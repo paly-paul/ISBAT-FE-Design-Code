@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ISBAT ERP — Login Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="styles/shared.css"/>
+<style>
+  html, body { height: 100%; margin: 0; background: #E8E4D9; }
+  body { font-family: var(--font-sans); }
+
+  /* Tweaks panel */
+  .tweaks-panel {
+    position: fixed; right: 20px; bottom: 20px; width: 280px;
+    background: #fff; border: 1px solid var(--isb-line);
+    border-radius: 12px; box-shadow: 0 10px 30px rgba(14,22,40,.12);
+    z-index: 10000; padding: 16px; font-size: 12px;
+    display: none;
+  }
+  .tweaks-panel.open { display: block; }
+  .tweaks-panel h3 { margin: 0 0 12px; font-family: var(--font-serif); font-weight: 500; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
+  .tweak-row { margin-bottom: 12px; }
+  .tweak-row label { display: block; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--isb-muted); margin-bottom: 6px; font-weight: 500; }
+  .tweak-row .btns { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tweak-row button { all: unset; cursor: pointer; font-size: 11px; padding: 4px 9px; border-radius: 5px; background: var(--isb-paper); color: var(--isb-ink-2); border: 1px solid var(--isb-line); transition: all .12s; }
+  .tweak-row button.active { background: var(--isb-blue); color: #fff; border-color: var(--isb-blue); }
+  .tweak-row select { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--isb-line); border-radius: 6px; background: #fff; }
+</style>
+</head>
+<body>
+<template id="__bundler_thumbnail" data-bg-color="#E8E4D9">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#E8E4D9"/>
+    <rect x="360" y="260" width="480" height="280" rx="20" fill="#ffffff" stroke="#E6E2D8" stroke-width="2"/>
+    <rect x="540" y="320" width="120" height="120" rx="26" fill="#7A3BB5"/>
+    <text x="600" y="402" text-anchor="middle" font-family="Georgia, serif" font-size="64" font-weight="600" fill="#ffffff">IS</text>
+    <text x="600" y="490" text-anchor="middle" font-family="Georgia, serif" font-size="26" fill="#0E1628">ISBAT ERP</text>
+    <text x="600" y="518" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#6B7386" letter-spacing="3">LOGIN FLOW</text>
+  </svg>
+</template>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="components/design-canvas.jsx"></script>
+<script type="text/babel" src="components/shared-bits.jsx"></script>
+<script type="text/babel" src="components/direction-a.jsx"></script>
+<script type="text/babel" src="components/direction-b.jsx"></script>
+
+<script type="text/babel">
+const TWEAKS = /*EDITMODE-BEGIN*/{
+  "density": "comfy",
+  "accent": "plum",
+  "showTweaksPanel": true
+}/*EDITMODE-END*/;
+
+const ACCENTS = {
+  blue:  { primary: "#2E6BE6", primary600: "#1F55C7", primary050: "#EEF3FE", primary700: "#183F95" },
+  teal:  { primary: "#1F8A8A", primary600: "#14706F", primary050: "#E6F4F4", primary700: "#0F4F4E" },
+  plum:  { primary: "#7A3BB5", primary600: "#5E2C8D", primary050: "#F3EAFB", primary700: "#3E1D5E" },
+};
+
+function applyAccent(a) {
+  const c = ACCENTS[a] || ACCENTS.blue;
+  const r = document.documentElement;
+  r.style.setProperty("--isb-blue", c.primary);
+  r.style.setProperty("--isb-blue-600", c.primary600);
+  r.style.setProperty("--isb-blue-050", c.primary050);
+  r.style.setProperty("--isb-blue-700", c.primary700);
+}
+
+// One artboard per screen, presented via DesignCanvas
+function Artboard({ dir, screen }) {
+  const [localScreen, setLocalScreen] = React.useState(screen);
+  const [roleIdx, setRoleIdx] = React.useState(1);
+  React.useEffect(() => { setLocalScreen(screen); }, [screen]);
+  const Dir = dir === "A" ? window.DirectionA : window.DirectionB;
+  return <Dir screen={localScreen} setScreen={setLocalScreen} roleIdx={roleIdx} setRoleIdx={setRoleIdx} />;
+}
+
+const SCREENS = [
+  { id: "landing",  label: "01 · Portal chooser" },
+  { id: "staff",    label: "02 · Staff sign-in" },
+  { id: "student",  label: "03 · Student sign-in" },
+  { id: "otp",      label: "04 · Two-factor (OTP)" },
+  { id: "forgot",   label: "05 · Forgot password" },
+  { id: "setup",    label: "06 · First-time setup" },
+  { id: "expired",  label: "07 · Session expired" },
+  { id: "redirect", label: "08 · Role-based redirect" },
+];
+
+const { DesignCanvas, DCSection, DCArtboard } = window;
+
+function App() {
+  const [accent, setAccent] = React.useState(TWEAKS.accent);
+  const [panelOpen, setPanelOpen] = React.useState(false);
+  const [editModeAvailable, setEma] = React.useState(false);
+
+  React.useEffect(() => { applyAccent(accent); }, [accent]);
+
+  // Tweaks protocol
+  React.useEffect(() => {
+    const handler = (e) => {
+      if (!e.data) return;
+      if (e.data.type === "__activate_edit_mode") setPanelOpen(true);
+      if (e.data.type === "__deactivate_edit_mode") setPanelOpen(false);
+    };
+    window.addEventListener("message", handler);
+    window.parent.postMessage({ type: "__edit_mode_available" }, "*");
+    setEma(true);
+    return () => window.removeEventListener("message", handler);
+  }, []);
+
+  const setAccentPersist = (a) => {
+    setAccent(a);
+    window.parent.postMessage({ type: "__edit_mode_set_keys", edits: { accent: a } }, "*");
+  };
+
+  const artboardW = 1200, artboardH = 780;
+
+  return (
+    <>
+      <DesignCanvas>
+        <DCSection id="directionA" title="Direction A — Editorial split"
+          subtitle="Brand-blue hero with live stats on the left. Serif headline, warm paper neutrals, orange accent rule. Carries over the dashboard's serif + accent language.">
+          {SCREENS.map(s => (
+            <DCArtboard key={"A-"+s.id} id={"A-"+s.id} label={s.label} width={artboardW} height={artboardH}>
+              <Artboard dir="A" screen={s.id} />
+            </DCArtboard>
+          ))}
+        </DCSection>
+
+        <DCSection id="directionB" title="Direction B — Warm canvas, centered card"
+          subtitle="Paper-white stage with a subtle brand bloom, a single floating card carries the form. Quieter, more 'website' in feel; same blue/orange/green accents.">
+          {SCREENS.map(s => (
+            <DCArtboard key={"B-"+s.id} id={"B-"+s.id} label={s.label} width={artboardW} height={artboardH}>
+              <Artboard dir="B" screen={s.id} />
+            </DCArtboard>
+          ))}
+        </DCSection>
+      </DesignCanvas>
+
+      {/* Tweaks panel */}
+      <div className={"tweaks-panel " + (panelOpen ? "open" : "")}>
+        <h3>
+          Tweaks
+          <button onClick={() => setPanelOpen(false)} style={{ all: "unset", cursor: "pointer", fontSize: 16, color: "var(--isb-muted)" }}>×</button>
+        </h3>
+        <div className="tweak-row">
+          <label>Accent color</label>
+          <div className="btns">
+            {Object.keys(ACCENTS).map(a => (
+              <button key={a} className={accent === a ? "active" : ""} onClick={() => setAccentPersist(a)}>
+                {a[0].toUpperCase() + a.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="tweak-row">
+          <label>Tip</label>
+          <div style={{ fontSize: 11, color: "var(--isb-muted)", lineHeight: 1.5 }}>
+            Click any artboard's <b>↗</b> to focus it fullscreen. Inside, the flows are clickable — try "Continue" on a sign-in, then "Forgot password".
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
