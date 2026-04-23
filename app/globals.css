@@ -1,0 +1,185 @@
+/* ISBAT ERP — global styles & design tokens */
+
+:root {
+  --isb-blue: #2E6BE6;
+  --isb-blue-600: #1F55C7;
+  --isb-blue-700: #183F95;
+  --isb-blue-050: #EEF3FE;
+  --isb-ink: #0E1628;
+  --isb-ink-2: #2A3345;
+  --isb-muted: #6B7386;
+  --isb-line: #E6E2D8;
+  --isb-line-2: #EFEBDF;
+  --isb-paper: #F6F4EF;
+  --isb-paper-2: #FBF9F4;
+  --isb-orange: #E68A2E;
+  --isb-green: #2EA862;
+  --isb-amber: #D9A51E;
+  --isb-red: #C84848;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  font-family: var(--font-sans, 'Inter Tight', 'Inter', -apple-system, 'Helvetica Neue', Arial, sans-serif);
+  color: var(--isb-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Logo ── */
+.isb-logo {
+  width: 32px; height: 32px; border-radius: 7px;
+  background: var(--isb-blue); color: #fff;
+  font-family: var(--font-serif, 'Source Serif 4', Georgia, serif);
+  font-weight: 600; display: inline-flex; align-items: center;
+  justify-content: center; letter-spacing: -0.02em; font-size: 14px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 1px 2px rgba(14,22,40,.2);
+  flex-shrink: 0;
+}
+.isb-logo.lg { width: 44px; height: 44px; border-radius: 9px; font-size: 18px; }
+
+/* ── Inputs ── */
+.isb-input {
+  width: 100%; height: 44px; padding: 0 14px;
+  background: #fff; border: 1px solid var(--isb-line);
+  border-radius: 8px; font: inherit; color: var(--isb-ink);
+  font-size: 14px; outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.isb-input:focus { border-color: var(--isb-blue); box-shadow: 0 0 0 4px var(--isb-blue-050); }
+.isb-input::placeholder { color: #A0A5B3; }
+.isb-input:disabled { background: var(--isb-paper); cursor: not-allowed; opacity: .7; }
+
+.isb-label {
+  display: block; font-size: 12px; font-weight: 500;
+  color: var(--isb-ink-2); margin-bottom: 6px; letter-spacing: .01em;
+}
+
+/* ── Buttons ── */
+.isb-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 8px; height: 44px; padding: 0 18px; border-radius: 8px;
+  font: inherit; font-weight: 500; font-size: 14px;
+  cursor: pointer; border: 1px solid transparent;
+  transition: all .15s; white-space: nowrap; text-decoration: none;
+}
+.isb-btn.primary {
+  background: var(--isb-blue); color: #fff;
+  box-shadow: 0 1px 0 rgba(255,255,255,.2) inset, 0 2px 4px rgba(46,107,230,.25);
+}
+.isb-btn.primary:hover:not(:disabled) { background: var(--isb-blue-600); }
+.isb-btn.primary:disabled { opacity: .6; cursor: not-allowed; }
+.isb-btn.ghost { background: transparent; color: var(--isb-ink-2); border-color: var(--isb-line); }
+.isb-btn.ghost:hover { background: var(--isb-paper); }
+.isb-btn.link {
+  background: transparent; color: var(--isb-blue);
+  padding: 0; height: auto; border: none;
+}
+.isb-btn.link:hover { text-decoration: underline; }
+.isb-btn.full { width: 100%; }
+
+/* ── Divider ── */
+.isb-divider {
+  display: flex; align-items: center; gap: 12px;
+  color: var(--isb-muted); font-size: 11px;
+  letter-spacing: .12em; text-transform: uppercase; margin: 18px 0;
+}
+.isb-divider::before, .isb-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--isb-line);
+}
+
+/* ── Link ── */
+.isb-link { color: var(--isb-blue); text-decoration: none; }
+.isb-link:hover { text-decoration: underline; }
+
+/* ── Chip ── */
+.isb-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 22px; padding: 0 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 500;
+  background: var(--isb-blue-050); color: var(--isb-blue-700);
+}
+
+/* ── Policy footer ── */
+.isb-policy { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11px; color: var(--isb-muted); }
+.isb-policy a { color: var(--isb-muted); text-decoration: none; border-bottom: 1px dotted var(--isb-line); }
+.isb-policy a:hover { color: var(--isb-ink); border-bottom-color: var(--isb-ink); }
+
+/* ── Field group ── */
+.isb-field { margin-bottom: 14px; }
+.isb-field .hint { font-size: 11px; color: var(--isb-muted); margin-top: 6px; }
+.isb-field .err {
+  font-size: 11px; color: var(--isb-red);
+  margin-top: 6px; display: flex; align-items: center; gap: 4px;
+}
+
+/* ── Password reveal wrap ── */
+.isb-pw-wrap { position: relative; }
+.isb-pw-wrap .toggle {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  background: transparent; border: 0; color: var(--isb-muted); cursor: pointer;
+  font-size: 11px; font-weight: 500; padding: 4px 8px; border-radius: 4px;
+  font-family: inherit;
+}
+.isb-pw-wrap .toggle:hover { color: var(--isb-ink); background: var(--isb-paper); }
+
+/* ── Checkbox ── */
+.isb-check {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--isb-ink-2); cursor: pointer; user-select: none;
+}
+.isb-check input {
+  appearance: none; width: 16px; height: 16px;
+  border: 1.5px solid var(--isb-line); border-radius: 4px; background: #fff;
+  display: grid; place-content: center; cursor: pointer; flex-shrink: 0;
+}
+.isb-check input:checked { background: var(--isb-blue); border-color: var(--isb-blue); }
+.isb-check input:checked::after {
+  content: ''; width: 4px; height: 8px;
+  border: solid #fff; border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translateY(-1px);
+}
+
+/* ── OTP digit inputs ── */
+.isb-otp { display: flex; gap: 10px; }
+.isb-otp input {
+  width: 48px; height: 56px; text-align: center;
+  font-family: var(--font-serif, 'Source Serif 4', Georgia, serif);
+  font-size: 22px; font-weight: 600; border: 1px solid var(--isb-line);
+  border-radius: 10px; background: #fff; outline: none; color: var(--isb-ink);
+  transition: border-color .15s, box-shadow .15s;
+}
+.isb-otp input:focus { border-color: var(--isb-blue); box-shadow: 0 0 0 4px var(--isb-blue-050); }
+
+/* ── Error banner ── */
+.isb-error-banner {
+  padding: 10px 14px; background: #FFF2F2; border: 1px solid #F3C0C0;
+  border-radius: 8px; font-size: 13px; color: var(--isb-red);
+  display: flex; align-items: flex-start; gap: 10px; margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+/* ── Animations ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.fade-up { animation: fadeUp .4s ease both; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin .8s linear infinite; display: inline-block; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+.pulse { animation: pulse 1.6s ease-in-out infinite; }
+
+/* ── Utilities ── */
+.nums { font-variant-numeric: tabular-nums; }
+
+/* ── Mobile: hide hero, single column ── */
+@media (max-width: 768px) {
+  .isb-hero-panel { display: none !important; }
+  .isb-form-panel { padding: 40px 24px !important; justify-content: flex-start !important; }
+}
