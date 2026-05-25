@@ -1,5 +1,5 @@
 # ISBAT University ERP — Academic Service API
-### REST API Specification · Backend: .NET Core 8 · Version: v1
+### REST API Specification · Backend: .NET Core 8 · Version: v2
 
 ---
 
@@ -10,7 +10,7 @@
 3. [Standard Response Envelope](#3-standard-response-envelope)
 4. [Error Codes](#4-error-codes)
 5. [Domain: Dashboard](#5-domain-dashboard)
-6. [Domain: Academic Calendar & Sessions](#6-domain-academic-calendar--sessions)
+6. [Domain: Intake Master (Academic Calendar & Sessions)](#6-domain-intake-master-academic-calendar--sessions)
 7. [Domain: Course Units Master (Curriculum)](#7-domain-course-units-master-curriculum)
 8. [Domain: Course Unit Allocation](#8-domain-course-unit-allocation)
 9. [Domain: Timetable Management](#9-domain-timetable-management)
@@ -23,7 +23,20 @@
 16. [Domain: Student Lookup & Profile](#16-domain-student-lookup--profile)
 17. [Domain: Finance Clearance (Read-Only Proxy)](#17-domain-finance-clearance-read-only-proxy)
 18. [Domain: Notifications](#18-domain-notifications)
-19. [C# DTO Definitions](#19-c-dto-definitions)
+19. [Domain: Faculty Master](#19-domain-faculty-master)
+20. [Domain: Lecturer Master](#20-domain-lecturer-master)
+21. [Domain: Skill Management](#21-domain-skill-management)
+22. [Domain: Programme Level](#22-domain-programme-level)
+23. [Domain: Programme Group](#23-domain-programme-group)
+24. [Domain: Programme Master](#24-domain-programme-master)
+25. [Domain: Batch Management](#25-domain-batch-management)
+26. [Domain: Fee Structure](#26-domain-fee-structure)
+27. [Domain: ODL Applications](#27-domain-odl-applications)
+28. [Domain: ODL Payment Reconciliation](#28-domain-odl-payment-reconciliation)
+29. [Domain: Qualification Equating](#29-domain-qualification-equating)
+30. [Domain: Grievance Management](#30-domain-grievance-management)
+31. [Domain: Access Gate](#31-domain-access-gate)
+32. [C# DTO Definitions](#32-c-dto-definitions)
 
 ---
 
@@ -87,7 +100,7 @@ Authorization: Bearer <jwt_token>
 
 | Endpoint Group | Student | Lecturer | Dean | Registrar | Admin |
 |---|:---:|:---:|:---:|:---:|:---:|
-| Dashboard (own data) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Dashboard (own/admin view) | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Timetable (read) | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Timetable (write) | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Course Units (read) | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -101,6 +114,18 @@ Authorization: Bearer <jwt_token>
 | Session Movement | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Student Profile (own) | ✅ | ❌ | ✅ | ✅ | ✅ |
 | Student Profile (any) | ❌ | ✅* | ✅ | ✅ | ✅ |
+| Intake Master (write) | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Faculty Master (write) | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Lecturer Master (write) | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Skill Management (write) | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Programme Level/Group/Master (write) | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Batch Management (write) | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Fee Structure (write) | ❌ | ❌ | ❌ | ❌ | ✅ |
+| ODL Applications (process) | ❌ | ❌ | ❌ | ✅ | ✅ |
+| ODL Reconciliation (write) | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Qualification Equating (write) | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Grievance (manage) | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Access Gate (write) | ❌ | ❌ | ✅ | ✅ | ✅ |
 
 > *Lecturers may view profiles of students enrolled in their allocated course units only.
 
@@ -204,9 +229,65 @@ Returns the student's (or staff's) academic overview — GPA, credit load, atten
 }
 ```
 
+### `GET /dashboard/admin-summary`
+
+Returns the admin/registrar ERP overview used by the **Academic Dashboard** admin landing view. Requires `Dean`, `Registrar`, or `Admin` role.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `intakeCode` | `string` | current | Filter stats by intake code (e.g. `20261`) |
+
+**Response `200 OK`:**
+
+```json
+{
+  "isSuccess": true,
+  "data": {
+    "intakeCode": "20261",
+    "intakeLabel": "Spring 2026",
+    "activeStudents": 1284,
+    "allocationPending": 3,
+    "timetablesActive": 14,
+    "odlPendingRecon": 4,
+    "setupHierarchy": {
+      "facultiesConfigured": true,
+      "programmeLevelsConfigured": true,
+      "programmeGroupsConfigured": true,
+      "programmeMasterConfigured": true,
+      "courseUnitsLinked": true
+    },
+    "semesterCycle": {
+      "allocationDone": true,
+      "timetablePublished": true,
+      "courseworkScheduled": false,
+      "examScheduled": false
+    },
+    "activeBatches": [
+      {
+        "batchCode": "BSCS-2026-A",
+        "programme": "BSc. Computer Science",
+        "studyMode": "Day",
+        "enrolledCount": 48,
+        "capacity": 60
+      }
+    ],
+    "recentActivity": [
+      {
+        "type": "ODL_APPLICATION",
+        "description": "New ODL application: James Opio (20261-ODL-0112)",
+        "timestamp": "2026-05-24T14:23:00+03:00"
+      }
+    ]
+  },
+  "message": null
+}
+```
+
 ---
 
-## 6. Domain: Academic Calendar & Sessions
+## 6. Domain: Intake Master (Academic Calendar & Sessions)
 
 ### `GET /academic-years`
 
@@ -251,6 +332,75 @@ Returns all configured academic years and their semester date windows.
 ### `GET /academic-years/current`
 
 Returns the currently active academic year and semester. Shorthand used by all other endpoints that default to the current period.
+
+### Intake Master Endpoints
+
+The **Intake Master** admin page manages intake records (semester/year enrolment windows). Intakes correspond to the `intakeCode` used across the ERP (e.g., `20261` = Spring 2026, Semester 1).
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/intakes` | Any staff | List all intakes |
+| `GET` | `/intakes/{code}` | Any staff | Get single intake |
+| `POST` | `/intakes` | Registrar, Admin | Create new intake |
+| `PUT` | `/intakes/{code}` | Registrar, Admin | Update intake |
+| `PATCH` | `/intakes/{code}/status` | Registrar, Admin | Toggle active/inactive |
+| `DELETE` | `/intakes/{code}` | Admin | Soft-delete intake |
+
+### `GET /intakes`
+
+**Query Parameters:** `?academicYear=2025-2026&studyMode=Day&status=Active`
+
+**Response `200 OK`:**
+
+```json
+{
+  "isSuccess": true,
+  "data": [
+    {
+      "code": "20261",
+      "label": "Spring 2026",
+      "academicYear": "2025–2026",
+      "semesterNo": 2,
+      "studyMode": "Day",
+      "registrationStart": "2026-01-15",
+      "registrationEnd": "2026-02-28",
+      "classesStart": "2026-03-01",
+      "classesEnd": "2026-06-30",
+      "status": "Active",
+      "enrolledCount": 1284
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 20, "totalCount": 12, "totalPages": 1 }
+}
+```
+
+### `POST /intakes`
+
+**Request Body:**
+
+```json
+{
+  "code": "20262",
+  "label": "Autumn 2026",
+  "academicYearId": "ay-2526",
+  "semesterNo": 1,
+  "studyMode": "Day",
+  "registrationStart": "2026-07-01",
+  "registrationEnd": "2026-08-31",
+  "classesStart": "2026-09-01",
+  "classesEnd": "2027-01-31"
+}
+```
+
+**Response `201 Created`:** Returns the created intake object.
+
+### `PATCH /intakes/{code}/status`
+
+```json
+{ "status": "Inactive" }
+```
+
+**Response `200 OK`:** `{ "isSuccess": true, "data": { "code": "20261", "status": "Inactive" } }`
 
 ---
 
@@ -361,6 +511,7 @@ Creates a new Course Unit. Dean / Registrar / Admin only.
   "semesterNo": 2,
   "programmeCode": "BSCS",
   "unitType": "theory",
+  "unitCategory": "Compulsory",
   "assessmentWeightage": {
     "coursework":     { "rawMark": 25, "scaledMark": 15 },
     "cbt":            { "rawMark": 50, "scaledMark": 15 },
@@ -369,6 +520,10 @@ Creates a new Course Unit. Dean / Registrar / Admin only.
   },
   "passMarkPercent": 50
 }
+
+> **`unitType` enum:** `"Theory"` | `"Practical"` | `"CBT"` | `"Project"` | `"Mixed"`
+>
+> **`unitCategory` enum:** `"Compulsory"` | `"Elective"` | `"Optional"` | `"Core"`
 ```
 
 **Response `201 Created`:** Returns the created `CourseUnitDto` inside the envelope.
@@ -1350,7 +1505,901 @@ Marks a notification as read for the authenticated user.
 
 ---
 
-## 19. C# DTO Definitions
+## 19. Domain: Faculty Master
+
+Manages academic faculties (Schools / Colleges). Used by the **Faculty Master** admin page.
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/faculties` | Any staff | List all faculties |
+| `GET` | `/faculties/{id}` | Any staff | Get single faculty |
+| `POST` | `/faculties` | Dean, Registrar, Admin | Create faculty |
+| `PUT` | `/faculties/{id}` | Dean, Registrar, Admin | Update faculty |
+| `DELETE` | `/faculties/{id}` | Admin | Soft-delete faculty |
+
+### `GET /faculties`
+
+**Response `200 OK`:**
+
+```json
+{
+  "isSuccess": true,
+  "data": [
+    {
+      "id": "fac-001",
+      "code": "FCT",
+      "name": "Faculty of Computing and Technology",
+      "shortName": "FCT",
+      "headOfFaculty": "Prof. John Ssemakula",
+      "headStaffId": "STF-0042",
+      "location": "Block A, Main Campus",
+      "email": "fct@isbat.ac.ug",
+      "phone": "+256-414-000100",
+      "programmeCount": 6,
+      "lecturerCount": 24,
+      "isActive": true
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 20, "totalCount": 5, "totalPages": 1 }
+}
+```
+
+### `POST /faculties`
+
+**Request Body:**
+
+```json
+{
+  "code": "FBM",
+  "name": "Faculty of Business and Management",
+  "shortName": "FBM",
+  "headStaffId": "STF-0015",
+  "location": "Block B, Main Campus",
+  "email": "fbm@isbat.ac.ug",
+  "phone": "+256-414-000200"
+}
+```
+
+**Response `201 Created`:** Returns created faculty object.
+
+---
+
+## 20. Domain: Lecturer Master
+
+Manages lecturer/staff profiles and faculty assignments. Used by the **Lecturer Master** admin page.
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/lecturers` | Any staff | List lecturers |
+| `GET` | `/lecturers/{staffId}` | Any staff | Get single lecturer |
+| `POST` | `/lecturers` | Registrar, Admin | Create lecturer profile |
+| `PUT` | `/lecturers/{staffId}` | Registrar, Admin | Update lecturer |
+| `PATCH` | `/lecturers/{staffId}/skills` | Registrar, Admin | Assign skills |
+| `DELETE` | `/lecturers/{staffId}` | Admin | Soft-delete |
+
+### `GET /lecturers`
+
+**Query Parameters:** `?facultyId=fac-001&skillId=sk-005&search=john`
+
+**Response `200 OK`:**
+
+```json
+{
+  "isSuccess": true,
+  "data": [
+    {
+      "staffId": "STF-0042",
+      "title": "Prof.",
+      "firstName": "John",
+      "lastName": "Ssemakula",
+      "email": "j.ssemakula@isbat.ac.ug",
+      "phone": "+256-772-000001",
+      "facultyId": "fac-001",
+      "facultyName": "Faculty of Computing and Technology",
+      "designation": "Senior Lecturer",
+      "employmentType": "FullTime",
+      "skills": ["Python", "Data Structures", "Algorithms"],
+      "allocatedUnitsCount": 3,
+      "isActive": true
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 20, "totalCount": 24, "totalPages": 2 }
+}
+```
+
+### `POST /lecturers`
+
+**Request Body:**
+
+```json
+{
+  "title": "Dr.",
+  "firstName": "Alice",
+  "lastName": "Namukasa",
+  "email": "a.namukasa@isbat.ac.ug",
+  "phone": "+256-772-000002",
+  "facultyId": "fac-001",
+  "designation": "Lecturer",
+  "employmentType": "FullTime",
+  "skillIds": ["sk-001", "sk-003"]
+}
+```
+
+**Response `201 Created`:** Returns created lecturer profile.
+
+### `PATCH /lecturers/{staffId}/skills`
+
+```json
+{ "skillIds": ["sk-001", "sk-003", "sk-007"] }
+```
+
+**Response `200 OK`:** Returns updated skills list.
+
+---
+
+## 21. Domain: Skill Management
+
+Manages a catalog of teaching/subject skills assignable to lecturers and course units. Used by the **Skill Management** admin page.
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/skills` | Any staff | List all skills |
+| `GET` | `/skills/{id}` | Any staff | Get single skill |
+| `POST` | `/skills` | Dean, Registrar, Admin | Create skill |
+| `PUT` | `/skills/{id}` | Dean, Registrar, Admin | Update skill |
+| `DELETE` | `/skills/{id}` | Admin | Soft-delete skill |
+
+### `GET /skills`
+
+**Query Parameters:** `?category=Programming&search=python`
+
+**Response `200 OK`:**
+
+```json
+{
+  "isSuccess": true,
+  "data": [
+    {
+      "id": "sk-001",
+      "name": "Python Programming",
+      "category": "Programming",
+      "description": "Proficiency in Python including data science libraries",
+      "lecturerCount": 8,
+      "courseUnitCount": 3,
+      "isActive": true
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 20, "totalCount": 42, "totalPages": 3 }
+}
+```
+
+### `POST /skills`
+
+**Request Body:**
+
+```json
+{
+  "name": "Machine Learning",
+  "category": "Artificial Intelligence",
+  "description": "Supervised and unsupervised ML model development"
+}
+```
+
+**Response `201 Created`:** Returns created skill.
+
+---
+
+## 22. Domain: Programme Level
+
+Manages National Qualifications Framework (NQF) levels and academic levels. Used by the **Programme Level** admin page.
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/programme-levels` | Any staff | List all levels |
+| `GET` | `/programme-levels/{id}` | Any staff | Get single level |
+| `POST` | `/programme-levels` | Registrar, Admin | Create level |
+| `PUT` | `/programme-levels/{id}` | Registrar, Admin | Update level |
+| `DELETE` | `/programme-levels/{id}` | Admin | Soft-delete |
+
+### `GET /programme-levels`
+
+**Response `200 OK`:**
+
+```json
+{
+  "isSuccess": true,
+  "data": [
+    {
+      "id": "pl-001",
+      "code": "NQF5",
+      "name": "Diploma",
+      "nqfLevel": 5,
+      "durationYears": 2,
+      "creditRequirement": 120,
+      "programmeCount": 4,
+      "isActive": true
+    },
+    {
+      "id": "pl-002",
+      "code": "NQF7",
+      "name": "Bachelor's Degree",
+      "nqfLevel": 7,
+      "durationYears": 3,
+      "creditRequirement": 360,
+      "programmeCount": 12,
+      "isActive": true
+    }
+  ]
+}
+```
+
+### `POST /programme-levels`
+
+```json
+{
+  "code": "NQF8",
+  "name": "Postgraduate Diploma",
+  "nqfLevel": 8,
+  "durationYears": 1,
+  "creditRequirement": 60
+}
+```
+
+**Response `201 Created`:** Returns created level.
+
+---
+
+## 23. Domain: Programme Group
+
+Manages grouping/categorisation of academic programmes. Used by the **Programme Group** admin page.
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/programme-groups` | Any staff | List all groups |
+| `GET` | `/programme-groups/{id}` | Any staff | Get single group |
+| `POST` | `/programme-groups` | Registrar, Admin | Create group |
+| `PUT` | `/programme-groups/{id}` | Registrar, Admin | Update group |
+| `DELETE` | `/programme-groups/{id}` | Admin | Soft-delete |
+
+### `GET /programme-groups`
+
+**Response `200 OK`:**
+
+```json
+{
+  "isSuccess": true,
+  "data": [
+    {
+      "id": "pg-001",
+      "code": "ICT",
+      "name": "Information and Communication Technology",
+      "facultyId": "fac-001",
+      "facultyName": "Faculty of Computing and Technology",
+      "programmeCount": 6,
+      "isActive": true
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 20, "totalCount": 8, "totalPages": 1 }
+}
+```
+
+### `POST /programme-groups`
+
+```json
+{
+  "code": "BUS",
+  "name": "Business Studies",
+  "facultyId": "fac-002"
+}
+```
+
+**Response `201 Created`:** Returns created group.
+
+---
+
+## 24. Domain: Programme Master
+
+Manages the full catalogue of academic programmes offered. Used by the **Programme Master** admin page. Supports specialisations and elective sets.
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/programmes` | Any staff | List all programmes |
+| `GET` | `/programmes/{code}` | Any staff | Get programme detail |
+| `POST` | `/programmes` | Registrar, Admin | Create programme |
+| `PUT` | `/programmes/{code}` | Registrar, Admin | Update programme |
+| `DELETE` | `/programmes/{code}` | Admin | Soft-delete |
+| `GET` | `/programmes/{code}/specialisations` | Any staff | List specialisations |
+| `POST` | `/programmes/{code}/specialisations` | Registrar, Admin | Add specialisation |
+| `DELETE` | `/programmes/{code}/specialisations/{specId}` | Admin | Remove specialisation |
+| `GET` | `/programmes/{code}/elective-sets` | Any staff | List elective sets |
+| `POST` | `/programmes/{code}/elective-sets` | Registrar, Admin | Create elective set |
+
+### `GET /programmes`
+
+**Query Parameters:** `?groupId=pg-001&levelId=pl-002&studyMode=Day&search=computer`
+
+**Response `200 OK`:**
+
+```json
+{
+  "isSuccess": true,
+  "data": [
+    {
+      "code": "BSCS",
+      "name": "BSc. Computer Science",
+      "levelId": "pl-002",
+      "levelName": "Bachelor's Degree",
+      "groupId": "pg-001",
+      "groupName": "ICT",
+      "facultyId": "fac-001",
+      "facultyName": "Faculty of Computing and Technology",
+      "studyModes": ["Day", "Evening"],
+      "durationSemesters": 6,
+      "totalCredits": 360,
+      "hasSpecialisations": true,
+      "specialisationCount": 3,
+      "activeEnrolmentCount": 284,
+      "isActive": true
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 20, "totalCount": 18, "totalPages": 1 }
+}
+```
+
+### `POST /programmes`
+
+**Request Body:**
+
+```json
+{
+  "code": "BSIT",
+  "name": "BSc. Information Technology",
+  "levelId": "pl-002",
+  "groupId": "pg-001",
+  "studyModes": ["Day", "Evening"],
+  "durationSemesters": 6,
+  "totalCredits": 360
+}
+```
+
+### `POST /programmes/{code}/specialisations`
+
+```json
+{
+  "name": "Cybersecurity",
+  "code": "BSCS-SEC",
+  "description": "Specialisation in network and information security"
+}
+```
+
+---
+
+## 25. Domain: Batch Management
+
+Manages student cohort batches per programme and intake. Used by the **Batch Management** admin page.
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/batches` | Any staff | List all batches |
+| `GET` | `/batches/{id}` | Any staff | Get single batch |
+| `POST` | `/batches` | Registrar, Admin | Create batch |
+| `PUT` | `/batches/{id}` | Registrar, Admin | Update batch |
+| `PATCH` | `/batches/{id}/status` | Registrar, Admin | Activate / deactivate |
+| `DELETE` | `/batches/{id}` | Admin | Soft-delete |
+| `GET` | `/batches/{id}/students` | Registrar, Admin | List students in batch |
+
+### `GET /batches`
+
+**Query Parameters:** `?intakeCode=20261&programmeCode=BSCS&studyMode=Day&status=Active`
+
+**Response `200 OK`:**
+
+```json
+{
+  "isSuccess": true,
+  "data": [
+    {
+      "id": "bat-001",
+      "code": "BSCS-2026-A",
+      "intakeCode": "20261",
+      "intakeLabel": "Spring 2026",
+      "programmeCode": "BSCS",
+      "programmeName": "BSc. Computer Science",
+      "studyMode": "Day",
+      "campus": "Main Campus",
+      "capacity": 60,
+      "enrolledCount": 48,
+      "semesterNo": 2,
+      "status": "Active",
+      "classRepStaffId": null
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 20, "totalCount": 22, "totalPages": 2 }
+}
+```
+
+### `POST /batches`
+
+**Request Body:**
+
+```json
+{
+  "code": "BSCS-2026-B",
+  "intakeCode": "20261",
+  "programmeCode": "BSCS",
+  "studyMode": "Evening",
+  "campus": "Main Campus",
+  "capacity": 50,
+  "semesterNo": 2
+}
+```
+
+**Response `201 Created`:** Returns created batch.
+
+---
+
+## 26. Domain: Fee Structure
+
+Manages tuition and fees payable per programme and semester. Used by the **Fee Structure** admin page. Admin-only write access.
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/fee-structures` | Any staff | List all fee structures |
+| `GET` | `/fee-structures/{id}` | Any staff | Get single structure |
+| `POST` | `/fee-structures` | Admin | Create fee structure |
+| `PUT` | `/fee-structures/{id}` | Admin | Update fee structure |
+| `DELETE` | `/fee-structures/{id}` | Admin | Soft-delete |
+| `GET` | `/fee-structures/{id}/items` | Any staff | List fee line items |
+| `POST` | `/fee-structures/{id}/items` | Admin | Add fee line item |
+| `DELETE` | `/fee-structures/{id}/items/{itemId}` | Admin | Remove line item |
+
+### `GET /fee-structures`
+
+**Query Parameters:** `?programmeCode=BSCS&academicYear=2025-2026&studyMode=Day`
+
+**Response `200 OK`:**
+
+```json
+{
+  "isSuccess": true,
+  "data": [
+    {
+      "id": "fs-001",
+      "programmeCode": "BSCS",
+      "programmeName": "BSc. Computer Science",
+      "academicYear": "2025–2026",
+      "semesterNo": 2,
+      "studyMode": "Day",
+      "currency": "UGX",
+      "totalFees": 2850000,
+      "items": [
+        { "id": "fsi-001", "description": "Tuition Fee", "amount": 2400000, "isMandatory": true },
+        { "id": "fsi-002", "description": "Registration Fee", "amount": 150000, "isMandatory": true },
+        { "id": "fsi-003", "description": "Library Fee", "amount": 50000, "isMandatory": true },
+        { "id": "fsi-004", "description": "Medical Fee", "amount": 100000, "isMandatory": true },
+        { "id": "fsi-005", "description": "Activity Fee", "amount": 150000, "isMandatory": false }
+      ],
+      "isActive": true
+    }
+  ]
+}
+```
+
+### `POST /fee-structures`
+
+```json
+{
+  "programmeCode": "BSIT",
+  "academicYear": "2025–2026",
+  "semesterNo": 2,
+  "studyMode": "Day",
+  "currency": "UGX"
+}
+```
+
+**Response `201 Created`:** Returns created fee structure (no items yet — add via `/items`).
+
+### `POST /fee-structures/{id}/items`
+
+```json
+{
+  "description": "Examination Fee",
+  "amount": 100000,
+  "isMandatory": true
+}
+```
+
+---
+
+## 27. Domain: ODL Applications
+
+Manages Open/Distance Learning (ODL) applications for new student enrolment online. Used by the **ODL Applications** admin page.
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/odl/applications` | Registrar, Admin | List all ODL applications |
+| `GET` | `/odl/applications/{id}` | Registrar, Admin | Get full application detail |
+| `PATCH` | `/odl/applications/{id}/status` | Registrar, Admin | Approve / reject / defer |
+| `POST` | `/odl/applications/{id}/notes` | Registrar, Admin | Add processing note |
+| `GET` | `/odl/applications/{id}/documents` | Registrar, Admin | List uploaded documents |
+
+### `GET /odl/applications`
+
+**Query Parameters:** `?intakeCode=20261&status=Pending&programmeCode=BSCS&search=james`
+
+**Response `200 OK`:**
+
+```json
+{
+  "isSuccess": true,
+  "data": [
+    {
+      "id": "odl-app-001",
+      "referenceNo": "20261-ODL-0112",
+      "intakeCode": "20261",
+      "applicantName": "James Opio",
+      "email": "james.opio@gmail.com",
+      "phone": "+256-772-001122",
+      "programmeCode": "BSCS",
+      "programmeName": "BSc. Computer Science",
+      "studyMode": "Distance",
+      "status": "Pending",
+      "paymentStatus": "Paid",
+      "paymentReference": "MTN-20261-0112",
+      "submittedAt": "2026-05-20T10:30:00+03:00",
+      "documentsUploaded": 4,
+      "documentsRequired": 5
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 20, "totalCount": 7, "totalPages": 1 }
+}
+```
+
+### `GET /odl/applications/{id}`
+
+Returns the full application with personal details, qualifications, emergency contact, and document list.
+
+**Response `200 OK` (abbreviated):**
+
+```json
+{
+  "isSuccess": true,
+  "data": {
+    "id": "odl-app-001",
+    "referenceNo": "20261-ODL-0112",
+    "personal": {
+      "firstName": "James", "lastName": "Opio",
+      "gender": "Male", "dateOfBirth": "2000-04-12",
+      "nationality": "Ugandan", "idType": "NIN",
+      "idNumber": "CM12345678UGUG"
+    },
+    "contact": {
+      "email": "james.opio@gmail.com", "phone": "+256-772-001122",
+      "address": "Gulu City, Uganda"
+    },
+    "qualifications": [
+      { "level": "UCE", "year": 2016, "school": "St. Mary's College Gulu", "aggregate": "U1", "grade": "Division 1" }
+    ],
+    "emergencyContact": {
+      "name": "Mary Opio", "relationship": "Mother", "phone": "+256-782-001122"
+    },
+    "programme": { "code": "BSCS", "name": "BSc. Computer Science", "studyMode": "Distance" },
+    "documents": [
+      { "id": "doc-001", "type": "UCE_CERT", "fileName": "uce_cert.pdf", "uploadedAt": "2026-05-20T10:20:00+03:00", "status": "Verified" }
+    ],
+    "status": "Pending",
+    "paymentStatus": "Paid",
+    "processingNotes": []
+  }
+}
+```
+
+### `PATCH /odl/applications/{id}/status`
+
+```json
+{
+  "status": "Approved",
+  "note": "All documents verified. Enrolment confirmed for Spring 2026."
+}
+```
+
+> **`status` enum:** `"Pending"` | `"UnderReview"` | `"Approved"` | `"Rejected"` | `"Deferred"` | `"Enrolled"`
+
+---
+
+## 28. Domain: ODL Payment Reconciliation
+
+Matches incoming ODL application payments (mobile money / bank transfer) to pending applications. Used by the **Payment Reconciliation** admin page.
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/odl/reconciliation` | Registrar, Admin | List reconciliation items |
+| `GET` | `/odl/reconciliation/{id}` | Registrar, Admin | Get single item |
+| `PATCH` | `/odl/reconciliation/{id}/match` | Registrar, Admin | Match payment to application |
+| `PATCH` | `/odl/reconciliation/{id}/flag` | Registrar, Admin | Flag as suspicious/duplicate |
+| `GET` | `/odl/reconciliation/summary` | Registrar, Admin | Reconciliation summary stats |
+
+### `GET /odl/reconciliation`
+
+**Query Parameters:** `?intakeCode=20261&status=Unmatched&paymentMethod=MobileMoney`
+
+**Response `200 OK`:**
+
+```json
+{
+  "isSuccess": true,
+  "data": [
+    {
+      "id": "recon-001",
+      "paymentReference": "MTN-20261-0089",
+      "payerName": "Alice Nakato",
+      "payerPhone": "+256-772-008899",
+      "amount": 250000,
+      "currency": "UGX",
+      "paymentMethod": "MobileMoney",
+      "paidAt": "2026-05-18T09:15:00+03:00",
+      "status": "Unmatched",
+      "matchedApplicationId": null,
+      "flagged": false
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 20, "totalCount": 4, "totalPages": 1 }
+}
+```
+
+### `PATCH /odl/reconciliation/{id}/match`
+
+Links a payment record to an ODL application.
+
+```json
+{
+  "applicationId": "odl-app-005",
+  "note": "Confirmed MTN reference matches applicant phone."
+}
+```
+
+**Response `200 OK`:** Returns updated reconciliation record with `status: "Matched"`.
+
+### `GET /odl/reconciliation/summary`
+
+```json
+{
+  "isSuccess": true,
+  "data": {
+    "intakeCode": "20261",
+    "totalPayments": 18,
+    "matched": 14,
+    "unmatched": 3,
+    "flagged": 1,
+    "totalAmountReceived": 4500000,
+    "currency": "UGX"
+  }
+}
+```
+
+---
+
+## 29. Domain: Qualification Equating
+
+Manages prior learning recognition and transfer credit assessment. Used by the **Qualification Equating** admin page.
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/qual-equating` | Registrar, Admin | List all equating requests |
+| `GET` | `/qual-equating/{id}` | Registrar, Admin | Get single request |
+| `POST` | `/qual-equating` | Registrar, Admin | Create equating request |
+| `PATCH` | `/qual-equating/{id}/decision` | Registrar, Admin | Approve / reject course equivalence |
+| `DELETE` | `/qual-equating/{id}` | Admin | Delete request |
+
+### `GET /qual-equating`
+
+**Query Parameters:** `?studentNo=ISB/2024/0028&status=Pending`
+
+**Response `200 OK`:**
+
+```json
+{
+  "isSuccess": true,
+  "data": [
+    {
+      "id": "qe-001",
+      "studentNo": "ISB/2024/0028",
+      "studentName": "Sarah Nakato",
+      "programmeCode": "BSCS",
+      "priorInstitution": "Makerere University",
+      "priorCourseCode": "CSC1100",
+      "priorCourseName": "Introduction to Computing",
+      "priorCredits": 3,
+      "equivalentCourseCode": "IT101",
+      "equivalentCourseName": "Introduction to Programming",
+      "status": "Pending",
+      "submittedAt": "2026-05-10T09:00:00+03:00",
+      "reviewedBy": null,
+      "decision": null,
+      "decisionNote": null
+    }
+  ]
+}
+```
+
+### `PATCH /qual-equating/{id}/decision`
+
+```json
+{
+  "decision": "Approved",
+  "creditsAwarded": 3,
+  "note": "Syllabus content aligns at 85%. Approved for full credit transfer."
+}
+```
+
+> **`decision` enum:** `"Approved"` | `"PartialCredit"` | `"Rejected"`
+
+---
+
+## 30. Domain: Grievance Management
+
+Tracks formal student grievance submissions and resolution workflow. Used by the **Grievance** admin page.
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/grievances` | Dean, Registrar, Admin | List all grievances |
+| `GET` | `/grievances/{id}` | Dean, Registrar, Admin | Get grievance detail |
+| `POST` | `/grievances` | Student (self-service) | Submit grievance |
+| `PATCH` | `/grievances/{id}/status` | Dean, Registrar, Admin | Update status |
+| `POST` | `/grievances/{id}/responses` | Dean, Registrar, Admin | Add resolution response |
+
+### `GET /grievances`
+
+**Query Parameters:** `?status=Open&category=Results&intakeCode=20261&search=nakato`
+
+**Response `200 OK`:**
+
+```json
+{
+  "isSuccess": true,
+  "data": [
+    {
+      "id": "grv-001",
+      "ticketNo": "GRV-2026-0042",
+      "studentNo": "ISB/2024/0028",
+      "studentName": "Sarah Nakato",
+      "programmeCode": "BSCS",
+      "category": "Results",
+      "subCategory": "Mark Correction",
+      "subject": "Incorrect CW mark for IT305",
+      "status": "Open",
+      "priority": "Medium",
+      "submittedAt": "2026-05-15T11:00:00+03:00",
+      "lastUpdatedAt": "2026-05-15T11:00:00+03:00",
+      "assignedTo": null,
+      "resolutionDeadline": "2026-05-22T00:00:00+03:00"
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 20, "totalCount": 11, "totalPages": 1 }
+}
+```
+
+### `PATCH /grievances/{id}/status`
+
+```json
+{
+  "status": "InProgress",
+  "assignedTo": "STF-0042",
+  "note": "Forwarded to IT305 lecturer for mark verification."
+}
+```
+
+> **`status` enum:** `"Open"` | `"InProgress"` | `"Resolved"` | `"Closed"` | `"Escalated"`
+
+### `POST /grievances/{id}/responses`
+
+```json
+{
+  "responseText": "After review, the coursework mark has been corrected from 18/25 to 21/25.",
+  "attachmentUrl": null,
+  "isPublicToStudent": true
+}
+```
+
+---
+
+## 31. Domain: Access Gate
+
+Controls student system access based on clearance, suspension, or administrative flags. Used by the **Access Gate** admin page.
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/access-gate` | Dean, Registrar, Admin | List access gate entries |
+| `GET` | `/access-gate/{studentNo}` | Dean, Registrar, Admin | Get student access status |
+| `PATCH` | `/access-gate/{studentNo}/restrict` | Dean, Registrar, Admin | Restrict access |
+| `PATCH` | `/access-gate/{studentNo}/restore` | Dean, Registrar, Admin | Restore full access |
+| `GET` | `/access-gate/log` | Admin | Audit log of all access changes |
+
+### `GET /access-gate`
+
+**Query Parameters:** `?status=Restricted&reason=Finance&programmeCode=BSCS`
+
+**Response `200 OK`:**
+
+```json
+{
+  "isSuccess": true,
+  "data": [
+    {
+      "studentNo": "ISB/2024/0028",
+      "studentName": "Sarah Nakato",
+      "programmeCode": "BSCS",
+      "accessStatus": "Restricted",
+      "restrictionReason": "Finance",
+      "restrictionNote": "Unpaid fees for Semester 2.",
+      "restrictedAt": "2026-05-01T00:00:00+03:00",
+      "restrictedBy": "STF-0001",
+      "canViewResults": false,
+      "canSubmitAssessments": false,
+      "canAccessTimetable": true,
+      "clearedBy": null,
+      "clearedAt": null
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 20, "totalCount": 17, "totalPages": 1 }
+}
+```
+
+### `PATCH /access-gate/{studentNo}/restrict`
+
+```json
+{
+  "reason": "Disciplinary",
+  "note": "Suspended pending disciplinary hearing — Student Affairs ref DA-2026-0011.",
+  "restrictionLevel": "Full",
+  "reviewDate": "2026-06-01"
+}
+```
+
+> **`reason` enum:** `"Finance"` | `"Disciplinary"` | `"Medical"` | `"Administrative"` | `"Other"`
+>
+> **`restrictionLevel` enum:** `"Full"` | `"ResultsOnly"` | `"AssessmentsOnly"`
+
+### `PATCH /access-gate/{studentNo}/restore`
+
+```json
+{
+  "note": "Fees cleared. Full access restored.",
+  "clearedBy": "STF-0001"
+}
+```
+
+**Response `200 OK`:** Returns updated access gate entry with `accessStatus: "Active"`.
+
+---
+
+## 32. C# DTO Definitions
 
 > All DTOs use `record` for immutability. Response DTOs are annotated with `System.Text.Json` serialization attributes. Request DTOs carry `System.ComponentModel.DataAnnotations` for model validation.
 
@@ -1931,4 +2980,6 @@ public record ClearanceStatusDto
 
 *End of Academic Service API Specification*
 
-*Document version: 1.0 · Generated: 2026-05-24 · Maintained by: ISBAT University ERP Backend Team*
+*Document version: 2.0 · Updated: 2026-05-25 · Maintained by: ISBAT University ERP Backend Team*
+
+> **v2.0 changes:** Added 13 new domain sections (Sections 19–31) covering Faculty Master, Lecturer Master, Skill Management, Programme Level, Programme Group, Programme Master, Batch Management, Fee Structure, ODL Applications, ODL Payment Reconciliation, Qualification Equating, Grievance Management, and Access Gate. Updated Section 5 with admin dashboard endpoint. Updated Section 6 with Intake Master CRUD. Updated Section 7 with `unitCategory` field and enum notes. Updated Section 2 role permission matrix. Section 19 (C# DTOs) renumbered to Section 32.
