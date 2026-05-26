@@ -88,11 +88,11 @@ export default function AcademicPage() {
   function sbSection(id: string, label: string, children: React.ReactNode) {
     const collapsed = collapsedSections.has(id)
     return (
-      <div className={`sb-collapse${collapsed ? '' : ' open'}`}>
+      <div className={`sb-collapse${collapsed ? ' closed' : ''}`}>
         <div className="sb-group-hdr" onClick={() => toggleCollapse(id)}>
           <span>{label}</span><span className="sb-chevron">{collapsed ? '▸' : '▾'}</span>
         </div>
-        {!collapsed && <div className="sb-collapse-body">{children}</div>}
+        <div className="sb-collapse-body">{children}</div>
       </div>
     )
   }
@@ -101,7 +101,7 @@ export default function AcademicPage() {
     <>
       {/* Header */}
       <header className="hdr">
-        <div className="hdr-brand" style={{ backgroundColor: 'rgb(240, 244, 248)' }}>
+        <div className="hdr-brand bg-bg">
           <div className="hdr-badge">IU</div>
         </div>
         <div className="hdr-body">
@@ -125,7 +125,7 @@ export default function AcademicPage() {
 
         {/* Sidebar */}
         <div className="sidebar">
-          <div className="sb-rail" style={{ backgroundColor: 'rgb(240, 244, 248)' }}>
+          <div className="sb-rail bg-bg">
             <div className="rail-item active" data-mod="academic">
               <span className="rail-icon"><i className="lni lni-graduation"></i></span>
               <span className="rail-label">Academic</span>
@@ -158,7 +158,7 @@ export default function AcademicPage() {
           </div>
 
           <div className="sb-panel-shell open">
-            <div className="sb-panel">
+            <div className="sb-panel active">
               <div className="sb-panel-hdr">
                 <div className="sb-panel-hdr-title">Module</div>
                 <div className="sb-panel-hdr-name"><i className="lni lni-graduation"></i> Academic</div>

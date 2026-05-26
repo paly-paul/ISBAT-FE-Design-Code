@@ -14,7 +14,7 @@ interface PageProps {
 
 export function UniversityExamPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">University Examination</div>
@@ -23,7 +23,7 @@ export function UniversityExamPage({ nav, openModal, showToast }: PageProps) {
         <button className="btn btn-primary" onClick={() => openModal('new-qp-modal')}><i className="lni lni-files"></i> Upload Question Paper</button>
       </div>
 
-      <div className="info-box" style={{marginBottom: '18px'}}>
+      <div className="info-box mb-[18px]">
         <i className="lni lni-clipboard"></i> <span>Question Papers must be uploaded by faculty and sent for <strong>manual vetting</strong> by the QP Vetting Committee before the offline exam. The committee checks against the approved syllabus. University Exam is marked out of <strong>100</strong> and prorated to <strong>70</strong>.</span>
       </div>
 
@@ -61,7 +61,7 @@ export function UniversityExamPage({ nav, openModal, showToast }: PageProps) {
 
 export function ResultsPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">Results</div>
@@ -69,11 +69,11 @@ export function ResultsPage({ nav, openModal, showToast }: PageProps) {
         </div>
       </div>
       <div className="undefined-box">
-        <div style={{fontSize: '32px', marginBottom: '12px'}}><i className="lni lni-bar-chart"></i></div>
-        <div style={{fontFamily: "'Inter',-apple-system,sans-serif", fontSize: '18px', fontWeight: 800, color: 'var(--g900)', marginBottom: '8px'}}>Results &amp; Mark Entry</div>
-        <div style={{fontSize: '13px', color: 'var(--g500)', marginBottom: '16px', maxWidth: '480px', marginLeft: 'auto', marginRight: 'auto'}}>This functionality is owned by the <strong>Assessment Module (Service 4)</strong>. Mark Entry → Mark Verification → Result Generation → Result Publication will be covered in the Assessment Module KT session.</div>
-        <div className="badge badge-purple" style={{marginBottom: '16px'}}><i className="lni lni-clipboard"></i> Pending KT Session — Assessment Module</div>
-        <div style={{fontSize: '12px', color: 'var(--g400)'}}>For academic-side visibility, result publication triggers the next Session Movement cycle.</div>
+        <div className="text-[32px] mb-3"><i className="lni lni-bar-chart"></i></div>
+        <div className="font-extrabold text-[18px] text-g900 mb-2">Results &amp; Mark Entry</div>
+        <div className="text-[13px] text-g500 mb-4 max-w-[480px] mx-auto">This functionality is owned by the <strong>Assessment Module (Service 4)</strong>. Mark Entry → Mark Verification → Result Generation → Result Publication will be covered in the Assessment Module KT session.</div>
+        <div className="badge badge-purple mb-4"><i className="lni lni-clipboard"></i> Pending KT Session — Assessment Module</div>
+        <div className="text-xs text-g400">For academic-side visibility, result publication triggers the next Session Movement cycle.</div>
       </div>
     </div>
   )
@@ -81,22 +81,22 @@ export function ResultsPage({ nav, openModal, showToast }: PageProps) {
 
 export function GrievancePage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">Grievance Management</div>
           <div className="pg-sub">Post-result student appeals · Grievance window from Intake Master</div>
         </div>
       </div>
-      <div className="warn-box" style={{marginBottom: '18px'}}>
+      <div className="warn-box mb-[18px]">
         <i className="lni lni-warning"></i> Grievance window is defined in the <strong>Intake Master</strong>. Current grievance end date: <strong>10 Jun 2026</strong>.
       </div>
       <div className="undefined-box">
-        <div style={{fontSize: '32px', marginBottom: '12px'}}><i className="lni lni-volume-high"></i></div>
-        <div style={{fontFamily: "'Inter',-apple-system,sans-serif", fontSize: '18px', fontWeight: 800, color: 'var(--g900)', marginBottom: '8px'}}>Grievance Module</div>
-        <div style={{fontSize: '13px', color: 'var(--g500)', marginBottom: '16px', maxWidth: '480px', marginLeft: 'auto', marginRight: 'auto'}}>Grievance workflow details — student appeal process, re-check criteria, outcome recording, and notification flow — have <strong>not yet been covered in a KT session.</strong></div>
-        <div className="badge badge-purple" style={{marginBottom: '12px'}}><i className="lni lni-clipboard"></i> Module Not Yet Defined — Details to be captured in KT Session</div>
-        <div style={{fontSize: '12px', color: 'var(--g400)'}}>Known facts: Students submit grievance before the Grievance End Date. Appeals are processed post-result publication.</div>
+        <div className="text-[32px] mb-3"><i className="lni lni-volume-high"></i></div>
+        <div className="font-extrabold text-[18px] text-g900 mb-2">Grievance Module</div>
+        <div className="text-[13px] text-g500 mb-4 max-w-[480px] mx-auto">Grievance workflow details — student appeal process, re-check criteria, outcome recording, and notification flow — have <strong>not yet been covered in a KT session.</strong></div>
+        <div className="badge badge-purple mb-3"><i className="lni lni-clipboard"></i> Module Not Yet Defined — Details to be captured in KT Session</div>
+        <div className="text-xs text-g400">Known facts: Students submit grievance before the Grievance End Date. Appeals are processed post-result publication.</div>
       </div>
     </div>
   )
@@ -104,7 +104,7 @@ export function GrievancePage({ nav, openModal, showToast }: PageProps) {
 
 export function OdlApplicationsPage({ nav, openModal, showToast, showPreview, setShowPreview }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">ODL Applications</div>
@@ -115,8 +115,8 @@ export function OdlApplicationsPage({ nav, openModal, showToast, showPreview, se
         </div>
       </div>
 
-      <div className="g2" style={{marginBottom: '18px'}}>
-        <div className="info-box"><i className="lni lni-world"></i> <span>ODL applications start online at <span style={{fontFamily: 'monospace', background: 'var(--b100)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px'}}>ERP.../online.ASP</span>. Unlike regular applications, <strong>payment is not required to start</strong>. No fee exemptions apply to ODL applicants.</span></div>
+      <div className="g2 mb-[18px]">
+        <div className="info-box"><i className="lni lni-world"></i> <span>ODL applications start online at <span className="font-mono bg-[var(--b100)] py-0.5 px-[6px] rounded text-[11px]">ERP.../online.ASP</span>. Unlike regular applications, <strong>payment is not required to start</strong>. No fee exemptions apply to ODL applicants.</span></div>
         <div className="warn-box"><i className="lni lni-warning"></i> <span>Applications remain in the <strong>Temporary ODL Table</strong> until payment is reconciled by accounts. Only after reconciliation does the application move to the regular application form.</span></div>
       </div>
 
@@ -136,11 +136,11 @@ export function OdlApplicationsPage({ nav, openModal, showToast, showPreview, se
       </div>
 
       {/* Stats */}
-      <div className="g4" style={{marginBottom: '18px'}}>
+      <div className="g4 mb-[18px]">
         <div className="stat-card"><div className="stat-lbl">Total ODL Applications</div><div className="stat-num">31</div><div className="stat-sub up">This intake</div></div>
-        <div className="stat-card" style={{'--b700': 'var(--amber)', '--b400': '#fbbf24'} as React.CSSProperties}><div className="stat-lbl">Awaiting Payment</div><div className="stat-num" style={{color: 'var(--amber)'}}>9</div><div className="stat-sub warn">In temp table</div></div>
-        <div className="stat-card" style={{'--b700': 'var(--purple)', '--b400': '#a78bfa'} as React.CSSProperties}><div className="stat-lbl">Paid — Pending Recon.</div><div className="stat-num" style={{color: 'var(--purple)'}}>4</div><div className="stat-sub warn">Accounts action needed</div></div>
-        <div className="stat-card" style={{'--b700': 'var(--green)', '--b400': '#34d399'} as React.CSSProperties}><div className="stat-lbl">Reconciled → Moved</div><div className="stat-num" style={{color: 'var(--green)'}}>18</div><div className="stat-sub up">In regular application</div></div>
+        <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]"><div className="stat-lbl">Awaiting Payment</div><div className="stat-num text-clr-amber">9</div><div className="stat-sub warn">In temp table</div></div>
+        <div className="stat-card [--b700:var(--purple)] [--b400:#a78bfa]"><div className="stat-lbl">Paid — Pending Recon.</div><div className="stat-num text-clr-purple">4</div><div className="stat-sub warn">Accounts action needed</div></div>
+        <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Reconciled → Moved</div><div className="stat-num text-clr-green">18</div><div className="stat-sub up">In regular application</div></div>
       </div>
 
       {/* Applications Table */}
@@ -148,7 +148,7 @@ export function OdlApplicationsPage({ nav, openModal, showToast, showPreview, se
         <div className="card-hdr">
           <div className="card-title"><span className="ctitle-icon"><i className="lni lni-world"></i></span> ODL Applicants — Temporary Table</div>
           <div className="flex gap-2">
-            <select className="ctrl" style={{width: 'auto', fontSize: '12px'}}><option>All Statuses</option><option>Awaiting Payment</option><option>Paid — Pending Recon.</option><option>Reconciled</option></select>
+            <select className="ctrl w-auto text-xs"><option>All Statuses</option><option>Awaiting Payment</option><option>Paid — Pending Recon.</option><option>Reconciled</option></select>
             <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
           </div>
         </div>
@@ -156,23 +156,23 @@ export function OdlApplicationsPage({ nav, openModal, showToast, showPreview, se
           <table>
             <thead><tr><th>ODL Ref No.</th><th>Applicant Name</th><th>Email</th><th>Programme</th><th>Applied Date</th><th>Payment</th><th>DPO Token</th><th>Status</th><th>Action</th></tr></thead>
             <tbody>
-              <tr><td style={{fontFamily: 'monospace', fontSize: '11px', color: 'var(--b700)'}}>ODL-2026-001</td><td><strong>Ssebulime Patrick</strong></td><td style={{fontSize: '11.5px'}}>patrick.ss@gmail.com</td><td>MBA ODL</td><td>10 Apr 2026</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid (DPO)</span></td><td style={{fontFamily: 'monospace', fontSize: '10px'}}>TKN-4829</td><td><span className="badge badge-purple">Pending Recon.</span></td><td><button className="btn btn-primary btn-sm" onClick={() => nav('odl-reconciliation')}>Reconcile →</button></td></tr>
-              <tr><td style={{fontFamily: 'monospace', fontSize: '11px', color: 'var(--b700)'}}>ODL-2026-002</td><td><strong>Nakiyaga Flavia</strong></td><td style={{fontSize: '11.5px'}}>f.nakiyaga@email.com</td><td>BSc. IT ODL</td><td>11 Apr 2026</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid (DPO)</span></td><td style={{fontFamily: 'monospace', fontSize: '10px'}}>TKN-4831</td><td><span className="badge badge-purple">Pending Recon.</span></td><td><button className="btn btn-primary btn-sm" onClick={() => nav('odl-reconciliation')}>Reconcile →</button></td></tr>
-              <tr className="flagged"><td style={{fontFamily: 'monospace', fontSize: '11px', color: 'var(--b700)'}}>ODL-2026-003</td><td><strong>Mutabazi Eric</strong></td><td style={{fontSize: '11.5px'}}>e.mutabazi@gmail.com</td><td>MBA ODL</td><td>12 Apr 2026</td><td><span className="badge badge-amber">Not Paid</span></td><td>—</td><td><span className="badge badge-amber">Awaiting Payment</span></td><td><button className="btn btn-neu btn-sm">View App →</button></td></tr>
-              <tr><td style={{fontFamily: 'monospace', fontSize: '11px', color: 'var(--g400)'}}>ODL-2026-004</td><td>Acayo Lydia</td><td style={{fontSize: '11.5px'}}>l.acayo@email.com</td><td>Diploma Bus. ODL</td><td>05 Apr 2026</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td style={{fontFamily: 'monospace', fontSize: '10px'}}>TKN-4791</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Reconciled</span></td><td><button className="btn btn-neu btn-sm">View →</button></td></tr>
+              <tr><td className="font-mono text-[11px] text-b700">ODL-2026-001</td><td><strong>Ssebulime Patrick</strong></td><td className="text-[11.5px]">patrick.ss@gmail.com</td><td>MBA ODL</td><td>10 Apr 2026</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid (DPO)</span></td><td className="font-mono text-[10px]">TKN-4829</td><td><span className="badge badge-purple">Pending Recon.</span></td><td><button className="btn btn-primary btn-sm" onClick={() => nav('odl-reconciliation')}>Reconcile →</button></td></tr>
+              <tr><td className="font-mono text-[11px] text-b700">ODL-2026-002</td><td><strong>Nakiyaga Flavia</strong></td><td className="text-[11.5px]">f.nakiyaga@email.com</td><td>BSc. IT ODL</td><td>11 Apr 2026</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid (DPO)</span></td><td className="font-mono text-[10px]">TKN-4831</td><td><span className="badge badge-purple">Pending Recon.</span></td><td><button className="btn btn-primary btn-sm" onClick={() => nav('odl-reconciliation')}>Reconcile →</button></td></tr>
+              <tr className="flagged"><td className="font-mono text-[11px] text-b700">ODL-2026-003</td><td><strong>Mutabazi Eric</strong></td><td className="text-[11.5px]">e.mutabazi@gmail.com</td><td>MBA ODL</td><td>12 Apr 2026</td><td><span className="badge badge-amber">Not Paid</span></td><td>—</td><td><span className="badge badge-amber">Awaiting Payment</span></td><td><button className="btn btn-neu btn-sm">View App →</button></td></tr>
+              <tr><td className="font-mono text-[11px] text-g400">ODL-2026-004</td><td>Acayo Lydia</td><td className="text-[11.5px]">l.acayo@email.com</td><td>Diploma Bus. ODL</td><td>05 Apr 2026</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td className="font-mono text-[10px]">TKN-4791</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Reconciled</span></td><td><button className="btn btn-neu btn-sm">View →</button></td></tr>
             </tbody>
           </table>
         </div>
       </div>
 
       {/* Online Application Form Preview (Candidate-facing) */}
-      <div className="card" style={{border: '2px dashed var(--cyan)', background: 'var(--cyan-bg)'}}>
-        <div className="card-hdr" style={{borderColor: 'rgba(2,132,199,.2)'}}>
+      <div className="card border-2 border-dashed border-[var(--cyan)] bg-[var(--cyan-bg)]">
+        <div className="card-hdr border-[rgba(2,132,199,.2)]">
           <div className="card-title"><span className="ctitle-icon"><i className="lni lni-world"></i></span> Candidate-Facing ODL Application Form</div>
           <span className="badge badge-cyan">Online Portal Preview</span>
         </div>
-        <div className="info-box" style={{marginBottom: '14px'}}>
-          <i className="lni lni-information"></i> This is the online form accessible at <span style={{fontFamily: 'monospace', background: 'var(--b100)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px'}}>ERP.../online.ASP</span>. No login required — candidates access via Reference Number + Email.
+        <div className="info-box mb-[14px]">
+          <i className="lni lni-information"></i> This is the online form accessible at <span className="font-mono bg-[var(--b100)] py-0.5 px-[6px] rounded text-[11px]">ERP.../online.ASP</span>. No login required — candidates access via Reference Number + Email.
         </div>
         <div className="g3">
           <div className="fg"><div className="lbl">Full Name <span className="req">*</span></div><input className="ctrl" type="text" placeholder="Full legal name" /></div>
@@ -185,16 +185,16 @@ export function OdlApplicationsPage({ nav, openModal, showToast, showPreview, se
             <select className="ctrl"><option>-- Select --</option><option>A-Level</option><option>Diploma</option><option>Bachelor&apos;s Degree</option></select>
           </div>
           <div className="fg"><div className="lbl">Photo Upload <span className="req">*</span></div>
-            <div className="file-zone" style={{padding: '12px'}}><input type="file" accept="image/*" /><div className="file-zone-icon" style={{fontSize: '18px'}}><i className="lni lni-image"></i></div><p>Passport photo</p></div>
+            <div className="file-zone p-3"><input type="file" accept="image/*" /><div className="file-zone-icon text-[18px]"><i className="lni lni-image"></i></div><p>Passport photo</p></div>
           </div>
         </div>
         <div className="sec-divider">Payment Option</div>
-        <div className="tgl-group" style={{marginBottom: '14px'}}>
+        <div className="tgl-group mb-[14px]">
           <button className="tgl-btn tgl-active"><i className="lni lni-credit-cards"></i> Pay Online via DPO</button>
           <button className="tgl-btn"><i className="lni lni-apartment"></i> Pay Manually at Office</button>
         </div>
-        <div className="success-box" style={{marginBottom: '14px'}}><i className="lni lni-checkmark"></i> <span>No fee exemptions apply to ODL applications. Application fee must be paid to complete the process.</span></div>
-        <div style={{display: 'flex', gap: '10px', justifyContent: 'flex-end'}}>
+        <div className="success-box mb-[14px]"><i className="lni lni-checkmark"></i> <span>No fee exemptions apply to ODL applications. Application fee must be paid to complete the process.</span></div>
+        <div className="flex gap-[10px] justify-end">
           <button className="btn btn-neu" onClick={() => showToast('Application saved. Reference number sent to email.', 'success')}><i className="lni lni-save"></i> Save &amp; Get Reference No.</button>
           <button className="btn btn-primary" onClick={() => showToast('Redirecting to DPO payment gateway...', 'success')}><i className="lni lni-credit-cards"></i> Proceed to Payment →</button>
         </div>
@@ -205,7 +205,7 @@ export function OdlApplicationsPage({ nav, openModal, showToast, showPreview, se
 
 export function OdelStudentPreviewPage({ nav, openModal, showToast, odpTab = 'personal', setOdpTab }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">ODel Student Preview</div>
@@ -213,13 +213,13 @@ export function OdelStudentPreviewPage({ nav, openModal, showToast, odpTab = 'pe
         </div>
         <div className="flex gap-2">
           <span className="badge badge-cyan"><i className="lni lni-world"></i> Online Portal Preview</span>
-          <button className="btn btn-neu" onClick={() => nav('dashboard')}>← Back</button>
+          <button className="btn btn-neu" onClick={() => nav('acad-dashboard')}>← Back</button>
         </div>
       </div>
 
-      <div className="info-box" style={{marginBottom: '14px'}}>
+      <div className="info-box mb-[14px]">
         <i className="lni lni-information"></i> Preview of the public-facing form at{' '}
-        <span style={{fontFamily: 'monospace', background: 'var(--b100)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px'}}>ERP.../online.ASP</span>
+        <span className="font-mono bg-[var(--b100)] py-0.5 px-[6px] rounded text-[11px]">ERP.../online.ASP</span>
         {' '}— no login required; candidates access via Reference No. + Email.
       </div>
 
@@ -268,7 +268,7 @@ export function OdelStudentPreviewPage({ nav, openModal, showToast, odpTab = 'pe
               </div>
               <div className="fg span3"><div className="lbl">Residential Address</div><input className="ctrl" type="text" placeholder="District / Town / Village" /></div>
             </div>
-            <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '14px'}}>
+            <div className="flex justify-end mt-[14px]">
               <button className="btn btn-primary" onClick={() => setOdpTab && setOdpTab('qualifications')}>Next: Qualifications →</button>
             </div>
           </div>
@@ -277,7 +277,7 @@ export function OdelStudentPreviewPage({ nav, openModal, showToast, odpTab = 'pe
         {/* TAB: Qualifications */}
         {odpTab === 'qualifications' && (
           <div className="odp-pane active" id="odp-qualifications">
-            <div className="info-box" style={{marginBottom: '14px'}}>
+            <div className="info-box mb-[14px]">
               <i className="lni lni-graduation"></i> Enter your highest qualification. ODL candidates can attach scanned certificates in the Documents tab.
             </div>
             <div className="g2">
@@ -294,7 +294,7 @@ export function OdelStudentPreviewPage({ nav, openModal, showToast, odpTab = 'pe
               <div className="fg"><div className="lbl">Current Employer</div><input className="ctrl" type="text" placeholder="Company / Organisation" /></div>
               <div className="fg"><div className="lbl">Years of Experience</div><input className="ctrl" type="number" min={0} max={50} placeholder="0" /></div>
             </div>
-            <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '14px'}}>
+            <div className="flex justify-between mt-[14px]">
               <button className="btn btn-neu" onClick={() => setOdpTab && setOdpTab('personal')}>← Personal Info</button>
               <button className="btn btn-primary" onClick={() => setOdpTab && setOdpTab('family')}>Next: Family Details →</button>
             </div>
@@ -317,7 +317,7 @@ export function OdelStudentPreviewPage({ nav, openModal, showToast, odpTab = 'pe
               </div>
               <div className="fg span2"><div className="lbl">Emergency Contact</div><input className="ctrl" type="text" placeholder="Name + Phone (in case of emergency)" /></div>
             </div>
-            <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '14px'}}>
+            <div className="flex justify-between mt-[14px]">
               <button className="btn btn-neu" onClick={() => setOdpTab && setOdpTab('qualifications')}>← Qualifications</button>
               <button className="btn btn-primary" onClick={() => setOdpTab && setOdpTab('documents')}>Next: Documents →</button>
             </div>
@@ -327,7 +327,7 @@ export function OdelStudentPreviewPage({ nav, openModal, showToast, odpTab = 'pe
         {/* TAB: Documents */}
         {odpTab === 'documents' && (
           <div className="odp-pane active" id="odp-documents">
-            <div className="info-box" style={{marginBottom: '14px'}}>
+            <div className="info-box mb-[14px]">
               <i className="lni lni-paperclip"></i> Upload scanned copies. Physical originals will be verified by the Administrator at final stage. Provisional certificates are accepted at this stage.
             </div>
             <div className="g2">
@@ -347,7 +347,7 @@ export function OdelStudentPreviewPage({ nav, openModal, showToast, odpTab = 'pe
                 <div className="file-zone"><input type="file" accept=".pdf,image/*" multiple /><div className="file-zone-icon"><i className="lni lni-files"></i></div><p>Recommendation letters, work certificates, etc.</p></div>
               </div>
             </div>
-            <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '14px'}}>
+            <div className="flex justify-between mt-[14px]">
               <button className="btn btn-neu" onClick={() => setOdpTab && setOdpTab('family')}>← Family</button>
               <button className="btn btn-primary" onClick={() => setOdpTab && setOdpTab('payment')}>Next: Application Payment →</button>
             </div>
@@ -357,14 +357,14 @@ export function OdelStudentPreviewPage({ nav, openModal, showToast, odpTab = 'pe
         {/* TAB: Application Payment */}
         {odpTab === 'payment' && (
           <div className="odp-pane active" id="odp-payment">
-            <div className="card" style={{border: '2px dashed var(--cyan)', background: 'var(--cyan-bg)', marginBottom: 0}}>
-              <div className="card-hdr" style={{borderColor: 'rgba(2,132,199,.2)'}}>
+            <div className="card border-2 border-dashed border-[var(--cyan)] bg-[var(--cyan-bg)] mb-0">
+              <div className="card-hdr border-[rgba(2,132,199,.2)]">
                 <div className="card-title"><span className="ctitle-icon"><i className="lni lni-world"></i></span> Candidate-Facing ODL Application Form</div>
                 <span className="badge badge-cyan">Online Portal Preview</span>
               </div>
-              <div className="info-box" style={{marginBottom: '14px'}}>
+              <div className="info-box mb-[14px]">
                 <i className="lni lni-information"></i> This is the online form accessible at{' '}
-                <span style={{fontFamily: 'monospace', background: 'var(--b100)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px'}}>ERP.../online.ASP</span>.
+                <span className="font-mono bg-[var(--b100)] py-0.5 px-[6px] rounded text-[11px]">ERP.../online.ASP</span>.
                 {' '}No login required — candidates access via Reference Number + Email.
               </div>
               <div className="g3">
@@ -373,7 +373,7 @@ export function OdelStudentPreviewPage({ nav, openModal, showToast, odpTab = 'pe
                 <div className="fg"><div className="lbl">Phone Number <span className="req">*</span></div><input className="ctrl" type="tel" placeholder="+256 700 000 000" /></div>
               </div>
               <div className="sec-divider">Application Fee</div>
-              <div className="g2" style={{marginBottom: '14px'}}>
+              <div className="g2 mb-[14px]">
                 <div className="fg">
                   <div className="lbl">Fee Type <span className="req">*</span></div>
                   <select className="ctrl">
@@ -383,18 +383,18 @@ export function OdelStudentPreviewPage({ nav, openModal, showToast, odpTab = 'pe
                 </div>
                 <div className="fg">
                   <div className="lbl">Amount</div>
-                  <div style={{padding: '14px 16px', background: 'var(--g100)', border: '1.5px dashed var(--g300)', borderRadius: 'var(--rsm)', color: 'var(--g400)', fontSize: '12.5px', fontWeight: 500}}>
+                  <div className="p-[14px_16px] bg-[var(--g100)] border-[1.5px] border-dashed border-[var(--g300)] rounded-[var(--rsm)] text-g400 text-[12.5px] font-medium">
                     Select a fee type to view the amount
                   </div>
                 </div>
               </div>
               <div className="sec-divider">Payment Option</div>
-              <div className="tgl-group" style={{marginBottom: '14px'}}>
+              <div className="tgl-group mb-[14px]">
                 <button className="tgl-btn tgl-active"><i className="lni lni-credit-cards"></i> Pay Online via DPO</button>
                 <button className="tgl-btn"><i className="lni lni-apartment"></i> Pay Manually at Office</button>
               </div>
-              <div className="success-box" style={{marginBottom: '14px'}}><i className="lni lni-checkmark"></i> <span>No fee exemptions apply to ODL applications. Application fee must be paid to complete the process.</span></div>
-              <div style={{display: 'flex', gap: '10px', justifyContent: 'space-between', flexWrap: 'wrap'}}>
+              <div className="success-box mb-[14px]"><i className="lni lni-checkmark"></i> <span>No fee exemptions apply to ODL applications. Application fee must be paid to complete the process.</span></div>
+              <div className="flex gap-[10px] justify-between flex-wrap">
                 <button className="btn btn-neu" onClick={() => setOdpTab && setOdpTab('documents')}>← Documents</button>
                 <div className="flex gap-2">
                   <button className="btn btn-neu" onClick={() => showToast('Application saved. Reference number sent to email.', 'success')}><i className="lni lni-save"></i> Save &amp; Get Reference No.</button>
@@ -411,7 +411,7 @@ export function OdelStudentPreviewPage({ nav, openModal, showToast, odpTab = 'pe
 
 export function OdlReconciliationPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">ODL Payment Reconciliation</div>
@@ -420,7 +420,7 @@ export function OdlReconciliationPage({ nav, openModal, showToast }: PageProps) 
         <button className="btn btn-neu" onClick={() => nav('odl-applications')}>← ODL Applications</button>
       </div>
 
-      <div className="warn-box" style={{marginBottom: '18px'}}>
+      <div className="warn-box mb-[18px]">
         <i className="lni lni-warning"></i> <span>Reconciliation is a <strong>manual accounts process</strong>. The system does NOT automatically move an applicant after DPO payment — accounts must verify and confirm. Once reconciled, the system sends a <strong>&quot;Payment is reconciled&quot;</strong> email to the candidate and their status changes from <em>Lead → Candidate</em>.</span>
       </div>
 
@@ -429,21 +429,21 @@ export function OdlReconciliationPage({ nav, openModal, showToast }: PageProps) 
           <div className="card-title"><span className="ctitle-icon"><i className="lni lni-credit-cards"></i></span> Pending Reconciliation (4)</div>
           <span className="badge badge-amber">Accounts Action Required</span>
         </div>
-        <div id="recon-list" style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+        <div id="recon-list" className="flex flex-col gap-[10px]">
 
           {/* Reconciliation Item 1 */}
-          <div style={{border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', padding: '16px', background: 'var(--surface)'}} id="recon-ODL-2026-001">
-            <div style={{display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px'}}>
+          <div className="border-[1.5px] border-g200 rounded-[var(--rsm)] p-4 bg-surface" id="recon-ODL-2026-001">
+            <div className="flex items-start justify-between flex-wrap gap-[10px]">
               <div>
-                <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px'}}>
-                  <span className="font-bold" style={{fontSize: '14px'}}>Ssebulime Patrick</span>
-                  <span style={{fontFamily: 'monospace', fontSize: '11px', color: 'var(--b700)'}}>ODL-2026-001</span>
+                <div className="flex items-center gap-2 mb-[6px]">
+                  <span className="font-bold text-sm">Ssebulime Patrick</span>
+                  <span className="font-mono text-[11px] text-b700">ODL-2026-001</span>
                   <span className="badge badge-purple">Pending Recon.</span>
                 </div>
-                <div style={{display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12.5px', color: 'var(--g500)'}}>
+                <div className="flex gap-4 flex-wrap text-[12.5px] text-g500">
                   <span><i className="lni lni-envelope"></i> patrick.ss@gmail.com</span>
                   <span><i className="lni lni-book"></i> MBA ODL</span>
-                  <span><i className="lni lni-credit-cards"></i> DPO Token: <span style={{fontFamily: 'monospace', color: 'var(--b700)'}}>TKN-4829</span></span>
+                  <span><i className="lni lni-credit-cards"></i> DPO Token: <span className="font-mono text-b700">TKN-4829</span></span>
                   <span><i className="lni lni-calendar"></i> Paid: 10 Apr 2026</span>
                   <span><i className="lni lni-dollar"></i> Amount: UGX 50,000</span>
                 </div>
@@ -457,18 +457,18 @@ export function OdlReconciliationPage({ nav, openModal, showToast }: PageProps) 
           </div>
 
           {/* Reconciliation Item 2 */}
-          <div style={{border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', padding: '16px', background: 'var(--surface)'}} id="recon-ODL-2026-002">
-            <div style={{display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px'}}>
+          <div className="border-[1.5px] border-g200 rounded-[var(--rsm)] p-4 bg-surface" id="recon-ODL-2026-002">
+            <div className="flex items-start justify-between flex-wrap gap-[10px]">
               <div>
-                <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px'}}>
-                  <span className="font-bold" style={{fontSize: '14px'}}>Nakiyaga Flavia</span>
-                  <span style={{fontFamily: 'monospace', fontSize: '11px', color: 'var(--b700)'}}>ODL-2026-002</span>
+                <div className="flex items-center gap-2 mb-[6px]">
+                  <span className="font-bold text-sm">Nakiyaga Flavia</span>
+                  <span className="font-mono text-[11px] text-b700">ODL-2026-002</span>
                   <span className="badge badge-purple">Pending Recon.</span>
                 </div>
-                <div style={{display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12.5px', color: 'var(--g500)'}}>
+                <div className="flex gap-4 flex-wrap text-[12.5px] text-g500">
                   <span><i className="lni lni-envelope"></i> f.nakiyaga@email.com</span>
                   <span><i className="lni lni-book"></i> BSc. IT ODL</span>
-                  <span><i className="lni lni-credit-cards"></i> DPO Token: <span style={{fontFamily: 'monospace', color: 'var(--b700)'}}>TKN-4831</span></span>
+                  <span><i className="lni lni-credit-cards"></i> DPO Token: <span className="font-mono text-b700">TKN-4831</span></span>
                   <span><i className="lni lni-calendar"></i> Paid: 11 Apr 2026</span>
                   <span><i className="lni lni-dollar"></i> Amount: UGX 50,000</span>
                 </div>
@@ -489,7 +489,7 @@ export function OdlReconciliationPage({ nav, openModal, showToast }: PageProps) 
 
 export function QualEquatingPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">Qualification Equating</div>
@@ -498,7 +498,7 @@ export function QualEquatingPage({ nav, openModal, showToast }: PageProps) {
         <button className="btn btn-primary" onClick={() => openModal('new-equating-modal')}><i className="lni lni-plus"></i> New Equating Request</button>
       </div>
 
-      <div className="info-box" style={{marginBottom: '18px'}}>
+      <div className="info-box mb-[18px]">
         <i className="lni lni-world"></i> <span>Any foreign qualification must be formally equated with <strong>NCHE</strong> (National Council of Higher Education) or <strong>UVTOP</strong> (Uganda National &amp; Technical Vocational Board) before the applicant can be admitted. O-Level: minimum 5 passes, passing grade ≤ 8. A-Level: assessed on Principal Passes and Subsidiary Passes.</span>
       </div>
 
@@ -519,11 +519,11 @@ export function QualEquatingPage({ nav, openModal, showToast }: PageProps) {
       </div>
 
       {/* Undefined sub-detail */}
-      <div className="undefined-box" style={{marginTop: '4px'}}>
-        <div style={{fontSize: '20px', marginBottom: '8px'}}><i className="lni lni-world"></i></div>
-        <div style={{fontWeight: 700, fontSize: '14px', color: 'var(--g900)', marginBottom: '6px'}}>Detailed Equating Workflow</div>
-        <div style={{fontSize: '12.5px', color: 'var(--g500)', maxWidth: '500px', margin: '0 auto'}}>The detailed process for document submission to NCHE/UVTOP, tracking, and outcome recording has <strong>not yet been covered in a KT session</strong>.</div>
-        <div className="badge badge-purple" style={{marginTop: '10px'}}><i className="lni lni-clipboard"></i> Module Not Yet Defined — Details to be captured in KT Session</div>
+      <div className="undefined-box mt-1">
+        <div className="text-[20px] mb-2"><i className="lni lni-world"></i></div>
+        <div className="font-bold text-sm text-g900 mb-[6px]">Detailed Equating Workflow</div>
+        <div className="text-[12.5px] text-g500 max-w-[500px] mx-auto">The detailed process for document submission to NCHE/UVTOP, tracking, and outcome recording has <strong>not yet been covered in a KT session</strong>.</div>
+        <div className="badge badge-purple mt-[10px]"><i className="lni lni-clipboard"></i> Module Not Yet Defined — Details to be captured in KT Session</div>
       </div>
     </div>
   )
