@@ -17,12 +17,12 @@ const MobileAcademicDashboard = dynamic(
   { ssr: true },
 )
 
-export default function AcademicLayout({
+export default async function AcademicLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const headersList = headers()
+  const headersList = await headers()
   const deviceType = headersList.get('x-device-type') ?? 'desktop'
   const isMobile = deviceType === 'mobile'
 
