@@ -14,7 +14,7 @@ interface PageProps {
 
 export function UniversityExamPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">University Examination</div>
@@ -61,7 +61,7 @@ export function UniversityExamPage({ nav, openModal, showToast }: PageProps) {
 
 export function ResultsPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">Results</div>
@@ -81,7 +81,7 @@ export function ResultsPage({ nav, openModal, showToast }: PageProps) {
 
 export function GrievancePage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">Grievance Management</div>
@@ -104,7 +104,7 @@ export function GrievancePage({ nav, openModal, showToast }: PageProps) {
 
 export function OdlApplicationsPage({ nav, openModal, showToast, showPreview, setShowPreview }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">ODL Applications</div>
@@ -205,7 +205,7 @@ export function OdlApplicationsPage({ nav, openModal, showToast, showPreview, se
 
 export function OdelStudentPreviewPage({ nav, openModal, showToast, odpTab = 'personal', setOdpTab }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">ODel Student Preview</div>
@@ -213,7 +213,7 @@ export function OdelStudentPreviewPage({ nav, openModal, showToast, odpTab = 'pe
         </div>
         <div className="flex gap-2">
           <span className="badge badge-cyan"><i className="lni lni-world"></i> Online Portal Preview</span>
-          <button className="btn btn-neu" onClick={() => nav('dashboard')}>← Back</button>
+          <button className="btn btn-neu" onClick={() => nav('acad-dashboard')}>← Back</button>
         </div>
       </div>
 
@@ -411,7 +411,7 @@ export function OdelStudentPreviewPage({ nav, openModal, showToast, odpTab = 'pe
 
 export function OdlReconciliationPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">ODL Payment Reconciliation</div>
@@ -489,7 +489,7 @@ export function OdlReconciliationPage({ nav, openModal, showToast }: PageProps) 
 
 export function QualEquatingPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">Qualification Equating</div>

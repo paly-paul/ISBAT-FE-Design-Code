@@ -12,7 +12,7 @@ interface PageProps {
 
 export function BatchManagementPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Batch Management</div><div className="pg-sub">Create batches per intake · Auto-generate batch codes · Sub-batch large cohorts · Assign Batch In-Charge</div></div>
         <button className="btn btn-primary" onClick={() => openModal('new-batch-modal')}><i className="lni lni-plus"></i> Create Batch</button>
@@ -154,7 +154,7 @@ export function BatchManagementPage({ nav, openModal, showToast }: PageProps) {
 
 export function FeeStructurePage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Programme Fee Structure</div><div className="pg-sub">Define fee items per semester · Custom titles · Set priority and base currency · Auto-settlement by priority</div></div>
         <div className="flex gap-2">
@@ -389,7 +389,7 @@ export function FeeStructurePage({ nav, openModal, showToast }: PageProps) {
 
 export function AccessGatePage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">Academic Access Gate</div>
@@ -470,7 +470,7 @@ export function AccessGatePage({ nav, openModal, showToast }: PageProps) {
 
 export function StudentLookupPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Student Lookup</div><div className="pg-sub">Cross-module shared page · Search any student · View academic and financial status</div></div>
         <span className="badge badge-purple" style={{ alignSelf: 'center' }}><i className="lni lni-link"></i> Shared Across All Modules</span>
@@ -637,7 +637,7 @@ export function StudentLookupPage({ nav, openModal, showToast }: PageProps) {
 
 export function FeeClearancePage({ nav, openModal, showToast, showFcResult, setShowFcResult }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Fee Clearance Check</div><div className="pg-sub">Read-only view · Clearance status consumed from Finance Service (Service 3)</div></div>
         <span className="badge badge-purple" style={{ alignSelf: 'center' }}><i className="lni lni-link"></i> Shared — Read Only in Academic Module</span>

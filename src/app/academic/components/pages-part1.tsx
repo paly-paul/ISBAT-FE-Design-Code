@@ -160,7 +160,7 @@ export function DashboardPage({ nav, openModal }: PageProps) {
 
 export function IntakeMasterPage({ nav, openModal }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Intake Master</div><div className="pg-sub">Configure academic sessions · Set all semester and term dates · Manage current intakes</div></div>
         <button className="btn btn-primary" onClick={() => openModal('new-intake-modal')}><i className="lni lni-plus"></i> New Intake</button>
@@ -211,7 +211,7 @@ export function IntakeMasterPage({ nav, openModal }: PageProps) {
 
 export function CourseUnitsPage({ nav, openModal }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Course Units Master (Curriculum)</div><div className="pg-sub">Define subjects per semester · Set Unit Type and Category · Attach approved syllabus · Configure assessment components</div></div>
         <button className="btn btn-primary" onClick={() => openModal('cu-new-modal')}><i className="lni lni-plus"></i> Add Course Unit</button>
@@ -262,7 +262,7 @@ export function CourseUnitsPage({ nav, openModal }: PageProps) {
 
 export function SkillMasterPage({ nav, openModal }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">Skill Management Master</div>

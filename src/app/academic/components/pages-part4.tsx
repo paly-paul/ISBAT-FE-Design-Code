@@ -10,7 +10,7 @@ interface PageProps {
 
 export function FacultyMasterPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Faculty Master</div><div className="pg-sub">Define university faculties · Associate programmes and course units</div></div>
         <button className="btn btn-primary" onClick={() => openModal('new-faculty-modal')}><i className="lni lni-plus"></i> Add Faculty</button>
@@ -34,7 +34,7 @@ export function FacultyMasterPage({ nav, openModal, showToast }: PageProps) {
 
 export function LecturerMasterPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Lecturer Master</div><div className="pg-sub">All teaching staff · Captures qualification details · Linked to Faculty &amp; Course Allocation</div></div>
         <button className="btn btn-primary" onClick={() => openModal('new-lecturer-modal')}><i className="lni lni-plus"></i> Add Lecturer</button>
@@ -115,7 +115,7 @@ export function LecturerMasterPage({ nav, openModal, showToast }: PageProps) {
 
 export function ALevelMasterPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Programme Level Master</div><div className="pg-sub">Define programme levels (Bachelor's, Master's, PhD etc.) · Set year count, semester count and minimum credit load</div></div>
         <button className="btn btn-primary" onClick={() => openModal('new-alevel-modal')}><i className="lni lni-plus"></i> Add Level</button>
@@ -149,7 +149,7 @@ export function ALevelMasterPage({ nav, openModal, showToast }: PageProps) {
 
 export function ProgrammeGroupPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Programme Group Master</div><div className="pg-sub">Generic programme names for reporting · Groups all curriculum versions under one umbrella</div></div>
         <button className="btn btn-primary" onClick={() => openModal('new-proggroup-modal')}><i className="lni lni-plus"></i> Add Programme Group</button>
@@ -182,7 +182,7 @@ export function ProgrammeGroupPage({ nav, openModal, showToast }: PageProps) {
 
 export function ProgrammeMasterPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Programme Master</div><div className="pg-sub">Define programme versions · Manage active/inactive status · Accreditation tracking · Specializations</div></div>
         <button className="btn btn-primary" onClick={() => openModal('new-prog-modal')}><i className="lni lni-plus"></i> Add Programme Version</button>

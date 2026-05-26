@@ -88,11 +88,11 @@ export default function AcademicPage() {
   function sbSection(id: string, label: string, children: React.ReactNode) {
     const collapsed = collapsedSections.has(id)
     return (
-      <div className={`sb-collapse${collapsed ? '' : ' open'}`}>
+      <div className={`sb-collapse${collapsed ? ' closed' : ''}`}>
         <div className="sb-group-hdr" onClick={() => toggleCollapse(id)}>
           <span>{label}</span><span className="sb-chevron">{collapsed ? '▸' : '▾'}</span>
         </div>
-        {!collapsed && <div className="sb-collapse-body">{children}</div>}
+        <div className="sb-collapse-body">{children}</div>
       </div>
     )
   }
@@ -158,7 +158,7 @@ export default function AcademicPage() {
           </div>
 
           <div className="sb-panel-shell open">
-            <div className="sb-panel">
+            <div className="sb-panel active">
               <div className="sb-panel-hdr">
                 <div className="sb-panel-hdr-title">Module</div>
                 <div className="sb-panel-hdr-name"><i className="lni lni-graduation"></i> Academic</div>

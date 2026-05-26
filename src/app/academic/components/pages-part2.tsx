@@ -10,7 +10,7 @@ interface PageProps {
 
 export function SessionMovementPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">Session Movement</div>
@@ -157,7 +157,7 @@ export function SessionMovementPage({ nav, openModal, showToast }: PageProps) {
 
 export function AllocationPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Course Unit Allocation</div><div className="pg-sub">Assign course units to faculty · Upload HOD Excel sheet · Preview and confirm allocation</div></div>
         <div className="flex gap-2">
@@ -212,7 +212,7 @@ export function AllocationPage({ nav, openModal, showToast }: PageProps) {
 
 export function TimetablePage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div>
           <div className="pg-title">Timetable Management</div>
@@ -322,7 +322,7 @@ export function TimetablePage({ nav, openModal, showToast }: PageProps) {
 
 export function CourseworkPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Coursework (CW) Management</div><div className="pg-sub">Term-based internal assessments · Faculty upload questions · 50% fee clearance required for submission</div></div>
         <button className="btn btn-primary" onClick={() => openModal('new-cw-modal')}><i className="lni lni-plus"></i> Schedule Coursework</button>
@@ -370,7 +370,7 @@ export function CourseworkPage({ nav, openModal, showToast }: PageProps) {
 
 export function ClassTestPage({ nav, openModal, showToast }: PageProps) {
   return (
-    <div className="page">
+    <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Class Test (CBT)</div><div className="pg-sub">Computer-based timed assessments · 60-minute server-side timer · 50% fee clearance for submission</div></div>
         <button className="btn btn-primary" onClick={() => openModal('new-cbt-modal')}><i className="lni lni-plus"></i> Schedule Class Test</button>

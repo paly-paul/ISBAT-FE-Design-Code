@@ -12,7 +12,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
     <>
       {/* ── New Intake Modal ── */}
       {openModals.has('new-intake-modal') && (
-        <div className="modal-overlay" id="new-intake-modal" onClick={() => closeModal('new-intake-modal')}>
+        <div className="modal-overlay open" id="new-intake-modal" onClick={() => closeModal('new-intake-modal')}>
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-calendar"></i> Create New Intake</div>
@@ -42,13 +42,45 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
         </div>
       )}
 
+      {/* ── Edit Intake Modal ── */}
+      {openModals.has('intake-edit-modal') && (
+        <div className="modal-overlay open" id="intake-edit-modal" onClick={() => closeModal('intake-edit-modal')}>
+          <div className="modal modal-md" onClick={e => e.stopPropagation()}>
+            <div className="modal-hdr">
+              <div className="modal-title"><i className="lni lni-pencil"></i> Edit Intake</div>
+              <button className="modal-close" onClick={() => closeModal('intake-edit-modal')}><i className="lni lni-close"></i></button>
+            </div>
+            <div className="g2">
+              <div className="fg"><div className="lbl">Intake Code <span className="req">*</span></div><input className="ctrl" type="text" defaultValue="20261" /></div>
+              <div className="fg"><div className="lbl">Description <span className="req">*</span></div><input className="ctrl" type="text" defaultValue="Spring 2026" /></div>
+              <div className="fg"><div className="lbl">Financial Year <span className="req">*</span></div><input className="ctrl" type="text" defaultValue="2025–26" /></div>
+              <div className="fg">
+                <div className="lbl">Set As <span className="req">*</span></div>
+                <select className="ctrl" defaultValue="Academic Intake (Teaching)"><option>Academic Intake (Teaching)</option><option>Admission Intake (New Students)</option></select>
+              </div>
+              <div className="fg"><div className="lbl">Semester Start Date <span className="req">*</span></div><input className="ctrl" type="date" defaultValue="2026-02-01" /></div>
+              <div className="fg"><div className="lbl">Term 1 End Date <span className="req">*</span></div><input className="ctrl" type="date" defaultValue="2026-03-30" /></div>
+              <div className="fg"><div className="lbl">Term 2 End Date / Semester End <span className="req">*</span></div><input className="ctrl" type="date" defaultValue="2026-05-31" /></div>
+              <div className="fg"><div className="lbl">Grievance End Date</div><input className="ctrl" type="date" defaultValue="2026-06-10" /></div>
+              <div className="fg"><div className="lbl">Re-entry Date</div><input className="ctrl" type="date" /></div>
+              <div className="fg"><div className="lbl">Late Fee Start Date</div><input className="ctrl" type="date" defaultValue="2026-06-15" /></div>
+            </div>
+            <div className="warn-box mt-3"><i className="lni lni-warning"></i> Only one intake can be set as <em>Current Academic</em> and one as <em>Current Admission</em> simultaneously. Setting a new one will deactivate the previous.</div>
+            <div className="modal-footer">
+              <button className="btn btn-neu" onClick={() => closeModal('intake-edit-modal')}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => { closeModal('intake-edit-modal'); showToast('Intake updated successfully.', 'success') }}><i className="lni lni-checkmark"></i> Update Intake</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Add / Edit Course Unit Modal ── */}
-      {openModals.has('new-cu-modal') && (
-        <div className="modal-overlay" id="new-cu-modal" onClick={() => closeModal('new-cu-modal')}>
+      {openModals.has('cu-new-modal') && (
+        <div className="modal-overlay open" id="cu-new-modal" onClick={() => closeModal('cu-new-modal')}>
           <div className="modal modal-80" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-book"></i> Add / Edit Course Unit</div>
-              <button className="modal-close" onClick={() => closeModal('new-cu-modal')}><i className="lni lni-close"></i></button>
+              <button className="modal-close" onClick={() => closeModal('cu-new-modal')}><i className="lni lni-close"></i></button>
             </div>
             <div className="g3">
               <div className="fg"><div className="lbl">Unit Code <span className="req">*</span></div><input className="ctrl" id="cu-code" placeholder="e.g. IT201" /></div>
@@ -153,7 +185,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
             </div>
 
             <div className="modal-footer">
-              <button className="btn btn-neu" onClick={() => closeModal('new-cu-modal')}>Cancel</button>
+              <button className="btn btn-neu" onClick={() => closeModal('cu-new-modal')}>Cancel</button>
               <button className="btn btn-primary"><i className="lni lni-checkmark"></i> Save Course Unit</button>
             </div>
           </div>
@@ -162,7 +194,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Confirm Session Movement Modal ── */}
       {openModals.has('confirm-movement-modal') && (
-        <div className="modal-overlay" id="confirm-movement-modal" onClick={() => closeModal('confirm-movement-modal')}>
+        <div className="modal-overlay open" id="confirm-movement-modal" onClick={() => closeModal('confirm-movement-modal')}>
           <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-warning"></i> Confirm Session Movement</div>
@@ -180,7 +212,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Import Allocation Modal ── */}
       {openModals.has('alloc-import-modal') && (
-        <div className="modal-overlay" id="alloc-import-modal" onClick={() => closeModal('alloc-import-modal')}>
+        <div className="modal-overlay open" id="alloc-import-modal" onClick={() => closeModal('alloc-import-modal')}>
           <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-download"></i> Import Allocation from Excel</div>
@@ -225,7 +257,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Import Timetable Modal ── */}
       {openModals.has('tt-import-modal') && (
-        <div className="modal-overlay" id="tt-import-modal" onClick={() => closeModal('tt-import-modal')}>
+        <div className="modal-overlay open" id="tt-import-modal" onClick={() => closeModal('tt-import-modal')}>
           <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-download"></i> Import Timetable from Excel</div>
@@ -262,7 +294,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Add Timetable Slot Modal ── */}
       {openModals.has('add-slot-modal') && (
-        <div className="modal-overlay" id="add-slot-modal" onClick={() => closeModal('add-slot-modal')}>
+        <div className="modal-overlay open" id="add-slot-modal" onClick={() => closeModal('add-slot-modal')}>
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-calendar"></i> Add Timetable Slot</div>
@@ -334,7 +366,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Add / Update Faculty Skills Modal ── */}
       {openModals.has('add-skill-modal') && (
-        <div className="modal-overlay" id="add-skill-modal" onClick={() => closeModal('add-skill-modal')}>
+        <div className="modal-overlay open" id="add-skill-modal" onClick={() => closeModal('add-skill-modal')}>
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-bulb"></i> Add / Update Faculty Skills</div>
@@ -371,7 +403,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Room Management Modal ── */}
       {openModals.has('room-mgmt-modal') && (
-        <div className="modal-overlay" id="room-mgmt-modal" onClick={() => closeModal('room-mgmt-modal')}>
+        <div className="modal-overlay open" id="room-mgmt-modal" onClick={() => closeModal('room-mgmt-modal')}>
           <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-apartment"></i> Room Management</div>
@@ -406,7 +438,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Add Faculty Modal ── */}
       {openModals.has('new-faculty-modal') && (
-        <div className="modal-overlay" id="new-faculty-modal" onClick={() => closeModal('new-faculty-modal')}>
+        <div className="modal-overlay open" id="new-faculty-modal" onClick={() => closeModal('new-faculty-modal')}>
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-apartment"></i> Add Faculty</div>
@@ -444,7 +476,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Add Lecturer Modal ── */}
       {openModals.has('new-lecturer-modal') && (
-        <div className="modal-overlay" id="new-lecturer-modal" onClick={() => closeModal('new-lecturer-modal')}>
+        <div className="modal-overlay open" id="new-lecturer-modal" onClick={() => closeModal('new-lecturer-modal')}>
           <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-user"></i> Add Lecturer</div>
@@ -519,7 +551,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Add / Edit Programme Level Modal ── */}
       {openModals.has('new-alevel-modal') && (
-        <div className="modal-overlay" id="new-alevel-modal" onClick={() => closeModal('new-alevel-modal')}>
+        <div className="modal-overlay open" id="new-alevel-modal" onClick={() => closeModal('new-alevel-modal')}>
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-graduation"></i> Add / Edit Programme Level</div>
@@ -550,7 +582,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Add Programme Group Modal ── */}
       {openModals.has('new-proggroup-modal') && (
-        <div className="modal-overlay" id="new-proggroup-modal" onClick={() => closeModal('new-proggroup-modal')}>
+        <div className="modal-overlay open" id="new-proggroup-modal" onClick={() => closeModal('new-proggroup-modal')}>
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-folder"></i> Add Programme Group</div>
@@ -575,7 +607,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Add Programme Version Modal ── */}
       {openModals.has('new-prog-modal') && (
-        <div className="modal-overlay" id="new-prog-modal" onClick={() => closeModal('new-prog-modal')}>
+        <div className="modal-overlay open" id="new-prog-modal" onClick={() => closeModal('new-prog-modal')}>
           <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-graduation"></i> <span id="prog-modal-title">Add Programme Version</span></div>
@@ -799,7 +831,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Manage Specializations Modal ── */}
       {openModals.has('specialization-modal') && (
-        <div className="modal-overlay" id="specialization-modal" onClick={() => closeModal('specialization-modal')}>
+        <div className="modal-overlay open" id="specialization-modal" onClick={() => closeModal('specialization-modal')}>
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-target"></i> Manage Specializations — MBA 2024</div>
@@ -830,7 +862,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Elective Select Modal ── */}
       {openModals.has('elective-select-modal') && (
-        <div className="modal-overlay" id="elective-select-modal" onClick={() => closeModal('elective-select-modal')}>
+        <div className="modal-overlay open" id="elective-select-modal" onClick={() => closeModal('elective-select-modal')}>
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-bar-chart"></i> Select Elective Paper — Batch BSC-IT-S26-DA · Sem 5</div>
@@ -862,7 +894,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Create New Batch Modal ── */}
       {openModals.has('new-batch-modal') && (
-        <div className="modal-overlay" id="new-batch-modal" onClick={() => closeModal('new-batch-modal')}>
+        <div className="modal-overlay open" id="new-batch-modal" onClick={() => closeModal('new-batch-modal')}>
           <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-users"></i> Create New Batch</div>
@@ -937,7 +969,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Add / Edit Fee Item Modal ── */}
       {openModals.has('new-fee-item-modal') && (
-        <div className="modal-overlay" id="new-fee-item-modal" onClick={() => closeModal('new-fee-item-modal')}>
+        <div className="modal-overlay open" id="new-fee-item-modal" onClick={() => closeModal('new-fee-item-modal')}>
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-dollar"></i> Add / Edit Fee Item</div>
@@ -1004,7 +1036,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
 
       {/* ── Add / Edit Fee Structure Modal ── */}
       {openModals.has('new-fee-structure-modal') && (
-        <div className="modal-overlay" id="new-fee-structure-modal" onClick={() => closeModal('new-fee-structure-modal')}>
+        <div className="modal-overlay open" id="new-fee-structure-modal" onClick={() => closeModal('new-fee-structure-modal')}>
           <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-dollar"></i> Add / Edit Fee Structure</div>
