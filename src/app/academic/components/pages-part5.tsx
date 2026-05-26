@@ -18,27 +18,27 @@ export function BatchManagementPage({ nav, openModal, showToast }: PageProps) {
         <button className="btn btn-primary" onClick={() => openModal('new-batch-modal')}><i className="lni lni-plus"></i> Create Batch</button>
       </div>
 
-      <div className="info-box" style={{ marginBottom: '14px' }}>
-        <i className="lni lni-information"></i> <span>Batch Code is <strong>system-generated</strong> as: <span style={{ fontFamily: 'monospace', background: 'var(--b100)', padding: '2px 6px', borderRadius: '4px' }}>Course Code + Session/Year + Batch Type + Sub-Batch</span> e.g. <strong>BSc-VFX-S26-DA</strong>. Large cohorts (100+ students) are split into <strong>sub-batches (DA, DB)</strong> of ~50 for separate timetabling and faculty allocation.</span>
+      <div className="info-box mb-[14px]">
+        <i className="lni lni-information"></i> <span>Batch Code is <strong>system-generated</strong> as: <span className="font-mono bg-[var(--b100)] py-[2px] px-[6px] rounded">Course Code + Session/Year + Batch Type + Sub-Batch</span> e.g. <strong>BSc-VFX-S26-DA</strong>. Large cohorts (100+ students) are split into <strong>sub-batches (DA, DB)</strong> of ~50 for separate timetabling and faculty allocation.</span>
       </div>
-      <div className="warn-box" style={{ marginBottom: '18px' }}>
+      <div className="warn-box mb-[18px]">
         <i className="lni lni-warning"></i> <span>Admissions occur <strong>every semester (twice a year)</strong>. A new batch must be created for each intake. <strong>Specialization</strong> is assigned to the individual student — not the batch. <strong>Batch In-Charges</strong> can view batch reports but have no direct relation to programme courses.</span>
       </div>
 
       {/* Stats */}
-      <div className="g4" style={{ marginBottom: '18px' }}>
+      <div className="g4 mb-[18px]">
         <div className="stat-card"><div className="stat-lbl">Active Batches</div><div className="stat-num">18</div><div className="stat-sub up">Spring 2026</div></div>
-        <div className="stat-card" style={{ '--b700': 'var(--amber)', '--b400': '#fbbf24' } as React.CSSProperties}><div className="stat-lbl">Pending Sub-batch</div><div className="stat-num" style={{ color: 'var(--amber)' }}>3</div><div className="stat-sub warn">Cohorts &gt; 50 students</div></div>
-        <div className="stat-card" style={{ '--b700': 'var(--green)', '--b400': '#34d399' } as React.CSSProperties}><div className="stat-lbl">Total Students</div><div className="stat-num" style={{ color: 'var(--green)' }}>1,284</div><div className="stat-sub up">Across all batches</div></div>
-        <div className="stat-card" style={{ '--b700': 'var(--purple)', '--b400': '#a78bfa' } as React.CSSProperties}><div className="stat-lbl">Batch In-Charges</div><div className="stat-num" style={{ color: 'var(--purple)' }}>18</div><div className="stat-sub up">Assigned</div></div>
+        <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]"><div className="stat-lbl">Pending Sub-batch</div><div className="stat-num text-clr-amber">3</div><div className="stat-sub warn">Cohorts &gt; 50 students</div></div>
+        <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Students</div><div className="stat-num text-clr-green">1,284</div><div className="stat-sub up">Across all batches</div></div>
+        <div className="stat-card [--b700:var(--purple)] [--b400:#a78bfa]"><div className="stat-lbl">Batch In-Charges</div><div className="stat-num text-clr-purple">18</div><div className="stat-sub up">Assigned</div></div>
       </div>
 
       <div className="card">
         <div className="card-hdr">
           <div className="card-title"><span className="ctitle-icon"><i className="lni lni-users"></i></span> Active Batches — Spring 2026 (20261)</div>
           <div className="flex gap-2">
-            <select className="ctrl" style={{ width: 'auto', fontSize: '12px' }}><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>MBA</option><option>BEng. Civil</option></select>
-            <select className="ctrl" style={{ width: 'auto', fontSize: '12px' }}><option>All Types</option><option>Day</option><option>Evening</option><option>Weekend</option><option>Distance/Online</option></select>
+            <select className="ctrl w-auto text-xs"><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>MBA</option><option>BEng. Civil</option></select>
+            <select className="ctrl w-auto text-xs"><option>All Types</option><option>Day</option><option>Evening</option><option>Weekend</option><option>Distance/Online</option></select>
             <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
           </div>
         </div>
@@ -47,7 +47,7 @@ export function BatchManagementPage({ nav, openModal, showToast }: PageProps) {
             <thead><tr><th>Batch Code</th><th>Programme (Version)</th><th>Semester</th><th>Type</th><th>Sub-Batch</th><th>Students</th><th>Batch In-Charge</th><th>Timetable</th><th>Action</th></tr></thead>
             <tbody>
               <tr>
-                <td><span className="font-bold text-blue" style={{ fontFamily: 'monospace' }}>BSC-IT-S26-DA</span></td>
+                <td><span className="font-bold text-blue font-mono">BSC-IT-S26-DA</span></td>
                 <td>BSc. IT 2026 <span className="pill pill-blue">BCA-2026</span></td>
                 <td>Sem 1</td>
                 <td><span className="badge badge-blue">Day</span></td>
@@ -58,7 +58,7 @@ export function BatchManagementPage({ nav, openModal, showToast }: PageProps) {
                 <td><button className="btn btn-neu btn-sm" onClick={() => openModal('new-batch-modal')}><i className="lni lni-pencil"></i> Edit</button></td>
               </tr>
               <tr>
-                <td><span className="font-bold text-blue" style={{ fontFamily: 'monospace' }}>BSC-IT-S26-DB</span></td>
+                <td><span className="font-bold text-blue font-mono">BSC-IT-S26-DB</span></td>
                 <td>BSc. IT 2026 <span className="pill pill-blue">BCA-2026</span></td>
                 <td>Sem 1</td>
                 <td><span className="badge badge-blue">Day</span></td>
@@ -69,7 +69,7 @@ export function BatchManagementPage({ nav, openModal, showToast }: PageProps) {
                 <td><button className="btn btn-neu btn-sm" onClick={() => openModal('new-batch-modal')}><i className="lni lni-pencil"></i> Edit</button></td>
               </tr>
               <tr>
-                <td><span className="font-bold text-blue" style={{ fontFamily: 'monospace' }}>BBA-S26-DA</span></td>
+                <td><span className="font-bold text-blue font-mono">BBA-S26-DA</span></td>
                 <td>BBA 2021 <span className="pill pill-blue">BBA-2021</span></td>
                 <td>Sem 3</td>
                 <td><span className="badge badge-blue">Day</span></td>
@@ -80,7 +80,7 @@ export function BatchManagementPage({ nav, openModal, showToast }: PageProps) {
                 <td><button className="btn btn-neu btn-sm" onClick={() => openModal('new-batch-modal')}><i className="lni lni-pencil"></i> Edit</button></td>
               </tr>
               <tr>
-                <td><span className="font-bold text-blue" style={{ fontFamily: 'monospace' }}>MBA-S26-EA</span></td>
+                <td><span className="font-bold text-blue font-mono">MBA-S26-EA</span></td>
                 <td>MBA 2024 <span className="pill pill-blue">MBA-2024</span></td>
                 <td>Sem 1</td>
                 <td><span className="badge badge-purple">Evening</span></td>
@@ -91,7 +91,7 @@ export function BatchManagementPage({ nav, openModal, showToast }: PageProps) {
                 <td><button className="btn btn-neu btn-sm" onClick={() => openModal('new-batch-modal')}><i className="lni lni-pencil"></i> Edit</button></td>
               </tr>
               <tr className="flagged">
-                <td><span className="font-bold" style={{ fontFamily: 'monospace', color: 'var(--amber)' }}>BSC-VFX-S26-??</span></td>
+                <td><span className="font-bold font-mono text-clr-amber">BSC-VFX-S26-??</span></td>
                 <td>BSc. VFX 2026 <span className="pill pill-blue">VFX-2026</span></td>
                 <td>Sem 1</td>
                 <td><span className="badge badge-blue">Day</span></td>
@@ -143,9 +143,9 @@ export function BatchManagementPage({ nav, openModal, showToast }: PageProps) {
             </select>
           </div>
         </div>
-        <div style={{ marginTop: '14px', padding: '14px', background: 'var(--b50)', border: '1.5px solid var(--b200)', borderRadius: 'var(--rsm)', display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--g500)', textTransform: 'uppercase' }}>Generated Batch Code:</span>
-          <span id="bcg-result" style={{ fontFamily: 'monospace', fontSize: '18px', fontWeight: 800, color: 'var(--b800)' }}>BSC-IT-S26-DA</span>
+        <div className="mt-[14px] p-[14px] bg-b50 border-[1.5px] border-[var(--b200)] rounded-[var(--rsm)] flex items-center gap-4">
+          <span className="text-[11px] font-bold text-g500 uppercase">Generated Batch Code:</span>
+          <span id="bcg-result" className="font-mono text-[18px] font-extrabold text-b800">BSC-IT-S26-DA</span>
         </div>
       </div>
     </div>
@@ -165,7 +165,7 @@ export function FeeStructurePage({ nav, openModal, showToast }: PageProps) {
 
       {/* Programme / Currency Selector */}
       <div className="fee-prog-selector">
-        <div className="fg" style={{ margin: '0' }}>
+        <div className="fg m-0">
           <div className="lbl">Programme</div>
           <select className="ctrl" id="fs-prog-select">
             <option value="bsc-it-local">BSc. IT 2026 — Local (UGX)</option>
@@ -173,13 +173,13 @@ export function FeeStructurePage({ nav, openModal, showToast }: PageProps) {
             <option value="mba-intl">MBA 2024 — International (USD)</option>
           </select>
         </div>
-        <div className="fg" style={{ margin: '0' }}>
+        <div className="fg m-0">
           <div className="lbl">Student Type</div>
-          <input className="ctrl" type="text" defaultValue="Local" readOnly style={{ background: 'var(--g100)', fontWeight: 600 }} />
+          <input className="ctrl bg-[var(--g100)] font-semibold" type="text" defaultValue="Local" readOnly />
         </div>
-        <div className="fg" style={{ margin: '0' }}>
+        <div className="fg m-0">
           <div className="lbl">Base Currency</div>
-          <input className="ctrl" type="text" defaultValue="UGX (Ugandan Shilling)" readOnly style={{ background: 'var(--g100)', fontWeight: 600 }} />
+          <input className="ctrl bg-[var(--g100)] font-semibold" type="text" defaultValue="UGX (Ugandan Shilling)" readOnly />
         </div>
         <button className="btn btn-neu" onClick={() => openModal('new-fee-structure-modal')}><i className="lni lni-cog"></i> Settings</button>
       </div>
@@ -192,7 +192,7 @@ export function FeeStructurePage({ nav, openModal, showToast }: PageProps) {
         <div className="fee-prog-chip grand"><div className="fee-prog-chip-lbl">Programme Total</div><div className="fee-prog-chip-val">UGX 6,500,000</div></div>
       </div>
 
-      <div className="g2" style={{ marginBottom: '18px' }}>
+      <div className="g2 mb-[18px]">
         <div className="info-box"><i className="lni lni-dollar"></i> <span>Within each semester, fee items are <strong>auto-settled by priority</strong> — P1 first, then P2, etc. Local-currency payments are auto-converted to the base currency.</span></div>
         <div className="warn-box"><i className="lni lni-warning"></i> <span><strong>Sponsored students</strong> bypass payment checks for session movement. Sponsorship is separate from scholarships (discounts on tuition).</span></div>
       </div>
@@ -378,7 +378,7 @@ export function FeeStructurePage({ nav, openModal, showToast }: PageProps) {
       </div>
 
       {/* Add Semester button */}
-      <div style={{ textAlign: 'center', marginTop: '6px' }}>
+      <div className="text-center mt-[6px]">
         <button className="sem-fee-add" onClick={() => showToast('Use Settings → Add Semester to define a new semester.', 'info')}>
           <i className="lni lni-plus"></i> Add New Semester
         </button>
@@ -395,42 +395,42 @@ export function AccessGatePage({ nav, openModal, showToast }: PageProps) {
           <div className="pg-title">Academic Access Gate</div>
           <div className="pg-sub">Cross-module · Interacts with S3 (Finance) and S10 (Student) · Controls attendance and LMS access based on payment status</div>
         </div>
-        <span className="badge badge-purple" style={{ alignSelf: 'center' }}><i className="lni lni-link"></i> S2 + S3 + S10</span>
+        <span className="badge badge-purple self-center"><i className="lni lni-link"></i> S2 + S3 + S10</span>
       </div>
 
-      <div className="danger-box" style={{ marginBottom: '18px' }}>
+      <div className="danger-box mb-[18px]">
         <i className="lni lni-lock"></i> <span><strong>Access Block Rule:</strong> Non-payment of the <em>current semester fee</em> results in an <strong>absolute block</strong> on the student's access to both class attendance and the LMS. This is separate from the 50% assessment submission threshold — full non-payment blocks everything. <strong>Sponsorship status bypasses all payment checks.</strong></span>
       </div>
 
-      <div className="g3" style={{ marginBottom: '18px' }}>
-        <div style={{ padding: '16px', background: 'var(--red-bg)', border: '2px solid var(--red-bd)', borderRadius: 'var(--radius)' }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--red)', marginBottom: '8px' }}><i className="lni lni-ban"></i> Fee Not Paid → BLOCKED</div>
-          <div style={{ fontSize: '12.5px', color: '#7f1d1d', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+      <div className="g3 mb-[18px]">
+        <div className="p-4 bg-[var(--red-bg)] border-2 border-[var(--red-bd)] rounded-[var(--radius)]">
+          <div className="text-[11px] font-bold uppercase text-clr-red mb-2"><i className="lni lni-ban"></i> Fee Not Paid → BLOCKED</div>
+          <div className="text-[12.5px] text-[#7f1d1d] flex flex-col gap-[5px]">
             <div><i className="lni lni-close"></i> Class Attendance (biometric + manual)</div>
             <div><i className="lni lni-close"></i> LMS Access (materials, submissions)</div>
             <div><i className="lni lni-close"></i> Assessment Submission (CW + CBT)</div>
             <div><i className="lni lni-close"></i> Progression to next semester</div>
           </div>
         </div>
-        <div style={{ padding: '16px', background: 'var(--amber-bg)', border: '2px solid var(--amber-bd)', borderRadius: 'var(--radius)' }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--amber)', marginBottom: '8px' }}><i className="lni lni-warning"></i> ≥50% Fee Paid → PARTIAL</div>
-          <div style={{ fontSize: '12.5px', color: '#78350f', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        <div className="p-4 bg-[var(--amber-bg)] border-2 border-[var(--amber-bd)] rounded-[var(--radius)]">
+          <div className="text-[11px] font-bold uppercase text-clr-amber mb-2"><i className="lni lni-warning"></i> ≥50% Fee Paid → PARTIAL</div>
+          <div className="text-[12.5px] text-[#78350f] flex flex-col gap-[5px]">
             <div><i className="lni lni-checkmark"></i> Class Attendance allowed</div>
             <div><i className="lni lni-checkmark"></i> LMS view access (read-only)</div>
             <div><i className="lni lni-checkmark"></i> Assessment question viewing</div>
             <div><i className="lni lni-close"></i> Assessment submission blocked</div>
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--amber)', marginTop: '8px', fontStyle: 'italic' }}>50% threshold on original pre-discount fee</div>
+          <div className="text-[11px] text-clr-amber mt-2 italic">50% threshold on original pre-discount fee</div>
         </div>
-        <div style={{ padding: '16px', background: 'var(--green-bg)', border: '2px solid var(--green-bd)', borderRadius: 'var(--radius)' }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--green)', marginBottom: '8px' }}><i className="lni lni-checkmark-circle"></i> Sponsored Student → FULL ACCESS</div>
-          <div style={{ fontSize: '12.5px', color: '#064e3b', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        <div className="p-4 bg-[var(--green-bg)] border-2 border-[var(--green-bd)] rounded-[var(--radius)]">
+          <div className="text-[11px] font-bold uppercase text-clr-green mb-2"><i className="lni lni-checkmark-circle"></i> Sponsored Student → FULL ACCESS</div>
+          <div className="text-[12.5px] text-[#064e3b] flex flex-col gap-[5px]">
             <div><i className="lni lni-checkmark"></i> All payment gates bypassed</div>
             <div><i className="lni lni-checkmark"></i> Assessment submission allowed</div>
             <div><i className="lni lni-checkmark"></i> Session progression bypassed</div>
             <div><i className="lni lni-checkmark"></i> Full LMS access</div>
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--green)', marginTop: '8px', fontStyle: 'italic' }}>Sponsorship verified from Finance Module (S3)</div>
+          <div className="text-[11px] text-clr-green mt-2 italic">Sponsorship verified from Finance Module (S3)</div>
         </div>
       </div>
 
@@ -440,27 +440,27 @@ export function AccessGatePage({ nav, openModal, showToast }: PageProps) {
           <div className="card-title"><span className="ctitle-icon"><i className="lni lni-dollar"></i></span> Finance Auto-Settlement Priority Reference (S3)</div>
           <span className="badge badge-purple">Read-only — Owned by Finance Module</span>
         </div>
-        <div className="info-box" style={{ marginBottom: '14px' }}>
+        <div className="info-box mb-[14px]">
           <i className="lni lni-credit-cards"></i> <span>When a student pays a <strong>lump sum in any currency</strong>, the system auto-converts to base currency (USD for international) and settles fee components in strict priority order. Remaining balance applied to next priority only after full clearance of current.</span>
         </div>
         <div className="g3">
-          <div style={{ padding: '14px', background: 'var(--b50)', border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)', textAlign: 'center' }}>
-            <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--b700)', marginBottom: '6px' }}>PRIORITY 1</div>
-            <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--b800)' }}>Admission Fee</div>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--b700)', marginTop: '4px', fontFamily: 'monospace' }}>$50 / UGX 50,000</div>
-            <div style={{ fontSize: '11px', color: 'var(--g400)', marginTop: '4px' }}>One-time at application</div>
+          <div className="p-[14px] bg-b50 border-[1.5px] border-[var(--b100)] rounded-[var(--rsm)] text-center">
+            <div className="text-[10px] font-bold uppercase text-b700 mb-[6px]">PRIORITY 1</div>
+            <div className="text-[15px] font-extrabold text-b800">Admission Fee</div>
+            <div className="text-[13px] font-bold text-b700 mt-1 font-mono">$50 / UGX 50,000</div>
+            <div className="text-[11px] text-g400 mt-1">One-time at application</div>
           </div>
-          <div style={{ padding: '14px', background: 'var(--amber-bg)', border: '1.5px solid var(--amber-bd)', borderRadius: 'var(--rsm)', textAlign: 'center' }}>
-            <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--amber)', marginBottom: '6px' }}>PRIORITY 2</div>
-            <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--amber)' }}>Registration / Entry Fee</div>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--amber)', marginTop: '4px', fontFamily: 'monospace' }}>$200 initial / Entry fee per sem</div>
-            <div style={{ fontSize: '11px', color: 'var(--g400)', marginTop: '4px' }}>Required before registration</div>
+          <div className="p-[14px] bg-[var(--amber-bg)] border-[1.5px] border-[var(--amber-bd)] rounded-[var(--rsm)] text-center">
+            <div className="text-[10px] font-bold uppercase text-clr-amber mb-[6px]">PRIORITY 2</div>
+            <div className="text-[15px] font-extrabold text-clr-amber">Registration / Entry Fee</div>
+            <div className="text-[13px] font-bold text-clr-amber mt-1 font-mono">$200 initial / Entry fee per sem</div>
+            <div className="text-[11px] text-g400 mt-1">Required before registration</div>
           </div>
-          <div style={{ padding: '14px', background: 'var(--green-bg)', border: '1.5px solid var(--green-bd)', borderRadius: 'var(--rsm)', textAlign: 'center' }}>
-            <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--green)', marginBottom: '6px' }}>PRIORITY 3</div>
-            <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--green)' }}>Tuition Fee</div>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--green)', marginTop: '4px', fontFamily: 'monospace' }}>$750 / semester</div>
-            <div style={{ fontSize: '11px', color: 'var(--g400)', marginTop: '4px' }}>50% needed for assessment; 100% for progression</div>
+          <div className="p-[14px] bg-[var(--green-bg)] border-[1.5px] border-[var(--green-bd)] rounded-[var(--rsm)] text-center">
+            <div className="text-[10px] font-bold uppercase text-clr-green mb-[6px]">PRIORITY 3</div>
+            <div className="text-[15px] font-extrabold text-clr-green">Tuition Fee</div>
+            <div className="text-[13px] font-bold text-clr-green mt-1 font-mono">$750 / semester</div>
+            <div className="text-[11px] text-g400 mt-1">50% needed for assessment; 100% for progression</div>
           </div>
         </div>
       </div>
@@ -473,9 +473,9 @@ export function StudentLookupPage({ nav, openModal, showToast }: PageProps) {
     <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Student Lookup</div><div className="pg-sub">Cross-module shared page · Search any student · View academic and financial status</div></div>
-        <span className="badge badge-purple" style={{ alignSelf: 'center' }}><i className="lni lni-link"></i> Shared Across All Modules</span>
+        <span className="badge badge-purple self-center"><i className="lni lni-link"></i> Shared Across All Modules</span>
       </div>
-      <div className="info-box" style={{ marginBottom: '18px' }}>
+      <div className="info-box mb-[18px]">
         <i className="lni lni-link"></i> <span>This is a <strong>cross-module shared page</strong> accessible from Academic, Admission, Finance, and Assessment modules. Full profile management lives in the <strong>Student Microservice (Service 10)</strong>.</span>
       </div>
       <div className="card">
@@ -500,7 +500,7 @@ export function StudentLookupPage({ nav, openModal, showToast }: PageProps) {
             </select>
           </div>
         </div>
-        <div id="student-filter-meta" style={{ marginTop: '10px', fontSize: '11.5px', color: 'var(--g500)', fontWeight: 500 }}></div>
+        <div id="student-filter-meta" className="mt-[10px] text-[11.5px] text-g500 font-medium"></div>
       </div>
 
       {/* Student Table */}
@@ -512,12 +512,12 @@ export function StudentLookupPage({ nav, openModal, showToast }: PageProps) {
         <div className="tbl-wrap">
           <table id="student-lookup-table">
             <thead><tr>
-              <th>Student No.</th><th>Name</th><th>Programme</th><th>Year / Sem</th><th>Intake</th><th>Academic Year</th><th>Fee Status</th><th>Status</th><th style={{ width: '160px' }}>Action</th>
+              <th>Student No.</th><th>Name</th><th>Programme</th><th>Year / Sem</th><th>Intake</th><th>Academic Year</th><th>Fee Status</th><th>Status</th><th className="w-[160px]">Action</th>
             </tr></thead>
             <tbody id="student-lookup-tbody">
               <tr data-prog="BSc. Computer Science" data-ay="2025-2026">
-                <td><span className="text-blue font-bold" style={{ fontFamily: 'monospace' }}>ISB/2026/0142</span></td>
-                <td><strong>Nakato Sarah Bridget</strong><div style={{ fontSize: '11px', color: 'var(--g500)' }}>nakato.s@students.isbatuniversity.ac.ug</div></td>
+                <td><span className="text-blue font-bold font-mono">ISB/2026/0142</span></td>
+                <td><strong>Nakato Sarah Bridget</strong><div className="text-[11px] text-g500">nakato.s@students.isbatuniversity.ac.ug</div></td>
                 <td>BSc. Computer Science</td>
                 <td>Year 1 · Sem 1</td>
                 <td>Spring 2026</td>
@@ -530,8 +530,8 @@ export function StudentLookupPage({ nav, openModal, showToast }: PageProps) {
                 </div></td>
               </tr>
               <tr data-prog="MBA Business Admin (ODL)" data-ay="2025-2026">
-                <td><span className="text-blue font-bold" style={{ fontFamily: 'monospace' }}>ISB/2026/0141</span></td>
-                <td><strong>Okello James Patrick</strong><div style={{ fontSize: '11px', color: 'var(--g500)' }}>okello.j@students.isbatuniversity.ac.ug</div></td>
+                <td><span className="text-blue font-bold font-mono">ISB/2026/0141</span></td>
+                <td><strong>Okello James Patrick</strong><div className="text-[11px] text-g500">okello.j@students.isbatuniversity.ac.ug</div></td>
                 <td>MBA Business Admin (ODL)</td>
                 <td>Year 1 · Sem 1</td>
                 <td>Spring 2026</td>
@@ -544,8 +544,8 @@ export function StudentLookupPage({ nav, openModal, showToast }: PageProps) {
                 </div></td>
               </tr>
               <tr data-prog="Diploma in Nursing" data-ay="2025-2026">
-                <td><span className="text-blue font-bold" style={{ fontFamily: 'monospace' }}>ISB/2026/0140</span></td>
-                <td><strong>Tumukunde Alice Grace</strong><div style={{ fontSize: '11px', color: 'var(--g500)' }}>tumukunde.a@students.isbatuniversity.ac.ug</div></td>
+                <td><span className="text-blue font-bold font-mono">ISB/2026/0140</span></td>
+                <td><strong>Tumukunde Alice Grace</strong><div className="text-[11px] text-g500">tumukunde.a@students.isbatuniversity.ac.ug</div></td>
                 <td>Diploma in Nursing</td>
                 <td>Year 1 · Sem 1</td>
                 <td>Spring 2026</td>
@@ -558,8 +558,8 @@ export function StudentLookupPage({ nav, openModal, showToast }: PageProps) {
                 </div></td>
               </tr>
               <tr data-prog="BCom. Accounting" data-ay="2025-2026">
-                <td><span className="text-blue font-bold" style={{ fontFamily: 'monospace' }}>ISB/2026/0138</span></td>
-                <td><strong>Nampijja Grace Miriam</strong><div style={{ fontSize: '11px', color: 'var(--g500)' }}>nampijja.g@students.isbatuniversity.ac.ug</div></td>
+                <td><span className="text-blue font-bold font-mono">ISB/2026/0138</span></td>
+                <td><strong>Nampijja Grace Miriam</strong><div className="text-[11px] text-g500">nampijja.g@students.isbatuniversity.ac.ug</div></td>
                 <td>BCom. Accounting</td>
                 <td>Year 1 · Sem 1</td>
                 <td>Spring 2026</td>
@@ -572,8 +572,8 @@ export function StudentLookupPage({ nav, openModal, showToast }: PageProps) {
                 </div></td>
               </tr>
               <tr data-prog="BSc. Information Technology" data-ay="2025-2026">
-                <td><span className="text-blue font-bold" style={{ fontFamily: 'monospace' }}>ISB/2025/0089</span></td>
-                <td><strong>Mugume Robert</strong><div style={{ fontSize: '11px', color: 'var(--g500)' }}>mugume.r@students.isbatuniversity.ac.ug</div></td>
+                <td><span className="text-blue font-bold font-mono">ISB/2025/0089</span></td>
+                <td><strong>Mugume Robert</strong><div className="text-[11px] text-g500">mugume.r@students.isbatuniversity.ac.ug</div></td>
                 <td>BSc. Information Technology</td>
                 <td>Year 1 · Sem 2</td>
                 <td>Fall 2025</td>
@@ -586,8 +586,8 @@ export function StudentLookupPage({ nav, openModal, showToast }: PageProps) {
                 </div></td>
               </tr>
               <tr data-prog="BEng. Civil Engineering" data-ay="2025-2026">
-                <td><span className="text-blue font-bold" style={{ fontFamily: 'monospace' }}>ISB/2025/0072</span></td>
-                <td><strong>Asiimwe Grace</strong><div style={{ fontSize: '11px', color: 'var(--g500)' }}>asiimwe.g@students.isbatuniversity.ac.ug</div></td>
+                <td><span className="text-blue font-bold font-mono">ISB/2025/0072</span></td>
+                <td><strong>Asiimwe Grace</strong><div className="text-[11px] text-g500">asiimwe.g@students.isbatuniversity.ac.ug</div></td>
                 <td>BEng. Civil Engineering</td>
                 <td>Year 1 · Sem 2</td>
                 <td>Fall 2025</td>
@@ -600,8 +600,8 @@ export function StudentLookupPage({ nav, openModal, showToast }: PageProps) {
                 </div></td>
               </tr>
               <tr data-prog="MBA Business Admin" data-ay="2023-2024">
-                <td><span className="text-blue font-bold" style={{ fontFamily: 'monospace' }}>ISB/2024/0044</span></td>
-                <td><strong>Waiswa Patrick</strong><div style={{ fontSize: '11px', color: 'var(--g500)' }}>waiswa.p@students.isbatuniversity.ac.ug</div></td>
+                <td><span className="text-blue font-bold font-mono">ISB/2024/0044</span></td>
+                <td><strong>Waiswa Patrick</strong><div className="text-[11px] text-g500">waiswa.p@students.isbatuniversity.ac.ug</div></td>
                 <td>MBA Business Admin</td>
                 <td>Year 2 · Sem 3</td>
                 <td>Spring 2024</td>
@@ -614,8 +614,8 @@ export function StudentLookupPage({ nav, openModal, showToast }: PageProps) {
                 </div></td>
               </tr>
               <tr data-prog="BBA" data-ay="2023-2024">
-                <td><span className="text-blue font-bold" style={{ fontFamily: 'monospace' }}>ISB/2024/0028</span></td>
-                <td><strong>Akello Diana</strong><div style={{ fontSize: '11px', color: 'var(--g500)' }}>akello.d@students.isbatuniversity.ac.ug</div></td>
+                <td><span className="text-blue font-bold font-mono">ISB/2024/0028</span></td>
+                <td><strong>Akello Diana</strong><div className="text-[11px] text-g500">akello.d@students.isbatuniversity.ac.ug</div></td>
                 <td>BBA</td>
                 <td>Year 2 · Sem 4</td>
                 <td>Spring 2024</td>
@@ -640,34 +640,34 @@ export function FeeClearancePage({ nav, openModal, showToast, showFcResult, setS
     <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Fee Clearance Check</div><div className="pg-sub">Read-only view · Clearance status consumed from Finance Service (Service 3)</div></div>
-        <span className="badge badge-purple" style={{ alignSelf: 'center' }}><i className="lni lni-link"></i> Shared — Read Only in Academic Module</span>
+        <span className="badge badge-purple self-center"><i className="lni lni-link"></i> Shared — Read Only in Academic Module</span>
       </div>
-      <div className="info-box" style={{ marginBottom: '18px' }}>
+      <div className="info-box mb-[18px]">
         <i className="lni lni-dollar"></i> <span>Fee clearance is <strong>owned and calculated by the Finance Module (Service 3)</strong>. The Academic Module consumes clearance status as a read-only API call to determine CW/CBT submission eligibility. <strong>Minimum 50% clearance</strong> is calculated on the <em>original tuition fee</em> (before discounts).</span>
       </div>
       <div className="card">
         <div className="card-hdr"><div className="card-title"><span className="ctitle-icon"><i className="lni lni-checkmark-circle"></i></span> Clearance Status Lookup</div></div>
         <div className="g2">
           <div className="fg"><div className="lbl">Student Number</div>
-            <div className="inp-wrap"><span className="inp-icon"><i className="lni lni-search-alt"></i></span><input className="ctrl" type="text" placeholder="ISB/2026/..." id="fc-student-no" style={{ paddingLeft: '34px' }} /></div>
+            <div className="inp-wrap"><span className="inp-icon"><i className="lni lni-search-alt"></i></span><input className="ctrl pl-[34px]" type="text" placeholder="ISB/2026/..." id="fc-student-no" /></div>
           </div>
-          <div className="fg" style={{ justifyContent: 'flex-end', paddingTop: '18px' }}>
+          <div className="fg justify-end pt-[18px]">
             <button className="btn btn-primary" onClick={() => setShowFcResult && setShowFcResult(true)}>Check Clearance</button>
           </div>
         </div>
-        <div id="fc-result" style={{ display: showFcResult ? 'block' : 'none', marginTop: '14px' }}>
+        <div id="fc-result" className={`${showFcResult ? 'block' : 'hidden'} mt-[14px]`}>
           <div className="g3">
-            <div style={{ padding: '14px', background: 'var(--green-bg)', border: '1px solid var(--green-bd)', borderRadius: 'var(--rsm)', textAlign: 'center' }}><div style={{ fontSize: '11px', color: 'var(--green)', fontWeight: 700, textTransform: 'uppercase' }}>Clearance %</div><div style={{ fontSize: '26px', fontWeight: 800, color: 'var(--green)', fontFamily: "'Inter',-apple-system,sans-serif" }}>72%</div></div>
-            <div style={{ padding: '14px', background: 'var(--b50)', border: '1px solid var(--b100)', borderRadius: 'var(--rsm)', textAlign: 'center' }}><div style={{ fontSize: '11px', color: 'var(--b700)', fontWeight: 700, textTransform: 'uppercase' }}>CW Submission</div><div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--green)', marginTop: '4px' }}><i className="lni lni-checkmark"></i> Allowed</div></div>
-            <div style={{ padding: '14px', background: 'var(--b50)', border: '1px solid var(--b100)', borderRadius: 'var(--rsm)', textAlign: 'center' }}><div style={{ fontSize: '11px', color: 'var(--b700)', fontWeight: 700, textTransform: 'uppercase' }}>CBT Submission</div><div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--green)', marginTop: '4px' }}><i className="lni lni-checkmark"></i> Allowed</div></div>
+            <div className="p-[14px] bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rsm)] text-center"><div className="text-[11px] text-clr-green font-bold uppercase">Clearance %</div><div className="text-[26px] font-extrabold text-clr-green">72%</div></div>
+            <div className="p-[14px] bg-b50 border border-[var(--b100)] rounded-[var(--rsm)] text-center"><div className="text-[11px] text-b700 font-bold uppercase">CW Submission</div><div className="text-[18px] font-extrabold text-clr-green mt-1"><i className="lni lni-checkmark"></i> Allowed</div></div>
+            <div className="p-[14px] bg-b50 border border-[var(--b100)] rounded-[var(--rsm)] text-center"><div className="text-[11px] text-b700 font-bold uppercase">CBT Submission</div><div className="text-[18px] font-extrabold text-clr-green mt-1"><i className="lni lni-checkmark"></i> Allowed</div></div>
           </div>
         </div>
       </div>
-      <div className="undefined-box" style={{ marginTop: '4px' }}>
-        <div style={{ fontSize: '22px', marginBottom: '8px' }}><i className="lni lni-dollar"></i></div>
-        <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '6px' }}>Finance Module Integration</div>
-        <div style={{ fontSize: '12.5px', color: 'var(--g500)', maxWidth: '500px', margin: '0 auto' }}>This page shows a read-only API response from Finance Service. Full fee management, payment processing, and clearance calculation are in the <strong>Finance Module (Service 3)</strong>.</div>
-        <div className="badge badge-purple" style={{ marginTop: '10px' }}><i className="lni lni-link"></i> Cross-Module — Read Only View from Finance Service</div>
+      <div className="undefined-box mt-1">
+        <div className="text-[22px] mb-2"><i className="lni lni-dollar"></i></div>
+        <div className="font-bold text-sm mb-[6px]">Finance Module Integration</div>
+        <div className="text-[12.5px] text-g500 max-w-[500px] m-0 mx-auto">This page shows a read-only API response from Finance Service. Full fee management, payment processing, and clearance calculation are in the <strong>Finance Module (Service 3)</strong>.</div>
+        <div className="badge badge-purple mt-[10px]"><i className="lni lni-link"></i> Cross-Module — Read Only View from Finance Service</div>
       </div>
     </div>
   )

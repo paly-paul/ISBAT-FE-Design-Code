@@ -22,10 +22,10 @@ export function SessionMovementPage({ nav, openModal, showToast }: PageProps) {
       </div>
 
       {/* Business Rules Summary */}
-      <div className="g2" style={{ marginBottom: '18px' }}>
-        <div className="warn-box" style={{ flexDirection: 'column', gap: '6px', alignItems: 'flex-start' }}>
-          <span style={{ fontWeight: 700 }}><i className="lni lni-warning"></i> Execution Rules</span>
-          <ul style={{ marginLeft: '16px', fontSize: '12.5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div className="g2 mb-[18px]">
+        <div className="warn-box flex-col gap-[6px] items-start">
+          <span className="font-bold"><i className="lni lni-warning"></i> Execution Rules</span>
+          <ul className="ml-4 text-[12.5px] flex flex-col gap-1">
             <li>Must be run <strong>3–4 weeks before</strong> the session start date to prevent congestion</li>
             <li>Executed <strong>batch-by-batch</strong> — never all at once — to avoid system overload</li>
             <li>The <strong>original batch code stays fixed</strong>; only the semester number increments (e.g. Sem 2 → Sem 3)</li>
@@ -33,18 +33,18 @@ export function SessionMovementPage({ nav, openModal, showToast }: PageProps) {
             <li>This is <strong>irreversible</strong> — Dropout records are locked once executed</li>
           </ul>
         </div>
-        <div className="info-box" style={{ flexDirection: 'column', gap: '6px', alignItems: 'flex-start' }}>
-          <span style={{ fontWeight: 700 }}><i className="lni lni-clipboard"></i> Tables Initialised on Movement</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px' }}>
-            <div style={{ padding: '7px 10px', background: 'var(--white)', border: '1px solid var(--b200)', borderRadius: '6px' }}><span className="font-bold text-blue">T_session_management</span> — Records active programmes + semesters for the academic year. Session Flag set to <span style={{ fontFamily: 'monospace', background: 'var(--b100)', padding: '1px 5px', borderRadius: '3px' }}>0</span> (not moved) → <span style={{ fontFamily: 'monospace', background: 'var(--green-bg)', padding: '1px 5px', borderRadius: '3px' }}>1</span> (moved)</div>
-            <div style={{ padding: '7px 10px', background: 'var(--white)', border: '1px solid var(--b200)', borderRadius: '6px' }}><span className="font-bold text-blue">Tia Table</span> — Stores programme + semester + unit + intake primary key. This PK is the first part of the Matching Code used in assessments</div>
-            <div style={{ padding: '7px 10px', background: 'var(--white)', border: '1px solid var(--b200)', borderRadius: '6px' }}><span className="font-bold text-blue">Exam Schedule Tables</span> — CW, CBT, and UE tables created with <span style={{ fontFamily: 'monospace', background: 'var(--amber-bg)', padding: '1px 5px', borderRadius: '3px' }}>NULL</span> values. Exam date + start time populated later during scheduling phase</div>
+        <div className="info-box flex-col gap-[6px] items-start">
+          <span className="font-bold"><i className="lni lni-clipboard"></i> Tables Initialised on Movement</span>
+          <div className="flex flex-col gap-[6px] text-xs">
+            <div className="p-[7px_10px] bg-[var(--white)] border border-[var(--b200)] rounded-md"><span className="font-bold text-blue">T_session_management</span> — Records active programmes + semesters for the academic year. Session Flag set to <span className="font-mono bg-[var(--b100)] px-[5px] py-[1px] rounded">0</span> (not moved) → <span className="font-mono bg-[var(--green-bg)] px-[5px] py-[1px] rounded">1</span> (moved)</div>
+            <div className="p-[7px_10px] bg-[var(--white)] border border-[var(--b200)] rounded-md"><span className="font-bold text-blue">Tia Table</span> — Stores programme + semester + unit + intake primary key. This PK is the first part of the Matching Code used in assessments</div>
+            <div className="p-[7px_10px] bg-[var(--white)] border border-[var(--b200)] rounded-md"><span className="font-bold text-blue">Exam Schedule Tables</span> — CW, CBT, and UE tables created with <span className="font-mono bg-[var(--amber-bg)] px-[5px] py-[1px] rounded">NULL</span> values. Exam date + start time populated later during scheduling phase</div>
           </div>
         </div>
       </div>
 
       {/* Progression Rules Reference */}
-      <div className="card" style={{ marginBottom: '18px' }}>
+      <div className="card mb-[18px]">
         <div className="card-hdr">
           <div className="card-title"><span className="ctitle-icon"><i className="lni lni-clipboard"></i></span> Progression Eligibility Rules (Hardcoded Business Logic)</div>
           <span className="badge badge-amber">Read Only — System Enforced</span>
@@ -69,7 +69,7 @@ export function SessionMovementPage({ nav, openModal, showToast }: PageProps) {
                 <td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td>
                 <td><span className="badge badge-red">Dropout</span> (current fee not paid) · <span className="badge badge-amber">Yet to register</span> (next sem entry fee not paid)</td>
               </tr>
-              <tr style={{ background: 'var(--b50)' }}>
+              <tr className="bg-b50">
                 <td><strong>Sem 2 → Sem 3 and beyond</strong></td>
                 <td>Current sem fee <strong>fully cleared</strong> + Next sem Entry Fee cleared</td>
                 <td>Must clear <strong>minimum 50%</strong> of all subjects from all previous semesters</td>
@@ -80,20 +80,20 @@ export function SessionMovementPage({ nav, openModal, showToast }: PageProps) {
             </tbody>
           </table>
         </div>
-        <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <div style={{ padding: '8px 12px', background: 'var(--green-bg)', border: '1px solid var(--green-bd)', borderRadius: 'var(--rxs)', fontSize: '11.5px' }}><span className="badge badge-green" style={{ marginRight: '6px' }}>Registered</span>All criteria met — promoted to next semester</div>
-          <div style={{ padding: '8px 12px', background: 'var(--red-bg)', border: '1px solid var(--red-bd)', borderRadius: 'var(--rxs)', fontSize: '11.5px' }}><span className="badge badge-red" style={{ marginRight: '6px' }}>Dropout</span>Current semester fee not fully paid — no subject check done</div>
-          <div style={{ padding: '8px 12px', background: 'var(--amber-bg)', border: '1px solid var(--amber-bd)', borderRadius: 'var(--rxs)', fontSize: '11.5px' }}><span className="badge badge-amber" style={{ marginRight: '6px' }}>Yet to register</span>Next semester Entry Fee not paid</div>
-          <div style={{ padding: '8px 12px', background: 'var(--cyan-bg)', border: '1px solid #bae6fd', borderRadius: 'var(--rxs)', fontSize: '11.5px' }}><span className="badge badge-cyan" style={{ marginRight: '6px' }}>Yet to Clear</span>Failed to pass ≥50% of subjects from previous semesters</div>
+        <div className="mt-3 flex gap-2 flex-wrap">
+          <div className="p-[8px_12px] bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rxs)] text-[11.5px]"><span className="badge badge-green mr-[6px]">Registered</span>All criteria met — promoted to next semester</div>
+          <div className="p-[8px_12px] bg-[var(--red-bg)] border border-[var(--red-bd)] rounded-[var(--rxs)] text-[11.5px]"><span className="badge badge-red mr-[6px]">Dropout</span>Current semester fee not fully paid — no subject check done</div>
+          <div className="p-[8px_12px] bg-[var(--amber-bg)] border border-[var(--amber-bd)] rounded-[var(--rxs)] text-[11.5px]"><span className="badge badge-amber mr-[6px]">Yet to register</span>Next semester Entry Fee not paid</div>
+          <div className="p-[8px_12px] bg-[var(--cyan-bg)] border border-[#bae6fd] rounded-[var(--rxs)] text-[11.5px]"><span className="badge badge-cyan mr-[6px]">Yet to Clear</span>Failed to pass ≥50% of subjects from previous semesters</div>
         </div>
       </div>
 
       {/* Current State */}
-      <div className="g4" style={{ marginBottom: '18px' }}>
-        <div className="stat-card"><div className="stat-lbl">Registered (Promote)</div><div className="stat-num" style={{ color: 'var(--green)' }}>1,169</div><div className="stat-sub up">All criteria met</div></div>
-        <div className="stat-card" style={{ '--b700': 'var(--red)', '--b400': '#f87171' } as React.CSSProperties}><div className="stat-lbl">Dropout</div><div className="stat-num" style={{ color: 'var(--red)' }}>12</div><div className="stat-sub dn">Current fee not paid</div></div>
-        <div className="stat-card" style={{ '--b700': 'var(--amber)', '--b400': '#fbbf24' } as React.CSSProperties}><div className="stat-lbl">Yet to register</div><div className="stat-num" style={{ color: 'var(--amber)' }}>62</div><div className="stat-sub warn">Next sem entry fee unpaid</div></div>
-        <div className="stat-card" style={{ '--b700': 'var(--cyan)', '--b400': '#38bdf8' } as React.CSSProperties}><div className="stat-lbl">Yet to Clear</div><div className="stat-num" style={{ color: 'var(--cyan)' }}>41</div><div className="stat-sub warn">&lt;50% subjects passed</div></div>
+      <div className="g4 mb-[18px]">
+        <div className="stat-card"><div className="stat-lbl">Registered (Promote)</div><div className="stat-num text-clr-green">1,169</div><div className="stat-sub up">All criteria met</div></div>
+        <div className="stat-card [--b700:var(--red)] [--b400:#f87171]"><div className="stat-lbl">Dropout</div><div className="stat-num text-clr-red">12</div><div className="stat-sub dn">Current fee not paid</div></div>
+        <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]"><div className="stat-lbl">Yet to register</div><div className="stat-num text-clr-amber">62</div><div className="stat-sub warn">Next sem entry fee unpaid</div></div>
+        <div className="stat-card [--b700:var(--cyan)] [--b400:#38bdf8]"><div className="stat-lbl">Yet to Clear</div><div className="stat-num text-clr-cyan">41</div><div className="stat-sub warn">&lt;50% subjects passed</div></div>
       </div>
 
       {/* Movement Scope */}
@@ -112,40 +112,40 @@ export function SessionMovementPage({ nav, openModal, showToast }: PageProps) {
             <select className="ctrl" id="sm-programme"><option value="">All Programmes</option><option>BSc. IT</option><option>BBA</option><option>BEng. Civil</option><option>MBA</option></select>
           </div>
         </div>
-        <div style={{ marginTop: '14px' }}>
+        <div className="mt-[14px]">
           <button className="btn btn-primary" onClick={() => showToast('Running preview...', 'info')}><i className="lni lni-eye"></i> Preview Movement Results</button>
         </div>
       </div>
 
       {/* Preview Results */}
-      <div className="card" id="sm-preview" style={{ display: 'none' }}>
+      <div className="card hidden" id="sm-preview">
         <div className="card-hdr">
           <div className="card-title"><span className="ctitle-icon"><i className="lni lni-eye"></i></span> Movement Preview — Spring 2026 → Fall 2026</div>
           <span className="badge badge-amber">Preview Only — Not Yet Executed</span>
         </div>
-        <div className="tbl-wrap" style={{ marginBottom: '14px' }}>
+        <div className="tbl-wrap mb-[14px]">
           <table>
             <thead><tr><th>Student No.</th><th>Name</th><th>Programme</th><th>Stage</th><th>Curr. Sem Fee</th><th>Next Sem Entry Fee</th><th>Subject Clearance</th><th>Sponsored</th><th>Movement Outcome</th></tr></thead>
             <tbody>
-              <tr><td style={{ fontFamily: 'monospace', fontSize: '11px' }}>ISB/2026/0142</td><td><strong>Nakato Sarah B.</strong></td><td>BSc. IT</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 78% passed</span></td><td>—</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td></tr>
-              <tr><td style={{ fontFamily: 'monospace', fontSize: '11px' }}>ISB/2026/0099</td><td><strong>Okello James P.</strong></td><td>BBA</td><td>Sem 1→2</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td><span className="badge badge-grey">Not checked (Sem1→2)</span></td><td>—</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td></tr>
-              <tr><td style={{ fontFamily: 'monospace', fontSize: '11px' }}>ISB/2026/0034</td><td><strong>Abubakar Faisal</strong></td><td>BSc. IT</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> 38% passed</span></td><td>—</td><td><span className="badge badge-cyan">Yet to Clear</span></td></tr>
-              <tr className="flagged"><td style={{ fontFamily: 'monospace', fontSize: '11px' }}>ISB/2026/0213</td><td><strong>Byamukama Robert</strong></td><td>BEng.</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> Not paid</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 65% passed</span></td><td>—</td><td><span className="badge badge-amber">Yet to register</span></td></tr>
-              <tr><td style={{ fontFamily: 'monospace', fontSize: '11px' }}>ISB/2025/0388</td><td><strong>Musoke David</strong></td><td>BBA</td><td>Sem 3→4</td><td><span className="badge badge-red"><i className="lni lni-close"></i> 15% only</span></td><td>—</td><td><span className="badge badge-grey">Not checked (fee failed)</span></td><td>—</td><td><span className="badge badge-red"><i className="lni lni-close"></i> Dropout</span></td></tr>
-              <tr><td style={{ fontFamily: 'monospace', fontSize: '11px' }}>ISB/2026/0051</td><td><strong>Uwase Claudine</strong></td><td>MBA</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> (Sponsored)</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> (Sponsored)</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 82% passed</span></td><td><span className="badge badge-blue"><i className="lni lni-checkmark"></i> Sponsored</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td></tr>
+              <tr><td className="font-mono text-[11px]">ISB/2026/0142</td><td><strong>Nakato Sarah B.</strong></td><td>BSc. IT</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 78% passed</span></td><td>—</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td></tr>
+              <tr><td className="font-mono text-[11px]">ISB/2026/0099</td><td><strong>Okello James P.</strong></td><td>BBA</td><td>Sem 1→2</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td><span className="badge badge-grey">Not checked (Sem1→2)</span></td><td>—</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td></tr>
+              <tr><td className="font-mono text-[11px]">ISB/2026/0034</td><td><strong>Abubakar Faisal</strong></td><td>BSc. IT</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> 38% passed</span></td><td>—</td><td><span className="badge badge-cyan">Yet to Clear</span></td></tr>
+              <tr className="flagged"><td className="font-mono text-[11px]">ISB/2026/0213</td><td><strong>Byamukama Robert</strong></td><td>BEng.</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> Not paid</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 65% passed</span></td><td>—</td><td><span className="badge badge-amber">Yet to register</span></td></tr>
+              <tr><td className="font-mono text-[11px]">ISB/2025/0388</td><td><strong>Musoke David</strong></td><td>BBA</td><td>Sem 3→4</td><td><span className="badge badge-red"><i className="lni lni-close"></i> 15% only</span></td><td>—</td><td><span className="badge badge-grey">Not checked (fee failed)</span></td><td>—</td><td><span className="badge badge-red"><i className="lni lni-close"></i> Dropout</span></td></tr>
+              <tr><td className="font-mono text-[11px]">ISB/2026/0051</td><td><strong>Uwase Claudine</strong></td><td>MBA</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> (Sponsored)</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> (Sponsored)</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 82% passed</span></td><td><span className="badge badge-blue"><i className="lni lni-checkmark"></i> Sponsored</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td></tr>
             </tbody>
           </table>
         </div>
-        <div className="g4" style={{ marginBottom: '14px' }}>
-          <div style={{ padding: '12px', background: 'var(--green-bg)', border: '1px solid var(--green-bd)', borderRadius: 'var(--rsm)', textAlign: 'center' }}><div style={{ fontSize: '11px', color: 'var(--green)', fontWeight: 700 }}>REGISTERED</div><div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--green)', fontFamily: "'Inter',-apple-system,sans-serif" }}>1,169</div></div>
-          <div style={{ padding: '12px', background: 'var(--red-bg)', border: '1px solid var(--red-bd)', borderRadius: 'var(--rsm)', textAlign: 'center' }}><div style={{ fontSize: '11px', color: 'var(--red)', fontWeight: 700 }}>DROPOUT</div><div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--red)', fontFamily: "'Inter',-apple-system,sans-serif" }}>12</div></div>
-          <div style={{ padding: '12px', background: 'var(--amber-bg)', border: '1px solid var(--amber-bd)', borderRadius: 'var(--rsm)', textAlign: 'center' }}><div style={{ fontSize: '11px', color: 'var(--amber)', fontWeight: 700 }}>YET TO REGISTER</div><div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--amber)', fontFamily: "'Inter',-apple-system,sans-serif" }}>62</div></div>
-          <div style={{ padding: '12px', background: 'var(--cyan-bg)', border: '1px solid #bae6fd', borderRadius: 'var(--rsm)', textAlign: 'center' }}><div style={{ fontSize: '11px', color: 'var(--cyan)', fontWeight: 700 }}>YET TO CLEAR</div><div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--cyan)', fontFamily: "'Inter',-apple-system,sans-serif" }}>41</div></div>
+        <div className="g4 mb-[14px]">
+          <div className="p-3 bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rsm)] text-center"><div className="text-[11px] text-clr-green font-bold">REGISTERED</div><div className="text-[22px] font-extrabold text-clr-green font-sans">1,169</div></div>
+          <div className="p-3 bg-[var(--red-bg)] border border-[var(--red-bd)] rounded-[var(--rsm)] text-center"><div className="text-[11px] text-clr-red font-bold">DROPOUT</div><div className="text-[22px] font-extrabold text-clr-red font-sans">12</div></div>
+          <div className="p-3 bg-[var(--amber-bg)] border border-[var(--amber-bd)] rounded-[var(--rsm)] text-center"><div className="text-[11px] text-clr-amber font-bold">YET TO REGISTER</div><div className="text-[22px] font-extrabold text-clr-amber font-sans">62</div></div>
+          <div className="p-3 bg-[var(--cyan-bg)] border border-[#bae6fd] rounded-[var(--rsm)] text-center"><div className="text-[11px] font-bold text-clr-cyan">YET TO CLEAR</div><div className="text-[22px] font-extrabold text-clr-cyan font-sans">41</div></div>
         </div>
-        <div className="danger-box" style={{ marginBottom: '14px' }}>
+        <div className="danger-box mb-[14px]">
           <i className="lni lni-volume-high"></i> <span>This action is <strong>irreversible</strong>. Dropout records are permanently locked. Students with "Yet to register" or "Yet to Clear" statuses will need to resolve their issue before the next movement. Download the preview report before proceeding.</span>
         </div>
-        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+        <div className="flex gap-[10px] justify-end">
           <button className="btn btn-neu" onClick={() => showToast('Preview report downloaded.', 'success')}><i className="lni lni-download"></i> Download Preview CSV</button>
           <button className="btn btn-danger" onClick={() => { (document.getElementById('sm-preview') as HTMLElement).style.display = 'none'; showToast('Preview cleared.', 'warn'); }}><i className="lni lni-close"></i> Cancel</button>
           <button className="btn btn-success btn-lg" onClick={() => openModal('confirm-movement-modal')}><i className="lni lni-checkmark"></i> Confirm & Execute Session Movement →</button>
@@ -166,9 +166,9 @@ export function AllocationPage({ nav, openModal, showToast }: PageProps) {
         </div>
       </div>
 
-      <div className="g2" style={{ marginBottom: '18px' }}>
+      <div className="g2 mb-[18px]">
         <div className="warn-box">
-          <i className="lni lni-warning"></i> <span><strong>Prerequisite:</strong> Faculty must have populated their skills in the <button className="btn btn-amber btn-sm" style={{ padding: '3px 10px', fontSize: '11px' }} onClick={() => nav('skill-master')}><i className="lni lni-bulb"></i> Skill Management Master</button> before allocation. <strong>4 faculty members</strong> currently have incomplete skill profiles — allocation for those faculty is blocked.</span>
+          <i className="lni lni-warning"></i> <span><strong>Prerequisite:</strong> Faculty must have populated their skills in the <button className="btn btn-amber btn-sm p-[3px_10px] text-[11px]" onClick={() => nav('skill-master')}><i className="lni lni-bulb"></i> Skill Management Master</button> before allocation. <strong>4 faculty members</strong> currently have incomplete skill profiles — allocation for those faculty is blocked.</span>
         </div>
         <div className="info-box">
           <i className="lni lni-information"></i> <span>Allocation data is manually entered by <strong>Support Staff</strong> from the Dean's pre-approved Excel file. <strong>No system restriction</strong> on subject count per faculty — typical load is <strong>5–6 subjects</strong>. <strong>Project subjects</strong> only require weekly check-ins, not traditional lectures — allocate accordingly.</span>
@@ -176,11 +176,11 @@ export function AllocationPage({ nav, openModal, showToast }: PageProps) {
       </div>
 
       {/* Allocation Stats */}
-      <div className="g4" style={{ marginBottom: '18px' }}>
+      <div className="g4 mb-[18px]">
         <div className="stat-card"><div className="stat-lbl">Total Course Units</div><div className="stat-num">84</div><div className="stat-sub up">Across all programmes</div></div>
-        <div className="stat-card" style={{ '--b700': 'var(--green)', '--b400': '#34d399' } as React.CSSProperties}><div className="stat-lbl">Allocated</div><div className="stat-num" style={{ color: 'var(--green)' }}>81</div><div className="stat-sub up">96% complete</div></div>
-        <div className="stat-card" style={{ '--b700': 'var(--amber)', '--b400': '#fbbf24' } as React.CSSProperties}><div className="stat-lbl">Unallocated</div><div className="stat-num" style={{ color: 'var(--amber)' }}>3</div><div className="stat-sub warn">Action required</div></div>
-        <div className="stat-card" style={{ '--b700': 'var(--purple)', '--b400': '#a78bfa' } as React.CSSProperties}><div className="stat-lbl">Faculty Members</div><div className="stat-num" style={{ color: 'var(--purple)' }}>28</div><div className="stat-sub up">Teaching this intake</div></div>
+        <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Allocated</div><div className="stat-num text-clr-green">81</div><div className="stat-sub up">96% complete</div></div>
+        <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]"><div className="stat-lbl">Unallocated</div><div className="stat-num text-clr-amber">3</div><div className="stat-sub warn">Action required</div></div>
+        <div className="stat-card [--b700:var(--purple)] [--b400:#a78bfa]"><div className="stat-lbl">Faculty Members</div><div className="stat-num text-clr-purple">28</div><div className="stat-sub up">Teaching this intake</div></div>
       </div>
 
       {/* Allocation Table */}
@@ -188,20 +188,20 @@ export function AllocationPage({ nav, openModal, showToast }: PageProps) {
         <div className="card-hdr">
           <div className="card-title"><span className="ctitle-icon"><i className="lni lni-graduation"></i></span> Current Allocations — Spring 2026</div>
           <div className="flex gap-2">
-            <select className="ctrl" style={{ width: 'auto', fontSize: '12px' }}><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>BEng. Civil</option></select>
-            <select className="ctrl" style={{ width: 'auto', fontSize: '12px' }}><option>All Statuses</option><option>Allocated</option><option>Unallocated</option></select>
+            <select className="ctrl w-auto text-xs"><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>BEng. Civil</option></select>
+            <select className="ctrl w-auto text-xs"><option>All Statuses</option><option>Allocated</option><option>Unallocated</option></select>
           </div>
         </div>
         <div className="tbl-wrap">
           <table>
             <thead><tr><th>Course Code</th><th>Unit Name</th><th>Programme</th><th>Semester</th><th>Batch</th><th>Allocated To</th><th>Status</th><th>Action</th></tr></thead>
             <tbody>
-              <tr><td style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--b700)' }}>IT101</td><td>Introduction to Programming</td><td>BSc. IT</td><td>Sem 1</td><td>BSC-IT-S1-D</td><td><span className="font-bold">Dr. Ssekibuule Ronald</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Allocated</span></td><td><button className="btn btn-neu btn-sm" onClick={() => showToast('Editing IT101', 'info')}><i className="lni lni-pencil"></i> Edit</button></td></tr>
-              <tr><td style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--b700)' }}>IT102</td><td>Computer Organisation</td><td>BSc. IT</td><td>Sem 1</td><td>BSC-IT-S1-D</td><td><span className="font-bold">Ms. Namutebi Joyce</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Allocated</span></td><td><button className="btn btn-neu btn-sm" onClick={() => showToast('Editing IT102', 'info')}><i className="lni lni-pencil"></i> Edit</button></td></tr>
-              <tr className="flagged"><td style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--b700)' }}>BBA301</td><td>Strategic Management</td><td>BBA</td><td>Sem 3</td><td>BBA-S3-D</td><td><span className="text-muted">— Unallocated —</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> Missing</span></td><td><button className="btn btn-amber btn-sm" onClick={() => showToast('Assigning BBA301', 'info')}>Assign →</button></td></tr>
-              <tr className="flagged"><td style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--b700)' }}>BBA302</td><td>Business Ethics</td><td>BBA</td><td>Sem 3</td><td>BBA-S3-D</td><td><span className="text-muted">— Unallocated —</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> Missing</span></td><td><button className="btn btn-amber btn-sm" onClick={() => showToast('Assigning BBA302', 'info')}>Assign →</button></td></tr>
-              <tr className="flagged"><td style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--b700)' }}>BBA303</td><td>Financial Accounting III</td><td>BBA</td><td>Sem 3</td><td>BBA-S3-D</td><td><span className="text-muted">— Unallocated —</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> Missing</span></td><td><button className="btn btn-amber btn-sm" onClick={() => showToast('Assigning BBA303', 'info')}>Assign →</button></td></tr>
-              <tr><td style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--b700)' }}>MBA101</td><td>Managerial Economics</td><td>MBA</td><td>Sem 1</td><td>MBA-S1-E</td><td><span className="font-bold">Prof. Mukasa Charles</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Allocated</span></td><td><button className="btn btn-neu btn-sm" onClick={() => showToast('Editing MBA101', 'info')}><i className="lni lni-pencil"></i> Edit</button></td></tr>
+              <tr><td className="font-mono text-[11px] text-b700">IT101</td><td>Introduction to Programming</td><td>BSc. IT</td><td>Sem 1</td><td>BSC-IT-S1-D</td><td><span className="font-bold">Dr. Ssekibuule Ronald</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Allocated</span></td><td><button className="btn btn-neu btn-sm" onClick={() => showToast('Editing IT101', 'info')}><i className="lni lni-pencil"></i> Edit</button></td></tr>
+              <tr><td className="font-mono text-[11px] text-b700">IT102</td><td>Computer Organisation</td><td>BSc. IT</td><td>Sem 1</td><td>BSC-IT-S1-D</td><td><span className="font-bold">Ms. Namutebi Joyce</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Allocated</span></td><td><button className="btn btn-neu btn-sm" onClick={() => showToast('Editing IT102', 'info')}><i className="lni lni-pencil"></i> Edit</button></td></tr>
+              <tr className="flagged"><td className="font-mono text-[11px] text-b700">BBA301</td><td>Strategic Management</td><td>BBA</td><td>Sem 3</td><td>BBA-S3-D</td><td><span className="text-muted">— Unallocated —</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> Missing</span></td><td><button className="btn btn-amber btn-sm" onClick={() => showToast('Assigning BBA301', 'info')}>Assign →</button></td></tr>
+              <tr className="flagged"><td className="font-mono text-[11px] text-b700">BBA302</td><td>Business Ethics</td><td>BBA</td><td>Sem 3</td><td>BBA-S3-D</td><td><span className="text-muted">— Unallocated —</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> Missing</span></td><td><button className="btn btn-amber btn-sm" onClick={() => showToast('Assigning BBA302', 'info')}>Assign →</button></td></tr>
+              <tr className="flagged"><td className="font-mono text-[11px] text-b700">BBA303</td><td>Financial Accounting III</td><td>BBA</td><td>Sem 3</td><td>BBA-S3-D</td><td><span className="text-muted">— Unallocated —</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> Missing</span></td><td><button className="btn btn-amber btn-sm" onClick={() => showToast('Assigning BBA303', 'info')}>Assign →</button></td></tr>
+              <tr><td className="font-mono text-[11px] text-b700">MBA101</td><td>Managerial Economics</td><td>MBA</td><td>Sem 1</td><td>MBA-S1-E</td><td><span className="font-bold">Prof. Mukasa Charles</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Allocated</span></td><td><button className="btn btn-neu btn-sm" onClick={() => showToast('Editing MBA101', 'info')}><i className="lni lni-pencil"></i> Edit</button></td></tr>
             </tbody>
           </table>
         </div>
@@ -226,25 +226,25 @@ export function TimetablePage({ nav, openModal, showToast }: PageProps) {
       </div>
 
       {/* Clash Detection Rules Banner */}
-      <div className="g2" style={{ marginBottom: '14px' }}>
-        <div className="danger-box" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
-          <span style={{ fontWeight: 700, fontSize: '12.5px' }}><i className="lni lni-volume-high"></i> Dual Clash Prevention (Hard Block)</span>
-          <span style={{ fontSize: '12px' }}>The system checks <strong>both</strong> conditions simultaneously on every slot entry:</span>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
-            <span style={{ background: 'var(--red-bg)', border: '1px solid var(--red-bd)', borderRadius: '4px', padding: '3px 8px', fontSize: '11.5px', fontWeight: 600 }}><i className="lni lni-user"></i> Faculty Clash — teacher already allocated elsewhere at same time</span>
-            <span style={{ background: 'var(--red-bg)', border: '1px solid var(--red-bd)', borderRadius: '4px', padding: '3px 8px', fontSize: '11.5px', fontWeight: 600 }}><i className="lni lni-apartment"></i> Room Clash — room already occupied by any class at exact same slot</span>
+      <div className="g2 mb-[14px]">
+        <div className="danger-box flex-col items-start gap-1">
+          <span className="font-bold text-[12.5px]"><i className="lni lni-volume-high"></i> Dual Clash Prevention (Hard Block)</span>
+          <span className="text-xs">The system checks <strong>both</strong> conditions simultaneously on every slot entry:</span>
+          <div className="flex gap-2 flex-wrap mt-[2px]">
+            <span className="bg-[var(--red-bg)] border border-[var(--red-bd)] rounded p-[3px_8px] text-[11.5px] font-semibold"><i className="lni lni-user"></i> Faculty Clash — teacher already allocated elsewhere at same time</span>
+            <span className="bg-[var(--red-bg)] border border-[var(--red-bd)] rounded p-[3px_8px] text-[11.5px] font-semibold"><i className="lni lni-apartment"></i> Room Clash — room already occupied by any class at exact same slot</span>
           </div>
-          <span style={{ fontSize: '11.5px', marginTop: '2px' }}>If either clash is detected → <strong>entry is blocked with an error message</strong>. No override permitted.</span>
+          <span className="text-[11.5px] mt-[2px]">If either clash is detected → <strong>entry is blocked with an error message</strong>. No override permitted.</span>
         </div>
-        <div className="info-box" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
-          <span style={{ fontWeight: 700, fontSize: '12.5px' }}><i className="lni lni-volume-high"></i> Publish Rules</span>
-          <span style={{ fontSize: '12px' }}>Once published, the schedule is <strong>immediately visible</strong> on both the Student Portal and the Lecturer's view — no delay.</span>
-          <span style={{ fontSize: '12px', marginTop: '2px' }}>Subjects with a <strong>Repetition Tag</strong> (set in Course Master) allow multiple batches to be combined into a single slot — system provides a combine option when a tag match is detected.</span>
+        <div className="info-box flex-col items-start gap-1">
+          <span className="font-bold text-[12.5px]"><i className="lni lni-volume-high"></i> Publish Rules</span>
+          <span className="text-xs">Once published, the schedule is <strong>immediately visible</strong> on both the Student Portal and the Lecturer's view — no delay.</span>
+          <span className="text-xs mt-[2px]">Subjects with a <strong>Repetition Tag</strong> (set in Course Master) allow multiple batches to be combined into a single slot — system provides a combine option when a tag match is detected.</span>
         </div>
       </div>
 
       {/* Batch Selector + View Toggle */}
-      <div className="card" style={{ marginBottom: '14px', padding: '16px' }}>
+      <div className="card mb-[14px] p-4">
         <div className="g4">
           <div className="fg"><div className="lbl">Batch <span className="req">*</span></div>
             <select className="ctrl" id="tt-batch" onChange={() => showToast('Rendering timetable...', 'info')}>
@@ -276,7 +276,7 @@ export function TimetablePage({ nav, openModal, showToast }: PageProps) {
       </div>
 
       {/* Conflict Warning */}
-      <div id="tt-conflict-banner" className="danger-box" style={{ marginBottom: '14px', display: 'none' }}>
+      <div id="tt-conflict-banner" className="danger-box hidden mb-[14px]">
         <i className="lni lni-volume-high"></i> <span id="tt-conflict-msg">Conflict detected — entry blocked.</span>
       </div>
 
@@ -289,25 +289,25 @@ export function TimetablePage({ nav, openModal, showToast }: PageProps) {
             <button className="btn btn-neu btn-sm" onClick={() => openModal('add-slot-modal')}><i className="lni lni-plus"></i> Add Slot</button>
           </div>
         </div>
-        <div className="info-box" style={{ marginBottom: '10px', padding: '8px 12px' }}>
-          <i className="lni lni-pointer"></i> <span style={{ fontSize: '12px' }}><strong>Drag-and-drop:</strong> Drag any slot to a new day/time cell. The system will immediately check for faculty and room clashes before confirming the move. Click any empty cell to add a new slot.</span>
+        <div className="info-box mb-[10px] p-[8px_12px]">
+          <i className="lni lni-pointer"></i> <span className="text-xs"><strong>Drag-and-drop:</strong> Drag any slot to a new day/time cell. The system will immediately check for faculty and room clashes before confirming the move. Click any empty cell to add a new slot.</span>
         </div>
-        <div style={{ overflowX: 'auto' }}>
+        <div className="overflow-x-auto">
           <div className="tt-grid" id="tt-grid-container"></div>
         </div>
-        <div style={{ marginTop: '14px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', color: 'var(--g500)', fontWeight: 600 }}>Legend:</span>
-          <span style={{ background: 'var(--b50)', border: '1px solid var(--b200)', borderRadius: '4px', padding: '3px 8px', fontSize: '11px' }}>Theory</span>
-          <span style={{ background: 'var(--green-bg)', border: '1px solid var(--green-bd)', borderRadius: '4px', padding: '3px 8px', fontSize: '11px' }}>Practical</span>
-          <span style={{ background: 'var(--amber-bg)', border: '1px solid var(--amber-bd)', borderRadius: '4px', padding: '3px 8px', fontSize: '11px' }}>Tutorial</span>
-          <span style={{ background: 'var(--purple-bg)', border: '1px solid var(--purple-bd)', borderRadius: '4px', padding: '3px 8px', fontSize: '11px' }}>CBT/Lab</span>
-          <span style={{ background: 'var(--cyan-bg)', border: '1px solid #bae6fd', borderRadius: '4px', padding: '3px 8px', fontSize: '11px' }}><i className="lni lni-reload"></i> Combined Batch</span>
-          <span style={{ background: 'var(--red-bg)', border: '1px solid var(--red-bd)', borderRadius: '4px', padding: '3px 8px', fontSize: '11px' }}><i className="lni lni-checkmark-circle"></i> Conflict (blocked)</span>
+        <div className="mt-[14px] flex gap-2 flex-wrap items-center">
+          <span className="text-[11px] text-g500 font-semibold">Legend:</span>
+          <span className="bg-b50 border border-[var(--b200)] rounded p-[3px_8px] text-[11px]">Theory</span>
+          <span className="bg-[var(--green-bg)] border border-[var(--green-bd)] rounded p-[3px_8px] text-[11px]">Practical</span>
+          <span className="bg-[var(--amber-bg)] border border-[var(--amber-bd)] rounded p-[3px_8px] text-[11px]">Tutorial</span>
+          <span className="bg-[var(--purple-bg)] border border-[var(--purple-bd)] rounded p-[3px_8px] text-[11px]">CBT/Lab</span>
+          <span className="bg-[var(--cyan-bg)] border border-[#bae6fd] rounded p-[3px_8px] text-[11px]"><i className="lni lni-reload"></i> Combined Batch</span>
+          <span className="bg-[var(--red-bg)] border border-[var(--red-bd)] rounded p-[3px_8px] text-[11px]"><i className="lni lni-checkmark-circle"></i> Conflict (blocked)</span>
         </div>
       </div>
 
       {/* List View */}
-      <div className="card" id="tt-list-view" style={{ display: 'none' }}>
+      <div className="card hidden" id="tt-list-view">
         <div className="card-hdr"><div className="card-title"><span className="ctitle-icon"><i className="lni lni-clipboard"></i></span> List View — Schedule</div></div>
         <div className="tbl-wrap">
           <table id="tt-list-table">
@@ -328,7 +328,7 @@ export function CourseworkPage({ nav, openModal, showToast }: PageProps) {
         <button className="btn btn-primary" onClick={() => openModal('new-cw-modal')}><i className="lni lni-plus"></i> Schedule Coursework</button>
       </div>
 
-      <div className="g2" style={{ marginBottom: '18px' }}>
+      <div className="g2 mb-[18px]">
         <div className="info-box"><i className="lni lni-ruler-alt"></i> <span><strong>Proration:</strong> Coursework is marked out of <strong>25</strong> and prorated to <strong>15</strong> marks in final result. Students must have minimum <strong>50% fee clearance</strong> (on original tuition fee before discounts) to submit.</span></div>
         <div className="warn-box"><i className="lni lni-warning"></i> <span>Students can <strong>view</strong> coursework questions without fee clearance. Fee clearance only blocks <strong>submission</strong>.</span></div>
       </div>
@@ -350,7 +350,7 @@ export function CourseworkPage({ nav, openModal, showToast }: PageProps) {
         <div className="card-hdr">
           <div className="card-title"><span className="ctitle-icon"><i className="lni lni-pencil-alt"></i></span> Active Coursework — Term 1 · Spring 2026</div>
           <div className="flex gap-2">
-            <select className="ctrl" style={{ width: 'auto', fontSize: '12px' }}><option>All Batches</option><option>BSC-IT-S1-D</option><option>BBA-S3-D</option><option>MBA-S1-E</option></select>
+            <select className="ctrl w-auto text-xs"><option>All Batches</option><option>BSC-IT-S1-D</option><option>BBA-S3-D</option><option>MBA-S1-E</option></select>
           </div>
         </div>
         <div className="tbl-wrap">
@@ -376,7 +376,7 @@ export function ClassTestPage({ nav, openModal, showToast }: PageProps) {
         <button className="btn btn-primary" onClick={() => openModal('new-cbt-modal')}><i className="lni lni-plus"></i> Schedule Class Test</button>
       </div>
 
-      <div className="g2" style={{ marginBottom: '18px' }}>
+      <div className="g2 mb-[18px]">
         <div className="info-box"><i className="lni lni-ruler-alt"></i> <span><strong>Proration:</strong> CBT is marked out of <strong>50</strong> and prorated to <strong>15</strong> marks. Each test runs for <strong>60 minutes</strong> with server-side timing — students cannot extend or pause.</span></div>
         <div className="warn-box"><i className="lni lni-warning"></i> <span>Minimum <strong>50% fee clearance</strong> required for submission (calculated on <strong>original tuition fee</strong>, not discounted amount). View access permitted without clearance.</span></div>
       </div>
@@ -384,7 +384,7 @@ export function ClassTestPage({ nav, openModal, showToast }: PageProps) {
       <div className="card">
         <div className="card-hdr">
           <div className="card-title"><span className="ctitle-icon"><i className="lni lni-display"></i></span> Scheduled Class Tests — Term 1</div>
-          <select className="ctrl" style={{ width: 'auto', fontSize: '12px' }}><option>All Batches</option><option>BSC-IT-S1-D</option><option>MBA-S1-E</option></select>
+          <select className="ctrl w-auto text-xs"><option>All Batches</option><option>BSC-IT-S1-D</option><option>MBA-S1-E</option></select>
         </div>
         <div className="tbl-wrap">
           <table>

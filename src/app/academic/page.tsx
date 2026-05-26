@@ -101,7 +101,7 @@ export default function AcademicPage() {
     <>
       {/* Header */}
       <header className="hdr">
-        <div className="hdr-brand" style={{ backgroundColor: 'rgb(240, 244, 248)' }}>
+        <div className="hdr-brand bg-bg">
           <div className="hdr-badge">IU</div>
         </div>
         <div className="hdr-body">
@@ -125,7 +125,7 @@ export default function AcademicPage() {
 
         {/* Sidebar */}
         <div className="sidebar">
-          <div className="sb-rail" style={{ backgroundColor: 'rgb(240, 244, 248)' }}>
+          <div className="sb-rail bg-bg">
             <div className="rail-item active" data-mod="academic">
               <span className="rail-icon"><i className="lni lni-graduation"></i></span>
               <span className="rail-label">Academic</span>

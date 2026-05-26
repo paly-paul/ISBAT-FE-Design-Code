@@ -106,9 +106,9 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
               </div>
             </div>
             {/* Assessment hint panel */}
-            <div id="cu-assessment-hint" style={{ margin: '14px 0', padding: '12px 16px', background: 'var(--b50)', border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)' }}>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--b700)', textTransform: 'uppercase', marginBottom: '8px' }}>Assessment Components for this Unit Type</div>
-              <div id="cu-hint-content" style={{ fontSize: '12.5px', color: 'var(--g700)' }}>
+            <div id="cu-assessment-hint" className="my-[14px] px-4 py-3 bg-b50 border-[1.5px] border-[var(--b100)] rounded-[var(--rsm)]">
+              <div className="text-[11px] font-bold text-b700 uppercase mb-2">Assessment Components for this Unit Type</div>
+              <div id="cu-hint-content" className="text-[12.5px] text-[var(--g700)]">
                 Has <strong>Coursework (CW)</strong>: out of 25 → prorated to 15 &nbsp;|&nbsp; Has <strong>Class Test (CBT)</strong>: out of 50 → prorated to 15 &nbsp;|&nbsp; <strong>University Exam (UE)</strong>: out of 100 → prorated to 70
               </div>
             </div>
@@ -122,49 +122,49 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
                 </div>
               </div>
               <div className="g3">
-                <div style={{ padding: '12px', background: 'var(--b50)', border: '1px solid var(--b100)', borderRadius: 'var(--rsm)' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--b700)', textAlign: 'center', marginBottom: '8px' }}>COURSEWORK (CW)</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                <div className="p-3 bg-b50 border border-[var(--b100)] rounded-[var(--rsm)]">
+                  <div className="text-[11px] font-bold text-b700 text-center mb-2">COURSEWORK (CW)</div>
+                  <div className="flex items-center gap-2 justify-center">
                     <input className="ctrl wt-input" type="number" id="wt-cw-raw" defaultValue={25} min={0} />
-                    <span style={{ fontFamily: "'Inter',-apple-system,sans-serif", fontSize: '18px', fontWeight: 800, color: 'var(--b800)' }}>→</span>
+                    <span className="text-[18px] font-extrabold text-b800">→</span>
                     <input className="ctrl wt-input" type="number" id="wt-cw-final" defaultValue={15} min={0} />
                   </div>
-                  <div style={{ fontSize: '10.5px', color: 'var(--g500)', textAlign: 'center', marginTop: '6px' }}>Assessed / Final weight</div>
+                  <div className="text-[10.5px] text-g500 text-center mt-[6px]">Assessed / Final weight</div>
                 </div>
-                <div style={{ padding: '12px', background: 'var(--amber-bg)', border: '1px solid var(--amber-bd)', borderRadius: 'var(--rsm)' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--amber)', textAlign: 'center', marginBottom: '8px' }}>CLASS TEST (CBT)</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                <div className="p-3 bg-[var(--amber-bg)] border border-[var(--amber-bd)] rounded-[var(--rsm)]">
+                  <div className="text-[11px] font-bold text-clr-amber text-center mb-2">CLASS TEST (CBT)</div>
+                  <div className="flex items-center gap-2 justify-center">
                     <input className="ctrl wt-input" type="number" id="wt-cbt-raw" defaultValue={50} min={0} />
-                    <span style={{ fontFamily: "'Inter',-apple-system,sans-serif", fontSize: '18px', fontWeight: 800, color: 'var(--amber)' }}>→</span>
+                    <span className="text-[18px] font-extrabold text-clr-amber">→</span>
                     <input className="ctrl wt-input" type="number" id="wt-cbt-final" defaultValue={15} min={0} />
                   </div>
-                  <div style={{ fontSize: '10.5px', color: 'var(--g500)', textAlign: 'center', marginTop: '6px' }}>Assessed / Final weight</div>
+                  <div className="text-[10.5px] text-g500 text-center mt-[6px]">Assessed / Final weight</div>
                 </div>
-                <div style={{ padding: '12px', background: 'var(--green-bg)', border: '1px solid var(--green-bd)', borderRadius: 'var(--rsm)' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--green)', textAlign: 'center', marginBottom: '8px' }}>UNIVERSITY EXAM</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                <div className="p-3 bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rsm)]">
+                  <div className="text-[11px] font-bold text-clr-green text-center mb-2">UNIVERSITY EXAM</div>
+                  <div className="flex items-center gap-2 justify-center">
                     <input className="ctrl wt-input" type="number" id="wt-ue-raw" defaultValue={100} min={0} />
-                    <span style={{ fontFamily: "'Inter',-apple-system,sans-serif", fontSize: '18px', fontWeight: 800, color: 'var(--green)' }}>→</span>
+                    <span className="text-[18px] font-extrabold text-clr-green">→</span>
                     <input className="ctrl wt-input" type="number" id="wt-ue-final" defaultValue={70} min={0} />
                   </div>
-                  <div style={{ fontSize: '10.5px', color: 'var(--g500)', textAlign: 'center', marginTop: '6px' }}>Assessed / Final weight</div>
+                  <div className="text-[10.5px] text-g500 text-center mt-[6px]">Assessed / Final weight</div>
                 </div>
               </div>
-              <div id="wt-sum-line" style={{ marginTop: '10px', fontSize: '12px', color: 'var(--g500)', textAlign: 'right' }}>Final weight total: <strong id="wt-sum-val" style={{ color: 'var(--green)' }}>100</strong> / 100</div>
+              <div id="wt-sum-line" className="mt-[10px] text-xs text-g500 text-right">Final weight total: <strong id="wt-sum-val" className="text-clr-green">100</strong> / 100</div>
             </div>
 
             {/* Course Outline */}
             <div className="mdl-section mdl-section--blue">
               <div className="mdl-section-hdr">
                 <span className="mdl-section-icon"><i className="lni lni-list"></i></span>
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="flex-1 min-w-0">
                   <div className="mdl-section-title">Course Outline — Chapters &amp; Topics</div>
                   <div className="mdl-section-sub">Build the syllabus structure for this unit. Auto-numbered — click to rename inline.</div>
                 </div>
-                <span id="co-current-unit" className="badge badge-blue" style={{ textTransform: 'none', letterSpacing: 0 }}>—</span>
+                <span id="co-current-unit" className="badge badge-blue normal-case tracking-normal">—</span>
                 <button className="btn btn-neu btn-sm" type="button"><i className="lni lni-plus"></i> Add Chapter</button>
               </div>
-              <div id="course-outline-body" style={{ marginTop: '4px' }}></div>
+              <div id="course-outline-body" className="mt-1"></div>
             </div>
 
             {/* Approved Syllabus */}
@@ -180,7 +180,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
                 <input type="file" accept=".pdf,.doc,.docx" />
                 <div className="file-zone-icon"><i className="lni lni-files"></i></div>
                 <p>Upload approved syllabus document (PDF/Word)</p>
-                <p style={{ fontSize: '11px', color: 'var(--g400)' }}>Must conform to NCHE or UVTOP accreditation</p>
+                <p className="text-[11px] text-g400">Must conform to NCHE or UVTOP accreditation</p>
               </div>
             </div>
 
@@ -200,8 +200,8 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
               <div className="modal-title"><i className="lni lni-warning"></i> Confirm Session Movement</div>
               <button className="modal-close" onClick={() => closeModal('confirm-movement-modal')}><i className="lni lni-close"></i></button>
             </div>
-            <div className="danger-box" style={{ marginBottom: '16px' }}><i className="lni lni-volume-high"></i> <span>This will <strong>permanently move 1,247 students</strong> to the next semester and mark <strong>12 students as Dropout</strong>. This action cannot be undone.</span></div>
-            <div className="fg" style={{ marginBottom: '16px' }}><div className="lbl">Type CONFIRM to proceed</div><input className="ctrl" type="text" id="sm-confirm-input" placeholder="Type CONFIRM" /></div>
+            <div className="danger-box mb-4"><i className="lni lni-volume-high"></i> <span>This will <strong>permanently move 1,247 students</strong> to the next semester and mark <strong>12 students as Dropout</strong>. This action cannot be undone.</span></div>
+            <div className="fg mb-4"><div className="lbl">Type CONFIRM to proceed</div><input className="ctrl" type="text" id="sm-confirm-input" placeholder="Type CONFIRM" /></div>
             <div className="modal-footer">
               <button className="btn btn-neu" onClick={() => closeModal('confirm-movement-modal')}>Cancel</button>
               <button className="btn btn-danger"><i className="lni lni-reload"></i> Execute Movement</button>
@@ -218,38 +218,38 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
               <div className="modal-title"><i className="lni lni-download"></i> Import Allocation from Excel</div>
               <button className="modal-close" onClick={() => closeModal('alloc-import-modal')}><i className="lni lni-close"></i></button>
             </div>
-            <div className="info-box" style={{ marginBottom: '14px' }}><i className="lni lni-information"></i> Upload the HOD/Dean's Excel allocation sheet. Required columns: <span style={{ fontFamily: 'monospace', background: 'var(--b100)', padding: '2px 5px', borderRadius: '3px', fontSize: '11px' }}>course_code, faculty_name, batch_code, semester</span>. Preview will show before saving.</div>
-            <div className="file-zone" style={{ marginBottom: '14px' }} id="alloc-upload-zone">
+            <div className="info-box mb-[14px]"><i className="lni lni-information"></i> Upload the HOD/Dean's Excel allocation sheet. Required columns: <span className="font-mono bg-[var(--b100)] py-[2px] px-[5px] rounded-[3px] text-[11px]">course_code, faculty_name, batch_code, semester</span>. Preview will show before saving.</div>
+            <div className="file-zone mb-[14px]" id="alloc-upload-zone">
               <input type="file" accept=".xlsx,.xls,.csv" />
               <div className="file-zone-icon"><i className="lni lni-bar-chart"></i></div>
               <p>Drop Excel file here or click to browse</p>
-              <p style={{ fontSize: '11px', color: 'var(--g400)' }}>.xlsx, .xls or .csv · Max 5MB</p>
+              <p className="text-[11px] text-g400">.xlsx, .xls or .csv · Max 5MB</p>
               <div className="fz-uploaded" id="alloc-upload-status"></div>
             </div>
-            <div id="alloc-preview-section" style={{ display: 'none' }}>
+            <div id="alloc-preview-section" className="hidden">
               <div className="sec-divider">Preview (8 rows detected)</div>
-              <div className="g3" style={{ marginBottom: '12px' }}>
-                <div style={{ padding: '10px', background: 'var(--green-bg)', border: '1px solid var(--green-bd)', borderRadius: 'var(--rsm)', textAlign: 'center' }}><div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--green)' }}>VALID ROWS</div><div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--green)' }}>6</div></div>
-                <div style={{ padding: '10px', background: 'var(--amber-bg)', border: '1px solid var(--amber-bd)', borderRadius: 'var(--rsm)', textAlign: 'center' }}><div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--amber)' }}>WARNINGS</div><div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--amber)' }}>1</div></div>
-                <div style={{ padding: '10px', background: 'var(--red-bg)', border: '1px solid var(--red-bd)', borderRadius: 'var(--rsm)', textAlign: 'center' }}><div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--red)' }}>ERRORS</div><div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--red)' }}>1</div></div>
+              <div className="g3 mb-3">
+                <div className="p-[10px] bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rsm)] text-center"><div className="text-[11px] font-bold text-clr-green">VALID ROWS</div><div className="text-[20px] font-extrabold text-clr-green">6</div></div>
+                <div className="p-[10px] bg-[var(--amber-bg)] border border-[var(--amber-bd)] rounded-[var(--rsm)] text-center"><div className="text-[11px] font-bold text-clr-amber">WARNINGS</div><div className="text-[20px] font-extrabold text-clr-amber">1</div></div>
+                <div className="p-[10px] bg-[var(--red-bg)] border border-[var(--red-bd)] rounded-[var(--rsm)] text-center"><div className="text-[11px] font-bold text-clr-red">ERRORS</div><div className="text-[20px] font-extrabold text-clr-red">1</div></div>
               </div>
               <div className="import-preview">
                 <table>
                   <thead><tr><th>#</th><th>Course Code</th><th>Faculty Name</th><th>Batch Code</th><th>Semester</th><th>Status</th><th>Issue</th></tr></thead>
                   <tbody>
-                    <tr className="import-row-ok"><td>1</td><td style={{ fontFamily: 'monospace' }}>IT101</td><td>Dr. Ssekibuule Ronald</td><td>BSC-IT-S1-D</td><td>Sem 1</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Valid</span></td><td>—</td></tr>
-                    <tr className="import-row-ok"><td>2</td><td style={{ fontFamily: 'monospace' }}>IT102</td><td>Ms. Namutebi Joyce</td><td>BSC-IT-S1-D</td><td>Sem 1</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Valid</span></td><td>—</td></tr>
-                    <tr className="import-row-warn"><td>3</td><td style={{ fontFamily: 'monospace' }}>BBA301</td><td>Dr. Kato Andrew</td><td>BBA-S3-D</td><td>Sem 3</td><td><span className="badge badge-amber"><i className="lni lni-warning"></i> Warning</span></td><td>Faculty not linked to FBM</td></tr>
-                    <tr className="import-row-err"><td>4</td><td style={{ fontFamily: 'monospace' }}>BBA999</td><td>Prof. Mukasa Charles</td><td>BBA-S3-D</td><td>Sem 3</td><td><span className="badge badge-red"><i className="lni lni-close"></i> Error</span></td><td>Course code not found</td></tr>
-                    <tr className="import-row-ok"><td>5</td><td style={{ fontFamily: 'monospace' }}>MBA101</td><td>Prof. Mukasa Charles</td><td>MBA-S1-E</td><td>Sem 1</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Valid</span></td><td>—</td></tr>
+                    <tr className="import-row-ok"><td>1</td><td className="font-mono">IT101</td><td>Dr. Ssekibuule Ronald</td><td>BSC-IT-S1-D</td><td>Sem 1</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Valid</span></td><td>—</td></tr>
+                    <tr className="import-row-ok"><td>2</td><td className="font-mono">IT102</td><td>Ms. Namutebi Joyce</td><td>BSC-IT-S1-D</td><td>Sem 1</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Valid</span></td><td>—</td></tr>
+                    <tr className="import-row-warn"><td>3</td><td className="font-mono">BBA301</td><td>Dr. Kato Andrew</td><td>BBA-S3-D</td><td>Sem 3</td><td><span className="badge badge-amber"><i className="lni lni-warning"></i> Warning</span></td><td>Faculty not linked to FBM</td></tr>
+                    <tr className="import-row-err"><td>4</td><td className="font-mono">BBA999</td><td>Prof. Mukasa Charles</td><td>BBA-S3-D</td><td>Sem 3</td><td><span className="badge badge-red"><i className="lni lni-close"></i> Error</span></td><td>Course code not found</td></tr>
+                    <tr className="import-row-ok"><td>5</td><td className="font-mono">MBA101</td><td>Prof. Mukasa Charles</td><td>MBA-S1-E</td><td>Sem 1</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Valid</span></td><td>—</td></tr>
                   </tbody>
                 </table>
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-neu" onClick={() => closeModal('alloc-import-modal')}>Cancel</button>
-              <button className="btn btn-amber btn-sm" id="alloc-download-errors" style={{ display: 'none' }} onClick={() => showToast('Error report downloaded.', 'warn')}><i className="lni lni-download"></i> Download Error Report</button>
-              <button className="btn btn-primary" id="alloc-import-btn" style={{ display: 'none' }} onClick={() => { closeModal('alloc-import-modal'); showToast('6 valid allocations saved. 1 warning requires manual review.', 'success') }}><i className="lni lni-checkmark"></i> Import Valid Rows (6)</button>
+              <button className="btn btn-amber btn-sm hidden" id="alloc-download-errors" onClick={() => showToast('Error report downloaded.', 'warn')}><i className="lni lni-download"></i> Download Error Report</button>
+              <button className="btn btn-primary hidden" id="alloc-import-btn" onClick={() => { closeModal('alloc-import-modal'); showToast('6 valid allocations saved. 1 warning requires manual review.', 'success') }}><i className="lni lni-checkmark"></i> Import Valid Rows (6)</button>
             </div>
           </div>
         </div>
@@ -263,16 +263,16 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
               <div className="modal-title"><i className="lni lni-download"></i> Import Timetable from Excel</div>
               <button className="modal-close" onClick={() => closeModal('tt-import-modal')}><i className="lni lni-close"></i></button>
             </div>
-            <div className="info-box" style={{ marginBottom: '14px' }}><i className="lni lni-information"></i> Required columns: <span style={{ fontFamily: 'monospace', background: 'var(--b100)', padding: '2px 5px', borderRadius: '3px', fontSize: '11px' }}>batch_code, day, start_time, end_time, course_code, type, venue, faculty</span>. System will detect conflicts automatically.</div>
-            <div className="file-zone" id="tt-upload-zone" style={{ marginBottom: '14px' }}>
+            <div className="info-box mb-[14px]"><i className="lni lni-information"></i> Required columns: <span className="font-mono bg-[var(--b100)] py-[2px] px-[5px] rounded-[3px] text-[11px]">batch_code, day, start_time, end_time, course_code, type, venue, faculty</span>. System will detect conflicts automatically.</div>
+            <div className="file-zone mb-[14px]" id="tt-upload-zone">
               <input type="file" accept=".xlsx,.xls,.csv" />
               <div className="file-zone-icon"><i className="lni lni-calendar"></i></div>
               <p>Drop timetable Excel file here or click to browse</p>
               <div className="fz-uploaded" id="tt-upload-status"></div>
             </div>
-            <div id="tt-preview-section" style={{ display: 'none' }}>
+            <div id="tt-preview-section" className="hidden">
               <div className="sec-divider">Conflict Check Results</div>
-              <div className="success-box" style={{ marginBottom: '12px' }}><i className="lni lni-checkmark"></i> <span>18 slots imported. <strong>No conflicts detected</strong>. Preview the visual grid below before saving.</span></div>
+              <div className="success-box mb-3"><i className="lni lni-checkmark"></i> <span>18 slots imported. <strong>No conflicts detected</strong>. Preview the visual grid below before saving.</span></div>
               <div className="import-preview">
                 <table>
                   <thead><tr><th>Day</th><th>Time</th><th>Course Unit</th><th>Type</th><th>Venue</th><th>Faculty</th><th>Status</th></tr></thead>
@@ -286,7 +286,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
             </div>
             <div className="modal-footer">
               <button className="btn btn-neu" onClick={() => closeModal('tt-import-modal')}>Cancel</button>
-              <button className="btn btn-primary" id="tt-import-btn" style={{ display: 'none' }} onClick={() => { closeModal('tt-import-modal'); showToast('Timetable imported. Visual grid updated.', 'success') }}><i className="lni lni-checkmark"></i> Import &amp; Update Timetable Grid</button>
+              <button className="btn btn-primary hidden" id="tt-import-btn" onClick={() => { closeModal('tt-import-modal'); showToast('Timetable imported. Visual grid updated.', 'success') }}><i className="lni lni-checkmark"></i> Import &amp; Update Timetable Grid</button>
             </div>
           </div>
         </div>
@@ -337,7 +337,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
                 </select>
               </div>
             </div>
-            <div id="slot-clash-result" style={{ display: 'none', margin: '10px 0' }}></div>
+            <div id="slot-clash-result" className="hidden my-[10px]"></div>
             <div className="sec-divider">Combined Batch (Repetition Tag)</div>
             <div className="g2">
               <div className="fg">
@@ -347,12 +347,12 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
                   <button className="tgl-btn" id="slot-rep-yes">Yes — Combine Batches</button>
                 </div>
               </div>
-              <div className="fg" id="slot-rep-batches" style={{ display: 'none' }}>
+              <div className="fg hidden" id="slot-rep-batches">
                 <div className="lbl">Include Batches</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px' }}><input type="checkbox" /> BSC-IT-S26-DA</label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px' }}><input type="checkbox" /> BSC-IT-S26-DB</label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px' }}><input type="checkbox" /> BBA-S26-DA</label>
+                <div className="flex flex-col gap-1">
+                  <label className="flex items-center gap-[6px] text-[12.5px]"><input type="checkbox" /> BSC-IT-S26-DA</label>
+                  <label className="flex items-center gap-[6px] text-[12.5px]"><input type="checkbox" /> BSC-IT-S26-DB</label>
+                  <label className="flex items-center gap-[6px] text-[12.5px]"><input type="checkbox" /> BBA-S26-DA</label>
                 </div>
               </div>
             </div>
@@ -372,7 +372,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
               <div className="modal-title"><i className="lni lni-bulb"></i> Add / Update Faculty Skills</div>
               <button className="modal-close" onClick={() => closeModal('add-skill-modal')}><i className="lni lni-close"></i></button>
             </div>
-            <div className="fg" style={{ marginBottom: '12px' }}>
+            <div className="fg mb-3">
               <div className="lbl">Faculty Member <span className="req">*</span></div>
               <select className="ctrl">
                 <option>-- Select --</option>
@@ -384,14 +384,14 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
               </select>
             </div>
             <div className="sec-divider">Subject Expertise Areas</div>
-            <div id="skill-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 80px', gap: '8px', alignItems: 'center' }}>
+            <div id="skill-list" className="flex flex-col gap-2 mb-[10px]">
+              <div className="grid grid-cols-[1fr_120px_80px] gap-2 items-center">
                 <input className="ctrl" type="text" placeholder="Skill / Subject area (e.g. Data Structures)" />
                 <select className="ctrl"><option>Expert</option><option>Proficient</option><option>Familiar</option></select>
                 <button className="btn btn-danger btn-sm"><i className="lni lni-trash-can"></i></button>
               </div>
             </div>
-            <button className="btn btn-neu btn-sm" style={{ marginBottom: '12px' }}><i className="lni lni-plus"></i> Add Skill Row</button>
+            <button className="btn btn-neu btn-sm mb-3"><i className="lni lni-plus"></i> Add Skill Row</button>
             <div className="info-box"><i className="lni lni-information"></i> Skills are visible to Support Staff performing Course Allocation from the Dean's Excel file.</div>
             <div className="modal-footer">
               <button className="btn btn-neu" onClick={() => closeModal('add-skill-modal')}>Cancel</button>
@@ -409,15 +409,15 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
               <div className="modal-title"><i className="lni lni-apartment"></i> Room Management</div>
               <button className="modal-close" onClick={() => closeModal('room-mgmt-modal')}><i className="lni lni-close"></i></button>
             </div>
-            <div className="info-box" style={{ marginBottom: '14px' }}><i className="lni lni-information"></i> Allocation prioritises matching <strong>student count to room capacity</strong>. Specialised subjects (e.g. Linux Administration) must only be allocated to specified labs. Rooms are clash-checked against <strong>all batches</strong> simultaneously.</div>
-            <div className="tbl-wrap" style={{ marginBottom: '14px' }}>
+            <div className="info-box mb-[14px]"><i className="lni lni-information"></i> Allocation prioritises matching <strong>student count to room capacity</strong>. Specialised subjects (e.g. Linux Administration) must only be allocated to specified labs. Rooms are clash-checked against <strong>all batches</strong> simultaneously.</div>
+            <div className="tbl-wrap mb-[14px]">
               <table>
                 <thead><tr><th>Room Code</th><th>Room Name</th><th>Capacity</th><th>Type</th><th>Specialised For</th><th>Status</th><th>Action</th></tr></thead>
                 <tbody>
-                  <tr><td style={{ fontFamily: 'monospace' }}>LR-01</td><td>Lecture Room 1</td><td>60</td><td><span className="badge badge-blue">Lecture</span></td><td>—</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Free</span></td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
-                  <tr><td style={{ fontFamily: 'monospace' }}>LR-02</td><td>Lecture Room 2</td><td>60</td><td><span className="badge badge-blue">Lecture</span></td><td>—</td><td><span className="badge badge-amber"><i className="lni lni-warning"></i> Mon 8–10</span></td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
-                  <tr><td style={{ fontFamily: 'monospace' }}>Lab-A</td><td>Linux Lab A</td><td>40</td><td><span className="badge badge-purple">Specialist</span></td><td>Linux / OS subjects only</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Free</span></td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
-                  <tr><td style={{ fontFamily: 'monospace' }}>Lab-B</td><td>General Computer Lab B</td><td>40</td><td><span className="badge badge-cyan">Computer Lab</span></td><td>—</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Free</span></td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
+                  <tr><td className="font-mono">LR-01</td><td>Lecture Room 1</td><td>60</td><td><span className="badge badge-blue">Lecture</span></td><td>—</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Free</span></td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
+                  <tr><td className="font-mono">LR-02</td><td>Lecture Room 2</td><td>60</td><td><span className="badge badge-blue">Lecture</span></td><td>—</td><td><span className="badge badge-amber"><i className="lni lni-warning"></i> Mon 8–10</span></td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
+                  <tr><td className="font-mono">Lab-A</td><td>Linux Lab A</td><td>40</td><td><span className="badge badge-purple">Specialist</span></td><td>Linux / OS subjects only</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Free</span></td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
+                  <tr><td className="font-mono">Lab-B</td><td>General Computer Lab B</td><td>40</td><td><span className="badge badge-cyan">Computer Lab</span></td><td>—</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Free</span></td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
                 </tbody>
               </table>
             </div>
@@ -447,7 +447,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
             <div className="g2">
               <div className="fg">
                 <div className="lbl">Faculty Code <span className="req">*</span></div>
-                <input className="ctrl" type="text" id="nf-code" placeholder="e.g. FCT" maxLength={6} style={{ fontFamily: 'monospace', textTransform: 'uppercase' }} />
+                <input className="ctrl font-mono uppercase" type="text" id="nf-code" placeholder="e.g. FCT" maxLength={6} />
               </div>
               <div className="fg">
                 <div className="lbl">Faculty Name <span className="req">*</span></div>
@@ -640,7 +640,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
                       <option value="8" data-years="4" data-credits="160" data-label="Engineering">Engineering (4yr / 8sem / 160cr)</option>
                       <option value="4" data-years="2" data-credits="72" data-label="Diploma">Diploma (2yr / 4sem / 72cr)</option>
                     </select>
-                    <div id="prog-alevel-info" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+                    <div id="prog-alevel-info" className="flex gap-2 flex-wrap mt-2">
                       <span className="lvl-chip"><span className="lvl-chip-lbl">No. of Years</span><span className="lvl-chip-val" id="lvl-years">3</span></span>
                       <span className="lvl-chip"><span className="lvl-chip-lbl">No. of Semesters</span><span className="lvl-chip-val" id="lvl-semesters">6</span></span>
                       <span className="lvl-chip"><span className="lvl-chip-lbl">Min. Credits</span><span className="lvl-chip-val" id="lvl-credits">132</span></span>
@@ -666,12 +666,12 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
                       <option value="FED">FED — Faculty of Education</option>
                       <option value="FLA">FLA — Faculty of Liberal Arts</option>
                     </select>
-                    <div id="prog-faculty-hint" style={{ fontSize: '11px', color: 'var(--g500)', marginTop: '5px' }}>Showing faculties at <strong>Main Campus</strong></div>
+                    <div id="prog-faculty-hint" className="text-[11px] text-g500 mt-[5px]">Showing faculties at <strong>Main Campus</strong></div>
                   </div>
                   <div className="fg span2">
                     <div className="lbl">Application Fee <span className="req">*</span></div>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <select className="ctrl" id="prog-app-fee-preset" style={{ flex: 1 }}>
+                    <div className="flex gap-[6px]">
+                      <select className="ctrl flex-1" id="prog-app-fee-preset">
                         <option value="50000" data-cur="UGX">UGX 50,000 — Standard (Direct)</option>
                         <option value="100000" data-cur="UGX">UGX 100,000 — Postgraduate</option>
                         <option value="30000" data-cur="UGX">UGX 30,000 — Diploma / Certificate</option>
@@ -680,35 +680,35 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
                         <option value="0" data-cur="UGX">Waived (HTC / Scholarship)</option>
                         <option value="custom" data-cur="UGX">Custom — enter manually</option>
                       </select>
-                      <input className="ctrl" id="prog-app-fee-amount" type="number" min={0} defaultValue={50000} style={{ width: '120px', fontWeight: 700 }} />
-                      <select className="ctrl" id="prog-app-fee-cur" style={{ width: '78px' }}>
+                      <input className="ctrl w-[120px] font-bold" id="prog-app-fee-amount" type="number" min={0} defaultValue={50000} />
+                      <select className="ctrl w-[78px]" id="prog-app-fee-cur">
                         <option value="UGX">UGX</option>
                         <option value="USD">USD</option>
                         <option value="KES">KES</option>
                       </select>
                     </div>
-                    <div style={{ fontSize: '11px', color: 'var(--g500)', marginTop: '5px' }}>Pre-loaded from Fee Master. Override per programme if needed.</div>
+                    <div className="text-[11px] text-g500 mt-[5px]">Pre-loaded from Fee Master. Override per programme if needed.</div>
                   </div>
                   <div className="fg span3">
                     <div className="g2">
-                      <div className="fg" style={{ margin: 0 }}><div className="lbl">Accreditation Date <span className="req">*</span></div><input className="ctrl" type="date" /></div>
-                      <div className="fg" style={{ margin: 0 }}><div className="lbl">Accreditation Expiry Date</div><input className="ctrl" type="date" /></div>
+                      <div className="fg m-0"><div className="lbl">Accreditation Date <span className="req">*</span></div><input className="ctrl" type="date" /></div>
+                      <div className="fg m-0"><div className="lbl">Accreditation Expiry Date</div><input className="ctrl" type="date" /></div>
                     </div>
                   </div>
                   <div className="fg span3">
                     <div className="lbl">Accreditation Letter</div>
-                    <div className="file-zone" style={{ padding: '14px' }}>
+                    <div className="file-zone p-[14px]">
                       <input type="file" accept=".pdf" />
                       <div className="file-zone-icon"><i className="lni lni-files"></i></div>
                       <p>Upload NCHE / UVTOP accreditation letter (PDF)</p>
                     </div>
                   </div>
                 </div>
-                <div className="sec-divider">Programme Specializations <span style={{ fontSize: '10.5px', fontWeight: 500, color: 'var(--g400)', textTransform: 'none', letterSpacing: 0, marginLeft: '8px' }}>Optional · A student can pick one specialization which dictates their specialization course units</span></div>
-                <div style={{ background: '#fafbfd', border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', padding: '14px 16px', marginBottom: '14px' }}>
-                  <div id="prog-spec-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}></div>
+                <div className="sec-divider">Programme Specializations <span className="text-[10.5px] font-medium text-g400 normal-case tracking-normal ml-2">Optional · A student can pick one specialization which dictates their specialization course units</span></div>
+                <div className="bg-[#fafbfd] border-[1.5px] border-g200 rounded-[var(--rsm)] p-[14px_16px] mb-[14px]">
+                  <div id="prog-spec-list" className="flex flex-col gap-2 mb-[10px]"></div>
                   <button className="btn btn-neu btn-sm"><i className="lni lni-plus"></i> Add Specialization</button>
-                  <div id="prog-spec-empty" style={{ fontSize: '12px', color: 'var(--g500)', fontStyle: 'italic', marginTop: '6px' }}>No specializations added — this programme will run as a single track.</div>
+                  <div id="prog-spec-empty" className="text-xs text-g500 italic mt-[6px]">No specializations added — this programme will run as a single track.</div>
                 </div>
                 <div className="sec-divider">Status &amp; Flags</div>
                 <div className="g3">
@@ -730,32 +730,32 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
                 <div className="warn-box mt-3"><i className="lni lni-warning"></i> Setting this version to <em>Active</em> will make it available for new admissions. Ensure the old version (if any) is set to <em>Inactive</em> first. Old curricula are preserved for existing students.</div>
               </div>
               {/* Step 2 */}
-              <div id="prog-step-2" style={{ display: 'none' }}>
+              <div id="prog-step-2" className="hidden">
                 <div className="mdl-section mdl-section--blue">
                   <div className="mdl-section-hdr">
                     <span className="mdl-section-icon"><i className="lni lni-book"></i></span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="flex-1 min-w-0">
                       <div className="mdl-section-title">Allocate Course Units by Semester</div>
                       <div className="mdl-section-sub">Assign course units to each semester. Pick from the curriculum master or add a quick placeholder.</div>
                     </div>
-                    <span id="prog-sem-summary" className="badge badge-blue" style={{ textTransform: 'none', letterSpacing: 0 }}>—</span>
+                    <span id="prog-sem-summary" className="badge badge-blue normal-case tracking-normal">—</span>
                   </div>
                   <div id="prog-sem-allocation-body"></div>
                 </div>
               </div>
               {/* Step 3 */}
-              <div id="prog-step-3" style={{ display: 'none' }}>
+              <div id="prog-step-3" className="hidden">
                 <div className="mdl-section mdl-section--blue">
                   <div className="mdl-section-hdr">
                     <span className="mdl-section-icon"><i className="lni lni-dollar"></i></span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="flex-1 min-w-0">
                       <div className="mdl-section-title">Define Fee Items by Semester</div>
                       <div className="mdl-section-sub">Add fee items per semester with custom titles (e.g. Tuition Fee, Semester Entry Fee, Lab Fee). Within a semester, items are auto-settled by priority.</div>
                     </div>
-                    <span id="prog-fee-summary" className="badge badge-blue" style={{ textTransform: 'none', letterSpacing: 0 }}>—</span>
+                    <span id="prog-fee-summary" className="badge badge-blue normal-case tracking-normal">—</span>
                   </div>
-                  <div className="g3" style={{ marginBottom: '14px' }}>
-                    <div className="fg" style={{ margin: 0 }}>
+                  <div className="g3 mb-[14px]">
+                    <div className="fg m-0">
                       <div className="lbl">Base Currency</div>
                       <select className="ctrl" id="prog-fee-currency">
                         <option value="UGX">UGX (Ugandan Shilling)</option>
@@ -763,14 +763,14 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
                         <option value="KES">KES (Kenyan Shilling)</option>
                       </select>
                     </div>
-                    <div className="fg" style={{ margin: 0 }}>
+                    <div className="fg m-0">
                       <div className="lbl">Student Type</div>
                       <select className="ctrl" id="prog-fee-stu-type">
                         <option>Local</option>
                         <option>International</option>
                       </select>
                     </div>
-                    <div className="fg" style={{ margin: 0 }}>
+                    <div className="fg m-0">
                       <div className="lbl">Quick Template</div>
                       <select className="ctrl">
                         <option value="">— Apply a template —</option>
@@ -782,36 +782,36 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
                     </div>
                   </div>
                   {/* Programme-level Fees & Discounts */}
-                  <div style={{ background: 'linear-gradient(135deg,#f0f5ff 0%,var(--white) 70%)', border: '1.5px dashed var(--b200)', borderRadius: 'var(--rsm)', padding: '14px 16px', marginBottom: '18px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11.5px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#2d448f', marginBottom: '12px' }}>
-                      <i className="lni lni-tag" style={{ fontSize: '14px' }}></i>
+                  <div className="bg-[linear-gradient(135deg,#f0f5ff_0%,var(--white)_70%)] border-[1.5px] border-dashed border-[var(--b200)] rounded-[var(--rsm)] p-[14px_16px] mb-[18px]">
+                    <div className="flex items-center gap-2 text-[11.5px] font-bold uppercase tracking-[.08em] text-[#2d448f] mb-3">
+                      <i className="lni lni-tag text-sm"></i>
                       <span>Programme-level Fees &amp; Discounts</span>
-                      <span className="badge badge-blue" style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 600, marginLeft: 'auto' }}>Applied across all semesters</span>
+                      <span className="badge badge-blue normal-case tracking-normal font-semibold ml-auto">Applied across all semesters</span>
                     </div>
                     <div className="g2">
-                      <div className="fg" style={{ margin: 0 }}>
+                      <div className="fg m-0">
                         <div className="lbl">Lumpsum Discount Calculation Type</div>
                         <select className="ctrl" id="prog-lumpsum-type">
                           <option value="amount">Amount</option>
                           <option value="percentage">Percentage</option>
                         </select>
                       </div>
-                      <div className="fg" style={{ margin: 0 }}>
+                      <div className="fg m-0">
                         <div className="lbl" id="prog-lumpsum-lbl">Lumpsum Discount Amount</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span id="prog-lumpsum-prefix" style={{ fontSize: '12px', color: 'var(--g500)', fontWeight: 700, minWidth: '28px', textAlign: 'center' }}>UGX</span>
-                          <input className="ctrl" type="number" id="prog-lumpsum-value" placeholder="0" min={0} style={{ flex: 1 }} />
-                          <span id="prog-lumpsum-suffix" style={{ display: 'none', fontSize: '15px', color: 'var(--g500)', fontWeight: 800 }}>%</span>
+                        <div className="flex items-center gap-2">
+                          <span id="prog-lumpsum-prefix" className="text-xs text-g500 font-bold min-w-[28px] text-center">UGX</span>
+                          <input className="ctrl flex-1" type="number" id="prog-lumpsum-value" placeholder="0" min={0} />
+                          <span id="prog-lumpsum-suffix" className="hidden text-[15px] text-g500 font-extrabold">%</span>
                         </div>
                       </div>
                     </div>
-                    <div className="g3" style={{ marginTop: '12px' }}>
-                      <div className="fg span2" style={{ margin: 0 }}><div className="lbl">Lateral Entry Fee</div><input className="ctrl" type="number" id="prog-lateral-fee" placeholder="0" min={0} /></div>
-                      <div className="fg" style={{ margin: 0 }}><div className="lbl">Currency</div><select className="ctrl" id="prog-lateral-cur"><option>UGX</option><option>USD</option><option>KES</option></select></div>
-                      <div className="fg span2" style={{ margin: 0 }}><div className="lbl">Credit Exemption Fee</div><input className="ctrl" type="number" id="prog-ce-fee" placeholder="0" min={0} /></div>
-                      <div className="fg" style={{ margin: 0 }}><div className="lbl">Currency</div><select className="ctrl" id="prog-ce-cur"><option>UGX</option><option>USD</option><option>KES</option></select></div>
-                      <div className="fg span2" style={{ margin: 0 }}><div className="lbl">Aptech Credit Exemption Fee</div><input className="ctrl" type="number" id="prog-ace-fee" placeholder="0" min={0} /></div>
-                      <div className="fg" style={{ margin: 0 }}><div className="lbl">Currency</div><select className="ctrl" id="prog-ace-cur"><option>UGX</option><option>USD</option><option>KES</option></select></div>
+                    <div className="g3 mt-3">
+                      <div className="fg span2 m-0"><div className="lbl">Lateral Entry Fee</div><input className="ctrl" type="number" id="prog-lateral-fee" placeholder="0" min={0} /></div>
+                      <div className="fg m-0"><div className="lbl">Currency</div><select className="ctrl" id="prog-lateral-cur"><option>UGX</option><option>USD</option><option>KES</option></select></div>
+                      <div className="fg span2 m-0"><div className="lbl">Credit Exemption Fee</div><input className="ctrl" type="number" id="prog-ce-fee" placeholder="0" min={0} /></div>
+                      <div className="fg m-0"><div className="lbl">Currency</div><select className="ctrl" id="prog-ce-cur"><option>UGX</option><option>USD</option><option>KES</option></select></div>
+                      <div className="fg span2 m-0"><div className="lbl">Aptech Credit Exemption Fee</div><input className="ctrl" type="number" id="prog-ace-fee" placeholder="0" min={0} /></div>
+                      <div className="fg m-0"><div className="lbl">Currency</div><select className="ctrl" id="prog-ace-cur"><option>UGX</option><option>USD</option><option>KES</option></select></div>
                     </div>
                   </div>
                   <div id="prog-sem-fee-body"></div>
@@ -820,10 +820,10 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
             </div>
             <div className="modal-footer" id="prog-modal-footer">
               <button className="btn btn-neu" onClick={() => closeModal('new-prog-modal')}>Cancel</button>
-              <span style={{ flex: 1 }}></span>
-              <button className="btn btn-neu" id="prog-back-btn" style={{ display: 'none' }}><i className="lni lni-arrow-left"></i> <span id="prog-back-lbl">Back</span></button>
+              <span className="flex-1"></span>
+              <button className="btn btn-neu hidden" id="prog-back-btn"><i className="lni lni-arrow-left"></i> <span id="prog-back-lbl">Back</span></button>
               <button className="btn btn-primary" id="prog-save-continue-btn"><span id="prog-cont-lbl">Save &amp; Continue</span> <i className="lni lni-arrow-right"></i></button>
-              <button className="btn btn-primary" id="prog-final-save-btn" style={{ display: 'none' }}><i className="lni lni-checkmark"></i> Save Programme</button>
+              <button className="btn btn-primary hidden" id="prog-final-save-btn"><i className="lni lni-checkmark"></i> Save Programme</button>
             </div>
           </div>
         </div>
@@ -837,8 +837,8 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
               <div className="modal-title"><i className="lni lni-target"></i> Manage Specializations — MBA 2024</div>
               <button className="modal-close" onClick={() => closeModal('specialization-modal')}><i className="lni lni-close"></i></button>
             </div>
-            <div className="info-box" style={{ marginBottom: '14px' }}><i className="lni lni-information"></i> Specializations are chosen by <strong>individual students</strong> (not the batch). A student can only select one specialization, which dictates which Specialization course units they must study (e.g. from Sem 3 for MBA).</div>
-            <div className="tbl-wrap" style={{ marginBottom: '14px' }}>
+            <div className="info-box mb-[14px]"><i className="lni lni-information"></i> Specializations are chosen by <strong>individual students</strong> (not the batch). A student can only select one specialization, which dictates which Specialization course units they must study (e.g. from Sem 3 for MBA).</div>
+            <div className="tbl-wrap mb-[14px]">
               <table>
                 <thead><tr><th>#</th><th>Specialization Name</th><th>Start Semester</th><th>Students Enrolled</th><th>Action</th></tr></thead>
                 <tbody>
@@ -868,19 +868,19 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
               <div className="modal-title"><i className="lni lni-bar-chart"></i> Select Elective Paper — Batch BSC-IT-S26-DA · Sem 5</div>
               <button className="modal-close" onClick={() => closeModal('elective-select-modal')}><i className="lni lni-close"></i></button>
             </div>
-            <div className="info-box" style={{ marginBottom: '14px' }}><i className="lni lni-information"></i> Elective selection is a <strong>batch-level decision</strong> — once selected, <strong>all students</strong> in this batch must study the chosen paper for this academic session. The selection can only be made once per session.</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px', border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', cursor: 'pointer', transition: 'var(--tr)' }}>
-                <input type="radio" name="elective" style={{ marginTop: '2px', flexShrink: 0 }} />
-                <div><div className="font-bold">Radar Navigation Systems</div><div style={{ fontSize: '12px', color: 'var(--g500)' }}>3 Credits · Theory · CW + CBT + UE</div></div>
+            <div className="info-box mb-[14px]"><i className="lni lni-information"></i> Elective selection is a <strong>batch-level decision</strong> — once selected, <strong>all students</strong> in this batch must study the chosen paper for this academic session. The selection can only be made once per session.</div>
+            <div className="flex flex-col gap-2 mb-[14px]">
+              <label className="flex items-start gap-3 p-3 border-[1.5px] border-g200 rounded-[var(--rsm)] cursor-pointer transition-[var(--tr)]">
+                <input type="radio" name="elective" className="mt-[2px] shrink-0" />
+                <div><div className="font-bold">Radar Navigation Systems</div><div className="text-xs text-g500">3 Credits · Theory · CW + CBT + UE</div></div>
               </label>
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px', border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', cursor: 'pointer', transition: 'var(--tr)' }}>
-                <input type="radio" name="elective" style={{ marginTop: '2px', flexShrink: 0 }} />
-                <div><div className="font-bold">Renewable Energy Systems</div><div style={{ fontSize: '12px', color: 'var(--g500)' }}>3 Credits · Combined · CW + CBT + UE + Practical</div></div>
+              <label className="flex items-start gap-3 p-3 border-[1.5px] border-g200 rounded-[var(--rsm)] cursor-pointer transition-[var(--tr)]">
+                <input type="radio" name="elective" className="mt-[2px] shrink-0" />
+                <div><div className="font-bold">Renewable Energy Systems</div><div className="text-xs text-g500">3 Credits · Combined · CW + CBT + UE + Practical</div></div>
               </label>
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px', border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', cursor: 'pointer', transition: 'var(--tr)' }}>
-                <input type="radio" name="elective" style={{ marginTop: '2px', flexShrink: 0 }} />
-                <div><div className="font-bold">Remote Sensing &amp; GIS</div><div style={{ fontSize: '12px', color: 'var(--g500)' }}>3 Credits · Theory · CW + CBT + UE</div></div>
+              <label className="flex items-start gap-3 p-3 border-[1.5px] border-g200 rounded-[var(--rsm)] cursor-pointer transition-[var(--tr)]">
+                <input type="radio" name="elective" className="mt-[2px] shrink-0" />
+                <div><div className="font-bold">Remote Sensing &amp; GIS</div><div className="text-xs text-g500">3 Credits · Theory · CW + CBT + UE</div></div>
               </label>
             </div>
             <div className="warn-box"><i className="lni lni-warning"></i> This selection is final for this session. All 80 students in BSC-IT-S26-DA will be enrolled in the selected paper.</div>
@@ -943,9 +943,9 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
               </div>
               <div className="fg"><div className="lbl">Expected Student Count</div><input className="ctrl" type="number" placeholder="e.g. 42" min={1} /></div>
             </div>
-            <div style={{ margin: '14px 0', padding: '14px', background: 'var(--b50)', border: '1.5px solid var(--b200)', borderRadius: 'var(--rsm)', display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--g500)', textTransform: 'uppercase' }}>Auto-Generated Batch Code:</span>
-              <span id="nb-code-preview" style={{ fontFamily: 'monospace', fontSize: '18px', fontWeight: 800, color: 'var(--b800)' }}>BSC-IT-S26-DA</span>
+            <div className="my-[14px] p-[14px] bg-b50 border-[1.5px] border-[var(--b200)] rounded-[var(--rsm)] flex items-center gap-4">
+              <span className="text-[11px] font-bold text-g500 uppercase">Auto-Generated Batch Code:</span>
+              <span id="nb-code-preview" className="font-mono text-[18px] font-extrabold text-b800">BSC-IT-S26-DA</span>
             </div>
             <div className="fg">
               <div className="lbl">Batch In-Charge (Faculty) <span className="req">*</span></div>
@@ -975,7 +975,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
               <div className="modal-title"><i className="lni lni-dollar"></i> Add / Edit Fee Item</div>
               <button className="modal-close" onClick={() => closeModal('new-fee-item-modal')}><i className="lni lni-close"></i></button>
             </div>
-            <div className="info-box" style={{ marginBottom: '14px' }}>
+            <div className="info-box mb-[14px]">
               <i className="lni lni-bulb"></i> <span>Give the fee item a clear, user-friendly title (e.g. <em>Tuition Fee</em>, <em>Semester Entry Fee</em>, <em>Lab Fee</em>). Priority controls auto-settlement order within the semester.</span>
             </div>
             <div className="g2">
@@ -1011,7 +1011,7 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
               </div>
               <div className="fg">
                 <div className="lbl">Currency</div>
-                <input className="ctrl" type="text" defaultValue="UGX" readOnly style={{ background: 'var(--g100)', fontWeight: 600 }} />
+                <input className="ctrl bg-[var(--g100)] font-semibold" type="text" defaultValue="UGX" readOnly />
               </div>
               <div className="fg span2">
                 <div className="lbl">Short Description / Note</div>
@@ -1019,10 +1019,10 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
               </div>
               <div className="fg span2">
                 <div className="lbl">Behavior</div>
-                <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', fontSize: '12.5px', color: 'var(--g700)' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}><input type="checkbox" defaultChecked /> Required for registration</label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}><input type="checkbox" /> One-time (not repeated each semester)</label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}><input type="checkbox" /> Refundable</label>
+                <div className="flex gap-[14px] flex-wrap text-[12.5px] text-[var(--g700)]">
+                  <label className="flex items-center gap-[6px] cursor-pointer"><input type="checkbox" defaultChecked /> Required for registration</label>
+                  <label className="flex items-center gap-[6px] cursor-pointer"><input type="checkbox" /> One-time (not repeated each semester)</label>
+                  <label className="flex items-center gap-[6px] cursor-pointer"><input type="checkbox" /> Refundable</label>
                 </div>
               </div>
             </div>
@@ -1057,24 +1057,24 @@ export function ModalsContainer({ openModals, closeModal, showToast, nav }: Moda
               </div>
             </div>
             <div className="sec-divider">Fee Components (Priority Order)</div>
-            <div className="info-box" style={{ marginBottom: '12px' }}><i className="lni lni-bulb"></i> Payments are auto-settled in priority order — Priority 1 fully cleared before Priority 2, and so on. Payments in local currency are auto-converted to the base currency.</div>
-            <div id="fee-components-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 160px 90px', gap: '10px', alignItems: 'center', padding: '10px 12px', background: 'var(--surface)', border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
-                <div><span className="badge badge-grey" style={{ fontFamily: 'monospace' }}>P1</span></div>
-                <div className="fg" style={{ margin: 0 }}><input className="ctrl" type="text" defaultValue="Admission Fee" placeholder="Component name" /></div>
-                <div className="fg" style={{ margin: 0 }}><input className="ctrl" type="number" defaultValue={50000} placeholder="Amount" /></div>
+            <div className="info-box mb-3"><i className="lni lni-bulb"></i> Payments are auto-settled in priority order — Priority 1 fully cleared before Priority 2, and so on. Payments in local currency are auto-converted to the base currency.</div>
+            <div id="fee-components-list" className="flex flex-col gap-2 mb-3">
+              <div className="grid grid-cols-[60px_1fr_160px_90px] gap-[10px] items-center p-[10px_12px] bg-surface border-[1.5px] border-g200 rounded-[var(--rxs)]">
+                <div><span className="badge badge-grey font-mono">P1</span></div>
+                <div className="fg m-0"><input className="ctrl" type="text" defaultValue="Admission Fee" placeholder="Component name" /></div>
+                <div className="fg m-0"><input className="ctrl" type="number" defaultValue={50000} placeholder="Amount" /></div>
                 <button className="btn btn-danger btn-sm"><i className="lni lni-trash-can"></i> Remove</button>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 160px 90px', gap: '10px', alignItems: 'center', padding: '10px 12px', background: 'var(--surface)', border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
-                <div><span className="badge badge-grey" style={{ fontFamily: 'monospace' }}>P2</span></div>
-                <div className="fg" style={{ margin: 0 }}><input className="ctrl" type="text" defaultValue="Registration Fee" placeholder="Component name" /></div>
-                <div className="fg" style={{ margin: 0 }}><input className="ctrl" type="number" defaultValue={200000} placeholder="Amount" /></div>
+              <div className="grid grid-cols-[60px_1fr_160px_90px] gap-[10px] items-center p-[10px_12px] bg-surface border-[1.5px] border-g200 rounded-[var(--rxs)]">
+                <div><span className="badge badge-grey font-mono">P2</span></div>
+                <div className="fg m-0"><input className="ctrl" type="text" defaultValue="Registration Fee" placeholder="Component name" /></div>
+                <div className="fg m-0"><input className="ctrl" type="number" defaultValue={200000} placeholder="Amount" /></div>
                 <button className="btn btn-danger btn-sm"><i className="lni lni-trash-can"></i> Remove</button>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 160px 90px', gap: '10px', alignItems: 'center', padding: '10px 12px', background: 'var(--surface)', border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
-                <div><span className="badge badge-grey" style={{ fontFamily: 'monospace' }}>P3</span></div>
-                <div className="fg" style={{ margin: 0 }}><input className="ctrl" type="text" defaultValue="Tuition Fee" placeholder="Component name" /></div>
-                <div className="fg" style={{ margin: 0 }}><input className="ctrl" type="number" defaultValue={750000} placeholder="Amount" /></div>
+              <div className="grid grid-cols-[60px_1fr_160px_90px] gap-[10px] items-center p-[10px_12px] bg-surface border-[1.5px] border-g200 rounded-[var(--rxs)]">
+                <div><span className="badge badge-grey font-mono">P3</span></div>
+                <div className="fg m-0"><input className="ctrl" type="text" defaultValue="Tuition Fee" placeholder="Component name" /></div>
+                <div className="fg m-0"><input className="ctrl" type="number" defaultValue={750000} placeholder="Amount" /></div>
                 <button className="btn btn-danger btn-sm"><i className="lni lni-trash-can"></i> Remove</button>
               </div>
             </div>
