@@ -1,15 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer base {
-  html {
-    font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
-  }
-}
-
 :root{
   --white:#ffffff; --bg:#f0f4f8; --surface:#f8fafc;
   --g100:#f1f5f9; --g200:#e2e8f0; --g300:#cbd5e1;
