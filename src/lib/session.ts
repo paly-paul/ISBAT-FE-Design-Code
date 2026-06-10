@@ -6,6 +6,7 @@ export interface LoginFlowState {
   maskedTarget?: string
   forgotChallengeId?: string
   forgotResetToken?: string
+  returnTo?: string
 }
 
 export function getFlowState(): LoginFlowState {

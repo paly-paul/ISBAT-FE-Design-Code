@@ -1138,7 +1138,7 @@ body {
 .isb-field { margin-bottom: 14px; }
 .isb-field .hint { font-size: 11px; color: var(--isb-muted); margin-top: 6px; }
 .isb-field .err {
-  font-size: 11px; color: var(--isb-red);
+  font-size: 13px; color: var(--isb-red);
   margin-top: 6px; display: flex; align-items: center; gap: 4px;
 }
 
@@ -1200,6 +1200,17 @@ body {
 
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
 .pulse { animation: pulse 1.6s ease-in-out infinite; }
+
+/* ── SuccessScreen ── */
+@keyframes ss-pop {
+  0%   { opacity: 0; transform: scale(0.65); }
+  75%  { transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes ss-ring  { to { stroke-dashoffset: 0; } }
+@keyframes ss-check { to { stroke-dashoffset: 0; } }
+@keyframes ss-rise  { from { opacity: 0; transform: translateY(13px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ss-dot   { from { opacity: 0; transform: scale(0); } to { opacity: 0.22; transform: scale(1); } }
 
 /* ── Utilities ── */
 .nums { font-variant-numeric: tabular-nums; }

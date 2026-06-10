@@ -4,9 +4,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import PanelA from '@/components/PanelA'
 import Icon from '@/components/Icon'
-import { staffLogin, AuthError } from '@/lib/auth'
+import { staffLogin, AuthError, MOCK_CREDENTIALS } from '@/lib/auth'
 import { setFlowState } from '@/lib/session'
-import { authErrorMessage, validateStaffId } from '@/lib/errorMessages'
+import { authErrorMessage, validateStaffId, validatePassword } from '@/lib/errorMessages'
+
+const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 export default function StaffLoginPage() {
   const router = useRouter()
@@ -16,17 +18,19 @@ export default function StaffLoginPage() {
   const [caps, setCaps] = useState(false)
   const [trust, setTrust] = useState(true)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [fieldError, setFieldError] = useState<string | null>(null)
+  const [idError, setIdError] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
 
   const disabled = loading || !staffId.trim() || !password
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const idErr = validateStaffId(staffId)
-    if (idErr) { setFieldError(idErr); return }
-    setFieldError(null)
-    setError(null)
+    if (idErr) { setIdError(idErr); return }
+    const pwErr = validatePassword(password)
+    if (pwErr) { setPasswordError(pwErr); return }
+    setIdError(null)
+    setPasswordError(null)
     setLoading(true)
 
     try {
@@ -35,14 +39,11 @@ export default function StaffLoginPage() {
         challengeId: result.challengeId,
         otpChannel: result.otpChannel,
         maskedTarget: result.maskedTarget,
+        returnTo: '/login/staff',
       })
       router.push('/login/otp')
     } catch (err) {
-      if (err instanceof AuthError) {
-        setError(authErrorMessage(err.code))
-      } else {
-        setError(authErrorMessage('unknown'))
-      }
+      setPasswordError(err instanceof AuthError ? authErrorMessage(err.code) : authErrorMessage('unknown'))
     } finally {
       setLoading(false)
     }
@@ -61,12 +62,15 @@ export default function StaffLoginPage() {
         </button>
       </div>
 
-      {error && (
-        <div className="isb-error-banner">
-          <Icon name="alert" size={16} color="var(--isb-red)" />
-          {error}
+      {/* {MOCK_AUTH && (
+        <div className="isb-error-banner" style={{ background: 'var(--isb-paper-2)', borderColor: 'var(--isb-line-2)', color: 'var(--isb-muted)', marginBottom: 16 }}>
+          <Icon name="shield" size={16} color="var(--isb-muted)" />
+          <span>
+            Mock mode &mdash; ID: <b style={{ color: 'var(--isb-ink)', fontFamily: 'monospace' }}>{MOCK_CREDENTIALS.staff.id}</b>
+            {' '}· Password: <b style={{ color: 'var(--isb-ink)', fontFamily: 'monospace' }}>{MOCK_CREDENTIALS.staff.password}</b>
+          </span>
         </div>
-      )}
+      )} */}
 
       <form onSubmit={handleSubmit}>
         <div className="isb-field">
@@ -75,13 +79,13 @@ export default function StaffLoginPage() {
             id="staff-id"
             className="isb-input"
             value={staffId}
-            onChange={e => { setStaffId(e.target.value); setFieldError(null) }}
+            onChange={e => { setStaffId(e.target.value); setIdError(null) }}
             placeholder="e.g. AR-2019-0042"
             autoComplete="username"
             autoFocus
           />
-          {fieldError
-            ? <div className="err">{fieldError}</div>
+          {idError
+            ? <div className="err">{idError}</div>
             : <div className="hint">Format: ROLE-YYYY-NNNN · Case-sensitive</div>
           }
         </div>
@@ -108,7 +112,7 @@ export default function StaffLoginPage() {
               className="isb-input"
               type={show ? 'text' : 'password'}
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={e => { setPassword(e.target.value); setPasswordError(null) }}
               onKeyUp={e => setCaps(e.getModifierState('CapsLock'))}
               style={{ paddingRight: 62 }}
               autoComplete="current-password"
@@ -117,6 +121,7 @@ export default function StaffLoginPage() {
               {show ? 'Hide' : 'Show'}
             </button>
           </div>
+          {passwordError && <div className="err">{passwordError}</div>}
           {caps && (
             <div className="err">
               <Icon name="caps" size={12} color="var(--isb-red)" /> Caps Lock is on
