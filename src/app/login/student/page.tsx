@@ -4,8 +4,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import PanelA from '@/components/PanelA'
 import Icon from '@/components/Icon'
-import { studentLogin, AuthError } from '@/lib/auth'
-import { authErrorMessage, validateStudentId } from '@/lib/errorMessages'
+import { studentLogin, AuthError, MOCK_CREDENTIALS } from '@/lib/auth'
+import { setFlowState } from '@/lib/session'
+import { authErrorMessage, validateStudentId, validatePassword } from '@/lib/errorMessages'
+
+const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 export default function StudentLoginPage() {
   const router = useRouter()
@@ -13,28 +16,32 @@ export default function StudentLoginPage() {
   const [password, setPassword] = useState('')
   const [show, setShow] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [fieldError, setFieldError] = useState<string | null>(null)
+  const [idError, setIdError] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
 
   const disabled = loading || !studentId.trim() || !password
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const idErr = validateStudentId(studentId)
-    if (idErr) { setFieldError(idErr); return }
-    setFieldError(null)
-    setError(null)
+    if (idErr) { setIdError(idErr); return }
+    const pwErr = validatePassword(password)
+    if (pwErr) { setPasswordError(pwErr); return }
+    setIdError(null)
+    setPasswordError(null)
     setLoading(true)
 
     try {
       const result = await studentLogin(studentId, password)
-      window.location.href = result.redirect || '/academic'
+      setFlowState({
+        challengeId: result.challengeId,
+        otpChannel: result.otpChannel,
+        maskedTarget: result.maskedTarget,
+        returnTo: '/login/student',
+      })
+      router.push('/login/otp')
     } catch (err) {
-      if (err instanceof AuthError) {
-        setError(authErrorMessage(err.code))
-      } else {
-        setError(authErrorMessage('unknown'))
-      }
+      setPasswordError(err instanceof AuthError ? authErrorMessage(err.code) : authErrorMessage('unknown'))
     } finally {
       setLoading(false)
     }
@@ -57,12 +64,15 @@ export default function StudentLoginPage() {
         </span>
       </div>
 
-      {error && (
-        <div className="isb-error-banner">
-          <Icon name="alert" size={16} color="var(--isb-red)" />
-          {error}
+      {/* {MOCK_AUTH && (
+        <div className="isb-error-banner" style={{ background: 'var(--isb-paper-2)', borderColor: 'var(--isb-line-2)', color: 'var(--isb-muted)', marginBottom: 16 }}>
+          <Icon name="shield" size={16} color="var(--isb-muted)" />
+          <span>
+            Mock mode &mdash; ID: <b style={{ color: 'var(--isb-ink)', fontFamily: 'monospace' }}>{MOCK_CREDENTIALS.student.id}</b>
+            {' '}· Password: <b style={{ color: 'var(--isb-ink)', fontFamily: 'monospace' }}>{MOCK_CREDENTIALS.student.password}</b>
+          </span>
         </div>
-      )}
+      )} */}
 
       <form onSubmit={handleSubmit}>
         <div className="isb-field">
@@ -71,13 +81,13 @@ export default function StudentLoginPage() {
             id="student-id"
             className="isb-input"
             value={studentId}
-            onChange={e => { setStudentId(e.target.value); setFieldError(null) }}
+            onChange={e => { setStudentId(e.target.value); setIdError(null) }}
             placeholder="ISB/YYYY/PROG/NNNN"
             autoComplete="username"
             autoFocus
           />
-          {fieldError
-            ? <div className="err">{fieldError}</div>
+          {idError
+            ? <div className="err">{idError}</div>
             : <div className="hint">Printed on your admission letter and ID card.</div>
           }
         </div>
@@ -104,7 +114,7 @@ export default function StudentLoginPage() {
               className="isb-input"
               type={show ? 'text' : 'password'}
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={e => { setPassword(e.target.value); setPasswordError(null) }}
               placeholder="Enter your password"
               style={{ paddingRight: 62 }}
               autoComplete="current-password"
@@ -113,18 +123,16 @@ export default function StudentLoginPage() {
               {show ? 'Hide' : 'Show'}
             </button>
           </div>
+          {passwordError && <div className="err">{passwordError}</div>}
         </div>
 
         <button
           type="submit"
           className="isb-btn primary full"
-          disabled={disabled}
+          disabled
           style={{ background: '#2EA862', boxShadow: '0 2px 4px rgba(46,168,98,.25)', marginTop: 12 }}
         >
-          {loading
-            ? 'Signing in…'
-            : <>Sign in to Student Portal <Icon name="arrow" size={15} color="#fff" /></>
-          }
+          <>Continue <Icon name="arrow" size={15} color="#fff" /></>
         </button>
 
         <div style={{ marginTop: 16, fontSize: 12.5, color: 'var(--isb-muted)', textAlign: 'center' }}>

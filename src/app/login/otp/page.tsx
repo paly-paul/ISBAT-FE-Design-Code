@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation'
 import PanelA from '@/components/PanelA'
 import Icon from '@/components/Icon'
 import OtpInput from '@/components/OtpInput'
-import { otpVerify, forgotStart, AuthError } from '@/lib/auth'
+import { otpVerify, forgotStart, AuthError, MOCK_CREDENTIALS } from '@/lib/auth'
 import { getFlowState, setFlowState, clearFlowState } from '@/lib/session'
 import { authErrorMessage } from '@/lib/errorMessages'
+import SuccessScreen from '@/components/SuccessScreen'
 
 const RESEND_COOLDOWN = 30
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
@@ -17,6 +18,7 @@ export default function OtpPage() {
   const [digits, setDigits] = useState(['', '', '', '', '', ''])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [successState, setSuccessState] = useState<{ role: string; redirect: string } | null>(null)
   const [flowState, setLocalFlowState] = useState<ReturnType<typeof getFlowState>>({})
   const [secondsLeft, setSecondsLeft] = useState(RESEND_COOLDOWN)
   const [resending, setResending] = useState(false)
@@ -48,7 +50,7 @@ export default function OtpPage() {
     try {
       const result = await otpVerify(flowState.challengeId, code)
       clearFlowState()
-      window.location.href = result.redirect || '/academic'
+      setSuccessState({ role: result.role, redirect: result.redirect })
     } catch (err) {
       if (err instanceof AuthError) {
         setError(authErrorMessage(err.code))
@@ -73,7 +75,21 @@ export default function OtpPage() {
     setResending(false)
   }
 
-  const maskedTarget = flowState.maskedTarget ?? (flowState.otpChannel === 'sms' ? '+256 ***** ****' : 'm******@isbat.ac.ug')
+  const maskedTarget = flowState.maskedTarget ?? (flowState.otpChannel === 'sms' ? '+256 ***** ****' : '***@isbat.ac.ug')
+
+  if (successState) {
+    const isStudent = successState.role === 'student'
+    return (
+      <PanelA eyebrow="Two-factor authentication" headline="Identity verified.">
+        <SuccessScreen
+          subtitle={isStudent
+            ? 'The Student Portal is still being built. Check back soon.'
+            : 'Welcome back to ISBAT ERP.'}
+          redirectTo={isStudent ? undefined : (successState.redirect || '/academic')}
+        />
+      </PanelA>
+    )
+  }
 
   return (
     <PanelA eyebrow="Two-factor authentication" headline="Verify it's you.">
@@ -83,12 +99,14 @@ export default function OtpPage() {
         Enter it below to continue.
       </p>
 
-      {MOCK_AUTH && (
+      {/* {MOCK_AUTH && (
         <div className="isb-error-banner" style={{ background: 'var(--isb-paper-2)', borderColor: 'var(--isb-line-2)', color: 'var(--isb-muted)' }}>
           <Icon name="shield" size={16} color="var(--isb-muted)" />
-          Mock mode — enter any 6-digit code to continue.
+          Mock mode &mdash; use code{' '}
+          <b style={{ color: 'var(--isb-ink)', fontFamily: 'monospace' }}>{MOCK_CREDENTIALS.otp}</b>
+          {' '}to continue.
         </div>
-      )}
+      )} */}
 
       {error && (
         <div className="isb-error-banner">
@@ -152,7 +170,7 @@ export default function OtpPage() {
         <button
           type="button"
           className="isb-btn link"
-          onClick={() => router.push('/login/staff')}
+          onClick={() => router.push(flowState.returnTo ?? '/login/staff')}
           style={{ fontSize: 12.5 }}
         >
           <Icon name="back" size={12} /> Use a different account

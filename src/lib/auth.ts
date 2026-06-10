@@ -1,5 +1,11 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
+const API_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? ''
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
+
+export const MOCK_CREDENTIALS = {
+  staff: { id: 'AR-2024-0001', password: 'Admin@1234',   challengeId: 'mock-staff-challenge'   },
+  student: { id: 'ISB/2024/BSCS/0142', password: 'Student@1234', challengeId: 'mock-student-challenge' },
+  otp: '123456',
+} as const
 
 export class AuthError extends Error {
   constructor(
@@ -28,7 +34,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>
 }
 
-// ── Staff login ──────────────────────────────────────────────────────────────
+// Staff login
 
 export interface StaffLoginResult {
   requiresOtp: boolean
@@ -39,9 +45,11 @@ export interface StaffLoginResult {
 
 export function staffLogin(staffId: string, password: string, trustDevice: boolean) {
   if (MOCK_AUTH) {
+    if (staffId !== MOCK_CREDENTIALS.staff.id || password !== MOCK_CREDENTIALS.staff.password)
+      return Promise.reject(new AuthError('bad_credentials'))
     return Promise.resolve<StaffLoginResult>({
       requiresOtp: true,
-      challengeId: 'mock-challenge-id',
+      challengeId: MOCK_CREDENTIALS.staff.challengeId,
       otpChannel: 'email',
       maskedTarget: 'm***@isbat.ac.ug',
     })
@@ -49,26 +57,30 @@ export function staffLogin(staffId: string, password: string, trustDevice: boole
   return post<StaffLoginResult>('/api/auth/staff/login', { staffId, password, trustDevice })
 }
 
-// ── Student login ────────────────────────────────────────────────────────────
+// Student login
 
 export interface StudentLoginResult {
-  sessionId: string
-  role: 'student'
-  redirect: string
+  requiresOtp: boolean
+  challengeId: string
+  otpChannel: 'email' | 'sms'
+  maskedTarget: string
 }
 
 export function studentLogin(studentId: string, password: string) {
   if (MOCK_AUTH) {
+    if (studentId !== MOCK_CREDENTIALS.student.id || password !== MOCK_CREDENTIALS.student.password)
+      return Promise.reject(new AuthError('bad_credentials'))
     return Promise.resolve<StudentLoginResult>({
-      sessionId: 'mock-session-id',
-      role: 'student',
-      redirect: '/academic',
+      requiresOtp: true,
+      challengeId: MOCK_CREDENTIALS.student.challengeId,
+      otpChannel: 'email',
+      maskedTarget: 's***@student.isbat.ac.ug',
     })
   }
   return post<StudentLoginResult>('/api/auth/student/login', { studentId, password })
 }
 
-// ── OTP verify ───────────────────────────────────────────────────────────────
+// OTP verify
 
 export interface OtpVerifyResult {
   sessionId: string
@@ -78,16 +90,19 @@ export interface OtpVerifyResult {
 
 export function otpVerify(challengeId: string, code: string) {
   if (MOCK_AUTH) {
+    if (code !== MOCK_CREDENTIALS.otp)
+      return Promise.reject(new AuthError('invalid_code'))
+    const isStudent = challengeId === MOCK_CREDENTIALS.student.challengeId
     return Promise.resolve<OtpVerifyResult>({
       sessionId: 'mock-session-id',
-      role: 'staff',
-      redirect: '/academic',
+      role: isStudent ? 'student' : 'staff',
+      redirect: isStudent ? '' : '/academic',
     })
   }
   return post<OtpVerifyResult>('/api/auth/otp/verify', { challengeId, code })
 }
 
-// ── Forgot password ──────────────────────────────────────────────────────────
+// Forgot password
 
 export interface ForgotStartResult {
   challengeId: string
@@ -116,7 +131,7 @@ export function forgotReset(resetToken: string, newPassword: string) {
   return post<void>('/api/auth/forgot/reset', { resetToken, newPassword })
 }
 
-// ── Account activation ───────────────────────────────────────────────────────
+// Account activation
 
 export interface ActivateProfile {
   fullName: string

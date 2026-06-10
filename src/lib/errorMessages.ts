@@ -33,8 +33,9 @@ export function validateStudentId(id: string): string | null {
 
 export function validatePassword(pw: string): string | null {
   if (!pw) return 'Password is required.'
-  if (pw.length < 10) return 'Password must be at least 10 characters.'
+  if (pw.length < 8) return 'Password must be at least 8 characters.'
+  if (!/[A-Z]/.test(pw)) return 'Password must contain at least one uppercase letter.'
   if (!/\d/.test(pw)) return 'Password must contain at least one number.'
-  if (!/[^a-zA-Z0-9]/.test(pw)) return 'Password must contain at least one symbol.'
+  if (!/[^a-zA-Z0-9]/.test(pw)) return 'Password must contain at least one special character.'
   return null
 }
