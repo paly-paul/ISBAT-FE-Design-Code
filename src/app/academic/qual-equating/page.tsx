@@ -1,18 +1,54 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
+import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
+import { FilterTh } from '@/components/FilterTh'
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  useEffect(() => {
+    function closeFilter(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('th')) setOpenFilter(null)
+    }
+    document.addEventListener('click', closeFilter)
+    return () => document.removeEventListener('click', closeFilter)
+  }, [])
+
+  const rows = [
+    { name: 'Kabila Jean-Pierre', country: 'DR Congo', qualLevel: 'A-Level Equivalent',  referredTo: 'NCHE',  referredBadge: 'badge-blue',  submittedDate: '01 Mar 2026', status: 'Completed', statusBadge: 'badge-green',  statusIcon: 'lni-checkmark', outcome: 'Equated — 2 Principal Passes', outcomeBadge: 'badge-green',  rowClass: '',       variant: 'view' },
+    { name: 'Abubakar Faisal',    country: 'Kenya',    qualLevel: 'O-Level (KCSE)',        referredTo: 'UVTOP', referredBadge: 'badge-amber', submittedDate: '10 Apr 2026', status: 'Pending',   statusBadge: 'badge-amber',  statusIcon: '',              outcome: '—',                           outcomeBadge: '',             rowClass: 'flagged', variant: 'followup' },
+    { name: 'Uwase Claudine',     country: 'Rwanda',   qualLevel: "Bachelor's Degree",     referredTo: 'NCHE',  referredBadge: 'badge-blue',  submittedDate: '15 Apr 2026', status: 'In Review', statusBadge: 'badge-purple', statusIcon: '',              outcome: '—',                           outcomeBadge: '',             rowClass: '',       variant: 'view' },
+  ]
+  const filteredRows = rows.filter(r =>
+    Object.entries(filters).every(([k, v]) => !v || String((r as Record<string, unknown>)[k]) === v)
+  )
+
+  function fth(label: string, col: string, opts: string[]) {
+    return (
+      <FilterTh
+        label={label}
+        opts={opts}
+        isOpen={openFilter === col}
+        activeFilter={filters[col] ?? ''}
+        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
+        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+      />
+    )
+  }
 
   return (
     <>
@@ -35,20 +71,43 @@ export default function Page() {
           </div>
           <ScrollTable>
             <table>
-              <thead><tr><th>Applicant Name</th><th>Country of Qualification</th><th>Qualification Level</th><th>Referred To</th><th>Submitted Date</th><th>Status</th><th>Outcome</th><th>Action</th></tr></thead>
+              <thead><tr><th>Action</th><th>Applicant Name</th>{fth('Country of Qualification', 'country', ['DR Congo', 'Kenya', 'Rwanda'])}{fth('Qualification Level', 'qualLevel', ['A-Level Equivalent', 'O-Level (KCSE)', "Bachelor's Degree"])}<th>Referred To</th><th>Submitted Date</th>{fth('Status', 'status', ['Completed', 'Pending', 'In Review'])}{fth('Outcome', 'outcome', ['Equated — 2 Principal Passes', '—'])}</tr></thead>
               <tbody>
-                <tr><td><strong>Kabila Jean-Pierre</strong></td><td><i className="lni lni-flag"></i> DR Congo</td><td>A-Level Equivalent</td><td><span className="badge badge-blue">NCHE</span></td><td>01 Mar 2026</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Completed</span></td><td><span className="badge badge-green">Equated — 2 Principal Passes</span></td><td><button className="btn btn-neu btn-sm">View →</button></td></tr>
-                <tr className="flagged"><td><strong>Abubakar Faisal</strong></td><td><i className="lni lni-flag"></i> Kenya</td><td>O-Level (KCSE)</td><td><span className="badge badge-amber">UVTOP</span></td><td>10 Apr 2026</td><td><span className="badge badge-amber">Pending</span></td><td>—</td><td><button className="btn btn-amber btn-sm">Follow Up</button></td></tr>
-                <tr><td><strong>Uwase Claudine</strong></td><td><i className="lni lni-flag"></i> Rwanda</td><td>Bachelor&apos;s Degree</td><td><span className="badge badge-blue">NCHE</span></td><td>15 Apr 2026</td><td><span className="badge badge-purple">In Review</span></td><td>—</td><td><button className="btn btn-neu btn-sm">View →</button></td></tr>
+                {filteredRows.map((r, i) => (
+                  <tr key={i} className={r.rowClass}>
+                    <td>
+                      <ActionMenu>
+                        {r.variant === 'view' && <button className="btn btn-neu btn-sm">View →</button>}
+                        {r.variant === 'followup' && <button className="btn btn-amber btn-sm">Follow Up</button>}
+                      </ActionMenu>
+                    </td>
+                    <td><strong>{r.name}</strong></td>
+                    <td><i className="lni lni-flag"></i> {r.country}</td>
+                    <td>{r.qualLevel}</td>
+                    <td><span className={`badge ${r.referredBadge}`}>{r.referredTo}</span></td>
+                    <td>{r.submittedDate}</td>
+                    <td>
+                      <span className={`badge ${r.statusBadge}`}>
+                        {r.statusIcon && <i className={`lni ${r.statusIcon}`}></i>} {r.status}
+                      </span>
+                    </td>
+                    <td>
+                      {r.outcomeBadge
+                        ? <span className={`badge ${r.outcomeBadge}`}>{r.outcome}</span>
+                        : r.outcome
+                      }
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </ScrollTable>
         </div>
 
         <div className="undefined-box mt-1">
-          <div className="text-[20px] mb-2"><i className="lni lni-world"></i></div>
-          <div className="font-bold text-sm text-g900 mb-[6px]">Detailed Equating Workflow</div>
-          <div className="text-[12.5px] text-g500 max-w-[500px] mx-auto">The detailed process for document submission to NCHE/UVTOP, tracking, and outcome recording has <strong>not yet been covered in a KT session</strong>.</div>
+          <div className="text-[var(--fs-xl)] mb-2"><i className="lni lni-world"></i></div>
+          <div className="font-bold text-[var(--fs-md)] text-g900 mb-[6px]">Detailed Equating Workflow</div>
+          <div className="text-[var(--fs-sm)] text-g500 max-w-[500px] mx-auto">The detailed process for document submission to NCHE/UVTOP, tracking, and outcome recording has <strong>not yet been covered in a KT session</strong>.</div>
           <div className="badge badge-purple mt-[10px]"><i className="lni lni-clipboard"></i> Module Not Yet Defined — Details to be captured in KT Session</div>
         </div>
       </div>

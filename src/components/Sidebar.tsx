@@ -87,10 +87,12 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, nav, collapsedSe
             {sbItem('lecturer-master', 'Lecturer Master', 'user')}
             {sbItem('skill-master', 'Skill Management', 'bulb')}
             {sbItem('batch-management', 'Batch Management', 'users')}
+            {sbItem('room-management', 'Room Management', 'home')}
             {sbItem('session-movement', 'Session Movement', 'reload', { text: '1', warn: true })}
           </>)}
 
           {sbSection('sc-cu-master', 'Course Unit Master', <>
+            {sbItem('repetition-tag', 'Repetition Tag', 'reload')}
             {sbItem('course-units', 'Course Units', 'book')}
           </>)}
 

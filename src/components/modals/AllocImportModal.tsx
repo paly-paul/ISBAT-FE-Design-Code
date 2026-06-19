@@ -1,6 +1,6 @@
 'use client'
 import { ModalProps } from './types'
-import { ScrollTable } from './ScrollTable'
+import { ScrollTable } from '@/components/ScrollTable'
 
 export function AllocImportModal({ isOpen, onClose, showToast }: ModalProps) {
   if (!isOpen) return null
@@ -11,20 +11,20 @@ export function AllocImportModal({ isOpen, onClose, showToast }: ModalProps) {
           <div className="modal-title"><i className="lni lni-download"></i> Import Allocation from Excel</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
-        <div className="info-box mb-[14px]"><i className="lni lni-information"></i> Upload the HOD/Dean&apos;s Excel allocation sheet. Required columns: <span className="font-mono bg-[var(--b100)] py-[2px] px-[5px] rounded-[3px] text-[11px]">course_code, faculty_name, batch_code, semester</span>. Preview will show before saving.</div>
+        <div className="info-box mb-[14px]"><i className="lni lni-information"></i> Upload the HOD/Dean&apos;s Excel allocation sheet. Required columns: <span className="font-mono bg-[var(--b100)] py-[2px] px-[5px] rounded-[3px] text-[var(--fs-xs)]">course_code, faculty_name, batch_code, semester</span>. Preview will show before saving.</div>
         <div className="file-zone mb-[14px]" id="alloc-upload-zone">
           <input type="file" accept=".xlsx,.xls,.csv" />
           <div className="file-zone-icon"><i className="lni lni-bar-chart"></i></div>
           <p>Drop Excel file here or click to browse</p>
-          <p className="text-[11px] text-g400">.xlsx, .xls or .csv · Max 5MB</p>
+          <p className="text-[var(--fs-xs)] text-g400">.xlsx, .xls or .csv · Max 5MB</p>
           <div className="fz-uploaded" id="alloc-upload-status"></div>
         </div>
         <div id="alloc-preview-section" className="hidden">
           <div className="sec-divider">Preview (8 rows detected)</div>
           <div className="g3 mb-3">
-            <div className="p-[10px] bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rsm)] text-center"><div className="text-[11px] font-bold text-clr-green">VALID ROWS</div><div className="text-[20px] font-extrabold text-clr-green">6</div></div>
-            <div className="p-[10px] bg-[var(--amber-bg)] border border-[var(--amber-bd)] rounded-[var(--rsm)] text-center"><div className="text-[11px] font-bold text-clr-amber">WARNINGS</div><div className="text-[20px] font-extrabold text-clr-amber">1</div></div>
-            <div className="p-[10px] bg-[var(--red-bg)] border border-[var(--red-bd)] rounded-[var(--rsm)] text-center"><div className="text-[11px] font-bold text-clr-red">ERRORS</div><div className="text-[20px] font-extrabold text-clr-red">1</div></div>
+            <div className="p-[10px] bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rsm)] text-center"><div className="text-[var(--fs-xs)] font-bold text-clr-green">VALID ROWS</div><div className="text-[var(--fs-xl)] font-extrabold text-clr-green">6</div></div>
+            <div className="p-[10px] bg-[var(--amber-bg)] border border-[var(--amber-bd)] rounded-[var(--rsm)] text-center"><div className="text-[var(--fs-xs)] font-bold text-clr-amber">WARNINGS</div><div className="text-[var(--fs-xl)] font-extrabold text-clr-amber">1</div></div>
+            <div className="p-[10px] bg-[var(--red-bg)] border border-[var(--red-bd)] rounded-[var(--rsm)] text-center"><div className="text-[var(--fs-xs)] font-bold text-clr-red">ERRORS</div><div className="text-[var(--fs-xl)] font-extrabold text-clr-red">1</div></div>
           </div>
           <ScrollTable className="import-preview">
             <table>

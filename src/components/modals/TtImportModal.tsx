@@ -1,6 +1,6 @@
 'use client'
 import { ModalProps } from './types'
-import { ScrollTable } from './ScrollTable'
+import { ScrollTable } from '@/components/ScrollTable'
 
 export function TtImportModal({ isOpen, onClose, showToast }: ModalProps) {
   if (!isOpen) return null
@@ -11,7 +11,7 @@ export function TtImportModal({ isOpen, onClose, showToast }: ModalProps) {
           <div className="modal-title"><i className="lni lni-download"></i> Import Timetable from Excel</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
-        <div className="info-box mb-[14px]"><i className="lni lni-information"></i> Required columns: <span className="font-mono bg-[var(--b100)] py-[2px] px-[5px] rounded-[3px] text-[11px]">batch_code, day, start_time, end_time, course_code, type, venue, faculty</span>. System will detect conflicts automatically.</div>
+        <div className="info-box mb-[14px]"><i className="lni lni-information"></i> Required columns: <span className="font-mono bg-[var(--b100)] py-[2px] px-[5px] rounded-[3px] text-[var(--fs-xs)]">batch_code, day, start_time, end_time, course_code, type, venue, faculty</span>. System will detect conflicts automatically.</div>
         <div className="file-zone mb-[14px]" id="tt-upload-zone">
           <input type="file" accept=".xlsx,.xls,.csv" />
           <div className="file-zone-icon"><i className="lni lni-calendar"></i></div>

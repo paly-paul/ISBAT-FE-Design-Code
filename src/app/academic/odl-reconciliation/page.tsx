@@ -39,11 +39,11 @@ export default function Page() {
               <div className="flex items-start justify-between flex-wrap gap-[10px]">
                 <div>
                   <div className="flex items-center gap-2 mb-[6px]">
-                    <span className="font-bold text-sm">Ssebulime Patrick</span>
-                    <span className="font-mono text-[11px] text-b700">ODL-2026-001</span>
+                    <span className="font-bold text-[var(--fs-md)]">Ssebulime Patrick</span>
+                    <span className="font-mono text-[var(--fs-xs)] text-b700">ODL-2026-001</span>
                     <span className="badge badge-purple">Pending Recon.</span>
                   </div>
-                  <div className="flex gap-4 flex-wrap text-[12.5px] text-g500">
+                  <div className="flex gap-4 flex-wrap text-[var(--fs-sm)] text-g500">
                     <span><i className="lni lni-envelope"></i> patrick.ss@gmail.com</span>
                     <span><i className="lni lni-book"></i> MBA ODL</span>
                     <span><i className="lni lni-credit-cards"></i> DPO Token: <span className="font-mono text-b700">TKN-4829</span></span>
@@ -63,11 +63,11 @@ export default function Page() {
               <div className="flex items-start justify-between flex-wrap gap-[10px]">
                 <div>
                   <div className="flex items-center gap-2 mb-[6px]">
-                    <span className="font-bold text-sm">Nakiyaga Flavia</span>
-                    <span className="font-mono text-[11px] text-b700">ODL-2026-002</span>
+                    <span className="font-bold text-[var(--fs-md)]">Nakiyaga Flavia</span>
+                    <span className="font-mono text-[var(--fs-xs)] text-b700">ODL-2026-002</span>
                     <span className="badge badge-purple">Pending Recon.</span>
                   </div>
-                  <div className="flex gap-4 flex-wrap text-[12.5px] text-g500">
+                  <div className="flex gap-4 flex-wrap text-[var(--fs-sm)] text-g500">
                     <span><i className="lni lni-envelope"></i> f.nakiyaga@email.com</span>
                     <span><i className="lni lni-book"></i> BSc. IT ODL</span>
                     <span><i className="lni lni-credit-cards"></i> DPO Token: <span className="font-mono text-b700">TKN-4831</span></span>

@@ -1,19 +1,56 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
-import { ProgrammeGroupModal } from '@/components/ProgrammeGroupModal'
+import { ActionMenu } from '@/components/ActionMenu'
+import { ProgrammeGroupModal } from '@/components/modals/ProgrammeGroupModal'
 import { Toast } from '@/components/Toast'
+import { FilterTh } from '@/components/FilterTh'
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  useEffect(() => {
+    function closeFilter(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('th')) setOpenFilter(null)
+    }
+    document.addEventListener('click', closeFilter)
+    return () => document.removeEventListener('click', closeFilter)
+  }, [])
+
+  const rows = [
+    { code: 'BCA', name: "Bachelor of Computer Applications",    level: "Bachelor's", activeVersions: '1 Active', inactiveVersions: '1 Inactive', students: 234 },
+    { code: 'BBA', name: "Bachelor of Business Administration",  level: "Bachelor's", activeVersions: '1 Active', inactiveVersions: '2 Inactive', students: 412 },
+    { code: 'MBA', name: "Master of Business Administration",    level: "Master's",   activeVersions: '1 Active', inactiveVersions: '1 Inactive', students: 186 },
+    { code: 'BEng', name: "Bachelor of Engineering (Civil)",     level: 'Engineering', activeVersions: '1 Active', inactiveVersions: '—',          students: 124 },
+  ]
+  const filteredRows = rows.filter(r =>
+    Object.entries(filters).every(([k, v]) => !v || String((r as Record<string, unknown>)[k]) === v)
+  )
+
+  function fth(label: string, col: string, opts: string[]) {
+    return (
+      <FilterTh
+        label={label}
+        opts={opts}
+        isOpen={openFilter === col}
+        activeFilter={filters[col] ?? ''}
+        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
+        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+      />
+    )
+  }
 
   return (
     <>
@@ -34,12 +71,19 @@ export default function Page() {
           </div>
           <ScrollTable>
             <table>
-              <thead><tr><th>Group Code</th><th>Group Name</th><th>Programme Level</th><th>Active Versions</th><th>Inactive Versions</th><th>Total Students</th><th>Action</th></tr></thead>
+              <thead><tr><th>Action</th><th>Group Code</th><th>Group Name</th>{fth('Programme Level', 'level', ["Bachelor's", "Master's", 'PhD', 'Diploma'])}<th>Active Versions</th><th>Inactive Versions</th><th>Total Students</th></tr></thead>
               <tbody>
-                <tr><td className="font-mono text-b700">BCA</td><td><strong>Bachelor of Computer Applications</strong></td><td>Bachelor&apos;s</td><td><span className="badge badge-green">1 Active</span></td><td><span className="badge badge-grey">1 Inactive</span></td><td>234</td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
-                <tr><td className="font-mono text-b700">BBA</td><td><strong>Bachelor of Business Administration</strong></td><td>Bachelor&apos;s</td><td><span className="badge badge-green">1 Active</span></td><td><span className="badge badge-grey">2 Inactive</span></td><td>412</td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
-                <tr><td className="font-mono text-b700">MBA</td><td><strong>Master of Business Administration</strong></td><td>Master&apos;s</td><td><span className="badge badge-green">1 Active</span></td><td><span className="badge badge-grey">1 Inactive</span></td><td>186</td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
-                <tr><td className="font-mono text-b700">BEng</td><td><strong>Bachelor of Engineering (Civil)</strong></td><td>Engineering</td><td><span className="badge badge-green">1 Active</span></td><td>—</td><td>124</td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
+                {filteredRows.map((r, i) => (
+                  <tr key={i}>
+                    <td><ActionMenu><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>
+                    <td className="font-mono text-b700">{r.code}</td>
+                    <td><strong>{r.name}</strong></td>
+                    <td>{r.level}</td>
+                    <td><span className="badge badge-green">{r.activeVersions}</span></td>
+                    <td>{r.inactiveVersions === '—' ? '—' : <span className="badge badge-grey">{r.inactiveVersions}</span>}</td>
+                    <td>{r.students}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </ScrollTable>

@@ -1,18 +1,35 @@
 'use client'
 import { useRef, useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
-export function ActionMenu({ children }: { children: React.ReactNode }) {
-  const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState({ top: 0, right: 0 })
+interface ActionMenuProps {
+  children: React.ReactNode
+  tooltip?: string
+}
+
+export function ActionMenu({ children, tooltip = 'Actions' }: ActionMenuProps) {
+  const [open, setOpen]       = useState(false)
+  const [showTip, setShowTip] = useState(false)
+  const [pos, setPos]         = useState({ top: 0, left: 0 })
+  const [tipPos, setTipPos]   = useState({ top: 0, left: 0 })
   const triggerRef = useRef<HTMLButtonElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   function openMenu() {
     if (triggerRef.current) {
       const r = triggerRef.current.getBoundingClientRect()
-      setPos({ top: r.bottom + 6, right: window.innerWidth - r.right })
+      setPos({ top: r.bottom + 6, left: r.left + r.width / 2 })
     }
+    setShowTip(false)
     setOpen(true)
+  }
+
+  function onMouseEnter() {
+    if (!open && triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect()
+      setTipPos({ top: r.top - 30, left: r.left + r.width / 2 })
+      setShowTip(true)
+    }
   }
 
   useEffect(() => {
@@ -32,18 +49,44 @@ export function ActionMenu({ children }: { children: React.ReactNode }) {
         ref={triggerRef}
         className={`btn btn-neu btn-sm act-trigger${open ? ' open' : ''}`}
         onClick={() => (open ? setOpen(false) : openMenu())}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={() => setShowTip(false)}
       >
-        Actions <i className={`lni lni-chevron-down act-chevron${open ? ' open' : ''}`} />
+        <i className="lni lni-more-alt" style={{ fontSize: 15 }} />
       </button>
-      {open && (
+
+      {showTip && !open && createPortal(
+        <div style={{
+          position: 'fixed',
+          top: tipPos.top,
+          left: tipPos.left,
+          transform: 'translateX(-50%)',
+          background: 'var(--g900)',
+          color: '#fff',
+          fontSize: 11,
+          fontWeight: 600,
+          padding: '4px 9px',
+          borderRadius: 'var(--rxs)',
+          pointerEvents: 'none',
+          zIndex: 10000,
+          whiteSpace: 'nowrap',
+          letterSpacing: '.02em',
+        }}>
+          {tooltip}
+        </div>,
+        document.body
+      )}
+
+      {open && createPortal(
         <div
           ref={dropdownRef}
           className="act-menu-list"
-          style={{ position: 'fixed', top: pos.top, right: pos.right }}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, transform: 'translateX(-50%)' }}
           onClick={() => setOpen(false)}
         >
           {children}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

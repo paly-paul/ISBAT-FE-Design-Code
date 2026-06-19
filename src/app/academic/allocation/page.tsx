@@ -1,19 +1,58 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
-import { AllocImportModal } from '@/components/AllocImportModal'
+import { ActionMenu } from '@/components/ActionMenu'
+import { AllocImportModal } from '@/components/modals/AllocImportModal'
 import { Toast } from '@/components/Toast'
+import { FilterTh } from '@/components/FilterTh'
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  useEffect(() => {
+    function closeFilter(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('th')) setOpenFilter(null)
+    }
+    document.addEventListener('click', closeFilter)
+    return () => document.removeEventListener('click', closeFilter)
+  }, [])
+
+  const rows = [
+    { code: 'IT101',  name: 'Introduction to Programming', programme: 'BSc. IT', semester: 'Sem 1', batch: 'BSC-IT-S1-D', allocatedTo: 'Dr. Ssekibuule Ronald', status: 'Allocated', rowClass: '',       toastMsg: 'Editing IT101' },
+    { code: 'IT102',  name: 'Computer Organisation',       programme: 'BSc. IT', semester: 'Sem 1', batch: 'BSC-IT-S1-D', allocatedTo: 'Ms. Namutebi Joyce',    status: 'Allocated', rowClass: '',       toastMsg: 'Editing IT102' },
+    { code: 'BBA301', name: 'Strategic Management',        programme: 'BBA',     semester: 'Sem 3', batch: 'BBA-S3-D',    allocatedTo: '',                       status: 'Missing',   rowClass: 'flagged', toastMsg: 'Assigning BBA301' },
+    { code: 'BBA302', name: 'Business Ethics',             programme: 'BBA',     semester: 'Sem 3', batch: 'BBA-S3-D',    allocatedTo: '',                       status: 'Missing',   rowClass: 'flagged', toastMsg: 'Assigning BBA302' },
+    { code: 'BBA303', name: 'Financial Accounting III',    programme: 'BBA',     semester: 'Sem 3', batch: 'BBA-S3-D',    allocatedTo: '',                       status: 'Missing',   rowClass: 'flagged', toastMsg: 'Assigning BBA303' },
+    { code: 'MBA101', name: 'Managerial Economics',        programme: 'MBA',     semester: 'Sem 1', batch: 'MBA-S1-E',    allocatedTo: 'Prof. Mukasa Charles',   status: 'Allocated', rowClass: '',       toastMsg: 'Editing MBA101' },
+  ]
+  const filteredRows = rows.filter(r =>
+    Object.entries(filters).every(([k, v]) => !v || String((r as Record<string, unknown>)[k]) === v)
+  )
+
+  function fth(label: string, col: string, opts: string[]) {
+    return (
+      <FilterTh
+        label={label}
+        opts={opts}
+        isOpen={openFilter === col}
+        activeFilter={filters[col] ?? ''}
+        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
+        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+      />
+    )
+  }
 
   return (
     <>
@@ -28,7 +67,7 @@ export default function Page() {
 
         <div className="g2 mb-[18px]">
           <div className="warn-box">
-            <i className="lni lni-warning"></i> <span><strong>Prerequisite:</strong> Faculty must have populated their skills in the <button className="btn btn-amber btn-sm p-[3px_10px] text-[11px]" onClick={() => nav('skill-master')}><i className="lni lni-bulb"></i> Skill Management Master</button> before allocation. <strong>4 faculty members</strong> currently have incomplete skill profiles — allocation for those faculty is blocked.</span>
+            <i className="lni lni-warning"></i> <span><strong>Prerequisite:</strong> Faculty must have populated their skills in the <button className="btn btn-amber btn-sm p-[3px_10px] text-[var(--fs-xs)]" onClick={() => nav('skill-master')}><i className="lni lni-bulb"></i> Skill Management Master</button> before allocation. <strong>4 faculty members</strong> currently have incomplete skill profiles — allocation for those faculty is blocked.</span>
           </div>
           <div className="info-box">
             <i className="lni lni-information"></i> <span>Allocation data is manually entered by <strong>Support Staff</strong> from the Dean&apos;s pre-approved Excel file. <strong>No system restriction</strong> on subject count per faculty — typical load is <strong>5–6 subjects</strong>. <strong>Project subjects</strong> only require weekly check-ins, not traditional lectures — allocate accordingly.</span>
@@ -46,20 +85,43 @@ export default function Page() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-graduation"></i></span> Current Allocations — Spring 2026</div>
             <div className="flex gap-2">
-              <select className="ctrl w-auto text-xs"><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>BEng. Civil</option></select>
-              <select className="ctrl w-auto text-xs"><option>All Statuses</option><option>Allocated</option><option>Unallocated</option></select>
+              <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>BEng. Civil</option></select>
+              <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Statuses</option><option>Allocated</option><option>Unallocated</option></select>
             </div>
           </div>
           <ScrollTable>
             <table>
-              <thead><tr><th>Course Code</th><th>Unit Name</th><th>Programme</th><th>Semester</th><th>Batch</th><th>Allocated To</th><th>Status</th><th>Action</th></tr></thead>
+              <thead><tr><th>Action</th><th>Course Code</th><th>Unit Name</th>{fth('Programme', 'programme', ['BSc. IT', 'BBA', 'MBA'])}{fth('Semester', 'semester', ['Sem 1', 'Sem 3'])}{fth('Batch', 'batch', ['BSC-IT-S1-D', 'BBA-S3-D', 'MBA-S1-E'])}<th>Allocated To</th>{fth('Status', 'status', ['Allocated', 'Missing'])}</tr></thead>
               <tbody>
-                <tr><td className="font-mono text-[11px] text-b700">IT101</td><td>Introduction to Programming</td><td>BSc. IT</td><td>Sem 1</td><td>BSC-IT-S1-D</td><td><span className="font-bold">Dr. Ssekibuule Ronald</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Allocated</span></td><td><button className="btn btn-neu btn-sm" onClick={() => showToast('Editing IT101', 'info')}><i className="lni lni-pencil"></i> Edit</button></td></tr>
-                <tr><td className="font-mono text-[11px] text-b700">IT102</td><td>Computer Organisation</td><td>BSc. IT</td><td>Sem 1</td><td>BSC-IT-S1-D</td><td><span className="font-bold">Ms. Namutebi Joyce</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Allocated</span></td><td><button className="btn btn-neu btn-sm" onClick={() => showToast('Editing IT102', 'info')}><i className="lni lni-pencil"></i> Edit</button></td></tr>
-                <tr className="flagged"><td className="font-mono text-[11px] text-b700">BBA301</td><td>Strategic Management</td><td>BBA</td><td>Sem 3</td><td>BBA-S3-D</td><td><span className="text-muted">— Unallocated —</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> Missing</span></td><td><button className="btn btn-amber btn-sm" onClick={() => showToast('Assigning BBA301', 'info')}>Assign →</button></td></tr>
-                <tr className="flagged"><td className="font-mono text-[11px] text-b700">BBA302</td><td>Business Ethics</td><td>BBA</td><td>Sem 3</td><td>BBA-S3-D</td><td><span className="text-muted">— Unallocated —</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> Missing</span></td><td><button className="btn btn-amber btn-sm" onClick={() => showToast('Assigning BBA302', 'info')}>Assign →</button></td></tr>
-                <tr className="flagged"><td className="font-mono text-[11px] text-b700">BBA303</td><td>Financial Accounting III</td><td>BBA</td><td>Sem 3</td><td>BBA-S3-D</td><td><span className="text-muted">— Unallocated —</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> Missing</span></td><td><button className="btn btn-amber btn-sm" onClick={() => showToast('Assigning BBA303', 'info')}>Assign →</button></td></tr>
-                <tr><td className="font-mono text-[11px] text-b700">MBA101</td><td>Managerial Economics</td><td>MBA</td><td>Sem 1</td><td>MBA-S1-E</td><td><span className="font-bold">Prof. Mukasa Charles</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Allocated</span></td><td><button className="btn btn-neu btn-sm" onClick={() => showToast('Editing MBA101', 'info')}><i className="lni lni-pencil"></i> Edit</button></td></tr>
+                {filteredRows.map((r, i) => (
+                  <tr key={i} className={r.rowClass}>
+                    <td>
+                      <ActionMenu>
+                        {r.status === 'Allocated'
+                          ? <button className="btn btn-neu btn-sm" onClick={() => showToast(r.toastMsg, 'info')}><i className="lni lni-pencil"></i> Edit</button>
+                          : <button className="btn btn-amber btn-sm" onClick={() => showToast(r.toastMsg, 'info')}>Assign →</button>
+                        }
+                      </ActionMenu>
+                    </td>
+                    <td className="font-mono text-[var(--fs-xs)] text-b700">{r.code}</td>
+                    <td>{r.name}</td>
+                    <td>{r.programme}</td>
+                    <td>{r.semester}</td>
+                    <td>{r.batch}</td>
+                    <td>
+                      {r.allocatedTo
+                        ? <span className="font-bold">{r.allocatedTo}</span>
+                        : <span className="text-muted">— Unallocated —</span>
+                      }
+                    </td>
+                    <td>
+                      {r.status === 'Allocated'
+                        ? <span className="badge badge-green"><i className="lni lni-checkmark"></i> Allocated</span>
+                        : <span className="badge badge-red"><i className="lni lni-close"></i> Missing</span>
+                      }
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </ScrollTable>

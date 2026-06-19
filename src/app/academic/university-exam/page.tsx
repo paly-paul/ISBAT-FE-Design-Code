@@ -1,18 +1,54 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
+import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
+import { FilterTh } from '@/components/FilterTh'
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  useEffect(() => {
+    function closeFilter(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('th')) setOpenFilter(null)
+    }
+    document.addEventListener('click', closeFilter)
+    return () => document.removeEventListener('click', closeFilter)
+  }, [])
+
+  const rows = [
+    { unit: 'IT101 – Intro to Programming', programme: 'BSc. IT', examDate: '15 May 2026', uploadedBy: 'Dr. Ssekibuule', uploadDate: '01 Apr 2026', vettingStatus: 'Under Vetting', vettingBadge: 'badge-amber', vettingIcon: '',              examStatus: 'Pending', examBadge: 'badge-grey',  examIcon: '',            rowClass: '',       variant: 'vet' },
+    { unit: 'IT102 – Computer Org.',         programme: 'BSc. IT', examDate: '17 May 2026', uploadedBy: 'Ms. Namutebi',   uploadDate: '02 Apr 2026', vettingStatus: 'Approved',      vettingBadge: 'badge-green', vettingIcon: 'lni-checkmark', examStatus: 'Pending', examBadge: 'badge-grey',  examIcon: '',            rowClass: '',       variant: 'view' },
+    { unit: 'BBA301 – Strategic Mgmt',       programme: 'BBA',     examDate: '16 May 2026', uploadedBy: '—',              uploadDate: '—',           vettingStatus: 'Not Uploaded',  vettingBadge: 'badge-red',   vettingIcon: '',              examStatus: 'Blocked', examBadge: 'badge-red',   examIcon: '',            rowClass: 'flagged', variant: 'upload' },
+  ]
+  const filteredRows = rows.filter(r =>
+    Object.entries(filters).every(([k, v]) => !v || String((r as Record<string, unknown>)[k]) === v)
+  )
+
+  function fth(label: string, col: string, opts: string[]) {
+    return (
+      <FilterTh
+        label={label}
+        opts={opts}
+        isOpen={openFilter === col}
+        activeFilter={filters[col] ?? ''}
+        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
+        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+      />
+    )
+  }
 
   return (
     <>
@@ -47,11 +83,34 @@ export default function Page() {
           </div>
           <ScrollTable>
             <table>
-              <thead><tr><th>Course Unit</th><th>Programme</th><th>Exam Date</th><th>Uploaded By</th><th>Upload Date</th><th>Vetting Status</th><th>Exam Status</th><th>Action</th></tr></thead>
+              <thead><tr><th>Action</th><th>Course Unit</th>{fth('Programme', 'programme', ['BSc. IT', 'BBA'])}<th>Exam Date</th><th>Uploaded By</th><th>Upload Date</th>{fth('Vetting Status', 'vettingStatus', ['Under Vetting', 'Approved', 'Not Uploaded'])}{fth('Exam Status', 'examStatus', ['Pending', 'Blocked'])}</tr></thead>
               <tbody>
-                <tr><td><strong>IT101 – Intro to Programming</strong></td><td>BSc. IT</td><td>15 May 2026</td><td>Dr. Ssekibuule</td><td>01 Apr 2026</td><td><span className="badge badge-amber">Under Vetting</span></td><td><span className="badge badge-grey">Pending</span></td><td><button className="btn btn-amber btn-sm">Vet QP →</button></td></tr>
-                <tr><td><strong>IT102 – Computer Org.</strong></td><td>BSc. IT</td><td>17 May 2026</td><td>Ms. Namutebi</td><td>02 Apr 2026</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Approved</span></td><td><span className="badge badge-grey">Pending</span></td><td><button className="btn btn-neu btn-sm">View QP</button></td></tr>
-                <tr className="flagged"><td><strong>BBA301 – Strategic Mgmt</strong></td><td>BBA</td><td>16 May 2026</td><td>—</td><td>—</td><td><span className="badge badge-red">Not Uploaded</span></td><td><span className="badge badge-red">Blocked</span></td><td><button className="btn btn-primary btn-sm" onClick={() => openModal('new-qp-modal')}>Upload QP</button></td></tr>
+                {filteredRows.map((r, i) => (
+                  <tr key={i} className={r.rowClass}>
+                    <td>
+                      <ActionMenu>
+                        {r.variant === 'vet' && <button className="btn btn-amber btn-sm">Vet QP →</button>}
+                        {r.variant === 'view' && <button className="btn btn-neu btn-sm">View QP</button>}
+                        {r.variant === 'upload' && <button className="btn btn-primary btn-sm" onClick={() => openModal('new-qp-modal')}>Upload QP</button>}
+                      </ActionMenu>
+                    </td>
+                    <td><strong>{r.unit}</strong></td>
+                    <td>{r.programme}</td>
+                    <td>{r.examDate}</td>
+                    <td>{r.uploadedBy}</td>
+                    <td>{r.uploadDate}</td>
+                    <td>
+                      <span className={`badge ${r.vettingBadge}`}>
+                        {r.vettingIcon && <i className={`lni ${r.vettingIcon}`}></i>} {r.vettingStatus}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`badge ${r.examBadge}`}>
+                        {r.examIcon && <i className={`lni ${r.examIcon}`}></i>} {r.examStatus}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </ScrollTable>

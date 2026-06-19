@@ -1,18 +1,55 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
+import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
+import { FilterTh } from '@/components/FilterTh'
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  useEffect(() => {
+    function closeFilter(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('th')) setOpenFilter(null)
+    }
+    document.addEventListener('click', closeFilter)
+    return () => document.removeEventListener('click', closeFilter)
+  }, [])
+
+  const rows = [
+    { batchCode: 'BSC-IT-S1-D',   programme: 'BSc. Information Technology', semester: 'Semester 1', students: 42, allocation: 'Done',      allocationBadge: 'badge-green', allocationIcon: true,  timetable: 'Live',      timetableBadge: 'badge-green', timetableIcon: true,  cwStatus: 'In Progress',  cwBadge: 'badge-amber', actionBtn: 'btn-neu',   actionLabel: 'View →',     actionNav: 'timetable' },
+    { batchCode: 'BBA-S3-D',      programme: 'BBA Business Administration', semester: 'Semester 3', students: 38, allocation: '3 Pending', allocationBadge: 'badge-amber', allocationIcon: false, timetable: 'Draft',     timetableBadge: 'badge-amber', timetableIcon: false, cwStatus: 'Not Started',  cwBadge: 'badge-grey',  actionBtn: 'btn-amber', actionLabel: 'Fix →',      actionNav: 'allocation' },
+    { batchCode: 'MBA-S1-E',      programme: 'MBA Business Admin',          semester: 'Semester 1', students: 24, allocation: 'Done',      allocationBadge: 'badge-green', allocationIcon: true,  timetable: 'Live',      timetableBadge: 'badge-green', timetableIcon: true,  cwStatus: 'Active',       cwBadge: 'badge-green', actionBtn: 'btn-neu',   actionLabel: 'View →',     actionNav: 'coursework' },
+    { batchCode: 'BENG-CIV-S2-D', programme: 'BEng. Civil Engineering',     semester: 'Semester 2', students: 31, allocation: 'Done',      allocationBadge: 'badge-green', allocationIcon: true,  timetable: 'Pending',   timetableBadge: 'badge-blue',  timetableIcon: false, cwStatus: 'Not Started',  cwBadge: 'badge-grey',  actionBtn: 'btn-neu',   actionLabel: 'Schedule →', actionNav: 'timetable' },
+  ]
+  const filteredRows = rows.filter(r =>
+    Object.entries(filters).every(([k, v]) => !v || (r as Record<string, unknown>)[k] === v)
+  )
+
+  function fth(label: string, col: string, opts: string[]) {
+    return (
+      <FilterTh
+        label={label}
+        opts={opts}
+        isOpen={openFilter === col}
+        activeFilter={filters[col] ?? ''}
+        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
+        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+      />
+    )
+  }
 
   return (
     <>
@@ -29,8 +66,8 @@ export default function Page() {
         </div>
 
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-[.08em] text-g400">Setup Hierarchy — must be completed in sequence</span>
-          <span className="badge badge-blue text-[10px]">Modules 1 → 2 → 3</span>
+          <span className="text-[var(--fs-xs)] font-bold uppercase tracking-[.08em] text-g400">Setup Hierarchy — must be completed in sequence</span>
+          <span className="badge badge-blue text-[var(--fs-2xs)]">Modules 1 → 2 → 3</span>
         </div>
         <div className="pipeline mb-3">
           <div className="pip-step done"><div className="pip-circle"><i className="lni lni-checkmark"></i></div><div className="pip-info"><div className="pip-label">Programme Level</div><div className="pip-desc">M1 · Done</div></div></div>
@@ -49,8 +86,8 @@ export default function Page() {
         </div>
 
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-[.08em] text-g400">Current Semester Cycle — Spring 2026</span>
-          <span className="badge badge-blue text-[10px]">Modules 3 → 4 → 5</span>
+          <span className="text-[var(--fs-xs)] font-bold uppercase tracking-[.08em] text-g400">Current Semester Cycle — Spring 2026</span>
+          <span className="badge badge-blue text-[var(--fs-2xs)]">Modules 3 → 4 → 5</span>
         </div>
         <div className="pipeline">
           <div className="pip-step done"><div className="pip-circle"><i className="lni lni-checkmark"></i></div><div className="pip-info"><div className="pip-label">Session Movement</div><div className="pip-desc">M3 · Completed</div></div></div>
@@ -100,10 +137,10 @@ export default function Page() {
             <div className="flex flex-col gap-[10px]">
               <div className="p-3 bg-b50 border border-[1.5px] border-b100 rounded-[var(--rsm)]">
                 <div className="flex justify-between items-center mb-[6px]">
-                  <span className="text-xs font-bold text-b800"><i className="lni lni-book"></i> Current Academic Intake</span>
+                  <span className="text-[var(--fs-sm)] font-bold text-b800"><i className="lni lni-book"></i> Current Academic Intake</span>
                   <span className="badge badge-blue">Spring 2026 (20261)</span>
                 </div>
-                <div className="text-[11.5px] text-g500 flex gap-4 flex-wrap">
+                <div className="text-[var(--fs-xs)] text-g500 flex gap-4 flex-wrap">
                   <span>Semester Start: <strong>01 Feb 2026</strong></span>
                   <span>Term 1 End: <strong>30 Mar 2026</strong></span>
                   <span>Semester End: <strong>31 May 2026</strong></span>
@@ -111,15 +148,15 @@ export default function Page() {
               </div>
               <div className="p-3 bg-[var(--green-bg)] border border-[1.5px] border-[var(--green-bd)] rounded-[var(--rsm)]">
                 <div className="flex justify-between items-center mb-[6px]">
-                  <span className="text-xs font-bold text-[#065f46]"><i className="lni lni-graduation"></i> Current Admission Intake</span>
+                  <span className="text-[var(--fs-sm)] font-bold text-[#065f46]"><i className="lni lni-graduation"></i> Current Admission Intake</span>
                   <span className="badge badge-green">Fall 2026 (20262)</span>
                 </div>
-                <div className="text-[11.5px] text-[#065f46] flex gap-4 flex-wrap">
+                <div className="text-[var(--fs-xs)] text-[#065f46] flex gap-4 flex-wrap">
                   <span>Admission Open: <strong>01 Mar 2026</strong></span>
                   <span>Closes: <strong>15 Jul 2026</strong></span>
                 </div>
               </div>
-              <div className="info-box text-[11.5px]">
+              <div className="info-box text-[var(--fs-xs)]">
                 <i className="lni lni-information"></i> Academic Intake and Admission Intake must always be <strong>different</strong> — only one of each can be active at a time.
               </div>
             </div>
@@ -144,18 +181,40 @@ export default function Page() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-folder"></i></span> Active Batches — Spring 2026</div>
             <div className="flex gap-2">
-              <select className="ctrl w-auto text-xs"><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>BEng. Civil</option><option>MBA</option></select>
+              <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>BEng. Civil</option><option>MBA</option></select>
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>
           </div>
           <ScrollTable>
             <table>
-              <thead><tr><th>Batch Code</th><th>Programme</th><th>Semester</th><th>Students</th><th>Allocation</th><th>Timetable</th><th>CW Status</th><th>Action</th></tr></thead>
+              <thead><tr><th>Action</th><th>Batch Code</th>{fth('Programme', 'programme', ['BSc. Information Technology', 'BBA Business Administration', 'MBA Business Admin', 'BEng. Civil Engineering'])}{fth('Semester', 'semester', ['Semester 1', 'Semester 2', 'Semester 3'])}<th>Students</th>{fth('Allocation', 'allocation', ['Done', '3 Pending'])}{fth('Timetable', 'timetable', ['Live', 'Draft', 'Pending'])}{fth('CW Status', 'cwStatus', ['In Progress', 'Not Started', 'Active'])}</tr></thead>
               <tbody>
-                <tr><td><span className="font-bold text-blue font-mono">BSC-IT-S1-D</span></td><td>BSc. Information Technology</td><td><span className="pill pill-blue">Semester 1</span></td><td>42</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Done</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Live</span></td><td><span className="badge badge-amber">In Progress</span></td><td><button className="btn btn-neu btn-sm" onClick={() => nav('timetable')}>View →</button></td></tr>
-                <tr><td><span className="font-bold text-blue font-mono">BBA-S3-D</span></td><td>BBA Business Administration</td><td><span className="pill pill-blue">Semester 3</span></td><td>38</td><td><span className="badge badge-amber"><i className="lni lni-warning"></i> 3 Pending</span></td><td><span className="badge badge-amber">Draft</span></td><td><span className="badge badge-grey">Not Started</span></td><td><button className="btn btn-amber btn-sm" onClick={() => nav('allocation')}>Fix →</button></td></tr>
-                <tr><td><span className="font-bold text-blue font-mono">MBA-S1-E</span></td><td>MBA Business Admin</td><td><span className="pill pill-blue">Semester 1</span></td><td>24</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Done</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Live</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Active</span></td><td><button className="btn btn-neu btn-sm" onClick={() => nav('coursework')}>View →</button></td></tr>
-                <tr><td><span className="font-bold text-blue font-mono">BENG-CIV-S2-D</span></td><td>BEng. Civil Engineering</td><td><span className="pill pill-blue">Semester 2</span></td><td>31</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Done</span></td><td><span className="badge badge-blue">Pending</span></td><td><span className="badge badge-grey">Not Started</span></td><td><button className="btn btn-neu btn-sm" onClick={() => nav('timetable')}>Schedule →</button></td></tr>
+                {filteredRows.map((r, i) => (
+                  <tr key={i}>
+                    <td>
+                      <ActionMenu>
+                        <button className={`btn ${r.actionBtn} btn-sm`} onClick={() => nav(r.actionNav)}>{r.actionLabel}</button>
+                      </ActionMenu>
+                    </td>
+                    <td><span className="font-bold text-blue font-mono">{r.batchCode}</span></td>
+                    <td>{r.programme}</td>
+                    <td><span className="pill pill-blue">{r.semester}</span></td>
+                    <td>{r.students}</td>
+                    <td>
+                      <span className={`badge ${r.allocationBadge}`}>
+                        {r.allocationIcon && <i className="lni lni-checkmark"></i>}
+                        {!r.allocationIcon && r.allocation === '3 Pending' && <i className="lni lni-warning"></i>}
+                        {' '}{r.allocation}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`badge ${r.timetableBadge}`}>
+                        {r.timetableIcon && <i className="lni lni-checkmark"></i>} {r.timetable}
+                      </span>
+                    </td>
+                    <td><span className={`badge ${r.cwBadge}`}>{r.cwStatus}</span></td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </ScrollTable>
