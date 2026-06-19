@@ -30,7 +30,7 @@ export default function Page() {
 
         <div className="info-box mb-[14px]">
           <i className="lni lni-information"></i> Preview of the public-facing form at{' '}
-          <span className="font-mono bg-[var(--b100)] py-0.5 px-[6px] rounded text-[11px]">ERP.../online.ASP</span>
+          <span className="font-mono bg-[var(--b100)] py-0.5 px-[6px] rounded text-[var(--fs-xs)]">ERP.../online.ASP</span>
           {' '}— no login required; candidates access via Reference No. + Email.
         </div>
 
@@ -170,7 +170,7 @@ export default function Page() {
                 </div>
                 <div className="info-box mb-[14px]">
                   <i className="lni lni-information"></i> This is the online form accessible at{' '}
-                  <span className="font-mono bg-[var(--b100)] py-0.5 px-[6px] rounded text-[11px]">ERP.../online.ASP</span>.
+                  <span className="font-mono bg-[var(--b100)] py-0.5 px-[6px] rounded text-[var(--fs-xs)]">ERP.../online.ASP</span>.
                   {' '}No login required — candidates access via Reference Number + Email.
                 </div>
                 <div className="g3">
@@ -189,7 +189,7 @@ export default function Page() {
                   </div>
                   <div className="fg">
                     <div className="lbl">Amount</div>
-                    <div className="p-[14px_16px] bg-[var(--g100)] border-[1.5px] border-dashed border-[var(--g300)] rounded-[var(--rsm)] text-g400 text-[12.5px] font-medium">
+                    <div className="p-[14px_16px] bg-[var(--g100)] border-[1.5px] border-dashed border-[var(--g300)] rounded-[var(--rsm)] text-g400 text-[var(--fs-sm)] font-medium">
                       Select a fee type to view the amount
                     </div>
                   </div>

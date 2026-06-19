@@ -54,7 +54,7 @@ export function FeeItemModal({ isOpen, onClose, showToast }: ModalProps) {
           </div>
           <div className="fg span2">
             <div className="lbl">Behavior</div>
-            <div className="flex gap-[14px] flex-wrap text-[12.5px] text-[var(--g700)]">
+            <div className="flex gap-[14px] flex-wrap text-[var(--fs-sm)] text-[var(--g700)]">
               <label className="flex items-center gap-[6px] cursor-pointer"><input type="checkbox" defaultChecked /> Required for registration</label>
               <label className="flex items-center gap-[6px] cursor-pointer"><input type="checkbox" /> One-time (not repeated each semester)</label>
               <label className="flex items-center gap-[6px] cursor-pointer"><input type="checkbox" /> Refundable</label>

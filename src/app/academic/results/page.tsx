@@ -23,11 +23,11 @@ export default function Page() {
           </div>
         </div>
         <div className="undefined-box">
-          <div className="text-[32px] mb-3"><i className="lni lni-bar-chart"></i></div>
-          <div className="font-extrabold text-[18px] text-g900 mb-2">Results &amp; Mark Entry</div>
-          <div className="text-[13px] text-g500 mb-4 max-w-[480px] mx-auto">This functionality is owned by the <strong>Assessment Module (Service 4)</strong>. Mark Entry → Mark Verification → Result Generation → Result Publication will be covered in the Assessment Module KT session.</div>
+          <div className="text-[var(--fs-stat)] mb-3"><i className="lni lni-bar-chart"></i></div>
+          <div className="font-extrabold text-[var(--fs-2xl)] text-g900 mb-2">Results &amp; Mark Entry</div>
+          <div className="text-[var(--fs-base)] text-g500 mb-4 max-w-[480px] mx-auto">This functionality is owned by the <strong>Assessment Module (Service 4)</strong>. Mark Entry → Mark Verification → Result Generation → Result Publication will be covered in the Assessment Module KT session.</div>
           <div className="badge badge-purple mb-4"><i className="lni lni-clipboard"></i> Pending KT Session — Assessment Module</div>
-          <div className="text-xs text-g400">For academic-side visibility, result publication triggers the next Session Movement cycle.</div>
+          <div className="text-[var(--fs-sm)] text-g400">For academic-side visibility, result publication triggers the next Session Movement cycle.</div>
         </div>
       </div>
       <Toast toast={toast} />

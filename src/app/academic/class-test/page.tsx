@@ -1,18 +1,54 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
+import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
+import { FilterTh } from '@/components/FilterTh'
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  useEffect(() => {
+    function closeFilter(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('th')) setOpenFilter(null)
+    }
+    document.addEventListener('click', closeFilter)
+    return () => document.removeEventListener('click', closeFilter)
+  }, [])
+
+  const rows = [
+    { unit: 'IT101 – Intro to Programming', batch: 'BSC-IT-S1-D', date: '20 Mar 2026', time: '10:00 AM', duration: '60 min', outOf: 50, attempted: '40/42', attemptedClass: 'text-green', cleared: 42, status: 'Completed',     statusBadge: 'badge-green', statusIcon: 'lni-checkmark', rowClass: '', variant: 'view' },
+    { unit: 'IT102 – Computer Org.',         batch: 'BSC-IT-S1-D', date: '22 Mar 2026', time: '02:00 PM', duration: '60 min', outOf: 50, attempted: '—',      attemptedClass: '',           cleared: 38, status: 'Upcoming',      statusBadge: 'badge-blue',  statusIcon: '',              rowClass: '', variant: 'manage' },
+    { unit: 'MBA101 – Managerial Econ.',     batch: 'MBA-S1-E',    date: '—',           time: '—',         duration: '60 min', outOf: 50, attempted: '—',      attemptedClass: '',           cleared: 24, status: 'Not Scheduled', statusBadge: 'badge-grey',  statusIcon: '',              rowClass: '', variant: 'schedule' },
+  ]
+  const filteredRows = rows.filter(r =>
+    Object.entries(filters).every(([k, v]) => !v || (r as unknown as Record<string, string>)[k] === v)
+  )
+
+  function fth(label: string, col: string, opts: string[]) {
+    return (
+      <FilterTh
+        label={label}
+        opts={opts}
+        isOpen={openFilter === col}
+        activeFilter={filters[col] ?? ''}
+        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
+        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+      />
+    )
+  }
 
   return (
     <>
@@ -30,15 +66,41 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-display"></i></span> Scheduled Class Tests — Term 1</div>
-            <select className="ctrl w-auto text-xs"><option>All Batches</option><option>BSC-IT-S1-D</option><option>MBA-S1-E</option></select>
+            <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Batches</option><option>BSC-IT-S1-D</option><option>MBA-S1-E</option></select>
           </div>
           <ScrollTable>
             <table>
-              <thead><tr><th>Course Unit</th><th>Batch</th><th>Date</th><th>Time</th><th>Duration</th><th>Out Of</th><th>Attempted</th><th>Cleared (≥50%)</th><th>Status</th><th>Action</th></tr></thead>
+              <thead><tr><th>Action</th><th>Course Unit</th>{fth('Batch', 'batch', ['BSC-IT-S1-D', 'MBA-S1-E'])}<th>Date</th><th>Time</th><th>Duration</th><th>Out Of</th><th>Attempted</th><th>Cleared (≥50%)</th>{fth('Status', 'status', ['Completed', 'Upcoming', 'Not Scheduled'])}</tr></thead>
               <tbody>
-                <tr><td><strong>IT101 – Intro to Programming</strong></td><td>BSC-IT-S1-D</td><td>20 Mar 2026</td><td>10:00 AM</td><td>60 min</td><td>50</td><td><span className="text-green font-bold">40/42</span></td><td>42</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Completed</span></td><td><button className="btn btn-neu btn-sm">View Marks</button></td></tr>
-                <tr><td><strong>IT102 – Computer Org.</strong></td><td>BSC-IT-S1-D</td><td>22 Mar 2026</td><td>02:00 PM</td><td>60 min</td><td>50</td><td>—</td><td>38</td><td><span className="badge badge-blue">Upcoming</span></td><td><button className="btn btn-neu btn-sm">Manage</button></td></tr>
-                <tr><td><strong>MBA101 – Managerial Econ.</strong></td><td>MBA-S1-E</td><td>—</td><td>—</td><td>60 min</td><td>50</td><td>—</td><td>24</td><td><span className="badge badge-grey">Not Scheduled</span></td><td><button className="btn btn-primary btn-sm" onClick={() => openModal('new-cbt-modal')}>Schedule →</button></td></tr>
+                {filteredRows.map((r, i) => (
+                  <tr key={i} className={r.rowClass}>
+                    <td>
+                      <ActionMenu>
+                        {r.variant === 'view' && <button className="btn btn-neu btn-sm">View Marks</button>}
+                        {r.variant === 'manage' && <button className="btn btn-neu btn-sm">Manage</button>}
+                        {r.variant === 'schedule' && <button className="btn btn-primary btn-sm" onClick={() => openModal('new-cbt-modal')}>Schedule →</button>}
+                      </ActionMenu>
+                    </td>
+                    <td><strong>{r.unit}</strong></td>
+                    <td>{r.batch}</td>
+                    <td>{r.date}</td>
+                    <td>{r.time}</td>
+                    <td>{r.duration}</td>
+                    <td>{r.outOf}</td>
+                    <td>
+                      {r.attempted === '—'
+                        ? '—'
+                        : <span className={`${r.attemptedClass} font-bold`}>{r.attempted}</span>
+                      }
+                    </td>
+                    <td>{r.cleared}</td>
+                    <td>
+                      <span className={`badge ${r.statusBadge}`}>
+                        {r.statusIcon && <i className={`lni ${r.statusIcon}`}></i>} {r.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </ScrollTable>

@@ -60,9 +60,9 @@ export function AddSlotModal({ isOpen, onClose, showToast }: ModalProps) {
           <div className="fg hidden" id="slot-rep-batches">
             <div className="lbl">Include Batches</div>
             <div className="flex flex-col gap-1">
-              <label className="flex items-center gap-[6px] text-[12.5px]"><input type="checkbox" /> BSC-IT-S26-DA</label>
-              <label className="flex items-center gap-[6px] text-[12.5px]"><input type="checkbox" /> BSC-IT-S26-DB</label>
-              <label className="flex items-center gap-[6px] text-[12.5px]"><input type="checkbox" /> BBA-S26-DA</label>
+              <label className="flex items-center gap-[6px] text-[var(--fs-sm)]"><input type="checkbox" /> BSC-IT-S26-DA</label>
+              <label className="flex items-center gap-[6px] text-[var(--fs-sm)]"><input type="checkbox" /> BSC-IT-S26-DB</label>
+              <label className="flex items-center gap-[6px] text-[var(--fs-sm)]"><input type="checkbox" /> BBA-S26-DA</label>
             </div>
           </div>
         </div>

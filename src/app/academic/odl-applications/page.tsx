@@ -1,19 +1,56 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
+import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
+import { FilterTh } from '@/components/FilterTh'
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [showPreview, setShowPreview] = useState(false)
+  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  useEffect(() => {
+    function closeFilter(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('th')) setOpenFilter(null)
+    }
+    document.addEventListener('click', closeFilter)
+    return () => document.removeEventListener('click', closeFilter)
+  }, [])
+
+  const rows = [
+    { ref: 'ODL-2026-001', name: 'Ssebulime Patrick',  email: 'patrick.ss@gmail.com',  programme: 'MBA ODL',          appliedDate: '10 Apr 2026', payment: 'Paid (DPO)',   paymentBadge: 'badge-green', paymentIcon: 'lni-checkmark', dpoToken: 'TKN-4829', status: 'Pending Recon.', statusBadge: 'badge-purple', rowClass: '',       strong: true,  variant: 'reconcile' },
+    { ref: 'ODL-2026-002', name: 'Nakiyaga Flavia',    email: 'f.nakiyaga@email.com',  programme: 'BSc. IT ODL',      appliedDate: '11 Apr 2026', payment: 'Paid (DPO)',   paymentBadge: 'badge-green', paymentIcon: 'lni-checkmark', dpoToken: 'TKN-4831', status: 'Pending Recon.', statusBadge: 'badge-purple', rowClass: '',       strong: true,  variant: 'reconcile' },
+    { ref: 'ODL-2026-003', name: 'Mutabazi Eric',      email: 'e.mutabazi@gmail.com',  programme: 'MBA ODL',          appliedDate: '12 Apr 2026', payment: 'Not Paid',     paymentBadge: 'badge-amber', paymentIcon: '',              dpoToken: '—',        status: 'Awaiting Payment', statusBadge: 'badge-amber',  rowClass: 'flagged', strong: true,  variant: 'view-app' },
+    { ref: 'ODL-2026-004', name: 'Acayo Lydia',        email: 'l.acayo@email.com',     programme: 'Diploma Bus. ODL', appliedDate: '05 Apr 2026', payment: 'Paid',         paymentBadge: 'badge-green', paymentIcon: 'lni-checkmark', dpoToken: 'TKN-4791', status: 'Reconciled',     statusBadge: 'badge-green',  rowClass: '',       strong: false, variant: 'view' },
+  ]
+  const filteredRows = rows.filter(r =>
+    Object.entries(filters).every(([k, v]) => !v || String((r as Record<string, unknown>)[k]) === v)
+  )
+
+  function fth(label: string, col: string, opts: string[]) {
+    return (
+      <FilterTh
+        label={label}
+        opts={opts}
+        isOpen={openFilter === col}
+        activeFilter={filters[col] ?? ''}
+        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
+        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+      />
+    )
+  }
 
   return (
     <>
@@ -29,7 +66,7 @@ export default function Page() {
         </div>
 
         <div className="g2 mb-[18px]">
-          <div className="info-box"><i className="lni lni-world"></i> <span>ODL applications start online at <span className="font-mono bg-[var(--b100)] py-0.5 px-[6px] rounded text-[11px]">ERP.../online.ASP</span>. Unlike regular applications, <strong>payment is not required to start</strong>. No fee exemptions apply to ODL applicants.</span></div>
+          <div className="info-box"><i className="lni lni-world"></i> <span>ODL applications start online at <span className="font-mono bg-[var(--b100)] py-0.5 px-[6px] rounded text-[var(--fs-xs)]">ERP.../online.ASP</span>. Unlike regular applications, <strong>payment is not required to start</strong>. No fee exemptions apply to ODL applicants.</span></div>
           <div className="warn-box"><i className="lni lni-warning"></i> <span>Applications remain in the <strong>Temporary ODL Table</strong> until payment is reconciled by accounts. Only after reconciliation does the application move to the regular application form.</span></div>
         </div>
 
@@ -58,18 +95,41 @@ export default function Page() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-world"></i></span> ODL Applicants — Temporary Table</div>
             <div className="flex gap-2">
-              <select className="ctrl w-auto text-xs"><option>All Statuses</option><option>Awaiting Payment</option><option>Paid — Pending Recon.</option><option>Reconciled</option></select>
+              <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Statuses</option><option>Awaiting Payment</option><option>Paid — Pending Recon.</option><option>Reconciled</option></select>
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>
           </div>
           <ScrollTable>
             <table>
-              <thead><tr><th>ODL Ref No.</th><th>Applicant Name</th><th>Email</th><th>Programme</th><th>Applied Date</th><th>Payment</th><th>DPO Token</th><th>Status</th><th>Action</th></tr></thead>
+              <thead><tr><th>Action</th><th>ODL Ref No.</th><th>Applicant Name</th><th>Email</th>{fth('Programme', 'programme', ['MBA ODL', 'BSc. IT ODL', 'Diploma Bus. ODL'])}<th>Applied Date</th>{fth('Payment', 'payment', ['Paid (DPO)', 'Paid', 'Not Paid'])}<th>DPO Token</th>{fth('Status', 'status', ['Pending Recon.', 'Awaiting Payment', 'Reconciled'])}</tr></thead>
               <tbody>
-                <tr><td className="font-mono text-[11px] text-b700">ODL-2026-001</td><td><strong>Ssebulime Patrick</strong></td><td className="text-[11.5px]">patrick.ss@gmail.com</td><td>MBA ODL</td><td>10 Apr 2026</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid (DPO)</span></td><td className="font-mono text-[10px]">TKN-4829</td><td><span className="badge badge-purple">Pending Recon.</span></td><td><button className="btn btn-primary btn-sm" onClick={() => nav('odl-reconciliation')}>Reconcile →</button></td></tr>
-                <tr><td className="font-mono text-[11px] text-b700">ODL-2026-002</td><td><strong>Nakiyaga Flavia</strong></td><td className="text-[11.5px]">f.nakiyaga@email.com</td><td>BSc. IT ODL</td><td>11 Apr 2026</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid (DPO)</span></td><td className="font-mono text-[10px]">TKN-4831</td><td><span className="badge badge-purple">Pending Recon.</span></td><td><button className="btn btn-primary btn-sm" onClick={() => nav('odl-reconciliation')}>Reconcile →</button></td></tr>
-                <tr className="flagged"><td className="font-mono text-[11px] text-b700">ODL-2026-003</td><td><strong>Mutabazi Eric</strong></td><td className="text-[11.5px]">e.mutabazi@gmail.com</td><td>MBA ODL</td><td>12 Apr 2026</td><td><span className="badge badge-amber">Not Paid</span></td><td>—</td><td><span className="badge badge-amber">Awaiting Payment</span></td><td><button className="btn btn-neu btn-sm">View App →</button></td></tr>
-                <tr><td className="font-mono text-[11px] text-g400">ODL-2026-004</td><td>Acayo Lydia</td><td className="text-[11.5px]">l.acayo@email.com</td><td>Diploma Bus. ODL</td><td>05 Apr 2026</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td className="font-mono text-[10px]">TKN-4791</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Reconciled</span></td><td><button className="btn btn-neu btn-sm">View →</button></td></tr>
+                {filteredRows.map((r, i) => (
+                  <tr key={i} className={r.rowClass}>
+                    <td>
+                      <ActionMenu>
+                        {r.variant === 'reconcile' && <button className="btn btn-primary btn-sm" onClick={() => nav('odl-reconciliation')}>Reconcile →</button>}
+                        {r.variant === 'view-app' && <button className="btn btn-neu btn-sm">View App →</button>}
+                        {r.variant === 'view' && <button className="btn btn-neu btn-sm">View →</button>}
+                      </ActionMenu>
+                    </td>
+                    <td className={`font-mono text-[var(--fs-xs)] ${r.strong ? 'text-b700' : 'text-g400'}`}>{r.ref}</td>
+                    <td>{r.strong ? <strong>{r.name}</strong> : r.name}</td>
+                    <td className="text-[var(--fs-xs)]">{r.email}</td>
+                    <td>{r.programme}</td>
+                    <td>{r.appliedDate}</td>
+                    <td>
+                      <span className={`badge ${r.paymentBadge}`}>
+                        {r.paymentIcon && <i className={`lni ${r.paymentIcon}`}></i>} {r.payment}
+                      </span>
+                    </td>
+                    <td className="font-mono text-[var(--fs-2xs)]">{r.dpoToken}</td>
+                    <td>
+                      <span className={`badge ${r.statusBadge}`}>
+                        {r.status === 'Reconciled' && <i className="lni lni-checkmark"></i>} {r.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </ScrollTable>
@@ -81,7 +141,7 @@ export default function Page() {
             <span className="badge badge-cyan">Online Portal Preview</span>
           </div>
           <div className="info-box mb-[14px]">
-            <i className="lni lni-information"></i> This is the online form accessible at <span className="font-mono bg-[var(--b100)] py-0.5 px-[6px] rounded text-[11px]">ERP.../online.ASP</span>. No login required — candidates access via Reference Number + Email.
+            <i className="lni lni-information"></i> This is the online form accessible at <span className="font-mono bg-[var(--b100)] py-0.5 px-[6px] rounded text-[var(--fs-xs)]">ERP.../online.ASP</span>. No login required — candidates access via Reference Number + Email.
           </div>
           <div className="g3">
             <div className="fg"><div className="lbl">Full Name <span className="req">*</span></div><input className="ctrl" type="text" placeholder="Full legal name" /></div>
@@ -94,7 +154,7 @@ export default function Page() {
               <select className="ctrl"><option>-- Select --</option><option>A-Level</option><option>Diploma</option><option>Bachelor&apos;s Degree</option></select>
             </div>
             <div className="fg"><div className="lbl">Photo Upload <span className="req">*</span></div>
-              <div className="file-zone p-3"><input type="file" accept="image/*" /><div className="file-zone-icon text-[18px]"><i className="lni lni-image"></i></div><p>Passport photo</p></div>
+              <div className="file-zone p-3"><input type="file" accept="image/*" /><div className="file-zone-icon text-[var(--fs-2xl)]"><i className="lni lni-image"></i></div><p>Passport photo</p></div>
             </div>
           </div>
           <div className="sec-divider">Payment Option</div>

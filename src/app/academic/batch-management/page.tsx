@@ -1,19 +1,58 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
-import { NewBatchModal } from '@/components/NewBatchModal'
+import { ActionMenu } from '@/components/ActionMenu'
+import { NewBatchModal } from '@/components/modals/NewBatchModal'
+import { EditBatchModal } from '@/components/modals/EditBatchModal'
 import { Toast } from '@/components/Toast'
+import { FilterTh } from '@/components/FilterTh'
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  useEffect(() => {
+    function closeFilter(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('th')) setOpenFilter(null)
+    }
+    document.addEventListener('click', closeFilter)
+    return () => document.removeEventListener('click', closeFilter)
+  }, [])
+
+  const rows = [
+    { batchCode: 'BSC-IT-S26-DA',  programme: 'BSc. IT 2026',  progTag: 'BCA-2026', semester: 'Sem 1', type: 'Day',     subBatch: 'DA (sub-batch A)',              subBadge: 'badge-grey',  students: 42,  incharge: 'Dr. Ssekibuule Ronald', ttBadge: 'badge-green', ttLabel: 'Set',     ttIcon: true,  rowClass: '',       variant: 'edit' },
+    { batchCode: 'BSC-IT-S26-DB',  programme: 'BSc. IT 2026',  progTag: 'BCA-2026', semester: 'Sem 1', type: 'Day',     subBatch: 'DB (sub-batch B)',              subBadge: 'badge-blue',  students: 38,  incharge: 'Ms. Namutebi Joyce',    ttBadge: 'badge-green', ttLabel: 'Set',     ttIcon: true,  rowClass: '',       variant: 'edit' },
+    { batchCode: 'BBA-S26-DA',     programme: 'BBA 2021',      progTag: 'BBA-2021', semester: 'Sem 3', type: 'Day',     subBatch: 'DA',                            subBadge: 'badge-grey',  students: 38,  incharge: 'Prof. Mukasa Charles',  ttBadge: 'badge-amber', ttLabel: 'Draft',   ttIcon: false, rowClass: '',       variant: 'edit' },
+    { batchCode: 'MBA-S26-EA',     programme: 'MBA 2024',      progTag: 'MBA-2024', semester: 'Sem 1', type: 'Evening', subBatch: 'EA',                            subBadge: 'badge-grey',  students: 24,  incharge: 'Dr. Kato Andrew',       ttBadge: 'badge-green', ttLabel: 'Set',     ttIcon: true,  rowClass: '',       variant: 'edit' },
+    { batchCode: 'BSC-VFX-S26-??', programme: 'BSc. VFX 2026', progTag: 'VFX-2026', semester: 'Sem 1', type: 'Day',     subBatch: '102 students — needs sub-batching', subBadge: 'badge-amber', students: 102, incharge: '—',                ttBadge: 'badge-red',   ttLabel: 'Not Set', ttIcon: false, rowClass: 'flagged', variant: 'split' },
+  ]
+  const filteredRows = rows.filter(r =>
+    Object.entries(filters).every(([k, v]) => !v || String((r as Record<string, unknown>)[k]) === v)
+  )
+
+  function fth(label: string, col: string, opts: string[]) {
+    return (
+      <FilterTh
+        label={label}
+        opts={opts}
+        isOpen={openFilter === col}
+        activeFilter={filters[col] ?? ''}
+        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
+        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+      />
+    )
+  }
 
   return (
     <>
@@ -26,8 +65,11 @@ export default function Page() {
         <div className="info-box mb-[14px]">
           <i className="lni lni-information"></i> <span>Batch Code is <strong>system-generated</strong> as: <span className="font-mono bg-[var(--b100)] py-[2px] px-[6px] rounded">Course Code + Session/Year + Batch Type + Sub-Batch</span> e.g. <strong>BSc-VFX-S26-DA</strong>. Large cohorts (100+ students) are split into <strong>sub-batches (DA, DB)</strong> of ~50 for separate timetabling and faculty allocation.</span>
         </div>
-        <div className="warn-box mb-[18px]">
+        <div className="warn-box mb-[14px]">
           <i className="lni lni-warning"></i> <span>Admissions occur <strong>every semester (twice a year)</strong>. A new batch must be created for each intake. <strong>Specialization</strong> is assigned to the individual student — not the batch. <strong>Batch In-Charges</strong> can view batch reports but have no direct relation to programme courses.</span>
+        </div>
+        <div className="info-box mb-[18px]">
+          <i className="lni lni-cog"></i> <span><strong>Automation:</strong> Batch creation can be triggered automatically during intake setup. Enabling <strong>Create Batches</strong> on the Create New Intake form will generate batches for all active programmes at the back end — no manual entry needed.</span>
         </div>
 
         <div className="g4 mb-[18px]">
@@ -41,60 +83,47 @@ export default function Page() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-users"></i></span> Active Batches — Spring 2026 (20261)</div>
             <div className="flex gap-2">
-              <select className="ctrl w-auto text-xs"><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>MBA</option><option>BEng. Civil</option></select>
-              <select className="ctrl w-auto text-xs"><option>All Types</option><option>Day</option><option>Evening</option><option>Weekend</option><option>Distance/Online</option></select>
+              <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>MBA</option><option>BEng. Civil</option></select>
+              <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Types</option><option>Day</option><option>Evening</option><option>Weekend</option><option>Distance/Online</option></select>
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>
           </div>
           <ScrollTable>
             <table>
-              <thead><tr><th>Batch Code</th><th>Programme (Version)</th><th>Semester</th><th>Type</th><th>Sub-Batch</th><th>Students</th><th>Batch In-Charge</th><th>Timetable</th><th>Action</th></tr></thead>
+              <thead><tr><th>Action</th><th>Batch Code</th>{fth('Programme (Version)', 'programme', ['BSc. IT 2026', 'BBA 2021', 'MBA 2024', 'BSc. VFX 2026'])}{fth('Semester', 'semester', ['Sem 1', 'Sem 3'])}{fth('Type', 'type', ['Day', 'Evening', 'Weekend'])}<th>Sub-Batch</th><th>Students</th><th>Batch In-Charge</th><th>Timetable</th></tr></thead>
               <tbody>
-                <tr>
-                  <td><span className="font-bold text-blue font-mono">BSC-IT-S26-DA</span></td>
-                  <td>BSc. IT 2026 <span className="pill pill-blue">BCA-2026</span></td>
-                  <td>Sem 1</td><td><span className="badge badge-blue">Day</span></td>
-                  <td><span className="badge badge-grey">DA (sub-batch A)</span></td>
-                  <td>42</td><td>Dr. Ssekibuule Ronald</td>
-                  <td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Set</span></td>
-                  <td><button className="btn btn-neu btn-sm" onClick={() => openModal('new-batch-modal')}><i className="lni lni-pencil"></i> Edit</button></td>
-                </tr>
-                <tr>
-                  <td><span className="font-bold text-blue font-mono">BSC-IT-S26-DB</span></td>
-                  <td>BSc. IT 2026 <span className="pill pill-blue">BCA-2026</span></td>
-                  <td>Sem 1</td><td><span className="badge badge-blue">Day</span></td>
-                  <td><span className="badge badge-blue">DB (sub-batch B)</span></td>
-                  <td>38</td><td>Ms. Namutebi Joyce</td>
-                  <td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Set</span></td>
-                  <td><button className="btn btn-neu btn-sm" onClick={() => openModal('new-batch-modal')}><i className="lni lni-pencil"></i> Edit</button></td>
-                </tr>
-                <tr>
-                  <td><span className="font-bold text-blue font-mono">BBA-S26-DA</span></td>
-                  <td>BBA 2021 <span className="pill pill-blue">BBA-2021</span></td>
-                  <td>Sem 3</td><td><span className="badge badge-blue">Day</span></td>
-                  <td><span className="badge badge-grey">DA</span></td>
-                  <td>38</td><td>Prof. Mukasa Charles</td>
-                  <td><span className="badge badge-amber">Draft</span></td>
-                  <td><button className="btn btn-neu btn-sm" onClick={() => openModal('new-batch-modal')}><i className="lni lni-pencil"></i> Edit</button></td>
-                </tr>
-                <tr>
-                  <td><span className="font-bold text-blue font-mono">MBA-S26-EA</span></td>
-                  <td>MBA 2024 <span className="pill pill-blue">MBA-2024</span></td>
-                  <td>Sem 1</td><td><span className="badge badge-purple">Evening</span></td>
-                  <td><span className="badge badge-grey">EA</span></td>
-                  <td>24</td><td>Dr. Kato Andrew</td>
-                  <td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Set</span></td>
-                  <td><button className="btn btn-neu btn-sm" onClick={() => openModal('new-batch-modal')}><i className="lni lni-pencil"></i> Edit</button></td>
-                </tr>
-                <tr className="flagged">
-                  <td><span className="font-bold font-mono text-clr-amber">BSC-VFX-S26-??</span></td>
-                  <td>BSc. VFX 2026 <span className="pill pill-blue">VFX-2026</span></td>
-                  <td>Sem 1</td><td><span className="badge badge-blue">Day</span></td>
-                  <td><span className="badge badge-amber"><i className="lni lni-warning"></i> 102 students — needs sub-batching</span></td>
-                  <td>102</td><td>—</td>
-                  <td><span className="badge badge-red">Not Set</span></td>
-                  <td><button className="btn btn-amber btn-sm" onClick={() => openModal('new-batch-modal')}>Split → Sub-batches</button></td>
-                </tr>
+                {filteredRows.map((r, i) => (
+                  <tr key={i} className={r.rowClass}>
+                    <td>
+                      <ActionMenu>
+                        {r.variant === 'edit'
+                          ? <button className="btn btn-neu btn-sm" onClick={() => openModal('edit-batch-modal')}><i className="lni lni-pencil"></i> Edit</button>
+                          : <button className="btn btn-amber btn-sm" onClick={() => openModal('new-batch-modal')}>Split → Sub-batches</button>
+                        }
+                      </ActionMenu>
+                    </td>
+                    <td>
+                      <span className={`font-bold font-mono ${r.variant === 'split' ? 'text-clr-amber' : 'text-blue'}`}>{r.batchCode}</span>
+                    </td>
+                    <td>{r.programme} <span className="pill pill-blue">{r.progTag}</span></td>
+                    <td>{r.semester}</td>
+                    <td>
+                      <span className={`badge ${r.type === 'Evening' ? 'badge-purple' : 'badge-blue'}`}>{r.type}</span>
+                    </td>
+                    <td>
+                      <span className={`badge ${r.subBadge}`}>
+                        {r.subBadge === 'badge-amber' && <i className="lni lni-warning"></i>} {r.subBatch}
+                      </span>
+                    </td>
+                    <td>{r.students}</td>
+                    <td>{r.incharge}</td>
+                    <td>
+                      <span className={`badge ${r.ttBadge}`}>
+                        {r.ttIcon && <i className="lni lni-checkmark"></i>} {r.ttLabel}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </ScrollTable>
@@ -118,12 +147,13 @@ export default function Page() {
             </div>
           </div>
           <div className="mt-[14px] p-[14px] bg-b50 border-[1.5px] border-[var(--b200)] rounded-[var(--rsm)] flex items-center gap-4">
-            <span className="text-[11px] font-bold text-g500 uppercase">Generated Batch Code:</span>
-            <span className="font-mono text-[18px] font-extrabold text-b800">BSC-IT-S26-DA</span>
+            <span className="text-[var(--fs-xs)] font-bold text-g500 uppercase">Generated Batch Code:</span>
+            <span className="font-mono text-[var(--fs-2xl)] font-extrabold text-b800">BSC-IT-S26-DA</span>
           </div>
         </div>
       </div>
       <NewBatchModal isOpen={openModals.has('new-batch-modal')} onClose={() => closeModal('new-batch-modal')} showToast={showToast} />
+      <EditBatchModal isOpen={openModals.has('edit-batch-modal')} onClose={() => closeModal('edit-batch-modal')} showToast={showToast} />
       <Toast toast={toast} />
     </>
   )

@@ -37,17 +37,17 @@ export default function Page() {
           {showFcResult && (
             <div className="mt-[14px]">
               <div className="g3">
-                <div className="p-[14px] bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rsm)] text-center"><div className="text-[11px] text-clr-green font-bold uppercase">Clearance %</div><div className="text-[26px] font-extrabold text-clr-green">72%</div></div>
-                <div className="p-[14px] bg-b50 border border-[var(--b100)] rounded-[var(--rsm)] text-center"><div className="text-[11px] text-b700 font-bold uppercase">CW Submission</div><div className="text-[18px] font-extrabold text-clr-green mt-1"><i className="lni lni-checkmark"></i> Allowed</div></div>
-                <div className="p-[14px] bg-b50 border border-[var(--b100)] rounded-[var(--rsm)] text-center"><div className="text-[11px] text-b700 font-bold uppercase">CBT Submission</div><div className="text-[18px] font-extrabold text-clr-green mt-1"><i className="lni lni-checkmark"></i> Allowed</div></div>
+                <div className="p-[14px] bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rsm)] text-center"><div className="text-[var(--fs-xs)] text-clr-green font-bold uppercase">Clearance %</div><div className="text-[var(--fs-stat)] font-extrabold text-clr-green">72%</div></div>
+                <div className="p-[14px] bg-b50 border border-[var(--b100)] rounded-[var(--rsm)] text-center"><div className="text-[var(--fs-xs)] text-b700 font-bold uppercase">CW Submission</div><div className="text-[var(--fs-2xl)] font-extrabold text-clr-green mt-1"><i className="lni lni-checkmark"></i> Allowed</div></div>
+                <div className="p-[14px] bg-b50 border border-[var(--b100)] rounded-[var(--rsm)] text-center"><div className="text-[var(--fs-xs)] text-b700 font-bold uppercase">CBT Submission</div><div className="text-[var(--fs-2xl)] font-extrabold text-clr-green mt-1"><i className="lni lni-checkmark"></i> Allowed</div></div>
               </div>
             </div>
           )}
         </div>
         <div className="undefined-box mt-1">
-          <div className="text-[22px] mb-2"><i className="lni lni-dollar"></i></div>
-          <div className="font-bold text-sm mb-[6px]">Finance Module Integration</div>
-          <div className="text-[12.5px] text-g500 max-w-[500px] m-0 mx-auto">This page shows a read-only API response from Finance Service. Full fee management, payment processing, and clearance calculation are in the <strong>Finance Module (Service 3)</strong>.</div>
+          <div className="text-[var(--fs-xl)] mb-2"><i className="lni lni-dollar"></i></div>
+          <div className="font-bold text-[var(--fs-md)] mb-[6px]">Finance Module Integration</div>
+          <div className="text-[var(--fs-sm)] text-g500 max-w-[500px] m-0 mx-auto">This page shows a read-only API response from Finance Service. Full fee management, payment processing, and clearance calculation are in the <strong>Finance Module (Service 3)</strong>.</div>
           <div className="badge badge-purple mt-[10px]"><i className="lni lni-link"></i> Cross-Module — Read Only View from Finance Service</div>
         </div>
       </div>

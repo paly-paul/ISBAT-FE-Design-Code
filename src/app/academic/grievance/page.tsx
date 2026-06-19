@@ -26,11 +26,11 @@ export default function Page() {
           <i className="lni lni-warning"></i> Grievance window is defined in the <strong>Intake Master</strong>. Current grievance end date: <strong>10 Jun 2026</strong>.
         </div>
         <div className="undefined-box">
-          <div className="text-[32px] mb-3"><i className="lni lni-volume-high"></i></div>
-          <div className="font-extrabold text-[18px] text-g900 mb-2">Grievance Module</div>
-          <div className="text-[13px] text-g500 mb-4 max-w-[480px] mx-auto">Grievance workflow details — student appeal process, re-check criteria, outcome recording, and notification flow — have <strong>not yet been covered in a KT session.</strong></div>
+          <div className="text-[var(--fs-stat)] mb-3"><i className="lni lni-volume-high"></i></div>
+          <div className="font-extrabold text-[var(--fs-2xl)] text-g900 mb-2">Grievance Module</div>
+          <div className="text-[var(--fs-base)] text-g500 mb-4 max-w-[480px] mx-auto">Grievance workflow details — student appeal process, re-check criteria, outcome recording, and notification flow — have <strong>not yet been covered in a KT session.</strong></div>
           <div className="badge badge-purple mb-3"><i className="lni lni-clipboard"></i> Module Not Yet Defined — Details to be captured in KT Session</div>
-          <div className="text-xs text-g400">Known facts: Students submit grievance before the Grievance End Date. Appeals are processed post-result publication.</div>
+          <div className="text-[var(--fs-sm)] text-g400">Known facts: Students submit grievance before the Grievance End Date. Appeals are processed post-result publication.</div>
         </div>
       </div>
       <Toast toast={toast} />

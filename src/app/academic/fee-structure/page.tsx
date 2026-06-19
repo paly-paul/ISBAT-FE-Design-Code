@@ -1,19 +1,62 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { FeeStructureModal } from '@/components/FeeStructureModal'
-import { FeeItemModal } from '@/components/FeeItemModal'
+import { FeeStructureModal } from '@/components/modals/FeeStructureModal'
+import { FeeItemModal } from '@/components/modals/FeeItemModal'
 import { Toast } from '@/components/Toast'
+
+type FeeItem = { name: string; meta: string; amt: string }
+type Semester = { sem: number; year: number; total: string; note: string; items: FeeItem[] }
+
+const INITIAL_SEMESTERS: Semester[] = [
+  { sem: 1, year: 1, total: 'UGX 1,250,000', note: '5 fee items · Includes one-time admission', items: [
+    { name: 'Admission Fee',          meta: 'One-time · Cleared first',                        amt: 'UGX 150,000' },
+    { name: 'Semester Entry Fee',     meta: 'Required before registration',                    amt: 'UGX 200,000' },
+    { name: 'Tuition Fee',            meta: '50% needed for assessment · 100% for progression', amt: 'UGX 750,000' },
+    { name: 'Lab Fee',                meta: 'Programming + Systems lab access',                 amt: 'UGX 100,000' },
+    { name: 'Library & Resources Fee', meta: 'e-Library + physical library',                   amt: 'UGX 50,000'  },
+  ]},
+  { sem: 2, year: 1, total: 'UGX 1,100,000', note: '4 fee items', items: [
+    { name: 'Semester Entry Fee',     meta: 'Required before registration',   amt: 'UGX 200,000' },
+    { name: 'Tuition Fee',            meta: '50% needed for assessment',      amt: 'UGX 750,000' },
+    { name: 'Lab Fee',                meta: 'Programming lab access',         amt: 'UGX 100,000' },
+    { name: 'Library & Resources Fee', meta: 'e-Library + physical library', amt: 'UGX 50,000'  },
+  ]},
+  { sem: 3, year: 2, total: 'UGX 1,150,000', note: '4 fee items · Industrial Training applicable', items: [
+    { name: 'Semester Entry Fee',     meta: 'Required before registration',          amt: 'UGX 200,000' },
+    { name: 'Tuition Fee',            meta: '50% needed for assessment',             amt: 'UGX 800,000' },
+    { name: 'Industrial Training Fee', meta: 'External placement coordination',      amt: 'UGX 100,000' },
+    { name: 'Library & Resources Fee', meta: 'e-Library + physical library',         amt: 'UGX 50,000'  },
+  ]},
+]
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [semesters, setSemesters] = useState<Semester[]>(INITIAL_SEMESTERS)
 
   function nav(id: string) { router.push('/academic/' + id) }
-  function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
+  function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  function moveItem(si: number, idx: number, dir: -1 | 1) {
+    const to = idx + dir
+    setSemesters(prev => prev.map((sem, i) => {
+      if (i !== si || to < 0 || to >= sem.items.length) return sem
+      const next = [...sem.items]
+      ;[next[idx], next[to]] = [next[to], next[idx]]
+      return { ...sem, items: next }
+    }))
+  }
+
+  function removeItem(si: number, idx: number) {
+    setSemesters(prev => prev.map((sem, i) =>
+      i === si ? { ...sem, items: sem.items.filter((_, j) => j !== idx) } : sem
+    ))
+    showToast('Fee item removed.', '')
+  }
 
   return (
     <>
@@ -52,27 +95,7 @@ export default function Page() {
           <div className="warn-box"><i className="lni lni-warning"></i> <span><strong>Sponsored students</strong> bypass payment checks for session movement. Sponsorship is separate from scholarships (discounts on tuition).</span></div>
         </div>
 
-        {[
-          { sem: 1, year: 1, total: 'UGX 1,250,000', note: '5 fee items · Includes one-time admission', items: [
-            { p: 'P1', name: 'Admission Fee', meta: 'One-time · Cleared first', amt: 'UGX 150,000' },
-            { p: 'P2', name: 'Semester Entry Fee', meta: 'Required before registration', amt: 'UGX 200,000' },
-            { p: 'P3', name: 'Tuition Fee', meta: '50% needed for assessment · 100% for progression', amt: 'UGX 750,000' },
-            { p: 'P4', name: 'Lab Fee', meta: 'Programming + Systems lab access', amt: 'UGX 100,000' },
-            { p: 'P5', name: 'Library & Resources Fee', meta: 'e-Library + physical library', amt: 'UGX 50,000' },
-          ]},
-          { sem: 2, year: 1, total: 'UGX 1,100,000', note: '4 fee items', items: [
-            { p: 'P1', name: 'Semester Entry Fee', meta: 'Required before registration', amt: 'UGX 200,000' },
-            { p: 'P2', name: 'Tuition Fee', meta: '50% needed for assessment', amt: 'UGX 750,000' },
-            { p: 'P3', name: 'Lab Fee', meta: 'Programming lab access', amt: 'UGX 100,000' },
-            { p: 'P4', name: 'Library & Resources Fee', meta: 'e-Library + physical library', amt: 'UGX 50,000' },
-          ]},
-          { sem: 3, year: 2, total: 'UGX 1,150,000', note: '4 fee items · Industrial Training applicable', items: [
-            { p: 'P1', name: 'Semester Entry Fee', meta: 'Required before registration', amt: 'UGX 200,000' },
-            { p: 'P2', name: 'Tuition Fee', meta: '50% needed for assessment', amt: 'UGX 800,000' },
-            { p: 'P3', name: 'Industrial Training Fee', meta: 'External placement coordination', amt: 'UGX 100,000' },
-            { p: 'P4', name: 'Library & Resources Fee', meta: 'e-Library + physical library', amt: 'UGX 50,000' },
-          ]},
-        ].map(({ sem, year, total, note, items }) => (
+        {semesters.map(({ sem, year, total, note, items }, si) => (
           <div key={sem} className="sem-fee-card">
             <div className="sem-fee-hdr">
               <div className="sem-fee-hdr-left">
@@ -89,14 +112,32 @@ export default function Page() {
             </div>
             <div className="sem-fee-body">
               <div className="sem-fee-items">
-                {items.map((item) => (
-                  <div key={item.p} className="sem-fee-row">
-                    <span className="sem-fee-pri">{item.p}</span>
+                {items.map((item, idx) => (
+                  <div key={idx} className="sem-fee-row">
+                    {/* Priority arrows + badge */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <button
+                          className="btn btn-neu"
+                          style={{ width: 22, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9 }}
+                          onClick={() => moveItem(si, idx, -1)}
+                          disabled={idx === 0}
+                        ><i className="lni lni-chevron-up"></i></button>
+                        <button
+                          className="btn btn-neu"
+                          style={{ width: 22, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9 }}
+                          onClick={() => moveItem(si, idx, 1)}
+                          disabled={idx === items.length - 1}
+                        ><i className="lni lni-chevron-down"></i></button>
+                      </div>
+                      <span className="sem-fee-pri">P{idx + 1}</span>
+                    </div>
+
                     <div><div className="sem-fee-name">{item.name}</div><div className="sem-fee-name-meta">{item.meta}</div></div>
                     <span className="sem-fee-amt">{item.amt}</span>
                     <div className="sem-fee-act">
                       <button className="btn btn-neu btn-sm" onClick={() => openModal('new-fee-item-modal')}><i className="lni lni-pencil"></i></button>
-                      <button className="btn btn-neu btn-sm"><i className="lni lni-trash-can"></i></button>
+                      <button className="btn btn-neu btn-sm" onClick={() => removeItem(si, idx)}><i className="lni lni-trash-can"></i></button>
                     </div>
                   </div>
                 ))}

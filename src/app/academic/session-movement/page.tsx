@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
-import { ConfirmMovementModal } from '@/components/ConfirmMovementModal'
+import { ConfirmMovementModal } from '@/components/modals/ConfirmMovementModal'
 import { Toast } from '@/components/Toast'
 
 export default function Page() {
@@ -31,7 +31,7 @@ export default function Page() {
         <div className="g2 mb-[18px]">
           <div className="warn-box flex-col gap-[6px] items-start">
             <span className="font-bold"><i className="lni lni-warning"></i> Execution Rules</span>
-            <ul className="ml-4 text-[12.5px] flex flex-col gap-1">
+            <ul className="ml-4 text-[var(--fs-sm)] flex flex-col gap-1">
               <li>Must be run <strong>3–4 weeks before</strong> the session start date to prevent congestion</li>
               <li>Executed <strong>batch-by-batch</strong> — never all at once — to avoid system overload</li>
               <li>The <strong>original batch code stays fixed</strong>; only the semester number increments (e.g. Sem 2 → Sem 3)</li>
@@ -41,7 +41,7 @@ export default function Page() {
           </div>
           <div className="info-box flex-col gap-[6px] items-start">
             <span className="font-bold"><i className="lni lni-clipboard"></i> Tables Initialised on Movement</span>
-            <div className="flex flex-col gap-[6px] text-xs">
+            <div className="flex flex-col gap-[6px] text-[var(--fs-sm)]">
               <div className="p-[7px_10px] bg-[var(--white)] border border-[var(--b200)] rounded-md"><span className="font-bold text-blue">T_session_management</span> — Records active programmes + semesters for the academic year. Session Flag set to <span className="font-mono bg-[var(--b100)] px-[5px] py-[1px] rounded">0</span> (not moved) → <span className="font-mono bg-[var(--green-bg)] px-[5px] py-[1px] rounded">1</span> (moved)</div>
               <div className="p-[7px_10px] bg-[var(--white)] border border-[var(--b200)] rounded-md"><span className="font-bold text-blue">Tia Table</span> — Stores programme + semester + unit + intake primary key. This PK is the first part of the Matching Code used in assessments</div>
               <div className="p-[7px_10px] bg-[var(--white)] border border-[var(--b200)] rounded-md"><span className="font-bold text-blue">Exam Schedule Tables</span> — CW, CBT, and UE tables created with <span className="font-mono bg-[var(--amber-bg)] px-[5px] py-[1px] rounded">NULL</span> values. Exam date + start time populated later during scheduling phase</div>
@@ -86,10 +86,10 @@ export default function Page() {
             </table>
           </ScrollTable>
           <div className="mt-3 flex gap-2 flex-wrap">
-            <div className="p-[8px_12px] bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rxs)] text-[11.5px]"><span className="badge badge-green mr-[6px]">Registered</span>All criteria met — promoted to next semester</div>
-            <div className="p-[8px_12px] bg-[var(--red-bg)] border border-[var(--red-bd)] rounded-[var(--rxs)] text-[11.5px]"><span className="badge badge-red mr-[6px]">Dropout</span>Current semester fee not fully paid — no subject check done</div>
-            <div className="p-[8px_12px] bg-[var(--amber-bg)] border border-[var(--amber-bd)] rounded-[var(--rxs)] text-[11.5px]"><span className="badge badge-amber mr-[6px]">Yet to register</span>Next semester Entry Fee not paid</div>
-            <div className="p-[8px_12px] bg-[var(--cyan-bg)] border border-[#bae6fd] rounded-[var(--rxs)] text-[11.5px]"><span className="badge badge-cyan mr-[6px]">Yet to Clear</span>Failed to pass ≥50% of subjects from previous semesters</div>
+            <div className="p-[8px_12px] bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rxs)] text-[var(--fs-xs)]"><span className="badge badge-green mr-[6px]">Registered</span>All criteria met — promoted to next semester</div>
+            <div className="p-[8px_12px] bg-[var(--red-bg)] border border-[var(--red-bd)] rounded-[var(--rxs)] text-[var(--fs-xs)]"><span className="badge badge-red mr-[6px]">Dropout</span>Current semester fee not fully paid — no subject check done</div>
+            <div className="p-[8px_12px] bg-[var(--amber-bg)] border border-[var(--amber-bd)] rounded-[var(--rxs)] text-[var(--fs-xs)]"><span className="badge badge-amber mr-[6px]">Yet to register</span>Next semester Entry Fee not paid</div>
+            <div className="p-[8px_12px] bg-[var(--cyan-bg)] border border-[#bae6fd] rounded-[var(--rxs)] text-[var(--fs-xs)]"><span className="badge badge-cyan mr-[6px]">Yet to Clear</span>Failed to pass ≥50% of subjects from previous semesters</div>
           </div>
         </div>
 
@@ -129,20 +129,20 @@ export default function Page() {
             <table>
               <thead><tr><th>Student No.</th><th>Name</th><th>Programme</th><th>Stage</th><th>Curr. Sem Fee</th><th>Next Sem Entry Fee</th><th>Subject Clearance</th><th>Sponsored</th><th>Movement Outcome</th></tr></thead>
               <tbody>
-                <tr><td className="font-mono text-[11px]">ISB/2026/0142</td><td><strong>Nakato Sarah B.</strong></td><td>BSc. IT</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 78% passed</span></td><td>—</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td></tr>
-                <tr><td className="font-mono text-[11px]">ISB/2026/0099</td><td><strong>Okello James P.</strong></td><td>BBA</td><td>Sem 1→2</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td><span className="badge badge-grey">Not checked (Sem1→2)</span></td><td>—</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td></tr>
-                <tr><td className="font-mono text-[11px]">ISB/2026/0034</td><td><strong>Abubakar Faisal</strong></td><td>BSc. IT</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> 38% passed</span></td><td>—</td><td><span className="badge badge-cyan">Yet to Clear</span></td></tr>
-                <tr className="flagged"><td className="font-mono text-[11px]">ISB/2026/0213</td><td><strong>Byamukama Robert</strong></td><td>BEng.</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> Not paid</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 65% passed</span></td><td>—</td><td><span className="badge badge-amber">Yet to register</span></td></tr>
-                <tr><td className="font-mono text-[11px]">ISB/2025/0388</td><td><strong>Musoke David</strong></td><td>BBA</td><td>Sem 3→4</td><td><span className="badge badge-red"><i className="lni lni-close"></i> 15% only</span></td><td>—</td><td><span className="badge badge-grey">Not checked (fee failed)</span></td><td>—</td><td><span className="badge badge-red"><i className="lni lni-close"></i> Dropout</span></td></tr>
-                <tr><td className="font-mono text-[11px]">ISB/2026/0051</td><td><strong>Uwase Claudine</strong></td><td>MBA</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> (Sponsored)</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> (Sponsored)</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 82% passed</span></td><td><span className="badge badge-blue"><i className="lni lni-checkmark"></i> Sponsored</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td></tr>
+                <tr><td className="font-mono text-[var(--fs-xs)]">ISB/2026/0142</td><td><strong>Nakato Sarah B.</strong></td><td>BSc. IT</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 78% passed</span></td><td>—</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td></tr>
+                <tr><td className="font-mono text-[var(--fs-xs)]">ISB/2026/0099</td><td><strong>Okello James P.</strong></td><td>BBA</td><td>Sem 1→2</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td><span className="badge badge-grey">Not checked (Sem1→2)</span></td><td>—</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td></tr>
+                <tr><td className="font-mono text-[var(--fs-xs)]">ISB/2026/0034</td><td><strong>Abubakar Faisal</strong></td><td>BSc. IT</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> 38% passed</span></td><td>—</td><td><span className="badge badge-cyan">Yet to Clear</span></td></tr>
+                <tr className="flagged"><td className="font-mono text-[var(--fs-xs)]">ISB/2026/0213</td><td><strong>Byamukama Robert</strong></td><td>BEng.</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> Not paid</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 65% passed</span></td><td>—</td><td><span className="badge badge-amber">Yet to register</span></td></tr>
+                <tr><td className="font-mono text-[var(--fs-xs)]">ISB/2025/0388</td><td><strong>Musoke David</strong></td><td>BBA</td><td>Sem 3→4</td><td><span className="badge badge-red"><i className="lni lni-close"></i> 15% only</span></td><td>—</td><td><span className="badge badge-grey">Not checked (fee failed)</span></td><td>—</td><td><span className="badge badge-red"><i className="lni lni-close"></i> Dropout</span></td></tr>
+                <tr><td className="font-mono text-[var(--fs-xs)]">ISB/2026/0051</td><td><strong>Uwase Claudine</strong></td><td>MBA</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> (Sponsored)</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> (Sponsored)</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 82% passed</span></td><td><span className="badge badge-blue"><i className="lni lni-checkmark"></i> Sponsored</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td></tr>
               </tbody>
             </table>
           </ScrollTable>
           <div className="g4 mb-[14px]">
-            <div className="p-3 bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rsm)] text-center"><div className="text-[11px] text-clr-green font-bold">REGISTERED</div><div className="text-[22px] font-extrabold text-clr-green font-sans">1,169</div></div>
-            <div className="p-3 bg-[var(--red-bg)] border border-[var(--red-bd)] rounded-[var(--rsm)] text-center"><div className="text-[11px] text-clr-red font-bold">DROPOUT</div><div className="text-[22px] font-extrabold text-clr-red font-sans">12</div></div>
-            <div className="p-3 bg-[var(--amber-bg)] border border-[var(--amber-bd)] rounded-[var(--rsm)] text-center"><div className="text-[11px] text-clr-amber font-bold">YET TO REGISTER</div><div className="text-[22px] font-extrabold text-clr-amber font-sans">62</div></div>
-            <div className="p-3 bg-[var(--cyan-bg)] border border-[#bae6fd] rounded-[var(--rsm)] text-center"><div className="text-[11px] font-bold text-clr-cyan">YET TO CLEAR</div><div className="text-[22px] font-extrabold text-clr-cyan font-sans">41</div></div>
+            <div className="p-3 bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rsm)] text-center"><div className="text-[var(--fs-xs)] text-clr-green font-bold">REGISTERED</div><div className="text-[var(--fs-xl)] font-extrabold text-clr-green font-sans">1,169</div></div>
+            <div className="p-3 bg-[var(--red-bg)] border border-[var(--red-bd)] rounded-[var(--rsm)] text-center"><div className="text-[var(--fs-xs)] text-clr-red font-bold">DROPOUT</div><div className="text-[var(--fs-xl)] font-extrabold text-clr-red font-sans">12</div></div>
+            <div className="p-3 bg-[var(--amber-bg)] border border-[var(--amber-bd)] rounded-[var(--rsm)] text-center"><div className="text-[var(--fs-xs)] text-clr-amber font-bold">YET TO REGISTER</div><div className="text-[var(--fs-xl)] font-extrabold text-clr-amber font-sans">62</div></div>
+            <div className="p-3 bg-[var(--cyan-bg)] border border-[#bae6fd] rounded-[var(--rsm)] text-center"><div className="text-[var(--fs-xs)] font-bold text-clr-cyan">YET TO CLEAR</div><div className="text-[var(--fs-xl)] font-extrabold text-clr-cyan font-sans">41</div></div>
           </div>
           <div className="danger-box mb-[14px]">
             <i className="lni lni-volume-high"></i> <span>This action is <strong>irreversible</strong>. Dropout records are permanently locked. Students with &quot;Yet to register&quot; or &quot;Yet to Clear&quot; statuses will need to resolve their issue before the next movement. Download the preview report before proceeding.</span>

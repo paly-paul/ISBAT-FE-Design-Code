@@ -1,19 +1,58 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
-import { ProgrammeLevelModal } from '@/components/ProgrammeLevelModal'
+import { ActionMenu } from '@/components/ActionMenu'
+import { ProgrammeLevelModal } from '@/components/modals/ProgrammeLevelModal'
 import { Toast } from '@/components/Toast'
+import { FilterTh } from '@/components/FilterTh'
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  useEffect(() => {
+    function closeFilter(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('th')) setOpenFilter(null)
+    }
+    document.addEventListener('click', closeFilter)
+    return () => document.removeEventListener('click', closeFilter)
+  }, [])
+
+  const rows = [
+    { code: 'CERT', name: "Certificate / HEC",          years: 1, sems: 2, minCredits: 48,  noIA: 'No',  linkedProgs: 3 },
+    { code: 'DIP',  name: "Diploma",                    years: 2, sems: 4, minCredits: 96,  noIA: 'No',  linkedProgs: 5 },
+    { code: 'BACH', name: "Bachelor's Degree",           years: 3, sems: 6, minCredits: 132, noIA: 'No',  linkedProgs: 12 },
+    { code: 'ENG',  name: "Bachelor of Engineering",    years: 4, sems: 8, minCredits: 160, noIA: 'No',  linkedProgs: 4 },
+    { code: 'MAST', name: "Master's Degree",             years: 2, sems: 4, minCredits: 72,  noIA: 'No',  linkedProgs: 6 },
+    { code: 'PHD',  name: "Doctor of Philosophy (PhD)", years: 3, sems: 6, minCredits: 0,   noIA: 'Yes', linkedProgs: 2 },
+  ]
+  const filteredRows = rows.filter(r =>
+    Object.entries(filters).every(([k, v]) => !v || String((r as Record<string, unknown>)[k]) === v)
+  )
+
+  function fth(label: string, col: string, opts: string[]) {
+    return (
+      <FilterTh
+        label={label}
+        opts={opts}
+        isOpen={openFilter === col}
+        activeFilter={filters[col] ?? ''}
+        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
+        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+      />
+    )
+  }
 
   return (
     <>
@@ -33,14 +72,25 @@ export default function Page() {
           </div>
           <ScrollTable>
             <table>
-              <thead><tr><th>Level Code</th><th>Level Name</th><th>Year Count</th><th>Semester Count</th><th>Min. Credit Load</th><th>No Internal Assessment</th><th>Linked Programmes</th><th>Action</th></tr></thead>
+              <thead><tr><th>Action</th><th>Level Code</th><th>Level Name</th><th>Year Count</th><th>Semester Count</th><th>Min. Credit Load</th>{fth('No Internal Assessment', 'noIA', ['Yes', 'No'])}<th>Linked Programmes</th></tr></thead>
               <tbody>
-                <tr><td className="font-mono text-b700">CERT</td><td><strong>Certificate / HEC</strong></td><td>1</td><td>2</td><td>48</td><td><span className="badge badge-grey">No</span></td><td>3</td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
-                <tr><td className="font-mono text-b700">DIP</td><td><strong>Diploma</strong></td><td>2</td><td>4</td><td>96</td><td><span className="badge badge-grey">No</span></td><td>5</td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
-                <tr><td className="font-mono text-b700">BACH</td><td><strong>Bachelor&apos;s Degree</strong></td><td>3</td><td>6</td><td>132</td><td><span className="badge badge-grey">No</span></td><td>12</td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
-                <tr><td className="font-mono text-b700">ENG</td><td><strong>Bachelor of Engineering</strong></td><td>4</td><td>8</td><td>160</td><td><span className="badge badge-grey">No</span></td><td>4</td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
-                <tr><td className="font-mono text-b700">MAST</td><td><strong>Master&apos;s Degree</strong></td><td>2</td><td>4</td><td>72</td><td><span className="badge badge-grey">No</span></td><td>6</td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
-                <tr><td className="font-mono text-b700">PHD</td><td><strong>Doctor of Philosophy (PhD)</strong></td><td>3</td><td>6</td><td>0</td><td><span className="badge badge-amber"><i className="lni lni-checkmark"></i> Yes — No IA</span></td><td>2</td><td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td></tr>
+                {filteredRows.map((r, i) => (
+                  <tr key={i}>
+                    <td><ActionMenu><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>
+                    <td className="font-mono text-b700">{r.code}</td>
+                    <td><strong>{r.name}</strong></td>
+                    <td>{r.years}</td>
+                    <td>{r.sems}</td>
+                    <td>{r.minCredits}</td>
+                    <td>
+                      {r.noIA === 'Yes'
+                        ? <span className="badge badge-amber"><i className="lni lni-checkmark"></i> Yes — No IA</span>
+                        : <span className="badge badge-grey">No</span>
+                      }
+                    </td>
+                    <td>{r.linkedProgs}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </ScrollTable>
