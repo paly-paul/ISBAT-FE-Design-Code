@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -7,12 +7,13 @@ import { NewBatchModal } from '@/components/modals/NewBatchModal'
 import { EditBatchModal } from '@/components/modals/EditBatchModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
@@ -37,7 +38,7 @@ export default function Page() {
     { batchCode: 'BSC-VFX-S26-??', programme: 'BSc. VFX 2026', progTag: 'VFX-2026', semester: 'Sem 1', type: 'Day',     subBatch: '102 students — needs sub-batching', subBadge: 'badge-amber', students: 102, incharge: '—',                ttBadge: 'badge-red',   ttLabel: 'Not Set', ttIcon: false, rowClass: 'flagged', variant: 'split' },
   ]
   const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v || String((r as Record<string, unknown>)[k]) === v)
+    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   )
 
   function fth(label: string, col: string, opts: string[]) {
@@ -46,10 +47,11 @@ export default function Page() {
         label={label}
         opts={opts}
         isOpen={openFilter === col}
-        activeFilter={filters[col] ?? ''}
+        activeFilter={filters[col] ?? []}
         onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
+        onClose={() => setOpenFilter(null)}
       />
     )
   }
@@ -83,14 +85,14 @@ export default function Page() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-users"></i></span> Active Batches — Spring 2026 (20261)</div>
             <div className="flex gap-2">
-              <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>MBA</option><option>BEng. Civil</option></select>
-              <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Types</option><option>Day</option><option>Evening</option><option>Weekend</option><option>Distance/Online</option></select>
+              <SearchSelect className="w-auto text-[var(--fs-sm)]" options={['All Programmes', 'BSc. IT', 'BBA', 'MBA', 'BEng. Civil']} />
+              <SearchSelect className="w-auto text-[var(--fs-sm)]" options={['All Types', 'Day', 'Evening', 'Weekend', 'Distance/Online']} />
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>
           </div>
           <ScrollTable>
             <table>
-              <thead><tr><th>Action</th><th>Batch Code</th>{fth('Programme (Version)', 'programme', ['BSc. IT 2026', 'BBA 2021', 'MBA 2024', 'BSc. VFX 2026'])}{fth('Semester', 'semester', ['Sem 1', 'Sem 3'])}{fth('Type', 'type', ['Day', 'Evening', 'Weekend'])}<th>Sub-Batch</th><th>Students</th><th>Batch In-Charge</th><th>Timetable</th></tr></thead>
+              <thead><tr><th style={{ width: 48 }}></th><th>Batch Code</th>{fth('Programme (Version)', 'programme', ['BSc. IT 2026', 'BBA 2021', 'MBA 2024', 'BSc. VFX 2026'])}{fth('Semester', 'semester', ['Sem 1', 'Sem 3'])}{fth('Type', 'type', ['Day', 'Evening', 'Weekend'])}<th>Sub-Batch</th><th>Students</th><th>Batch In-Charge</th><th>Timetable</th></tr></thead>
               <tbody>
                 {filteredRows.map((r, i) => (
                   <tr key={i} className={r.rowClass}>
@@ -137,13 +139,13 @@ export default function Page() {
           <div className="g4">
             <div className="fg"><div className="lbl">Course Code</div><input className="ctrl" type="text" placeholder="e.g. BSC-IT" /></div>
             <div className="fg"><div className="lbl">Session / Year</div>
-              <select className="ctrl"><option value="S26">S26 (Spring 2026)</option><option value="F26">F26 (Fall 2026)</option><option value="S27">S27 (Spring 2027)</option></select>
+              <SearchSelect options={[{ value: 'S26', label: 'S26 (Spring 2026)' }, { value: 'F26', label: 'F26 (Fall 2026)' }, { value: 'S27', label: 'S27 (Spring 2027)' }]} />
             </div>
             <div className="fg"><div className="lbl">Batch Type</div>
-              <select className="ctrl"><option value="D">D — Day</option><option value="E">E — Evening</option><option value="W">W — Weekend</option><option value="O">O — Distance/Online</option></select>
+              <SearchSelect options={[{ value: 'D', label: 'D — Day' }, { value: 'E', label: 'E — Evening' }, { value: 'W', label: 'W — Weekend' }, { value: 'O', label: 'O — Distance/Online' }]} />
             </div>
             <div className="fg"><div className="lbl">Sub-batch</div>
-              <select className="ctrl"><option value="A">A (first sub-batch)</option><option value="B">B (second sub-batch)</option><option value="C">C (third sub-batch)</option></select>
+              <SearchSelect options={[{ value: 'A', label: 'A (first sub-batch)' }, { value: 'B', label: 'B (second sub-batch)' }, { value: 'C', label: 'C (third sub-batch)' }]} />
             </div>
           </div>
           <div className="mt-[14px] p-[14px] bg-b50 border-[1.5px] border-[var(--b200)] rounded-[var(--rsm)] flex items-center gap-4">

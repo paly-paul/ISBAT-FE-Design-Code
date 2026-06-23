@@ -1,11 +1,11 @@
-'use client'
+﻿'use client'
 import { ModalProps } from './types'
 import { ScrollTable } from '@/components/ScrollTable'
 
 export function TtImportModal({ isOpen, onClose, showToast }: ModalProps) {
   if (!isOpen) return null
   return (
-    <div className="modal-overlay open" id="tt-import-modal" onClick={onClose}>
+    <div className="modal-overlay open" id="tt-import-modal">
       <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-download"></i> Import Timetable from Excel</div>

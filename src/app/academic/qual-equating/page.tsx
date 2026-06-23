@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -10,7 +10,7 @@ export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
@@ -33,7 +33,7 @@ export default function Page() {
     { name: 'Uwase Claudine',     country: 'Rwanda',   qualLevel: "Bachelor's Degree",     referredTo: 'NCHE',  referredBadge: 'badge-blue',  submittedDate: '15 Apr 2026', status: 'In Review', statusBadge: 'badge-purple', statusIcon: '',              outcome: '—',                           outcomeBadge: '',             rowClass: '',       variant: 'view' },
   ]
   const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v || String((r as Record<string, unknown>)[k]) === v)
+    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   )
 
   function fth(label: string, col: string, opts: string[]) {
@@ -42,10 +42,11 @@ export default function Page() {
         label={label}
         opts={opts}
         isOpen={openFilter === col}
-        activeFilter={filters[col] ?? ''}
+        activeFilter={filters[col] ?? []}
         onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
+        onClose={() => setOpenFilter(null)}
       />
     )
   }
@@ -71,7 +72,7 @@ export default function Page() {
           </div>
           <ScrollTable>
             <table>
-              <thead><tr><th>Action</th><th>Applicant Name</th>{fth('Country of Qualification', 'country', ['DR Congo', 'Kenya', 'Rwanda'])}{fth('Qualification Level', 'qualLevel', ['A-Level Equivalent', 'O-Level (KCSE)', "Bachelor's Degree"])}<th>Referred To</th><th>Submitted Date</th>{fth('Status', 'status', ['Completed', 'Pending', 'In Review'])}{fth('Outcome', 'outcome', ['Equated — 2 Principal Passes', '—'])}</tr></thead>
+              <thead><tr><th style={{ width: 48 }}></th><th>Applicant Name</th>{fth('Country of Qualification', 'country', ['DR Congo', 'Kenya', 'Rwanda'])}{fth('Qualification Level', 'qualLevel', ['A-Level Equivalent', 'O-Level (KCSE)', "Bachelor's Degree"])}<th>Referred To</th><th>Submitted Date</th>{fth('Status', 'status', ['Completed', 'Pending', 'In Review'])}{fth('Outcome', 'outcome', ['Equated — 2 Principal Passes', '—'])}</tr></thead>
               <tbody>
                 {filteredRows.map((r, i) => (
                   <tr key={i} className={r.rowClass}>

@@ -1,15 +1,39 @@
-'use client'
+﻿'use client'
 import { useState } from 'react'
 import { ModalProps } from './types'
 import { SuccessPopup } from './SuccessPopup'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export function EditIntakeModal({ isOpen, onClose, showToast }: ModalProps) {
-  const [step, setStep] = useState(1)
-  const [saved, setSaved] = useState(false)
+  const [step, setStep]           = useState(1)
+  const [saved, setSaved]         = useState(false)
+  const [semStart, setSemStart]   = useState('2026-02-01')
+  const [term2End, setTerm2End]   = useState('2026-05-25')
+  const [intakeCode, setIntakeCode]       = useState('20261')
+  const [description, setDescription]     = useState('Spring 2026')
+  const [financialYear, setFinancialYear] = useState('2025–26')
+  const [intakeType, setIntakeType]       = useState('spring')
+  const [errors, setErrors]               = useState<Record<string, string>>({})
+
+  function calcDuration() {
+    if (!semStart || !term2End) return ''
+    const ms = new Date(term2End).getTime() - new Date(semStart).getTime()
+    return ms > 0 ? String(Math.round(ms / (1000 * 60 * 60 * 24 * 7))) : ''
+  }
+
+  function validate() {
+    const e: Record<string, string> = {}
+    if (!intakeCode.trim())    e.intakeCode    = 'Intake Code is required'
+    if (!description.trim())   e.description   = 'Description is required'
+    if (!financialYear.trim()) e.financialYear = 'Financial Year is required'
+    if (!intakeType)           e.intakeType    = 'Please select an Intake Type'
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
 
   if (!isOpen) return null
 
-  function handleClose() { setStep(1); setSaved(false); onClose() }
+  function handleClose() { setStep(1); setSaved(false); setErrors({}); onClose() }
 
   if (saved) {
     return (
@@ -26,7 +50,7 @@ export function EditIntakeModal({ isOpen, onClose, showToast }: ModalProps) {
   }
 
   return (
-    <div className="modal-overlay open" id="intake-edit-modal" onClick={handleClose}>
+    <div className="modal-overlay open" id="intake-edit-modal">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Intake</div>
@@ -48,12 +72,51 @@ export function EditIntakeModal({ isOpen, onClose, showToast }: ModalProps) {
         <div className="modal-scroll">
           {step === 1 && (
             <div className="g2">
-              <div className="fg"><div className="lbl">Intake Code <span className="req">*</span></div><input className="ctrl" type="text" defaultValue="20261" /></div>
-              <div className="fg"><div className="lbl">Description <span className="req">*</span></div><input className="ctrl" type="text" defaultValue="Spring 2026" /></div>
-              <div className="fg"><div className="lbl">Financial Year <span className="req">*</span></div><input className="ctrl" type="text" defaultValue="2025–26" /></div>
+              <div className="fg">
+                <div className="lbl">Intake Code <span className="req">*</span></div>
+                <input
+                  className="ctrl"
+                  style={errors.intakeCode ? { borderColor: 'var(--red)' } : undefined}
+                  type="text"
+                  placeholder="e.g. 20261"
+                  value={intakeCode}
+                  onChange={e => { setIntakeCode(e.target.value); if (errors.intakeCode) setErrors(p => ({ ...p, intakeCode: '' })) }}
+                />
+                {errors.intakeCode && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeCode}</p>}
+              </div>
+              <div className="fg">
+                <div className="lbl">Description <span className="req">*</span></div>
+                <input
+                  className="ctrl"
+                  style={errors.description ? { borderColor: 'var(--red)' } : undefined}
+                  type="text"
+                  placeholder="e.g. Spring 2026"
+                  value={description}
+                  onChange={e => { setDescription(e.target.value); if (errors.description) setErrors(p => ({ ...p, description: '' })) }}
+                />
+                {errors.description && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.description}</p>}
+              </div>
+              <div className="fg">
+                <div className="lbl">Financial Year <span className="req">*</span></div>
+                <input
+                  className="ctrl"
+                  style={errors.financialYear ? { borderColor: 'var(--red)' } : undefined}
+                  type="text"
+                  placeholder="e.g. 2025–26"
+                  value={financialYear}
+                  onChange={e => { setFinancialYear(e.target.value); if (errors.financialYear) setErrors(p => ({ ...p, financialYear: '' })) }}
+                />
+                {errors.financialYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.financialYear}</p>}
+              </div>
               <div className="fg">
                 <div className="lbl">Intake Type <span className="req">*</span></div>
-                <select className="ctrl" defaultValue="spring"><option value="">Select type…</option><option value="spring">Spring</option><option value="fall">Fall</option></select>
+                <SearchSelect
+                  placeholder="Select type…"
+                  value={intakeType}
+                  onChange={v => { setIntakeType(v); if (errors.intakeType) setErrors(p => ({ ...p, intakeType: '' })) }}
+                  options={[{ value: 'spring', label: 'Spring' }, { value: 'fall', label: 'Fall' }]}
+                />
+                {errors.intakeType && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeType}</p>}
               </div>
               <div className="fg" style={{ gridColumn: 'span 2' }}>
                 <div className="lbl">Set As</div>
@@ -68,16 +131,12 @@ export function EditIntakeModal({ isOpen, onClose, showToast }: ModalProps) {
                   </label>
                 </div>
               </div>
-              <div className="fg"><div className="lbl">Semester Start Date <span className="req">*</span></div><input className="ctrl" type="date" defaultValue="2026-02-01" /></div>
-              <div className="fg"><div className="lbl">Term 1 End Date <span className="req">*</span></div><input className="ctrl" type="date" defaultValue="2026-03-30" /></div>
-              <div className="fg"><div className="lbl">Term 2 End Date / Semester End <span className="req">*</span></div><input className="ctrl" type="date" defaultValue="2026-05-31" /></div>
               <div className="fg"><div className="lbl">Grievance End Date</div><input className="ctrl" type="date" defaultValue="2026-06-10" /></div>
               <div className="fg"><div className="lbl">Re-entry Date</div><input className="ctrl" type="date" /></div>
               <div className="fg"><div className="lbl">Late Fee Start Date</div><input className="ctrl" type="date" defaultValue="2026-06-15" /></div>
-              <div className="fg"><div className="lbl">Duration (weeks)</div><input className="ctrl" type="text" defaultValue="16" /></div>
-              <div className="fg"><div className="lbl">Last Date for Re-registration</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="15/Jun/2026" /></div>
-              <div className="fg"><div className="lbl">Exam Grievance Start Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="01/Jun/2026" /></div>
-              <div className="fg"><div className="lbl">Exam Grievance End Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="10/Jun/2026" /></div>
+              <div className="fg"><div className="lbl">Last Date for Re-registration</div><input className="ctrl" type="date" defaultValue="2026-06-15" /></div>
+              <div className="fg"><div className="lbl">Exam Grievance Start Date</div><input className="ctrl" type="date" defaultValue="2026-06-01" /></div>
+              <div className="fg"><div className="lbl">Exam Grievance End Date</div><input className="ctrl" type="date" defaultValue="2026-06-10" /></div>
             </div>
           )}
 
@@ -89,23 +148,34 @@ export function EditIntakeModal({ isOpen, onClose, showToast }: ModalProps) {
                   Optional · Fill in the key dates for the first semester
                 </span>
               </div>
-              <div className="g2">
-                <div className="fg"><div className="lbl">Admission Start Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="01/Nov/2025" /></div>
-                <div className="fg"><div className="lbl">Admission Late Fee Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="15/Jan/2026" /></div>
-                <div className="fg"><div className="lbl">Admission End Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="31/Jan/2026" /></div>
-                <div className="fg"><div className="lbl">Re-entry Start Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="01/Jan/2026" /></div>
-                <div className="fg"><div className="lbl">Re-entry Late Fee Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="20/Jan/2026" /></div>
-                <div className="fg"><div className="lbl">Re-entry End Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="31/Jan/2026" /></div>
-                <div className="fg"><div className="lbl">Semester Start Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="01/Feb/2026" /></div>
-                <div className="fg"><div className="lbl">Semester End Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="31/May/2026" /></div>
-                <div className="fg"><div className="lbl">Lump Sum Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="15/Feb/2026" /></div>
-                <div className="fg"><div className="lbl">Term 1 End Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="30/Mar/2026" /></div>
-                <div className="fg"><div className="lbl">Term 2 Start Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="01/Apr/2026" /></div>
-                <div className="fg"><div className="lbl">Resit Start Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="01/Jun/2026" /></div>
-                <div className="fg"><div className="lbl">Resit End Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="15/Jun/2026" /></div>
-                <div className="fg"><div className="lbl">Final Exam Start Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="01/May/2026" /></div>
-                <div className="fg"><div className="lbl">Final Exam End Date</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="25/May/2026" /></div>
-                <div className="fg"><div className="lbl">Clearance Date (80%)</div><input className="ctrl" type="text" placeholder="dd/MMM/yyyy" defaultValue="10/Jun/2026" /></div>
+              <div className="g-dates">
+                <div className="fg"><div className="lbl">Admission Start Date</div><input className="ctrl" type="date" defaultValue="2025-11-01" /></div>
+                <div className="fg"><div className="lbl">Admission Late Fee Date</div><input className="ctrl" type="date" defaultValue="2026-01-15" /></div>
+                <div className="fg"><div className="lbl">Admission End Date</div><input className="ctrl" type="date" defaultValue="2026-01-31" /></div>
+                <div className="fg"><div className="lbl">Re-entry Start Date</div><input className="ctrl" type="date" defaultValue="2026-01-01" /></div>
+                <div className="fg"><div className="lbl">Re-entry Late Fee Date</div><input className="ctrl" type="date" defaultValue="2026-01-20" /></div>
+                <div className="fg"><div className="lbl">Re-entry End Date</div><input className="ctrl" type="date" defaultValue="2026-01-31" /></div>
+                <div className="fg"><div className="lbl">Semester/Term 1 Start Date</div><input className="ctrl" type="date" value={semStart} onChange={e => setSemStart(e.target.value)} /></div>
+                <div className="fg"><div className="lbl">Lump Sum Date</div><input className="ctrl" type="date" defaultValue="2026-02-15" /></div>
+                <div className="fg"><div className="lbl">Term 1 End Date</div><input className="ctrl" type="date" defaultValue="2026-03-30" /></div>
+                <div className="fg"><div className="lbl">Term 2 Start Date</div><input className="ctrl" type="date" defaultValue="2026-04-01" /></div>
+                <div className="fg"><div className="lbl">Semester/Term 2 End Date</div><input className="ctrl" type="date" value={term2End} onChange={e => setTerm2End(e.target.value)} /></div>
+                <div className="fg">
+                  <div className="lbl">Duration (weeks)</div>
+                  <input
+                    className="ctrl"
+                    style={{ background: 'var(--g100)', color: calcDuration() ? 'var(--g700)' : 'var(--g400)', cursor: 'not-allowed' }}
+                    type="text"
+                    value={calcDuration()}
+                    readOnly
+                    placeholder="Set semester dates below"
+                  />
+                </div>
+                <div className="fg"><div className="lbl">Resit Start Date</div><input className="ctrl" type="date" defaultValue="2026-06-01" /></div>
+                <div className="fg"><div className="lbl">Resit End Date</div><input className="ctrl" type="date" defaultValue="2026-06-15" /></div>
+                <div className="fg"><div className="lbl">Final Exam Start Date</div><input className="ctrl" type="date" defaultValue="2026-05-01" /></div>
+                <div className="fg"><div className="lbl">Final Exam End Date</div><input className="ctrl" type="date" defaultValue="2026-05-25" /></div>
+                <div className="fg"><div className="lbl">Clearance Date (80%)</div><input className="ctrl" type="date" defaultValue="2026-06-10" /></div>
               </div>
             </div>
           )}
@@ -120,7 +190,7 @@ export function EditIntakeModal({ isOpen, onClose, showToast }: ModalProps) {
             </button>
           )}
           {step === 1 && (
-            <button className="btn btn-primary" onClick={() => setStep(2)}>
+            <button className="btn btn-primary" onClick={() => { if (validate()) setStep(2) }}>
               Save & Continue <i className="lni lni-arrow-right"></i>
             </button>
           )}

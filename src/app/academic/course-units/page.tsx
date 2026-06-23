@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -13,7 +13,7 @@ export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
@@ -42,7 +42,7 @@ export default function Page() {
     { code: 'IT103',      name: 'Engineering Maths I',                            programme: 'BSc. IT', sem: 'Sem 1', credits: 3, unitType: 'Theory',    category: 'Core',                  hasCW: 'No',  hasCBT: 'No',  proration: 'UE100→100',                                  syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
   ]
   const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v || String((r as Record<string, unknown>)[k]) === v)
+    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   )
 
   function fth(label: string, col: string, opts: string[]) {
@@ -51,10 +51,11 @@ export default function Page() {
         label={label}
         opts={opts}
         isOpen={openFilter === col}
-        activeFilter={filters[col] ?? ''}
+        activeFilter={filters[col] ?? []}
         onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
+        onClose={() => setOpenFilter(null)}
       />
     )
   }
@@ -117,7 +118,7 @@ export default function Page() {
           </div>
           <ScrollTable>
             <table>
-              <thead><tr><th>Action</th><th>Code</th><th>Unit Name</th>{fth('Programme', 'programme', ['BSc. IT', 'BBA', 'MBA'])}{fth('Sem', 'sem', ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5'])}<th>Credits</th>{fth('Unit Type', 'unitType', ['Theory', 'Practical', 'Combined', 'Project'])}{fth('Category', 'category', ['Core', 'Specialization', 'Elective (batch-level)'])}{fth('Has CW', 'hasCW', ['Yes', 'No'])}{fth('Has CBT', 'hasCBT', ['Yes', 'No'])}<th>Proration</th><th>Syllabus</th></tr></thead>
+              <thead><tr><th style={{ width: 48 }}></th><th>Code</th><th>Unit Name</th>{fth('Programme', 'programme', ['BSc. IT', 'BBA', 'MBA'])}{fth('Sem', 'sem', ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5'])}<th>Credits</th>{fth('Unit Type', 'unitType', ['Theory', 'Practical', 'Combined', 'Project'])}{fth('Category', 'category', ['Core', 'Specialization', 'Elective (batch-level)'])}{fth('Has CW', 'hasCW', ['Yes', 'No'])}{fth('Has CBT', 'hasCBT', ['Yes', 'No'])}<th>Proration</th><th>Syllabus</th></tr></thead>
               <tbody>
                 {filteredRows.map((r, i) => (
                   <tr key={i} className={r.rowClass}>

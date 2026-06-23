@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ConfirmMovementModal } from '@/components/modals/ConfirmMovementModal'
 import { Toast } from '@/components/Toast'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function Page() {
   const router = useRouter()
@@ -106,13 +107,13 @@ export default function Page() {
           </div>
           <div className="g3">
             <div className="fg"><div className="lbl">From Intake <span className="req">*</span></div>
-              <select className="ctrl" id="sm-from-intake"><option value="20261">Spring 2026 (20261) — Current Academic</option><option value="20253">Autumn 2025 (20253)</option></select>
+              <SearchSelect options={[{ value: '20261', label: 'Spring 2026 (20261) — Current Academic' }, { value: '20253', label: 'Autumn 2025 (20253)' }]} />
             </div>
             <div className="fg"><div className="lbl">To Intake <span className="req">*</span></div>
-              <select className="ctrl" id="sm-to-intake"><option value="20262">Fall 2026 (20262) — Next Intake</option></select>
+              <SearchSelect options={[{ value: '20262', label: 'Fall 2026 (20262) — Next Intake' }]} />
             </div>
             <div className="fg"><div className="lbl">Programme Filter</div>
-              <select className="ctrl" id="sm-programme"><option value="">All Programmes</option><option>BSc. IT</option><option>BBA</option><option>BEng. Civil</option><option>MBA</option></select>
+              <SearchSelect placeholder="All Programmes" options={['BSc. IT', 'BBA', 'BEng. Civil', 'MBA']} />
             </div>
           </div>
           <div className="mt-[14px]">

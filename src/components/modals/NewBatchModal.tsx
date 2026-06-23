@@ -1,7 +1,8 @@
-'use client'
+﻿'use client'
 import { useState } from 'react'
 import { ModalProps } from './types'
 import { SuccessPopup } from './SuccessPopup'
+import { SearchSelect } from '@/components/SearchSelect'
 
 const SPECIALIZATIONS = [
   'General (All Specializations)',
@@ -33,7 +34,7 @@ export function NewBatchModal({ isOpen, onClose, showToast }: ModalProps) {
   }
 
   return (
-    <div className="modal-overlay open" id="new-batch-modal" onClick={onClose}>
+    <div className="modal-overlay open" id="new-batch-modal">
       <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-users"></i> Create New Batch</div>
@@ -43,35 +44,41 @@ export function NewBatchModal({ isOpen, onClose, showToast }: ModalProps) {
         <div className="g3">
           <div className="fg">
             <div className="lbl">Programme Version <span className="req">*</span></div>
-            <select className="ctrl">
-              <option value="">— Select programme —</option>
-              <option value="BSC-IT">BSc. IT 2026 (BCA-2026)</option>
-              <option value="BBA">BBA 2021 (BBA-2021)</option>
-              <option value="MBA">MBA 2024 (MBA-2024)</option>
-            </select>
+            <SearchSelect
+              placeholder="— Select programme —"
+              options={[
+                { value: 'BSC-IT', label: 'BSc. IT 2026 (BCA-2026)' },
+                { value: 'BBA', label: 'BBA 2021 (BBA-2021)' },
+                { value: 'MBA', label: 'MBA 2024 (MBA-2024)' },
+              ]}
+            />
           </div>
           <div className="fg">
             <div className="lbl">Intake / Session <span className="req">*</span></div>
-            <select className="ctrl">
-              <option value="S26">Spring 2026 (S26)</option>
-              <option value="F26">Fall 2026 (F26)</option>
-            </select>
+            <SearchSelect
+              options={[
+                { value: 'S26', label: 'Spring 2026 (S26)' },
+                { value: 'F26', label: 'Fall 2026 (F26)' },
+              ]}
+            />
           </div>
           <div className="fg">
             <div className="lbl">Batch Type <span className="req">*</span></div>
-            <select className="ctrl">
-              <option value="D">Day</option>
-              <option value="E">Evening</option>
-              <option value="W">Weekend (Masters/PhD only)</option>
-              <option value="O">Distance / Online</option>
-            </select>
+            <SearchSelect
+              options={[
+                { value: 'D', label: 'Day' },
+                { value: 'E', label: 'Evening' },
+                { value: 'W', label: 'Weekend (Masters/PhD only)' },
+                { value: 'O', label: 'Distance / Online' },
+              ]}
+            />
           </div>
           <div className="fg">
             <div className="lbl">Specialization</div>
-            <select className="ctrl">
-              <option value="">— Select specialization —</option>
-              {SPECIALIZATIONS.map(s => <option key={s}>{s}</option>)}
-            </select>
+            <SearchSelect
+              placeholder="— Select specialization —"
+              options={SPECIALIZATIONS}
+            />
           </div>
           <div className="fg">
             <div className="lbl">Expected Student Count</div>
@@ -86,14 +93,10 @@ export function NewBatchModal({ isOpen, onClose, showToast }: ModalProps) {
 
         <div className="fg">
           <div className="lbl">Batch In-Charge (Faculty) <span className="req">*</span></div>
-          <select className="ctrl">
-            <option value="">— Select faculty member —</option>
-            <option>Dr. Ssekibuule Ronald</option>
-            <option>Ms. Namutebi Joyce</option>
-            <option>Prof. Mukasa Charles</option>
-            <option>Dr. Tendo Patrick</option>
-            <option>Dr. Kato Andrew</option>
-          </select>
+          <SearchSelect
+            placeholder="— Select faculty member —"
+            options={['Dr. Ssekibuule Ronald', 'Ms. Namutebi Joyce', 'Prof. Mukasa Charles', 'Dr. Tendo Patrick', 'Dr. Kato Andrew']}
+          />
         </div>
 
         <div className="info-box mt-3">

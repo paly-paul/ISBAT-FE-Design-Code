@@ -4,14 +4,15 @@ interface PanelAProps {
   children: React.ReactNode
   headline?: string
   eyebrow?: string
+  centered?: boolean
 }
 
-export default function PanelA({ children, headline, eyebrow }: PanelAProps) {
+export default function PanelA({ children, headline, eyebrow, centered }: PanelAProps) {
   return (
     <div className="isb-panel-root">
       <HeroA />
 
-      <div className="isb-form-panel">
+      <div className="isb-form-panel" style={centered ? { justifyContent: 'center' } : undefined}>
         <div className="isb-help-link">
           Need help?{' '}
           <a href="mailto:itsupport@isbatuniversity.ac.ug" className="isb-link">
@@ -19,7 +20,7 @@ export default function PanelA({ children, headline, eyebrow }: PanelAProps) {
           </a>
         </div>
 
-        <div className="isb-form-content">
+        <div className="isb-form-content" style={centered ? { textAlign: 'center' } : undefined}>
           {eyebrow && (
             <div style={{
               fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase',

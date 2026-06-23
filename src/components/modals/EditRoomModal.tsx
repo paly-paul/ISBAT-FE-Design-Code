@@ -1,7 +1,8 @@
-'use client'
+﻿'use client'
 import { useState } from 'react'
 import { ModalProps } from './types'
 import { SuccessPopup } from './SuccessPopup'
+import { SearchSelect } from '@/components/SearchSelect'
 
 const CAMPUSES = [
   'Main Campus — Kampala',
@@ -31,7 +32,7 @@ export function EditRoomModal({ isOpen, onClose, showToast }: ModalProps) {
   }
 
   return (
-    <div className="modal-overlay open" onClick={handleClose}>
+    <div className="modal-overlay open">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Room</div>
@@ -53,10 +54,7 @@ export function EditRoomModal({ isOpen, onClose, showToast }: ModalProps) {
           </div>
           <div className="fg span2">
             <div className="lbl">Campus <span className="req">*</span></div>
-            <select className="ctrl" defaultValue="Main Campus — Kampala">
-              <option value="">— Select Campus —</option>
-              {CAMPUSES.map(c => <option key={c}>{c}</option>)}
-            </select>
+            <SearchSelect placeholder="— Select Campus —" value="Main Campus — Kampala" options={CAMPUSES} />
           </div>
           <div className="fg">
             <div className="lbl">Building</div>
@@ -64,9 +62,7 @@ export function EditRoomModal({ isOpen, onClose, showToast }: ModalProps) {
           </div>
           <div className="fg">
             <div className="lbl">Status <span className="req">*</span></div>
-            <select className="ctrl" defaultValue="Active">
-              {STATUSES.map(s => <option key={s}>{s}</option>)}
-            </select>
+            <SearchSelect value="Active" options={STATUSES} />
           </div>
         </div>
 

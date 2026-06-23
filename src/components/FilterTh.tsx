@@ -1,58 +1,113 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 interface FilterThProps {
   label: string
   opts: string[]
   isOpen: boolean
-  activeFilter: string
+  activeFilter: string[]
   onToggle: (e: React.MouseEvent) => void
-  onSelect: (val: string) => void
+  onSelect: (vals: string[]) => void
   onClear: () => void
+  onClose: () => void
 }
 
-export function FilterTh({ label, opts, isOpen, activeFilter, onToggle, onSelect, onClear }: FilterThProps) {
-  const [search, setSearch] = useState('')
+export function FilterTh({ label, opts, isOpen, activeFilter, onToggle, onSelect, onClear, onClose }: FilterThProps) {
+  const [search, setSearch]   = useState('')
+  const [pending, setPending] = useState<string[]>([])
+  const [pos, setPos]         = useState({ top: 0, left: 0, minWidth: 0 })
+  const thRef = useRef<HTMLTableCellElement>(null)
+
+  useEffect(() => {
+    if (isOpen && thRef.current) {
+      const r = thRef.current.getBoundingClientRect()
+      setPos({ top: r.bottom + 4, left: r.left, minWidth: Math.max(r.width, 210) })
+      setPending([...activeFilter])
+    }
+    if (!isOpen) setSearch('')
+  }, [isOpen])
+
+  const meaningful = opts.filter(o => o && o !== '-' && o !== '—' && o.trim() !== '')
 
   const visible = search.trim()
-    ? opts.filter(o => o.toLowerCase().includes(search.toLowerCase()))
-    : opts
+    ? meaningful.filter(o => o.toLowerCase().includes(search.toLowerCase()))
+    : meaningful
 
-  function handleSelect(val: string) { onSelect(val); setSearch('') }
-  function handleClear()             { onClear();       setSearch('') }
+  const allVisibleChecked = visible.length > 0 && visible.every(o => pending.includes(o))
+
+  function toggleOne(o: string) {
+    setPending(prev => prev.includes(o) ? prev.filter(x => x !== o) : [...prev, o])
+  }
+
+  function toggleAll() {
+    if (allVisibleChecked) {
+      setPending(prev => prev.filter(o => !visible.includes(o)))
+    } else {
+      setPending(prev => [...new Set([...prev, ...visible])])
+    }
+  }
+
+  function handleOk() {
+    if (pending.length === 0) return
+    onSelect(pending)
+  }
 
   return (
-    <th className="filterable" onClick={onToggle}>
+    <th ref={thRef} className="filterable" onClick={onToggle}>
       {label}
-      <i className={`lni lni-funnel th-fi${activeFilter ? ' fil-on' : ''}`} onClick={e => e.stopPropagation()} />
-      {isOpen && (
-        <div className="col-filter-drop" onClick={e => e.stopPropagation()}>
-          <div style={{ padding: '6px 8px 4px' }}>
-            <input
-              className="ctrl"
-              style={{ fontSize: 12, height: 28, padding: '4px 8px' }}
-              placeholder={`Search ${label}…`}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onClick={e => e.stopPropagation()}
-              autoFocus
-            />
-          </div>
-          <div className={`col-filter-opt${!activeFilter ? ' fil-active' : ''}`} onClick={handleClear}>
-            All {label}
-          </div>
-          {visible.map(o => (
-            <div key={o} className={`col-filter-opt${activeFilter === o ? ' fil-active' : ''}`}
-                 onClick={() => handleSelect(o)}>
-              {o}
+      <i className={`lni lni-funnel th-fi${activeFilter.length ? ' fil-on' : ''}`} onClick={onToggle} />
+
+      {isOpen && createPortal(
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={onClose} />
+          <div
+            className="col-filter-drop"
+            style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.minWidth, zIndex: 9999, padding: 0 }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="col-filter-search">
+              <input
+                className="ctrl"
+                style={{ fontSize: 12, height: 28, padding: '4px 8px' }}
+                placeholder={`Search ${label}…`}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                autoFocus
+              />
             </div>
-          ))}
-          {visible.length === 0 && (
-            <div style={{ padding: '6px 10px', fontSize: 12, color: 'var(--g400)', fontStyle: 'italic' }}>
-              No matches
+
+            <label className="col-filter-select-all">
+              <input type="checkbox" checked={allVisibleChecked} onChange={toggleAll} />
+              Select All
+            </label>
+
+            <div className="col-filter-opts">
+              {visible.map(o => (
+                <label key={o} className={`col-filter-opt-row${pending.includes(o) ? ' fil-active' : ''}`}>
+                  <input type="checkbox" checked={pending.includes(o)} onChange={() => toggleOne(o)} />
+                  {o}
+                </label>
+              ))}
+              {visible.length === 0 && (
+                <div className="col-filter-no-match">No matches</div>
+              )}
             </div>
-          )}
-        </div>
+
+            <div className="col-filter-footer">
+              <button className="col-filter-btn col-filter-btn-reset" onClick={() => { setPending([]); onClear() }}>Reset</button>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button className="col-filter-btn col-filter-btn-cancel" onClick={onClose}>Cancel</button>
+                <button
+                  className="col-filter-btn col-filter-btn-ok"
+                  disabled={pending.length === 0}
+                  onClick={handleOk}
+                >OK</button>
+              </div>
+            </div>
+          </div>
+        </>,
+        document.body
       )}
     </th>
   )
