@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -37,7 +37,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]       = useState<{ msg: string; type: string } | null>(null)
   const [approvals, setApprovals] = useState<Record<string, ApprovalStatus>>(INITIAL_APPROVALS)
-  const [filters, setFilters]   = useState<Record<string, string>>({})
+  const [filters, setFilters]   = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   const currentUser = MOCK_USERS[role]
@@ -71,7 +71,7 @@ export default function Page() {
     if (role === 'lecturer') return r.name === currentUser.name
     return r.faculty === currentUser.faculty
   }).filter(r =>
-    Object.entries(filters).every(([k, v]) => !v || String((r as Record<string, unknown>)[k]) === v)
+    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   )
 
   function approvalBadge(status: ApprovalStatus) {
@@ -87,10 +87,11 @@ export default function Page() {
         label={label}
         opts={opts}
         isOpen={openFilter === col}
-        activeFilter={filters[col] ?? ''}
+        activeFilter={filters[col] ?? []}
         onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
+        onClose={() => setOpenFilter(null)}
       />
     )
   }
@@ -170,7 +171,7 @@ export default function Page() {
               <thead>
                 <tr>
                   {role === 'dean' && <th>Approval Actions</th>}
-                  <th>Action</th>
+                  <th style={{ width: 48 }}></th>
                   {role === 'dean' && <th>Faculty Name</th>}
                   {role === 'dean' && fth('Faculty', 'faculty', ['FCT', 'FBM'])}
                   <th>Skills / Subject Areas</th>

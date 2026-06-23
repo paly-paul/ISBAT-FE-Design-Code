@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function Page() {
   const router = useRouter()
@@ -32,19 +33,20 @@ export default function Page() {
               <div className="inp-wrap"><span className="inp-icon"><i className="lni lni-search-alt"></i></span><input className="ctrl" type="text" placeholder="e.g. ISB/2026/0142 or Nakato Sarah..." /></div>
             </div>
             <div className="fg"><div className="lbl">Programme Filter</div>
-              <select className="ctrl">
-                <option value="">All Programmes</option>
-                <option>BSc. Computer Science</option><option>BSc. Information Technology</option><option>BBA</option><option>MBA Business Admin</option><option>MBA Business Admin (ODL)</option>
-                <option>BEng. Civil Engineering</option><option>BCom. Accounting</option><option>Diploma in Nursing</option>
-              </select>
+              <SearchSelect
+                placeholder="All Programmes"
+                options={['BSc. Computer Science', 'BSc. Information Technology', 'BBA', 'MBA Business Admin', 'MBA Business Admin (ODL)', 'BEng. Civil Engineering', 'BCom. Accounting', 'Diploma in Nursing']}
+              />
             </div>
             <div className="fg"><div className="lbl">Academic Year</div>
-              <select className="ctrl">
-                <option value="">All Academic Years</option>
-                <option value="2025-2026">2025–2026</option>
-                <option value="2024-2025">2024–2025</option>
-                <option value="2023-2024">2023–2024</option>
-              </select>
+              <SearchSelect
+                placeholder="All Academic Years"
+                options={[
+                  { value: '2025-2026', label: '2025–2026' },
+                  { value: '2024-2025', label: '2024–2025' },
+                  { value: '2023-2024', label: '2023–2024' },
+                ]}
+              />
             </div>
           </div>
         </div>

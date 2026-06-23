@@ -1,7 +1,8 @@
-'use client'
+﻿'use client'
 import { useState } from 'react'
 import { ModalProps } from './types'
 import { SuccessPopup } from './SuccessPopup'
+import { SearchSelect } from '@/components/SearchSelect'
 
 const NATIONALITIES = [
   'Ugandan', 'Kenyan', 'Tanzanian', 'Rwandan', 'Burundian', 'South Sudanese',
@@ -27,7 +28,7 @@ export function EditLecturerModal({ isOpen, onClose, showToast }: ModalProps) {
   }
 
   return (
-    <div className="modal-overlay open" id="edit-lecturer-modal" onClick={onClose}>
+    <div className="modal-overlay open" id="edit-lecturer-modal">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Lecturer</div>
@@ -41,7 +42,7 @@ export function EditLecturerModal({ isOpen, onClose, showToast }: ModalProps) {
           <div className="g3">
             <div className="fg">
               <div className="lbl">Salutation</div>
-              <select className="ctrl" defaultValue="Dr."><option>Dr.</option><option>Prof.</option><option>Mr.</option><option>Ms.</option><option>Mrs.</option></select>
+              <SearchSelect value="Dr." options={['Dr.', 'Prof.', 'Mr.', 'Ms.', 'Mrs.']} />
             </div>
             <div className="fg"><div className="lbl">First Name <span className="req">*</span></div><input className="ctrl" type="text" defaultValue="Sarah" /></div>
             <div className="fg"><div className="lbl">Last Name <span className="req">*</span></div><input className="ctrl" type="text" defaultValue="Nakimuli" /></div>
@@ -55,33 +56,23 @@ export function EditLecturerModal({ isOpen, onClose, showToast }: ModalProps) {
             </div>
             <div className="fg">
               <div className="lbl">Designation <span className="req">*</span></div>
-              <select className="ctrl" defaultValue="Senior Lecturer">
-                <option>Professor</option><option>Associate Professor</option><option>Senior Lecturer</option>
-                <option>Lecturer</option><option>Assistant Lecturer</option><option>Teaching Assistant</option>
-              </select>
+              <SearchSelect value="Senior Lecturer" options={['Professor', 'Associate Professor', 'Senior Lecturer', 'Lecturer', 'Assistant Lecturer', 'Teaching Assistant']} />
             </div>
             <div className="fg">
               <div className="lbl">Gender</div>
-              <select className="ctrl" defaultValue="Female"><option value="">Select…</option><option>Male</option><option>Female</option><option>Others</option></select>
+              <SearchSelect placeholder="Select…" value="Female" options={['Male', 'Female', 'Others']} />
             </div>
             <div className="fg"><div className="lbl">Date of Birth</div><input className="ctrl" type="text" defaultValue="15/Mar/1985" /></div>
             <div className="fg"><div className="lbl">Place of Birth</div><input className="ctrl" type="text" defaultValue="Kampala" /></div>
             <div className="fg">
               <div className="lbl">Nationality</div>
-              <select className="ctrl" defaultValue="Ugandan">
-                <option value="">Select…</option>
-                {NATIONALITIES.map(n => <option key={n}>{n}</option>)}
-              </select>
+              <SearchSelect placeholder="Select…" value="Ugandan" options={NATIONALITIES} />
             </div>
             <div className="fg"><div className="lbl">National ID</div><input className="ctrl" type="text" defaultValue="CM86730412" /></div>
             <div className="fg"><div className="lbl">Religion</div><input className="ctrl" type="text" defaultValue="Christian" /></div>
             <div className="fg">
               <div className="lbl">Marital Status</div>
-              <select className="ctrl" defaultValue="Married">
-                <option value="">Select…</option>
-                <option>Single</option><option>Married</option><option>Divorced</option>
-                <option>Widow</option><option>Widower</option><option>Separated</option>
-              </select>
+              <SearchSelect placeholder="Select…" value="Married" options={['Single', 'Married', 'Divorced', 'Widow', 'Widower', 'Separated']} />
             </div>
           </div>
 
@@ -90,7 +81,7 @@ export function EditLecturerModal({ isOpen, onClose, showToast }: ModalProps) {
           <div className="g3">
             <div className="fg">
               <div className="lbl">Highest Qualification <span className="req">*</span></div>
-              <select className="ctrl" defaultValue="PhD"><option>PhD</option><option>Master&apos;s Degree</option><option>Bachelor&apos;s Degree</option><option>Postgraduate Diploma</option></select>
+              <SearchSelect value="PhD" options={['PhD', "Master's Degree", "Bachelor's Degree", 'Postgraduate Diploma']} />
             </div>
             <div className="fg"><div className="lbl">Field of Study <span className="req">*</span></div><input className="ctrl" type="text" defaultValue="Computer Science" /></div>
             <div className="fg"><div className="lbl">Year of Completion</div><input className="ctrl" type="number" min={1980} max={2030} defaultValue={2018} /></div>
@@ -99,20 +90,16 @@ export function EditLecturerModal({ isOpen, onClose, showToast }: ModalProps) {
             <div className="fg span3"><div className="lbl">Specialisation Areas</div><input className="ctrl" type="text" defaultValue="Machine Learning, Algorithms" /></div>
             <div className="fg">
               <div className="lbl">Class Obtained</div>
-              <select className="ctrl" defaultValue="First Class">
-                <option value="">Select…</option>
-                <option>First Class</option><option>Second Class Upper</option><option>Second Class Lower</option>
-                <option>Third Class</option><option>Pass</option><option>Distinction</option><option>Merit</option>
-              </select>
+              <SearchSelect placeholder="Select…" value="First Class" options={['First Class', 'Second Class Upper', 'Second Class Lower', 'Third Class', 'Pass', 'Distinction', 'Merit']} />
             </div>
             <div className="fg"><div className="lbl">Period of Study</div><input className="ctrl" type="text" defaultValue="2014 – 2018" /></div>
             <div className="fg">
               <div className="lbl">Proof of Award</div>
-              <select className="ctrl" defaultValue="Yes"><option value="">Select…</option><option>Yes</option><option>No</option></select>
+              <SearchSelect placeholder="Select…" value="Yes" options={['Yes', 'No']} />
             </div>
             <div className="fg">
               <div className="lbl">Proof of Transcripts</div>
-              <select className="ctrl" defaultValue="Yes"><option value="">Select…</option><option>Yes</option><option>No</option></select>
+              <SearchSelect placeholder="Select…" value="Yes" options={['Yes', 'No']} />
             </div>
             <div className="fg span2">
               <div className="lbl">Upload Transcripts</div>
@@ -129,15 +116,11 @@ export function EditLecturerModal({ isOpen, onClose, showToast }: ModalProps) {
           <div className="g2">
             <div className="fg">
               <div className="lbl">Faculty <span className="req">*</span></div>
-              <select className="ctrl" defaultValue="Faculty of Computing & Technology">
-                <option>Faculty of Computing &amp; Technology</option>
-                <option>Faculty of Business &amp; Management</option>
-                <option>Faculty of Engineering</option>
-              </select>
+              <SearchSelect value="Faculty of Computing & Technology" options={['Faculty of Computing & Technology', 'Faculty of Business & Management', 'Faculty of Engineering']} />
             </div>
             <div className="fg">
               <div className="lbl">Status</div>
-              <select className="ctrl" defaultValue="Active"><option>Active</option><option>On Leave</option><option>Visiting</option><option>Suspended</option></select>
+              <SearchSelect value="Active" options={['Active', 'On Leave', 'Visiting', 'Suspended']} />
             </div>
           </div>
 

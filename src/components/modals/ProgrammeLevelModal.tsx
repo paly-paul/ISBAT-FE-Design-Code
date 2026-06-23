@@ -1,10 +1,10 @@
-'use client'
+﻿'use client'
 import { ModalProps } from './types'
 
 export function ProgrammeLevelModal({ isOpen, onClose, showToast }: ModalProps) {
   if (!isOpen) return null
   return (
-    <div className="modal-overlay open" id="new-alevel-modal" onClick={onClose}>
+    <div className="modal-overlay open" id="new-alevel-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-graduation"></i> Add / Edit Programme Level</div>

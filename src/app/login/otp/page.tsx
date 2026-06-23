@@ -80,7 +80,7 @@ export default function OtpPage() {
   if (successState) {
     const isStudent = successState.role === 'student'
     return (
-      <PanelA eyebrow="Two-factor authentication" headline="Identity verified.">
+      <PanelA eyebrow="Two-factor authentication" headline="Identity verified." centered>
         <SuccessScreen
           subtitle={isStudent
             ? 'The Student Portal is still being built. Check back soon.'

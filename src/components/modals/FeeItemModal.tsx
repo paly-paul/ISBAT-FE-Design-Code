@@ -1,10 +1,11 @@
-'use client'
+﻿'use client'
 import { ModalProps } from './types'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export function FeeItemModal({ isOpen, onClose, showToast }: ModalProps) {
   if (!isOpen) return null
   return (
-    <div className="modal-overlay open" id="new-fee-item-modal" onClick={onClose}>
+    <div className="modal-overlay open" id="new-fee-item-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-dollar"></i> Add / Edit Fee Item</div>
@@ -16,25 +17,11 @@ export function FeeItemModal({ isOpen, onClose, showToast }: ModalProps) {
         <div className="g2">
           <div className="fg">
             <div className="lbl">Semester <span className="req">*</span></div>
-            <select className="ctrl">
-              <option>Semester 1 — Year 1</option>
-              <option>Semester 2 — Year 1</option>
-              <option>Semester 3 — Year 2</option>
-              <option>Semester 4 — Year 2</option>
-              <option>Semester 5 — Year 3</option>
-              <option>Semester 6 — Year 3</option>
-            </select>
+            <SearchSelect options={['Semester 1 — Year 1', 'Semester 2 — Year 1', 'Semester 3 — Year 2', 'Semester 4 — Year 2', 'Semester 5 — Year 3', 'Semester 6 — Year 3']} />
           </div>
           <div className="fg">
             <div className="lbl">Priority <span className="req">*</span></div>
-            <select className="ctrl">
-              <option>P1 — Cleared first</option>
-              <option>P2</option>
-              <option>P3</option>
-              <option>P4</option>
-              <option>P5</option>
-              <option>P6</option>
-            </select>
+            <SearchSelect options={['P1 — Cleared first', 'P2', 'P3', 'P4', 'P5', 'P6']} />
           </div>
           <div className="fg span2">
             <div className="lbl">Fee Item Title <span className="req">*</span></div>

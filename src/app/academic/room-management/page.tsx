@@ -1,16 +1,17 @@
-'use client'
+﻿'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { NewRoomModal } from '@/components/modals/NewRoomModal'
 import { EditRoomModal } from '@/components/modals/EditRoomModal'
 import { Toast } from '@/components/Toast'
+import { FilterTh } from '@/components/FilterTh'
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
@@ -38,7 +39,7 @@ export default function Page() {
   ]
 
   const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v || String((r as Record<string, unknown>)[k]) === v)
+    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   )
 
   function statusBadge(status: string) {
@@ -53,24 +54,16 @@ export default function Page() {
 
   function fth(label: string, col: string, opts: string[]) {
     return (
-      <th className="filterable" onClick={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}>
-        {label}
-        <i className={`lni lni-funnel th-fi${filters[col] ? ' fil-on' : ''}`} onClick={e => e.stopPropagation()} />
-        {openFilter === col && (
-          <div className="col-filter-drop" onClick={e => e.stopPropagation()}>
-            <div className={`col-filter-opt${!filters[col] ? ' fil-active' : ''}`}
-                 onClick={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}>
-              All {label}
-            </div>
-            {opts.map(o => (
-              <div key={o} className={`col-filter-opt${filters[col] === o ? ' fil-active' : ''}`}
-                   onClick={() => { setFilters(f => ({ ...f, [col]: o })); setOpenFilter(null) }}>
-                {o}
-              </div>
-            ))}
-          </div>
-        )}
-      </th>
+      <FilterTh
+        label={label}
+        opts={opts}
+        isOpen={openFilter === col}
+        activeFilter={filters[col] ?? []}
+        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
+        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
+        onClose={() => setOpenFilter(null)}
+      />
     )
   }
 
@@ -97,7 +90,7 @@ export default function Page() {
             <table>
               <thead>
                 <tr>
-                  <th>Action</th>
+                  <th style={{ width: 48 }}></th>
                   <th>Room Code</th>
                   <th>Room Description</th>
                   {fth('Campus', 'campus', ['Main Campus — Kampala', 'Kampala City Campus', 'Mukono Campus', 'Jinja Campus', 'Online / ODL Hub'])}

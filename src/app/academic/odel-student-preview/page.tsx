@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function Page() {
   const router = useRouter()
@@ -61,10 +62,10 @@ export default function Page() {
                 <div className="fg"><div className="lbl">Last Name <span className="req">*</span></div><input className="ctrl" type="text" placeholder="Last name" /></div>
                 <div className="fg"><div className="lbl">Date of Birth <span className="req">*</span></div><input className="ctrl" type="date" /></div>
                 <div className="fg"><div className="lbl">Gender <span className="req">*</span></div>
-                  <select className="ctrl"><option>-- Select --</option><option>Female</option><option>Male</option><option>Other</option></select>
+                  <SearchSelect placeholder="-- Select --" options={['Female', 'Male', 'Other']} />
                 </div>
                 <div className="fg"><div className="lbl">Nationality <span className="req">*</span></div>
-                  <select className="ctrl"><option>Ugandan</option><option>Kenyan</option><option>Tanzanian</option><option>Rwandan</option><option>Other</option></select>
+                  <SearchSelect options={['Ugandan', 'Kenyan', 'Tanzanian', 'Rwandan', 'Other']} />
                 </div>
                 <div className="fg"><div className="lbl">National ID / Passport <span className="req">*</span></div><input className="ctrl" type="text" placeholder="CM12345..." /></div>
                 <div className="fg"><div className="lbl">Phone <span className="req">*</span></div>
@@ -74,7 +75,7 @@ export default function Page() {
                   <div className="inp-wrap"><span className="inp-icon"><i className="lni lni-envelope"></i></span><input className="ctrl" type="email" placeholder="applicant@email.com" /></div>
                 </div>
                 <div className="fg"><div className="lbl">Country of Residence</div>
-                  <select className="ctrl"><option>Uganda</option><option>Kenya</option><option>Tanzania</option><option>Rwanda</option><option>Other</option></select>
+                  <SearchSelect options={['Uganda', 'Kenya', 'Tanzania', 'Rwanda', 'Other']} />
                 </div>
                 <div className="fg span3"><div className="lbl">Residential Address</div><input className="ctrl" type="text" placeholder="District / Town / Village" /></div>
               </div>
@@ -91,7 +92,7 @@ export default function Page() {
               </div>
               <div className="g2">
                 <div className="fg"><div className="lbl">Highest Qualification <span className="req">*</span></div>
-                  <select className="ctrl"><option>-- Select --</option><option>A-Level (UACE)</option><option>Diploma</option><option>Bachelor&apos;s Degree</option><option>Master&apos;s Degree</option></select>
+                  <SearchSelect placeholder="-- Select --" options={['A-Level (UACE)', 'Diploma', "Bachelor's Degree", "Master's Degree"]} />
                 </div>
                 <div className="fg"><div className="lbl">Institution Attended <span className="req">*</span></div><input className="ctrl" type="text" placeholder="School / College / University" /></div>
                 <div className="fg"><div className="lbl">Year of Completion <span className="req">*</span></div><input className="ctrl" type="number" min={1980} max={2030} placeholder="2024" /></div>
@@ -182,10 +183,10 @@ export default function Page() {
                 <div className="g2 mb-[14px]">
                   <div className="fg">
                     <div className="lbl">Fee Type <span className="req">*</span></div>
-                    <select className="ctrl">
-                      <option value="">-- Select fee type --</option>
-                      <option value="application">Application Fee</option>
-                    </select>
+                    <SearchSelect
+                      placeholder="-- Select fee type --"
+                      options={[{ value: 'application', label: 'Application Fee' }]}
+                    />
                   </div>
                   <div className="fg">
                     <div className="lbl">Amount</div>

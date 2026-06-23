@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -8,12 +8,13 @@ import { AddSlotModal } from '@/components/modals/AddSlotModal'
 import { RoomMgmtModal } from '@/components/modals/RoomMgmtModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
@@ -39,7 +40,7 @@ export default function Page() {
     { day: 'Friday',    time: '08:00–10:00', courseUnit: 'MBA101 – Managerial Economics',  type: 'Theory',    room: 'LR-02',  capacity: 60, faculty: 'Prof. Mukasa Charles',  combined: '—' },
   ]
   const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v || String((r as Record<string, unknown>)[k]) === v)
+    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   )
 
   function fth(label: string, col: string, opts: string[]) {
@@ -48,10 +49,11 @@ export default function Page() {
         label={label}
         opts={opts}
         isOpen={openFilter === col}
-        activeFilter={filters[col] ?? ''}
+        activeFilter={filters[col] ?? []}
         onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
+        onClose={() => setOpenFilter(null)}
       />
     )
   }
@@ -91,24 +93,30 @@ export default function Page() {
         <div className="card mb-[14px] p-4">
           <div className="g4">
             <div className="fg"><div className="lbl">Batch <span className="req">*</span></div>
-              <select className="ctrl" id="tt-batch" onChange={() => showToast('Rendering timetable...', 'info')}>
-                <option value="BSC-IT-S1-D">BSC-IT-S26-DA · BSc. IT Sem 1 Day A</option>
-                <option value="BBA-S3-D">BBA-S26-DA · BBA Sem 3 Day A</option>
-                <option value="MBA-S1-E">MBA-S26-EA · MBA Sem 1 Evening A</option>
-                <option value="BENG-CIV-S2-D">BEng-CIV-S26-DA · Civil Sem 2 Day A</option>
-              </select>
+              <SearchSelect
+                options={[
+                  { value: 'BSC-IT-S1-D', label: 'BSC-IT-S26-DA · BSc. IT Sem 1 Day A' },
+                  { value: 'BBA-S3-D', label: 'BBA-S26-DA · BBA Sem 3 Day A' },
+                  { value: 'MBA-S1-E', label: 'MBA-S26-EA · MBA Sem 1 Evening A' },
+                  { value: 'BENG-CIV-S2-D', label: 'BEng-CIV-S26-DA · Civil Sem 2 Day A' },
+                ]}
+                onChange={() => showToast('Rendering timetable...', 'info')}
+              />
             </div>
             <div className="fg"><div className="lbl">Intake</div>
-              <select className="ctrl"><option>Spring 2026 (20261)</option></select>
+              <SearchSelect options={['Spring 2026 (20261)']} />
             </div>
             <div className="fg"><div className="lbl">Room Filter</div>
-              <select className="ctrl" id="tt-room-filter" onChange={() => showToast('Filtering rooms...', 'info')}>
-                <option value="">All Rooms</option>
-                <option value="LR-01">LR-01 (cap. 60)</option>
-                <option value="LR-02">LR-02 (cap. 60)</option>
-                <option value="Lab-A">Lab-A Linux (cap. 40)</option>
-                <option value="Lab-B">Lab-B General (cap. 40)</option>
-              </select>
+              <SearchSelect
+                placeholder="All Rooms"
+                options={[
+                  { value: 'LR-01', label: 'LR-01 (cap. 60)' },
+                  { value: 'LR-02', label: 'LR-02 (cap. 60)' },
+                  { value: 'Lab-A', label: 'Lab-A Linux (cap. 40)' },
+                  { value: 'Lab-B', label: 'Lab-B General (cap. 40)' },
+                ]}
+                onChange={() => showToast('Filtering rooms...', 'info')}
+              />
             </div>
             <div className="fg"><div className="lbl">View</div>
               <div className="tgl-group">
@@ -152,7 +160,7 @@ export default function Page() {
           <div className="card-hdr"><div className="card-title"><span className="ctitle-icon"><i className="lni lni-clipboard"></i></span> List View — Schedule</div></div>
           <ScrollTable>
             <table id="tt-list-table">
-              <thead><tr><th>Action</th>{fth('Day', 'day', ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])}<th>Time</th><th>Course Unit</th>{fth('Type', 'type', ['Theory', 'Practical'])}{fth('Room', 'room', ['LR-01', 'LR-02', 'Lab-A', 'Lab-B'])}<th>Capacity</th>{fth('Faculty', 'faculty', ['Dr. Ssekibuule Ronald', 'Ms. Namutebi Joyce', 'Prof. Mukasa Charles'])}<th>Combined Batch?</th></tr></thead>
+              <thead><tr><th style={{ width: 48 }}></th>{fth('Day', 'day', ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])}<th>Time</th><th>Course Unit</th>{fth('Type', 'type', ['Theory', 'Practical'])}{fth('Room', 'room', ['LR-01', 'LR-02', 'Lab-A', 'Lab-B'])}<th>Capacity</th>{fth('Faculty', 'faculty', ['Dr. Ssekibuule Ronald', 'Ms. Namutebi Joyce', 'Prof. Mukasa Charles'])}<th>Combined Batch?</th></tr></thead>
               <tbody>
                 {filteredRows.map((r, i) => (
                   <tr key={i}>

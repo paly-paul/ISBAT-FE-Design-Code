@@ -1,7 +1,8 @@
-'use client'
+﻿'use client'
 import { useState } from 'react'
 import { ModalProps } from './types'
 import { SuccessPopup } from './SuccessPopup'
+import { SearchSelect } from '@/components/SearchSelect'
 
 const LECTURERS = [
   'Dr. Nakimuli Sarah',
@@ -29,7 +30,7 @@ export function NewFacultyModal({ isOpen, onClose, showToast }: ModalProps) {
   }
 
   return (
-    <div className="modal-overlay open" id="new-faculty-modal" onClick={onClose}>
+    <div className="modal-overlay open" id="new-faculty-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-apartment"></i> Add Faculty</div>
@@ -46,10 +47,10 @@ export function NewFacultyModal({ isOpen, onClose, showToast }: ModalProps) {
           </div>
           <div className="fg span2">
             <div className="lbl">Dean <span className="req">*</span></div>
-            <select className="ctrl">
-              <option value="">Select lecturer…</option>
-              {LECTURERS.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
+            <SearchSelect
+              placeholder="Select lecturer…"
+              options={LECTURERS}
+            />
           </div>
         </div>
         <div className="modal-footer">

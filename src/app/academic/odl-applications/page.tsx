@@ -1,17 +1,18 @@
-'use client'
+﻿'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [showPreview, setShowPreview] = useState(false)
-  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
@@ -35,7 +36,7 @@ export default function Page() {
     { ref: 'ODL-2026-004', name: 'Acayo Lydia',        email: 'l.acayo@email.com',     programme: 'Diploma Bus. ODL', appliedDate: '05 Apr 2026', payment: 'Paid',         paymentBadge: 'badge-green', paymentIcon: 'lni-checkmark', dpoToken: 'TKN-4791', status: 'Reconciled',     statusBadge: 'badge-green',  rowClass: '',       strong: false, variant: 'view' },
   ]
   const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v || String((r as Record<string, unknown>)[k]) === v)
+    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   )
 
   function fth(label: string, col: string, opts: string[]) {
@@ -44,10 +45,11 @@ export default function Page() {
         label={label}
         opts={opts}
         isOpen={openFilter === col}
-        activeFilter={filters[col] ?? ''}
+        activeFilter={filters[col] ?? []}
         onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
+        onClose={() => setOpenFilter(null)}
       />
     )
   }
@@ -95,13 +97,13 @@ export default function Page() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-world"></i></span> ODL Applicants — Temporary Table</div>
             <div className="flex gap-2">
-              <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Statuses</option><option>Awaiting Payment</option><option>Paid — Pending Recon.</option><option>Reconciled</option></select>
+              <SearchSelect className="w-auto text-[var(--fs-sm)]" options={['All Statuses', 'Awaiting Payment', 'Paid — Pending Recon.', 'Reconciled']} />
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>
           </div>
           <ScrollTable>
             <table>
-              <thead><tr><th>Action</th><th>ODL Ref No.</th><th>Applicant Name</th><th>Email</th>{fth('Programme', 'programme', ['MBA ODL', 'BSc. IT ODL', 'Diploma Bus. ODL'])}<th>Applied Date</th>{fth('Payment', 'payment', ['Paid (DPO)', 'Paid', 'Not Paid'])}<th>DPO Token</th>{fth('Status', 'status', ['Pending Recon.', 'Awaiting Payment', 'Reconciled'])}</tr></thead>
+              <thead><tr><th style={{ width: 48 }}></th><th>ODL Ref No.</th><th>Applicant Name</th><th>Email</th>{fth('Programme', 'programme', ['MBA ODL', 'BSc. IT ODL', 'Diploma Bus. ODL'])}<th>Applied Date</th>{fth('Payment', 'payment', ['Paid (DPO)', 'Paid', 'Not Paid'])}<th>DPO Token</th>{fth('Status', 'status', ['Pending Recon.', 'Awaiting Payment', 'Reconciled'])}</tr></thead>
               <tbody>
                 {filteredRows.map((r, i) => (
                   <tr key={i} className={r.rowClass}>
@@ -148,10 +150,10 @@ export default function Page() {
             <div className="fg"><div className="lbl">Email Address <span className="req">*</span></div><input className="ctrl" type="email" placeholder="Your email (used for ref. number)" /></div>
             <div className="fg"><div className="lbl">Phone Number <span className="req">*</span></div><input className="ctrl" type="tel" placeholder="+256 700 000 000" /></div>
             <div className="fg"><div className="lbl">Programme of Interest <span className="req">*</span></div>
-              <select className="ctrl"><option>-- Select ODL Programme --</option><option>MBA Business Admin (ODL)</option><option>BSc. IT (ODL)</option><option>Diploma in Business (ODL)</option></select>
+              <SearchSelect placeholder="-- Select ODL Programme --" options={['MBA Business Admin (ODL)', 'BSc. IT (ODL)', 'Diploma in Business (ODL)']} />
             </div>
             <div className="fg"><div className="lbl">Highest Qualification</div>
-              <select className="ctrl"><option>-- Select --</option><option>A-Level</option><option>Diploma</option><option>Bachelor&apos;s Degree</option></select>
+              <SearchSelect placeholder="-- Select --" options={['A-Level', 'Diploma', "Bachelor's Degree"]} />
             </div>
             <div className="fg"><div className="lbl">Photo Upload <span className="req">*</span></div>
               <div className="file-zone p-3"><input type="file" accept="image/*" /><div className="file-zone-icon text-[var(--fs-2xl)]"><i className="lni lni-image"></i></div><p>Passport photo</p></div>

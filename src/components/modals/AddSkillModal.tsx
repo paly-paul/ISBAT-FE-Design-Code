@@ -1,7 +1,8 @@
-'use client'
+﻿'use client'
 import { useState } from 'react'
 import { ModalProps } from './types'
 import { SuccessPopup } from './SuccessPopup'
+import { SearchSelect } from '@/components/SearchSelect'
 
 const ALL_LECTURERS = [
   'Dr. Ssekibuule Ronald (FCT)',
@@ -41,7 +42,7 @@ export function AddSkillModal({ isOpen, onClose, showToast, role = 'lecturer', c
   }
 
   return (
-    <div className="modal-overlay open" id="add-skill-modal" onClick={onClose}>
+    <div className="modal-overlay open" id="add-skill-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-bulb"></i> Add / Update Skills</div>
@@ -74,10 +75,10 @@ export function AddSkillModal({ isOpen, onClose, showToast, role = 'lecturer', c
               style={{ background: 'var(--g100)', color: 'var(--g500)', cursor: 'not-allowed' }}
             />
           ) : (
-            <select className="ctrl">
-              <option value="">— Select lecturer —</option>
-              {ALL_LECTURERS.map(l => <option key={l}>{l}</option>)}
-            </select>
+            <SearchSelect
+              placeholder="— Select lecturer —"
+              options={ALL_LECTURERS}
+            />
           )}
           {isLecturer && (
             <div className="hint" style={{ marginTop: 4, fontSize: 11.5, color: 'var(--g400)' }}>
@@ -90,7 +91,7 @@ export function AddSkillModal({ isOpen, onClose, showToast, role = 'lecturer', c
         <div className="flex flex-col gap-2 mb-[10px]">
           <div className="flex gap-2 items-center">
             <input className="ctrl flex-1" type="text" placeholder="Skill / Subject area (e.g. Data Structures)" />
-            <select className="ctrl" style={{ width: 130, flexShrink: 0 }}><option>Expert</option><option>Proficient</option><option>Familiar</option></select>
+            <SearchSelect options={['Expert', 'Proficient', 'Familiar']} style={{ width: 130, flexShrink: 0 }} />
             <button className="btn btn-danger btn-sm" style={{ flexShrink: 0, width: 36, padding: '0 0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><i className="lni lni-trash-can"></i></button>
           </div>
         </div>

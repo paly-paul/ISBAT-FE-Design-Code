@@ -1,10 +1,11 @@
-'use client'
+﻿'use client'
 import { ModalProps } from './types'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export function AddSlotModal({ isOpen, onClose, showToast }: ModalProps) {
   if (!isOpen) return null
   return (
-    <div className="modal-overlay open" id="add-slot-modal" onClick={onClose}>
+    <div className="modal-overlay open" id="add-slot-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-calendar"></i> Add Timetable Slot</div>
@@ -13,38 +14,31 @@ export function AddSlotModal({ isOpen, onClose, showToast }: ModalProps) {
         <div className="g2">
           <div className="fg">
             <div className="lbl">Course Unit <span className="req">*</span></div>
-            <select className="ctrl" id="slot-cu">
-              <option>IT101 – Intro to Programming</option>
-              <option>IT102 – Computer Org.</option>
-              <option>IT103 – Engineering Maths</option>
-              <option>MBA101 – Managerial Econ.</option>
-            </select>
+            <SearchSelect options={['IT101 – Intro to Programming', 'IT102 – Computer Org.', 'IT103 – Engineering Maths', 'MBA101 – Managerial Econ.']} />
           </div>
-          <div className="fg"><div className="lbl">Session Type <span className="req">*</span></div><select className="ctrl"><option>Theory</option><option>Practical</option><option>Tutorial</option><option>CBT/Lab</option></select></div>
-          <div className="fg"><div className="lbl">Day <span className="req">*</span></div><select className="ctrl"><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option></select></div>
+          <div className="fg"><div className="lbl">Session Type <span className="req">*</span></div><SearchSelect options={['Theory', 'Practical', 'Tutorial', 'CBT/Lab']} /></div>
+          <div className="fg"><div className="lbl">Day <span className="req">*</span></div><SearchSelect options={['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']} /></div>
           <div className="fg"><div className="lbl">Start Time <span className="req">*</span></div><input className="ctrl" type="time" defaultValue="08:00" id="slot-start" /></div>
           <div className="fg"><div className="lbl">End Time <span className="req">*</span></div><input className="ctrl" type="time" defaultValue="10:00" id="slot-end" /></div>
           <div className="fg">
             <div className="lbl">Room / Venue <span className="req">*</span></div>
-            <select className="ctrl" id="slot-room">
-              <option value="">-- Select Room --</option>
-              <option value="LR-01">LR-01 (Lecture, cap. 60)</option>
-              <option value="LR-02">LR-02 (Lecture, cap. 60)</option>
-              <option value="Lab-A">Lab-A Linux (Specialist, cap. 40)</option>
-              <option value="Lab-B">Lab-B General (Computer Lab, cap. 40)</option>
-              <option value="Lab-C">Lab-C MBA (Case Room, cap. 30)</option>
-            </select>
+            <SearchSelect
+              placeholder="-- Select Room --"
+              options={[
+                { value: 'LR-01', label: 'LR-01 (Lecture, cap. 60)' },
+                { value: 'LR-02', label: 'LR-02 (Lecture, cap. 60)' },
+                { value: 'Lab-A', label: 'Lab-A Linux (Specialist, cap. 40)' },
+                { value: 'Lab-B', label: 'Lab-B General (Computer Lab, cap. 40)' },
+                { value: 'Lab-C', label: 'Lab-C MBA (Case Room, cap. 30)' },
+              ]}
+            />
           </div>
           <div className="fg">
             <div className="lbl">Faculty <span className="req">*</span></div>
-            <select className="ctrl" id="slot-faculty">
-              <option value="">-- Select Faculty --</option>
-              <option>Dr. Ssekibuule Ronald</option>
-              <option>Ms. Namutebi Joyce</option>
-              <option>Prof. Mukasa Charles</option>
-              <option>Dr. Tendo Patrick</option>
-              <option>Dr. Kato Andrew</option>
-            </select>
+            <SearchSelect
+              placeholder="-- Select Faculty --"
+              options={['Dr. Ssekibuule Ronald', 'Ms. Namutebi Joyce', 'Prof. Mukasa Charles', 'Dr. Tendo Patrick', 'Dr. Kato Andrew']}
+            />
           </div>
         </div>
         <div id="slot-clash-result" className="hidden my-[10px]"></div>

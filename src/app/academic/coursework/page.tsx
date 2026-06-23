@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -10,7 +10,7 @@ export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
@@ -33,7 +33,7 @@ export default function Page() {
     { unit: 'MBA101 – Managerial Econ.',      batch: 'MBA-S1-E',    faculty: 'Prof. Mukasa',    openDate: '—',          dueDate: '—',           outOf: 25, submitted: '0/24',  submittedClass: '',           cleared: 24, clearedClass: 'text-green', status: 'Not Scheduled', statusBadge: 'badge-grey',  statusIcon: '',              rowClass: 'flagged', variant: 'schedule' },
   ]
   const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v || (r as unknown as Record<string, string>)[k] === v)
+    Object.entries(filters).every(([k, v]) => !v.length || v.includes((r as unknown as Record<string, string>)[k]))
   )
 
   function fth(label: string, col: string, opts: string[]) {
@@ -42,10 +42,11 @@ export default function Page() {
         label={label}
         opts={opts}
         isOpen={openFilter === col}
-        activeFilter={filters[col] ?? ''}
+        activeFilter={filters[col] ?? []}
         onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(val) => { setFilters(f => ({ ...f, [col]: val })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: '' })); setOpenFilter(null) }}
+        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
+        onClose={() => setOpenFilter(null)}
       />
     )
   }
@@ -84,7 +85,7 @@ export default function Page() {
           </div>
           <ScrollTable>
             <table>
-              <thead><tr><th>Action</th><th>Course Unit</th>{fth('Batch', 'batch', ['BSC-IT-S1-D', 'MBA-S1-E'])}{fth('Faculty', 'faculty', ['Dr. Ssekibuule', 'Ms. Namutebi', 'Prof. Mukasa'])}<th>Open Date</th><th>Due Date</th><th>Out Of</th><th>Submitted</th><th>Cleared (≥50%)</th>{fth('Status', 'status', ['Closed', 'Open', 'Not Scheduled'])}</tr></thead>
+              <thead><tr><th style={{ width: 48 }}></th><th>Course Unit</th>{fth('Batch', 'batch', ['BSC-IT-S1-D', 'MBA-S1-E'])}{fth('Faculty', 'faculty', ['Dr. Ssekibuule', 'Ms. Namutebi', 'Prof. Mukasa'])}<th>Open Date</th><th>Due Date</th><th>Out Of</th><th>Submitted</th><th>Cleared (≥50%)</th>{fth('Status', 'status', ['Closed', 'Open', 'Not Scheduled'])}</tr></thead>
               <tbody>
                 {filteredRows.map((r, i) => (
                   <tr key={i} className={r.rowClass}>

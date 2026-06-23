@@ -1,7 +1,8 @@
-'use client'
+﻿'use client'
 import { useState } from 'react'
 import { ModalProps } from './types'
 import { SuccessPopup } from './SuccessPopup'
+import { SearchSelect } from '@/components/SearchSelect'
 
 const PROGRAMME_LEVELS = [
   'Certificate',
@@ -30,7 +31,7 @@ export function EditRepTagModal({ isOpen, onClose, showToast }: ModalProps) {
   }
 
   return (
-    <div className="modal-overlay open" id="edit-rep-tag-modal" onClick={onClose}>
+    <div className="modal-overlay open" id="edit-rep-tag-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Repetition Tag</div>
@@ -43,10 +44,7 @@ export function EditRepTagModal({ isOpen, onClose, showToast }: ModalProps) {
           </div>
           <div className="fg">
             <div className="lbl">Programme Level <span className="req">*</span></div>
-            <select className="ctrl" defaultValue="Bachelor's Degree">
-              <option value="">Select level…</option>
-              {PROGRAMME_LEVELS.map(l => <option key={l}>{l}</option>)}
-            </select>
+            <SearchSelect placeholder="Select level…" value="Bachelor's Degree" options={PROGRAMME_LEVELS} />
           </div>
           <div className="fg span2">
             <div className="lbl">Description <span className="req">*</span></div>

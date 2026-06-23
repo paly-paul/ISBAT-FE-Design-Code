@@ -1,7 +1,8 @@
-'use client'
+﻿'use client'
 import { useState } from 'react'
 import { ModalProps } from './types'
 import { SuccessPopup } from './SuccessPopup'
+import { SearchSelect } from '@/components/SearchSelect'
 
 type Topic   = { name: string; studySeq: string; numClasses: string }
 type Chapter = { title: string; topics: Topic[] }
@@ -13,31 +14,59 @@ const PREFILLED_CHAPTERS: Chapter[] = [
   {
     title: 'Chapter 1: Introduction to Programming',
     topics: [
-      { name: 'What is a Program?',           studySeq: 'Week 1',   numClasses: '2' },
-      { name: 'Variables and Data Types',      studySeq: 'Week 1–2', numClasses: '3' },
+      { name: 'What is a Program?',           studySeq: '1', numClasses: '2' },
+      { name: 'Variables and Data Types',      studySeq: '2', numClasses: '3' },
     ],
   },
   {
     title: 'Chapter 2: Control Structures',
     topics: [
-      { name: 'Conditional Statements (if/else)', studySeq: 'Week 3', numClasses: '3' },
-      { name: 'Loops (for, while, do-while)',      studySeq: 'Week 4', numClasses: '4' },
+      { name: 'Conditional Statements (if/else)', studySeq: '3', numClasses: '3' },
+      { name: 'Loops (for, while, do-while)',      studySeq: '4', numClasses: '4' },
     ],
   },
 ]
 
 export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
-  const [saved, setSaved]       = useState(false)
-  const [chapters, setChapters] = useState<Chapter[]>(PREFILLED_CHAPTERS)
+  const [saved, setSaved]               = useState(false)
+  const [chapters, setChapters]         = useState<Chapter[]>(PREFILLED_CHAPTERS)
+  const [unitCode, setUnitCode]         = useState('IT101')
+  const [unitName, setUnitName]         = useState('Introduction to Programming')
+  const [numChapters, setNumChapters]   = useState('2')
+  const [credits, setCredits]           = useState('3')
+  const [unitType, setUnitType]         = useState('theory')
+  const [unitCategory, setUnitCategory] = useState('core')
+  const [errors, setErrors]               = useState<Record<string, string>>({})
+  const [chapterErrors, setChapterErrors] = useState<string[]>([])
+
+  function validate() {
+    const e: Record<string, string> = {}
+    if (!unitCode.trim())  e.unitCode     = 'Unit Code is required'
+    if (!unitName.trim())  e.unitName     = 'Unit Name is required'
+    if (!credits)          e.credits      = 'Credits is required'
+    if (!unitType)         e.unitType     = 'Please select a Unit Type'
+    if (!unitCategory)     e.unitCategory = 'Please select a Unit Category'
+    setErrors(e)
+    const chapErrs = chapters.map(ch => ch.title.trim() ? '' : 'Chapter title is required')
+    setChapterErrors(chapErrs)
+    return Object.keys(e).length === 0 && chapErrs.every(err => !err)
+  }
 
   if (!isOpen) return null
 
-  function handleClose() { setSaved(false); setChapters(PREFILLED_CHAPTERS); onClose() }
+  function handleClose() { setSaved(false); setChapters(PREFILLED_CHAPTERS); setErrors({}); setChapterErrors([]); onClose() }
 
-  function addChapter() { setChapters(p => [...p, blankChapter(p.length + 1)]) }
-  function removeChapter(ci: number) { setChapters(p => p.filter((_, i) => i !== ci)) }
+  function addChapter() {
+    setChapters(p => [...p, blankChapter(p.length + 1)])
+    setChapterErrors(p => [...p, ''])
+  }
+  function removeChapter(ci: number) {
+    setChapters(p => p.filter((_, i) => i !== ci))
+    setChapterErrors(p => p.filter((_, i) => i !== ci))
+  }
   function setChapterTitle(ci: number, v: string) {
     setChapters(p => p.map((c, i) => i === ci ? { ...c, title: v } : c))
+    if (chapterErrors[ci]) setChapterErrors(p => p.map((e, i) => i === ci ? '' : e))
   }
   function addTopic(ci: number) {
     setChapters(p => p.map((c, i) => i === ci ? { ...c, topics: [...c.topics, blankTopic()] } : c))
@@ -63,7 +92,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) 
   }
 
   return (
-    <div className="modal-overlay open" id="cu-edit-modal" onClick={handleClose}>
+    <div className="modal-overlay open" id="cu-edit-modal">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Course Unit</div>
@@ -76,32 +105,87 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) 
           <div className="g3">
             <div className="fg">
               <div className="lbl">Unit Code <span className="req">*</span></div>
-              <input className="ctrl font-mono uppercase" defaultValue="IT101" />
+              <input
+                className="ctrl font-mono uppercase"
+                style={errors.unitCode ? { borderColor: 'var(--red)' } : undefined}
+                value={unitCode}
+                onChange={e => { setUnitCode(e.target.value); if (errors.unitCode) setErrors(p => ({ ...p, unitCode: '' })) }}
+              />
+              {errors.unitCode && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.unitCode}</p>}
             </div>
-            <div className="fg span2">
+            <div className="fg">
               <div className="lbl">Unit Name <span className="req">*</span></div>
-              <input className="ctrl" defaultValue="Introduction to Programming" />
+              <input
+                className="ctrl"
+                style={errors.unitName ? { borderColor: 'var(--red)' } : undefined}
+                value={unitName}
+                onChange={e => { setUnitName(e.target.value); if (errors.unitName) setErrors(p => ({ ...p, unitName: '' })) }}
+              />
+              {errors.unitName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.unitName}</p>}
+            </div>
+            <div className="fg">
+              <div className="lbl">No. of Chapters</div>
+              <input
+                className="ctrl"
+                style={errors.numChapters ? { borderColor: 'var(--red)' } : undefined}
+                type="number"
+                min={1}
+                value={numChapters}
+                onChange={e => { setNumChapters(e.target.value); if (errors.numChapters) setErrors(p => ({ ...p, numChapters: '' })) }}
+              />
+              {errors.numChapters && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.numChapters}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Credits <span className="req">*</span></div>
-              <input className="ctrl" type="number" defaultValue={3} min={1} />
+              <input
+                className="ctrl"
+                style={errors.credits ? { borderColor: 'var(--red)' } : undefined}
+                type="number"
+                min={1}
+                value={credits}
+                onChange={e => { setCredits(e.target.value); if (errors.credits) setErrors(p => ({ ...p, credits: '' })) }}
+              />
+              {errors.credits && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.credits}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Unit Type <span className="req">*</span></div>
-              <select className="ctrl" defaultValue="theory">
-                <option value="theory">Theory — IA (CW+CBT) + UE</option>
-                <option value="practical">Practical — CW only (no CBT) + Practical UE</option>
-                <option value="combined">Combined — Theory IA + Practical UE (no Practical IA)</option>
-                <option value="project">Project — Evaluated after set timeframe</option>
-              </select>
+              <SearchSelect
+                value={unitType}
+                onChange={v => { setUnitType(v); if (errors.unitType) setErrors(p => ({ ...p, unitType: '' })) }}
+                options={[
+                  { value: 'theory', label: 'Theory — IA (CW+CBT) + UE' },
+                  { value: 'practical', label: 'Practical — CW only (no CBT) + Practical UE' },
+                  { value: 'combined', label: 'Combined — Theory IA + Practical UE (no Practical IA)' },
+                  { value: 'project', label: 'Project — Evaluated after set timeframe' },
+                ]}
+              />
+              {errors.unitType && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.unitType}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Unit Category <span className="req">*</span></div>
-              <select className="ctrl" defaultValue="core">
-                <option value="core">Core — Mandatory for all students</option>
-                <option value="specialization">Specialization — Mandatory for enrolled specialization only</option>
-                <option value="elective">Elective — Batch selects one paper from a set</option>
-              </select>
+              <SearchSelect
+                value={unitCategory}
+                onChange={v => { setUnitCategory(v); if (errors.unitCategory) setErrors(p => ({ ...p, unitCategory: '' })) }}
+                options={[
+                  { value: 'core', label: 'Core — Mandatory for all students' },
+                  { value: 'specialization', label: 'Specialization — Mandatory for enrolled specialization only' },
+                  { value: 'elective', label: 'Elective — Batch selects one paper from a set' },
+                ]}
+              />
+              {errors.unitCategory && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.unitCategory}</p>}
+            </div>
+            <div className="fg span2">
+              <div className="lbl">Repetition Tag</div>
+              <SearchSelect
+                placeholder="— Select repetition tag —"
+                value="RT-CU-001"
+                options={[
+                  { value: 'RT-CU-001', label: 'RT-CU-001 — Standard repeat for failed units' },
+                  { value: 'RT-CU-002', label: 'RT-CU-002 — Supplementary repeat (one semester delay)' },
+                  { value: 'RT-CU-003', label: 'RT-CU-003 — Cross-programme shared unit' },
+                  { value: 'RT-CU-004', label: 'RT-CU-004 — Elective repeat (student choice)' },
+                ]}
+              />
             </div>
             <div className="fg span3">
               <div className="lbl">Include In</div>
@@ -185,9 +269,17 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) 
             <div className="flex flex-col gap-4 mt-2">
               {chapters.map((ch, ci) => (
                 <div key={ci} style={{ border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--b50)', borderBottom: '1px solid var(--b100)' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--b600)', whiteSpace: 'nowrap' }}>Ch. {ci + 1}</span>
-                    <input className="ctrl" style={{ flex: 1, fontWeight: 600 }} value={ch.title} onChange={e => setChapterTitle(ci, e.target.value)} />
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', background: 'var(--b50)', borderBottom: '1px solid var(--b100)' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--b600)', whiteSpace: 'nowrap', paddingTop: 6 }}>Ch. {ci + 1}</span>
+                    <div style={{ flex: 1 }}>
+                      <input
+                        className="ctrl"
+                        style={{ width: '100%', fontWeight: 600, ...(chapterErrors[ci] ? { borderColor: 'var(--red)' } : {}) }}
+                        value={ch.title}
+                        onChange={e => setChapterTitle(ci, e.target.value)}
+                      />
+                      {chapterErrors[ci] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{chapterErrors[ci]}</p>}
+                    </div>
                     {chapters.length > 1 && (
                       <button className="btn btn-danger btn-sm" style={{ flexShrink: 0, width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => removeChapter(ci)}>
                         <i className="lni lni-trash-can"></i>
@@ -202,7 +294,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) 
                       <div key={ti} style={{ display: 'grid', gridTemplateColumns: '20px 1fr 150px 130px 30px', gap: 6, alignItems: 'center' }}>
                         <span style={{ fontSize: 11, color: 'var(--g400)', textAlign: 'center' }}>{ti + 1}.</span>
                         <input className="ctrl" value={t.name}      onChange={e => setTopic(ci, ti, 'name',      e.target.value)} placeholder="Topic name" />
-                        <input className="ctrl" value={t.studySeq}  onChange={e => setTopic(ci, ti, 'studySeq',  e.target.value)} placeholder="e.g. Week 1–2" />
+                        <input className="ctrl" type="number" min={1} value={t.studySeq} onChange={e => setTopic(ci, ti, 'studySeq', e.target.value)} placeholder="e.g. 3" />
                         <input className="ctrl" value={t.numClasses} onChange={e => setTopic(ci, ti, 'numClasses', e.target.value)} placeholder="e.g. 4" />
                         <button className="btn btn-danger btn-sm" style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => removeTopic(ci, ti)} disabled={ch.topics.length === 1}>
                           <i className="lni lni-trash-can"></i>
@@ -239,7 +331,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) 
 
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => setSaved(true)}>
+          <button className="btn btn-primary" onClick={() => { if (validate()) setSaved(true) }}>
             <i className="lni lni-checkmark"></i> Update Course Unit
           </button>
         </div>
