@@ -2750,6 +2750,10 @@ th:hover .th-fi {
   display: flex
 }
 
+body:has(.modal-overlay.open) {
+  overflow: hidden
+}
+
 .modal {
   background: var(--white);
   border-radius: var(--radius);
@@ -3735,43 +3739,94 @@ th:hover .th-fi {
 }
 
 .mdl-section--amber {
-  background: linear-gradient(180deg, var(--amber-bg) 0%, var(--white) 60px)
+  background: var(--white);
+  padding-top: 0
 }
 
 .mdl-section--amber::before {
   background: var(--amber)
 }
 
-.mdl-section--amber .mdl-section-icon {
+.mdl-section--amber .mdl-section-hdr {
   background: var(--amber-bg);
+  border-bottom: 1.5px solid var(--amber-bd);
+  margin: 0 -18px 14px;
+  padding: 14px 16px;
+  border-radius: var(--rsm) var(--rsm) 0 0
+}
+
+.mdl-section--amber .mdl-section-title {
+  color: color-mix(in srgb, var(--amber) 65%, #000)
+}
+
+.mdl-section--amber .mdl-section-sub {
+  color: var(--g600)
+}
+
+.mdl-section--amber .mdl-section-icon {
+  background: color-mix(in srgb, var(--amber) 12%, white);
   color: var(--amber);
   border: 1.5px solid var(--amber-bd)
 }
 
 .mdl-section--blue {
-  background: linear-gradient(180deg, var(--b50) 0%, var(--white) 60px)
+  background: var(--white);
+  padding-top: 0
 }
 
 .mdl-section--blue::before {
   background: var(--b600)
 }
 
-.mdl-section--blue .mdl-section-icon {
+.mdl-section--blue .mdl-section-hdr {
   background: var(--b50);
+  border-bottom: 1.5px solid var(--b100);
+  margin: 0 -18px 14px;
+  padding: 14px 16px;
+  border-radius: var(--rsm) var(--rsm) 0 0
+}
+
+.mdl-section--blue .mdl-section-title {
+  color: var(--b900)
+}
+
+.mdl-section--blue .mdl-section-sub {
+  color: var(--b600)
+}
+
+.mdl-section--blue .mdl-section-icon {
+  background: var(--b100);
   color: var(--b700);
   border: 1.5px solid var(--b200)
 }
 
 .mdl-section--green {
-  background: linear-gradient(180deg, var(--green-bg) 0%, var(--white) 60px)
+  background: var(--white);
+  padding-top: 0
 }
 
 .mdl-section--green::before {
   background: var(--green)
 }
 
-.mdl-section--green .mdl-section-icon {
+.mdl-section--green .mdl-section-hdr {
   background: var(--green-bg);
+  border-bottom: 1.5px solid var(--green-bd);
+  margin: 0 -18px 14px;
+  padding: 14px 16px;
+  border-radius: var(--rsm) var(--rsm) 0 0
+}
+
+.mdl-section--green .mdl-section-title {
+  color: color-mix(in srgb, var(--green) 65%, #000)
+}
+
+.mdl-section--green .mdl-section-sub {
+  color: var(--g600)
+}
+
+.mdl-section--green .mdl-section-icon {
+  background: color-mix(in srgb, var(--green) 10%, white);
   color: var(--green);
   border: 1.5px solid var(--green-bd)
 }
