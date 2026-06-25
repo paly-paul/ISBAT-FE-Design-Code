@@ -5,6 +5,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { EmptyState } from '@/components/EmptyState'
 
 export default function Page() {
   const router = useRouter()
@@ -186,10 +187,13 @@ export default function Page() {
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>
           </div>
-          <ScrollTable>
+          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead><tr><th style={{ width: 48 }}></th><th>Batch Code</th>{fth('Programme', 'programme', ['BSc. Information Technology', 'BBA Business Administration', 'MBA Business Admin', 'BEng. Civil Engineering'])}{fth('Semester', 'semester', ['Semester 1', 'Semester 2', 'Semester 3'])}<th>Students</th>{fth('Allocation', 'allocation', ['Done', '3 Pending'])}{fth('Timetable', 'timetable', ['Live', 'Draft', 'Pending'])}{fth('CW Status', 'cwStatus', ['In Progress', 'Not Started', 'Active'])}</tr></thead>
               <tbody>
+                {filteredRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : null}
                 {filteredRows.map((r, i) => (
                   <tr key={i}>
                     <td>

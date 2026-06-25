@@ -3,17 +3,23 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
-import { NewRepTagModal } from '@/components/modals/NewRepTagModal'
-import { EditRepTagModal } from '@/components/modals/EditRepTagModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
+import { NewCampusModal } from '@/components/modals/NewCampusModal'
+import { EditCampusModal } from '@/components/modals/EditCampusModal'
+
+function StatusBadge({ status }: { status: string }) {
+  if (status === 'Active')
+    return <span className="badge-green">{status}</span>
+  return <span className="badge-grey">{status}</span>
+}
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
-  const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
+  const [filters, setFilters]       = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
@@ -31,12 +37,12 @@ export default function Page() {
   }, [])
 
   const rows = [
-    { code: 'RT-CU-001', description: 'Standard repeat for failed course units',       level: "Bachelor's Degree"    },
-    { code: 'RT-CU-002', description: 'Supplementary exam carry-forward repeat',        level: 'Diploma'              },
-    { code: 'RT-CU-003', description: 'Medical or special consideration repeat',        level: "Master's Degree"      },
-    { code: 'RT-CU-004', description: 'Retake after academic probation',                level: "Bachelor's Degree"    },
-    { code: 'RT-CU-005', description: 'Credit exemption repeat for lateral entrants',   level: 'Postgraduate Diploma' },
+    { code: 'MKL', name: 'Makerere Campus',      city: 'Kampala, Uganda',  status: 'Active'   },
+    { code: 'KAM', name: 'Kampala City Campus',   city: 'Kampala, Uganda',  status: 'Active'   },
+    { code: 'MBR', name: 'Mbarara Campus',        city: 'Mbarara, Uganda',  status: 'Inactive' },
+    { code: 'GUL', name: 'Gulu Campus',           city: 'Gulu, Uganda',     status: 'Active'   },
   ]
+
   const filteredRows = rows.filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   )
@@ -48,8 +54,8 @@ export default function Page() {
         opts={opts}
         isOpen={openFilter === col}
         activeFilter={filters[col] ?? []}
-        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
+        onToggle={e => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
+        onSelect={vals => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
         onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
         onClose={() => setOpenFilter(null)}
       />
@@ -61,28 +67,26 @@ export default function Page() {
       <div className="page active">
         <div className="pg-hdr">
           <div>
-            <div className="pg-title">Course Units Repetition Tag</div>
-            <div className="pg-sub">Define repetition tags for course units · Linked to programme levels</div>
+            <div className="pg-title">Campus Master</div>
+            <div className="pg-sub">Manage university campuses and their locations</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-rep-tag-modal')}>
-            <i className="lni lni-plus"></i> Add Repetition Tag
+          <button className="btn btn-primary" onClick={() => openModal('new-campus-modal')}>
+            <i className="lni lni-plus"></i> Add Campus
           </button>
         </div>
         <div className="card">
           <div className="card-hdr">
-            <div className="card-title">
-              <span className="ctitle-icon"><i className="lni lni-reload"></i></span>
-              Repetition Tags
-            </div>
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-home"></i></span> Campuses</div>
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead>
                 <tr>
                   <th style={{ width: 48 }}></th>
-                  <th>Repetition Tag Code</th>
-                  <th>Description</th>
-                  {fth('Programme Level', 'level', ["Bachelor's Degree", 'Diploma', "Master's Degree", 'Postgraduate Diploma', 'Certificate', 'PhD / Doctorate'])}
+                  <th>Campus Code</th>
+                  <th>Campus Name</th>
+                  {fth('City / Location', 'city', ['Kampala, Uganda', 'Mbarara, Uganda', 'Gulu, Uganda'])}
+                  {fth('Status', 'status', ['Active', 'Inactive'])}
                 </tr>
               </thead>
               <tbody>
@@ -91,10 +95,17 @@ export default function Page() {
                   : null}
                 {filteredRows.map((r, i) => (
                   <tr key={i}>
-                    <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => openModal('edit-rep-tag-modal')}><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>
-                    <td className="font-mono font-bold text-b700">{r.code}</td>
-                    <td>{r.description}</td>
-                    <td><span className="badge badge-blue">{r.level}</span></td>
+                    <td>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openModal('edit-campus-modal')}>
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>
+                      </ActionMenu>
+                    </td>
+                    <td className="font-mono font-bold">{r.code}</td>
+                    <td><strong>{r.name}</strong></td>
+                    <td>{r.city}</td>
+                    <td><StatusBadge status={r.status} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -102,8 +113,8 @@ export default function Page() {
           </ScrollTable>
         </div>
       </div>
-      <NewRepTagModal  isOpen={openModals.has('new-rep-tag-modal')}  onClose={() => closeModal('new-rep-tag-modal')}  showToast={showToast} />
-      <EditRepTagModal isOpen={openModals.has('edit-rep-tag-modal')} onClose={() => closeModal('edit-rep-tag-modal')} showToast={showToast} />
+      <NewCampusModal  isOpen={openModals.has('new-campus-modal')}  onClose={() => closeModal('new-campus-modal')}  showToast={showToast} />
+      <EditCampusModal isOpen={openModals.has('edit-campus-modal')} onClose={() => closeModal('edit-campus-modal')} showToast={showToast} />
       <Toast toast={toast} />
     </>
   )

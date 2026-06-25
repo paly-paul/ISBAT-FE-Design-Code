@@ -7,6 +7,7 @@ import { NewBatchModal } from '@/components/modals/NewBatchModal'
 import { EditBatchModal } from '@/components/modals/EditBatchModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { EmptyState } from '@/components/EmptyState'
 import { SearchSelect } from '@/components/SearchSelect'
 
 export default function Page() {
@@ -90,10 +91,13 @@ export default function Page() {
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>
           </div>
-          <ScrollTable>
+          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead><tr><th style={{ width: 48 }}></th><th>Batch Code</th>{fth('Programme (Version)', 'programme', ['BSc. IT 2026', 'BBA 2021', 'MBA 2024', 'BSc. VFX 2026'])}{fth('Semester', 'semester', ['Sem 1', 'Sem 3'])}{fth('Type', 'type', ['Day', 'Evening', 'Weekend'])}<th>Sub-Batch</th><th>Students</th><th>Batch In-Charge</th><th>Timetable</th></tr></thead>
               <tbody>
+                {filteredRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : null}
                 {filteredRows.map((r, i) => (
                   <tr key={i} className={r.rowClass}>
                     <td>

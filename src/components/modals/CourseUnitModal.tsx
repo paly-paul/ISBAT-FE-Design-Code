@@ -12,6 +12,7 @@ function blankChapter(n: number): Chapter { return { title: `Chapter ${n}`, topi
 
 export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
   const [saved, setSaved]               = useState(false)
+  const [step, setStep]                 = useState(1)
   const [chapters, setChapters]         = useState<Chapter[]>([blankChapter(1)])
   const [unitCode, setUnitCode]         = useState('')
   const [unitName, setUnitName]         = useState('')
@@ -21,8 +22,16 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
   const [unitCategory, setUnitCategory] = useState('')
   const [errors, setErrors]               = useState<Record<string, string>>({})
   const [chapterErrors, setChapterErrors] = useState<string[]>([])
+  const [includeCW, setIncludeCW]     = useState(true)
+  const [includeCBT, setIncludeCBT]   = useState(true)
+  const [cwFinal, setCwFinal]         = useState(15)
+  const [cbtFinal, setCbtFinal]       = useState(15)
+  const [ueFinal, setUeFinal]         = useState(70)
 
-  function validate() {
+  const finalTotal = (includeCW ? cwFinal : 0) + (includeCBT ? cbtFinal : 0) + ueFinal
+  const totalOk    = finalTotal === 100
+
+  function validateStep1() {
     const e: Record<string, string> = {}
     if (!unitCode.trim())  e.unitCode     = 'Unit Code is required'
     if (!unitName.trim())  e.unitName     = 'Unit Name is required'
@@ -30,14 +39,22 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
     if (!unitType)         e.unitType     = 'Please select a Unit Type'
     if (!unitCategory)     e.unitCategory = 'Please select a Unit Category'
     setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  function validateStep2() {
     const chapErrs = chapters.map(ch => ch.title.trim() ? '' : 'Chapter title is required')
     setChapterErrors(chapErrs)
-    return Object.keys(e).length === 0 && chapErrs.every(err => !err)
+    return chapErrs.every(err => !err)
   }
 
   if (!isOpen) return null
 
-  function handleClose() { setSaved(false); setChapters([blankChapter(1)]); setErrors({}); setChapterErrors([]); onClose() }
+  function handleClose() {
+    setSaved(false); setStep(1); setChapters([blankChapter(1)]); setErrors({}); setChapterErrors([])
+    setIncludeCW(true); setIncludeCBT(true); setCwFinal(15); setCbtFinal(15); setUeFinal(70)
+    onClose()
+  }
 
   // chapter helpers
   function addChapter() {
@@ -85,7 +102,22 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
+        <div className="prog-steps">
+          <div className={`prog-step${step === 1 ? ' active' : ''}`}>
+            <span className="prog-step-num">1</span>
+            <span>Unit Details</span>
+          </div>
+          <div className="prog-step-line"></div>
+          <div className={`prog-step${step === 2 ? ' active' : ''}`}>
+            <span className="prog-step-num">2</span>
+            <span>Course Outline</span>
+          </div>
+        </div>
+
         <div className="modal-scroll">
+
+          {/* ── Step 1: Basic Info ─────────────────────────────── */}
+          {step === 1 && <>
 
           {/* ── Basic Info ─────────────────────────────────────── */}
           <div className="g3">
@@ -182,22 +214,14 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
               <div className="lbl">Include In</div>
               <div style={{ display: 'flex', gap: 28, marginTop: 8 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--g700)' }}>
-                  <input type="checkbox" defaultChecked style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }} />
+                  <input type="checkbox" checked={includeCBT} onChange={e => setIncludeCBT(e.target.checked)} style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }} />
                   Class Test
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--g700)' }}>
-                  <input type="checkbox" defaultChecked style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }} />
+                  <input type="checkbox" checked={includeCW} onChange={e => setIncludeCW(e.target.checked)} style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }} />
                   Course Work
                 </label>
               </div>
-            </div>
-          </div>
-
-          {/* ── Assessment hint ───────────────────────────────── */}
-          <div className="my-[14px] px-4 py-3 bg-b50 border-[1.5px] border-[var(--b100)] rounded-[var(--rsm)]">
-            <div className="font-bold text-b700 uppercase mb-2" style={{ fontSize: 'var(--fs-xs)' }}>Assessment Components for this Unit Type</div>
-            <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>
-              Has <strong>Coursework (CW)</strong>: out of 25 → prorated to 15 &nbsp;|&nbsp; Has <strong>Class Test (CBT)</strong>: out of 50 → prorated to 15 &nbsp;|&nbsp; <strong>University Exam (UE)</strong>: out of 100 → prorated to 70
             </div>
           </div>
 
@@ -210,41 +234,106 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
                 <div className="mdl-section-sub">Set assessed vs. final-weight marks for each component</div>
               </div>
             </div>
+
+            {/* Assessment components hint */}
+            <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--b50)', border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)' }}>
+              <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 700, color: 'var(--b700)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Assessment Components for this Unit Type</div>
+              <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)', display: 'flex', flexWrap: 'wrap', gap: '6px 16px' }}>
+                <span style={!includeCW ? { opacity: 0.4, textDecoration: 'line-through' } : undefined}>
+                  <strong>Coursework (CW)</strong>: out of 25 → prorated to 15
+                </span>
+                <span style={{ color: 'var(--g300)' }}>|</span>
+                <span style={!includeCBT ? { opacity: 0.4, textDecoration: 'line-through' } : undefined}>
+                  <strong>Class Test (CBT)</strong>: out of 50 → prorated to 15
+                </span>
+                <span style={{ color: 'var(--g300)' }}>|</span>
+                <span><strong>University Exam (UE)</strong>: out of 100 → prorated to 70</span>
+              </div>
+            </div>
+
             <div className="g3">
-              <div className="p-3 bg-b50 border border-[var(--b100)] rounded-[var(--rsm)]">
-                <div className="font-bold text-b700 text-center mb-2" style={{ fontSize: 'var(--fs-xs)' }}>COURSEWORK (CW)</div>
-                <div className="flex items-center gap-2 justify-center">
-                  <input className="ctrl wt-input" type="number" defaultValue={25} min={0} />
-                  <span className="font-extrabold text-b800" style={{ fontSize: 'var(--fs-2xl)' }}>→</span>
-                  <input className="ctrl wt-input" type="number" defaultValue={15} min={0} />
+              {/* CW card */}
+              <div style={{ borderRadius: 'var(--rsm)', overflow: 'hidden', transition: 'opacity .2s', ...(!includeCW ? { opacity: 0.38, filter: 'grayscale(0.4)' } : {}) }}>
+                <div style={{ cursor: !includeCW ? 'not-allowed' : undefined }}>
+                  <div style={{ pointerEvents: !includeCW ? 'none' : undefined }}>
+                    <div className="p-3 bg-b50 border border-[var(--b100)] rounded-[var(--rsm)]">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 8 }}>
+                        <div className="font-bold text-b700 text-center" style={{ fontSize: 'var(--fs-xs)' }}>COURSEWORK (CW)</div>
+                        {!includeCW && <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'var(--g200)', color: 'var(--g500)', textTransform: 'uppercase' }}>Disabled</span>}
+                      </div>
+                      <div className="flex items-center gap-2 justify-center">
+                        <input className="ctrl wt-input" type="number" defaultValue={25} min={0} />
+                        <span className="font-extrabold text-b800" style={{ fontSize: 'var(--fs-2xl)' }}>→</span>
+                        <input className="ctrl wt-input" type="number" value={cwFinal} min={0} onChange={e => setCwFinal(+e.target.value)} />
+                      </div>
+                      <div className="text-g500 text-center mt-[6px]" style={{ fontSize: 'var(--fs-2xs)' }}>Assessed / Final weight</div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-g500 text-center mt-[6px]" style={{ fontSize: 'var(--fs-2xs)' }}>Assessed / Final weight</div>
               </div>
-              <div className="p-3 bg-[var(--amber-bg)] border border-[var(--amber-bd)] rounded-[var(--rsm)]">
-                <div className="font-bold text-clr-amber text-center mb-2" style={{ fontSize: 'var(--fs-xs)' }}>CLASS TEST (CBT)</div>
-                <div className="flex items-center gap-2 justify-center">
-                  <input className="ctrl wt-input" type="number" defaultValue={50} min={0} />
-                  <span className="font-extrabold text-clr-amber" style={{ fontSize: 'var(--fs-2xl)' }}>→</span>
-                  <input className="ctrl wt-input" type="number" defaultValue={15} min={0} />
+
+              {/* CBT card */}
+              <div style={{ borderRadius: 'var(--rsm)', overflow: 'hidden', transition: 'opacity .2s', ...(!includeCBT ? { opacity: 0.38, filter: 'grayscale(0.4)' } : {}) }}>
+                <div style={{ cursor: !includeCBT ? 'not-allowed' : undefined }}>
+                  <div style={{ pointerEvents: !includeCBT ? 'none' : undefined }}>
+                    <div className="p-3 bg-[var(--amber-bg)] border border-[var(--amber-bd)] rounded-[var(--rsm)]">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 8 }}>
+                        <div className="font-bold text-clr-amber text-center" style={{ fontSize: 'var(--fs-xs)' }}>CLASS TEST (CBT)</div>
+                        {!includeCBT && <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'var(--g200)', color: 'var(--g500)', textTransform: 'uppercase' }}>Disabled</span>}
+                      </div>
+                      <div className="flex items-center gap-2 justify-center">
+                        <input className="ctrl wt-input" type="number" defaultValue={50} min={0} />
+                        <span className="font-extrabold text-clr-amber" style={{ fontSize: 'var(--fs-2xl)' }}>→</span>
+                        <input className="ctrl wt-input" type="number" value={cbtFinal} min={0} onChange={e => setCbtFinal(+e.target.value)} />
+                      </div>
+                      <div className="text-g500 text-center mt-[6px]" style={{ fontSize: 'var(--fs-2xs)' }}>Assessed / Final weight</div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-g500 text-center mt-[6px]" style={{ fontSize: 'var(--fs-2xs)' }}>Assessed / Final weight</div>
               </div>
+
+              {/* UE card — always enabled */}
               <div className="p-3 bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rsm)]">
                 <div className="font-bold text-clr-green text-center mb-2" style={{ fontSize: 'var(--fs-xs)' }}>UNIVERSITY EXAM</div>
                 <div className="flex items-center gap-2 justify-center">
                   <input className="ctrl wt-input" type="number" defaultValue={100} min={0} />
                   <span className="font-extrabold text-clr-green" style={{ fontSize: 'var(--fs-2xl)' }}>→</span>
-                  <input className="ctrl wt-input" type="number" defaultValue={70} min={0} />
+                  <input className="ctrl wt-input" type="number" value={ueFinal} min={0} onChange={e => setUeFinal(+e.target.value)} />
                 </div>
                 <div className="text-g500 text-center mt-[6px]" style={{ fontSize: 'var(--fs-2xs)' }}>Assessed / Final weight</div>
               </div>
             </div>
+
             <div className="mt-[10px] text-g500 text-right" style={{ fontSize: 'var(--fs-sm)' }}>
-              Final weight total: <strong className="text-clr-green">100</strong> / 100
+              Final weight total:{' '}
+              <strong style={{ color: totalOk ? 'var(--green)' : 'var(--red)' }}>{finalTotal}</strong>
+              {' '}/ 100
+              {!totalOk && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--red)' }}>⚠ Must equal 100</span>}
             </div>
           </div>
 
-          {/* ── Course Outline ────────────────────────────────── */}
+          {/* ── Approved Syllabus ─────────────────────────────── */}
+          <div className="mdl-section mdl-section--green">
+            <div className="mdl-section-hdr">
+              <span className="mdl-section-icon"><i className="lni lni-files"></i></span>
+              <div>
+                <div className="mdl-section-title">Approved Syllabus</div>
+                <div className="mdl-section-sub">Attach the NCHE / UVTOP-approved syllabus document for this unit</div>
+              </div>
+            </div>
+            <div className="file-zone">
+              <input type="file" accept=".pdf,.doc,.docx" />
+              <div className="file-zone-icon"><i className="lni lni-files"></i></div>
+              <p>Upload approved syllabus document (PDF / Word)</p>
+              <p className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>Must conform to NCHE or UVTOP accreditation</p>
+            </div>
+          </div>
+
+          </>}
+
+          {/* ── Step 2: Course Outline ────────────────────────── */}
+          {step === 2 && <>
+
           <div className="mdl-section mdl-section--blue">
             <div className="mdl-section-hdr">
               <span className="mdl-section-icon"><i className="lni lni-list"></i></span>
@@ -319,30 +408,28 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
             </div>
           </div>
 
-          {/* ── Approved Syllabus ─────────────────────────────── */}
-          <div className="mdl-section mdl-section--green">
-            <div className="mdl-section-hdr">
-              <span className="mdl-section-icon"><i className="lni lni-files"></i></span>
-              <div>
-                <div className="mdl-section-title">Approved Syllabus</div>
-                <div className="mdl-section-sub">Attach the NCHE / UVTOP-approved syllabus document for this unit</div>
-              </div>
-            </div>
-            <div className="file-zone">
-              <input type="file" accept=".pdf,.doc,.docx" />
-              <div className="file-zone-icon"><i className="lni lni-files"></i></div>
-              <p>Upload approved syllabus document (PDF / Word)</p>
-              <p className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>Must conform to NCHE or UVTOP accreditation</p>
-            </div>
-          </div>
+          </>}
 
         </div>
 
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => { if (validate()) setSaved(true) }}>
-            <i className="lni lni-checkmark"></i> Save Course Unit
-          </button>
+          <span className="flex-1"></span>
+          {step === 2 && (
+            <button className="btn btn-neu" onClick={() => setStep(1)}>
+              <i className="lni lni-arrow-left"></i> Back
+            </button>
+          )}
+          {step === 1 && (
+            <button className="btn btn-primary" onClick={() => { if (validateStep1()) setStep(2) }}>
+              Save &amp; Continue <i className="lni lni-arrow-right"></i>
+            </button>
+          )}
+          {step === 2 && (
+            <button className="btn btn-primary" onClick={() => { if (validateStep2()) setSaved(true) }}>
+              <i className="lni lni-checkmark"></i> Save Course Unit
+            </button>
+          )}
         </div>
       </div>
     </div>

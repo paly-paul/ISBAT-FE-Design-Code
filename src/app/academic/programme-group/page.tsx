@@ -6,6 +6,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { ProgrammeGroupModal } from '@/components/modals/ProgrammeGroupModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { EmptyState } from '@/components/EmptyState'
 
 export default function Page() {
   const router = useRouter()
@@ -70,10 +71,13 @@ export default function Page() {
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-folder"></i></span> Programme Groups</div>
             <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
           </div>
-          <ScrollTable>
+          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead><tr><th style={{ width: 48 }}></th><th>Group Code</th><th>Group Name</th>{fth('Programme Level', 'level', ["Bachelor's", "Master's", 'PhD', 'Diploma'])}<th>Active Versions</th><th>Inactive Versions</th><th>Total Students</th></tr></thead>
               <tbody>
+                {filteredRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : null}
                 {filteredRows.map((r, i) => (
                   <tr key={i}>
                     <td><ActionMenu><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>

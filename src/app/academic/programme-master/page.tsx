@@ -7,6 +7,7 @@ import { ProgrammeModal } from '@/components/modals/ProgrammeModal'
 import { SpecializationModal } from '@/components/modals/SpecializationModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { EmptyState } from '@/components/EmptyState'
 
 export default function Page() {
   const router = useRouter()
@@ -90,10 +91,13 @@ export default function Page() {
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>
           </div>
-          <ScrollTable>
+          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead><tr><th style={{ width: 48 }}></th><th>Prog. Code</th><th>Programme Name</th>{fth('Group', 'group', ['BCA', 'BBA', 'MBA', '—'])}{fth('Programme Level', 'level', ["Bachelor's · 3yr / 6sem", "Master's · 2yr / 4sem", 'PhD · 3yr / 6sem'])}<th>Faculty → Campus</th><th>Accreditation Date</th><th>Expires</th><th>No IA</th><th>Specializations</th>{fth('Admission Status', 'admissionStatus', ['Active', 'Inactive'])}</tr></thead>
               <tbody>
+                {filteredRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : null}
                 {filteredRows.map((r, i) => (
                   <tr key={i} className={r.rowClass}>
                     <td>

@@ -6,6 +6,7 @@ import { NewRoomModal } from '@/components/modals/NewRoomModal'
 import { EditRoomModal } from '@/components/modals/EditRoomModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { EmptyState } from '@/components/EmptyState'
 
 export default function Page() {
   const router = useRouter()
@@ -86,7 +87,7 @@ export default function Page() {
               Rooms &amp; Venues
             </div>
           </div>
-          <ScrollTable>
+          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead>
                 <tr>
@@ -100,6 +101,9 @@ export default function Page() {
                 </tr>
               </thead>
               <tbody>
+                {filteredRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : null}
                 {filteredRows.map((r, i) => (
                   <tr key={i}>
                     <td><button className="btn btn-neu btn-sm" onClick={() => openModal('edit-room-modal')}><i className="lni lni-pencil"></i> Edit</button></td>

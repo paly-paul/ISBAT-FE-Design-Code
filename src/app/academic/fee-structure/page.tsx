@@ -11,15 +11,18 @@ type FeeRecord = {
   feeCode: string
   description: string
   programme: string
+  programmeCode: string
+  intake: string
+  currency: string
 }
 
 const MOCK_FEES: FeeRecord[] = [
-  { id: 1, feeCode: 'FS-LOCAL-001', description: 'BSc. IT Local Students Fee Structure 2026',          programme: 'BSc. Information Technology'    },
-  { id: 2, feeCode: 'FS-INTL-001',  description: 'BSc. IT International Students Fee Structure 2026', programme: 'BSc. Information Technology'    },
-  { id: 3, feeCode: 'FS-MBA-001',   description: 'MBA Full-Time Fee Structure 2024',                   programme: 'Master of Business Administration' },
-  { id: 4, feeCode: 'FS-LOCAL-002', description: 'BSc. CS Local Students Fee Structure 2026',          programme: 'BSc. Computer Science'           },
-  { id: 5, feeCode: 'FS-INTL-002',  description: 'BSc. CS International Students Fee Structure 2026', programme: 'BSc. Computer Science'           },
-  { id: 6, feeCode: 'FS-ODL-001',   description: 'ODL Programme Fee Structure 2026',                   programme: 'ODL — Bachelor of Commerce'      },
+  { id: 1, feeCode: 'FS-LOCAL-001', description: 'BSc. IT Local Students Fee Structure 2026',          programme: 'BSc. Information Technology',     programmeCode: 'BSIT-2025', intake: '20261', currency: 'UGX' },
+  { id: 2, feeCode: 'FS-INTL-001',  description: 'BSc. IT International Students Fee Structure 2026', programme: 'BSc. Information Technology',     programmeCode: 'BSIT-2025', intake: '20261', currency: 'USD' },
+  { id: 3, feeCode: 'FS-MBA-001',   description: 'MBA Full-Time Fee Structure 2024',                   programme: 'Master of Business Administration', programmeCode: 'MBA-2024',  intake: '20241', currency: 'UGX' },
+  { id: 4, feeCode: 'FS-LOCAL-002', description: 'BSc. CS Local Students Fee Structure 2026',          programme: 'BSc. Computer Science',            programmeCode: 'BSCS-2026', intake: '20261', currency: 'UGX' },
+  { id: 5, feeCode: 'FS-INTL-002',  description: 'BSc. CS International Students Fee Structure 2026', programme: 'BSc. Computer Science',            programmeCode: 'BSCS-2026', intake: '20261', currency: 'USD' },
+  { id: 6, feeCode: 'FS-ODL-001',   description: 'ODL Programme Fee Structure 2026',                   programme: 'ODL — Bachelor of Commerce',       programmeCode: 'BCOM-2025', intake: '20262', currency: 'UGX' },
 ]
 
 export default function Page() {
@@ -27,6 +30,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [records, setRecords] = useState<FeeRecord[]>(MOCK_FEES)
+  const [editRecord, setEditRecord] = useState<FeeRecord | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -71,7 +75,7 @@ export default function Page() {
                 <tr key={r.id}>
                   <td>
                     <ActionMenu>
-                      <button className="btn btn-neu btn-sm" onClick={() => openModal('new-fee-structure-modal')}><i className="lni lni-pencil"></i> Edit</button>
+                      <button className="btn btn-neu btn-sm" onClick={() => { setEditRecord(r); openModal('edit-fee-structure-modal') }}><i className="lni lni-pencil"></i> Edit</button>
                       <button className="btn btn-neu btn-sm" onClick={() => deleteRecord(r.id)}><i className="lni lni-trash-can"></i> Delete</button>
                     </ActionMenu>
                   </td>
@@ -86,6 +90,7 @@ export default function Page() {
       </div>
 
       <FeeStructureModal isOpen={openModals.has('new-fee-structure-modal')} onClose={() => closeModal('new-fee-structure-modal')} showToast={showToast} nav={nav} />
+      <FeeStructureModal isOpen={openModals.has('edit-fee-structure-modal')} onClose={() => closeModal('edit-fee-structure-modal')} showToast={showToast} nav={nav} mode="edit" editData={editRecord ?? undefined} />
       <Toast toast={toast} />
     </>
   )
