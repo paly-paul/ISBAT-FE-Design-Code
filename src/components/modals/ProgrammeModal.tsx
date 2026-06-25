@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 import { useState } from 'react'
 import { ModalProps } from './types'
 import { SuccessPopup } from './SuccessPopup'
@@ -19,17 +19,18 @@ const LEDGERS = [
 ]
 const NUM_SEMS = 6
 
-type FeeItem  = { id: number; title: string; amount: string; currency: string; ledger: string }
-type SemFees  = FeeItem[][]
-type CUItem   = { id: number; code: string; name: string; credits: number }
-type SemUnits = CUItem[][]
-type SpecRow  = { id: number; value: string }
+type FeeItem     = { id: number; title: string; amount: string; currency: string; ledger: string }
+type SemFees     = FeeItem[][]
+type CUItem      = { id: number; code: string; name: string; credits: number }
+type SemUnits    = CUItem[][]
+type SpecRow     = { id: number; value: string }
+type FeeStructure = { id: number; feeCode: string; currency: string; semFees: SemFees }
 
 function blankItem(id: number): FeeItem {
   return { id, title: '', amount: '', currency: 'UGX', ledger: 'Tuition Fee' }
 }
 
-const DEFAULT_FEES: SemFees = Array.from({ length: NUM_SEMS }, (_, i) =>
+const DEFAULT_SEM_FEES: SemFees = Array.from({ length: NUM_SEMS }, (_, i) =>
   i === 0
     ? [
         { id: 1, title: 'Tuition Fee',       amount: '750000', currency: 'UGX', ledger: 'Tuition Fee'      },
@@ -37,6 +38,10 @@ const DEFAULT_FEES: SemFees = Array.from({ length: NUM_SEMS }, (_, i) =>
       ]
     : []
 )
+
+function makeDefaultFeeStructures(): FeeStructure[] {
+  return [{ id: 1, feeCode: 'FS-LOCAL-001', currency: 'UGX', semFees: DEFAULT_SEM_FEES }]
+}
 
 const COURSE_UNIT_OPTS = [
   { value: 'IT101', label: 'IT101 — Introduction to Programming (3 cr)',    code: 'IT101', name: 'Introduction to Programming',    credits: 3 },
@@ -53,9 +58,10 @@ const COURSE_UNIT_OPTS = [
   { value: 'MT102', label: 'MT102 — Statistics and Probability (3 cr)',     code: 'MT102', name: 'Statistics and Probability',     credits: 3 },
 ]
 
-let nextId     = 100
-let nextCUId   = 200
-let nextSpecId = 300
+let nextId        = 100
+let nextCUId      = 200
+let nextSpecId    = 300
+let nextFeeStructId = 10
 
 const SPEC_OPTS = [
   'Computer Science',
@@ -71,10 +77,12 @@ const SPEC_OPTS = [
   'Electrical Engineering',
 ]
 
-export function ProgrammeModal({ isOpen, onClose, showToast }: ModalProps) {
-  const [step, setStep]         = useState(1)
-  const [saved, setSaved]       = useState(false)
-  const [semFees, setSemFees]   = useState<SemFees>(DEFAULT_FEES)
+export function ProgrammeModal({ isOpen, onClose, showToast: _showToast }: ModalProps) {
+  const [step, setStep]           = useState(1)
+  const [saved, setSaved]         = useState(false)
+  const [feeStructures, setFeeStructures] = useState<FeeStructure[]>(makeDefaultFeeStructures)
+  const [activeFeeIdx, setActiveFeeIdx]   = useState(0)
+  const [feeAccordion, setFeeAccordion]   = useState(0)
   const [semUnits, setSemUnits]     = useState<SemUnits>(() => Array.from({ length: NUM_SEMS }, () => []))
   const [pendingSel, setPendingSel] = useState<string[]>(() => Array(NUM_SEMS).fill(''))
   const [activeAcc, setActiveAcc]   = useState<number>(0)
@@ -82,34 +90,83 @@ export function ProgrammeModal({ isOpen, onClose, showToast }: ModalProps) {
 
   if (!isOpen) return null
 
+  const activeFeeStruct = feeStructures[activeFeeIdx]
+
   function handleClose() {
-    setStep(1); setSaved(false); setSemFees(DEFAULT_FEES)
+    setStep(1); setSaved(false)
+    setFeeStructures(makeDefaultFeeStructures())
+    setActiveFeeIdx(0); setFeeAccordion(0)
     setSemUnits(Array.from({ length: NUM_SEMS }, () => []))
     setPendingSel(Array(NUM_SEMS).fill(''))
     setSpecs([])
     onClose()
   }
 
-  function addSpec()                         { setSpecs(p => [...p, { id: nextSpecId++, value: '' }]) }
-  function removeSpec(id: number)            { setSpecs(p => p.filter(s => s.id !== id)) }
+  function addSpec()                           { setSpecs(p => [...p, { id: nextSpecId++, value: '' }]) }
+  function removeSpec(id: number)              { setSpecs(p => p.filter(s => s.id !== id)) }
   function updateSpec(id: number, val: string) { setSpecs(p => p.map(s => s.id === id ? { ...s, value: val } : s)) }
+
+  /* ── fee structure helpers ── */
+  function addFeeStructure() {
+    const newStruct: FeeStructure = {
+      id: nextFeeStructId++,
+      feeCode: 'FS-NEW-' + String(nextFeeStructId).padStart(3, '0'),
+      currency: 'UGX',
+      semFees: Array.from({ length: NUM_SEMS }, () => []),
+    }
+    setFeeStructures(prev => [...prev, newStruct])
+    setActiveFeeIdx(feeStructures.length)
+    setFeeAccordion(0)
+  }
+
+  function removeFeeStructure(idx: number) {
+    if (feeStructures.length <= 1) return
+    setFeeStructures(prev => prev.filter((_, i) => i !== idx))
+    setActiveFeeIdx(prev => (prev >= idx && prev > 0 ? prev - 1 : prev))
+  }
+
+  function updateFeeStructureMeta(field: 'feeCode' | 'currency', val: string) {
+    setFeeStructures(prev => prev.map((s, i) => i === activeFeeIdx ? { ...s, [field]: val } : s))
+  }
 
   /* ── fee item helpers ── */
   function addItem(si: number) {
-    setSemFees(prev => prev.map((items, i) =>
-      i === si ? [...items, blankItem(nextId++)] : items
+    setFeeStructures(prev => prev.map((s, i) =>
+      i === activeFeeIdx
+        ? { ...s, semFees: s.semFees.map((items, j) => j === si ? [...items, blankItem(nextId++)] : items) }
+        : s
     ))
   }
   function removeItem(si: number, id: number) {
-    setSemFees(prev => prev.map((items, i) =>
-      i === si ? items.filter(f => f.id !== id) : items
+    setFeeStructures(prev => prev.map((s, i) =>
+      i === activeFeeIdx
+        ? { ...s, semFees: s.semFees.map((items, j) => j === si ? items.filter(f => f.id !== id) : items) }
+        : s
     ))
   }
   function updateItem(si: number, id: number, field: keyof FeeItem, val: string) {
-    setSemFees(prev => prev.map((items, i) =>
-      i === si ? items.map(f => f.id === id ? { ...f, [field]: val } : f) : items
+    setFeeStructures(prev => prev.map((s, i) =>
+      i === activeFeeIdx
+        ? { ...s, semFees: s.semFees.map((items, j) => j === si ? items.map(f => f.id === id ? { ...f, [field]: val } : f) : items) }
+        : s
     ))
   }
+  function moveItem(si: number, idx: number, dir: -1 | 1) {
+    const to = idx + dir
+    setFeeStructures(prev => prev.map((s, i) => {
+      if (i !== activeFeeIdx) return s
+      return {
+        ...s,
+        semFees: s.semFees.map((items, j) => {
+          if (j !== si || to < 0 || to >= items.length) return items
+          const next = [...items];
+          [next[idx], next[to]] = [next[to], next[idx]]
+          return next
+        }),
+      }
+    }))
+  }
+
   /* ── course unit helpers ── */
   function addUnit(si: number, val: string) {
     const opt = COURSE_UNIT_OPTS.find(u => u.value === val)
@@ -123,16 +180,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast }: ModalProps) {
     setSemUnits(prev => prev.map((units, i) =>
       i === si ? units.filter(u => u.id !== id) : units
     ))
-  }
-
-  function moveItem(si: number, idx: number, dir: -1 | 1) {
-    const to = idx + dir
-    setSemFees(prev => prev.map((items, i) => {
-      if (i !== si || to < 0 || to >= items.length) return items
-      const next = [...items]
-      ;[next[idx], next[to]] = [next[to], next[idx]]
-      return next
-    }))
   }
 
   if (saved) {
@@ -294,8 +341,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast }: ModalProps) {
                   const totalCredits  = units.reduce((s, u) => s + u.credits, 0)
                   return (
                     <div key={si} style={{ border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
-
-                      {/* Accordion header */}
                       <button
                         type="button"
                         onClick={() => setActiveAcc(isOpen ? -1 : si)}
@@ -308,8 +353,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast }: ModalProps) {
                         </span>
                         <i className="lni lni-chevron-down" style={{ fontSize: 11, color: 'var(--g400)', flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.25s ease' }} />
                       </button>
-
-                      {/* Accordion body */}
                       <div style={{ overflow: 'hidden', maxHeight: isOpen ? 600 : 0, transition: 'max-height 0.3s ease' }}>
                         <div style={{ padding: '10px 14px' }}>
                           {units.length === 0 && (
@@ -350,141 +393,191 @@ export function ProgrammeModal({ isOpen, onClose, showToast }: ModalProps) {
 
           {/* ── Step 3: Semester-wise Fee Structure ────────────── */}
           {step === 3 && (
-            <div className="mdl-section mdl-section--blue">
-              <div className="mdl-section-hdr">
-                <span className="mdl-section-icon"><i className="lni lni-dollar"></i></span>
-                <div className="flex-1 min-w-0">
-                  <div className="mdl-section-title">Define Fee Items by Semester</div>
-                  <div className="mdl-section-sub">Add fee items per semester with Ledger, Currency and priority ordering.</div>
-                </div>
-              </div>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
 
-              {/* Global fee controls */}
-              <div className="g3 mb-[14px]">
-                <div className="fg m-0">
-                  <div className="lbl">Base Currency</div>
-                  <SearchSelect options={['UGX (Ugandan Shilling)', 'USD (US Dollar)', 'KES (Kenyan Shilling)']} />
+              {/* Left fee structure list */}
+              <div style={{ width: 210, flexShrink: 0, background: 'var(--surface)', border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', overflow: 'hidden', position: 'sticky', top: 0, display: 'flex', flexDirection: 'column', maxHeight: 480 }}>
+                <div style={{ padding: '14px 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
+                  Fee Structures <span style={{ color: 'var(--b500)' }}>({feeStructures.length})</span>
                 </div>
-                <div className="fg m-0">
-                  <div className="lbl">Student Type</div>
-                  <SearchSelect options={['Local', 'International']} />
-                </div>
-                <div className="fg m-0">
-                  <div className="lbl">Quick Template</div>
-                  <SearchSelect
-                    placeholder="— Apply a template —"
-                    options={['Basic (Tuition + Entry)', 'Standard (Tuition + Entry + Lab)', 'Full (Tuition + Entry + Lab + Library + Admission)', 'Clear all fee items']}
-                  />
-                </div>
-              </div>
-
-              {/* Programme-level fees */}
-              <div className="bg-[linear-gradient(135deg,#f0f5ff_0%,var(--white)_70%)] border-[1.5px] border-dashed border-[var(--b200)] rounded-[var(--rsm)] p-[14px_16px] mb-[18px]">
-                <div className="flex items-center gap-2 font-bold uppercase mb-3" style={{ fontSize: 'var(--fs-xs)', letterSpacing: '.08em', color: '#2d448f' }}>
-                  <i className="lni lni-tag" style={{ fontSize: 'var(--fs-md)' }}></i>
-                  <span>Programme-level Fees &amp; Discounts</span>
-                  <span className="badge badge-blue normal-case tracking-normal font-semibold ml-auto">Applied across all semesters</span>
-                </div>
-                <div className="g2">
-                  <div className="fg m-0">
-                    <div className="lbl">Lumpsum Discount Type</div>
-                    <SearchSelect options={['Amount', 'Percentage']} />
-                  </div>
-                  <div className="fg m-0">
-                    <div className="lbl">Lumpsum Discount Amount</div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-g500 font-bold min-w-[28px] text-center" style={{ fontSize: 'var(--fs-sm)' }}>UGX</span>
-                      <input className="ctrl flex-1" type="number" placeholder="0" min={0} />
-                    </div>
-                  </div>
-                </div>
-                <div className="g3 mt-3">
-                  <div className="fg span2 m-0"><div className="lbl">Lateral Entry Fee</div><input className="ctrl" type="number" placeholder="0" min={0} /></div>
-                  <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={CURRENCIES} /></div>
-                  <div className="fg span2 m-0"><div className="lbl">Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} /></div>
-                  <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={CURRENCIES} /></div>
-                  <div className="fg span2 m-0"><div className="lbl">Aptech Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} /></div>
-                  <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={CURRENCIES} /></div>
-                </div>
-              </div>
-
-              {/* Per-semester fee items */}
-              <div className="flex flex-col gap-4">
-                {semFees.map((items, si) => (
-                  <div key={si} style={{ border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
-
-                    {/* Semester header */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: 'var(--b50)', borderBottom: '1px solid var(--b100)' }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--b700)' }}>
-                        <i className="lni lni-calendar mr-1"></i> Semester {si + 1}
-                      </span>
-                      {items.length > 0 && (
-                        <span className="text-g400" style={{ fontSize: 11.5 }}>
-                          Total: <strong className="text-g700">{items.reduce((s, f) => s + (parseFloat(f.amount) || 0), 0).toLocaleString()} {items[0]?.currency}</strong>
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Column headers */}
-                    {items.length > 0 && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 120px 90px 210px 32px', gap: 6, padding: '6px 12px 2px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        <span style={{ textAlign: 'center' }}>Pri.</span>
-                        <span>Fee Title</span>
-                        <span>Amount</span>
-                        <span>Currency</span>
-                        <span>Ledger</span>
-                        <span></span>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
+                  {feeStructures.map((s, i) => (
+                    <div
+                      key={s.id}
+                      onClick={() => { setActiveFeeIdx(i); setFeeAccordion(0) }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '9px 10px', borderRadius: 'var(--rsm)', marginBottom: 2,
+                        background: activeFeeIdx === i ? 'var(--b500)' : 'transparent',
+                        color: activeFeeIdx === i ? '#fff' : 'var(--g700)',
+                        cursor: 'pointer', transition: 'background .15s',
+                      }}
+                    >
+                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: activeFeeIdx === i ? 'rgba(255,255,255,.2)' : 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <i className="lni lni-coin" style={{ fontSize: 12, color: activeFeeIdx === i ? '#fff' : 'var(--b600)' }}></i>
                       </div>
-                    )}
-
-                    {/* Fee rows */}
-                    <div className="flex flex-col gap-1" style={{ padding: items.length > 0 ? '4px 12px 10px' : '10px 12px' }}>
-                      {items.length === 0 && (
-                        <div className="text-g400 italic" style={{ fontSize: 12.5 }}>No fee items for this semester. Click &ldquo;Add Fee Item&rdquo; to begin.</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 12.5, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.feeCode}</div>
+                        <div style={{ fontSize: 11, opacity: .65, lineHeight: 1.3 }}>{s.currency}</div>
+                      </div>
+                      {feeStructures.length > 1 && (
+                        <button
+                          onClick={e => { e.stopPropagation(); removeFeeStructure(i) }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: activeFeeIdx === i ? 'rgba(255,255,255,.65)' : 'var(--g300)', display: 'flex', alignItems: 'center', borderRadius: 'var(--rxs)', flexShrink: 0 }}
+                        ><i className="lni lni-trash-can" style={{ fontSize: 12 }}></i></button>
                       )}
-                      {items.map((f, idx) => (
-                        <div key={f.id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 120px 90px 210px 32px', gap: 6, alignItems: 'center' }}>
-                          {/* Priority arrows */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
-                            <button
-                              className="btn btn-neu"
-                              style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}
-                              onClick={() => moveItem(si, idx, -1)}
-                              disabled={idx === 0}
-                            ><i className="lni lni-chevron-up"></i></button>
-                            <button
-                              className="btn btn-neu"
-                              style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}
-                              onClick={() => moveItem(si, idx, 1)}
-                              disabled={idx === items.length - 1}
-                            ><i className="lni lni-chevron-down"></i></button>
-                          </div>
-                          <input className="ctrl" value={f.title}    onChange={e => updateItem(si, f.id, 'title',    e.target.value)} placeholder="e.g. Tuition Fee" />
-                          <input className="ctrl" value={f.amount}   onChange={e => updateItem(si, f.id, 'amount',   e.target.value)} type="number" min={0} placeholder="0" />
-                          <SearchSelect
-                            options={CURRENCIES}
-                            value={f.currency}
-                            onChange={val => updateItem(si, f.id, 'currency', val)}
-                          />
-                          <SearchSelect
-                            placeholder="— Select Ledger —"
-                            options={LEDGERS}
-                            value={f.ledger}
-                            onChange={val => updateItem(si, f.id, 'ledger', val)}
-                          />
-                          <button
-                            className="btn btn-danger btn-sm"
-                            style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                            onClick={() => removeItem(si, f.id)}
-                          ><i className="lni lni-trash-can"></i></button>
-                        </div>
-                      ))}
-                      <button className="btn btn-neu btn-sm mt-1" style={{ alignSelf: 'flex-start', fontSize: 11 }} onClick={() => addItem(si)}>
-                        <i className="lni lni-plus"></i> Add Fee Item
-                      </button>
                     </div>
+                  ))}
+                </div>
+                <div style={{ borderTop: '1.5px solid var(--g200)', padding: '6px 8px 10px' }}>
+                  <button className="btn btn-neu btn-sm" style={{ width: '100%' }} onClick={addFeeStructure}>
+                    <i className="lni lni-plus"></i> Add Fee Structure
+                  </button>
+                </div>
+              </div>
+
+              {/* Right configuration panel */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+
+                {/* Active structure banner */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, padding: '10px 14px', background: 'var(--b50)', borderRadius: 'var(--rsm)', border: '1.5px solid var(--b100)' }}>
+                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <i className="lni lni-coin" style={{ color: 'var(--b600)', fontSize: 15 }}></i>
                   </div>
-                ))}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--b800)' }}>{activeFeeStruct.feeCode} — {activeFeeStruct.currency}</div>
+                    <div style={{ fontSize: 11, color: 'var(--g400)' }}>Structure {activeFeeIdx + 1} of {feeStructures.length}</div>
+                  </div>
+                </div>
+
+                {/* Fee structure controls */}
+                <div className="g3 mb-[14px]">
+                  <div className="fg m-0">
+                    <div className="lbl">Fee Code</div>
+                    <input className="ctrl font-mono uppercase" type="text" value={activeFeeStruct.feeCode} onChange={e => updateFeeStructureMeta('feeCode', e.target.value)} />
+                  </div>
+                  <div className="fg m-0">
+                    <div className="lbl">Fee Description</div>
+                    <input className="ctrl" type="text" placeholder="e.g. Local undergraduate fee structure" />
+                  </div>
+                  <div className="fg m-0">
+                    <div className="lbl">Base Currency</div>
+                    <SearchSelect
+                      options={[
+                        { value: 'UGX', label: 'UGX (Ugandan Shilling)' },
+                        { value: 'USD', label: 'USD (US Dollar)' },
+                        { value: 'KES', label: 'KES (Kenyan Shilling)' },
+                        { value: 'EUR', label: 'EUR (Euro)' },
+                        { value: 'GBP', label: 'GBP (British Pound)' },
+                      ]}
+                      value={activeFeeStruct.currency}
+                      onChange={val => updateFeeStructureMeta('currency', val)}
+                    />
+                  </div>
+                  <div className="fg m-0">
+                    <div className="lbl">Copy Fee Code</div>
+                    <SearchSelect
+                      placeholder="— Select source structure —"
+                      options={feeStructures.filter((_, i) => i !== activeFeeIdx).map(s => ({ value: s.feeCode, label: s.feeCode }))}
+                    />
+                  </div>
+                  <div className="fg m-0">
+                    <div className="lbl">Intake</div>
+                    <SearchSelect
+                      placeholder="— Select intake —"
+                      options={[
+                        { value: '20241', label: '20241 — Spring 2024' },
+                        { value: '20261', label: '20261 — Spring 2026' },
+                        { value: '20262', label: '20262 — Fall 2026' },
+                        { value: '20271', label: '20271 — Spring 2027' },
+                        { value: '20272', label: '20272 — Fall 2027' },
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                {/* Programme-level fees & discounts */}
+                <div className="bg-[linear-gradient(135deg,#f0f5ff_0%,var(--white)_70%)] border-[1.5px] border-dashed border-[var(--b200)] rounded-[var(--rsm)] p-[14px_16px] mb-[18px]">
+                  <div className="flex items-center gap-2 font-bold uppercase mb-3" style={{ fontSize: 'var(--fs-xs)', letterSpacing: '.08em', color: '#2d448f' }}>
+                    <i className="lni lni-tag" style={{ fontSize: 'var(--fs-md)' }}></i>
+                    <span>Programme-level Fees &amp; Discounts</span>
+                    <span className="badge badge-blue normal-case tracking-normal font-semibold ml-auto">Applied across all semesters</span>
+                  </div>
+                  <div className="g4">
+                    <div className="fg m-0">
+                      <div className="lbl">Lumpsum Discount Type</div>
+                      <SearchSelect options={['Amount', 'Percentage']} />
+                    </div>
+                    <div className="fg m-0">
+                      <div className="lbl">Lumpsum Discount Amount</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-g500 font-bold min-w-[28px] text-center" style={{ fontSize: 'var(--fs-sm)' }}>{activeFeeStruct.currency}</span>
+                        <input className="ctrl flex-1" type="number" placeholder="0" min={0} />
+                      </div>
+                    </div>
+                    <div className="fg m-0"><div className="lbl">Lateral Entry Fee</div><input className="ctrl" type="number" placeholder="0" min={0} /></div>
+                    <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={CURRENCIES} /></div>
+                    <div className="fg m-0"><div className="lbl">Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} /></div>
+                    <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={CURRENCIES} /></div>
+                    <div className="fg m-0"><div className="lbl">Aptech Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} /></div>
+                    <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={CURRENCIES} /></div>
+                  </div>
+                </div>
+
+                {/* Per-semester accordion */}
+                <div className="flex flex-col gap-2">
+                  {activeFeeStruct.semFees.map((items, si) => {
+                    const isOpen = feeAccordion === si
+                    const total  = items.reduce((s, f) => s + (parseFloat(f.amount) || 0), 0)
+                    return (
+                      <div key={si} style={{ border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
+                        <button
+                          type="button"
+                          onClick={() => setFeeAccordion(isOpen ? -1 : si)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', width: '100%', background: isOpen ? 'var(--b50)' : 'var(--white)', border: 'none', borderBottom: isOpen ? '1px solid var(--b100)' : 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.2s' }}
+                        >
+                          <span className="badge badge-blue" style={{ flexShrink: 0 }}>Sem {si + 1}</span>
+                          <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--b700)' }}>Semester {si + 1}</span>
+                          {items.length > 0
+                            ? <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--g400)', marginRight: 8 }}>{items.length} item{items.length !== 1 ? 's' : ''} · {total.toLocaleString()} {items[0]?.currency}</span>
+                            : <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--g400)', fontStyle: 'italic', marginRight: 8 }}>No items</span>
+                          }
+                          <i className="lni lni-chevron-down" style={{ fontSize: 11, color: 'var(--g400)', flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.25s ease' }} />
+                        </button>
+                        <div style={{ overflow: 'hidden', maxHeight: isOpen ? 800 : 0, transition: 'max-height 0.3s ease' }}>
+                          <div style={{ padding: '10px 14px' }}>
+                            {items.length > 0 && (
+                              <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 120px 90px 210px 32px', gap: 6, padding: '0 0 4px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <span style={{ textAlign: 'center' }}>Pri.</span><span>Fee Title</span><span>Amount</span><span>Currency</span><span>Ledger</span><span></span>
+                              </div>
+                            )}
+                            <div className="flex flex-col gap-1">
+                              {items.length === 0 && (
+                                <div className="text-g400 italic" style={{ fontSize: 12.5, marginBottom: 8 }}>No fee items — click &ldquo;Add Fee Item&rdquo; to begin.</div>
+                              )}
+                              {items.map((f, idx) => (
+                                <div key={f.id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 120px 90px 210px 32px', gap: 6, alignItems: 'center' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+                                    <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(si, idx, -1)} disabled={idx === 0}><i className="lni lni-chevron-up"></i></button>
+                                    <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(si, idx, 1)} disabled={idx === items.length - 1}><i className="lni lni-chevron-down"></i></button>
+                                  </div>
+                                  <input className="ctrl" value={f.title}  onChange={e => updateItem(si, f.id, 'title',  e.target.value)} placeholder="e.g. Tuition Fee" />
+                                  <input className="ctrl" value={f.amount} onChange={e => updateItem(si, f.id, 'amount', e.target.value)} type="number" min={0} placeholder="0" />
+                                  <SearchSelect options={CURRENCIES} value={f.currency} onChange={val => updateItem(si, f.id, 'currency', val)} />
+                                  <SearchSelect placeholder="— Select Ledger —" options={LEDGERS} value={f.ledger} onChange={val => updateItem(si, f.id, 'ledger', val)} />
+                                  <button className="btn btn-danger btn-sm" style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => removeItem(si, f.id)}><i className="lni lni-trash-can"></i></button>
+                                </div>
+                              ))}
+                              <button className="btn btn-neu btn-sm mt-2" style={{ alignSelf: 'flex-start', fontSize: 11 }} onClick={() => addItem(si)}>
+                                <i className="lni lni-plus"></i> Add Fee Item
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           )}

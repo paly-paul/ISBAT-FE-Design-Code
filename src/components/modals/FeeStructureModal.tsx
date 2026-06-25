@@ -121,6 +121,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
       : makeDefaultStructures()
   )
   const [activeIdx, setActiveIdx]   = useState(0)
+  const [activeAcc, setActiveAcc]   = useState(0)
 
   useEffect(() => {
     if (isOpen && mode === 'edit' && editData) {
@@ -131,7 +132,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
 
   if (!isOpen) return null
 
-  function handleClose() { setSaved(false); setStructures(makeDefaultStructures()); setActiveIdx(0); onClose() }
+  function handleClose() { setSaved(false); setStructures(makeDefaultStructures()); setActiveIdx(0); setActiveAcc(0); onClose() }
 
   const active = structures[activeIdx]
 
@@ -227,7 +228,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
               {structures.map((s, i) => (
                 <div
                   key={s.id}
-                  onClick={() => setActiveIdx(i)}
+                  onClick={() => { setActiveIdx(i); setActiveAcc(0) }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8,
                     padding: '9px 10px', borderRadius: 'var(--rsm)', marginBottom: 2,
@@ -376,48 +377,59 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
               </div>
             </div>
 
-            {/* Per-semester fee items */}
-            <div className="flex flex-col gap-4">
-              {active.semFees.map((items, si) => (
-                <div key={si} style={{ border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: 'var(--b50)', borderBottom: '1px solid var(--b100)' }}>
-                    <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--b700)' }}>
-                      <i className="lni lni-calendar mr-1"></i> Semester {si + 1}
-                    </span>
-                    {items.length > 0 && (
-                      <span className="text-g400" style={{ fontSize: 11.5 }}>
-                        Total: <strong className="text-g700">{items.reduce((s, f) => s + (parseFloat(f.amount) || 0), 0).toLocaleString()} {items[0]?.currency}</strong>
-                      </span>
-                    )}
-                  </div>
-                  {items.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 120px 90px 210px 32px', gap: 6, padding: '6px 12px 2px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      <span style={{ textAlign: 'center' }}>Pri.</span><span>Fee Title</span><span>Amount</span><span>Currency</span><span>Ledger</span><span></span>
-                    </div>
-                  )}
-                  <div className="flex flex-col gap-1" style={{ padding: items.length > 0 ? '4px 12px 10px' : '10px 12px' }}>
-                    {items.length === 0 && (
-                      <div className="text-g400 italic" style={{ fontSize: 12.5 }}>No fee items for this semester — click &ldquo;Add Fee Item&rdquo; to begin.</div>
-                    )}
-                    {items.map((f, idx) => (
-                      <div key={f.id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 120px 90px 210px 32px', gap: 6, alignItems: 'center' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
-                          <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(si, idx, -1)} disabled={idx === 0}><i className="lni lni-chevron-up"></i></button>
-                          <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(si, idx, 1)} disabled={idx === items.length - 1}><i className="lni lni-chevron-down"></i></button>
-                        </div>
-                        <input className="ctrl" value={f.title}  onChange={e => updateItem(si, f.id, 'title',  e.target.value)} placeholder="e.g. Tuition Fee" />
-                        <input className="ctrl" value={f.amount} onChange={e => updateItem(si, f.id, 'amount', e.target.value)} type="number" min={0} placeholder="0" />
-                        <SearchSelect options={CURRENCIES} value={f.currency} onChange={val => updateItem(si, f.id, 'currency', val)} />
-                        <SearchSelect placeholder="— Select Ledger —" options={LEDGERS} value={f.ledger} onChange={val => updateItem(si, f.id, 'ledger', val)} />
-                        <button className="btn btn-danger btn-sm" style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => removeItem(si, f.id)}><i className="lni lni-trash-can"></i></button>
-                      </div>
-                    ))}
-                    <button className="btn btn-neu btn-sm mt-1" style={{ alignSelf: 'flex-start', fontSize: 11 }} onClick={() => addItem(si)}>
-                      <i className="lni lni-plus"></i> Add Fee Item
+            {/* Per-semester accordion */}
+            <div className="flex flex-col gap-2">
+              {active.semFees.map((items, si) => {
+                const isOpen = activeAcc === si
+                const total  = items.reduce((s, f) => s + (parseFloat(f.amount) || 0), 0)
+                return (
+                  <div key={si} style={{ border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveAcc(isOpen ? -1 : si)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', width: '100%', background: isOpen ? 'var(--b50)' : 'var(--white)', border: 'none', borderBottom: isOpen ? '1px solid var(--b100)' : 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.2s' }}
+                    >
+                      <span className="badge badge-blue" style={{ flexShrink: 0 }}>Sem {si + 1}</span>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--b700)' }}>Semester {si + 1}</span>
+                      {items.length > 0
+                        ? <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--g400)', marginRight: 8 }}>{items.length} item{items.length !== 1 ? 's' : ''} · {total.toLocaleString()} {items[0]?.currency}</span>
+                        : <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--g400)', fontStyle: 'italic', marginRight: 8 }}>No items</span>
+                      }
+                      <i className="lni lni-chevron-down" style={{ fontSize: 11, color: 'var(--g400)', flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.25s ease' }} />
                     </button>
+                    <div style={{ overflow: 'hidden', maxHeight: isOpen ? 800 : 0, transition: 'max-height 0.3s ease' }}>
+                      <div style={{ padding: '10px 14px' }}>
+                        {items.length > 0 && (
+                          <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 120px 90px 210px 32px', gap: 6, padding: '0 0 4px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            <span style={{ textAlign: 'center' }}>Pri.</span><span>Fee Title</span><span>Amount</span><span>Currency</span><span>Ledger</span><span></span>
+                          </div>
+                        )}
+                        <div className="flex flex-col gap-1">
+                          {items.length === 0 && (
+                            <div className="text-g400 italic" style={{ fontSize: 12.5, marginBottom: 8 }}>No fee items — click &ldquo;Add Fee Item&rdquo; to begin.</div>
+                          )}
+                          {items.map((f, idx) => (
+                            <div key={f.id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 120px 90px 210px 32px', gap: 6, alignItems: 'center' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+                                <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(si, idx, -1)} disabled={idx === 0}><i className="lni lni-chevron-up"></i></button>
+                                <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(si, idx, 1)} disabled={idx === items.length - 1}><i className="lni lni-chevron-down"></i></button>
+                              </div>
+                              <input className="ctrl" value={f.title}  onChange={e => updateItem(si, f.id, 'title',  e.target.value)} placeholder="e.g. Tuition Fee" />
+                              <input className="ctrl" value={f.amount} onChange={e => updateItem(si, f.id, 'amount', e.target.value)} type="number" min={0} placeholder="0" />
+                              <SearchSelect options={CURRENCIES} value={f.currency} onChange={val => updateItem(si, f.id, 'currency', val)} />
+                              <SearchSelect placeholder="— Select Ledger —" options={LEDGERS} value={f.ledger} onChange={val => updateItem(si, f.id, 'ledger', val)} />
+                              <button className="btn btn-danger btn-sm" style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => removeItem(si, f.id)}><i className="lni lni-trash-can"></i></button>
+                            </div>
+                          ))}
+                          <button className="btn btn-neu btn-sm mt-2" style={{ alignSelf: 'flex-start', fontSize: 11 }} onClick={() => addItem(si)}>
+                            <i className="lni lni-plus"></i> Add Fee Item
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
             </div>{/* end gate wrapper */}
           </div>
