@@ -5,6 +5,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { EmptyState } from '@/components/EmptyState'
 
 export default function Page() {
   const router = useRouter()
@@ -83,10 +84,13 @@ export default function Page() {
               <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Batches</option><option>BSC-IT-S1-D</option><option>BBA-S3-D</option><option>MBA-S1-E</option></select>
             </div>
           </div>
-          <ScrollTable>
+          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead><tr><th style={{ width: 48 }}></th><th>Course Unit</th>{fth('Batch', 'batch', ['BSC-IT-S1-D', 'MBA-S1-E'])}{fth('Faculty', 'faculty', ['Dr. Ssekibuule', 'Ms. Namutebi', 'Prof. Mukasa'])}<th>Open Date</th><th>Due Date</th><th>Out Of</th><th>Submitted</th><th>Cleared (≥50%)</th>{fth('Status', 'status', ['Closed', 'Open', 'Not Scheduled'])}</tr></thead>
               <tbody>
+                {filteredRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : null}
                 {filteredRows.map((r, i) => (
                   <tr key={i} className={r.rowClass}>
                     <td>

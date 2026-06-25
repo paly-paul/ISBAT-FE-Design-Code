@@ -1,9 +1,9 @@
 'use client'
-import React from 'react'
+import { Dispatch, SetStateAction, ReactNode } from 'react'
 
 interface SidebarProps {
   panelOpen: boolean
-  setPanelOpen: React.Dispatch<React.SetStateAction<boolean>>
+  setPanelOpen: Dispatch<SetStateAction<boolean>>
   currentPage: string
   nav: (id: string) => void
   collapsedSections: Set<string>
@@ -24,7 +24,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, nav, collapsedSe
     )
   }
 
-  function sbSection(id: string, label: string, children: React.ReactNode) {
+  function sbSection(id: string, label: string, children: ReactNode) {
     const collapsed = collapsedSections.has(id)
     return (
       <div className={`sb-collapse${collapsed ? ' closed' : ''}`}>
@@ -114,6 +114,12 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, nav, collapsedSe
 
           {sbSection('sc-cross', 'Cross-Module', <>
             {sbItem('student-lookup', 'Student Lookup', 'user')}
+          </>)}
+
+          {sbSection('sc-config', 'Configuration Core', <>
+            {sbItem('campus-master', 'Campus Master', 'home')}
+            {sbItem('currency-master', 'Currency Master', 'dollar')}
+            {sbItem('country-master', 'Country Master', 'world')}
           </>)}
 
           <div className="sb-panel-footer">S2 · Academic Service</div>

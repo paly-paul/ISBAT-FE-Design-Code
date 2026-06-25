@@ -71,7 +71,7 @@ export function EditIntakeModal({ isOpen, onClose, showToast }: ModalProps) {
 
         <div className="modal-scroll">
           {step === 1 && (
-            <div className="g2">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
               <div className="fg">
                 <div className="lbl">Intake Code <span className="req">*</span></div>
                 <input
@@ -118,7 +118,7 @@ export function EditIntakeModal({ isOpen, onClose, showToast }: ModalProps) {
                 />
                 {errors.intakeType && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeType}</p>}
               </div>
-              <div className="fg" style={{ gridColumn: 'span 2' }}>
+              <div className="fg" style={{ gridColumn: 'span 3' }}>
                 <div className="lbl">Set As</div>
                 <div style={{ display: 'flex', gap: 28, marginTop: 8 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--g700)' }}>
@@ -148,7 +148,7 @@ export function EditIntakeModal({ isOpen, onClose, showToast }: ModalProps) {
                   Optional · Fill in the key dates for the first semester
                 </span>
               </div>
-              <div className="g-dates">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
                 <div className="fg"><div className="lbl">Admission Start Date</div><input className="ctrl" type="date" defaultValue="2025-11-01" /></div>
                 <div className="fg"><div className="lbl">Admission Late Fee Date</div><input className="ctrl" type="date" defaultValue="2026-01-15" /></div>
                 <div className="fg"><div className="lbl">Admission End Date</div><input className="ctrl" type="date" defaultValue="2026-01-31" /></div>

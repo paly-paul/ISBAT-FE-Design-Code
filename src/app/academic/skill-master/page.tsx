@@ -6,6 +6,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { AddSkillModal } from '@/components/modals/AddSkillModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { EmptyState } from '@/components/EmptyState'
 
 type Role = 'lecturer' | 'dean'
 type ApprovalStatus = 'Approved' | 'Pending' | 'Rejected' | 'Details Requested'
@@ -166,7 +167,7 @@ export default function Page() {
               </div>
             )}
           </div>
-          <ScrollTable>
+          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead>
                 <tr>
@@ -183,6 +184,9 @@ export default function Page() {
                 </tr>
               </thead>
               <tbody>
+                {visibleRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : null}
                 {visibleRows.map((r, i) => {
                   const approval = approvals[r.name] ?? 'Pending'
                   return (

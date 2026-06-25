@@ -7,6 +7,7 @@ import { NewLecturerModal } from '@/components/modals/NewLecturerModal'
 import { EditLecturerModal } from '@/components/modals/EditLecturerModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { EmptyState } from '@/components/EmptyState'
 
 export default function Page() {
   const router = useRouter()
@@ -72,10 +73,13 @@ export default function Page() {
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-user"></i></span> Lecturers</div>
             <span className="badge badge-blue"><i className="lni lni-users"></i> 5 total</span>
           </div>
-          <ScrollTable>
+          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead><tr><th style={{ width: 48 }}></th><th>ID</th><th>Name</th>{fth('Highest Qualification', 'qualification', ["PhD", "Master's", "Bachelor's"])}<th>Specialisation</th>{fth('Faculty', 'faculty', ['FCT', 'FBM', 'FEN'])}{fth('Designation', 'designation', ['Senior Lecturer', 'Lecturer', 'Assistant Lecturer', 'Adjunct'])}{fth('Status', 'status', ['Active', 'Inactive'])}</tr></thead>
               <tbody>
+                {filteredRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : null}
                 {filteredRows.map((r, i) => (
                   <tr key={i}>
                     <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => openModal('edit-lecturer-modal')}><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>

@@ -8,6 +8,7 @@ import { EditCourseUnitModal } from '@/components/modals/EditCourseUnitModal'
 import { ElectiveSelectModal } from '@/components/modals/ElectiveSelectModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { EmptyState } from '@/components/EmptyState'
 
 export default function Page() {
   const router = useRouter()
@@ -116,10 +117,13 @@ export default function Page() {
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>
           </div>
-          <ScrollTable>
+          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead><tr><th style={{ width: 48 }}></th><th>Code</th><th>Unit Name</th>{fth('Programme', 'programme', ['BSc. IT', 'BBA', 'MBA'])}{fth('Sem', 'sem', ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5'])}<th>Credits</th>{fth('Unit Type', 'unitType', ['Theory', 'Practical', 'Combined', 'Project'])}{fth('Category', 'category', ['Core', 'Specialization', 'Elective (batch-level)'])}{fth('Has CW', 'hasCW', ['Yes', 'No'])}{fth('Has CBT', 'hasCBT', ['Yes', 'No'])}<th>Proration</th><th>Syllabus</th></tr></thead>
               <tbody>
+                {filteredRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : null}
                 {filteredRows.map((r, i) => (
                   <tr key={i} className={r.rowClass}>
                     <td>
