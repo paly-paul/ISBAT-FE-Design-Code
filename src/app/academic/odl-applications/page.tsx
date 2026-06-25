@@ -5,6 +5,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { EmptyState } from '@/components/EmptyState'
 import { SearchSelect } from '@/components/SearchSelect'
 
 export default function Page() {
@@ -101,10 +102,13 @@ export default function Page() {
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>
           </div>
-          <ScrollTable>
+          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead><tr><th style={{ width: 48 }}></th><th>ODL Ref No.</th><th>Applicant Name</th><th>Email</th>{fth('Programme', 'programme', ['MBA ODL', 'BSc. IT ODL', 'Diploma Bus. ODL'])}<th>Applied Date</th>{fth('Payment', 'payment', ['Paid (DPO)', 'Paid', 'Not Paid'])}<th>DPO Token</th>{fth('Status', 'status', ['Pending Recon.', 'Awaiting Payment', 'Reconciled'])}</tr></thead>
               <tbody>
+                {filteredRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : null}
                 {filteredRows.map((r, i) => (
                   <tr key={i} className={r.rowClass}>
                     <td>

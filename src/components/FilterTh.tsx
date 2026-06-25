@@ -53,14 +53,16 @@ export function FilterTh({ label, opts, isOpen, activeFilter, onToggle, onSelect
     onSelect(pending)
   }
 
+  const isActive = activeFilter.length > 0
+
   return (
-    <th ref={thRef} className="filterable" onClick={onToggle}>
+    <th ref={thRef} className={`filterable${isActive ? ' th-active' : ''}`} onClick={onToggle}>
       {label}
       <i className={`lni lni-funnel th-fi${activeFilter.length ? ' fil-on' : ''}`} onClick={onToggle} />
 
       {isOpen && createPortal(
         <>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={onClose} />
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={e => { e.stopPropagation(); onClose() }} />
           <div
             className="col-filter-drop"
             style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.minWidth, zIndex: 9999, padding: 0 }}

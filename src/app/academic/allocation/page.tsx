@@ -6,6 +6,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { AllocImportModal } from '@/components/modals/AllocImportModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { EmptyState } from '@/components/EmptyState'
 
 export default function Page() {
   const router = useRouter()
@@ -90,10 +91,13 @@ export default function Page() {
               <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Statuses</option><option>Allocated</option><option>Unallocated</option></select>
             </div>
           </div>
-          <ScrollTable>
+          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead><tr><th style={{ width: 48 }}></th><th>Course Code</th><th>Unit Name</th>{fth('Programme', 'programme', ['BSc. IT', 'BBA', 'MBA'])}{fth('Semester', 'semester', ['Sem 1', 'Sem 3'])}{fth('Batch', 'batch', ['BSC-IT-S1-D', 'BBA-S3-D', 'MBA-S1-E'])}<th>Allocated To</th>{fth('Status', 'status', ['Allocated', 'Missing'])}</tr></thead>
               <tbody>
+                {filteredRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : null}
                 {filteredRows.map((r, i) => (
                   <tr key={i} className={r.rowClass}>
                     <td>

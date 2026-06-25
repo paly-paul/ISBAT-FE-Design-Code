@@ -1,5 +1,5 @@
 ﻿'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ModalProps } from './types'
 import { SuccessPopup } from './SuccessPopup'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -63,6 +63,15 @@ export function FeeStructureModal_OLD({ isOpen, onClose, showToast }: ModalProps
 }
    ───────────────────────────────────────────────────────── */
 
+const PROGRAMMES = [
+  { value: 'BSCS-2026', label: 'BSc. Computer Science (BSCS-2026)' },
+  { value: 'BSIT-2025', label: 'BSc. Information Technology (BSIT-2025)' },
+  { value: 'BBA-2024',  label: 'Bachelor of Business Administration (BBA-2024)' },
+  { value: 'MBA-2024',  label: 'Master of Business Administration (MBA-2024)' },
+  { value: 'BENG-2026', label: 'BEng. Electrical Engineering (BENG-2026)' },
+  { value: 'BCOM-2025', label: 'BCom. Accounting & Finance (BCOM-2025)' },
+]
+
 const CURRENCIES = ['UGX', 'USD', 'KES', 'EUR', 'GBP']
 const LEDGERS = [
   'Tuition Fee', 'Examination Fee', 'Registration Fee', 'Library Fee',
@@ -75,6 +84,7 @@ type SemFees = FeeItem[][]
 
 type Structure = {
   id: number
+  programme: string
   feeCode: string
   currency: string
   createdVia: 'new' | 'copy'
@@ -95,32 +105,41 @@ const DEFAULT_SEM_FEES: SemFees = Array.from({ length: NUM_SEMS }, (_, i) =>
 )
 
 function makeDefaultStructures(): Structure[] {
-  return [{ id: 1, feeCode: 'FS-LOCAL-001', currency: 'UGX', createdVia: 'new', semFees: DEFAULT_SEM_FEES }]
+  return [{ id: 1, programme: '', feeCode: 'FS-LOCAL-001', currency: 'UGX', createdVia: 'new', semFees: DEFAULT_SEM_FEES }]
 }
 
 let nextId = 200
 let nextStructId = 100
 
-export function FeeStructureModal({ isOpen, onClose, showToast }: ModalProps) {
+type EditData = { programmeCode: string; intake: string; feeCode: string; description: string; currency: string }
+
+export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }: ModalProps & { mode?: 'edit'; editData?: EditData }) {
   const [saved, setSaved]           = useState(false)
-  const [structures, setStructures] = useState<Structure[]>(makeDefaultStructures())
+  const [structures, setStructures] = useState<Structure[]>(() =>
+    mode === 'edit' && editData
+      ? [{ ...makeDefaultStructures()[0], programme: editData.programmeCode, feeCode: editData.feeCode, currency: editData.currency }]
+      : makeDefaultStructures()
+  )
   const [activeIdx, setActiveIdx]   = useState(0)
-  const [showAddMenu, setShowAddMenu] = useState(false)
+
+  useEffect(() => {
+    if (isOpen && mode === 'edit' && editData) {
+      setStructures([{ ...makeDefaultStructures()[0], programme: editData.programmeCode, feeCode: editData.feeCode, currency: editData.currency }])
+      setActiveIdx(0)
+    }
+  }, [isOpen, editData])
 
   if (!isOpen) return null
 
-  function handleClose() { setSaved(false); setStructures(makeDefaultStructures()); setActiveIdx(0); setShowAddMenu(false); onClose() }
+  function handleClose() { setSaved(false); setStructures(makeDefaultStructures()); setActiveIdx(0); onClose() }
 
   const active = structures[activeIdx]
 
   // ── Structure management ─────────────────────────────────
-  function addStructure(via: 'new' | 'copy') {
-    const newStruct: Structure = via === 'copy'
-      ? { ...active, id: nextStructId++, feeCode: active.feeCode + '-COPY', createdVia: 'copy', semFees: JSON.parse(JSON.stringify(active.semFees)) }
-      : { id: nextStructId++, feeCode: 'FS-NEW-' + nextStructId, currency: 'UGX', createdVia: 'new', semFees: Array.from({ length: NUM_SEMS }, () => []) }
+  function addStructure() {
+    const newStruct: Structure = { id: nextStructId++, programme: '', feeCode: 'FS-NEW-' + nextStructId, currency: 'UGX', createdVia: 'new', semFees: Array.from({ length: NUM_SEMS }, () => []) }
     setStructures(prev => [...prev, newStruct])
     setActiveIdx(structures.length)
-    setShowAddMenu(false)
   }
 
   function removeStructure(idx: number) {
@@ -129,7 +148,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast }: ModalProps) {
     setActiveIdx(prev => (prev >= idx && prev > 0 ? prev - 1 : prev))
   }
 
-  function updateStructureMeta(field: 'feeCode' | 'currency', val: string) {
+  function updateStructureMeta(field: 'programme' | 'feeCode' | 'currency', val: string) {
     setStructures(prev => prev.map((s, i) => i === activeIdx ? { ...s, [field]: val } : s))
   }
 
@@ -218,7 +237,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast }: ModalProps) {
                   }}
                 >
                   <div style={{ width: 30, height: 30, borderRadius: '50%', background: activeIdx === i ? 'rgba(255,255,255,.2)' : 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <i className="lni lni-user" style={{ fontSize: 13, color: activeIdx === i ? '#fff' : 'var(--b600)' }}></i>
+                    <i className="lni lni-coin" style={{ fontSize: 13, color: activeIdx === i ? '#fff' : 'var(--b600)' }}></i>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>{s.feeCode}</div>
@@ -233,55 +252,47 @@ export function FeeStructureModal({ isOpen, onClose, showToast }: ModalProps) {
                 </div>
               ))}
             </div>
-            <div style={{ borderTop: '1.5px solid var(--g200)', padding: '6px 8px 10px' }}>
-              {showAddMenu ? (
-                <>
-                  <button
-                    className="btn"
-                    style={{ width: '100%', justifyContent: 'flex-start', gap: 9, padding: '9px 10px', marginBottom: 2, borderRadius: 'var(--rxs)', background: 'none', border: 'none', fontSize: 12.5, color: 'var(--g800)' }}
-                    onClick={() => addStructure('new')}
-                  >
-                    <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--b50)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <i className="lni lni-plus" style={{ color: 'var(--b600)', fontSize: 11 }}></i>
-                    </span>
-                    Create new structure
-                  </button>
-                  <button
-                    className="btn"
-                    style={{ width: '100%', justifyContent: 'flex-start', gap: 9, padding: '9px 10px', marginBottom: 6, borderRadius: 'var(--rxs)', background: 'none', border: 'none', fontSize: 12.5, color: 'var(--g800)' }}
-                    onClick={() => addStructure('copy')}
-                  >
-                    <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--b50)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <i className="lni lni-files" style={{ color: 'var(--b600)', fontSize: 11 }}></i>
-                    </span>
-                    Copy structure
-                  </button>
-                  <button className="btn btn-neu btn-sm" style={{ width: '100%' }} onClick={() => setShowAddMenu(false)}>
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <button className="btn btn-neu btn-sm" style={{ width: '100%' }} onClick={() => setShowAddMenu(true)}>
-                  <i className="lni lni-plus"></i> Add Structure
+            {mode !== 'edit' && (
+              <div style={{ borderTop: '1.5px solid var(--g200)', padding: '6px 8px 10px' }}>
+                <button className="btn btn-neu btn-sm" style={{ width: '100%' }} onClick={addStructure}>
+                  <i className="lni lni-plus"></i> Add Fee Structure
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Right panel — active structure configuration */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '18px 22px' }}>
 
+            {/* Programme selector */}
+            <div className="fg m-0 mb-[18px]">
+              <div className="lbl">Programme {mode !== 'edit' && <span className="req">*</span>}</div>
+              <div style={mode === 'edit' ? { cursor: 'not-allowed', opacity: 0.6 } : undefined}>
+                <div style={mode === 'edit' ? { pointerEvents: 'none' } : undefined}>
+                  <SearchSelect
+                    placeholder="— Select a programme to begin —"
+                    value={active.programme}
+                    onChange={val => updateStructureMeta('programme', val)}
+                    options={PROGRAMMES}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Locked until a programme is chosen */}
+            <div style={{ opacity: active.programme ? 1 : 0.4, pointerEvents: active.programme ? 'auto' : 'none', transition: 'opacity .2s' }}>
+
             {/* Active structure banner */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, padding: '12px 16px', background: 'var(--b50)', borderRadius: 'var(--rsm)', border: '1.5px solid var(--b100)' }}>
               <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <i className="lni lni-user" style={{ color: 'var(--b600)', fontSize: 17 }}></i>
+                <i className="lni lni-coin" style={{ color: 'var(--b600)', fontSize: 17 }}></i>
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--b800)' }}>
-                  {active.feeCode} — {active.currency}
+                  {active.feeCode} — {active.currency}{editData?.description ? ` · ${editData.description}` : ''}
                 </div>
                 <div style={{ fontSize: 11.5, color: 'var(--g400)' }}>
-                  Structure {activeIdx + 1} of {structures.length} · {active.createdVia === 'copy' ? 'Copied from existing structure' : 'New structure'}
+                  Structure {activeIdx + 1} of {structures.length}
                 </div>
               </div>
             </div>
@@ -291,6 +302,10 @@ export function FeeStructureModal({ isOpen, onClose, showToast }: ModalProps) {
               <div className="fg m-0">
                 <div className="lbl">Fee Code</div>
                 <input className="ctrl font-mono uppercase" type="text" value={active.feeCode} onChange={e => updateStructureMeta('feeCode', e.target.value)} />
+              </div>
+              <div className="fg m-0">
+                <div className="lbl">Fee Description</div>
+                <input className="ctrl" type="text" placeholder="e.g. Local undergraduate fee structure" defaultValue={editData?.description ?? ''} />
               </div>
               <div className="fg m-0">
                 <div className="lbl">Base Currency</div>
@@ -306,15 +321,31 @@ export function FeeStructureModal({ isOpen, onClose, showToast }: ModalProps) {
                   onChange={val => updateStructureMeta('currency', val)}
                 />
               </div>
-              {active.createdVia === 'copy' && (
-                <div className="fg m-0">
-                  <div className="lbl">Copy Fee Code</div>
+              <div className="fg m-0">
+                <div className="lbl">Copy Fee Code</div>
+                <SearchSelect
+                  placeholder="— Select source structure —"
+                  options={structures.filter((_, i) => i !== activeIdx).map(s => ({ value: s.feeCode, label: s.feeCode }))}
+                />
+              </div>
+              <div className="fg m-0">
+                <div className="lbl">Intake</div>
+                <div style={mode === 'edit' ? { cursor: 'not-allowed', opacity: 0.6 } : undefined}>
+                  <div style={mode === 'edit' ? { pointerEvents: 'none' } : undefined}>
                   <SearchSelect
-                    placeholder="— Select source structure —"
-                    options={structures.filter((_, i) => i !== activeIdx).map(s => ({ value: s.feeCode, label: s.feeCode }))}
+                    placeholder="— Select intake —"
+                    value={editData?.intake}
+                    options={[
+                      { value: '20241', label: '20241 — Spring 2024' },
+                      { value: '20261', label: '20261 — Spring 2026' },
+                      { value: '20262', label: '20262 — Fall 2026' },
+                      { value: '20271', label: '20271 — Spring 2027' },
+                      { value: '20272', label: '20272 — Fall 2027' },
+                    ]}
                   />
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Programme-level fees & discounts */}
@@ -324,7 +355,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast }: ModalProps) {
                 <span>Programme-level Fees &amp; Discounts</span>
                 <span className="badge badge-blue normal-case tracking-normal font-semibold ml-auto">Applied across all semesters</span>
               </div>
-              <div className="g2">
+              <div className="g4">
                 <div className="fg m-0">
                   <div className="lbl">Lumpsum Discount Type</div>
                   <SearchSelect options={['Amount', 'Percentage']} />
@@ -336,13 +367,11 @@ export function FeeStructureModal({ isOpen, onClose, showToast }: ModalProps) {
                     <input className="ctrl flex-1" type="number" placeholder="0" min={0} />
                   </div>
                 </div>
-              </div>
-              <div className="g3 mt-3">
-                <div className="fg span2 m-0"><div className="lbl">Lateral Entry Fee</div><input className="ctrl" type="number" placeholder="0" min={0} /></div>
+                <div className="fg m-0"><div className="lbl">Lateral Entry Fee</div><input className="ctrl" type="number" placeholder="0" min={0} /></div>
                 <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={CURRENCIES} /></div>
-                <div className="fg span2 m-0"><div className="lbl">Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} /></div>
+                <div className="fg m-0"><div className="lbl">Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} /></div>
                 <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={CURRENCIES} /></div>
-                <div className="fg span2 m-0"><div className="lbl">Aptech Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} /></div>
+                <div className="fg m-0"><div className="lbl">Aptech Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} /></div>
                 <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={CURRENCIES} /></div>
               </div>
             </div>
@@ -390,6 +419,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast }: ModalProps) {
                 </div>
               ))}
             </div>
+            </div>{/* end gate wrapper */}
           </div>
         </div>
 

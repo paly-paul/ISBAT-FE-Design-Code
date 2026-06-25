@@ -1513,7 +1513,7 @@ body {
 }
 
 .lbl {
-  font-size: var(--fs-sm);
+  font-size: 13px;
   font-weight: 600;
   color: var(--g700);
   margin-bottom: 5px;
@@ -1915,6 +1915,114 @@ textarea.ctrl {
   position: relative
 }
 
+.tbl-empty-cell {
+  padding: 64px 24px !important;
+  border: none !important;
+  background: transparent !important;
+  text-align: center
+}
+
+.tbl-empty-inner {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0
+}
+
+.tbl-empty-icon-wrap {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--g100);
+  box-shadow: var(--neu-out);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18px;
+  font-size: 28px;
+  color: var(--g400);
+  position: relative
+}
+
+.tbl-empty-icon-wrap::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--g200)
+}
+
+.tbl-empty-icon-wrap.filtered {
+  color: var(--b400);
+  background: var(--b50)
+}
+
+.tbl-empty-icon-wrap.filtered::after {
+  border-color: var(--b100)
+}
+
+.tbl-empty-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--g700);
+  margin-bottom: 6px;
+  letter-spacing: -.2px
+}
+
+.tbl-empty-sub {
+  font-size: 13px;
+  color: var(--g400);
+  max-width: 320px;
+  line-height: 1.55;
+  margin-bottom: 20px
+}
+
+.tbl-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  margin-bottom: 6px;
+  background: var(--amber-bg);
+  border: 1.5px solid var(--amber-bd);
+  border-radius: var(--rsm);
+}
+
+.tbl-filter-bar-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--amber);
+  flex: 1
+}
+
+.tbl-filter-bar-label i {
+  font-size: 11px
+}
+
+.tbl-filter-bar-reset {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--rxs);
+  border: 1.5px solid var(--amber-bd);
+  background: var(--white);
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--tr), color var(--tr)
+}
+
+.tbl-filter-bar-reset:hover {
+  background: var(--amber);
+  color: var(--white);
+  border-color: var(--amber)
+}
+
 .tbl-wrap {
   border-radius: var(--rsm);
   border: 1.5px solid var(--g200);
@@ -2019,7 +2127,7 @@ tr.flagged td {
 }
 
 .ss-placeholder {
-  color: var(--g300) !important;
+  color: var(--g500) !important;
 }
 
 .ss-chevron {
@@ -2099,6 +2207,11 @@ th {
 
 th.filterable {
   cursor: pointer
+}
+
+th.filterable.th-active {
+  background: rgba(255, 255, 255, .18);
+  box-shadow: inset 0 -3px 0 var(--b300)
 }
 
 .th-fi {
@@ -2246,6 +2359,18 @@ th:hover .th-fi {
 }
 
 .col-filter-btn-reset:hover { color: var(--red) }
+
+.col-filter-btn-reset-all {
+  background: none;
+  color: var(--amber);
+  font-size: 11px;
+  text-decoration: underline;
+  padding: 0;
+  height: auto;
+  cursor: pointer
+}
+
+.col-filter-btn-reset-all:hover { color: color-mix(in srgb, var(--amber) 70%, #000) }
 
 .col-filter-btn-cancel {
   background: var(--surface);

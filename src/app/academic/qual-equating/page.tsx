@@ -5,6 +5,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { EmptyState } from '@/components/EmptyState'
 
 export default function Page() {
   const router = useRouter()
@@ -70,10 +71,13 @@ export default function Page() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-world"></i></span> Equating Requests</div>
           </div>
-          <ScrollTable>
+          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead><tr><th style={{ width: 48 }}></th><th>Applicant Name</th>{fth('Country of Qualification', 'country', ['DR Congo', 'Kenya', 'Rwanda'])}{fth('Qualification Level', 'qualLevel', ['A-Level Equivalent', 'O-Level (KCSE)', "Bachelor's Degree"])}<th>Referred To</th><th>Submitted Date</th>{fth('Status', 'status', ['Completed', 'Pending', 'In Review'])}{fth('Outcome', 'outcome', ['Equated — 2 Principal Passes', '—'])}</tr></thead>
               <tbody>
+                {filteredRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : null}
                 {filteredRows.map((r, i) => (
                   <tr key={i} className={r.rowClass}>
                     <td>

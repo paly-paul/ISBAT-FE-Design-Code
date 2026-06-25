@@ -8,6 +8,7 @@ import { AddSlotModal } from '@/components/modals/AddSlotModal'
 import { RoomMgmtModal } from '@/components/modals/RoomMgmtModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { EmptyState } from '@/components/EmptyState'
 import { SearchSelect } from '@/components/SearchSelect'
 
 export default function Page() {
@@ -158,10 +159,13 @@ export default function Page() {
 
         <div className="card hidden" id="tt-list-view">
           <div className="card-hdr"><div className="card-title"><span className="ctitle-icon"><i className="lni lni-clipboard"></i></span> List View — Schedule</div></div>
-          <ScrollTable>
+          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table id="tt-list-table">
               <thead><tr><th style={{ width: 48 }}></th>{fth('Day', 'day', ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])}<th>Time</th><th>Course Unit</th>{fth('Type', 'type', ['Theory', 'Practical'])}{fth('Room', 'room', ['LR-01', 'LR-02', 'Lab-A', 'Lab-B'])}<th>Capacity</th>{fth('Faculty', 'faculty', ['Dr. Ssekibuule Ronald', 'Ms. Namutebi Joyce', 'Prof. Mukasa Charles'])}<th>Combined Batch?</th></tr></thead>
               <tbody>
+                {filteredRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : null}
                 {filteredRows.map((r, i) => (
                   <tr key={i}>
                     <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => openModal('add-slot-modal')}><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>

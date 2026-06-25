@@ -7,6 +7,7 @@ import { NewIntakeModal } from '@/components/modals/NewIntakeModal'
 import { EditIntakeModal } from '@/components/modals/EditIntakeModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
+import { EmptyState } from '@/components/EmptyState'
 
 export default function Page() {
   const router = useRouter()
@@ -95,10 +96,13 @@ export default function Page() {
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-calendar"></i></span> All Intakes</div>
             <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
           </div>
-          <ScrollTable>
+          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
-              <thead><tr><th style={{ width: 48 }}></th><th>Code</th><th>Description</th>{fth('Fin. Year', 'finYear', ['2025–26', '2026–27'])}<th>Sem Start</th><th>Term1 End</th><th>Term2 End</th><th>Grievance End</th><th>Re-entry Date</th>{fth('Academic?', 'academic', ['Current', 'Closed', '—'])}{fth('Admission?', 'admission', ['Current', 'Closed', '—'])}</tr></thead>
+              <thead><tr><th style={{ width: 48 }}></th><th>Code</th><th>Description</th>{fth('Fin. Year', 'finYear', ['2025–26', '2026–27'])}<th>Sem Start</th><th>Term1 End</th><th>Term2 End</th><th>Grievance End</th><th>Re-entry Date</th>{fth('Academic', 'academic', ['Current', 'Closed', '—'])}{fth('Admission', 'admission', ['Current', 'Closed', '—'])}</tr></thead>
               <tbody>
+                {filteredRows.length === 0
+                  ? <EmptyState colSpan={11} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : null}
                 {filteredRows.map((r, i) => (
                   <tr key={i} className={r.rowClass}>
                     <td>

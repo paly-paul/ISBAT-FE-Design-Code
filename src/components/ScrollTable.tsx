@@ -1,7 +1,15 @@
 'use client'
 import { useRef, useState, useEffect } from 'react'
 
-export function ScrollTable({ children, className }: { children: React.ReactNode; className?: string }) {
+interface ScrollTableProps {
+  children: React.ReactNode
+  className?: string
+  filters?: Record<string, string[]>
+  onResetFilters?: () => void
+}
+
+export function ScrollTable({ children, className, filters, onResetFilters }: ScrollTableProps) {
+  const hasActiveFilters = filters ? Object.values(filters).some(v => v.length > 0) : false
   const ref = useRef<HTMLDivElement>(null)
   const [canLeft, setCanLeft] = useState(false)
   const [canRight, setCanRight] = useState(false)
@@ -31,6 +39,17 @@ export function ScrollTable({ children, className }: { children: React.ReactNode
 
   return (
     <div className="tbl-scroll-host">
+      {hasActiveFilters && onResetFilters && (
+        <div className="tbl-filter-bar">
+          <span className="tbl-filter-bar-label">
+            <i className="lni lni-funnel"></i>
+            {Object.values(filters!).filter(v => v.length).length} filter{Object.values(filters!).filter(v => v.length).length > 1 ? 's' : ''} active
+          </span>
+          <button className="tbl-filter-bar-reset" onClick={onResetFilters}>
+            <i className="lni lni-close"></i> Reset all filters
+          </button>
+        </div>
+      )}
       {canLeft && (
         <button className="tbl-arrow tbl-arrow-l" onClick={() => scrollBy('left')} aria-label="Scroll left">
           <i className="lni lni-chevron-left" />
