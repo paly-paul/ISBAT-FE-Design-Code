@@ -8,6 +8,7 @@ export default function AcademicLayout({ children }: { children: React.ReactNode
   const [panelOpen, setPanelOpen] = useState(true)
   const [profileOpen, setProfileOpen] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
+  const [activeRail, setActiveRail] = useState<'academic' | 'config'>('academic')
   const profileRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
   const router = useRouter()
@@ -59,6 +60,8 @@ export default function AcademicLayout({ children }: { children: React.ReactNode
           nav={nav}
           collapsedSections={collapsedSections}
           toggleCollapse={toggleCollapse}
+          activeRail={activeRail}
+          setActiveRail={setActiveRail}
         />
         <main className={`main${panelOpen ? ' panel-open' : ''}`}>
           {children}

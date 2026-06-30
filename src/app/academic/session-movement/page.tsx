@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
-import { ConfirmMovementModal } from '@/components/modals/ConfirmMovementModal'
+import { ConfirmMovementModal } from '@/components/modals/academic/ConfirmMovementModal'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 

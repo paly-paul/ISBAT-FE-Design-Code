@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -6,14 +6,8 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
-import { NewCountryModal } from '@/components/modals/NewCountryModal'
-import { EditCountryModal } from '@/components/modals/EditCountryModal'
-
-function StatusBadge({ status }: { status: string }) {
-  if (status === 'Active')
-    return <span className="badge-green">{status}</span>
-  return <span className="badge-grey">{status}</span>
-}
+import { NewCountryModal } from '@/components/modals/academic/NewCountryModal'
+import { EditCountryModal } from '@/components/modals/academic/EditCountryModal'
 
 export default function Page() {
   const router = useRouter()
@@ -37,14 +31,14 @@ export default function Page() {
   }, [])
 
   const rows = [
-    { code: 'UG',  name: 'Uganda',       nationality: 'Ugandan',     dialCode: '+256', status: 'Active'   },
-    { code: 'KE',  name: 'Kenya',        nationality: 'Kenyan',      dialCode: '+254', status: 'Active'   },
-    { code: 'TZ',  name: 'Tanzania',     nationality: 'Tanzanian',   dialCode: '+255', status: 'Active'   },
-    { code: 'RW',  name: 'Rwanda',       nationality: 'Rwandan',     dialCode: '+250', status: 'Active'   },
-    { code: 'SS',  name: 'South Sudan',  nationality: 'South Sudanese', dialCode: '+211', status: 'Active' },
-    { code: 'CD',  name: 'DR Congo',     nationality: 'Congolese',   dialCode: '+243', status: 'Inactive' },
-    { code: 'GB',  name: 'United Kingdom', nationality: 'British',   dialCode: '+44',  status: 'Active'   },
-    { code: 'IN',  name: 'India',        nationality: 'Indian',      dialCode: '+91',  status: 'Active'   },
+    { countryCode: 'UGA', countryName: 'Uganda',         nationality: 'Ugandan',        defaultCountry: 1, countryPrefix: '+256' },
+    { countryCode: 'KEN', countryName: 'Kenya',           nationality: 'Kenyan',         defaultCountry: 0, countryPrefix: '+254' },
+    { countryCode: 'TZA', countryName: 'Tanzania',        nationality: 'Tanzanian',      defaultCountry: 0, countryPrefix: '+255' },
+    { countryCode: 'RWA', countryName: 'Rwanda',          nationality: 'Rwandan',        defaultCountry: 0, countryPrefix: '+250' },
+    { countryCode: 'SSD', countryName: 'South Sudan',     nationality: 'South Sudanese', defaultCountry: 0, countryPrefix: '+211' },
+    { countryCode: 'COD', countryName: 'DR Congo',        nationality: 'Congolese',      defaultCountry: 0, countryPrefix: '+243' },
+    { countryCode: 'GBR', countryName: 'United Kingdom',  nationality: 'British',        defaultCountry: 0, countryPrefix: '+44'  },
+    { countryCode: 'IND', countryName: 'India',           nationality: 'Indian',         defaultCountry: 0, countryPrefix: '+91'  },
   ]
 
   const filteredRows = rows.filter(r =>
@@ -87,11 +81,11 @@ export default function Page() {
               <thead>
                 <tr>
                   <th style={{ width: 48 }}></th>
-                  <th>Code</th>
+                  <th>Country Code</th>
                   <th>Country Name</th>
                   {fth('Nationality', 'nationality', ['Ugandan', 'Kenyan', 'Tanzanian', 'Rwandan', 'South Sudanese', 'Congolese', 'British', 'Indian'])}
-                  {fth('Dial Code', 'dialCode', ['+256', '+254', '+255', '+250', '+211', '+243', '+44', '+91'])}
-                  {fth('Status', 'status', ['Active', 'Inactive'])}
+                  <th>Dial Prefix</th>
+                  <th>Default</th>
                 </tr>
               </thead>
               <tbody>
@@ -107,11 +101,15 @@ export default function Page() {
                         </button>
                       </ActionMenu>
                     </td>
-                    <td className="font-mono font-bold">{r.code}</td>
-                    <td><strong>{r.name}</strong></td>
+                    <td className="font-mono font-bold">{r.countryCode}</td>
+                    <td><strong>{r.countryName}</strong></td>
                     <td>{r.nationality}</td>
-                    <td className="font-mono">{r.dialCode}</td>
-                    <td><StatusBadge status={r.status} /></td>
+                    <td className="font-mono">{r.countryPrefix}</td>
+                    <td>
+                      {r.defaultCountry === 1
+                        ? <span className="badge badge-green">Default</span>
+                        : <span className="badge-grey">—</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>

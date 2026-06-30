@@ -1,0 +1,58 @@
+'use client'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Toast } from '@/components/Toast'
+
+export default function EnquiryFormPage() {
+  const router = useRouter()
+  const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  return (
+    <div id="page-enquiry-form">
+      <div className="pg-hdr">
+        <div>
+          <h1 className="text-xl font-semibold text-g900">New Enquiry</h1>
+          <p className="text-sm text-g500 mt-0.5">Information Desk — capture walk-in, phone &amp; online enquiries</p>
+        </div>
+        <button className="btn btn-ghost" onClick={() => router.push('/admission/enquiry-list')}><i className="lni lni-arrow-left" /> Enquiry List</button>
+      </div>
+
+      <div className="card max-w-3xl">
+        <div className="g2">
+          <div className="fg"><label className="lbl">First Name <span className="text-clr-red">*</span></label><input className="ctrl" placeholder="e.g. Brian" /></div>
+          <div className="fg"><label className="lbl">Last Name <span className="text-clr-red">*</span></label><input className="ctrl" placeholder="e.g. Kamya" /></div>
+          <div className="fg"><label className="lbl">Phone <span className="text-clr-red">*</span></label><input className="ctrl" placeholder="+256 7XX XXX XXX" /></div>
+          <div className="fg"><label className="lbl">Email</label><input className="ctrl" type="email" placeholder="candidate@example.com" /></div>
+          <div className="fg">
+            <label className="lbl">Enquiry Channel</label>
+            <select className="ctrl"><option value="">— select —</option><option>Walk-in</option><option>Phone</option><option>Online</option><option>Kiosk</option></select>
+          </div>
+          <div className="fg">
+            <label className="lbl">Programme Interest</label>
+            <select className="ctrl"><option value="">— select —</option><option>BSCS — Computer Science</option><option>BBA — Business Administration</option><option>BSIT — Information Technology</option><option>MBA — Master of Business Admin</option></select>
+          </div>
+          <div className="fg">
+            <label className="lbl">Preferred Intake</label>
+            <select className="ctrl"><option value="">— select —</option><option>Spring 2026</option><option>Fall 2026</option><option>Spring 2027</option></select>
+          </div>
+          <div className="fg">
+            <label className="lbl">Preferred Study Mode</label>
+            <select className="ctrl"><option value="">— select —</option><option>Full-time</option><option>Weekend</option><option>Evening</option><option>ODL</option></select>
+          </div>
+          <div className="fg" style={{ gridColumn: 'span 2' }}>
+            <label className="lbl">Enquiry Notes</label>
+            <textarea className="ctrl" rows={3} placeholder="Additional notes about the enquiry..." />
+          </div>
+        </div>
+        <div className="sec-divider" />
+        <div className="flex justify-end gap-2">
+          <button className="btn btn-ghost" onClick={() => router.push('/admission/enquiry-list')}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => showToast('Enquiry saved successfully.', 'success')}>Save Enquiry</button>
+        </div>
+      </div>
+
+      <Toast toast={toast} />
+    </div>
+  )
+}

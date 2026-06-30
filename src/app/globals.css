@@ -1715,6 +1715,12 @@ textarea.ctrl {
   transition: var(--tr);
 }
 
+.btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .btn-primary {
   background: linear-gradient(135deg, var(--b700), var(--b500));
   color: #fff;

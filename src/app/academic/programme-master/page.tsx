@@ -1,10 +1,10 @@
-﻿'use client'
+'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
-import { ProgrammeModal } from '@/components/modals/ProgrammeModal'
-import { SpecializationModal } from '@/components/modals/SpecializationModal'
+import { ProgrammeModal } from '@/components/modals/academic/ProgrammeModal'
+import { SpecializationModal } from '@/components/modals/academic/SpecializationModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -15,6 +15,7 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [progMode, setProgMode] = useState<'add' | 'edit'>('add')
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -61,7 +62,7 @@ export default function Page() {
       <div className="page active">
         <div className="pg-hdr">
           <div><div className="pg-title">Programme Master</div><div className="pg-sub">Define programme versions · Manage active/inactive status · Accreditation tracking · Specializations</div></div>
-          <button className="btn btn-primary" onClick={() => openModal('new-prog-modal')}><i className="lni lni-plus"></i> Add Programme Version</button>
+          <button className="btn btn-primary" onClick={() => { setProgMode('add'); openModal('new-prog-modal') }}><i className="lni lni-plus"></i> Add Programme Version</button>
         </div>
 
         <div className="flex items-center gap-2 mb-[18px] flex-wrap">
@@ -103,7 +104,7 @@ export default function Page() {
                     <td>
                       {r.variant === 'edit' && (
                         <ActionMenu>
-                          <button className="btn btn-neu btn-sm" onClick={() => openModal('new-prog-modal')}><i className="lni lni-pencil"></i> Edit</button>
+                          <button className="btn btn-neu btn-sm" onClick={() => { setProgMode('edit'); openModal('new-prog-modal') }}><i className="lni lni-pencil"></i> Edit</button>
                           <button className="btn btn-neu btn-sm" onClick={() => nav('course-units')}><i className="lni lni-book"></i> Curriculum</button>
                         </ActionMenu>
                       )}
@@ -114,13 +115,13 @@ export default function Page() {
                       )}
                       {r.variant === 'renew' && (
                         <ActionMenu>
-                          <button className="btn btn-amber btn-sm" onClick={() => openModal('new-prog-modal')}><i className="lni lni-warning"></i> Renew</button>
-                          <button className="btn btn-primary btn-sm" onClick={() => openModal('new-prog-modal')}><i className="lni lni-plus"></i> New Version</button>
+                          <button className="btn btn-amber btn-sm" onClick={() => { setProgMode('edit'); openModal('new-prog-modal') }}><i className="lni lni-warning"></i> Renew</button>
+                          <button className="btn btn-primary btn-sm" onClick={() => { setProgMode('add'); openModal('new-prog-modal') }}><i className="lni lni-plus"></i> New Version</button>
                         </ActionMenu>
                       )}
                       {r.variant === 'editspec' && (
                         <ActionMenu>
-                          <button className="btn btn-neu btn-sm" onClick={() => openModal('new-prog-modal')}><i className="lni lni-pencil"></i> Edit</button>
+                          <button className="btn btn-neu btn-sm" onClick={() => { setProgMode('edit'); openModal('new-prog-modal') }}><i className="lni lni-pencil"></i> Edit</button>
                           <button className="btn btn-neu btn-sm" onClick={() => openModal('specialization-modal')}><i className="lni lni-target"></i> Specializations</button>
                         </ActionMenu>
                       )}
@@ -158,7 +159,7 @@ export default function Page() {
           </ScrollTable>
         </div>
       </div>
-      <ProgrammeModal isOpen={openModals.has('new-prog-modal')} onClose={() => closeModal('new-prog-modal')} showToast={showToast} />
+      <ProgrammeModal isOpen={openModals.has('new-prog-modal')} onClose={() => closeModal('new-prog-modal')} showToast={showToast} mode={progMode === 'edit' ? 'edit' : undefined} />
       <SpecializationModal isOpen={openModals.has('specialization-modal')} onClose={() => closeModal('specialization-modal')} showToast={showToast} />
       <Toast toast={toast} />
     </>
