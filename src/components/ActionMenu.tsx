@@ -39,8 +39,24 @@ export function ActionMenu({ children, tooltip = 'Actions' }: ActionMenuProps) {
       if (!triggerRef.current?.contains(t) && !dropdownRef.current?.contains(t))
         setOpen(false)
     }
+    function updatePos() {
+      if (!triggerRef.current) return
+      const r = triggerRef.current.getBoundingClientRect()
+      setPos({ top: r.bottom + 6, left: r.left + r.width / 2 })
+    }
+    function onScroll() { requestAnimationFrame(updatePos) }
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (!entry.isIntersecting) setOpen(false) },
+      { threshold: 0 }
+    )
+    if (triggerRef.current) observer.observe(triggerRef.current)
     document.addEventListener('mousedown', handle)
-    return () => document.removeEventListener('mousedown', handle)
+    document.addEventListener('scroll', onScroll, true)
+    return () => {
+      document.removeEventListener('mousedown', handle)
+      document.removeEventListener('scroll', onScroll, true)
+      observer.disconnect()
+    }
   }, [open])
 
   return (

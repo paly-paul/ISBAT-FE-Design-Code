@@ -1,10 +1,10 @@
-﻿'use client'
+'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
-import { NewFacultyModal } from '@/components/modals/NewFacultyModal'
-import { EditFacultyModal } from '@/components/modals/EditFacultyModal'
+import { NewFacultyModal } from '@/components/modals/academic/NewFacultyModal'
+import { EditFacultyModal } from '@/components/modals/academic/EditFacultyModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -31,9 +31,9 @@ export default function Page() {
   }, [])
 
   const rows = [
-    { code: 'FCT', name: 'Faculty of Computing & Technology',  dean: 'Dr. Ssekibuule Ronald', programmes: 3, units: 42 },
-    { code: 'FBM', name: 'Faculty of Business & Management',   dean: 'Prof. Mukasa Charles',  programmes: 4, units: 56 },
-    { code: 'FEN', name: 'Faculty of Engineering',             dean: 'Dr. Tendo Patrick',      programmes: 2, units: 38 },
+    { code: 'FCT', name: 'Faculty of Computing & Technology', dean: 'Dr. Ssekibuule Ronald', programmes: 3, units: 42 },
+    { code: 'FBM', name: 'Faculty of Business & Management', dean: 'Prof. Mukasa Charles', programmes: 4, units: 56 },
+    { code: 'FEN', name: 'Faculty of Engineering', dean: 'Dr. Tendo Patrick', programmes: 2, units: 38 },
   ]
   const filteredRows = rows.filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
@@ -62,10 +62,10 @@ export default function Page() {
           <button className="btn btn-primary" onClick={() => openModal('new-faculty-modal')}><i className="lni lni-plus"></i> Add Faculty</button>
         </div>
         <div className="card">
-          <div className="card-hdr"><div className="card-title"><span className="ctitle-icon"><i className="lni lni-apartment"></i></span> Faculties</div></div>
+          <div className="card-hdr"><div className="card-title"><span className="ctitle-icon"><i className="lni lni-library"></i></span> Faculties</div></div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
-              <thead><tr><th style={{ width: 48 }}></th><th>Faculty Code</th><th>Faculty Name</th>{fth('Dean', 'dean', ['Dr. Ssekibuule Ronald', 'Prof. Mukasa Charles', 'Dr. Tendo Patrick'])}<th>Programmes</th><th>Course Units</th></tr></thead>
+              <thead><tr><th style={{ width: 48 }}></th><th>Faculty Code</th><th>Faculty Name</th>{fth('Dean', 'dean', ['Dr. Ssekibuule Ronald', 'Prof. Mukasa Charles', 'Dr. Tendo Patrick'])}<th>Programmes</th>{/* <th>Course Units</th> */}</tr></thead>
               <tbody>
                 {filteredRows.length === 0
                   ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
@@ -77,7 +77,7 @@ export default function Page() {
                     <td><strong>{r.name}</strong></td>
                     <td>{r.dean}</td>
                     <td>{r.programmes}</td>
-                    <td>{r.units}</td>
+                    {/* <td>{r.units}</td> */}
                   </tr>
                 ))}
               </tbody>

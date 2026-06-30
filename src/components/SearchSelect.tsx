@@ -66,8 +66,24 @@ export function SearchSelect({
       if (!triggerRef.current?.contains(t) && !dropRef.current?.contains(t))
         setOpen(false)
     }
+    function updatePos() {
+      if (!triggerRef.current) return
+      const r = triggerRef.current.getBoundingClientRect()
+      setPos({ top: r.bottom + 4, left: r.left, width: r.width })
+    }
+    function onScroll() { requestAnimationFrame(updatePos) }
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (!entry.isIntersecting) setOpen(false) },
+      { threshold: 0 }
+    )
+    if (triggerRef.current) observer.observe(triggerRef.current)
     document.addEventListener('mousedown', handle)
-    return () => document.removeEventListener('mousedown', handle)
+    document.addEventListener('scroll', onScroll, true)
+    return () => {
+      document.removeEventListener('mousedown', handle)
+      document.removeEventListener('scroll', onScroll, true)
+      observer.disconnect()
+    }
   }, [open])
 
   function select(val: string) {

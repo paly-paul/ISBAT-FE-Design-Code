@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { FeeStructureModal } from '@/components/modals/FeeStructureModal'
+import { FeeStructureModal } from '@/components/modals/academic/FeeStructureModal'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'

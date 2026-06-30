@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -6,14 +6,8 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
-import { NewCampusModal } from '@/components/modals/NewCampusModal'
-import { EditCampusModal } from '@/components/modals/EditCampusModal'
-
-function StatusBadge({ status }: { status: string }) {
-  if (status === 'Active')
-    return <span className="badge-green">{status}</span>
-  return <span className="badge-grey">{status}</span>
-}
+import { NewCampusModal } from '@/components/modals/academic/NewCampusModal'
+import { EditCampusModal } from '@/components/modals/academic/EditCampusModal'
 
 export default function Page() {
   const router = useRouter()
@@ -37,10 +31,10 @@ export default function Page() {
   }, [])
 
   const rows = [
-    { code: 'MKL', name: 'Makerere Campus',      city: 'Kampala, Uganda',  status: 'Active'   },
-    { code: 'KAM', name: 'Kampala City Campus',   city: 'Kampala, Uganda',  status: 'Active'   },
-    { code: 'MBR', name: 'Mbarara Campus',        city: 'Mbarara, Uganda',  status: 'Inactive' },
-    { code: 'GUL', name: 'Gulu Campus',           city: 'Gulu, Uganda',     status: 'Active'   },
+    { campusCode: 'MKL', campusName: 'Makerere Campus',     location: 'Kampala', address: 'Plot 5, Makerere Hill Road',      contact: '+256 414 530 000' },
+    { campusCode: 'KAM', campusName: 'Kampala City Campus', location: 'Kampala', address: '14 Kampala Road, City Centre',     contact: '+256 414 230 100' },
+    { campusCode: 'MBR', campusName: 'Mbarara Campus',      location: 'Mbarara', address: 'Kakoba Road, Mbarara',             contact: '+256 485 660 200' },
+    { campusCode: 'GUL', campusName: 'Gulu Campus',         location: 'Gulu',    address: 'Acholi Quarters, Gulu',            contact: '+256 471 432 100' },
   ]
 
   const filteredRows = rows.filter(r =>
@@ -68,7 +62,7 @@ export default function Page() {
         <div className="pg-hdr">
           <div>
             <div className="pg-title">Campus Master</div>
-            <div className="pg-sub">Manage university campuses and their locations</div>
+            <div className="pg-sub">Manage university campuses and their contact details</div>
           </div>
           <button className="btn btn-primary" onClick={() => openModal('new-campus-modal')}>
             <i className="lni lni-plus"></i> Add Campus
@@ -85,8 +79,9 @@ export default function Page() {
                   <th style={{ width: 48 }}></th>
                   <th>Campus Code</th>
                   <th>Campus Name</th>
-                  {fth('City / Location', 'city', ['Kampala, Uganda', 'Mbarara, Uganda', 'Gulu, Uganda'])}
-                  {fth('Status', 'status', ['Active', 'Inactive'])}
+                  {fth('Location', 'location', ['Kampala', 'Mbarara', 'Gulu'])}
+                  <th>Address</th>
+                  <th>Contact</th>
                 </tr>
               </thead>
               <tbody>
@@ -102,10 +97,11 @@ export default function Page() {
                         </button>
                       </ActionMenu>
                     </td>
-                    <td className="font-mono font-bold">{r.code}</td>
-                    <td><strong>{r.name}</strong></td>
-                    <td>{r.city}</td>
-                    <td><StatusBadge status={r.status} /></td>
+                    <td className="font-mono font-bold">{r.campusCode}</td>
+                    <td><strong>{r.campusName}</strong></td>
+                    <td>{r.location}</td>
+                    <td>{r.address}</td>
+                    <td>{r.contact}</td>
                   </tr>
                 ))}
               </tbody>

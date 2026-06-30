@@ -28,6 +28,26 @@ export function FilterTh({ label, opts, isOpen, activeFilter, onToggle, onSelect
     if (!isOpen) setSearch('')
   }, [isOpen])
 
+  useEffect(() => {
+    if (!isOpen) return
+    function updatePos() {
+      if (!thRef.current) return
+      const r = thRef.current.getBoundingClientRect()
+      setPos({ top: r.bottom + 4, left: r.left, minWidth: Math.max(r.width, 210) })
+    }
+    function onScroll() { requestAnimationFrame(updatePos) }
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (!entry.isIntersecting) onClose() },
+      { threshold: 0 }
+    )
+    if (thRef.current) observer.observe(thRef.current)
+    document.addEventListener('scroll', onScroll, true)
+    return () => {
+      document.removeEventListener('scroll', onScroll, true)
+      observer.disconnect()
+    }
+  }, [isOpen, onClose])
+
   const meaningful = opts.filter(o => o && o !== '-' && o !== '—' && o.trim() !== '')
 
   const visible = search.trim()
