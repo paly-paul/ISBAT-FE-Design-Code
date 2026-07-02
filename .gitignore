@@ -36,4 +36,4 @@ yarn-error.log*
 next-env.d.ts
 
 # local reference docs
-PROJECT_STRUCTURE.md
+# PROJECT_STRUCTURE.md

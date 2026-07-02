@@ -2401,7 +2401,7 @@ th:hover .th-fi {
 .info-box {
   background: var(--b50);
   border: 1.5px solid var(--b200);
-  border-radius: var(--rxs);
+  /* border-radius: var(--rxs); */
   padding: 12px 14px;
   font-size: var(--fs-base);
   display: flex;
