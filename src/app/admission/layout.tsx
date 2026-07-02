@@ -46,6 +46,7 @@ const SIDEBAR_SECTIONS = [
 
 export default function AdmissionLayout({ children }: { children: React.ReactNode }) {
   const [panelOpen, setPanelOpen] = useState(true)
+  const [activePanel, setActivePanel] = useState<'admission' | 'config'>('admission')
   const [profileOpen, setProfileOpen] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const profileRef = useRef<HTMLDivElement>(null)
@@ -53,6 +54,15 @@ export default function AdmissionLayout({ children }: { children: React.ReactNod
   const router = useRouter()
 
   const currentPage = pathname.split('/').pop() ?? 'dashboard'
+
+  function clickRail(panel: 'admission' | 'config') {
+    if (activePanel === panel) {
+      setPanelOpen(p => !p)
+    } else {
+      setActivePanel(panel)
+      setPanelOpen(true)
+    }
+  }
 
   useEffect(() => {
     setPanelOpen(false)
@@ -94,11 +104,11 @@ export default function AdmissionLayout({ children }: { children: React.ReactNod
       <div className="layout">
         <div className="sidebar">
           <div className="sb-rail bg-bg">
-            <div className="rail-item active" data-mod="admission" onClick={() => setPanelOpen(p => !p)} style={{ cursor: 'pointer' }}>
+            <div className={`rail-item${activePanel === 'admission' ? ' active' : ''}`} data-mod="admission" onClick={() => clickRail('admission')} style={{ cursor: 'pointer' }}>
               <span className="rail-icon"><i className="lni lni-clipboard"></i></span>
               <span className="rail-label">Admission</span>
-              <span className="rail-dot"></span>
-              <span className="rail-tooltip">{panelOpen ? 'Hide panel' : 'Admission'}</span>
+              {activePanel === 'admission' && panelOpen && <span className="rail-dot"></span>}
+              <span className="rail-tooltip">{activePanel === 'admission' && panelOpen ? 'Hide panel' : 'Admission'}</span>
             </div>
             <div className="rail-divider"></div>
             <div className="rail-item" data-mod="academic" onClick={() => router.push('/academic/acad-dashboard')} style={{ cursor: 'pointer' }}>
@@ -118,10 +128,16 @@ export default function AdmissionLayout({ children }: { children: React.ReactNod
                 <span className="rail-tooltip">{r.label} · Coming Soon</span>
               </div>
             ))}
+            <div className={`rail-item${activePanel === 'config' ? ' active' : ''}`} data-mod="config" onClick={() => clickRail('config')} style={{ cursor: 'pointer' }}>
+              <span className="rail-icon"><i className="lni lni-cog"></i></span>
+              <span className="rail-label">Config</span>
+              {activePanel === 'config' && panelOpen && <span className="rail-dot"></span>}
+              <span className="rail-tooltip">{activePanel === 'config' && panelOpen ? 'Hide panel' : 'Core Config'}</span>
+            </div>
             <div className="rail-spacer"></div>
             <div className="rail-divider"></div>
             <div className="rail-item locked" data-mod="userrole">
-              <span className="rail-icon"><i className="lni lni-cog"></i></span>
+              <span className="rail-icon"><i className="lni lni-users"></i></span>
               <span className="rail-label">Admin</span>
               <span className="rail-tooltip">User &amp; Role · Coming Soon</span>
             </div>
@@ -129,39 +145,81 @@ export default function AdmissionLayout({ children }: { children: React.ReactNod
 
           <div className={`sb-panel-shell${panelOpen ? ' open' : ''}`}>
             <div className="sb-panel active">
-              <div className="sb-panel-hdr">
-                <div className="sb-panel-hdr-title">Module</div>
-                <div className="sb-panel-hdr-name"><i className="lni lni-clipboard"></i> Admission</div>
-              </div>
 
-              {SIDEBAR_SECTIONS.map(section => {
-                const collapsed = collapsedSections.has(section.id)
-                return (
-                  <div key={section.id} className={`sb-collapse${collapsed ? ' closed' : ''}`}>
-                    <div className="sb-group-hdr" onClick={() => toggleCollapse(section.id)}>
-                      <span>{section.label}</span>
-                      <span className="sb-chevron">{collapsed ? '▸' : '▾'}</span>
-                    </div>
-                    <div className="sb-collapse-body">
-                      {section.items.map(item => (
-                        <div
-                          key={item.id}
-                          className={`sb-item${currentPage === item.id ? ' active' : ''}`}
-                          onClick={() => nav(item.id)}
-                        >
-                          <span className="sb-icon"><i className={`lni lni-${item.icon}`}></i></span>
-                          {item.label}
-                          {'badge' in item && item.badge && <span className="sb-badge">{item.badge}</span>}
-                          {'badgeWarn' in item && item.badgeWarn && <span className="sb-badge warn">{item.badgeWarn}</span>}
-                          {'badgeGreen' in item && item.badgeGreen && <span className="sb-badge green">{item.badgeGreen}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
+              {activePanel === 'admission' && <>
+                <div className="sb-panel-hdr">
+                  <div className="sb-panel-hdr-title">Module</div>
+                  <div className="sb-panel-hdr-name"><i className="lni lni-clipboard"></i> Admission</div>
+                </div>
 
-              <div className="sb-panel-footer">S1 · Admission Service</div>
+                {SIDEBAR_SECTIONS.map(section => {
+                  const collapsed = collapsedSections.has(section.id)
+                  return (
+                    <div key={section.id} className={`sb-collapse${collapsed ? ' closed' : ''}`}>
+                      <div className="sb-group-hdr" onClick={() => toggleCollapse(section.id)}>
+                        <span>{section.label}</span>
+                        <span className="sb-chevron">{collapsed ? '▸' : '▾'}</span>
+                      </div>
+                      <div className="sb-collapse-body">
+                        {section.items.map(item => (
+                          <div
+                            key={item.id}
+                            className={`sb-item${currentPage === item.id ? ' active' : ''}`}
+                            onClick={() => nav(item.id)}
+                          >
+                            <span className="sb-icon"><i className={`lni lni-${item.icon}`}></i></span>
+                            {item.label}
+                            {'badge' in item && item.badge && <span className="sb-badge">{item.badge}</span>}
+                            {'badgeWarn' in item && item.badgeWarn && <span className="sb-badge warn">{item.badgeWarn}</span>}
+                            {'badgeGreen' in item && item.badgeGreen && <span className="sb-badge green">{item.badgeGreen}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+
+                <div className="sb-panel-footer">S1 · Admission Service</div>
+              </>}
+
+              {activePanel === 'config' && <>
+                <div className="sb-panel-hdr">
+                  <div className="sb-panel-hdr-title">Module</div>
+                  <div className="sb-panel-hdr-name"><i className="lni lni-cog"></i> Configuration</div>
+                </div>
+
+                {(() => {
+                  const collapsed = collapsedSections.has('sc-config')
+                  const navAcad = (id: string) => router.push('/academic/' + id)
+                  return (
+                    <div className={`sb-collapse${collapsed ? ' closed' : ''}`}>
+                      <div className="sb-group-hdr" onClick={() => toggleCollapse('sc-config')}>
+                        <span>Core Configuration</span>
+                        <span className="sb-chevron">{collapsed ? '▸' : '▾'}</span>
+                      </div>
+                      <div className="sb-collapse-body">
+                        {[
+                          { id: 'faculty-master',  label: 'Faculty Master',     icon: 'library' },
+                          { id: 'campus-master',   label: 'Campus Master',      icon: 'home' },
+                          { id: 'country-master',  label: 'Country Master',     icon: 'world' },
+                          { id: 'currency-master', label: 'Currency Master',    icon: 'dollar' },
+                          { id: 'room-management', label: 'Room Management',    icon: 'home' },
+                          { id: 'repetition-tag',  label: 'Repetition Tag',     icon: 'reload' },
+                          { id: 'skill-master',    label: 'Skill Master',       icon: 'bulb' },
+                        ].map(item => (
+                          <div key={item.id} className="sb-item" onClick={() => navAcad(item.id)}>
+                            <span className="sb-icon"><i className={`lni lni-${item.icon}`}></i></span>
+                            {item.label}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                <div className="sb-panel-footer">S0 · Core Config</div>
+              </>}
+
             </div>
           </div>
         </div>

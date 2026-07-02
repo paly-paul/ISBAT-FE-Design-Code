@@ -1,46 +1,53 @@
 'use client'
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 
 const PIPELINE = [
-  { label: 'App. Payment',  status: 'done',   note: '23 paid' },
-  { label: 'App. Filing',   status: 'done',   note: '20 filed' },
-  { label: 'Vetting',       status: 'active', note: '5 pending' },
-  { label: 'Reg. Payment',  status: '',       note: '$250 check' },
-  { label: 'Registration',  status: '',       note: "Registrar's Desk" },
-  { label: 'Active Student', status: '',      note: 'T_Student' },
+  { label: 'App. Payment',   status: 'done',   note: '23 paid' },
+  { label: 'App. Filing',    status: 'done',   note: '20 filed' },
+  { label: 'Vetting',        status: 'active', note: '5 pending' },
+  { label: 'Reg. Payment',   status: '',        note: '$250 check' },
+  { label: 'Registration',   status: '',        note: "Registrar's Desk" },
+  { label: 'Active Student', status: '',        note: 'T_Student' },
 ]
 
 const RECENT_APPS = [
-  { ref: 'ADM-26-0023', name: 'Aisha Nakamya',   src: 'Direct',  prog: 'BSCS',  type: 'Full-time', fee: 'Paid',    stage: 'Vetting' },
-  { ref: 'ADM-26-0022', name: 'Brian Ochieng',    src: 'CRM',     prog: 'BBA',   type: 'Full-time', fee: 'Paid',    stage: 'Filing' },
-  { ref: 'ADM-26-0021', name: 'Clara Mbabazi',    src: 'Online',  prog: 'BSIT',  type: 'Weekend',   fee: 'Paid',    stage: 'Vetting' },
-  { ref: 'ADM-26-0020', name: 'David Ssempijja',  src: 'ODel',    prog: 'MBA',   type: 'ODL',       fee: 'Pending', stage: 'Payment' },
-  { ref: 'ADM-26-0019', name: 'Esther Namutebi',  src: 'Direct',  prog: 'BSCS',  type: 'Full-time', fee: 'Paid',    stage: 'Admitted' },
+  { ref: 'APP-2026-0023', name: 'Nakato Sarah Bridget',   src: 'Walk-in',      prog: 'BSc. Computer Science',      type: 'Direct', fee: '50,000',     feeOk: true,  stage: 'In Vetting',     action: 'review' },
+  { ref: 'APP-2026-0022', name: 'Okello James Patrick',   src: 'CRM (Merito)', prog: 'MBA Business Admin',         type: 'ODL',    fee: 'Waived (HTC)', feeOk: true, stage: 'In Vetting',     action: 'review' },
+  { ref: 'APP-2026-0021', name: 'Tumukunde Alice Grace',  src: 'Walk-in',      prog: 'Diploma in Nursing',         type: 'Direct', fee: '50,000',     feeOk: true,  stage: 'Reg. Payment',   action: 'register' },
+  { ref: 'APP-2026-0020', name: 'Mugisha David Kalisa',   src: 'CRM (Merito)', prog: 'BSc. Information Technology', type: 'Direct', fee: 'Pending',    feeOk: false, stage: 'Payment Pending', action: 'collect' },
+  { ref: 'APP-2026-0019', name: 'Nampijja Grace Miriam',  src: 'Walk-in',      prog: 'BCom. Accounting',           type: 'Direct', fee: '50,000',     feeOk: true,  stage: 'Filing Pending', action: 'file' },
 ]
 
 const VETTING_QUEUE = [
-  { name: 'Aisha Nakamya',  prog: 'BSCS', time: '2 hrs ago' },
-  { name: 'Clara Mbabazi',  prog: 'BSIT', time: '3 hrs ago' },
-  { name: 'James Okello',   prog: 'BBA',  time: '5 hrs ago' },
-  { name: 'Fatuma Ssali',   prog: 'BSCS', time: '1 day ago' },
-  { name: 'George Mukasa',  prog: 'MBA',  time: '1 day ago' },
+  { name: 'Nakato Sarah Bridget', prog: 'BSc. CS',        docs: 4, time: '2h ago',  urgent: true },
+  { name: 'Okello James Patrick', prog: 'MBA ODL',        docs: 5, time: '3h ago',  urgent: true },
+  { name: 'Byamukama Robert',     prog: 'BEng. Civil',    docs: 3, time: '5h ago',  urgent: false },
+  { name: 'Nalwoga Brenda',       prog: 'Diploma Nursing',docs: 5, time: '6h ago',  urgent: false },
 ]
 
 const READY_REG = [
-  { name: 'Esther Namutebi', prog: 'BSCS', time: 'Today' },
-  { name: 'Hassan Kato',     prog: 'BBA',  time: 'Yesterday' },
-  { name: 'Irene Atim',      prog: 'BSIT', time: '2 days ago' },
+  { name: 'Tumukunde Alice',   prog: 'Nursing', fee: 'Paid $250', paid: true },
+  { name: 'Ssemakula Peter',   prog: 'IT',      fee: 'Pending',   paid: false },
+  { name: 'Birungi Christine', prog: 'BCom.',   fee: 'Paid $250', paid: true },
 ]
 
 const DONUT_DATA = [
-  { label: 'Direct', value: 9, pct: 39, color: '#2d448f' },
-  { label: 'CRM',    value: 6, pct: 26, color: '#3b82f6' },
-  { label: 'ODel',   value: 4, pct: 17, color: '#d97706' },
-  { label: 'Online', value: 4, pct: 17, color: '#059669' },
+  { label: 'Direct (Walk-in)', value: 9, pct: 39, color: '#2d448f' },
+  { label: 'CRM (Merito)',     value: 6, pct: 26, color: '#3b82f6' },
+  { label: 'ODel Online App.', value: 4, pct: 17, color: '#d97706' },
+  { label: 'Online Enquiry',   value: 4, pct: 17, color: '#059669' },
+]
+
+const CONV_BARS = [
+  { from: 'Enquiry',       to: 'App. Payment',  pct: 38, level: 'low'  as const, meta: '60 → 23 · 37 lost' },
+  { from: 'App. Payment',  to: 'App. Filing',   pct: 87, level: 'high' as const, meta: '23 → 20 · 3 pending' },
+  { from: 'App. Filing',   to: 'Vetting',       pct: 90, level: 'high' as const, meta: '20 → 18 · 2 pending' },
+  { from: 'Vetting',       to: 'Reg. Payment',  pct: 89, level: 'high' as const, meta: '18 → 16 · 2 pending' },
+  { from: 'Reg. Payment',  to: 'Active Student',pct: 88, level: 'high' as const, meta: '16 → 14 · 2 pending' },
 ]
 
 function donutSegments() {
@@ -56,33 +63,42 @@ function donutSegments() {
   })
 }
 
-function ConvBar({ from, to, pct, level }: { from: string; to: string; pct: number; level: string }) {
-  const color = level === 'high' ? 'text-clr-green' : 'text-clr-red'
+function ConvBar({ from, to, pct, level, meta }: { from: string; to: string; pct: number; level: 'high' | 'low'; meta: string }) {
+  const isHigh = level === 'high'
   return (
     <div className="conv-item">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-g600">{from} → {to}</span>
-        <span className={`text-xs font-semibold ${color}`}>{pct}%</span>
+      <div className="conv-hdr">
+        <span className="conv-from">{from} → {to}</span>
+        <span className={`conv-pct ${isHigh ? 'conv-pct-high' : 'conv-pct-low'}`}>{pct}%</span>
       </div>
-      <div className="h-2 rounded-full bg-g100 overflow-hidden">
-        <svg className="h-2 w-full" preserveAspectRatio="none">
-          <rect x="0" y="0" width={`${pct}%`} height="100%" rx="4"
-            className={level === 'high' ? 'fill-clr-green' : 'fill-clr-red'} />
-        </svg>
+      <div className="conv-track">
+        <div className={`conv-fill ${isHigh ? 'conv-fill-high' : 'conv-fill-low'}`} style={{ width: `${pct}%` }} />
       </div>
+      <span className="conv-meta">{meta}</span>
     </div>
   )
 }
 
 function stageBadge(stage: string) {
-  const map: Record<string, string> = { Vetting: 'badge-amber', Filing: 'badge-blue', Payment: 'badge-red', Admitted: 'badge-green' }
+  const map: Record<string, string> = {
+    'In Vetting':      'badge-amber',
+    'Reg. Payment':    'badge-green',
+    'Payment Pending': 'badge-amber',
+    'Filing Pending':  'badge-blue',
+  }
   return map[stage] || 'badge-grey'
 }
 
 function srcBadge(src: string) {
-  const map: Record<string, string> = { Direct: 'badge-blue', CRM: 'badge-purple', Online: 'badge-green', ODel: 'badge-amber' }
+  const map: Record<string, string> = {
+    'Walk-in':      'badge-blue',
+    'CRM (Merito)': 'badge-purple',
+    'Online':       'badge-green',
+    'ODel':         'badge-amber',
+  }
   return map[src] || 'badge-grey'
 }
+
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -95,75 +111,86 @@ export default function DashboardPage() {
     <div id="page-dashboard">
       <div className="pg-hdr">
         <div>
-          <h1 className="text-xl font-semibold text-g900">Admission Dashboard</h1>
-          <p className="text-sm text-g500 mt-0.5">Spring 2026 (20261) · Real-time overview of the admission pipeline</p>
+          <div className="pg-title">Admission Dashboard</div>
+          <div className="pg-sub">Spring 2026 (20261) · Real-time overview of the admission pipeline</div>
         </div>
         <button className="btn btn-primary" onClick={() => router.push('/admission/payment')}>
           <i className="lni lni-plus" /> New Application
         </button>
       </div>
 
+      {/* Pipeline */}
       <div className="pipeline mb-6">
         {PIPELINE.map((step, i) => (
-          <div key={step.label} className={`pip-step ${step.status}`}>
-            <div className="pip-circle">{i + 1}</div>
-            <span className="text-xs font-medium mt-1">{step.label}</span>
-            <span className="text-[10px] text-g400 mt-0.5">{step.note}</span>
-            {i < PIPELINE.length - 1 && <div className={`pip-line ${step.status === 'done' ? 'done' : ''}`} />}
-          </div>
+          <React.Fragment key={step.label}>
+            <div className={`pip-step ${step.status}`}>
+              <div className="pip-circle">{i + 1}</div>
+              <div className="flex flex-col gap-0.5">
+                <span className="pip-label">{step.label}</span>
+                <span className="pip-desc">{step.note}</span>
+              </div>
+            </div>
+            {i < PIPELINE.length - 1 && (
+              <div className={`pip-line${step.status === 'done' ? ' done' : ''}`} />
+            )}
+          </React.Fragment>
         ))}
       </div>
 
+      {/* Stat cards */}
       <div className="stats-row mb-6">
-        <div className="stat-card">
-          <span className="text-sm text-g500">Total Applicants</span>
-          <span className="text-2xl font-bold text-g900">23</span>
-          <span className="text-xs text-clr-green">↑ 18% vs last intake</span>
+        <div className="stat-card flex flex-col">
+          <span className="stat-lbl">Total Applicants</span>
+          <span className="stat-num">23</span>
+          <span className="stat-sub up">↑ 18% vs last intake</span>
         </div>
-        <div className="stat-card">
-          <span className="text-sm text-g500">Awaiting Vetting</span>
-          <span className="text-2xl font-bold text-clr-amber">5</span>
-          <span className="text-xs text-clr-amber">Needs attention</span>
+        <div className="stat-card flex flex-col">
+          <span className="stat-lbl">Awaiting Vetting</span>
+          <span className="stat-num" style={{ color: 'var(--amber)' }}>5</span>
+          <span className="stat-sub warn">Needs attention</span>
         </div>
-        <div className="stat-card">
-          <span className="text-sm text-g500">Provisionally Admitted</span>
-          <span className="text-2xl font-bold text-clr-green">14</span>
-          <span className="text-xs text-clr-green">↑ 6 this week</span>
+        <div className="stat-card flex flex-col">
+          <span className="stat-lbl">Provisionally Admitted</span>
+          <span className="stat-num" style={{ color: 'var(--green)' }}>14</span>
+          <span className="stat-sub up">↑ 6 this week</span>
         </div>
-        <div className="stat-card">
-          <span className="text-sm text-g500">Fully Registered</span>
-          <span className="text-2xl font-bold text-clr-gold">4</span>
-          <span className="text-xs text-clr-gold">↑ 2 this week</span>
+        <div className="stat-card flex flex-col">
+          <span className="stat-lbl">Fully Registered</span>
+          <span className="stat-num" style={{ color: 'var(--gold)' }}>4</span>
+          <span className="stat-sub up">↑ 2 this week</span>
         </div>
       </div>
 
+      {/* Admission Progress */}
       <div className="card mb-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="card-hdr">
           <div>
-            <h2 className="text-base font-semibold text-g900">Admission Progress — Spring 2026 (20261)</h2>
-            <p className="text-xs text-g400 mt-0.5">Pipeline analytics and source breakdown</p>
+            <div className="card-title">Admission Progress — Spring 2026 (20261)</div>
+            <div className="card-sub">Application source mix + stage-to-stage conversion · 23 applicants, 14 active</div>
           </div>
-          <span className="badge-green text-xs px-2 py-0.5 rounded-full font-medium">Live</span>
+          <span className="badge-green px-2 py-0.5 rounded-full font-medium" style={{ fontSize: 'var(--fs-xs)' }}>● Live</span>
         </div>
         <div className="adm-chart-grid">
+          {/* Left — donut chart */}
           <div className="adm-chart-col">
             <h3 className="adm-chart-title">Application Source Mix</h3>
-            <p className="adm-chart-sub">Where applicants are coming from</p>
+            <p className="adm-chart-sub">How the 23 applicants reached the admission desk</p>
             <div className="donut-wrap">
               <div className="donut-svg-wrap">
                 <svg viewBox="0 0 120 120" className="donut">
                   {segments.map(seg => (
                     <circle key={seg.label} className="donut-seg" cx="60" cy="60" r="45" fill="none"
-                      stroke={seg.color} strokeWidth="18" strokeDasharray={seg.dashArray} strokeDashoffset={seg.dashOffset} />
+                      stroke={seg.color} strokeWidth="18"
+                      strokeDasharray={seg.dashArray} strokeDashoffset={seg.dashOffset} />
                   ))}
+                  <text x="60" y="55" className="donut-center-num" textAnchor="middle" dominantBaseline="middle">23</text>
+                  <text x="60" y="70" className="donut-center-lbl" textAnchor="middle">APPLICANTS</text>
                 </svg>
-                <span className="donut-center-num">23</span>
-                <span className="donut-center-lbl">Total</span>
               </div>
               <div className="donut-legend">
                 {DONUT_DATA.map(d => (
                   <div key={d.label} className="donut-legend-item">
-                    <span className="donut-swatch"><svg width="10" height="10"><circle cx="5" cy="5" r="5" fill={d.color} /></svg></span>
+                    <span className="donut-swatch" style={{ background: d.color }} />
                     <span className="donut-legend-lbl">{d.label}</span>
                     <span className="donut-legend-val">{d.value}</span>
                     <span className="donut-legend-pct">{d.pct}%</span>
@@ -172,37 +199,59 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="donut-metrics">
-              <div className="donut-metric"><span className="donut-metric-lbl">Counsellor-driven</span><span className="donut-metric-val">65%</span><span className="donut-metric-sub">Direct + CRM</span></div>
-              <div className="donut-metric"><span className="donut-metric-lbl">Self-service</span><span className="donut-metric-val">35%</span><span className="donut-metric-sub">Online + ODel</span></div>
-              <div className="donut-metric"><span className="donut-metric-lbl">Top source</span><span className="donut-metric-val">Direct</span><span className="donut-metric-sub">9 applicants</span></div>
+              <div className="donut-metric">
+                <div className="donut-metric-lbl">Counsellor-Driven</div>
+                <div className="donut-metric-val">65%</div>
+                <div className="donut-metric-sub">Direct + CRM</div>
+              </div>
+              <div className="donut-metric">
+                <div className="donut-metric-lbl">Self-Service</div>
+                <div className="donut-metric-val">35%</div>
+                <div className="donut-metric-sub">ODel + Online</div>
+              </div>
+              <div className="donut-metric">
+                <div className="donut-metric-lbl">Top Source</div>
+                <div className="donut-metric-val">Direct</div>
+                <div className="donut-metric-sub">9 applicants</div>
+              </div>
             </div>
           </div>
+
+          {/* Right — conversion bars */}
           <div className="adm-chart-col">
             <h3 className="adm-chart-title">Stage-to-Stage Conversion</h3>
-            <p className="adm-chart-sub">How applicants move through the pipeline</p>
+            <p className="adm-chart-sub">Where applicants drop off — % moving forward each step</p>
             <div className="conv-list">
-              <ConvBar from="Enquiry" to="App. Payment" pct={38} level="low" />
-              <ConvBar from="App. Payment" to="Filing" pct={87} level="high" />
-              <ConvBar from="Filing" to="Vetting" pct={90} level="high" />
-              <ConvBar from="Vetting" to="Reg. Payment" pct={89} level="high" />
-              <ConvBar from="Reg. Payment" to="Active Student" pct={88} level="high" />
+              {CONV_BARS.map(b => (
+                <ConvBar key={b.from} from={b.from} to={b.to} pct={b.pct} level={b.level} meta={b.meta} />
+              ))}
             </div>
-            <div className="mt-4 p-3 rounded-lg bg-g50 border border-g200">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-g500">Overall Enquiry → Active Student</span>
-                <span className="text-sm font-bold text-g900">23%</span>
+            <div className="conv-summary">
+              <div>
+                <div className="conv-summary-lbl">Overall Conversion (Enquiry → Active)</div>
+                <div className="conv-summary-meta">60 enquiries · 14 active students</div>
               </div>
+              <span className="conv-summary-val">23%</span>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Recent Applications */}
       <div className="card mb-6">
-        <h2 className="text-base font-semibold text-g900 mb-4">Recent Applications</h2>
+        <div className="card-hdr">
+          <div className="card-title">Recent Applications — Spring 2026</div>
+          <div className="flex items-center gap-2">
+            <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/applicants')}>View All</button>
+            <button className="btn btn-primary btn-sm" onClick={() => router.push('/admission/payment')}>
+              <i className="lni lni-plus" /> New
+            </button>
+          </div>
+        </div>
         <ScrollTable>
           <table>
             <thead>
-              <tr className="border-b border-g200 text-left text-xs text-g500 uppercase tracking-wider">
+              <tr className="border-b border-g200 text-left text-g500 uppercase tracking-wider" style={{ fontSize: 'var(--fs-xs)' }}>
                 <th style={{ width: 48 }}></th>
                 <th className="pb-2 pr-4 font-medium">Ref No.</th>
                 <th className="pb-2 pr-4 font-medium">Applicant Name</th>
@@ -216,13 +265,43 @@ export default function DashboardPage() {
             <tbody>
               {RECENT_APPS.map(app => (
                 <tr key={app.ref} className="border-b border-g100 hover:bg-g50 transition-colors">
-                  <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/applicants')}><i className="lni lni-eye" /> View</button></ActionMenu></td>
-                  <td className="py-2.5 pr-4 font-mono text-xs text-b600">{app.ref}</td>
+                  <td>
+                    <ActionMenu>
+                      <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/applicants')}>
+                        View
+                      </button>
+                      {app.action === 'review' && (
+                        <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/vetting')}>
+                          Review →
+                        </button>
+                      )}
+                      {app.action === 'register' && (
+                        <button className="btn btn-success btn-sm" onClick={() => router.push('/admission/registration')}>
+                          Register →
+                        </button>
+                      )}
+                      {app.action === 'collect' && (
+                        <button className="btn btn-amber btn-sm" onClick={() => router.push('/admission/payment')}>
+                          Collect Fee
+                        </button>
+                      )}
+                      {app.action === 'file' && (
+                        <button className="btn btn-primary btn-sm" onClick={() => router.push('/admission/filing')}>
+                          File Now →
+                        </button>
+                      )}
+                    </ActionMenu>
+                  </td>
+                  <td className="py-2.5 pr-4 font-mono text-b600" style={{ fontSize: 'var(--fs-xs)' }}>{app.ref}</td>
                   <td className="py-2.5 pr-4 text-g800 font-medium">{app.name}</td>
                   <td className="py-2.5 pr-4"><span className={`badge ${srcBadge(app.src)}`}>{app.src}</span></td>
                   <td className="py-2.5 pr-4 text-g700">{app.prog}</td>
                   <td className="py-2.5 pr-4 text-g600">{app.type}</td>
-                  <td className="py-2.5 pr-4"><span className={app.fee === 'Paid' ? 'text-clr-green text-xs font-medium' : 'text-clr-red text-xs font-medium'}>{app.fee}</span></td>
+                  <td className="py-2.5 pr-4">
+                    {app.feeOk
+                      ? <span className="text-clr-green font-medium" style={{ fontSize: 'var(--fs-xs)' }}>✓ {app.fee}</span>
+                      : <span className="text-clr-amber font-medium" style={{ fontSize: 'var(--fs-xs)' }}>{app.fee}</span>}
+                  </td>
                   <td className="py-2.5 pr-4"><span className={`badge ${stageBadge(app.stage)}`}>{app.stage}</span></td>
                 </tr>
               ))}
@@ -231,36 +310,44 @@ export default function DashboardPage() {
         </ScrollTable>
       </div>
 
+      {/* Bottom panels */}
       <div className="g2">
         <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-g900">Vetting Queue (5)</h2>
-            <button className="text-xs text-b500 hover:text-b700 font-medium" onClick={() => router.push('/admission/vetting')}>Open →</button>
+          <div className="card-hdr">
+            <div className="card-title">Vetting Queue (5)</div>
+            <button style={{ fontSize: 'var(--fs-xs)', color: 'var(--b500)', fontWeight: 600 }} onClick={() => router.push('/admission/vetting')}>Open →</button>
           </div>
           <div className="timeline">
             {VETTING_QUEUE.map(item => (
               <div key={item.name} className="tl-item">
-                <div className="tl-dot pending" />
+                <div className={`tl-dot ${item.urgent ? 'active' : ''}`}>
+                  {item.urgent ? <i className="lni lni-warning" style={{ fontSize: 14 }} /> : null}
+                </div>
                 <div className="tl-content">
-                  <span className="text-sm font-medium text-g800">{item.name}</span>
-                  <span className="text-xs text-g400">{item.prog} · {item.time}</span>
+                  <div className="tl-label">{item.name}</div>
+                  <div className="tl-meta">{item.prog} · Docs {item.docs}/5 · {item.time}</div>
                 </div>
               </div>
             ))}
           </div>
         </div>
+
         <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-g900">Ready to Register (3)</h2>
-            <button className="text-xs text-b500 hover:text-b700 font-medium" onClick={() => router.push('/admission/registration')}>Open →</button>
+          <div className="card-hdr">
+            <div className="card-title">Ready to Register (3)</div>
+            <button style={{ fontSize: 'var(--fs-xs)', color: 'var(--b500)', fontWeight: 600 }} onClick={() => router.push('/admission/registration')}>Open →</button>
           </div>
           <div className="timeline">
             {READY_REG.map(item => (
               <div key={item.name} className="tl-item">
-                <div className="tl-dot done" />
+                <div className={`tl-dot ${item.paid ? 'done' : 'active'}`}>
+                  {item.paid
+                    ? <i className="lni lni-checkmark" style={{ fontSize: 14 }} />
+                    : <i className="lni lni-warning" style={{ fontSize: 14 }} />}
+                </div>
                 <div className="tl-content">
-                  <span className="text-sm font-medium text-g800">{item.name}</span>
-                  <span className="text-xs text-g400">{item.prog} · {item.time}</span>
+                  <div className="tl-label">{item.name}</div>
+                  <div className="tl-meta">{item.prog} · Reg. fee <span className={item.paid ? 'text-clr-green font-medium' : 'text-clr-amber font-medium'}>{item.fee}</span></div>
                 </div>
               </div>
             ))}
