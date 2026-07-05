@@ -4,19 +4,16 @@ import { ModalProps } from '../types'
 import { ScrollTable } from '@/components/ScrollTable'
 import { SuccessPopup } from '../academic/SuccessPopup'
 
-const ENQUIRY_RECORDS = [
-  { ref: 'ENQ-2026-0047', name: 'Kamya Brian Sse', date: '09/05/2026', phone: '+256 772 456 789', email: 'kamyabrian@gmail.com', programme: 'BSc. Computer Science',        campus: 'Kampala · Intake 20261',  mode: 'Day',     status: 'Pending' },
-  { ref: 'ENQ-2026-0046', name: 'Nambi Doreen',    date: '08/05/2026', phone: '+256 700 334 455', email: '',                     programme: 'Diploma in Nursing',            campus: 'Kampala · Intake 20261',  mode: 'Day',     status: 'Pending' },
-  { ref: 'ENQ-2026-0044', name: 'Atim Connie',     date: '07/05/2026', phone: '+256 756 223 441', email: '',                     programme: 'BCom. Accounting',              campus: 'Kampala · Intake 20261',  mode: 'Evening', status: 'Follow-up' },
-  { ref: 'ENQ-2026-0043', name: 'Ssali Brian',     date: '07/05/2026', phone: '+256 788 001 122', email: 'ssali.b@gmail.com',    programme: 'MBA Business Admin (ODL)',      campus: 'Distance · Intake 20261', mode: 'ODL',     status: 'Pending' },
-  { ref: 'ENQ-2026-0042', name: 'Okello Joseph',   date: '06/05/2026', phone: '+256 705 998 010', email: 'okello.j@yahoo.com',   programme: 'Diploma in Community Health',   campus: 'Mbarara · Intake 20262',  mode: 'Day',     status: 'Pending' },
-  { ref: 'ENQ-2026-0041', name: 'Nakato Sarah',    date: '06/05/2026', phone: '+256 750 887 332', email: 'nakato.s@gmail.com',   programme: 'HEC Information Technology',    campus: 'Kampala · Intake 20261',  mode: 'Day',     status: 'Pending' },
+const ODEL_RECORDS = [
+  { ref: 'ODL-2026-0014', name: 'Ssebulime Patrick', date: '09/05/2026', phone: '+256 703 444 555', email: 'patrick.s@outlook.com', programme: 'MBA Business Admin (ODL)', campus: 'Distance · Intake 20261' },
+  { ref: 'ODL-2026-0013', name: 'Mutabazi Eric',      date: '08/05/2026', phone: '+256 711 222 333', email: 'eric.m@gmail.com',       programme: 'BSc. IT (ODL)',            campus: 'Distance · Intake 20261' },
+  { ref: 'ODL-2026-0012', name: 'Aine Patience',       date: '07/05/2026', phone: '+256 779 110 224', email: 'aine.p@gmail.com',       programme: 'Diploma in Business (ODL)', campus: 'Distance · Intake 20262' },
 ]
 
-export function ImportSourceModal({ isOpen, onClose }: ModalProps) {
+export function ImportOdelModal({ isOpen, onClose }: ModalProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedRef, setSelectedRef] = useState<string | null>(null)
-  const [imported, setImported] = useState<typeof ENQUIRY_RECORDS[0] | null>(null)
+  const [imported, setImported] = useState<typeof ODEL_RECORDS[0] | null>(null)
 
   if (!isOpen) return null
 
@@ -26,18 +23,18 @@ export function ImportSourceModal({ isOpen, onClose }: ModalProps) {
   }
 
   const q = searchTerm.trim().toLowerCase()
-  const filtered = ENQUIRY_RECORDS.filter(r =>
+  const filtered = ODEL_RECORDS.filter(r =>
     !q || r.name.toLowerCase().includes(q) || r.ref.toLowerCase().includes(q) ||
     r.phone.toLowerCase().includes(q) || r.email.toLowerCase().includes(q) || r.programme.toLowerCase().includes(q)
   )
-  const selected = ENQUIRY_RECORDS.find(r => r.ref === selectedRef) || null
+  const selected = ODEL_RECORDS.find(r => r.ref === selectedRef) || null
 
   if (imported) {
     return (
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
           <SuccessPopup
-            title="Enquiry Imported!"
+            title="ODel Application Imported!"
             subtitle={`${imported.name} (${imported.programme}) has been imported to Application Payment.`}
             onClose={handleClose}
           />
@@ -50,13 +47,13 @@ export function ImportSourceModal({ isOpen, onClose }: ModalProps) {
     <div className="modal-overlay open">
       <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
-          <div className="modal-title flex items-center gap-2"><i className="lni lni-notepad"></i> Import from Enquiry</div>
+          <div className="modal-title flex items-center gap-2"><i className="lni lni-world"></i> Import from ODel Application</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
         <div className="info-box mb-3">
           <i className="lni lni-information"></i>
-          <span>Enquiries captured at the Information Desk. Select a record to copy student details into the Application Payment form.</span>
+          <span>ODel is the online application portal for distance learners. Pre-filled records below are awaiting verification &amp; payment.</span>
         </div>
 
         <div className="mb-3" style={{
@@ -101,14 +98,14 @@ export function ImportSourceModal({ isOpen, onClose }: ModalProps) {
                     </td>
                     <td className="p-3">
                       <div>{r.phone}</div>
-                      <div className="text-xs" style={{ color: 'var(--g400)' }}>{r.email || '—'}</div>
+                      <div className="text-xs" style={{ color: 'var(--g400)' }}>{r.email}</div>
                     </td>
                     <td className="p-3">
                       <div>{r.programme}</div>
                       <div className="text-xs" style={{ color: 'var(--g400)' }}>{r.campus}</div>
                     </td>
-                    <td className="p-3"><span className="badge badge-grey">{r.mode}</span></td>
-                    <td className="p-3"><span className="badge badge-amber">{r.status}</span></td>
+                    <td className="p-3"><span className="badge badge-blue">ODL</span></td>
+                    <td className="p-3"><span className="badge badge-cyan">Pre-Filled</span></td>
                   </tr>
                 ))}
               </tbody>

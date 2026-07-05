@@ -19,7 +19,7 @@ export function StudentProfileModal({ isOpen, onClose, showToast }: ModalProps) 
   }
 
   return (
-    <div className="modal-overlay open" onClick={onClose}>
+    <div className="modal-overlay open">
       <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-user"></i> View Student Profile &mdash; {s.id}</div>

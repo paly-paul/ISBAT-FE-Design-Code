@@ -1,47 +1,107 @@
 'use client'
+import { useState } from 'react'
 import { ModalProps } from '../types'
 
+const EMPTY = {
+  firstName: '', lastName: '', phone: '', email: '',
+  channel: '', programme: '', intake: '', mode: '', notes: '',
+}
+
 export function EnquiryFormModal({ isOpen, onClose, showToast }: ModalProps) {
+  const [form, setForm]     = useState(EMPTY)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
   if (!isOpen) return null
 
+  function set<K extends keyof typeof EMPTY>(key: K, value: string) {
+    setForm(prev => ({ ...prev, [key]: value }))
+    if (errors[key]) setErrors(prev => ({ ...prev, [key]: '' }))
+  }
+
+  function handleClose() { setForm(EMPTY); setErrors({}); onClose() }
+
+  function validate() {
+    const e: Record<string, string> = {}
+    if (!form.firstName.trim()) e.firstName = 'First Name is required'
+    if (!form.lastName.trim())  e.lastName  = 'Last Name is required'
+    if (!form.phone.trim())     e.phone     = 'Phone is required'
+    if (!form.channel)          e.channel   = 'Please select an Enquiry Channel'
+    if (!form.programme)        e.programme = 'Please select a Programme Interest'
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
   return (
-    <div className="modal-overlay open" onClick={onClose}>
+    <div className="modal-overlay open">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-notepad"></i> New Enquiry &mdash; Information Desk</div>
-          <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
+          <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
         <div className="g2 mb-4">
-          <div className="fg"><label className="lbl">First Name</label><input className="ctrl" placeholder="Enter first name" /></div>
-          <div className="fg"><label className="lbl">Last Name</label><input className="ctrl" placeholder="Enter last name" /></div>
-          <div className="fg"><label className="lbl">Phone</label><input className="ctrl" placeholder="+256 7XX XXX XXX" /></div>
-          <div className="fg"><label className="lbl">Email</label><input className="ctrl" placeholder="email@example.com" /></div>
           <div className="fg">
-            <label className="lbl">Enquiry Channel</label>
-            <select className="ctrl"><option value="">Select channel</option><option>Walk-In</option><option>Phone Call</option><option>Email</option><option>Website</option><option>Social Media</option><option>Referral</option></select>
+            <label className="lbl">First Name <span className="req">*</span></label>
+            <input className="ctrl" placeholder="Enter first name" value={form.firstName}
+              onChange={e => set('firstName', e.target.value)}
+              style={errors.firstName ? { borderColor: 'var(--red)' } : undefined} />
+            {errors.firstName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.firstName}</p>}
           </div>
           <div className="fg">
-            <label className="lbl">Programme Interest</label>
-            <select className="ctrl"><option value="">Select programme</option><option>BSc Computer Science</option><option>BBA Management</option><option>BSc Nursing</option><option>Diploma IT</option><option>BBA Accounting</option></select>
+            <label className="lbl">Last Name <span className="req">*</span></label>
+            <input className="ctrl" placeholder="Enter last name" value={form.lastName}
+              onChange={e => set('lastName', e.target.value)}
+              style={errors.lastName ? { borderColor: 'var(--red)' } : undefined} />
+            {errors.lastName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lastName}</p>}
+          </div>
+          <div className="fg">
+            <label className="lbl">Phone <span className="req">*</span></label>
+            <input className="ctrl" type="tel" inputMode="numeric" placeholder="+256 7XX XXX XXX" value={form.phone}
+              onChange={e => set('phone', e.target.value.replace(/[^0-9+\s-]/g, ''))}
+              style={errors.phone ? { borderColor: 'var(--red)' } : undefined} />
+            {errors.phone && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.phone}</p>}
+          </div>
+          <div className="fg">
+            <label className="lbl">Email</label>
+            <input className="ctrl" type="email" placeholder="email@example.com" value={form.email} onChange={e => set('email', e.target.value)} />
+          </div>
+          <div className="fg">
+            <label className="lbl">Enquiry Channel <span className="req">*</span></label>
+            <select className="ctrl" value={form.channel} onChange={e => set('channel', e.target.value)}
+              style={errors.channel ? { borderColor: 'var(--red)' } : undefined}>
+              <option value="">Select channel</option><option>Walk-In</option><option>Phone Call</option><option>Email</option><option>Website</option><option>Social Media</option><option>Referral</option>
+            </select>
+            {errors.channel && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.channel}</p>}
+          </div>
+          <div className="fg">
+            <label className="lbl">Programme Interest <span className="req">*</span></label>
+            <select className="ctrl" value={form.programme} onChange={e => set('programme', e.target.value)}
+              style={errors.programme ? { borderColor: 'var(--red)' } : undefined}>
+              <option value="">Select programme</option><option>BSc Computer Science</option><option>BBA Management</option><option>BSc Nursing</option><option>Diploma IT</option><option>BBA Accounting</option>
+            </select>
+            {errors.programme && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programme}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Preferred Intake</label>
-            <select className="ctrl"><option value="">Select intake</option><option>September 2026</option><option>January 2027</option><option>May 2027</option></select>
+            <select className="ctrl" value={form.intake} onChange={e => set('intake', e.target.value)}>
+              <option value="">Select intake</option><option>September 2026</option><option>January 2027</option><option>May 2027</option>
+            </select>
           </div>
           <div className="fg">
             <label className="lbl">Preferred Study Mode</label>
-            <select className="ctrl"><option value="">Select mode</option><option>Full-Time</option><option>Part-Time</option><option>Weekend</option><option>Evening</option><option>Online / ODL</option></select>
+            <select className="ctrl" value={form.mode} onChange={e => set('mode', e.target.value)}>
+              <option value="">Select mode</option><option>Full-Time</option><option>Part-Time</option><option>Weekend</option><option>Evening</option><option>Online / ODL</option>
+            </select>
           </div>
           <div className="fg" style={{ gridColumn: 'span 2' }}>
             <label className="lbl">Notes</label>
-            <textarea className="ctrl" rows={3} placeholder="Additional notes or remarks..." />
+            <textarea className="ctrl" rows={3} placeholder="Additional notes or remarks..." value={form.notes} onChange={e => set('notes', e.target.value)} />
           </div>
         </div>
 
         <div className="modal-footer">
-          <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => { showToast('Enquiry saved successfully.', 'success'); onClose() }}>
+          <button className="btn" onClick={handleClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => { if (validate()) { showToast('Enquiry saved successfully.', 'success'); handleClose() } }}>
             <i className="lni lni-save"></i> Save Enquiry
           </button>
         </div>
