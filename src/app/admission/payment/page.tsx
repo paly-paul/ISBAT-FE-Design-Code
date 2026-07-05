@@ -3,6 +3,8 @@ import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ImportSourceModal } from '@/components/modals/admission/ImportSourceModal'
+import { ImportCrmModal } from '@/components/modals/admission/ImportCrmModal'
+import { ImportOdelModal } from '@/components/modals/admission/ImportOdelModal'
 import { SearchSelect } from '@/components/SearchSelect'
 
 const PIPELINE = [
@@ -130,10 +132,10 @@ export default function PaymentPage() {
             <button className="btn btn-neu btn-sm" onClick={() => openModal('import-source')}>
               <i className="lni lni-download" /> Import from Enquiry
             </button>
-            <button className="btn btn-neu btn-sm">
+            <button className="btn btn-neu btn-sm" onClick={() => openModal('import-odel')}>
               <i className="lni lni-cloud-download" /> Import from ODel App
             </button>
-            <button className="btn btn-primary btn-sm" onClick={() => openModal('import-source')}>
+            <button className="btn btn-primary btn-sm" onClick={() => openModal('import-crm')}>
               <i className="lni lni-download" /> Import from CRM
             </button>
           </div>
@@ -421,6 +423,8 @@ export default function PaymentPage() {
       </div>
 
       <ImportSourceModal isOpen={openModals.has('import-source')} onClose={() => closeModal('import-source')} showToast={showToast} />
+      <ImportCrmModal isOpen={openModals.has('import-crm')} onClose={() => closeModal('import-crm')} showToast={showToast} />
+      <ImportOdelModal isOpen={openModals.has('import-odel')} onClose={() => closeModal('import-odel')} showToast={showToast} />
       <Toast toast={toast} />
     </div>
   )

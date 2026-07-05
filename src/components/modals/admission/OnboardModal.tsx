@@ -12,7 +12,7 @@ export function OnboardModal({ isOpen, onClose, showToast, nav }: ModalProps) {
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay open" onClick={onClose}>
+    <div className="modal-overlay open">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-volume"></i> Student Successfully Registered!</div>

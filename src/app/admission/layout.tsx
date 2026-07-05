@@ -12,6 +12,8 @@ const SIDEBAR_SECTIONS = [
       { id: 'kiosk-enquiry',   label: 'Self-Service Kiosk', icon: 'tab' },
       { id: 'ondesk-enquiry',  label: 'On-Desk Enquiry',    icon: 'pencil-alt' },
       { id: 'enquiry-list',    label: 'Enquiry List',       icon: 'folder',    badge: '8' },
+      { id: 'enquiry-followup-master', label: 'Enquiry Followup Master', icon: 'calendar' },
+      { id: 'enquiry-followup',        label: 'Enquiry Followup',        icon: 'phone', badgeWarn: '4' },
     ],
   },
   {
