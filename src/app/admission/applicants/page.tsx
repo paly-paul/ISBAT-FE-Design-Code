@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { SearchSelect } from '@/components/SearchSelect'
 
 const ALL_APPLICANTS = [
   { ref: 'ADM-26-0023', name: 'Aisha Nakamya',   src: 'Direct', prog: 'BSCS', type: 'Full-time', fee: 'Paid',    stage: 'Vetting',    date: '12 Jun 2026' },
@@ -50,10 +51,12 @@ export default function ApplicantsPage() {
             <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm" />
             <input className="ctrl pl-8 w-56" placeholder="Search applicants…" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <select className="ctrl w-40" value={stageFilter} onChange={e => setStageFilter(e.target.value)}>
-            <option>All</option><option>Payment</option><option>Filing</option>
-            <option>Vetting</option><option>Admitted</option><option>Registered</option>
-          </select>
+          <SearchSelect
+            className="w-40"
+            options={['All', 'Payment', 'Filing', 'Vetting', 'Admitted', 'Registered']}
+            value={stageFilter}
+            onChange={setStageFilter}
+          />
           <button className="btn btn-outline" onClick={() => showToast('CSV exported successfully', 'success')}>
             <i className="lni lni-download mr-1" /> Export CSV
           </button>

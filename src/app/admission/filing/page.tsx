@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
+import { SearchSelect } from '@/components/SearchSelect'
 
 const APPLICANTS = [
   { id: 'APP-2026-0023', name: 'Nakato Sarah',    course: 'BSc Computer Science',       intake: 'Jan 2026', fee: '2,400,000 UGX' },
@@ -37,7 +38,7 @@ function Input({ placeholder, type = 'text', readOnly }: { placeholder?: string;
   return <input className="ctrl" type={type} placeholder={placeholder} readOnly={readOnly} />
 }
 function Select({ options, placeholder }: { options: string[]; placeholder?: string }) {
-  return <select className="ctrl"><option value="">{placeholder || 'Select...'}</option>{options.map(o => <option key={o} value={o}>{o}</option>)}</select>
+  return <SearchSelect placeholder={placeholder || 'Select...'} options={options} />
 }
 
 const PIPELINE = [

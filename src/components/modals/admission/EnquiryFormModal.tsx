@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../academic/SuccessPopup'
+import { SearchSelect } from '@/components/SearchSelect'
 
 const EMPTY = {
   firstName: '', lastName: '', phone: '', email: '',
@@ -79,31 +80,41 @@ export function EnquiryFormModal({ isOpen, onClose }: ModalProps) {
           </div>
           <div className="fg">
             <label className="lbl">Enquiry Channel <span className="req">*</span></label>
-            <select className="ctrl" value={form.channel} onChange={e => set('channel', e.target.value)}
-              style={errors.channel ? { borderColor: 'var(--red)' } : undefined}>
-              <option value="">Select channel</option><option>Walk-In</option><option>Phone Call</option><option>Email</option><option>Website</option><option>Social Media</option><option>Referral</option>
-            </select>
+            <SearchSelect
+              placeholder="Select channel"
+              options={['Walk-In', 'Phone Call', 'Email', 'Website', 'Social Media', 'Referral']}
+              value={form.channel}
+              onChange={v => set('channel', v)}
+            />
             {errors.channel && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.channel}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Programme Interest <span className="req">*</span></label>
-            <select className="ctrl" value={form.programme} onChange={e => set('programme', e.target.value)}
-              style={errors.programme ? { borderColor: 'var(--red)' } : undefined}>
-              <option value="">Select programme</option><option>BSc Computer Science</option><option>BBA Management</option><option>BSc Nursing</option><option>Diploma IT</option><option>BBA Accounting</option>
-            </select>
+            <SearchSelect
+              placeholder="Select programme"
+              options={['BSc Computer Science', 'BBA Management', 'BSc Nursing', 'Diploma IT', 'BBA Accounting']}
+              value={form.programme}
+              onChange={v => set('programme', v)}
+            />
             {errors.programme && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programme}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Preferred Intake</label>
-            <select className="ctrl" value={form.intake} onChange={e => set('intake', e.target.value)}>
-              <option value="">Select intake</option><option>September 2026</option><option>January 2027</option><option>May 2027</option>
-            </select>
+            <SearchSelect
+              placeholder="Select intake"
+              options={['September 2026', 'January 2027', 'May 2027']}
+              value={form.intake}
+              onChange={v => set('intake', v)}
+            />
           </div>
           <div className="fg">
             <label className="lbl">Preferred Study Mode</label>
-            <select className="ctrl" value={form.mode} onChange={e => set('mode', e.target.value)}>
-              <option value="">Select mode</option><option>Full-Time</option><option>Part-Time</option><option>Weekend</option><option>Evening</option><option>Online / ODL</option>
-            </select>
+            <SearchSelect
+              placeholder="Select mode"
+              options={['Full-Time', 'Part-Time', 'Weekend', 'Evening', 'Online / ODL']}
+              value={form.mode}
+              onChange={v => set('mode', v)}
+            />
           </div>
           <div className="fg" style={{ gridColumn: 'span 2' }}>
             <label className="lbl">Notes</label>

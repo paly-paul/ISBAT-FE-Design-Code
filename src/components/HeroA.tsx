@@ -31,7 +31,7 @@ export default function HeroA() {
       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: '#E68A2E' }} />
 
       {/* Brand lockup */}
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12, color: '#fff' }}>
+      {/* <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12, color: '#fff' }}>
         <div style={{
           width: 36, height: 36, borderRadius: 8, background: '#fff', color: ACCENT,
           display: 'grid', placeContent: 'center',
@@ -48,7 +48,7 @@ export default function HeroA() {
             Enterprise Resource Portal
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Headline */}
       <div style={{ position: 'relative', marginTop: 56, color: '#fff' }}>

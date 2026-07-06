@@ -3,8 +3,8 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
-import { NewLecturerModal } from '@/components/modals/academic/NewLecturerModal'
-import { EditLecturerModal } from '@/components/modals/academic/EditLecturerModal'
+import { NewEmployeeModal } from '@/components/modals/employee/NewEmployeeModal'
+import { EditEmployeeModal } from '@/components/modals/employee/EditEmployeeModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -16,7 +16,7 @@ export default function Page() {
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
 
-  function nav(id: string) { router.push('/academic/' + id) }
+  function nav(id: string) { router.push('/employee/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
@@ -31,11 +31,11 @@ export default function Page() {
   }, [])
 
   const rows = [
-    { id: 'LEC-0001', name: 'Dr. Nakimuli Sarah',  email: 'snakimuli@isbatuniversity.ac.ug', qualification: 'PhD', qualDetail: 'PhD Computer Science',    qualSub: 'Makerere University · 2018',         specialisation: 'Machine Learning, Algorithms',     faculty: 'FCT', designation: 'Senior Lecturer', statusBadge: 'badge-green', statusLabel: 'Active' },
-    { id: 'LEC-0002', name: 'Prof. Mukasa Charles', email: 'cmukasa@isbatuniversity.ac.ug', qualification: "Master's", qualDetail: 'PhD Business Administration', qualSub: 'University of Cape Town · 2012',      specialisation: 'Strategic Management, Finance',    faculty: 'FBM', designation: 'Senior Lecturer', statusBadge: 'badge-green', statusLabel: 'Active' },
-    { id: 'LEC-0003', name: 'Dr. Tendo Patrick',   email: 'ptendo@isbatuniversity.ac.ug',  qualification: 'PhD', qualDetail: 'PhD Civil Engineering',     qualSub: 'Kyambogo University · 2016',         specialisation: 'Structural Design, Geotechnics',   faculty: 'FEN', designation: 'Senior Lecturer', statusBadge: 'badge-green', statusLabel: 'Active' },
-    { id: 'LEC-0004', name: 'Ms. Acen Lillian',    email: 'lacen@isbatuniversity.ac.ug',   qualification: "Master's", qualDetail: 'MSc Information Technology',  qualSub: 'Makerere University · 2021',         specialisation: 'Web Development, Databases',       faculty: 'FCT', designation: 'Lecturer',        statusBadge: 'badge-green', statusLabel: 'Active' },
-    { id: 'LEC-0005', name: 'Mr. Okello Brian',    email: 'bokello@isbatuniversity.ac.ug', qualification: "Bachelor's", qualDetail: 'MBA Finance',               qualSub: 'Strathmore University · 2020',       specialisation: 'Corporate Finance, Accounting',    faculty: 'FBM', designation: 'Assistant Lecturer', statusBadge: 'badge-amber', statusLabel: 'On Leave' },
+    { id: 'EMP-0001', name: 'Dr. Nakimuli Sarah',  email: 'snakimuli@isbatuniversity.ac.ug', qualification: 'PhD', qualDetail: 'PhD Computer Science',    qualSub: 'Makerere University · 2018',         specialisation: 'Machine Learning, Algorithms',     faculty: 'FCT', designation: 'Senior Lecturer', statusBadge: 'badge-green', statusLabel: 'Active' },
+    { id: 'EMP-0002', name: 'Prof. Mukasa Charles', email: 'cmukasa@isbatuniversity.ac.ug', qualification: "Master's", qualDetail: 'PhD Business Administration', qualSub: 'University of Cape Town · 2012',      specialisation: 'Strategic Management, Finance',    faculty: 'FBM', designation: 'Senior Lecturer', statusBadge: 'badge-green', statusLabel: 'Active' },
+    { id: 'EMP-0003', name: 'Dr. Tendo Patrick',   email: 'ptendo@isbatuniversity.ac.ug',  qualification: 'PhD', qualDetail: 'PhD Civil Engineering',     qualSub: 'Kyambogo University · 2016',         specialisation: 'Structural Design, Geotechnics',   faculty: 'FEN', designation: 'Senior Lecturer', statusBadge: 'badge-green', statusLabel: 'Active' },
+    { id: 'EMP-0004', name: 'Ms. Acen Lillian',    email: 'lacen@isbatuniversity.ac.ug',   qualification: "Master's", qualDetail: 'MSc Information Technology',  qualSub: 'Makerere University · 2021',         specialisation: 'Web Development, Databases',       faculty: 'FCT', designation: 'Lecturer',        statusBadge: 'badge-green', statusLabel: 'Active' },
+    { id: 'EMP-0005', name: 'Mr. Okello Brian',    email: 'bokello@isbatuniversity.ac.ug', qualification: "Bachelor's", qualDetail: 'MBA Finance',               qualSub: 'Strathmore University · 2020',       specialisation: 'Corporate Finance, Accounting',    faculty: 'FBM', designation: 'Assistant Lecturer', statusBadge: 'badge-amber', statusLabel: 'On Leave' },
   ]
   const filteredRows = rows.filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
@@ -60,8 +60,8 @@ export default function Page() {
     <>
       <div className="page active">
         <div className="pg-hdr">
-          <div><div className="pg-title">Lecturer Master</div><div className="pg-sub">All teaching staff · Captures qualification details · Linked to Faculty &amp; Course Allocation</div></div>
-          <button className="btn btn-primary" onClick={() => openModal('new-lecturer-modal')}><i className="lni lni-plus"></i> Add Lecturer</button>
+          <div><div className="pg-title">Employee Master</div><div className="pg-sub">All employees · Captures qualification details · Linked to Faculty &amp; Course Allocation</div></div>
+          <button className="btn btn-primary" onClick={() => openModal('new-employee-modal')}><i className="lni lni-plus"></i> Add Employee</button>
         </div>
 
         <div className="info-box mb-[14px]">
@@ -70,7 +70,7 @@ export default function Page() {
 
         <div className="card">
           <div className="card-hdr">
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-user"></i></span> Lecturers</div>
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-user"></i></span> Employees</div>
             <span className="badge badge-blue"><i className="lni lni-users"></i> 5 total</span>
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
@@ -82,7 +82,7 @@ export default function Page() {
                   : null}
                 {filteredRows.map((r, i) => (
                   <tr key={i}>
-                    <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => openModal('edit-lecturer-modal')}><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>
+                    <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => openModal('edit-employee-modal')}><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>
                     <td className="font-mono text-b700">{r.id}</td>
                     <td><strong>{r.name}</strong><div className="text-[var(--fs-xs)] text-g500">{r.email}</div></td>
                     <td>{r.qualDetail}<div className="text-[var(--fs-xs)] text-g500">{r.qualSub}</div></td>
@@ -97,8 +97,8 @@ export default function Page() {
           </ScrollTable>
         </div>
       </div>
-      <NewLecturerModal isOpen={openModals.has('new-lecturer-modal')} onClose={() => closeModal('new-lecturer-modal')} showToast={showToast} />
-      <EditLecturerModal isOpen={openModals.has('edit-lecturer-modal')} onClose={() => closeModal('edit-lecturer-modal')} showToast={showToast} />
+      <NewEmployeeModal isOpen={openModals.has('new-employee-modal')} onClose={() => closeModal('new-employee-modal')} showToast={showToast} />
+      <EditEmployeeModal isOpen={openModals.has('edit-employee-modal')} onClose={() => closeModal('edit-employee-modal')} showToast={showToast} />
       <Toast toast={toast} />
     </>
   )

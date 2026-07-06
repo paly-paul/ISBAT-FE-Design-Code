@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { SearchSelect } from '@/components/SearchSelect'
 import { LogFollowupModal, FollowupRecord } from '@/components/modals/admission/LogFollowupModal'
 
 const INITIAL_ROWS: FollowupRecord[] = [
@@ -84,10 +85,12 @@ export default function EnquiryFollowupPage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-g800">Allocated Follow-ups &mdash; 2026</h2>
           <div className="flex gap-2">
-            <select className="ctrl w-40" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-              <option value="">All Statuses</option>
-              <option>Overdue</option><option>Due Today</option><option>Upcoming</option><option>Completed</option>
-            </select>
+            <SearchSelect
+              className="w-40"
+              options={[{ value: '', label: 'All Statuses' }, { value: 'Overdue', label: 'Overdue' }, { value: 'Due Today', label: 'Due Today' }, { value: 'Upcoming', label: 'Upcoming' }, { value: 'Completed', label: 'Completed' }]}
+              value={statusFilter}
+              onChange={setStatusFilter}
+            />
           </div>
         </div>
         <ScrollTable>

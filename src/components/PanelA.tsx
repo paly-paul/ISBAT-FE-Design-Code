@@ -21,6 +21,11 @@ export default function PanelA({ children, headline, eyebrow, centered }: PanelA
         </div>
 
         <div className="isb-form-content" style={centered ? { textAlign: 'center' } : undefined}>
+          <img
+            src="/isbat-university-logo.png"
+            alt="ISBAT University"
+            style={{ display: 'block', height: 95, width: 'auto', marginInline: 'auto', marginBottom: 32 }}
+          />
           {eyebrow && (
             <div style={{
               fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase',

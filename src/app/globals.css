@@ -1857,6 +1857,81 @@ textarea.ctrl {
 }
 
 /* ═══════════════════════════════════════
+   TABS — bar + animated panel transition
+═══════════════════════════════════════ */
+.tab-bar {
+  position: relative;
+  display: flex;
+  border-bottom: 1px solid var(--g200);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab-bar::-webkit-scrollbar {
+  display: none
+}
+
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 13px 20px;
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--g500);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .25s ease, background .25s ease;
+}
+
+.tab-btn:hover {
+  color: var(--g700);
+  background: var(--g100);
+}
+
+.tab-btn.active {
+  color: var(--b700);
+  background: var(--b50);
+}
+
+/* Sliding underline indicator — position/width set inline via JS measurement */
+.tab-indicator {
+  position: absolute;
+  bottom: -1px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--b400), var(--b600));
+  box-shadow: 0 0 8px rgba(59, 130, 246, .45);
+  transition: left .38s cubic-bezier(.16, 1, .3, 1), width .38s cubic-bezier(.16, 1, .3, 1);
+  pointer-events: none;
+}
+
+@keyframes tab-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(.985);
+    filter: blur(3px);
+  }
+
+  60% {
+    filter: blur(0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.tab-panel-in {
+  animation: tab-panel-in .5s cubic-bezier(.16, 1, .3, 1) both;
+}
+
+/* ═══════════════════════════════════════
    BADGES
 ═══════════════════════════════════════ */
 .badge {
@@ -4819,6 +4894,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: center;
   position: relative;
   overflow-y: auto;
 }

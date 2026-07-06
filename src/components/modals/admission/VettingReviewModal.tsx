@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../academic/SuccessPopup'
+import { applicantProfileHref } from '@/lib/applicantProfileLink'
 
 export interface VettingApplicant {
   ref: string; name: string; programme: string; type: string; docs: string; submitted: string
@@ -82,7 +83,33 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicant, onRe
           <div className="g2" style={{ gap: 28, alignItems: 'start' }}>
             {/* LEFT: Applicant Profile */}
             <div>
-              <h3 className="text-sm font-semibold text-g700 mb-3"><i className="lni lni-user mr-1" /> Applicant Profile</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-g700"><i className="lni lni-user mr-1" /> Applicant Profile</h3>
+                <a
+                  href={applicantProfileHref({
+                    ref: applicant.ref,
+                    name: applicant.name,
+                    programme: applicant.programme,
+                    type: applicant.type,
+                    dob: details.dob,
+                    gender: details.gender,
+                    nationality: details.nationality,
+                    nationalId: details.nationalId,
+                    phone: details.phone,
+                    email: details.email,
+                    address: details.address,
+                    intake: details.intake,
+                    campus: details.campus,
+                    submitted: applicant.submitted,
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1"
+                  style={{ fontSize: 'var(--fs-xs)', color: 'var(--b600)', fontWeight: 600 }}
+                >
+                  <i className="lni lni-external-link" /> View Full Profile
+                </a>
+              </div>
 
               <div className="sec-divider">Personal Information</div>
               <div className="g2 mb-4">

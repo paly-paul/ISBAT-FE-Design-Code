@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { ModalProps } from '../types'
-import { SuccessPopup } from './SuccessPopup'
+import { SuccessPopup } from '../academic/SuccessPopup'
 import { SearchSelect } from '@/components/SearchSelect'
 
 const NATIONALITIES = [
@@ -10,28 +10,46 @@ const NATIONALITIES = [
   'British', 'American', 'Other',
 ]
 
-export function NewLecturerModal({ isOpen, onClose, showToast }: ModalProps) {
+const DEPARTMENT_DESIGNATIONS: Record<string, string[]> = {
+  'Computer Science':           ['Professor', 'Associate Professor', 'Senior Lecturer', 'Lecturer', 'Assistant Lecturer', 'Teaching Assistant'],
+  'Information Technology':     ['Professor', 'Associate Professor', 'Senior Lecturer', 'Lecturer', 'Assistant Lecturer', 'Teaching Assistant'],
+  'Business Administration':    ['Professor', 'Associate Professor', 'Senior Lecturer', 'Lecturer', 'Assistant Lecturer'],
+  'Accounting & Finance':       ['Professor', 'Associate Professor', 'Senior Lecturer', 'Lecturer', 'Assistant Lecturer'],
+  'Civil Engineering':          ['Professor', 'Associate Professor', 'Senior Lecturer', 'Lecturer', 'Lab Instructor'],
+  'Nursing Sciences':           ['Professor', 'Associate Professor', 'Senior Lecturer', 'Lecturer', 'Clinical Instructor'],
+}
+const DEPARTMENTS = Object.keys(DEPARTMENT_DESIGNATIONS)
+
+export function NewEmployeeModal({ isOpen, onClose, showToast }: ModalProps) {
   const [saved, setSaved] = useState(false)
+  const [department, setDepartment] = useState('')
+  const [designation, setDesignation] = useState('')
 
   if (!isOpen) return null
 
-  function handleClose() { setSaved(false); onClose() }
+  function handleClose() { setSaved(false); setDepartment(''); setDesignation(''); onClose() }
+
+  function handleDepartmentChange(dept: string) {
+    setDepartment(dept)
+    const opts = DEPARTMENT_DESIGNATIONS[dept] ?? []
+    setDesignation(prev => (opts.includes(prev) ? prev : ''))
+  }
 
   if (saved) {
     return (
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
-          <SuccessPopup title="Lecturer Added!" subtitle="The new lecturer has been saved successfully." onClose={handleClose} />
+          <SuccessPopup title="Employee Added!" subtitle="The new employee has been saved successfully." onClose={handleClose} />
         </div>
       </div>
     )
   }
 
   return (
-    <div className="modal-overlay open" id="new-lecturer-modal">
+    <div className="modal-overlay open" id="new-employee-modal">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
-          <div className="modal-title"><i className="lni lni-user"></i> Add Lecturer</div>
+          <div className="modal-title"><i className="lni lni-user"></i> Add Employee</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
 
@@ -55,8 +73,17 @@ export function NewLecturerModal({ isOpen, onClose, showToast }: ModalProps) {
               </div>
             </div>
             <div className="fg">
+              <div className="lbl">Department <span className="req">*</span></div>
+              <SearchSelect placeholder="Select department…" options={DEPARTMENTS} value={department} onChange={handleDepartmentChange} />
+            </div>
+            <div className="fg">
               <div className="lbl">Designation <span className="req">*</span></div>
-              <SearchSelect options={['Professor', 'Associate Professor', 'Senior Lecturer', 'Lecturer', 'Assistant Lecturer', 'Teaching Assistant']} />
+              <SearchSelect
+                placeholder={department ? 'Select designation…' : 'Select department first'}
+                options={department ? DEPARTMENT_DESIGNATIONS[department] : []}
+                value={designation}
+                onChange={setDesignation}
+              />
             </div>
             <div className="fg">
               <div className="lbl">Gender</div>
@@ -128,7 +155,7 @@ export function NewLecturerModal({ isOpen, onClose, showToast }: ModalProps) {
 
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => setSaved(true)}><i className="lni lni-checkmark"></i> Add Lecturer</button>
+          <button className="btn btn-primary" onClick={() => setSaved(true)}><i className="lni lni-checkmark"></i> Add Employee</button>
         </div>
       </div>
     </div>

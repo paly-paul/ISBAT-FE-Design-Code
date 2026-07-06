@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function OnlineEnquiryPage() {
   const router = useRouter()
@@ -26,19 +27,19 @@ export default function OnlineEnquiryPage() {
           <div className="fg"><label className="lbl">Email</label><input className="ctrl" type="email" placeholder="candidate@example.com" /></div>
           <div className="fg">
             <label className="lbl">Enquiry Channel</label>
-            <select className="ctrl"><option value="">— select —</option><option>Walk-in</option><option>Phone</option><option>Online</option><option>Kiosk</option></select>
+            <SearchSelect placeholder="— select —" options={['Walk-in', 'Phone', 'Online', 'Kiosk']} />
           </div>
           <div className="fg">
             <label className="lbl">Programme Interest</label>
-            <select className="ctrl"><option value="">— select —</option><option>BSCS — Computer Science</option><option>BBA — Business Administration</option><option>BSIT — Information Technology</option><option>MBA — Master of Business Admin</option></select>
+            <SearchSelect placeholder="— select —" options={['BSCS — Computer Science', 'BBA — Business Administration', 'BSIT — Information Technology', 'MBA — Master of Business Admin']} />
           </div>
           <div className="fg">
             <label className="lbl">Preferred Intake</label>
-            <select className="ctrl"><option value="">— select —</option><option>Spring 2026</option><option>Fall 2026</option><option>Spring 2027</option></select>
+            <SearchSelect placeholder="— select —" options={['Spring 2026', 'Fall 2026', 'Spring 2027']} />
           </div>
           <div className="fg">
             <label className="lbl">Preferred Study Mode</label>
-            <select className="ctrl"><option value="">— select —</option><option>Full-time</option><option>Weekend</option><option>Evening</option><option>ODL</option></select>
+            <SearchSelect placeholder="— select —" options={['Full-time', 'Weekend', 'Evening', 'ODL']} />
           </div>
           <div className="fg" style={{ gridColumn: 'span 2' }}>
             <label className="lbl">Enquiry Notes</label>
