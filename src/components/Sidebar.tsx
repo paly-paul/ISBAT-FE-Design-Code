@@ -2,23 +2,65 @@
 import { Dispatch, SetStateAction, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 
+export type RailId = 'admission' | 'academic' | 'student' | 'employee' | 'config'
+
 interface SidebarProps {
   panelOpen: boolean
   setPanelOpen: Dispatch<SetStateAction<boolean>>
   currentPage: string
-  nav: (id: string) => void
   collapsedSections: Set<string>
   toggleCollapse: (id: string) => void
-  activeRail: 'academic' | 'config'
-  setActiveRail: Dispatch<SetStateAction<'academic' | 'config'>>
+  activeRail: RailId
+  setActiveRail: Dispatch<SetStateAction<RailId>>
 }
 
-export function Sidebar({ panelOpen, setPanelOpen, currentPage, nav, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {
+const ADMISSION_SECTIONS = [
+  {
+    id: 'sc-enq',
+    label: 'Enquiry',
+    items: [
+      { id: 'online-enquiry',  label: 'Online Enquiry',     icon: 'display' },
+      { id: 'kiosk-enquiry',   label: 'Self-Service Kiosk', icon: 'tab' },
+      { id: 'ondesk-enquiry',  label: 'On-Desk Enquiry',    icon: 'pencil-alt' },
+      { id: 'enquiry-list',    label: 'Enquiry List',       icon: 'folder',    badge: '8' },
+      { id: 'enquiry-followup-master', label: 'Enquiry Followup Master', icon: 'calendar' },
+      { id: 'enquiry-followup',        label: 'Enquiry Followup',        icon: 'phone', badgeWarn: '4' },
+    ],
+  },
+  {
+    id: 'sc-adm-flow',
+    label: 'Admission Flow',
+    items: [
+      { id: 'dashboard',    label: 'Dashboard',          icon: 'dashboard' },
+      { id: 'payment',      label: 'Application Payment', icon: 'credit-cards',  badge: '12' },
+      { id: 'filing',       label: 'Application Filing',  icon: 'pencil-alt',    badgeWarn: '7' },
+      { id: 'vetting',      label: 'Vetting Desk',        icon: 'search-alt',    badgeWarn: '5' },
+      { id: 'registration', label: "Registrar's Desk",    icon: 'graduation',    badgeGreen: '3' },
+    ],
+  },
+  {
+    id: 'sc-adm-rec',
+    label: 'Records',
+    items: [
+      { id: 'applicants', label: 'All Applicants', icon: 'users' },
+      { id: 'receipts',   label: 'Receipts',       icon: 'files' },
+      { id: 'reports',    label: 'Reports',        icon: 'bar-chart' },
+    ],
+  },
+]
+
+export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {
   const router = useRouter()
 
-  function sbItem(id: string, label: string, icon: string, badge?: { text: string; warn?: boolean }) {
+  function navAdmission(id: string) { router.push('/admission/' + id) }
+  function navAcademic(id: string) { router.push('/academic/' + id) }
+  function navStudent(id: string) { router.push('/student/' + id) }
+  function navEmployee(id: string) { router.push('/employee/' + id) }
+
+  function sbItem(id: string, label: string, icon: string, badge?: { text: string; warn?: boolean }, prefix: 'academic' | 'student' | 'employee' = 'academic') {
+    const go = prefix === 'student' ? navStudent : prefix === 'employee' ? navEmployee : navAcademic
     return (
-      <div className={`sb-item${currentPage === id ? ' active' : ''}`} onClick={() => nav(id)}>
+      <div className={`sb-item${currentPage === id ? ' active' : ''}`} onClick={() => go(id)}>
         <span className="sb-icon"><i className={`lni lni-${icon}`}></i></span>
         {label}
         {badge && <span className={`sb-badge${badge.warn ? ' warn' : ''}`}>{badge.text}</span>}
@@ -38,7 +80,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, nav, collapsedSe
     )
   }
 
-  function clickRail(rail: 'academic' | 'config') {
+  function clickRail(rail: RailId) {
     if (activeRail === rail) {
       setPanelOpen(p => !p)
     } else {
@@ -50,10 +92,11 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, nav, collapsedSe
   return (
     <div className="sidebar">
       <div className="sb-rail bg-bg">
-        <div className="rail-item" data-mod="admission" onClick={() => router.push('/admission/dashboard')} style={{ cursor: 'pointer' }}>
+        <div className={`rail-item${activeRail === 'admission' ? ' active' : ''}`} data-mod="admission" onClick={() => clickRail('admission')} style={{ cursor: 'pointer' }}>
           <span className="rail-icon"><i className="lni lni-clipboard"></i></span>
           <span className="rail-label">Admission</span>
-          <span className="rail-tooltip">Admission</span>
+          {activeRail === 'admission' && panelOpen && <span className="rail-dot"></span>}
+          <span className="rail-tooltip">{panelOpen && activeRail === 'admission' ? 'Hide panel' : 'Admission'}</span>
         </div>
         <div className="rail-divider"></div>
         <div className={`rail-item${activeRail === 'academic' ? ' active' : ''}`} data-mod="academic" onClick={() => clickRail('academic')} style={{ cursor: 'pointer' }}>
@@ -63,10 +106,16 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, nav, collapsedSe
           <span className="rail-tooltip">{panelOpen && activeRail === 'academic' ? 'Hide panel' : 'Academic'}</span>
         </div>
         <div className="rail-divider"></div>
-        <div className="rail-item locked" data-mod="finance">
+        <div className="rail-item" data-mod="finance">
           <span className="rail-icon"><i className="lni lni-dollar"></i></span>
           <span className="rail-label">Finance</span>
-          <span className="rail-tooltip">Finance · Coming Soon</span>
+          <span className="rail-tooltip">Finance</span>
+        </div>
+        <div className={`rail-item${activeRail === 'student' ? ' active' : ''}`} data-mod="student" onClick={() => clickRail('student')} style={{ cursor: 'pointer' }}>
+          <span className="rail-icon"><i className="lni lni-user"></i></span>
+          <span className="rail-label">Student</span>
+          {activeRail === 'student' && panelOpen && <span className="rail-dot"></span>}
+          <span className="rail-tooltip">{panelOpen && activeRail === 'student' ? 'Hide panel' : 'Student'}</span>
         </div>
         <div className="rail-item locked" data-mod="attendance">
           <span className="rail-icon"><i className="lni lni-alarm-clock"></i></span>
@@ -77,6 +126,12 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, nav, collapsedSe
           <span className="rail-icon"><i className="lni lni-bar-chart"></i></span>
           <span className="rail-label">Analytics</span>
           <span className="rail-tooltip">Analytics · Coming Soon</span>
+        </div>
+        <div className={`rail-item${activeRail === 'employee' ? ' active' : ''}`} data-mod="employee" onClick={() => clickRail('employee')} style={{ cursor: 'pointer' }}>
+          <span className="rail-icon"><i className="lni lni-briefcase"></i></span>
+          <span className="rail-label">Employee</span>
+          {activeRail === 'employee' && panelOpen && <span className="rail-dot"></span>}
+          <span className="rail-tooltip">{panelOpen && activeRail === 'employee' ? 'Hide panel' : 'Employee'}</span>
         </div>
         <div className={`rail-item${activeRail === 'config' ? ' active' : ''}`} data-mod="config" onClick={() => clickRail('config')} style={{ cursor: 'pointer' }}>
           <span className="rail-icon"><i className="lni lni-cog"></i></span>
@@ -96,6 +151,42 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, nav, collapsedSe
       <div className={`sb-panel-shell${panelOpen ? ' open' : ''}`}>
         <div className={`sb-panel${panelOpen ? ' active' : ''}`}>
 
+          {activeRail === 'admission' && <>
+            <div className="sb-panel-hdr">
+              <div className="sb-panel-hdr-title">Module</div>
+              <div className="sb-panel-hdr-name"><i className="lni lni-clipboard"></i> Admission</div>
+            </div>
+
+            {ADMISSION_SECTIONS.map(section => {
+              const collapsed = collapsedSections.has(section.id)
+              return (
+                <div key={section.id} className={`sb-collapse${collapsed ? ' closed' : ''}`}>
+                  <div className="sb-group-hdr" onClick={() => toggleCollapse(section.id)}>
+                    <span>{section.label}</span>
+                    <span className="sb-chevron">{collapsed ? '▸' : '▾'}</span>
+                  </div>
+                  <div className="sb-collapse-body">
+                    {section.items.map(item => (
+                      <div
+                        key={item.id}
+                        className={`sb-item${currentPage === item.id ? ' active' : ''}`}
+                        onClick={() => navAdmission(item.id)}
+                      >
+                        <span className="sb-icon"><i className={`lni lni-${item.icon}`}></i></span>
+                        {item.label}
+                        {'badge' in item && item.badge && <span className="sb-badge">{item.badge}</span>}
+                        {'badgeWarn' in item && item.badgeWarn && <span className="sb-badge warn">{item.badgeWarn}</span>}
+                        {'badgeGreen' in item && item.badgeGreen && <span className="sb-badge green">{item.badgeGreen}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+
+            <div className="sb-panel-footer">S1 · Admission Service</div>
+          </>}
+
           {activeRail === 'academic' && <>
             <div className="sb-panel-hdr">
               <div className="sb-panel-hdr-title">Module</div>
@@ -108,7 +199,6 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, nav, collapsedSe
 
             {sbSection('sc-core', 'Academic Core', <>
               {sbItem('intake-master', 'Intake Master', 'calendar')}
-              {sbItem('lecturer-master', 'Lecturer Master', 'user')}
               {sbItem('skill-master', 'Skill Management', 'bulb')}
               {sbItem('batch-management', 'Batch Management', 'users')}
               {sbItem('room-management', 'Room Management', 'home')}
@@ -141,6 +231,32 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, nav, collapsedSe
             </>)}
 
             <div className="sb-panel-footer">S2 · Academic Service</div>
+          </>}
+
+          {activeRail === 'student' && <>
+            <div className="sb-panel-hdr">
+              <div className="sb-panel-hdr-title">Module</div>
+              <div className="sb-panel-hdr-name"><i className="lni lni-user"></i> Student</div>
+            </div>
+
+            {sbSection('sc-student-core', 'Student Records', <>
+              {sbItem('student-master', 'Student Master', 'graduation', undefined, 'student')}
+            </>)}
+
+            <div className="sb-panel-footer">S10 · Student Service</div>
+          </>}
+
+          {activeRail === 'employee' && <>
+            <div className="sb-panel-hdr">
+              <div className="sb-panel-hdr-title">Module</div>
+              <div className="sb-panel-hdr-name"><i className="lni lni-briefcase"></i> Employee</div>
+            </div>
+
+            {sbSection('sc-employee-core', 'Employee Records', <>
+              {sbItem('employee-master', 'Employee Master', 'user', undefined, 'employee')}
+            </>)}
+
+            <div className="sb-panel-footer">S4 · Employee Service</div>
           </>}
 
           {activeRail === 'config' && <>

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../academic/SuccessPopup'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export interface FollowupEnquiry {
   ref: string; name: string; programme: string; assignedTo: string; followupDate: string; priority: string
@@ -69,12 +70,12 @@ export function AllocateFollowupModal({ isOpen, onClose, enquiry, onAllocate }: 
         <div className="g2">
           <div className="fg">
             <label className="lbl">Assign To <span className="req">*</span></label>
-            <select className="ctrl" value={assignedTo}
-              onChange={e => { setAssignedTo(e.target.value); if (errors.assignedTo) setErrors(p => ({ ...p, assignedTo: '' })) }}
-              style={errors.assignedTo ? { borderColor: 'var(--red)' } : undefined}>
-              <option value="">-- Select Staff --</option>
-              {STAFF.map(s => <option key={s}>{s}</option>)}
-            </select>
+            <SearchSelect
+              placeholder="-- Select Staff --"
+              options={STAFF}
+              value={assignedTo}
+              onChange={v => { setAssignedTo(v); if (errors.assignedTo) setErrors(p => ({ ...p, assignedTo: '' })) }}
+            />
             {errors.assignedTo && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.assignedTo}</p>}
           </div>
           <div className="fg">
@@ -86,9 +87,7 @@ export function AllocateFollowupModal({ isOpen, onClose, enquiry, onAllocate }: 
           </div>
           <div className="fg" style={{ gridColumn: 'span 2' }}>
             <label className="lbl">Priority</label>
-            <select className="ctrl" value={priority} onChange={e => setPriority(e.target.value)}>
-              <option>High</option><option>Medium</option><option>Low</option>
-            </select>
+            <SearchSelect options={['High', 'Medium', 'Low']} value={priority} onChange={setPriority} />
           </div>
           <div className="fg" style={{ gridColumn: 'span 2' }}>
             <label className="lbl">Notes</label>

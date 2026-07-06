@@ -1,6 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { ModalProps } from '../types'
+import { SearchSelect } from '@/components/SearchSelect'
+import { applicantProfileHref } from '@/lib/applicantProfileLink'
 
 export interface RegistrationStudent {
   ref: string; name: string; prog: string; type: string
@@ -69,7 +71,33 @@ export function CompleteRegistrationModal({ isOpen, onClose, student, onOnboard 
           <div className="g2" style={{ gap: 28, alignItems: 'start' }}>
             {/* LEFT: Student Profile */}
             <div>
-              <h3 className="text-sm font-semibold text-g700 mb-3"><i className="lni lni-user mr-1" /> Student Profile</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-g700"><i className="lni lni-user mr-1" /> Student Profile</h3>
+                <a
+                  href={applicantProfileHref({
+                    ref: student.ref,
+                    name: student.name,
+                    programme: student.prog,
+                    type: student.type,
+                    dob: details.dob,
+                    gender: details.gender,
+                    nationality: details.nationality,
+                    nationalId: details.nationalId,
+                    phone: details.phone,
+                    email: details.email,
+                    address: details.address,
+                    intake: details.intake,
+                    campus: details.campus,
+                    submitted: details.submitted,
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1"
+                  style={{ fontSize: 'var(--fs-xs)', color: 'var(--b600)', fontWeight: 600 }}
+                >
+                  <i className="lni lni-external-link" /> View Full Profile
+                </a>
+              </div>
 
               <div className="sec-divider">Personal Information</div>
               <div className="g2 mb-4">
@@ -99,9 +127,11 @@ export function CompleteRegistrationModal({ isOpen, onClose, student, onOnboard 
             <div>
               <div className="fg">
                 <label className="lbl">Admission Type <span className="req">*</span></label>
-                <select className="ctrl" value={admissionType} onChange={e => setAdmissionType(e.target.value)}>
-                  <option>Regular Entry (Semester 1)</option><option>Lateral Entry</option><option>Credit Transfer</option><option>Existing Student</option>
-                </select>
+                <SearchSelect
+                  options={['Regular Entry (Semester 1)', 'Lateral Entry', 'Credit Transfer', 'Existing Student']}
+                  value={admissionType}
+                  onChange={setAdmissionType}
+                />
               </div>
 
               <div className="flex flex-col gap-2 mt-2">
@@ -117,16 +147,16 @@ export function CompleteRegistrationModal({ isOpen, onClose, student, onOnboard 
               <div className="g2">
                 <div className="fg">
                   <label className="lbl">Payment Type <span className="req">*</span></label>
-                  <select className="ctrl" value={paymentType} onChange={e => handlePaymentTypeChange(e.target.value)}>
-                    <option>Cash</option><option>Bank Transfer</option><option>Mobile Money</option>
-                  </select>
+                  <SearchSelect options={['Cash', 'Bank Transfer', 'Mobile Money']} value={paymentType} onChange={handlePaymentTypeChange} />
                 </div>
                 <div className="fg">
                   <label className="lbl">Receipt Book <span className="req">*</span></label>
-                  <select className="ctrl" value={receiptBook} onChange={e => setReceiptBook(e.target.value)}>
-                    <option value="">-- Select Receipt Book --</option>
-                    <option>RB-2026-001</option><option>RB-2026-002</option><option>RB-2026-003</option>
-                  </select>
+                  <SearchSelect
+                    placeholder="-- Select Receipt Book --"
+                    options={['RB-2026-001', 'RB-2026-002', 'RB-2026-003']}
+                    value={receiptBook}
+                    onChange={setReceiptBook}
+                  />
                 </div>
               </div>
               {showBankFields && (

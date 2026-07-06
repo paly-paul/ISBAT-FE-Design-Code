@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { SearchSelect } from '@/components/SearchSelect'
 import { EnquiryFormModal } from '@/components/modals/admission/EnquiryFormModal'
 
 const ENQUIRY_ROWS = [
@@ -62,7 +63,7 @@ export default function EnquiryListPage() {
           <h2 className="text-base font-semibold text-g800">Enquiry Register — 2026</h2>
           <div className="flex gap-2">
             <input className="ctrl w-52" placeholder="Search enquiries..." />
-            <select className="ctrl w-36"><option value="">All Channels</option><option>Walk-in</option><option>Phone</option><option>Online</option><option>Kiosk</option></select>
+            <SearchSelect className="w-36" options={['All Channels', 'Walk-in', 'Phone', 'Online', 'Kiosk']} />
             <button className="btn btn-ghost"><i className="lni lni-download" /> Export</button>
           </div>
         </div>

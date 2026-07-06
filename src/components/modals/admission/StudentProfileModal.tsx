@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../academic/SuccessPopup'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export function StudentProfileModal({ isOpen, onClose }: ModalProps) {
   const [status, setStatus] = useState('Active')
@@ -78,9 +79,7 @@ export function StudentProfileModal({ isOpen, onClose }: ModalProps) {
           <div className="fg"><label className="lbl">CGPA</label><input className="ctrl" readOnly value={s.cgpa}/></div>
           <div className="fg">
             <label className="lbl">Status</label>
-            <select className="ctrl" value={status} onChange={e => setStatus(e.target.value)}>
-              <option>Active</option><option>Suspended</option><option>Deferred</option><option>Graduated</option>
-            </select>
+            <SearchSelect options={['Active', 'Suspended', 'Deferred', 'Graduated']} value={status} onChange={setStatus} />
           </div>
           <div className="fg"><label className="lbl">Fee Clearance</label><input className="ctrl" readOnly value={s.feeClear}/></div>
         </div>

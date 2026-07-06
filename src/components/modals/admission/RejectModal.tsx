@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { ModalProps } from '../types'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export function RejectModal({ isOpen, onClose, showToast }: ModalProps) {
   const [reason, setReason]   = useState('')
@@ -34,17 +35,12 @@ export function RejectModal({ isOpen, onClose, showToast }: ModalProps) {
 
         <div className="fg mb-3">
           <label className="lbl">Rejection Reason <span className="req">*</span></label>
-          <select className="ctrl" value={reason}
-            onChange={e => { setReason(e.target.value); if (errors.reason) setErrors(p => ({ ...p, reason: '' })) }}
-            style={errors.reason ? { borderColor: 'var(--red)' } : undefined}>
-            <option value="">Select reason</option>
-            <option>Does not meet A-Level entry standards</option>
-            <option>Incomplete documentation</option>
-            <option>Fee payment discrepancy</option>
-            <option>Programme quota full</option>
-            <option>Fraudulent documents detected</option>
-            <option>Other</option>
-          </select>
+          <SearchSelect
+            placeholder="Select reason"
+            options={['Does not meet A-Level entry standards', 'Incomplete documentation', 'Fee payment discrepancy', 'Programme quota full', 'Fraudulent documents detected', 'Other']}
+            value={reason}
+            onChange={v => { setReason(v); if (errors.reason) setErrors(p => ({ ...p, reason: '' })) }}
+          />
           {errors.reason && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.reason}</p>}
         </div>
 

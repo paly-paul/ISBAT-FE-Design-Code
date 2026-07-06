@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { SearchSelect } from '@/components/SearchSelect'
 import { RejectModal } from '@/components/modals/admission/RejectModal'
 import { VettingReviewModal, VettingApplicant } from '@/components/modals/admission/VettingReviewModal'
 
@@ -43,19 +44,27 @@ export default function VettingPage() {
           <p className="text-sm text-g500 mt-1">Assistant Registrar reviews documents &amp; minimum standards</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <select className="ctrl" value={filterProg} onChange={e => setFilterProg(e.target.value)}>
-            <option value="all">All Programmes</option>
-            <option value="bscs">BSc Computer Science</option>
-            <option value="bba">BBA Accounting</option>
-            <option value="bsit">BSc Information Technology</option>
-            <option value="dba">Diploma in Business Admin</option>
-          </select>
-          <select className="ctrl" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-            <option value="all">All Statuses</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-          </select>
+          <SearchSelect
+            options={[
+              { value: 'all', label: 'All Programmes' },
+              { value: 'bscs', label: 'BSc Computer Science' },
+              { value: 'bba', label: 'BBA Accounting' },
+              { value: 'bsit', label: 'BSc Information Technology' },
+              { value: 'dba', label: 'Diploma in Business Admin' },
+            ]}
+            value={filterProg}
+            onChange={setFilterProg}
+          />
+          <SearchSelect
+            options={[
+              { value: 'all', label: 'All Statuses' },
+              { value: 'pending', label: 'Pending' },
+              { value: 'approved', label: 'Approved' },
+              { value: 'rejected', label: 'Rejected' },
+            ]}
+            value={filterStatus}
+            onChange={setFilterStatus}
+          />
         </div>
       </div>
 

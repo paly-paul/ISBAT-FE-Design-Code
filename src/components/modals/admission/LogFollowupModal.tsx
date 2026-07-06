@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../academic/SuccessPopup'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export interface FollowupRecord {
   ref: string; name: string; assignedTo: string; followupDate: string; priority: string; status: string
@@ -64,16 +65,18 @@ export function LogFollowupModal({ isOpen, onClose, record, onLog }: Props) {
 
         <div className="fg mb-3">
           <label className="lbl">Outcome <span className="req">*</span></label>
-          <select className="ctrl" value={outcome}
-            onChange={e => { setOutcome(e.target.value); if (errors.outcome) setErrors(p => ({ ...p, outcome: '' })) }}
-            style={errors.outcome ? { borderColor: 'var(--red)' } : undefined}>
-            <option value="">Select outcome</option>
-            <option>Interested &mdash; scheduled next call</option>
-            <option>Not reachable</option>
-            <option>Requested callback</option>
-            <option>Converted to application</option>
-            <option>Not interested</option>
-          </select>
+          <SearchSelect
+            options={[
+              { value: '', label: 'Select outcome' },
+              { value: 'Interested — scheduled next call', label: 'Interested — scheduled next call' },
+              { value: 'Not reachable', label: 'Not reachable' },
+              { value: 'Requested callback', label: 'Requested callback' },
+              { value: 'Converted to application', label: 'Converted to application' },
+              { value: 'Not interested', label: 'Not interested' },
+            ]}
+            value={outcome}
+            onChange={v => { setOutcome(v); if (errors.outcome) setErrors(p => ({ ...p, outcome: '' })) }}
+          />
           {errors.outcome && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.outcome}</p>}
         </div>
 

@@ -4,17 +4,17 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Header } from '@/components/Header'
 import { Sidebar, RailId } from '@/components/Sidebar'
 
-export default function AcademicLayout({ children }: { children: React.ReactNode }) {
+export default function StudentLayout({ children }: { children: React.ReactNode }) {
   const [panelOpen, setPanelOpen] = useState(true)
   const [profileOpen, setProfileOpen] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
-  const [activeRail, setActiveRail] = useState<RailId>('academic')
+  const [activeRail, setActiveRail] = useState<RailId>('student')
   const profileRef = useRef<HTMLDivElement>(null)
   const prevPathname = useRef<string | null>(null)
   const pathname = usePathname()
   const router = useRouter()
 
-  const currentPage = pathname.split('/').pop() ?? 'acad-dashboard'
+  const currentPage = pathname.split('/').pop() ?? 'student-master'
 
   useEffect(() => {
     if (prevPathname.current !== null && prevPathname.current !== pathname) {
