@@ -6,7 +6,7 @@ type Tab = 'personal' | 'application' | 'qualification' | 'family' | 'documents'
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'personal',     label: 'Personal Information', icon: 'lni-user-4' },
   { id: 'application',  label: 'Application Details',  icon: 'lni-clipboard' },
-  { id: 'qualification', label: 'Qualification',       icon: 'lni-graduation-cap-1' },
+  { id: 'qualification', label: 'Qualification',       icon: 'lni-graduation' },
   { id: 'family',       label: 'Family / Guardian',    icon: 'lni-users-2' },
   { id: 'documents',    label: 'Documents',            icon: 'lni-folder-2' },
 ]

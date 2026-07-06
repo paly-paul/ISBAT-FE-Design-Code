@@ -1,4 +1,5 @@
 import LiveStatsRotator from './LiveStatsRotator'
+import HeroImageSlider from './HeroImageSlider'
 import PolicyFooter from './PolicyFooter'
 
 const ACCENT = '#2E6BE6'
@@ -31,7 +32,7 @@ export default function HeroA() {
       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: '#E68A2E' }} />
 
       {/* Brand lockup */}
-      {/* <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12, color: '#fff' }}>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12, color: '#fff' }}>
         <div style={{
           width: 36, height: 36, borderRadius: 8, background: '#fff', color: ACCENT,
           display: 'grid', placeContent: 'center',
@@ -48,7 +49,7 @@ export default function HeroA() {
             Enterprise Resource Portal
           </div>
         </div>
-      </div> */}
+      </div>
 
       {/* Headline */}
       <div style={{ position: 'relative', marginTop: 56, color: '#fff' }}>
@@ -62,6 +63,14 @@ export default function HeroA() {
           Admissions, academics, assessments and student services — coordinated in real time
           for faculty, staff and students.
         </div>
+      </div>
+
+      {/* Image slider */}
+      <div style={{
+        position: 'relative', flex: 1, minHeight: 300, marginTop: 24,
+        marginLeft: -56, marginRight: -56, display: 'flex',
+      }}>
+        <HeroImageSlider />
       </div>
 
       {/* Live stats */}
