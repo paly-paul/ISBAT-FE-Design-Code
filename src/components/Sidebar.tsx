@@ -275,6 +275,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
               {sbItem('campus-master', 'Campus Master', 'home')}
               {sbItem('currency-master', 'Currency Master', 'dollar')}
               {sbItem('country-master', 'Country Master', 'world')}
+              {sbItem('permission-master', 'Permission Master', 'lock')}
             </>)}
 
             <div className="sb-panel-footer">S0 · Core Config</div>
