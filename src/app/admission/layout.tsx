@@ -36,14 +36,14 @@ const SIDEBAR_SECTIONS = [
       { id: 'reports',    label: 'Reports',        icon: 'bar-chart' },
     ],
   },
-  {
-    id: 'sc-adm-set',
-    label: 'Settings',
-    items: [
-      { id: 'programmes',    label: 'Programmes',    icon: 'apartment' },
-      { id: 'fee-structures', label: 'Fee Structures', icon: 'dollar' },
-    ],
-  },
+  // {
+  //   id: 'sc-adm-set',
+  //   label: 'Settings',
+  //   items: [
+  //     { id: 'programmes',    label: 'Programmes',    icon: 'apartment' },
+  //     { id: 'fee-structures', label: 'Fee Structures', icon: 'dollar' },
+  //   ],
+  // },
 ]
 
 export default function AdmissionLayout({ children }: { children: React.ReactNode }) {

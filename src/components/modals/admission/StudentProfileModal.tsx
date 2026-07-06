@@ -1,10 +1,24 @@
 'use client'
 import { useState } from 'react'
 import { ModalProps } from '../types'
+import { SuccessPopup } from '../academic/SuccessPopup'
 
-export function StudentProfileModal({ isOpen, onClose, showToast }: ModalProps) {
+export function StudentProfileModal({ isOpen, onClose }: ModalProps) {
   const [status, setStatus] = useState('Active')
+  const [saved, setSaved]   = useState(false)
   if (!isOpen) return null
+
+  function handleClose() { setSaved(false); onClose() }
+
+  if (saved) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <SuccessPopup title="Profile Updated!" subtitle="Student profile changes have been saved successfully." onClose={handleClose} />
+        </div>
+      </div>
+    )
+  }
 
   const s = {
     id: 'ISB/2024/BSCS/0142', first: 'Aisha', last: 'Nakamya', dob: '2001-03-15',
@@ -81,7 +95,7 @@ export function StudentProfileModal({ isOpen, onClose, showToast }: ModalProps) 
 
         <div className="modal-footer">
           <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => showToast('Student profile updated successfully.', 'success')}>Save Changes</button>
+          <button className="btn btn-primary" onClick={() => setSaved(true)}>Save Changes</button>
         </div>
       </div>
     </div>
