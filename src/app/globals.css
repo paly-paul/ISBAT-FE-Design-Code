@@ -1057,7 +1057,8 @@ body {
 }
 
 .donut-seg {
-  transition: stroke-width .2s ease
+  transition: stroke-width .2s ease;
+  cursor: pointer;
 }
 
 .donut-seg:hover {
@@ -1100,6 +1101,17 @@ body {
   background: var(--surface);
   border: 1px solid var(--g200);
   border-radius: var(--rxs);
+  cursor: pointer;
+  transition: background var(--tr), border-color var(--tr), opacity var(--tr);
+}
+
+.donut-legend-item.active {
+  background: var(--b50);
+  border-color: var(--b200);
+}
+
+.donut-legend-item.dim {
+  opacity: .45
 }
 
 .donut-swatch {

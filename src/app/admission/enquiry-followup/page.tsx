@@ -40,7 +40,6 @@ export default function EnquiryFollowupPage() {
 
   function applyLog(ref: string, outcome: string, completed: boolean) {
     setRows(prev => prev.map(r => r.ref === ref ? { ...r, status: completed ? 'Completed' : r.status } : r))
-    showToast(completed ? 'Follow-up marked as completed.' : `Follow-up logged: ${outcome}`, 'success')
   }
 
   const filtered = rows.filter(r => !statusFilter || r.status === statusFilter)
@@ -99,6 +98,7 @@ export default function EnquiryFollowupPage() {
                 <tr key={r.ref}>
                   <td>
                     <ActionMenu>
+                      <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/payment')}><i className="lni lni-arrow-right" /> Convert</button>
                       {r.status !== 'Completed'
                         ? <button className="btn btn-neu btn-sm" onClick={() => handleLog(r)}><i className="lni lni-phone" /> Log Follow-up</button>
                         : <button className="btn btn-neu btn-sm" onClick={() => handleLog(r)}><i className="lni lni-eye" /> View</button>}

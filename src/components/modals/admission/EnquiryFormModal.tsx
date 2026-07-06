@@ -1,15 +1,17 @@
 'use client'
 import { useState } from 'react'
 import { ModalProps } from '../types'
+import { SuccessPopup } from '../academic/SuccessPopup'
 
 const EMPTY = {
   firstName: '', lastName: '', phone: '', email: '',
   channel: '', programme: '', intake: '', mode: '', notes: '',
 }
 
-export function EnquiryFormModal({ isOpen, onClose, showToast }: ModalProps) {
+export function EnquiryFormModal({ isOpen, onClose }: ModalProps) {
   const [form, setForm]     = useState(EMPTY)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [saved, setSaved]   = useState(false)
 
   if (!isOpen) return null
 
@@ -18,7 +20,7 @@ export function EnquiryFormModal({ isOpen, onClose, showToast }: ModalProps) {
     if (errors[key]) setErrors(prev => ({ ...prev, [key]: '' }))
   }
 
-  function handleClose() { setForm(EMPTY); setErrors({}); onClose() }
+  function handleClose() { setForm(EMPTY); setErrors({}); setSaved(false); onClose() }
 
   function validate() {
     const e: Record<string, string> = {}
@@ -29,6 +31,16 @@ export function EnquiryFormModal({ isOpen, onClose, showToast }: ModalProps) {
     if (!form.programme)        e.programme = 'Please select a Programme Interest'
     setErrors(e)
     return Object.keys(e).length === 0
+  }
+
+  if (saved) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <SuccessPopup title="Enquiry Saved!" subtitle="The new enquiry has been added to the register." onClose={handleClose} />
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -101,7 +113,7 @@ export function EnquiryFormModal({ isOpen, onClose, showToast }: ModalProps) {
 
         <div className="modal-footer">
           <button className="btn" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => { if (validate()) { showToast('Enquiry saved successfully.', 'success'); handleClose() } }}>
+          <button className="btn btn-primary" onClick={() => { if (validate()) setSaved(true) }}>
             <i className="lni lni-save"></i> Save Enquiry
           </button>
         </div>

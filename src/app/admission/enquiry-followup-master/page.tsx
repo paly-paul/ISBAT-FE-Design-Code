@@ -36,7 +36,6 @@ export default function EnquiryFollowupMasterPage() {
 
   function applyAllocation(ref: string, assignedTo: string, followupDate: string, priority: string) {
     setRows(prev => prev.map(r => r.ref === ref ? { ...r, assignedTo, followupDate, priority } : r))
-    showToast(`Follow-up allocated to ${assignedTo}.`, 'success')
   }
 
   const q = searchTerm.trim().toLowerCase()
@@ -92,6 +91,7 @@ export default function EnquiryFollowupMasterPage() {
                 <tr key={r.ref}>
                   <td>
                     <ActionMenu>
+                      <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/payment')}><i className="lni lni-arrow-right" /> Convert</button>
                       <button className="btn btn-neu btn-sm" onClick={() => handleAllocate(r)}>
                         <i className={`lni ${r.assignedTo === 'Unallocated' ? 'lni-user' : 'lni-reload'}`} /> {r.assignedTo === 'Unallocated' ? 'Allocate' : 'Reassign'}
                       </button>

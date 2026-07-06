@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { ModalProps } from '../types'
+import { SuccessPopup } from '../academic/SuccessPopup'
 
 export interface VettingApplicant {
   ref: string; name: string; programme: string; type: string; docs: string; submitted: string
@@ -39,18 +40,32 @@ interface Props extends ModalProps {
 
 export function VettingReviewModal({ isOpen, onClose, showToast, applicant, onReject }: Props) {
   const [remarks, setRemarks] = useState('')
+  const [approved, setApproved] = useState(false)
 
   useEffect(() => {
     if (applicant) {
       setRemarks('A-Level grades meet Degree entry standards. National ID missing — applicant to provide within 7 working days. Recommend provisional approval.')
+      setApproved(false)
     }
   }, [applicant])
 
   if (!isOpen || !applicant) return null
 
+  function handleClose() { setApproved(false); onClose() }
+
   const details = PROFILE_DETAILS[applicant.ref] ?? PROFILE_DETAILS['APP-2025-0041']
   const [firstName, ...rest] = applicant.name.split(' ')
   const lastName = rest.join(' ')
+
+  if (approved) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <SuccessPopup title="Application Approved!" subtitle={`${applicant.name}'s provisional admission letter has been issued.`} onClose={handleClose} />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="modal-overlay open">
@@ -164,7 +179,7 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicant, onRe
         <div className="modal-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
           <div className="grid grid-cols-3 gap-3">
             <button className="btn btn-amber w-full justify-center" onClick={() => showToast('Applicant placed on hold — waiting for original documents', 'amber')}><i className="lni lni-timer" /> Wait for Original Documents</button>
-            <button className="btn btn-success w-full justify-center" onClick={() => { showToast('Application approved — provisional letter issued', 'success'); onClose() }}><i className="lni lni-checkmark" /> Approve &amp; Issue Provisional Letter</button>
+            <button className="btn btn-success w-full justify-center" onClick={() => setApproved(true)}><i className="lni lni-checkmark" /> Approve &amp; Issue Provisional Letter</button>
             <button className="btn btn-danger w-full justify-center" onClick={onReject}><i className="lni lni-close" /> Reject Application</button>
           </div>
           <p className="text-xs text-g400 text-center">Sets T_Application.Action = 1 (Wait) / 2 (Approved) / 3 (Rejected)</p>

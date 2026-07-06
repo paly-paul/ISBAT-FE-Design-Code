@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { ModalProps } from '../types'
+import { SuccessPopup } from '../academic/SuccessPopup'
 
 export interface FollowupEnquiry {
   ref: string; name: string; programme: string; assignedTo: string; followupDate: string; priority: string
@@ -19,19 +20,20 @@ export function AllocateFollowupModal({ isOpen, onClose, enquiry, onAllocate }: 
   const [priority, setPriority] = useState('Medium')
   const [notes, setNotes] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     if (enquiry) {
       setAssignedTo(enquiry.assignedTo === 'Unallocated' ? '' : enquiry.assignedTo)
       setFollowupDate(enquiry.followupDate === '—' ? '' : enquiry.followupDate)
       setPriority(enquiry.priority || 'Medium')
-      setNotes(''); setErrors({})
+      setNotes(''); setErrors({}); setSaved(false)
     }
   }, [enquiry])
 
   if (!isOpen || !enquiry) return null
 
-  function handleClose() { setAssignedTo(''); setFollowupDate(''); setPriority('Medium'); setNotes(''); setErrors({}); onClose() }
+  function handleClose() { setAssignedTo(''); setFollowupDate(''); setPriority('Medium'); setNotes(''); setErrors({}); setSaved(false); onClose() }
 
   function validate() {
     const e: Record<string, string> = {}
@@ -39,6 +41,16 @@ export function AllocateFollowupModal({ isOpen, onClose, enquiry, onAllocate }: 
     if (!followupDate)  e.followupDate = 'Follow-up date is required'
     setErrors(e)
     return Object.keys(e).length === 0
+  }
+
+  if (saved) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <SuccessPopup title="Follow-up Allocated!" subtitle={`${enquiry.name} has been assigned to ${assignedTo} for follow-up.`} onClose={handleClose} />
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -86,7 +98,7 @@ export function AllocateFollowupModal({ isOpen, onClose, enquiry, onAllocate }: 
 
         <div className="modal-footer">
           <button className="btn" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => { if (validate()) { onAllocate(enquiry.ref, assignedTo, followupDate, priority); handleClose() } }}>
+          <button className="btn btn-primary" onClick={() => { if (validate()) { onAllocate(enquiry.ref, assignedTo, followupDate, priority); setSaved(true) } }}>
             <i className="lni lni-checkmark"></i> Allocate Follow-up
           </button>
         </div>

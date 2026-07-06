@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { ModalProps } from '../types'
+import { SuccessPopup } from '../academic/SuccessPopup'
 
 export interface FollowupRecord {
   ref: string; name: string; assignedTo: string; followupDate: string; priority: string; status: string
@@ -16,14 +17,15 @@ export function LogFollowupModal({ isOpen, onClose, record, onLog }: Props) {
   const [notes, setNotes] = useState('')
   const [markComplete, setMarkComplete] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    if (record) { setOutcome(''); setNotes(''); setMarkComplete(false); setErrors({}) }
+    if (record) { setOutcome(''); setNotes(''); setMarkComplete(false); setErrors({}); setSaved(false) }
   }, [record])
 
   if (!isOpen || !record) return null
 
-  function handleClose() { setOutcome(''); setNotes(''); setMarkComplete(false); setErrors({}); onClose() }
+  function handleClose() { setOutcome(''); setNotes(''); setMarkComplete(false); setErrors({}); setSaved(false); onClose() }
 
   function validate() {
     const e: Record<string, string> = {}
@@ -31,6 +33,20 @@ export function LogFollowupModal({ isOpen, onClose, record, onLog }: Props) {
     if (!notes.trim())  e.notes   = 'Follow-up notes are required'
     setErrors(e)
     return Object.keys(e).length === 0
+  }
+
+  if (saved) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <SuccessPopup
+            title={markComplete ? 'Follow-up Completed!' : 'Follow-up Logged!'}
+            subtitle={markComplete ? `${record.name}'s follow-up has been marked as completed.` : `Outcome recorded: ${outcome}`}
+            onClose={handleClose}
+          />
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -76,7 +92,7 @@ export function LogFollowupModal({ isOpen, onClose, record, onLog }: Props) {
 
         <div className="modal-footer">
           <button className="btn" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => { if (validate()) { onLog(record.ref, outcome, markComplete); handleClose() } }}>
+          <button className="btn btn-primary" onClick={() => { if (validate()) { onLog(record.ref, outcome, markComplete); setSaved(true) } }}>
             <i className="lni lni-checkmark"></i> Save Follow-up
           </button>
         </div>

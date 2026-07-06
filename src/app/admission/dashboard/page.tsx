@@ -103,6 +103,7 @@ function srcBadge(src: string) {
 export default function DashboardPage() {
   const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [hoveredSrc, setHoveredSrc] = useState<string | null>(null)
   const segments = donutSegments()
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
@@ -181,7 +182,9 @@ export default function DashboardPage() {
                   {segments.map(seg => (
                     <circle key={seg.label} className="donut-seg" cx="60" cy="60" r="45" fill="none"
                       stroke={seg.color} strokeWidth="18"
-                      strokeDasharray={seg.dashArray} strokeDashoffset={seg.dashOffset} />
+                      strokeDasharray={seg.dashArray} strokeDashoffset={seg.dashOffset}
+                      onMouseEnter={() => setHoveredSrc(seg.label)}
+                      onMouseLeave={() => setHoveredSrc(null)} />
                   ))}
                   <text x="60" y="55" className="donut-center-num" textAnchor="middle" dominantBaseline="middle">23</text>
                   <text x="60" y="70" className="donut-center-lbl" textAnchor="middle">APPLICANTS</text>
@@ -189,7 +192,12 @@ export default function DashboardPage() {
               </div>
               <div className="donut-legend">
                 {DONUT_DATA.map(d => (
-                  <div key={d.label} className="donut-legend-item">
+                  <div
+                    key={d.label}
+                    className={`donut-legend-item${hoveredSrc === d.label ? ' active' : ''}${hoveredSrc && hoveredSrc !== d.label ? ' dim' : ''}`}
+                    onMouseEnter={() => setHoveredSrc(d.label)}
+                    onMouseLeave={() => setHoveredSrc(null)}
+                  >
                     <span className="donut-swatch" style={{ background: d.color }} />
                     <span className="donut-legend-lbl">{d.label}</span>
                     <span className="donut-legend-val">{d.value}</span>
