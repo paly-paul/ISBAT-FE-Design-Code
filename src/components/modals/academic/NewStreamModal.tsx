@@ -2,8 +2,16 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
+import { StreamInput } from '@/lib/api/academic/stream'
 
-export function NewStreamModal({ isOpen, onClose, showToast }: ModalProps) {
+interface NewStreamModalProps extends ModalProps {
+  createStream: {
+    mutate: (input: StreamInput, options?: { onSuccess?: () => void }) => void
+    isPending: boolean
+  }
+}
+
+export function NewStreamModal({ isOpen, onClose, showToast, createStream }: NewStreamModalProps) {
   const [saved, setSaved]             = useState(false)
   const [streamCode, setStreamCode]   = useState('')
   const [streamName, setStreamName]   = useState('')
@@ -70,8 +78,18 @@ export function NewStreamModal({ isOpen, onClose, showToast }: ModalProps) {
         </div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => { if (validate()) setSaved(true) }}>
-            <i className="lni lni-checkmark"></i> Add Stream
+          <button
+            className="btn btn-primary"
+            disabled={createStream.isPending}
+            onClick={() => {
+              if (!validate()) return
+              createStream.mutate(
+                { streamCode, streamName },
+                { onSuccess: () => { setSaved(true); showToast('Stream added successfully') } },
+              )
+            }}
+          >
+            <i className="lni lni-checkmark"></i> {createStream.isPending ? 'Adding…' : 'Add Stream'}
           </button>
         </div>
       </div>

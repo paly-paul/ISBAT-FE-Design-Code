@@ -1,14 +1,47 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
+import { Skill, SkillInput } from '@/lib/api/academic/skill'
 
-export function EditSkillModal({ isOpen, onClose, showToast }: ModalProps) {
+interface EditSkillModalProps extends ModalProps {
+  skill: Skill | null
+  updateSkill: {
+    mutate: (variables: { id: string; input: SkillInput }, options?: { onSuccess?: () => void }) => void
+    isPending: boolean
+  }
+}
+
+export function EditSkillModal({ isOpen, onClose, showToast, skill, updateSkill }: EditSkillModalProps) {
   const [saved, setSaved] = useState(false)
+  const [skillName, setSkillName] = useState('')
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
-  if (!isOpen) return null
+  useEffect(() => {
+    if (isOpen && skill) {
+      setSkillName(skill.skillName)
+      setErrors({})
+    }
+  }, [isOpen, skill])
+
+  if (!isOpen || !skill) return null
 
   function handleClose() { setSaved(false); onClose() }
+
+  function validate() {
+    const e: Record<string, string> = {}
+    if (!skillName.trim()) e.skillName = 'Skill Name is required'
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  function handleSubmit() {
+    if (!skill || !validate()) return
+    updateSkill.mutate(
+      { id: skill.id, input: { skillName } },
+      { onSuccess: () => { setSaved(true); showToast('Skill updated successfully') } },
+    )
+  }
 
   if (saved) {
     return (
@@ -29,12 +62,19 @@ export function EditSkillModal({ isOpen, onClose, showToast }: ModalProps) {
         </div>
         <div className="fg">
           <div className="lbl">Skill Name <span className="req">*</span></div>
-          <input className="ctrl" type="text" defaultValue="C#" />
+          <input
+            className="ctrl"
+            type="text"
+            value={skillName}
+            onChange={e => { setSkillName(e.target.value); if (errors.skillName) setErrors(p => ({ ...p, skillName: '' })) }}
+            style={errors.skillName ? { borderColor: 'var(--red)' } : undefined}
+          />
+          {errors.skillName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.skillName}</p>}
         </div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => setSaved(true)}>
-            <i className="lni lni-checkmark"></i> Update Skill
+          <button className="btn btn-primary" disabled={updateSkill.isPending} onClick={handleSubmit}>
+            <i className="lni lni-checkmark"></i> {updateSkill.isPending ? 'Updating…' : 'Update Skill'}
           </button>
         </div>
       </div>

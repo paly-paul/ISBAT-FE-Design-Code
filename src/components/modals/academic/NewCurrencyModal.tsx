@@ -2,8 +2,16 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
+import { CurrencyInput } from '@/lib/api/academic/currency'
 
-export function NewCurrencyModal({ isOpen, onClose, showToast }: ModalProps) {
+interface NewCurrencyModalProps extends ModalProps {
+  createCurrency: {
+    mutate: (input: CurrencyInput, options?: { onSuccess?: () => void }) => void
+    isPending: boolean
+  }
+}
+
+export function NewCurrencyModal({ isOpen, onClose, showToast, createCurrency }: NewCurrencyModalProps) {
   const [saved, setSaved]                 = useState(false)
   const [currencyCode, setCurrencyCode]   = useState('')
   const [currencyName, setCurrencyName]   = useState('')
@@ -82,8 +90,18 @@ export function NewCurrencyModal({ isOpen, onClose, showToast }: ModalProps) {
         </div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => { if (validate()) setSaved(true) }}>
-            <i className="lni lni-checkmark"></i> Add Currency
+          <button
+            className="btn btn-primary"
+            disabled={createCurrency.isPending}
+            onClick={() => {
+              if (!validate()) return
+              createCurrency.mutate(
+                { currencyCode, currencyName, isDefault: isDefault ? 1 : 0 },
+                { onSuccess: () => { setSaved(true); showToast('Currency added successfully') } },
+              )
+            }}
+          >
+            <i className="lni lni-checkmark"></i> {createCurrency.isPending ? 'Adding…' : 'Add Currency'}
           </button>
         </div>
       </div>

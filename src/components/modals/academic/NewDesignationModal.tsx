@@ -2,27 +2,46 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
+import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import { DesignationInput } from '@/lib/api/academic/designation'
+import { useDepartments } from '@/hooks/config/useDepartments'
+import { AuthError } from '@/lib/api/client'
 
-const DEPARTMENT_OPTIONS = [
-  { value: 'Computer Science',        label: 'Computer Science' },
-  { value: 'Information Technology',  label: 'Information Technology' },
-  { value: 'Business Administration', label: 'Business Administration' },
-  { value: 'Accounting & Finance',    label: 'Accounting & Finance' },
-  { value: 'Civil Engineering',       label: 'Civil Engineering' },
-  { value: 'Nursing Sciences',        label: 'Nursing Sciences' },
-]
+// Not part of the real GET /api/v1/users/designations response (which
+// references departments by numeric intDept, not a name string) — kept for
+// reference. The Department dropdown below is now backed by the real
+// departments list (useDepartments) instead of this hardcoded set.
+// const DEPARTMENT_OPTIONS = [
+//   { value: 'Computer Science',        label: 'Computer Science' },
+//   { value: 'Information Technology',  label: 'Information Technology' },
+//   { value: 'Business Administration', label: 'Business Administration' },
+//   { value: 'Accounting & Finance',    label: 'Accounting & Finance' },
+//   { value: 'Civil Engineering',       label: 'Civil Engineering' },
+//   { value: 'Nursing Sciences',        label: 'Nursing Sciences' },
+// ]
 
-export function NewDesignationModal({ isOpen, onClose, showToast }: ModalProps) {
+interface NewDesignationModalProps extends ModalProps {
+  createDesignation: {
+    mutate: (input: DesignationInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
+    isPending: boolean
+  }
+}
+
+export function NewDesignationModal({ isOpen, onClose, showToast, createDesignation }: NewDesignationModalProps) {
   const [saved, setSaved]                     = useState(false)
+  const [failure, setFailure]                 = useState<string | null>(null)
   const [designationName, setDesignationName] = useState('')
   const [department, setDepartment]           = useState('')
   const [errors, setErrors]                   = useState<Record<string, string>>({})
 
+  const { data: departments = [] } = useDepartments()
+  const departmentOptions = departments.map(d => ({ value: String(d.intDept), label: d.deptName }))
+
   if (!isOpen) return null
 
   function handleClose() {
-    setSaved(false); setDesignationName(''); setDepartment(''); setErrors({})
+    setSaved(false); setFailure(null); setDesignationName(''); setDepartment(''); setErrors({})
     onClose()
   }
 
@@ -34,11 +53,34 @@ export function NewDesignationModal({ isOpen, onClose, showToast }: ModalProps) 
     return Object.keys(e).length === 0
   }
 
+  // Maps the backend's { code, errors } failure shape (see
+  // departments-and-designations.md) to inline field errors where the cause
+  // is actionable right there (duplicate designationName); validation_error
+  // and not_found (bad intDept reference) show the failure popup instead.
+  function handleCreateError(error: Error) {
+    const code = error instanceof AuthError ? error.code : undefined
+    if (code === 'bad_request') {
+      setErrors(prev => ({ ...prev, designationName: error.message || 'A designation with this name already exists.' }))
+      return
+    }
+    setFailure(error.message || 'Failed to add designation. Please try again.')
+  }
+
   if (saved) {
     return (
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
           <SuccessPopup title="Designation Added!" subtitle="The new designation has been saved successfully." onClose={handleClose} />
+        </div>
+      </div>
+    )
+  }
+
+  if (failure) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup title="Couldn't Add Designation" subtitle={failure} onClose={() => setFailure(null)} />
         </div>
       </div>
     )
@@ -70,15 +112,28 @@ export function NewDesignationModal({ isOpen, onClose, showToast }: ModalProps) 
               placeholder="Select department…"
               value={department}
               onChange={v => { setDepartment(v); if (errors.department) setErrors(p => ({ ...p, department: '' })) }}
-              options={DEPARTMENT_OPTIONS}
+              options={departmentOptions}
             />
             {errors.department && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.department}</p>}
           </div>
         </div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => { if (validate()) setSaved(true) }}>
-            <i className="lni lni-checkmark"></i> Add Designation
+          <button
+            className="btn btn-primary"
+            disabled={createDesignation.isPending}
+            onClick={() => {
+              if (!validate()) return
+              createDesignation.mutate(
+                { designationName, intDept: Number(department) },
+                {
+                  onSuccess: () => { setSaved(true); showToast('Designation added successfully') },
+                  onError: handleCreateError,
+                },
+              )
+            }}
+          >
+            <i className="lni lni-checkmark"></i> {createDesignation.isPending ? 'Adding…' : 'Add Designation'}
           </button>
         </div>
       </div>

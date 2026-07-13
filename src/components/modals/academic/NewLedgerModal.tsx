@@ -2,8 +2,16 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
+import { LedgerInput } from '@/lib/api/academic/ledger'
 
-export function NewLedgerModal({ isOpen, onClose, showToast }: ModalProps) {
+interface NewLedgerModalProps extends ModalProps {
+  createLedger: {
+    mutate: (input: LedgerInput, options?: { onSuccess?: () => void }) => void
+    isPending: boolean
+  }
+}
+
+export function NewLedgerModal({ isOpen, onClose, showToast, createLedger }: NewLedgerModalProps) {
   const [saved, setSaved]           = useState(false)
   const [ledgerCode, setLedgerCode] = useState('')
   const [ledgerName, setLedgerName] = useState('')
@@ -67,8 +75,18 @@ export function NewLedgerModal({ isOpen, onClose, showToast }: ModalProps) {
         </div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => { if (validate()) setSaved(true) }}>
-            <i className="lni lni-checkmark"></i> Add Ledger
+          <button
+            className="btn btn-primary"
+            disabled={createLedger.isPending}
+            onClick={() => {
+              if (!validate()) return
+              createLedger.mutate(
+                { ledgerCode, ledgerName },
+                { onSuccess: () => { setSaved(true); showToast('Ledger added successfully') } },
+              )
+            }}
+          >
+            <i className="lni lni-checkmark"></i> {createLedger.isPending ? 'Adding…' : 'Add Ledger'}
           </button>
         </div>
       </div>

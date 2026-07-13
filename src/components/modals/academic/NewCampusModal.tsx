@@ -2,9 +2,20 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
+import { FailurePopup } from './FailurePopup'
+import { CampusInput } from '@/lib/api/academic/campus'
+import { AuthError } from '@/lib/api/client'
 
-export function NewCampusModal({ isOpen, onClose, showToast }: ModalProps) {
+interface NewCampusModalProps extends ModalProps {
+  createCampus: {
+    mutate: (input: CampusInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
+    isPending: boolean
+  }
+}
+
+export function NewCampusModal({ isOpen, onClose, showToast, createCampus }: NewCampusModalProps) {
   const [saved, setSaved]         = useState(false)
+  const [failure, setFailure]     = useState<string | null>(null)
   const [campusCode, setCampusCode] = useState('')
   const [campusName, setCampusName] = useState('')
   const [location, setLocation]   = useState('')
@@ -15,7 +26,7 @@ export function NewCampusModal({ isOpen, onClose, showToast }: ModalProps) {
   if (!isOpen) return null
 
   function handleClose() {
-    setSaved(false); setCampusCode(''); setCampusName(''); setLocation(''); setAddress(''); setContact(''); setErrors({})
+    setSaved(false); setFailure(null); setCampusCode(''); setCampusName(''); setLocation(''); setAddress(''); setContact(''); setErrors({})
     onClose()
   }
 
@@ -33,6 +44,16 @@ export function NewCampusModal({ isOpen, onClose, showToast }: ModalProps) {
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
           <SuccessPopup title="Campus Added!" subtitle="The new campus has been saved successfully." onClose={handleClose} />
+        </div>
+      </div>
+    )
+  }
+
+  if (failure) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup title="Couldn't Add Campus" subtitle={failure} onClose={() => setFailure(null)} />
         </div>
       </div>
     )
@@ -107,8 +128,24 @@ export function NewCampusModal({ isOpen, onClose, showToast }: ModalProps) {
         </div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => { if (validate()) setSaved(true) }}>
-            <i className="lni lni-checkmark"></i> Add Campus
+          <button
+            className="btn btn-primary"
+            disabled={createCampus.isPending}
+            onClick={() => {
+              if (!validate()) return
+              createCampus.mutate(
+                { campusCode, campusName, location, address, contact },
+                {
+                  onSuccess: () => { setSaved(true); showToast('Campus added successfully') },
+                  onError: (error: Error) => {
+                    const code = error instanceof AuthError ? error.code : undefined
+                    setFailure(error.message || `Failed to add campus${code ? ` (${code})` : ''}. Please try again.`)
+                  },
+                },
+              )
+            }}
+          >
+            <i className="lni lni-checkmark"></i> {createCampus.isPending ? 'Adding…' : 'Add Campus'}
           </button>
         </div>
       </div>

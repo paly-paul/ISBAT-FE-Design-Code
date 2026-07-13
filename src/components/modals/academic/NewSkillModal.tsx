@@ -2,8 +2,16 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
+import { SkillInput } from '@/lib/api/academic/skill'
 
-export function NewSkillModal({ isOpen, onClose, showToast }: ModalProps) {
+interface NewSkillModalProps extends ModalProps {
+  createSkill: {
+    mutate: (input: SkillInput, options?: { onSuccess?: () => void }) => void
+    isPending: boolean
+  }
+}
+
+export function NewSkillModal({ isOpen, onClose, showToast, createSkill }: NewSkillModalProps) {
   const [saved, setSaved]           = useState(false)
   const [skillName, setSkillName]   = useState('')
   const [errors, setErrors]         = useState<Record<string, string>>({})
@@ -50,8 +58,18 @@ export function NewSkillModal({ isOpen, onClose, showToast }: ModalProps) {
         </div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => { if (validate()) setSaved(true) }}>
-            <i className="lni lni-checkmark"></i> Add Skill
+          <button
+            className="btn btn-primary"
+            disabled={createSkill.isPending}
+            onClick={() => {
+              if (!validate()) return
+              createSkill.mutate(
+                { skillName },
+                { onSuccess: () => { setSaved(true); showToast('Skill added successfully') } },
+              )
+            }}
+          >
+            <i className="lni lni-checkmark"></i> {createSkill.isPending ? 'Adding…' : 'Add Skill'}
           </button>
         </div>
       </div>
