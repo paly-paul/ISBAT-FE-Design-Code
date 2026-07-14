@@ -9,7 +9,8 @@ import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
-import { useFaculties, useCreateFaculty, useUpdateFaculty, Faculty } from '@/hooks/config/useFaculties'
+import { useFaculties, useCreateFaculty, useUpdateFaculty, useDeleteFaculty, Faculty } from '@/hooks/config/useFaculties'
+import { useEmployees } from '@/hooks/employee/useEmployees'
 
 export default function Page() {
   const router = useRouter()
@@ -18,10 +19,23 @@ export default function Page() {
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingFaculty, setEditingFaculty] = useState<Faculty | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Faculty | null>(null)
 
   const { data: rows = [], isLoading } = useFaculties()
   const createFaculty = useCreateFaculty()
   const updateFaculty = useUpdateFaculty()
+  const deleteFaculty = useDeleteFaculty()
+
+  // The backend doesn't always resolve deanName for a faculty even when
+  // deanEmployeeGuid is set (seen in the real GET response) — fall back to
+  // resolving it client-side from the employees list already used elsewhere
+  // in this app for dean selection.
+  const { data: employees = [] } = useEmployees()
+  function deanDisplayName(r: Faculty): string {
+    if (r.deanName) return r.deanName
+    const dean = employees.find(e => e.employeeGuid === r.deanEmployeeGuid)
+    return dean ? `${dean.firstName} ${dean.surname}` : '—'
+  }
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -31,6 +45,14 @@ export default function Page() {
   function openEditModal(faculty: Faculty) {
     setEditingFaculty(faculty)
     openModal('edit-faculty-modal')
+  }
+
+  function confirmDeleteFaculty() {
+    if (!deleteTarget) return
+    deleteFaculty.mutate(deleteTarget.facultyGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Faculty deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete faculty', 'error'),
+    })
   }
 
   useEffect(() => {
@@ -43,8 +65,17 @@ export default function Page() {
   }, [])
 
   const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
+    Object.entries(filters).every(([k, v]) => {
+      if (!v.length) return true
+      const cell = k === 'deanName' ? deanDisplayName(r) : String((r as unknown as Record<string, unknown>)[k])
+      return v.includes(cell)
+    })
   )
+
+  // No dedicated dean lookup endpoint yet — derive filter options from the
+  // (resolved) deans present in the currently loaded page instead of a
+  // hardcoded list.
+  const deanOptions = Array.from(new Set(rows.map(deanDisplayName).filter(name => name !== '—')))
 
   function fth(label: string, col: string, opts: string[]) {
     return (
@@ -72,13 +103,17 @@ export default function Page() {
           <div className="card-hdr"><div className="card-title"><span className="ctitle-icon"><i className="lni lni-library"></i></span> Faculties</div></div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
-              <thead><tr><th style={{ width: 48 }}></th><th>Faculty Code</th><th>Faculty Name</th>{fth('Dean', 'dean', ['Dr. Ssekibuule Ronald', 'Prof. Mukasa Charles', 'Dr. Tendo Patrick'])}<th>Programmes</th>{/* <th>Course Units</th> */}</tr></thead>
+              <thead><tr><th style={{ width: 48 }}></th><th>Faculty Code</th><th>Faculty Name</th><th>Campus</th>{fth('Dean', 'deanName', deanOptions)}{/* <th>Programmes</th> — not returned by GET /api/v1/academic/faculties */}{/* <th>Course Units</th> */}</tr></thead>
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
                   : filteredRows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
                     : null}
+                {/* Previous row markup (pre GET /api/v1/academic/faculties integration) —
+                    kept for reference. `id`/`code`/`name`/`dean` are now
+                    `facultyGuid`/`facultyCode`/`facultyName`/`deanName`, and
+                    `programmes` is no longer returned by the real endpoint.
                 {filteredRows.map((r) => (
                   <tr key={r.id}>
                     <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>
@@ -86,6 +121,21 @@ export default function Page() {
                     <td><strong>{r.name}</strong></td>
                     <td>{r.dean}</td>
                     <td>{r.programmes}</td>
+                  </tr>
+                ))}
+                */}
+                {filteredRows.map((r) => (
+                  <tr key={r.facultyGuid}>
+                    <td>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}><i className="lni lni-pencil"></i> Edit</button>
+                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>
+                      </ActionMenu>
+                    </td>
+                    <td className="font-mono">{r.facultyCode}</td>
+                    <td><strong>{r.facultyName}</strong></td>
+                    <td>{r.campusName}</td>
+                    <td>{deanDisplayName(r)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -107,6 +157,24 @@ export default function Page() {
         updateFaculty={updateFaculty}
       />
       <Toast toast={toast} />
+
+      {deleteTarget && (
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
+            <div className="perm-delete-title">Delete {deleteTarget.facultyName}?</div>
+            <div className="perm-delete-sub">
+              This will permanently delete this faculty. This can&apos;t be undone.
+            </div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" disabled={deleteFaculty.isPending} onClick={confirmDeleteFaculty}>
+                <i className="lni lni-trash-can"></i> {deleteFaculty.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

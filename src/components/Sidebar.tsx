@@ -290,6 +290,14 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
 
         </div>
       </div>
+
+      <button
+        className="sb-toggle"
+        onClick={() => setPanelOpen(p => !p)}
+        aria-label={panelOpen ? 'Collapse menu' : 'Expand menu'}
+      >
+        <i className={`lni ${panelOpen ? 'lni-chevron-left' : 'lni-chevron-right'}`}></i>
+      </button>
     </div>
   )
 }

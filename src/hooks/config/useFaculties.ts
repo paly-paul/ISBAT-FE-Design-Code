@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Faculty, FacultyInput, createFaculty, getFaculties, updateFaculty } from '@/lib/api/academic/faculty'
+import { Faculty, FacultyInput, createFaculty, deleteFaculty, getFaculties, updateFaculty } from '@/lib/api/academic/faculty'
 
 const FACULTIES_KEY = ['faculties']
 
@@ -27,6 +27,14 @@ export function useUpdateFaculty() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: FacultyInput }) => updateFaculty(id, input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: FACULTIES_KEY }),
+  })
+}
+
+export function useDeleteFaculty() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => deleteFaculty(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: FACULTIES_KEY }),
   })
 }

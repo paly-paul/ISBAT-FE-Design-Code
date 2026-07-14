@@ -7,12 +7,7 @@ import { CreateEmployeeInput } from '@/lib/api/employee/employee'
 import { useCreateEmployee } from '@/hooks/employee/useEmployees'
 import { useDepartments } from '@/hooks/config/useDepartments'
 import { useDesignations } from '@/hooks/config/useDesignations'
-
-const NATIONALITIES = [
-  'Ugandan', 'Kenyan', 'Tanzanian', 'Rwandan', 'Burundian', 'South Sudanese',
-  'Ethiopian', 'Nigerian', 'Ghanaian', 'South African', 'Indian', 'Chinese',
-  'British', 'American', 'Other',
-]
+import { useCountries } from '@/hooks/config/useCountries'
 
 // Only category confirmed against the real create payload so far
 // ({ category: 1, categoryPrefix: 'AD' }) — add more once the backend
@@ -22,9 +17,10 @@ const CATEGORIES: { label: string; category: number; prefix: string }[] = [
 ]
 
 const TITLES = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof']
-// Numeric mappings below (sex, marital status, religion, country) aren't
-// confirmed by a backend lookup endpoint yet — sequential ids are a
-// placeholder guess, same as the other guessed dropdown enums in this file.
+// Numeric mappings below (sex, marital status, religion) aren't confirmed by
+// a backend lookup endpoint yet — sequential ids are a placeholder guess.
+// Country is the exception: it's backed by the real GET /api/v1/users/countries
+// list (useCountries), keyed by intCountryCode.
 const SEXES = ['Male', 'Female', 'Others']
 const MARITAL_STATUSES = ['Single', 'Married', 'Divorced', 'Widow', 'Widower', 'Separated']
 const RELIGIONS = ['Christian', 'Muslim', 'Hindu', 'Other']
@@ -78,6 +74,9 @@ export function NewEmployeeModal({ isOpen, onClose, showToast }: ModalProps) {
   const createEmployee = useCreateEmployee()
   const { data: departments = [] } = useDepartments()
   const { data: designations = [] } = useDesignations()
+  const { data: countries = [] } = useCountries()
+  const countryOptions = countries.map(c => ({ value: String(c.intCountryCode), label: c.countryName }))
+  const defaultCountryCode = countries.find(c => c.defaultCountry === 1)?.intCountryCode ?? 1
   const departmentOptions = departments.map(d => d.deptName)
   const selectedDept = departments.find(d => d.deptName === department)
   const designationOptions = selectedDept ? designations.filter(d => String(d.intDept) === String(selectedDept.intDept)).map(d => d.designationName) : []
@@ -160,7 +159,7 @@ export function NewEmployeeModal({ isOpen, onClose, showToast }: ModalProps) {
       sex: sexToNumber(sex),
       birthDate,
       placeOfBirth,
-      intCountryCode: NATIONALITIES.indexOf(country) + 1 || 1,
+      intCountryCode: country ? Number(country) : defaultCountryCode,
       natId,
       nationalId: nationalId.trim() || null,
       emailId,
@@ -249,7 +248,7 @@ export function NewEmployeeModal({ isOpen, onClose, showToast }: ModalProps) {
             </div>
             <div className="fg">
               <div className="lbl">Country</div>
-              <SearchSelect placeholder="Select…" options={NATIONALITIES} value={country} onChange={setCountry} />
+              <SearchSelect placeholder="Select…" options={countryOptions} value={country} onChange={setCountry} />
             </div>
             <div className="fg">
               <div className="lbl">National ID Type <span className="req">*</span></div>

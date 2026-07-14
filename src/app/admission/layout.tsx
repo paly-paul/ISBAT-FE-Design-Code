@@ -11,16 +11,13 @@ export default function AdmissionLayout({ children }: { children: React.ReactNod
   const [profileOpen, setProfileOpen] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const profileRef = useRef<HTMLDivElement>(null)
-  const prevPathname = useRef<string | null>(null)
   const router = useRouter()
 
   const currentPage = pathname.split('/').pop() ?? 'dashboard'
 
+  // Scroll to top on navigation — the sidebar panel is left as the user set
+  // it (open/closed, collapsed sections) rather than being force-closed here.
   useEffect(() => {
-    if (prevPathname.current !== null && prevPathname.current !== pathname) {
-      setPanelOpen(false)
-    }
-    prevPathname.current = pathname
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [pathname])
 

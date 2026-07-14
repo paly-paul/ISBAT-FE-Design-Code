@@ -9,7 +9,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { NewCampusModal } from '@/components/modals/academic/NewCampusModal'
 import { EditCampusModal } from '@/components/modals/academic/EditCampusModal'
-import { useCampuses, useCampusDropdown, useCreateCampus, useUpdateCampus, Campus } from '@/hooks/config/useCampuses'
+import { useCampuses, useCampusDropdown, useCreateCampus, useUpdateCampus, useDeleteCampus, Campus } from '@/hooks/config/useCampuses'
 
 export default function Page() {
   const router = useRouter()
@@ -18,11 +18,13 @@ export default function Page() {
   const [filters, setFilters]       = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingCampus, setEditingCampus] = useState<Campus | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Campus | null>(null)
 
   const { data: rows = [], isLoading } = useCampuses()
   const { data: campusDropdown = [] } = useCampusDropdown()
   const createCampus = useCreateCampus()
   const updateCampus = useUpdateCampus()
+  const deleteCampus = useDeleteCampus()
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -32,6 +34,14 @@ export default function Page() {
   function openEditModal(campus: Campus) {
     setEditingCampus(campus)
     openModal('edit-campus-modal')
+  }
+
+  function confirmDeleteCampus() {
+    if (!deleteTarget) return
+    deleteCampus.mutate(deleteTarget.campusGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Campus deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete campus', 'error'),
+    })
   }
 
   useEffect(() => {
@@ -123,6 +133,9 @@ export default function Page() {
                         <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
                           <i className="lni lni-pencil"></i> Edit
                         </button>
+                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                          <i className="lni lni-trash-can"></i> Delete
+                        </button>
                       </ActionMenu>
                     </td>
                     <td className="font-mono font-bold">{r.campusCode}</td>
@@ -151,6 +164,24 @@ export default function Page() {
         updateCampus={updateCampus}
       />
       <Toast toast={toast} />
+
+      {deleteTarget && (
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
+            <div className="perm-delete-title">Delete {deleteTarget.campusName}?</div>
+            <div className="perm-delete-sub">
+              This will permanently delete this campus. This can&apos;t be undone.
+            </div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" disabled={deleteCampus.isPending} onClick={confirmDeleteCampus}>
+                <i className="lni lni-trash-can"></i> {deleteCampus.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
