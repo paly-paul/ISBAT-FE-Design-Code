@@ -2,9 +2,20 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
+import { FailurePopup } from './FailurePopup'
+import { CountryInput } from '@/lib/api/academic/country'
+import { AuthError } from '@/lib/api/client'
 
-export function NewCountryModal({ isOpen, onClose, showToast }: ModalProps) {
+interface NewCountryModalProps extends ModalProps {
+  createCountry: {
+    mutate: (input: CountryInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
+    isPending: boolean
+  }
+}
+
+export function NewCountryModal({ isOpen, onClose, showToast, createCountry }: NewCountryModalProps) {
   const [saved, setSaved]                       = useState(false)
+  const [failure, setFailure]                   = useState<string | null>(null)
   const [countryCode, setCountryCode]           = useState('')
   const [countryName, setCountryName]           = useState('')
   const [nationality, setNationality]           = useState('')
@@ -15,18 +26,39 @@ export function NewCountryModal({ isOpen, onClose, showToast }: ModalProps) {
   if (!isOpen) return null
 
   function handleClose() {
-    setSaved(false); setCountryCode(''); setCountryName(''); setNationality('')
+    setSaved(false); setFailure(null); setCountryCode(''); setCountryName(''); setNationality('')
     setCountryPrefix(''); setDefaultCountry(false); setErrors({})
     onClose()
   }
 
+  // Mirrors the real POST /api/v1/users/countries validation rules (all
+  // fields required; countryCode/countryPrefix max 10 chars, countryName/
+  // nationality max 100) so these surface inline instead of only after a
+  // failed request.
   function validate() {
     const e: Record<string, string> = {}
-    if (!countryCode.trim())   e.countryCode   = 'Country Code is required'
-    if (!countryName.trim())   e.countryName   = 'Country Name is required'
-    if (!countryPrefix.trim()) e.countryPrefix = 'Dial Prefix is required'
+    if (!countryCode.trim())        e.countryCode   = 'Country Code is required'
+    else if (countryCode.trim().length > 10) e.countryCode = 'Country Code must be 10 characters or fewer'
+    if (!countryName.trim())        e.countryName   = 'Country Name is required'
+    else if (countryName.trim().length > 100) e.countryName = 'Country Name must be 100 characters or fewer'
+    if (!nationality.trim())        e.nationality   = 'Nationality is required'
+    else if (nationality.trim().length > 100) e.nationality = 'Nationality must be 100 characters or fewer'
+    if (!countryPrefix.trim())      e.countryPrefix = 'Dial Prefix is required'
+    else if (countryPrefix.trim().length > 10) e.countryPrefix = 'Dial Prefix must be 10 characters or fewer'
     setErrors(e)
     return Object.keys(e).length === 0
+  }
+
+  // Maps the backend's { code, errors } failure shape (see countries.md) to
+  // an inline field error where the cause is actionable right there
+  // (duplicate countryCode); validation_error shows the failure popup instead.
+  function handleCreateError(error: Error) {
+    const code = error instanceof AuthError ? error.code : undefined
+    if (code === 'bad_request') {
+      setErrors(prev => ({ ...prev, countryCode: error.message || 'A country with this code already exists.' }))
+      return
+    }
+    setFailure(error.message || 'Failed to add country. Please try again.')
   }
 
   if (saved) {
@@ -34,6 +66,16 @@ export function NewCountryModal({ isOpen, onClose, showToast }: ModalProps) {
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
           <SuccessPopup title="Country Added!" subtitle="The new country has been saved successfully." onClose={handleClose} />
+        </div>
+      </div>
+    )
+  }
+
+  if (failure) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup title="Couldn't Add Country" subtitle={failure} onClose={() => setFailure(null)} />
         </div>
       </div>
     )
@@ -52,8 +94,8 @@ export function NewCountryModal({ isOpen, onClose, showToast }: ModalProps) {
             <input
               className="ctrl font-mono uppercase"
               type="text"
-              placeholder="e.g. UGA"
-              maxLength={3}
+              placeholder="e.g. UG"
+              maxLength={10}
               value={countryCode}
               onChange={e => { setCountryCode(e.target.value); if (errors.countryCode) setErrors(p => ({ ...p, countryCode: '' })) }}
               style={errors.countryCode ? { borderColor: 'var(--red)' } : undefined}
@@ -67,7 +109,7 @@ export function NewCountryModal({ isOpen, onClose, showToast }: ModalProps) {
               type="tel"
               inputMode="numeric"
               placeholder="e.g. +256"
-              maxLength={6}
+              maxLength={10}
               value={countryPrefix}
               onChange={e => { setCountryPrefix(e.target.value.replace(/[^0-9+]/g, '')); if (errors.countryPrefix) setErrors(p => ({ ...p, countryPrefix: '' })) }}
               style={errors.countryPrefix ? { borderColor: 'var(--red)' } : undefined}
@@ -80,6 +122,7 @@ export function NewCountryModal({ isOpen, onClose, showToast }: ModalProps) {
               className="ctrl"
               type="text"
               placeholder="e.g. Uganda"
+              maxLength={100}
               value={countryName}
               onChange={e => { setCountryName(e.target.value); if (errors.countryName) setErrors(p => ({ ...p, countryName: '' })) }}
               style={errors.countryName ? { borderColor: 'var(--red)' } : undefined}
@@ -87,14 +130,17 @@ export function NewCountryModal({ isOpen, onClose, showToast }: ModalProps) {
             {errors.countryName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.countryName}</p>}
           </div>
           <div className="fg span2">
-            <div className="lbl">Nationality</div>
+            <div className="lbl">Nationality <span className="req">*</span></div>
             <input
               className="ctrl"
               type="text"
               placeholder="e.g. Ugandan"
+              maxLength={100}
               value={nationality}
-              onChange={e => setNationality(e.target.value)}
+              onChange={e => { setNationality(e.target.value); if (errors.nationality) setErrors(p => ({ ...p, nationality: '' })) }}
+              style={errors.nationality ? { borderColor: 'var(--red)' } : undefined}
             />
+            {errors.nationality && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.nationality}</p>}
           </div>
           <div className="fg span2">
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginTop: 4 }}>
@@ -110,8 +156,21 @@ export function NewCountryModal({ isOpen, onClose, showToast }: ModalProps) {
         </div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => { if (validate()) setSaved(true) }}>
-            <i className="lni lni-checkmark"></i> Add Country
+          <button
+            className="btn btn-primary"
+            disabled={createCountry.isPending}
+            onClick={() => {
+              if (!validate()) return
+              createCountry.mutate(
+                { countryCode, countryName, nationality, countryPrefix, defaultCountry: defaultCountry ? 1 : 0 },
+                {
+                  onSuccess: () => { setSaved(true); showToast('Country added successfully') },
+                  onError: handleCreateError,
+                },
+              )
+            }}
+          >
+            <i className="lni lni-checkmark"></i> {createCountry.isPending ? 'Adding…' : 'Add Country'}
           </button>
         </div>
       </div>

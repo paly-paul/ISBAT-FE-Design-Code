@@ -1,4 +1,7 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? ''
+import { AuthError, post, apiPost } from './api/client'
+
+export { AuthError }
+
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 export const MOCK_CREDENTIALS = {
@@ -7,77 +10,77 @@ export const MOCK_CREDENTIALS = {
   otp: '123456',
 } as const
 
-export class AuthError extends Error {
-  constructor(
-    public readonly code: string,
-    message?: string,
-  ) {
-    super(message ?? code)
-    this.name = 'AuthError'
-  }
-}
-
-async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(body),
-  })
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ code: 'unknown' }))
-    throw new AuthError(err.code ?? 'unknown', err.message)
-  }
-
-  if (res.status === 204) return undefined as T
-  return res.json() as Promise<T>
-}
-
 // Staff login
 
-export interface StaffLoginResult {
-  requiresOtp: boolean
-  challengeId: string
-  otpChannel: 'email' | 'sms'
-  maskedTarget: string
-}
+export type StaffLoginResult =
+  | { requiresOtp: true; challengeId: string; otpChannel: 'email' | 'sms'; maskedTarget: string }
+  | { requiresOtp: false; displayName?: string; redirect: string }
 
-export function staffLogin(staffId: string, password: string, trustDevice: boolean) {
+export function staffLogin(staffId: string, password: string, trustDevice: boolean): Promise<StaffLoginResult> {
   if (MOCK_AUTH) {
     if (staffId !== MOCK_CREDENTIALS.staff.id || password !== MOCK_CREDENTIALS.staff.password)
       return Promise.reject(new AuthError('bad_credentials'))
-    return Promise.resolve<StaffLoginResult>({
+    return Promise.resolve({
       requiresOtp: true,
       challengeId: MOCK_CREDENTIALS.staff.challengeId,
       otpChannel: 'email',
       maskedTarget: 'm***@isbat.ac.ug',
     })
   }
-  return post<StaffLoginResult>('/api/auth/staff/login', { staffId, password, trustDevice })
+  // The backend currently authenticates purely via Set-Cookie with no JSON
+  // body on success — data may be null. displayName then stays unknown here;
+  // the academic layout's refreshSession() fallback fetches it on mount.
+  return apiPost<{ displayName: string } | null>('/api/v1/users/auth/login', {
+    Username: staffId,
+    Password: password,
+  }).then(data => ({ requiresOtp: false, displayName: data?.displayName, redirect: '/academic' }))
 }
 
 // Student login
 
-export interface StudentLoginResult {
-  requiresOtp: boolean
-  challengeId: string
-  otpChannel: 'email' | 'sms'
-  maskedTarget: string
-}
+export type StudentLoginResult =
+  | { requiresOtp: true; challengeId: string; otpChannel: 'email' | 'sms'; maskedTarget: string }
+  | { requiresOtp: false; displayName?: string; redirect: string }
 
-export function studentLogin(studentId: string, password: string) {
+export function studentLogin(studentId: string, password: string): Promise<StudentLoginResult> {
   if (MOCK_AUTH) {
     if (studentId !== MOCK_CREDENTIALS.student.id || password !== MOCK_CREDENTIALS.student.password)
       return Promise.reject(new AuthError('bad_credentials'))
-    return Promise.resolve<StudentLoginResult>({
+    return Promise.resolve({
       requiresOtp: true,
       challengeId: MOCK_CREDENTIALS.student.challengeId,
       otpChannel: 'email',
       maskedTarget: 's***@student.isbat.ac.ug',
     })
   }
-  return post<StudentLoginResult>('/api/auth/student/login', { studentId, password })
+  // See staffLogin — the backend may respond 2xx with no JSON body on success.
+  return apiPost<{ displayName: string } | null>('/api/v1/users/auth/login', {
+    Username: studentId,
+    Password: password,
+  }).then(data => ({ requiresOtp: false, displayName: data?.displayName, redirect: '' }))
+}
+
+// Session refresh — relies on the httpOnly refresh-token cookie set at login;
+// no body needed. Used to silently restore/validate a session (e.g. on layout mount).
+
+export interface RefreshResult {
+  displayName?: string
+}
+
+export function refreshSession(): Promise<RefreshResult> {
+  if (MOCK_AUTH) {
+    return Promise.resolve({ displayName: 'Mock User' })
+  }
+  // Like login, this may respond 2xx with no JSON body (cookies-only) — treat
+  // that as a valid, identity-less refresh rather than a failure.
+  return apiPost<RefreshResult | null>('/api/v1/users/auth/refresh', {}).then(data => data ?? {})
+}
+
+// Logout — invalidates the httpOnly session cookie; no body needed.
+
+export function logout(): Promise<boolean> {
+  if (MOCK_AUTH) return Promise.resolve(true)
+  return apiPost<boolean>('/api/v1/users/auth/logout', {})
 }
 
 // OTP verify
@@ -86,6 +89,7 @@ export interface OtpVerifyResult {
   sessionId: string
   role: string
   redirect: string
+  displayName: string
 }
 
 export function otpVerify(challengeId: string, code: string) {
@@ -97,6 +101,7 @@ export function otpVerify(challengeId: string, code: string) {
       sessionId: 'mock-session-id',
       role: isStudent ? 'student' : 'staff',
       redirect: isStudent ? '' : '/academic',
+      displayName: isStudent ? 'Mock Student' : 'Mock User',
     })
   }
   return post<OtpVerifyResult>('/api/auth/otp/verify', { challengeId, code })

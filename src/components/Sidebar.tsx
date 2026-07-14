@@ -56,9 +56,16 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
   function navAcademic(id: string) { router.push('/academic/' + id) }
   function navStudent(id: string) { router.push('/student/' + id) }
   function navEmployee(id: string) { router.push('/employee/' + id) }
+  function navConfig(id: string) { router.push('/config/' + id) }
 
-  function sbItem(id: string, label: string, icon: string, badge?: { text: string; warn?: boolean }, prefix: 'academic' | 'student' | 'employee' = 'academic') {
-    const go = prefix === 'student' ? navStudent : prefix === 'employee' ? navEmployee : navAcademic
+  function sbItem(id: string, label: string, icon: string, badge?: { text: string; warn?: boolean }, prefix: 'academic' | 'student' | 'employee' | 'config' = 'academic') {
+    const go = prefix === 'student'
+      ? navStudent
+      : prefix === 'employee'
+        ? navEmployee
+        : prefix === 'config'
+          ? navConfig
+          : navAcademic
     return (
       <div className={`sb-item${currentPage === id ? ' active' : ''}`} onClick={() => go(id)}>
         <span className="sb-icon"><i className={`lni lni-${icon}`}></i></span>
@@ -266,16 +273,16 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
             </div>
 
             {sbSection('sc-config', 'Core Configuration', <>
-              {sbItem('faculty-master', 'Faculty Master', 'library')}
-              {sbItem('department-master', 'Department Master', 'briefcase')}
-              {sbItem('designation-master', 'Designation Master', 'tag')}
-              {sbItem('stream-master', 'Specialization', 'certificate')}
-              {sbItem('skill', 'Skill Master', 'bulb')}
-              {sbItem('ledger', 'Ledger Master', 'book')}
-              {sbItem('campus-master', 'Campus Master', 'home')}
-              {sbItem('currency-master', 'Currency Master', 'dollar')}
-              {sbItem('country-master', 'Country Master', 'world')}
-              {sbItem('permission-master', 'Permission Master', 'lock')}
+              {sbItem('faculty-master', 'Faculty Master', 'library', undefined, 'config')}
+              {sbItem('department-master', 'Department Master', 'briefcase', undefined, 'config')}
+              {sbItem('designation-master', 'Designation Master', 'tag', undefined, 'config')}
+              {sbItem('stream-master', 'Specialization', 'certificate', undefined, 'config')}
+              {sbItem('skill', 'Skill Master', 'bulb', undefined, 'config')}
+              {sbItem('ledger', 'Ledger Master', 'book', undefined, 'config')}
+              {sbItem('campus-master', 'Campus Master', 'home', undefined, 'config')}
+              {sbItem('currency-master', 'Currency Master', 'dollar', undefined, 'config')}
+              {sbItem('country-master', 'Country Master', 'world', undefined, 'config')}
+              {sbItem('permission-master', 'Permission Master', 'lock', undefined, 'config')}
             </>)}
 
             <div className="sb-panel-footer">S0 · Core Config</div>

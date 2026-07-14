@@ -8,6 +8,8 @@ import { EditEmployeeModal } from '@/components/modals/employee/EditEmployeeModa
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { useEmployees } from '@/hooks/employee/useEmployees'
 
 export default function Page() {
   const router = useRouter()
@@ -15,11 +17,17 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [editingEmployeeGuid, setEditingEmployeeGuid] = useState<string | null>(null)
 
   function nav(id: string) { router.push('/employee/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  function openEditModal(employeeGuid: string) {
+    setEditingEmployeeGuid(employeeGuid)
+    openModal('edit-employee-modal')
+  }
 
   useEffect(() => {
     function closeFilter(e: MouseEvent) {
@@ -30,15 +38,37 @@ export default function Page() {
     return () => document.removeEventListener('click', closeFilter)
   }, [])
 
-  const rows = [
-    { id: 'EMP-0001', name: 'Dr. Nakimuli Sarah',  email: 'snakimuli@isbatuniversity.ac.ug', qualification: 'PhD', qualDetail: 'PhD Computer Science',    qualSub: 'Makerere University · 2018',         specialisation: 'Machine Learning, Algorithms',     faculty: 'FCT', designation: 'Senior Lecturer', statusBadge: 'badge-green', statusLabel: 'Active' },
-    { id: 'EMP-0002', name: 'Prof. Mukasa Charles', email: 'cmukasa@isbatuniversity.ac.ug', qualification: "Master's", qualDetail: 'PhD Business Administration', qualSub: 'University of Cape Town · 2012',      specialisation: 'Strategic Management, Finance',    faculty: 'FBM', designation: 'Senior Lecturer', statusBadge: 'badge-green', statusLabel: 'Active' },
-    { id: 'EMP-0003', name: 'Dr. Tendo Patrick',   email: 'ptendo@isbatuniversity.ac.ug',  qualification: 'PhD', qualDetail: 'PhD Civil Engineering',     qualSub: 'Kyambogo University · 2016',         specialisation: 'Structural Design, Geotechnics',   faculty: 'FEN', designation: 'Senior Lecturer', statusBadge: 'badge-green', statusLabel: 'Active' },
-    { id: 'EMP-0004', name: 'Ms. Acen Lillian',    email: 'lacen@isbatuniversity.ac.ug',   qualification: "Master's", qualDetail: 'MSc Information Technology',  qualSub: 'Makerere University · 2021',         specialisation: 'Web Development, Databases',       faculty: 'FCT', designation: 'Lecturer',        statusBadge: 'badge-green', statusLabel: 'Active' },
-    { id: 'EMP-0005', name: 'Mr. Okello Brian',    email: 'bokello@isbatuniversity.ac.ug', qualification: "Bachelor's", qualDetail: 'MBA Finance',               qualSub: 'Strathmore University · 2020',       specialisation: 'Corporate Finance, Accounting',    faculty: 'FBM', designation: 'Assistant Lecturer', statusBadge: 'badge-amber', statusLabel: 'On Leave' },
-  ]
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
+  // Previous mock shape (pre GET /api/v1/users/employees integration) — kept
+  // for reference until the remaining fields (qualification, specialisation,
+  // faculty, designation) are confirmed against the real backend contract.
+  // const rows = [
+  //   { id: 'EMP-0001', name: 'Dr. Nakimuli Sarah',  email: 'snakimuli@isbatuniversity.ac.ug', qualification: 'PhD', qualDetail: 'PhD Computer Science',    qualSub: 'Makerere University · 2018',         specialisation: 'Machine Learning, Algorithms',     faculty: 'FCT', designation: 'Senior Lecturer', statusBadge: 'badge-green', statusLabel: 'Active' },
+  //   { id: 'EMP-0002', name: 'Prof. Mukasa Charles', email: 'cmukasa@isbatuniversity.ac.ug', qualification: "Master's", qualDetail: 'PhD Business Administration', qualSub: 'University of Cape Town · 2012',      specialisation: 'Strategic Management, Finance',    faculty: 'FBM', designation: 'Senior Lecturer', statusBadge: 'badge-green', statusLabel: 'Active' },
+  //   { id: 'EMP-0003', name: 'Dr. Tendo Patrick',   email: 'ptendo@isbatuniversity.ac.ug',  qualification: 'PhD', qualDetail: 'PhD Civil Engineering',     qualSub: 'Kyambogo University · 2016',         specialisation: 'Structural Design, Geotechnics',   faculty: 'FEN', designation: 'Senior Lecturer', statusBadge: 'badge-green', statusLabel: 'Active' },
+  //   { id: 'EMP-0004', name: 'Ms. Acen Lillian',    email: 'lacen@isbatuniversity.ac.ug',   qualification: "Master's", qualDetail: 'MSc Information Technology',  qualSub: 'Makerere University · 2021',         specialisation: 'Web Development, Databases',       faculty: 'FCT', designation: 'Lecturer',        statusBadge: 'badge-green', statusLabel: 'Active' },
+  //   { id: 'EMP-0005', name: 'Mr. Okello Brian',    email: 'bokello@isbatuniversity.ac.ug', qualification: "Bachelor's", qualDetail: 'MBA Finance',               qualSub: 'Strathmore University · 2020',       specialisation: 'Corporate Finance, Accounting',    faculty: 'FBM', designation: 'Assistant Lecturer', statusBadge: 'badge-amber', statusLabel: 'On Leave' },
+  // ]
+
+  // Shaped after GET /api/v1/users/employees ({ data: { items: [...] } }) —
+  // employeeGuid is kept as the row key only; shortCode is the
+  // user-facing identifier shown in the table. Backed by react-query so a
+  // successful create (which invalidates the 'employees' query) refetches
+  // the list and the new row shows up here automatically.
+  const { data: rows = [], isLoading } = useEmployees()
+  // Newest first — employeeGuid isn't sequential, but shortCode's numeric
+  // suffix (e.g. 'AD/00121') is assigned in order, so it's the best
+  // available proxy for creation order (the API doesn't return a created-date).
+  const sortedRows = [...rows].sort((a, b) => {
+    const numA = Number(a.shortCode.split('/').pop())
+    const numB = Number(b.shortCode.split('/').pop())
+    return numB - numA
+  })
+  const filteredRows = sortedRows.filter(r =>
+    Object.entries(filters).every(([k, v]) => {
+      if (!v.length) return true
+      const cell = k === 'sex' ? (r.sex === 1 ? 'Male' : 'Female') : String((r as unknown as Record<string, unknown>)[k])
+      return v.includes(cell)
+    })
   )
 
   function fth(label: string, col: string, opts: string[]) {
@@ -71,15 +101,21 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-user"></i></span> Employees</div>
-            <span className="badge badge-blue"><i className="lni lni-users"></i> 5 total</span>
+            <span className="badge badge-blue"><i className="lni lni-users"></i> {rows.length} total</span>
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
+              {/* Previous header (pre GET /api/v1/users/employees integration) — kept for reference.
               <thead><tr><th style={{ width: 48 }}></th><th>ID</th><th>Name</th>{fth('Highest Qualification', 'qualification', ["PhD", "Master's", "Bachelor's"])}<th>Specialisation</th>{fth('Faculty', 'faculty', ['FCT', 'FBM', 'FEN'])}{fth('Designation', 'designation', ['Senior Lecturer', 'Lecturer', 'Assistant Lecturer', 'Adjunct'])}{fth('Status', 'status', ['Active', 'Inactive'])}</tr></thead>
+              */}
+              <thead><tr><th style={{ width: 48 }}></th><th>Short Code</th><th>Name</th>{fth('Sex', 'sex', ['Male', 'Female'])}{fth('Status', 'status', ['Active', 'Inactive'])}</tr></thead>
               <tbody>
-                {filteredRows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
-                  : null}
+                {isLoading
+                  ? <TableLoadingState colSpan={999} />
+                  : filteredRows.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                    : null}
+                {/* Previous row markup (pre GET /api/v1/users/employees integration) — kept for reference.
                 {filteredRows.map((r, i) => (
                   <tr key={i}>
                     <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => openModal('edit-employee-modal')}><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>
@@ -92,13 +128,28 @@ export default function Page() {
                     <td><span className={`badge ${r.statusBadge}`}><span className="bdot"></span>{r.statusLabel}</span></td>
                   </tr>
                 ))}
+                */}
+                {filteredRows.map(r => (
+                  <tr key={r.employeeGuid}>
+                    <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.employeeGuid)}><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>
+                    <td className="font-mono text-b700">{r.shortCode}</td>
+                    <td><strong>{r.empName}</strong><div className="text-[var(--fs-xs)] text-g500">{r.title}</div></td>
+                    <td>{r.sex === 1 ? 'Male' : 'Female'}</td>
+                    <td><span className={`badge ${r.status === 'Active' ? 'badge-green' : 'badge-amber'}`}><span className="bdot"></span>{r.status}</span></td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </ScrollTable>
         </div>
       </div>
       <NewEmployeeModal isOpen={openModals.has('new-employee-modal')} onClose={() => closeModal('new-employee-modal')} showToast={showToast} />
-      <EditEmployeeModal isOpen={openModals.has('edit-employee-modal')} onClose={() => closeModal('edit-employee-modal')} showToast={showToast} />
+      <EditEmployeeModal
+        isOpen={openModals.has('edit-employee-modal')}
+        onClose={() => closeModal('edit-employee-modal')}
+        showToast={showToast}
+        employeeGuid={editingEmployeeGuid}
+      />
       <Toast toast={toast} />
     </>
   )

@@ -1,60 +1,48 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import { PermissionGroup, PermissionGroupInput } from '@/lib/api/academic/permissionGroup'
+import { moduleIcon, moduleLabel } from '@/hooks/users/usePermissionCatalog'
+import { usePermissionWizard } from '@/hooks/users/usePermissionWizard'
 
-const MODULES = ['Admission', 'Academic', 'Student', 'Employee', 'Finance', 'Core Configuration']
-
-const MODULE_PERMISSIONS: Record<string, string[]> = {
-  Admission: ['View Admission', 'Add Enquiry', 'Approve Application', 'Reject Application', 'Manage Registration'],
-  Academic: ['View Academic', 'Manage Programmes', 'Manage Timetable', 'Approve Results', 'Manage Batches'],
-  Student: ['View Student', 'Add Student', 'Edit Student', 'Deactivate Student'],
-  Employee: ['View Employee', 'Add Employee', 'Edit Employee', 'Manage Designations'],
-  Finance: ['View Finance', 'Manage Fee Structure', 'Approve Payments', 'Reconcile Accounts'],
-  'Core Configuration': ['View Configuration', 'Manage Masters', 'Manage Permissions'],
+interface EditPermissionModalProps extends ModalProps {
+  permissionGroup: PermissionGroup | null
+  updatePermissionGroup: {
+    mutate: (variables: { id: string; input: PermissionGroupInput }, options?: { onSuccess?: () => void }) => void
+    isPending: boolean
+  }
 }
 
-const MODULE_ICON: Record<string, string> = {
-  Admission: 'clipboard',
-  Academic: 'graduation',
-  Student: 'user',
-  Employee: 'briefcase',
-  Finance: 'dollar',
-  'Core Configuration': 'cog',
-}
-
-interface ModuleBlock {
-  module: string
-  open: boolean
-  permissions: string[]
-}
-
-const INITIAL_BLOCKS: ModuleBlock[] = [
-  { module: 'Admission', open: true,  permissions: ['View Admission', 'Manage Registration'] },
-  { module: 'Academic',   open: false, permissions: ['View Academic'] },
-]
-
-export function EditPermissionModal({ isOpen, onClose, showToast }: ModalProps) {
-  const [saved, setSaved] = useState(false)
-  const [confirming, setConfirming] = useState(false)
-  const [groupName, setGroupName] = useState('Registrar')
-  const [selectedModule, setSelectedModule] = useState('')
-  const [blocks, setBlocks] = useState<ModuleBlock[]>(INITIAL_BLOCKS)
-  const [pendingScrollTo, setPendingScrollTo] = useState<string | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
-  const blockRefs = useRef<Partial<Record<string, HTMLDivElement>>>({})
+export function EditPermissionModal({ isOpen, onClose, showToast, permissionGroup, updatePermissionGroup }: EditPermissionModalProps) {
+  const {
+    moduleOptions, permissionsByModule, pagesByModule, permissionNameById, moduleByPermissionId,
+    saved, setSaved, confirming, setConfirming,
+    groupName, setGroupName, selectedModule, setSelectedModule,
+    blocks, blockRefs, deleteTarget, setDeleteTarget, deleteTargetBlock,
+    globalSearch, setGlobalSearch, globalMatches,
+    activeBlocks, canSubmit,
+    handleAddModule, handleGlobalSelect, toggleBlockOpen, updateBlockSearch,
+    toggleAll, togglePermission, confirmDelete, seedFromGroupPermissions, resetWizard,
+  } = usePermissionWizard()
 
   useEffect(() => {
-    if (!pendingScrollTo) return
-    blockRefs.current[pendingScrollTo]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    setPendingScrollTo(null)
-  }, [pendingScrollTo])
+    if (isOpen && permissionGroup) {
+      seedFromGroupPermissions(permissionGroup.group, permissionGroup.permissions)
+      setConfirming(false)
+      setSelectedModule('')
+      setDeleteTarget(null)
+      setGlobalSearch('')
+    }
+    // Re-seed once the catalog finishes loading too, so ids aren't stuck
+    // under the 'Other' fallback bucket while moduleByPermissionId is empty.
+  }, [isOpen, permissionGroup, moduleByPermissionId])
 
-  if (!isOpen) return null
+  if (!isOpen || !permissionGroup) return null
 
   function handleClose() {
-    setSaved(false); setConfirming(false); setGroupName('Registrar'); setSelectedModule(''); setBlocks(INITIAL_BLOCKS); setDeleteTarget(null)
+    resetWizard()
     onClose()
   }
 
@@ -68,51 +56,18 @@ export function EditPermissionModal({ isOpen, onClose, showToast }: ModalProps) 
     )
   }
 
-  function handleAddModule() {
-    if (!selectedModule || !groupName.trim()) return
-    setBlocks(prev => {
-      const exists = prev.find(b => b.module === selectedModule)
-      if (exists) return prev.map(b => b.module === selectedModule ? { ...b, open: true } : b)
-      return [...prev, { module: selectedModule, open: true, permissions: [] }]
-    })
-    setPendingScrollTo(selectedModule)
+  function handleSave() {
+    if (!permissionGroup) return
+    const permissions = activeBlocks.flatMap(b => b.permissions)
+    updatePermissionGroup.mutate(
+      { id: permissionGroup.id, input: { group: groupName, description: permissionGroup.description, permissions } },
+      { onSuccess: () => { setSaved(true); showToast('Permission group updated successfully') } },
+    )
   }
-
-  function toggleBlockOpen(module: string) {
-    setBlocks(prev => prev.map(b => b.module === module ? { ...b, open: !b.open } : b))
-  }
-
-  function toggleAll(module: string) {
-    setBlocks(prev => prev.map(b => {
-      if (b.module !== module) return b
-      const all = MODULE_PERMISSIONS[module]
-      const isAllChecked = b.permissions.length === all.length
-      return { ...b, permissions: isAllChecked ? [] : [...all] }
-    }))
-  }
-
-  function togglePermission(module: string, perm: string) {
-    setBlocks(prev => prev.map(b => {
-      if (b.module !== module) return b
-      const has = b.permissions.includes(perm)
-      return { ...b, permissions: has ? b.permissions.filter(p => p !== perm) : [...b.permissions, perm] }
-    }))
-  }
-
-  function confirmDelete() {
-    if (!deleteTarget) return
-    setBlocks(prev => prev.filter(b => b.module !== deleteTarget))
-    delete blockRefs.current[deleteTarget]
-    setDeleteTarget(null)
-  }
-
-  const deleteTargetBlock = blocks.find(b => b.module === deleteTarget)
-  const activeBlocks = blocks.filter(b => b.permissions.length > 0)
-  const canSubmit = groupName.trim().length > 0 && activeBlocks.length > 0
 
   return (
     <div className="modal-overlay open" id="edit-permission-modal">
-      <div className="modal modal-lg modal-flex" style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+      <div className="modal modal-xl modal-flex" style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Permission Group</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
@@ -121,7 +76,7 @@ export function EditPermissionModal({ isOpen, onClose, showToast }: ModalProps) 
         <div className="modal-scroll">
           {!confirming ? (
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-              <div className="g2">
+              <div className="g3">
                 <div className="fg">
                   <div className="lbl">Group Name <span className="req">*</span></div>
                   <input className="ctrl" type="text" value={groupName} onChange={e => setGroupName(e.target.value)} />
@@ -130,7 +85,7 @@ export function EditPermissionModal({ isOpen, onClose, showToast }: ModalProps) 
                   <div className="lbl">Module</div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <SearchSelect placeholder="Select module…" options={MODULES} value={selectedModule} onChange={setSelectedModule} />
+                      <SearchSelect placeholder="Select module…" options={moduleOptions} value={selectedModule} onChange={setSelectedModule} />
                     </div>
                     <button
                       type="button"
@@ -144,6 +99,33 @@ export function EditPermissionModal({ isOpen, onClose, showToast }: ModalProps) 
                     </button>
                   </div>
                 </div>
+                <div className="fg" style={{ position: 'relative' }}>
+                  <div className="lbl">Search Permissions</div>
+                  <input
+                    className="ctrl"
+                    type="text"
+                    placeholder={!groupName.trim() ? 'Enter a group name first' : 'Search by permission name…'}
+                    value={globalSearch}
+                    disabled={!groupName.trim()}
+                    onChange={e => setGlobalSearch(e.target.value)}
+                  />
+                  {globalMatches.length > 0 && (
+                    <div className="ss-drop" style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, zIndex: 50 }}>
+                      <div className="ss-opts">
+                        {globalMatches.map(({ module, permission }) => (
+                          <div
+                            key={`${module}-${permission.intPermission}`}
+                            className="col-filter-opt"
+                            onClick={() => handleGlobalSelect(module, permission)}
+                          >
+                            {permission.permissionName}
+                            <span style={{ color: 'var(--g400)', marginLeft: 6, fontSize: 11 }}>{moduleLabel(module)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {blocks.length > 0 ? (
@@ -151,8 +133,12 @@ export function EditPermissionModal({ isOpen, onClose, showToast }: ModalProps) 
                   <div className="lbl">Module Permissions</div>
                   <div className="perm-blocks-scroll">
                     {blocks.map(b => {
-                      const all = MODULE_PERMISSIONS[b.module]
-                      const allChecked = b.permissions.length === all.length
+                      const all = permissionsByModule[b.module] ?? []
+                      const allChecked = all.length > 0 && b.permissions.length === all.length
+                      const term = b.search.trim().toLowerCase()
+                      const visiblePages = (pagesByModule[b.module] ?? [])
+                        .map(pg => ({ page: pg.page, permissions: term ? pg.permissions.filter(p => p.permissionName.toLowerCase().includes(term)) : pg.permissions }))
+                        .filter(pg => pg.permissions.length > 0)
                       return (
                         <div
                           key={b.module}
@@ -163,8 +149,8 @@ export function EditPermissionModal({ isOpen, onClose, showToast }: ModalProps) 
                             <span onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center' }}>
                               <input type="checkbox" checked={allChecked} onChange={() => toggleAll(b.module)} />
                             </span>
-                            <i className={`lni lni-${MODULE_ICON[b.module]}`}></i>
-                            {b.module}
+                            <i className={`lni lni-${moduleIcon(b.module)}`}></i>
+                            {moduleLabel(b.module)}
                             <span className="badge badge-blue" style={{ marginLeft: 6 }}>{b.permissions.length}/{all.length}</span>
                             <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>
                               <button
@@ -179,11 +165,32 @@ export function EditPermissionModal({ isOpen, onClose, showToast }: ModalProps) 
                             </span>
                           </div>
                           <div className="perm-block-body">
-                            {all.map(p => (
-                              <label key={p} className="chk-item" style={{ cursor: 'pointer' }}>
-                                <input type="checkbox" checked={b.permissions.includes(p)} onChange={() => togglePermission(b.module, p)} />
-                                <span className="text-sm text-g700">{p}</span>
-                              </label>
+                            <input
+                              className="ctrl"
+                              type="text"
+                              placeholder="Search permissions in this module…"
+                              value={b.search}
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => updateBlockSearch(b.module, e.target.value)}
+                              style={{ gridColumn: '1 / -1', fontSize: 12, height: 32 }}
+                            />
+                            {visiblePages.length === 0 ? (
+                              <div style={{ gridColumn: '1 / -1', fontSize: 12, color: 'var(--g400)', fontStyle: 'italic' }}>No matching permissions</div>
+                            ) : visiblePages.map(pg => (
+                              <div key={pg.page} style={{ gridColumn: '1 / -1' }}>
+                                <div className="perm-page-title">
+                                  <i className="lni lni-folder"></i>
+                                  {pg.page}
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px 12px' }}>
+                                  {pg.permissions.map(p => (
+                                    <label key={p.intPermission} className="chk-item" style={{ cursor: 'pointer' }}>
+                                      <input type="checkbox" checked={b.permissions.includes(p.intPermission)} onChange={() => togglePermission(b.module, p.intPermission)} />
+                                      <span className="text-sm text-g700">{p.permissionName}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -233,11 +240,11 @@ export function EditPermissionModal({ isOpen, onClose, showToast }: ModalProps) 
                       width: 32, height: 32, borderRadius: 8, display: 'grid', placeItems: 'center',
                       background: 'var(--b100)', color: 'var(--b700)', flexShrink: 0,
                     }}>
-                      <i className={`lni lni-${MODULE_ICON[b.module]}`}></i>
+                      <i className={`lni lni-${moduleIcon(b.module)}`}></i>
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--g900)' }}>{b.module}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--g500)' }}>{b.permissions.join(', ')}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--g900)' }}>{moduleLabel(b.module)}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--g500)' }}>{b.permissions.map(id => permissionNameById[id] ?? id).join(', ')}</div>
                     </div>
                     <span className="badge badge-blue">{b.permissions.length}</span>
                   </div>
@@ -260,8 +267,8 @@ export function EditPermissionModal({ isOpen, onClose, showToast }: ModalProps) 
               <button className="btn btn-neu" onClick={() => setConfirming(false)}>
                 <i className="lni lni-arrow-left"></i> Back
               </button>
-              <button className="btn btn-success" onClick={() => setSaved(true)}>
-                <i className="lni lni-checkmark-circle"></i> Confirm &amp; Save
+              <button className="btn btn-success" disabled={updatePermissionGroup.isPending} onClick={handleSave}>
+                <i className="lni lni-checkmark-circle"></i> {updatePermissionGroup.isPending ? 'Saving…' : 'Confirm & Save'}
               </button>
             </>
           )}
@@ -271,7 +278,7 @@ export function EditPermissionModal({ isOpen, onClose, showToast }: ModalProps) 
           <div className="perm-delete-overlay" onClick={() => setDeleteTarget(null)}>
             <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
               <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
-              <div className="perm-delete-title">Remove {deleteTargetBlock.module}?</div>
+              <div className="perm-delete-title">Remove {moduleLabel(deleteTargetBlock.module)}?</div>
               <div className="perm-delete-sub">
                 This will remove {deleteTargetBlock.permissions.length > 0
                   ? `all ${deleteTargetBlock.permissions.length} selected permission${deleteTargetBlock.permissions.length === 1 ? '' : 's'}`

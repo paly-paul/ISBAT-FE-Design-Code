@@ -1,5 +1,7 @@
 'use client'
-import React from 'react'
+import React, { useState } from 'react'
+import { logout } from '@/lib/auth'
+import { clearSessionIdentity } from '@/lib/session'
 
 interface HeaderProps {
   panelOpen: boolean
@@ -8,9 +10,30 @@ interface HeaderProps {
   setProfileOpen: React.Dispatch<React.SetStateAction<boolean>>
   profileRef: React.RefObject<HTMLDivElement>
   onSignOut: () => void
+  displayName?: string
 }
 
-export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, profileRef, onSignOut }: HeaderProps) {
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/)
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || 'U'
+}
+
+export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, profileRef, onSignOut, displayName = 'Administrator' }: HeaderProps) {
+  const [signingOut, setSigningOut] = useState(false)
+
+  async function handleSignOut(e: React.MouseEvent) {
+    e.stopPropagation()
+    setSigningOut(true)
+    try {
+      await logout()
+    } catch {
+      // Ignore — still sign the user out locally even if the API call fails.
+    } finally {
+      clearSessionIdentity()
+      onSignOut()
+    }
+  }
+
   return (
     <header className="hdr">
       <div className="hdr-brand bg-bg">
@@ -28,20 +51,21 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
           <div className="hdr-module-pill acad"><i className="lni lni-graduation"></i> Academic</div>
           <div className="hdr-intake">Spring 2026 (20261)</div>
           <div className="hdr-user" ref={profileRef} onClick={() => setProfileOpen(p => !p)}>
-            <div className="hdr-avatar">AD</div>
-            <span>Administrator</span>
+            <div className="hdr-avatar">{initialsOf(displayName)}</div>
+            <span>{displayName}</span>
             {profileOpen && (
               <div className="profile-dropdown">
                 <div className="profile-dropdown-info">
-                  <div className="profile-dropdown-name">Administrator</div>
+                  <div className="profile-dropdown-name">{displayName}</div>
                   <div className="profile-dropdown-role">System Admin · Academic</div>
                 </div>
                 <div className="profile-dropdown-divider" />
                 <button
                   className="profile-dropdown-signout"
-                  onClick={e => { e.stopPropagation(); onSignOut() }}
+                  onClick={handleSignOut}
+                  disabled={signingOut}
                 >
-                  <i className="lni lni-exit"></i> Sign Out
+                  <i className="lni lni-exit"></i> {signingOut ? 'Signing out…' : 'Sign Out'}
                 </button>
               </div>
             )}

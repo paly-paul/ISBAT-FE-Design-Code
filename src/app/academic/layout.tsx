@@ -3,18 +3,58 @@ import { useState, useRef, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Header } from '@/components/Header'
 import { Sidebar, RailId } from '@/components/Sidebar'
+import { refreshSession } from '@/lib/auth'
+import { getSessionIdentity, setSessionIdentity } from '@/lib/session'
 
 export default function AcademicLayout({ children }: { children: React.ReactNode }) {
   const [panelOpen, setPanelOpen] = useState(true)
   const [profileOpen, setProfileOpen] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const [activeRail, setActiveRail] = useState<RailId>('academic')
+  const [displayName, setDisplayName] = useState<string | null>(null)
+  const [authChecked, setAuthChecked] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
   const prevPathname = useRef<string | null>(null)
   const pathname = usePathname()
   const router = useRouter()
 
   const currentPage = pathname.split('/').pop() ?? 'acad-dashboard'
+
+  // Identity is stored client-side once login/OTP succeeds (see src/lib/session.ts),
+  // so a normal mount or page reload never needs to hit the network — it just
+  // reads it back. refreshSession() is only a fallback for a fresh tab / restored
+  // browser session where cookies are still valid but local identity was never set
+  // (sessionStorage doesn't survive a closed tab). Ongoing expiry during use is
+  // handled reactively by the API client (src/lib/api/client.ts), which
+  // refreshes-and-retries on any unauthorized response — no polling needed here.
+  useEffect(() => {
+    let cancelled = false
+
+    async function check() {
+      const identity = getSessionIdentity()
+      if (identity) {
+        setDisplayName(identity.displayName)
+        setAuthChecked(true)
+        return
+      }
+
+      try {
+        const result = await refreshSession()
+        if (cancelled) return
+        if (result.displayName) setSessionIdentity({ displayName: result.displayName })
+        setDisplayName(result.displayName ?? null)
+        setAuthChecked(true)
+      } catch {
+        if (!cancelled) router.replace('/login/staff')
+      }
+    }
+
+    check()
+
+    return () => {
+      cancelled = true
+    }
+  }, [router])
 
   useEffect(() => {
     if (prevPathname.current !== null && prevPathname.current !== pathname) {
@@ -42,6 +82,22 @@ export default function AcademicLayout({ children }: { children: React.ReactNode
     })
   }
 
+  if (!authChecked) {
+    return (
+      <div style={{ display: 'grid', placeContent: 'center', minHeight: '100vh' }}>
+        <span
+          style={{
+            width: 28, height: 28,
+            border: '3px solid var(--g100, #e2e2e2)',
+            borderTopColor: 'var(--b500, #2E6BE6)',
+            borderRadius: '50%',
+            animation: 'spin 700ms linear infinite',
+          }}
+        />
+      </div>
+    )
+  }
+
   return (
     <>
       <Header
@@ -51,6 +107,7 @@ export default function AcademicLayout({ children }: { children: React.ReactNode
         setProfileOpen={setProfileOpen}
         profileRef={profileRef}
         onSignOut={() => router.push('/')}
+        displayName={displayName ?? undefined}
       />
       <div className="layout">
         <Sidebar

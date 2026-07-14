@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import PanelA from '@/components/PanelA'
 import Icon from '@/components/Icon'
 import { studentLogin, AuthError, MOCK_CREDENTIALS } from '@/lib/auth'
-import { setFlowState } from '@/lib/session'
+import { setFlowState, setSessionIdentity } from '@/lib/session'
 import { authErrorMessage, validateStudentId, validatePassword } from '@/lib/errorMessages'
+import SuccessScreen from '@/components/SuccessScreen'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -18,6 +19,7 @@ export default function StudentLoginPage() {
   const [loading, setLoading] = useState(false)
   const [idError, setIdError] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [successState, setSuccessState] = useState<{ displayName?: string; redirect: string } | null>(null)
 
   const disabled = loading || !studentId.trim() || !password
 
@@ -33,18 +35,36 @@ export default function StudentLoginPage() {
 
     try {
       const result = await studentLogin(studentId, password)
-      setFlowState({
-        challengeId: result.challengeId,
-        otpChannel: result.otpChannel,
-        maskedTarget: result.maskedTarget,
-        returnTo: '/login/student',
-      })
-      router.push('/login/otp')
+      if (result.requiresOtp) {
+        setFlowState({
+          challengeId: result.challengeId,
+          otpChannel: result.otpChannel,
+          maskedTarget: result.maskedTarget,
+          returnTo: '/login/student',
+        })
+        router.push('/login/otp')
+      } else {
+        if (result.displayName) setSessionIdentity({ displayName: result.displayName })
+        setSuccessState({ displayName: result.displayName, redirect: result.redirect })
+      }
     } catch (err) {
       setPasswordError(err instanceof AuthError ? authErrorMessage(err.code) : authErrorMessage('unknown'))
     } finally {
       setLoading(false)
     }
+  }
+
+  if (successState) {
+    return (
+      <PanelA eyebrow="Students" headline="Signed in." centered>
+        <SuccessScreen
+          subtitle={successState.redirect
+            ? (successState.displayName ? `Welcome back, ${successState.displayName}.` : 'Welcome back.')
+            : 'The Student Portal is still being built. Check back soon.'}
+          redirectTo={successState.redirect || undefined}
+        />
+      </PanelA>
+    )
   }
 
   return (

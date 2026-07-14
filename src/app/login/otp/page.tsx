@@ -6,7 +6,7 @@ import PanelA from '@/components/PanelA'
 import Icon from '@/components/Icon'
 import OtpInput from '@/components/OtpInput'
 import { otpVerify, forgotStart, AuthError, MOCK_CREDENTIALS } from '@/lib/auth'
-import { getFlowState, setFlowState, clearFlowState } from '@/lib/session'
+import { getFlowState, setFlowState, clearFlowState, setSessionIdentity } from '@/lib/session'
 import { authErrorMessage } from '@/lib/errorMessages'
 import SuccessScreen from '@/components/SuccessScreen'
 
@@ -49,6 +49,7 @@ export default function OtpPage() {
 
     try {
       const result = await otpVerify(flowState.challengeId, code)
+      setSessionIdentity({ displayName: result.displayName })
       clearFlowState()
       setSuccessState({ role: result.role, redirect: result.redirect })
     } catch (err) {

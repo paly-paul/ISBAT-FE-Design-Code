@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import PanelA from '@/components/PanelA'
 import Icon from '@/components/Icon'
 import { staffLogin, AuthError } from '@/lib/auth'
-import { setFlowState } from '@/lib/session'
+import { setFlowState, setSessionIdentity } from '@/lib/session'
 import { authErrorMessage } from '@/lib/errorMessages'
+import SuccessScreen from '@/components/SuccessScreen'
 
 const LAST_USER = {
   initials: 'RM',
@@ -23,6 +24,7 @@ export default function SessionExpiredPage() {
   const [show, setShow] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [successState, setSuccessState] = useState<{ displayName?: string; redirect: string } | null>(null)
 
   async function handleResume(e: React.FormEvent) {
     e.preventDefault()
@@ -32,12 +34,17 @@ export default function SessionExpiredPage() {
 
     try {
       const result = await staffLogin(LAST_USER.staffId, password, false)
-      setFlowState({
-        challengeId: result.challengeId,
-        otpChannel: result.otpChannel,
-        maskedTarget: result.maskedTarget,
-      })
-      router.push('/login/otp')
+      if (result.requiresOtp) {
+        setFlowState({
+          challengeId: result.challengeId,
+          otpChannel: result.otpChannel,
+          maskedTarget: result.maskedTarget,
+        })
+        router.push('/login/otp')
+      } else {
+        if (result.displayName) setSessionIdentity({ displayName: result.displayName })
+        setSuccessState({ displayName: result.displayName ?? LAST_USER.name, redirect: result.redirect })
+      }
     } catch (err) {
       if (err instanceof AuthError) {
         setError(authErrorMessage(err.code))
@@ -47,6 +54,17 @@ export default function SessionExpiredPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (successState) {
+    return (
+      <PanelA eyebrow="Session" headline="Signed in." centered>
+        <SuccessScreen
+          subtitle={`Welcome back, ${successState.displayName}.`}
+          redirectTo={successState.redirect}
+        />
+      </PanelA>
+    )
   }
 
   return (
