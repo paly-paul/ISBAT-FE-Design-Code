@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut } from '../client'
+import { apiDelete, apiGet, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -108,4 +108,16 @@ export function updateCampus(id: string, input: CampusInput): Promise<Campus> {
     return Promise.resolve(existing)
   }
   return apiPut<Campus>(`/api/v1/academic/campus/${id}`, input)
+}
+
+// Confirmed via DELETE /api/v1/academic/campus/:campusGuid — soft-delete,
+// data is null on success. Fails with 404 not_found for an unknown campusGuid.
+export function deleteCampus(id: string): Promise<boolean> {
+  if (MOCK_AUTH) {
+    const index = mockCampuses.findIndex(c => c.campusGuid === id)
+    if (index === -1) return Promise.reject(new Error('Campus not found'))
+    mockCampuses.splice(index, 1)
+    return Promise.resolve(true)
+  }
+  return apiDelete<boolean>(`/api/v1/academic/campus/${id}`)
 }

@@ -2,21 +2,17 @@
 import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
+import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Faculty, FacultyInput } from '@/lib/api/academic/faculty'
-
-const LECTURERS = [
-  'Dr. Nakimuli Sarah',
-  'Prof. Mukasa Charles',
-  'Dr. Tendo Patrick',
-  'Ms. Acen Lillian',
-  'Mr. Okello Brian',
-]
+import { useCampusDropdown } from '@/hooks/config/useCampuses'
+import { useEmployees } from '@/hooks/employee/useEmployees'
+import { AuthError } from '@/lib/api/client'
 
 interface EditFacultyModalProps extends ModalProps {
   faculty: Faculty | null
   updateFaculty: {
-    mutate: (variables: { id: string; input: FacultyInput }, options?: { onSuccess?: () => void }) => void
+    mutate: (variables: { id: string; input: FacultyInput }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
     isPending: boolean
   }
 }
@@ -24,14 +20,23 @@ interface EditFacultyModalProps extends ModalProps {
 export function EditFacultyModal({ isOpen, onClose, showToast, faculty, updateFaculty }: EditFacultyModalProps) {
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
-  const [dean, setDean] = useState('')
+  const [campusGuid, setCampusGuid] = useState('')
+  const [deanEmployeeGuid, setDeanEmployeeGuid] = useState('')
   const [saved, setSaved] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
+
+  const { data: campusDropdown = [] } = useCampusDropdown()
+  const campusOptions = campusDropdown.map(c => ({ value: c.campusGuid, label: c.campusName }))
+
+  const { data: employees = [] } = useEmployees()
+  const deanOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
 
   useEffect(() => {
     if (isOpen && faculty) {
-      setCode(faculty.code)
-      setName(faculty.name)
-      setDean(faculty.dean)
+      setCode(faculty.facultyCode)
+      setName(faculty.facultyName)
+      setCampusGuid(faculty.campusGuid)
+      setDeanEmployeeGuid(faculty.deanEmployeeGuid ?? '')
     }
   }, [isOpen, faculty])
 
@@ -39,14 +44,24 @@ export function EditFacultyModal({ isOpen, onClose, showToast, faculty, updateFa
 
   function handleClose() {
     setSaved(false)
+    setFailure(null)
     onClose()
   }
 
   function handleSubmit() {
-    if (!faculty || !code || !name || !dean) return
+    if (!faculty || !code || !name || !campusGuid || !deanEmployeeGuid) return
     updateFaculty.mutate(
-      { id: faculty.id, input: { code, name, dean } },
-      { onSuccess: () => { setSaved(true); showToast('Faculty updated successfully') } },
+      { id: faculty.facultyGuid, input: { facultyCode: code, facultyName: name, campusGuid, deanEmployeeGuid } },
+      {
+        onSuccess: () => { setSaved(true); showToast('Faculty updated successfully') },
+        onError: (error: Error) => {
+          // 404 not_found means the faculty was deleted elsewhere between
+          // opening this modal and submitting — everything else (400
+          // validation_error, etc.) just surfaces the backend's message.
+          const notFound = error instanceof AuthError && error.code === 'not_found'
+          setFailure(notFound ? 'This faculty no longer exists — it may have been deleted.' : (error.message || 'Failed to update faculty. Please try again.'))
+        },
+      },
     )
   }
 
@@ -60,14 +75,24 @@ export function EditFacultyModal({ isOpen, onClose, showToast, faculty, updateFa
     )
   }
 
-  const disabled = !code || !name || !dean || updateFaculty.isPending
+  if (failure) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup title="Couldn't Update Faculty" subtitle={failure} onClose={() => setFailure(null)} />
+        </div>
+      </div>
+    )
+  }
+
+  const disabled = !code || !name || !campusGuid || !deanEmployeeGuid || updateFaculty.isPending
 
   return (
     <div className="modal-overlay open" id="edit-faculty-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Faculty</div>
-          <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
+          <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
         <div className="g2">
           <div className="fg">
@@ -90,17 +115,26 @@ export function EditFacultyModal({ isOpen, onClose, showToast, faculty, updateFa
             />
           </div>
           <div className="fg span2">
+            <div className="lbl">Campus <span className="req">*</span></div>
+            <SearchSelect
+              placeholder="Select campus…"
+              value={campusGuid}
+              onChange={setCampusGuid}
+              options={campusOptions}
+            />
+          </div>
+          <div className="fg span2">
             <div className="lbl">Dean <span className="req">*</span></div>
             <SearchSelect
-              placeholder="Select lecturer…"
-              value={dean}
-              onChange={setDean}
-              options={LECTURERS}
+              placeholder="Select employee…"
+              value={deanEmployeeGuid}
+              onChange={setDeanEmployeeGuid}
+              options={deanOptions}
             />
           </div>
         </div>
         <div className="modal-footer">
-          <button className="btn btn-neu" onClick={onClose}>Cancel</button>
+          <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
           <button className="btn btn-primary" disabled={disabled} onClick={handleSubmit}>
             <i className="lni lni-checkmark"></i> {updateFaculty.isPending ? 'Updating…' : 'Update Faculty'}
           </button>

@@ -7,12 +7,7 @@ import { CreateEmployeeInput } from '@/lib/api/employee/employee'
 import { useEmployee, useUpdateEmployee } from '@/hooks/employee/useEmployees'
 import { useDepartments } from '@/hooks/config/useDepartments'
 import { useDesignations } from '@/hooks/config/useDesignations'
-
-const NATIONALITIES = [
-  'Ugandan', 'Kenyan', 'Tanzanian', 'Rwandan', 'Burundian', 'South Sudanese',
-  'Ethiopian', 'Nigerian', 'Ghanaian', 'South African', 'Indian', 'Chinese',
-  'British', 'American', 'Other',
-]
+import { useCountries } from '@/hooks/config/useCountries'
 
 // Only category confirmed against the real create payload so far
 // ({ category: 1, categoryPrefix: 'AD' }) — add more once the backend
@@ -22,9 +17,10 @@ const CATEGORIES: { label: string; category: number; prefix: string }[] = [
 ]
 
 const TITLES = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof']
-// Numeric mappings below (sex, marital status, religion, country) aren't
-// confirmed by a backend lookup endpoint yet — sequential ids are a
-// placeholder guess, same as the other guessed dropdown enums in this file.
+// Numeric mappings below (sex, marital status, religion) aren't confirmed by
+// a backend lookup endpoint yet — sequential ids are a placeholder guess.
+// Country is the exception: it's backed by the real GET /api/v1/users/countries
+// list (useCountries), keyed by intCountryCode.
 const SEXES = ['Male', 'Female', 'Others']
 const MARITAL_STATUSES = ['Single', 'Married', 'Divorced', 'Widow', 'Widower', 'Separated']
 const RELIGIONS = ['Christian', 'Muslim', 'Hindu', 'Other']
@@ -84,6 +80,8 @@ export function EditEmployeeModal({ isOpen, onClose, showToast, employeeGuid }: 
   const updateEmployee = useUpdateEmployee()
   const { data: departments = [] } = useDepartments()
   const { data: designations = [] } = useDesignations()
+  const { data: countries = [] } = useCountries()
+  const defaultCountryCode = countries.find(c => c.defaultCountry === 1)?.intCountryCode ?? 1
   const departmentOptions = departments.map(d => d.deptName)
   const selectedDept = departments.find(d => d.deptName === department)
   const designationOptions = selectedDept ? designations.filter(d => String(d.intDept) === String(selectedDept.intDept)).map(d => d.designationName) : []
@@ -119,16 +117,17 @@ export function EditEmployeeModal({ isOpen, onClose, showToast, employeeGuid }: 
     setErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
   }
 
-  // The Country dropdown's option list (NATIONALITIES) is a guessed demonym
-  // list, not the backend's real country lookup — append the fetched
-  // employee's countryName if it isn't already in there so it still shows
-  // up selected instead of appearing blank.
+  // Normally backed by the real countries list — if the employee's
+  // intCountryCode isn't in the current list (e.g. a deleted country), fall
+  // back to showing its countryName from the employee record so the field
+  // doesn't appear blank.
   const countryOptions = useMemo(() => {
-    if (employee?.countryName && !NATIONALITIES.includes(employee.countryName)) {
-      return [...NATIONALITIES, employee.countryName]
+    const opts = countries.map(c => ({ value: String(c.intCountryCode), label: c.countryName }))
+    if (employee?.intCountryCode != null && employee.countryName && !countries.some(c => c.intCountryCode === employee.intCountryCode)) {
+      opts.push({ value: String(employee.intCountryCode), label: employee.countryName })
     }
-    return NATIONALITIES
-  }, [employee])
+    return opts
+  }, [countries, employee])
 
   useEffect(() => {
     if (!isOpen || !employee) return
@@ -140,7 +139,7 @@ export function EditEmployeeModal({ isOpen, onClose, showToast, employeeGuid }: 
     setSex(employee.sex === 1 ? 'Male' : employee.sex === 2 ? 'Female' : 'Others')
     setBirthDate(employee.birthDate.slice(0, 10))
     setPlaceOfBirth(employee.placeOfBirth)
-    setCountry(employee.countryName ?? '')
+    setCountry(employee.intCountryCode != null ? String(employee.intCountryCode) : '')
     setNatId(employee.natId)
     setNationalId(employee.nationalId ?? '')
     setEmailId(employee.emailId)
@@ -181,7 +180,7 @@ export function EditEmployeeModal({ isOpen, onClose, showToast, employeeGuid }: 
       sex: sexToNumber(sex),
       birthDate,
       placeOfBirth,
-      intCountryCode: NATIONALITIES.indexOf(country) + 1 || 1,
+      intCountryCode: country ? Number(country) : defaultCountryCode,
       natId,
       nationalId: nationalId.trim() || null,
       emailId,

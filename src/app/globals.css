@@ -733,6 +733,35 @@ body {
   flex-shrink: 0;
 }
 
+/* ── PANEL TOGGLE — circular arrow button pinned to the sidebar's right edge ── */
+.sb-toggle {
+  position: absolute;
+  top: 6%;
+  right: -12px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--white);
+  border: 1.5px solid var(--sb-border);
+  box-shadow: var(--neu-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  color: var(--g500);
+  font-size: 11px;
+  z-index: 210;
+  transition: var(--tr);
+}
+
+.sb-toggle:hover {
+  border-color: var(--b300);
+  color: var(--b700);
+  background: var(--b50);
+}
+
 /* ═══════════════════════════════════════
    MAIN CONTENT
 ═══════════════════════════════════════ */

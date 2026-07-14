@@ -66,7 +66,9 @@ export default function Page() {
   const filteredRows = sortedRows.filter(r =>
     Object.entries(filters).every(([k, v]) => {
       if (!v.length) return true
-      const cell = k === 'sex' ? (r.sex === 1 ? 'Male' : 'Female') : String((r as unknown as Record<string, unknown>)[k])
+      const cell = k === 'sex' ? (r.sex === 1 ? 'Male' : 'Female')
+        : k === 'status' ? (r.isApproved ? 'Approved' : 'Pending')
+        : String((r as unknown as Record<string, unknown>)[k])
       return v.includes(cell)
     })
   )
@@ -108,7 +110,7 @@ export default function Page() {
               {/* Previous header (pre GET /api/v1/users/employees integration) — kept for reference.
               <thead><tr><th style={{ width: 48 }}></th><th>ID</th><th>Name</th>{fth('Highest Qualification', 'qualification', ["PhD", "Master's", "Bachelor's"])}<th>Specialisation</th>{fth('Faculty', 'faculty', ['FCT', 'FBM', 'FEN'])}{fth('Designation', 'designation', ['Senior Lecturer', 'Lecturer', 'Assistant Lecturer', 'Adjunct'])}{fth('Status', 'status', ['Active', 'Inactive'])}</tr></thead>
               */}
-              <thead><tr><th style={{ width: 48 }}></th><th>Short Code</th><th>Name</th>{fth('Sex', 'sex', ['Male', 'Female'])}{fth('Status', 'status', ['Active', 'Inactive'])}</tr></thead>
+              <thead><tr><th style={{ width: 48 }}></th><th>Short Code</th><th>Name</th>{fth('Sex', 'sex', ['Male', 'Female'])}{fth('Status', 'status', ['Approved', 'Pending'])}</tr></thead>
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
@@ -133,9 +135,9 @@ export default function Page() {
                   <tr key={r.employeeGuid}>
                     <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.employeeGuid)}><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>
                     <td className="font-mono text-b700">{r.shortCode}</td>
-                    <td><strong>{r.empName}</strong><div className="text-[var(--fs-xs)] text-g500">{r.title}</div></td>
+                    <td><strong>{r.title} {r.firstName} {r.surname}</strong></td>
                     <td>{r.sex === 1 ? 'Male' : 'Female'}</td>
-                    <td><span className={`badge ${r.status === 'Active' ? 'badge-green' : 'badge-amber'}`}><span className="bdot"></span>{r.status}</span></td>
+                    <td><span className={`badge ${r.isApproved ? 'badge-green' : 'badge-amber'}`}><span className="bdot"></span>{r.isApproved ? 'Approved' : 'Pending'}</span></td>
                   </tr>
                 ))}
               </tbody>

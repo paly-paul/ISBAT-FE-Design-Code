@@ -14,7 +14,6 @@ export default function AcademicLayout({ children }: { children: React.ReactNode
   const [displayName, setDisplayName] = useState<string | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
-  const prevPathname = useRef<string | null>(null)
   const pathname = usePathname()
   const router = useRouter()
 
@@ -56,11 +55,9 @@ export default function AcademicLayout({ children }: { children: React.ReactNode
     }
   }, [router])
 
+  // Scroll to top on navigation — the sidebar panel is left as the user set
+  // it (open/closed, collapsed sections) rather than being force-closed here.
   useEffect(() => {
-    if (prevPathname.current !== null && prevPathname.current !== pathname) {
-      setPanelOpen(false)
-    }
-    prevPathname.current = pathname
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [pathname])
 

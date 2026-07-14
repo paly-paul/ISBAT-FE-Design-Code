@@ -10,17 +10,14 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const [activeRail, setActiveRail] = useState<RailId>('employee')
   const profileRef = useRef<HTMLDivElement>(null)
-  const prevPathname = useRef<string | null>(null)
   const pathname = usePathname()
   const router = useRouter()
 
   const currentPage = pathname.split('/').pop() ?? 'employee-master'
 
+  // Scroll to top on navigation — the sidebar panel is left as the user set
+  // it (open/closed, collapsed sections) rather than being force-closed here.
   useEffect(() => {
-    if (prevPathname.current !== null && prevPathname.current !== pathname) {
-      setPanelOpen(false)
-    }
-    prevPathname.current = pathname
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [pathname])
 
