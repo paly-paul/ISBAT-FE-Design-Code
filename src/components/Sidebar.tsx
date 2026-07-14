@@ -1,6 +1,7 @@
 'use client'
-import { Dispatch, SetStateAction, ReactNode } from 'react'
+import { Dispatch, SetStateAction, ReactNode, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export type RailId = 'admission' | 'academic' | 'student' | 'employee' | 'config'
 
@@ -49,29 +50,37 @@ const ADMISSION_SECTIONS = [
   },
 ]
 
+// Kept in sync with the item ids rendered below — used only to warm the
+// route cache on mount so a sidebar click doesn't wait on a cold chunk/RSC
+// fetch. The sidebar uses div+onClick (not next/link), so none of these get
+// Next's automatic viewport-based prefetch otherwise.
+const ADMISSION_IDS = ADMISSION_SECTIONS.flatMap(s => s.items.map(i => i.id))
+const ACADEMIC_IDS = ['acad-dashboard', 'intake-master', 'skill-master', 'batch-management', 'room-management', 'session-movement', 'repetition-tag', 'course-units', 'a-level-master', 'programme-group', 'programme-master', 'fee-structure', 'timetable', 'odl-applications', 'odl-reconciliation', 'student-lookup']
+const STUDENT_IDS = ['student-master']
+const EMPLOYEE_IDS = ['employee-master']
+const CONFIG_IDS = ['faculty-master', 'department-master', 'designation-master', 'stream-master', 'skill', 'ledger', 'campus-master', 'currency-master', 'country-master', 'permission-master']
+
 export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {
   const router = useRouter()
 
-  function navAdmission(id: string) { router.push('/admission/' + id) }
-  function navAcademic(id: string) { router.push('/academic/' + id) }
-  function navStudent(id: string) { router.push('/student/' + id) }
-  function navEmployee(id: string) { router.push('/employee/' + id) }
-  function navConfig(id: string) { router.push('/config/' + id) }
+  // Warm every module route once on mount so navigation is instant regardless
+  // of which rail the user switches to first.
+  useEffect(() => {
+    ADMISSION_IDS.forEach(id => router.prefetch(`/admission/${id}`))
+    ACADEMIC_IDS.forEach(id => router.prefetch(`/academic/${id}`))
+    STUDENT_IDS.forEach(id => router.prefetch(`/student/${id}`))
+    EMPLOYEE_IDS.forEach(id => router.prefetch(`/employee/${id}`))
+    CONFIG_IDS.forEach(id => router.prefetch(`/config/${id}`))
+  }, [router])
 
   function sbItem(id: string, label: string, icon: string, badge?: { text: string; warn?: boolean }, prefix: 'academic' | 'student' | 'employee' | 'config' = 'academic') {
-    const go = prefix === 'student'
-      ? navStudent
-      : prefix === 'employee'
-        ? navEmployee
-        : prefix === 'config'
-          ? navConfig
-          : navAcademic
+    const href = `/${prefix}/${id}`
     return (
-      <div className={`sb-item${currentPage === id ? ' active' : ''}`} onClick={() => go(id)}>
+      <Link href={href} className={`sb-item${currentPage === id ? ' active' : ''}`}>
         <span className="sb-icon"><i className={`lni lni-${icon}`}></i></span>
         {label}
         {badge && <span className={`sb-badge${badge.warn ? ' warn' : ''}`}>{badge.text}</span>}
-      </div>
+      </Link>
     )
   }
 
@@ -174,17 +183,17 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
                   </div>
                   <div className="sb-collapse-body">
                     {section.items.map(item => (
-                      <div
+                      <Link
                         key={item.id}
+                        href={`/admission/${item.id}`}
                         className={`sb-item${currentPage === item.id ? ' active' : ''}`}
-                        onClick={() => navAdmission(item.id)}
                       >
                         <span className="sb-icon"><i className={`lni lni-${item.icon}`}></i></span>
                         {item.label}
                         {'badge' in item && item.badge && <span className="sb-badge">{item.badge}</span>}
                         {'badgeWarn' in item && item.badgeWarn && <span className="sb-badge warn">{item.badgeWarn}</span>}
                         {'badgeGreen' in item && item.badgeGreen && <span className="sb-badge green">{item.badgeGreen}</span>}
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 </div>
