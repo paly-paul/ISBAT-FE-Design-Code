@@ -11,8 +11,12 @@ export default function AcademicLayout({ children }: { children: React.ReactNode
   const [profileOpen, setProfileOpen] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const [activeRail, setActiveRail] = useState<RailId>('academic')
-  const [displayName, setDisplayName] = useState<string | null>(null)
-  const [authChecked, setAuthChecked] = useState(false)
+  // Lazily read whatever identity is already in sessionStorage on first render
+  // so a user who's already authenticated (the common case — navigating in from
+  // another module) skips the spinner gate entirely instead of flashing it on
+  // every mount of this layout.
+  const [displayName, setDisplayName] = useState<string | null>(() => getSessionIdentity()?.displayName ?? null)
+  const [authChecked, setAuthChecked] = useState(() => !!getSessionIdentity())
   const profileRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
   const router = useRouter()
