@@ -1,36 +1,51 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ProgramGroupInput } from '@/lib/api/academic/programGroup'
+import { useProgramGroup } from '@/hooks/academic/useProgramGroups'
 import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
 import { AuthError } from '@/lib/api/client'
 
-interface ProgrammeGroupModalProps extends ModalProps {
-  createProgramGroup: {
-    mutate: (input: ProgramGroupInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
+interface EditProgrammeGroupModalProps extends ModalProps {
+  programGroupGuid: string | null
+  updateProgramGroup: {
+    mutate: (variables: { guid: string; input: ProgramGroupInput }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
     isPending: boolean
   }
 }
 
-export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramGroup }: ProgrammeGroupModalProps) {
-  const [saved, setSaved]             = useState(false)
-  const [failure, setFailure]         = useState<string | null>(null)
-  const [groupCode, setGroupCode]     = useState('')
-  const [groupName, setGroupName]     = useState('')
+export function EditProgrammeGroupModal({ isOpen, onClose, showToast, programGroupGuid, updateProgramGroup }: EditProgrammeGroupModalProps) {
+  const { data: programGroup, isLoading, isError, error } = useProgramGroup(programGroupGuid, isOpen)
+
+  const [saved, setSaved]               = useState(false)
+  const [failure, setFailure]           = useState<string | null>(null)
+  const [groupCode, setGroupCode]       = useState('')
+  const [groupName, setGroupName]       = useState('')
   const [programLevel, setProgramLevel] = useState('')
-  const [errors, setErrors]           = useState<Record<string, string>>({})
+  const [errors, setErrors]             = useState<Record<string, string>>({})
 
   const { data: programLevels = [] } = useProgramLevels()
   const programLevelOptions = programLevels.map(l => ({ value: l.programLevelGuid, label: l.levelName }))
 
+  // Prefill the form once the programme group has loaded. Re-runs whenever a
+  // different guid is fetched (react-query resets `programGroup` to
+  // undefined when programGroupGuid changes, so stale data never leaks
+  // between edits).
+  useEffect(() => {
+    if (!isOpen || !programGroup) return
+    setGroupCode(programGroup.groupCode)
+    setGroupName(programGroup.groupName)
+    setProgramLevel(programGroup.programLevelGuid)
+    setErrors({})
+  }, [isOpen, programGroup])
+
   if (!isOpen) return null
 
   function handleClose() {
-    setSaved(false); setFailure(null)
-    setGroupCode(''); setGroupName(''); setProgramLevel(''); setErrors({})
+    setSaved(false); setFailure(null); setErrors({})
     onClose()
   }
 
@@ -49,21 +64,33 @@ export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramG
 
   // Maps the backend's { code, errors } failure shape to an inline field
   // error where the cause is actionable right there (duplicate groupCode);
-  // anything else shows the failure popup instead.
-  function handleCreateError(error: Error) {
+  // anything else shows the failure popup instead — same convention as
+  // ProgrammeGroupModal's create-error handling.
+  function handleUpdateError(error: Error) {
     const code = error instanceof AuthError ? error.code : undefined
     if (code === 'bad_request') {
       setErrors(prev => ({ ...prev, groupCode: error.message || 'A programme group with this code already exists.' }))
       return
     }
-    setFailure(error.message || 'Failed to add programme group. Please try again.')
+    setFailure(error.message || 'Failed to update programme group. Please try again.')
+  }
+
+  function handleUpdate() {
+    if (!programGroupGuid || !validate()) return
+    updateProgramGroup.mutate(
+      { guid: programGroupGuid, input: { groupCode, groupName, programLevelGuid: programLevel } },
+      {
+        onSuccess: () => { setSaved(true); showToast('Programme Group updated successfully') },
+        onError: handleUpdateError,
+      },
+    )
   }
 
   if (saved) {
     return (
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
-          <SuccessPopup title="Programme Group Added!" subtitle="The new programme group has been saved successfully." onClose={handleClose} />
+          <SuccessPopup title="Programme Group Updated!" subtitle="Your changes have been saved successfully." onClose={handleClose} />
         </div>
       </div>
     )
@@ -73,17 +100,47 @@ export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramG
     return (
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
-          <FailurePopup title="Couldn't Add Programme Group" subtitle={failure} onClose={() => setFailure(null)} />
+          <FailurePopup title="Couldn't Update Programme Group" subtitle={failure} onClose={() => setFailure(null)} />
+        </div>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup
+            title="Couldn't Load Programme Group"
+            subtitle={error instanceof AuthError ? (error.message || 'Failed to load programme group details.') : 'Failed to load programme group details.'}
+            onClose={handleClose}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading || !programGroup) {
+    return (
+      <div className="modal-overlay open" id="edit-proggroup-modal">
+        <div className="modal modal-md" onClick={e => e.stopPropagation()}>
+          <div className="modal-hdr">
+            <div className="modal-title"><i className="lni lni-pencil"></i> Edit Programme Group</div>
+            <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
+            <span style={{ color: 'var(--g400)' }}>Loading programme group details…</span>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="modal-overlay open" id="new-proggroup-modal">
+    <div className="modal-overlay open" id="edit-proggroup-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
-          <div className="modal-title"><i className="lni lni-folder"></i> Add Programme Group</div>
+          <div className="modal-title"><i className="lni lni-pencil"></i> Edit Programme Group — <span className="font-mono">{programGroup.groupCode}</span></div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
         <div className="g2">
@@ -123,21 +180,8 @@ export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramG
         <div className="info-box mt-3"><i className="lni lni-information"></i> The Programme Group is used for aggregate reporting across all curriculum versions. E.g. searching &quot;BCA&quot; returns students from BCA 2026 and BCA 2031.</div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button
-            className="btn btn-primary"
-            disabled={createProgramGroup.isPending}
-            onClick={() => {
-              if (!validate()) return
-              createProgramGroup.mutate(
-                { groupCode, groupName, programLevelGuid: programLevel },
-                {
-                  onSuccess: () => { setSaved(true); showToast('Programme Group added successfully') },
-                  onError: handleCreateError,
-                },
-              )
-            }}
-          >
-            <i className="lni lni-checkmark"></i> {createProgramGroup.isPending ? 'Adding…' : 'Save Group'}
+          <button className="btn btn-primary" disabled={updateProgramGroup.isPending} onClick={handleUpdate}>
+            <i className="lni lni-checkmark"></i> {updateProgramGroup.isPending ? 'Saving…' : 'Update Group'}
           </button>
         </div>
       </div>

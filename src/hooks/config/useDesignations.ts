@@ -3,10 +3,16 @@ import { createDesignation, deleteDesignation, Designation, DesignationInput, ge
 
 const DESIGNATIONS_KEY = ['designations']
 
+// Fetch a single page large enough to cover the whole list — nothing in
+// this codebase currently paginates the master lists client-side, so the
+// hook needs the full set in one request rather than the API's default
+// page=1/pageSize=10 (which was silently hiding any row past the 10th).
+const DESIGNATIONS_PAGE_SIZE = 1000
+
 export function useDesignations() {
   return useQuery({
     queryKey: DESIGNATIONS_KEY,
-    queryFn: () => getDesignations(),
+    queryFn: () => getDesignations(1, DESIGNATIONS_PAGE_SIZE),
     // Never treat the cached list as stale on its own — only refetch when a
     // mutation (create/update/delete) explicitly invalidates this key below,
     // instead of on every remount/window focus.

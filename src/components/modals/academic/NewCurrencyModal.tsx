@@ -2,17 +2,20 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
+import { FailurePopup } from './FailurePopup'
 import { CurrencyInput } from '@/lib/api/academic/currency'
+import { AuthError } from '@/lib/api/client'
 
 interface NewCurrencyModalProps extends ModalProps {
   createCurrency: {
-    mutate: (input: CurrencyInput, options?: { onSuccess?: () => void }) => void
+    mutate: (input: CurrencyInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
     isPending: boolean
   }
 }
 
 export function NewCurrencyModal({ isOpen, onClose, showToast, createCurrency }: NewCurrencyModalProps) {
   const [saved, setSaved]                 = useState(false)
+  const [failure, setFailure]             = useState<string | null>(null)
   const [currencyCode, setCurrencyCode]   = useState('')
   const [currencyName, setCurrencyName]   = useState('')
   const [isDefault, setIsDefault]         = useState(false)
@@ -21,7 +24,7 @@ export function NewCurrencyModal({ isOpen, onClose, showToast, createCurrency }:
   if (!isOpen) return null
 
   function handleClose() {
-    setSaved(false); setCurrencyCode(''); setCurrencyName(''); setIsDefault(false); setErrors({})
+    setSaved(false); setFailure(null); setCurrencyCode(''); setCurrencyName(''); setIsDefault(false); setErrors({})
     onClose()
   }
 
@@ -33,11 +36,33 @@ export function NewCurrencyModal({ isOpen, onClose, showToast, createCurrency }:
     return Object.keys(e).length === 0
   }
 
+  // Maps the backend's { code, errors } failure shape to an inline field
+  // error where the cause is actionable right there (duplicate
+  // currencyCode); anything else shows the failure popup instead.
+  function handleCreateError(error: Error) {
+    const code = error instanceof AuthError ? error.code : undefined
+    if (code === 'bad_request') {
+      setErrors(prev => ({ ...prev, currencyCode: error.message || 'A currency with this code already exists.' }))
+      return
+    }
+    setFailure(error.message || 'Failed to add currency. Please try again.')
+  }
+
   if (saved) {
     return (
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
           <SuccessPopup title="Currency Added!" subtitle="The new currency has been saved successfully." onClose={handleClose} />
+        </div>
+      </div>
+    )
+  }
+
+  if (failure) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup title="Couldn't Add Currency" subtitle={failure} onClose={() => setFailure(null)} />
         </div>
       </div>
     )
@@ -97,7 +122,10 @@ export function NewCurrencyModal({ isOpen, onClose, showToast, createCurrency }:
               if (!validate()) return
               createCurrency.mutate(
                 { currencyCode, currencyName, isDefault: isDefault ? 1 : 0 },
-                { onSuccess: () => { setSaved(true); showToast('Currency added successfully') } },
+                {
+                  onSuccess: () => { setSaved(true); showToast('Currency added successfully') },
+                  onError: handleCreateError,
+                },
               )
             }}
           >

@@ -3,14 +3,13 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
-import { ProgrammeGroupModal } from '@/components/modals/academic/ProgrammeGroupModal'
-import { EditProgrammeGroupModal } from '@/components/modals/academic/EditProgrammeGroupModal'
+import { ProgrammeLevelModal } from '@/components/modals/academic/ProgrammeLevelModal'
+import { EditProgrammeLevelModal } from '@/components/modals/academic/EditProgrammeLevelModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
-import { useCreateProgramGroup, useDeleteProgramGroup, useProgramGroups, useUpdateProgramGroup, ProgramGroup } from '@/hooks/academic/useProgramGroups'
-import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
+import { useCreateProgramLevel, useDeleteProgramLevel, useProgramLevels, useUpdateProgramLevel, ProgramLevel } from '@/hooks/academic/useProgramLevels'
 
 export default function Page() {
   const router = useRouter()
@@ -18,8 +17,8 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
-  const [editingProgramGroupGuid, setEditingProgramGroupGuid] = useState<string | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<ProgramGroup | null>(null)
+  const [editingProgramLevelGuid, setEditingProgramLevelGuid] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ProgramLevel | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -35,25 +34,24 @@ export default function Page() {
     return () => document.removeEventListener('click', closeFilter)
   }, [])
 
-  const { data: rows = [], isLoading } = useProgramGroups()
-  const { data: programLevels = [] } = useProgramLevels()
-  const createProgramGroup = useCreateProgramGroup()
-  const updateProgramGroup = useUpdateProgramGroup()
-  const deleteProgramGroup = useDeleteProgramGroup()
+  const { data: rows = [], isLoading } = useProgramLevels()
+  const createProgramLevel = useCreateProgramLevel()
+  const updateProgramLevel = useUpdateProgramLevel()
+  const deleteProgramLevel = useDeleteProgramLevel()
   const filteredRows = rows.filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
   )
 
   function openEditModal(guid: string) {
-    setEditingProgramGroupGuid(guid)
-    openModal('edit-proggroup-modal')
+    setEditingProgramLevelGuid(guid)
+    openModal('edit-alevel-modal')
   }
 
-  function confirmDeleteProgramGroup() {
+  function confirmDeleteProgramLevel() {
     if (!deleteTarget) return
-    deleteProgramGroup.mutate(deleteTarget.programGroupGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Programme Group deleted successfully') },
-      onError: (error: Error) => showToast(error.message || 'Failed to delete programme group', 'error'),
+    deleteProgramLevel.mutate(deleteTarget.programLevelGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Programme Level deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete programme level', 'error'),
     })
   }
 
@@ -76,32 +74,32 @@ export default function Page() {
     <>
       <div className="page active">
         <div className="pg-hdr">
-          <div><div className="pg-title">Programme Group Master</div><div className="pg-sub">Generic programme names for reporting · Groups all curriculum versions under one umbrella</div></div>
-          <button className="btn btn-primary" onClick={() => openModal('new-proggroup-modal')}><i className="lni lni-plus"></i> Add Programme Group</button>
+          <div><div className="pg-title">Programme Level Master</div><div className="pg-sub">Define programme levels (Bachelor&apos;s, Master&apos;s, PhD etc.) · Set year count, semester count and minimum credit load</div></div>
+          <button className="btn btn-primary" onClick={() => openModal('new-alevel-modal')}><i className="lni lni-plus"></i> Add Level</button>
         </div>
 
         <div className="info-box mb-[18px]">
-          <i className="lni lni-information"></i> Programme Groups are used for <strong>high-level reporting</strong> — e.g. searching &quot;BCA&quot; returns all students across BCA 2026 <em>and</em> BCA 2031 versions. This ensures a single generic name links all curriculum versions for aggregate analytics.
+          <i className="lni lni-information"></i> Programme Level defines the <strong>fundamental attributes</strong> of every programme at that level (year count, semester count, minimum credit load). Selecting a level in the Programme Master auto-populates these values — e.g. selecting Bachelor&apos;s defaults to 3 years, 6 semesters.
         </div>
 
         <div className="card">
           <div className="card-hdr">
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-folder"></i></span> Programme Groups</div>
-            <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-graduation"></i></span> Defined Programme Levels</div>
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead>
                 <tr>
                   <th style={{ width: 48 }}></th>
-                  <th>Group Code</th>
-                  <th>Group Name</th>
-                  {fth('Programme Level', 'programLevelName', programLevels.map(l => l.levelName))}
-                  {/* Not part of the confirmed GET /api/v1/academic/program-groups
-                  response — kept for reference until/unless the backend adds them.
-                  <th>Active Versions</th>
-                  <th>Inactive Versions</th>
-                  <th>Total Students</th>
+                  <th>Level Code</th>
+                  <th>Level Name</th>
+                  <th>Year Count</th>
+                  <th>Semester Count</th>
+                  <th>Min. Credit Load</th>
+                  {/* Not part of the confirmed GET /api/v1/academic/program-levels
+                  response — kept for reference until/unless the backend adds it.
+                  {fth('No Internal Assessment', 'noIA', ['Yes', 'No'])}
+                  <th>Linked Programmes</th>
                   */}
                 </tr>
               </thead>
@@ -112,10 +110,10 @@ export default function Page() {
                     ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
                     : null}
                 {filteredRows.map((r) => (
-                  <tr key={r.programGroupGuid}>
+                  <tr key={r.programLevelGuid}>
                     <td>
                       <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.programGroupGuid)}>
+                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.programLevelGuid)}>
                           <i className="lni lni-pencil"></i> Edit
                         </button>
                         <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
@@ -123,14 +121,20 @@ export default function Page() {
                         </button>
                       </ActionMenu>
                     </td>
-                    <td className="font-mono text-b700">{r.groupCode}</td>
-                    <td><strong>{r.groupName}</strong></td>
-                    <td>{r.programLevelName}</td>
-                    {/* Not part of the confirmed GET /api/v1/academic/program-groups
-                    response — kept for reference until/unless the backend adds them.
-                    <td><span className="badge badge-green">{r.activeVersions}</span></td>
-                    <td>{r.inactiveVersions === '—' ? '—' : <span className="badge badge-grey">{r.inactiveVersions}</span>}</td>
-                    <td>{r.students}</td>
+                    <td className="font-mono text-b700">{r.levelCode}</td>
+                    <td><strong>{r.levelName}</strong></td>
+                    <td>{r.yearCount}</td>
+                    <td>{r.semCount}</td>
+                    <td>{r.minCreditLoad}</td>
+                    {/* Not part of the confirmed GET /api/v1/academic/program-levels
+                    response — kept for reference until/unless the backend adds it.
+                    <td>
+                      {r.noIA === 'Yes'
+                        ? <span className="badge badge-amber"><i className="lni lni-checkmark"></i> Yes — No IA</span>
+                        : <span className="badge badge-grey">No</span>
+                      }
+                    </td>
+                    <td>{r.linkedProgs}</td>
                     */}
                   </tr>
                 ))}
@@ -139,18 +143,18 @@ export default function Page() {
           </ScrollTable>
         </div>
       </div>
-      <ProgrammeGroupModal
-        isOpen={openModals.has('new-proggroup-modal')}
-        onClose={() => closeModal('new-proggroup-modal')}
+      <ProgrammeLevelModal
+        isOpen={openModals.has('new-alevel-modal')}
+        onClose={() => closeModal('new-alevel-modal')}
         showToast={showToast}
-        createProgramGroup={createProgramGroup}
+        createProgramLevel={createProgramLevel}
       />
-      <EditProgrammeGroupModal
-        isOpen={openModals.has('edit-proggroup-modal')}
-        onClose={() => closeModal('edit-proggroup-modal')}
+      <EditProgrammeLevelModal
+        isOpen={openModals.has('edit-alevel-modal')}
+        onClose={() => closeModal('edit-alevel-modal')}
         showToast={showToast}
-        programGroupGuid={editingProgramGroupGuid}
-        updateProgramGroup={updateProgramGroup}
+        programLevelGuid={editingProgramLevelGuid}
+        updateProgramLevel={updateProgramLevel}
       />
       <Toast toast={toast} />
 
@@ -158,14 +162,14 @@ export default function Page() {
         <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
           <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
             <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
-            <div className="perm-delete-title">Delete {deleteTarget.groupName}?</div>
+            <div className="perm-delete-title">Delete {deleteTarget.levelName}?</div>
             <div className="perm-delete-sub">
-              This will permanently delete this programme group. This can&apos;t be undone.
+              This will permanently delete this programme level. This can&apos;t be undone.
             </div>
             <div className="perm-delete-actions">
               <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button className="btn btn-danger" disabled={deleteProgramGroup.isPending} onClick={confirmDeleteProgramGroup}>
-                <i className="lni lni-trash-can"></i> {deleteProgramGroup.isPending ? 'Deleting…' : 'Delete'}
+              <button className="btn btn-danger" disabled={deleteProgramLevel.isPending} onClick={confirmDeleteProgramLevel}>
+                <i className="lni lni-trash-can"></i> {deleteProgramLevel.isPending ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>

@@ -1,0 +1,106 @@
+import { apiDelete, apiGet, apiPost, apiPut } from '../client'
+
+const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
+
+// Real backend shape returned by GET /api/v1/academic/program-groups
+// (paginated — items/totalCount/pageNumber/pageSize, same envelope as
+// faculty/designation/department/etc.)
+export interface ProgramGroup {
+  programGroupGuid: string
+  groupCode: string
+  groupName: string
+  programLevelGuid: string
+  programLevelName: string
+}
+
+// Previous hardcoded rows (pre GET /api/v1/academic/program-groups
+// integration) — activeVersions/inactiveVersions/students aren't part of
+// the confirmed real response, kept here for reference until/unless the
+// backend adds them.
+// const mockRows = [
+//   { code: 'BCA', name: "Bachelor of Computer Applications",    level: "Bachelor's", activeVersions: '1 Active', inactiveVersions: '1 Inactive', students: 234 },
+//   { code: 'BBA', name: "Bachelor of Business Administration",  level: "Bachelor's", activeVersions: '1 Active', inactiveVersions: '2 Inactive', students: 412 },
+//   { code: 'MBA', name: "Master of Business Administration",    level: "Master's",   activeVersions: '1 Active', inactiveVersions: '1 Inactive', students: 186 },
+//   { code: 'BEng', name: "Bachelor of Engineering (Civil)",     level: 'Engineering', activeVersions: '1 Active', inactiveVersions: '—',          students: 124 },
+// ]
+
+const mockProgramGroups: ProgramGroup[] = [
+  { programGroupGuid: '1', groupCode: 'BCA',  groupName: 'Bachelor of Computer Applications',   programLevelGuid: '3', programLevelName: "Bachelor's Degree" },
+  { programGroupGuid: '2', groupCode: 'BBA',  groupName: 'Bachelor of Business Administration', programLevelGuid: '3', programLevelName: "Bachelor's Degree" },
+  { programGroupGuid: '3', groupCode: 'MBA',  groupName: 'Master of Business Administration',   programLevelGuid: '5', programLevelName: "Master's Degree" },
+  { programGroupGuid: '4', groupCode: 'BEng', groupName: 'Bachelor of Engineering (Civil)',      programLevelGuid: '4', programLevelName: 'Bachelor of Engineering' },
+]
+
+interface ProgramGroupListResponse {
+  items: ProgramGroup[]
+  totalCount: number
+  pageNumber: number
+  pageSize: number
+}
+
+export function getProgramGroups(page = 1, pageSize = 10): Promise<ProgramGroup[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockProgramGroups)
+  return apiGet<ProgramGroupListResponse | null>(`/api/v1/academic/program-groups?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
+}
+
+// Confirmed create payload — programLevelName is server-resolved from
+// programLevelGuid, so it isn't sent, even though it's present on the GET
+// response shape.
+export interface ProgramGroupInput {
+  groupCode: string
+  groupName: string
+  programLevelGuid: string
+}
+
+let mockProgramGroupSeq = mockProgramGroups.length + 1
+
+export function createProgramGroup(input: ProgramGroupInput): Promise<ProgramGroup> {
+  if (MOCK_AUTH) {
+    const group: ProgramGroup = {
+      programGroupGuid: String(mockProgramGroupSeq++),
+      groupCode: input.groupCode,
+      groupName: input.groupName,
+      programLevelGuid: input.programLevelGuid,
+      // Server-resolved from programLevelGuid on the real GET response — no
+      // local programme-level list to cross-reference against here.
+      programLevelName: '',
+    }
+    mockProgramGroups.push(group)
+    return Promise.resolve(group)
+  }
+  return apiPost<ProgramGroup>('/api/v1/academic/program-groups', input)
+}
+
+// GET/PUT single-record endpoints — inferred as /api/v1/academic/program-groups/:guid,
+// following the same base-path/:guid convention as every other real-wired
+// domain in this app (program-levels, designation, faculty, etc.); not
+// separately confirmed against the backend.
+export function getProgramGroupById(guid: string): Promise<ProgramGroup> {
+  if (MOCK_AUTH) {
+    const existing = mockProgramGroups.find(g => g.programGroupGuid === guid)
+    if (!existing) return Promise.reject(new Error('Programme group not found'))
+    return Promise.resolve(existing)
+  }
+  return apiGet<ProgramGroup>(`/api/v1/academic/program-groups/${guid}`)
+}
+
+// Same payload shape as create (see ProgramGroupInput above).
+export function updateProgramGroup(guid: string, input: ProgramGroupInput): Promise<ProgramGroup> {
+  if (MOCK_AUTH) {
+    const existing = mockProgramGroups.find(g => g.programGroupGuid === guid)
+    if (!existing) return Promise.reject(new Error('Programme group not found'))
+    Object.assign(existing, input)
+    return Promise.resolve(existing)
+  }
+  return apiPut<ProgramGroup>(`/api/v1/academic/program-groups/${guid}`, input)
+}
+
+export function deleteProgramGroup(guid: string): Promise<boolean> {
+  if (MOCK_AUTH) {
+    const index = mockProgramGroups.findIndex(g => g.programGroupGuid === guid)
+    if (index === -1) return Promise.reject(new Error('Programme group not found'))
+    mockProgramGroups.splice(index, 1)
+    return Promise.resolve(true)
+  }
+  return apiDelete<boolean>(`/api/v1/academic/program-groups/${guid}`)
+}
