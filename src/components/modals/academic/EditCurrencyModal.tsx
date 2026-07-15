@@ -43,7 +43,7 @@ export function EditCurrencyModal({ isOpen, onClose, showToast, currency, update
   function handleSubmit() {
     if (!currency || !validate()) return
     updateCurrency.mutate(
-      { id: currency.id, input: { currencyCode, currencyName, isDefault: isDefault ? 1 : 0 } },
+      { id: String(currency.intCurrency), input: { currencyCode, currencyName, isDefault: isDefault ? 1 : 0 } },
       { onSuccess: () => { setSaved(true); showToast('Currency updated successfully') } },
     )
   }

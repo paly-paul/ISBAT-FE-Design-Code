@@ -55,7 +55,7 @@ const ADMISSION_SECTIONS = [
 // fetch. The sidebar uses div+onClick (not next/link), so none of these get
 // Next's automatic viewport-based prefetch otherwise.
 const ADMISSION_IDS = ADMISSION_SECTIONS.flatMap(s => s.items.map(i => i.id))
-const ACADEMIC_IDS = ['acad-dashboard', 'intake-master', 'skill-master', 'batch-management', 'room-management', 'session-movement', 'repetition-tag', 'course-units', 'a-level-master', 'programme-group', 'programme-master', 'fee-structure', 'timetable', 'odl-applications', 'odl-reconciliation', 'student-lookup']
+const ACADEMIC_IDS = ['acad-dashboard', 'intake-master', 'skill-master', 'batch-management', 'room-management', 'session-movement', 'repetition-tag', 'course-units', 'programme-level', 'programme-group', 'programme-master', 'fee-structure', 'timetable', 'odl-applications', 'odl-reconciliation', 'student-lookup']
 const STUDENT_IDS = ['student-master']
 const EMPLOYEE_IDS = ['employee-master']
 const CONFIG_IDS = ['faculty-master', 'department-master', 'designation-master', 'stream-master', 'skill', 'ledger', 'campus-master', 'currency-master', 'country-master', 'permission-master']
@@ -227,7 +227,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
             </>)}
 
             {sbSection('sc-prog', 'Programme Master', <>
-              {sbItem('a-level-master', 'Programme Level', 'layers')}
+              {sbItem('programme-level', 'Programme Level', 'layers')}
               {sbItem('programme-group', 'Programme Group', 'folder')}
               {sbItem('programme-master', 'Programme Master', 'graduation')}
               {sbItem('fee-structure', 'Fee Structure', 'dollar')}

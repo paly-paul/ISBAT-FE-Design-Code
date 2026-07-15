@@ -3,10 +3,16 @@ import { createIntake, CreateIntakeInput, deleteIntake, getIntakeById, getIntake
 
 const INTAKES_KEY = ['intakes']
 
+// Fetch a single page large enough to cover the whole list — nothing in
+// this codebase currently paginates the master lists client-side, so the
+// hook needs the full set in one request rather than the API's default
+// page=1/pageSize=10 (which was silently hiding any row past the 10th).
+const INTAKES_PAGE_SIZE = 1000
+
 export function useIntakes() {
   return useQuery({
     queryKey: INTAKES_KEY,
-    queryFn: () => getIntakes(),
+    queryFn: () => getIntakes(1, INTAKES_PAGE_SIZE),
     // Same reasoning as the other master-data lists in this app: don't
     // re-fetch just because the user switched tabs and came back — only
     // refetch once a create/update mutation actually changes this data.

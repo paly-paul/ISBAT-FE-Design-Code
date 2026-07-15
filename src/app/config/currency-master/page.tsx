@@ -63,7 +63,7 @@ export default function Page() {
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
                 {rows.map((r) => (
-                  <tr key={r.id}>
+                  <tr key={r.intCurrency}>
                     <td>
                       <ActionMenu>
                         <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>

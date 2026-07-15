@@ -43,6 +43,19 @@ function redirectToLogin() {
   if (typeof window !== 'undefined') window.location.href = '/login'
 }
 
+// Only a definitive rejection from the refresh endpoint itself (refresh token
+// expired/invalid) should force a logout. A network blip, timeout, or gateway
+// hiccup while calling /auth/refresh throws a plain error (not AuthError) and
+// should surface as a normal failure instead — the session may still be fine.
+async function handleUnauthorized(): Promise<void> {
+  try {
+    await refreshAccessToken()
+  } catch (err) {
+    if (err instanceof AuthError) redirectToLogin()
+    throw err
+  }
+}
+
 // Legacy raw-JSON endpoints (no envelope) — still used by auth flows the real
 // backend hasn't implemented yet (OTP, forgot password, activation).
 export async function post<T>(path: string, body: unknown, retried = false): Promise<T> {
@@ -54,12 +67,7 @@ export async function post<T>(path: string, body: unknown, retried = false): Pro
   })
 
   if (res.status === 401 && !isAuthEndpoint(path) && !retried) {
-    try {
-      await refreshAccessToken()
-    } catch {
-      redirectToLogin()
-      throw new AuthError('unauthorized')
-    }
+    await handleUnauthorized()
     return post<T>(path, body, true)
   }
 
@@ -80,12 +88,7 @@ export async function get<T>(path: string, retried = false): Promise<T> {
   })
 
   if (res.status === 401 && !isAuthEndpoint(path) && !retried) {
-    try {
-      await refreshAccessToken()
-    } catch {
-      redirectToLogin()
-      throw new AuthError('unauthorized')
-    }
+    await handleUnauthorized()
     return get<T>(path, true)
   }
 
@@ -119,12 +122,7 @@ export async function apiPost<T>(path: string, body: unknown, retried = false): 
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    try {
-      await refreshAccessToken()
-    } catch {
-      redirectToLogin()
-      throw new AuthError('unauthorized')
-    }
+    await handleUnauthorized()
     return apiPost<T>(path, body, true)
   }
 
@@ -154,12 +152,7 @@ export async function apiPut<T>(path: string, body: unknown, retried = false): P
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    try {
-      await refreshAccessToken()
-    } catch {
-      redirectToLogin()
-      throw new AuthError('unauthorized')
-    }
+    await handleUnauthorized()
     return apiPut<T>(path, body, true)
   }
 
@@ -185,12 +178,7 @@ export async function apiDelete<T>(path: string, retried = false): Promise<T> {
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    try {
-      await refreshAccessToken()
-    } catch {
-      redirectToLogin()
-      throw new AuthError('unauthorized')
-    }
+    await handleUnauthorized()
     return apiDelete<T>(path, true)
   }
 
@@ -216,12 +204,7 @@ export async function apiGet<T>(path: string, retried = false): Promise<T> {
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    try {
-      await refreshAccessToken()
-    } catch {
-      redirectToLogin()
-      throw new AuthError('unauthorized')
-    }
+    await handleUnauthorized()
     return apiGet<T>(path, true)
   }
 

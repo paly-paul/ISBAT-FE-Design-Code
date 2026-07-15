@@ -66,7 +66,7 @@ export default function Page() {
         </div>
 
         <div className="flex items-center gap-2 mb-[18px] flex-wrap">
-          <button className="btn btn-neu btn-sm text-[var(--fs-xs)]" onClick={() => nav('a-level-master')}><i className="lni lni-graduation"></i> Programme Level</button>
+          <button className="btn btn-neu btn-sm text-[var(--fs-xs)]" onClick={() => nav('programme-level')}><i className="lni lni-graduation"></i> Programme Level</button>
           <span className="text-g300 text-[var(--fs-2xl)]">→</span>
           <button className="btn btn-neu btn-sm text-[var(--fs-xs)]" onClick={() => nav('programme-group')}><i className="lni lni-folder"></i> Programme Group</button>
           <span className="text-g300 text-[var(--fs-2xl)]">→</span>

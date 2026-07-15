@@ -1,41 +1,59 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ProgramLevelInput } from '@/lib/api/academic/programLevel'
+import { useProgramLevel } from '@/hooks/academic/useProgramLevels'
 import { useCurrencies } from '@/hooks/config/useCurrencies'
 import { AuthError } from '@/lib/api/client'
 
-interface ProgrammeLevelModalProps extends ModalProps {
-  createProgramLevel: {
-    mutate: (input: ProgramLevelInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
+interface EditProgrammeLevelModalProps extends ModalProps {
+  programLevelGuid: string | null
+  updateProgramLevel: {
+    mutate: (variables: { guid: string; input: ProgramLevelInput }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
     isPending: boolean
   }
 }
 
-export function ProgrammeLevelModal({ isOpen, onClose, showToast, createProgramLevel }: ProgrammeLevelModalProps) {
-  const [saved, setSaved]               = useState(false)
-  const [failure, setFailure]           = useState<string | null>(null)
-  const [levelCode, setLevelCode]       = useState('')
-  const [levelName, setLevelName]       = useState('')
-  const [yearCount, setYearCount]       = useState('')
+export function EditProgrammeLevelModal({ isOpen, onClose, showToast, programLevelGuid, updateProgramLevel }: EditProgrammeLevelModalProps) {
+  const { data: programLevel, isLoading, isError, error } = useProgramLevel(programLevelGuid, isOpen)
+
+  const [saved, setSaved]                 = useState(false)
+  const [failure, setFailure]             = useState<string | null>(null)
+  const [levelCode, setLevelCode]         = useState('')
+  const [levelName, setLevelName]         = useState('')
+  const [yearCount, setYearCount]         = useState('')
   const [minCreditLoad, setMinCreditLoad] = useState('')
-  const [appFee, setAppFee]             = useState('')
-  const [lateFee, setLateFee]           = useState('')
-  const [currency, setCurrency]         = useState('')
-  const [errors, setErrors]             = useState<Record<string, string>>({})
+  const [appFee, setAppFee]               = useState('')
+  const [lateFee, setLateFee]             = useState('')
+  const [currency, setCurrency]           = useState('')
+  const [errors, setErrors]               = useState<Record<string, string>>({})
 
   const { data: currencies = [] } = useCurrencies()
   const currencyOptions = currencies.map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` }))
 
+  // Prefill the form once the programme level has loaded. Re-runs whenever a
+  // different guid is fetched (react-query resets `programLevel` to
+  // undefined when programLevelGuid changes, so stale data never leaks
+  // between edits).
+  useEffect(() => {
+    if (!isOpen || !programLevel) return
+    setLevelCode(programLevel.levelCode)
+    setLevelName(programLevel.levelName)
+    setYearCount(String(programLevel.yearCount))
+    setMinCreditLoad(String(programLevel.minCreditLoad))
+    setAppFee(String(programLevel.appFee))
+    setLateFee(String(programLevel.lateFee))
+    setCurrency(String(programLevel.intCurrency))
+    setErrors({})
+  }, [isOpen, programLevel])
+
   if (!isOpen) return null
 
   function handleClose() {
-    setSaved(false); setFailure(null)
-    setLevelCode(''); setLevelName(''); setYearCount(''); setMinCreditLoad('')
-    setAppFee(''); setLateFee(''); setCurrency(''); setErrors({})
+    setSaved(false); setFailure(null); setErrors({})
     onClose()
   }
 
@@ -58,21 +76,44 @@ export function ProgrammeLevelModal({ isOpen, onClose, showToast, createProgramL
 
   // Maps the backend's { code, errors } failure shape to an inline field
   // error where the cause is actionable right there (duplicate levelCode);
-  // anything else shows the failure popup instead.
-  function handleCreateError(error: Error) {
+  // anything else shows the failure popup instead — same convention as
+  // ProgrammeLevelModal's create-error handling.
+  function handleUpdateError(error: Error) {
     const code = error instanceof AuthError ? error.code : undefined
     if (code === 'bad_request') {
       setErrors(prev => ({ ...prev, levelCode: error.message || 'A programme level with this code already exists.' }))
       return
     }
-    setFailure(error.message || 'Failed to add programme level. Please try again.')
+    setFailure(error.message || 'Failed to update programme level. Please try again.')
+  }
+
+  function handleUpdate() {
+    if (!programLevelGuid || !validate()) return
+    updateProgramLevel.mutate(
+      {
+        guid: programLevelGuid,
+        input: {
+          levelCode,
+          levelName,
+          yearCount: +yearCount,
+          minCreditLoad: +minCreditLoad,
+          appFee: +appFee,
+          lateFee: +lateFee,
+          intCurrency: +currency,
+        },
+      },
+      {
+        onSuccess: () => { setSaved(true); showToast('Programme Level updated successfully') },
+        onError: handleUpdateError,
+      },
+    )
   }
 
   if (saved) {
     return (
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
-          <SuccessPopup title="Programme Level Added!" subtitle="The new programme level has been saved successfully." onClose={handleClose} />
+          <SuccessPopup title="Programme Level Updated!" subtitle="Your changes have been saved successfully." onClose={handleClose} />
         </div>
       </div>
     )
@@ -82,17 +123,47 @@ export function ProgrammeLevelModal({ isOpen, onClose, showToast, createProgramL
     return (
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
-          <FailurePopup title="Couldn't Add Programme Level" subtitle={failure} onClose={() => setFailure(null)} />
+          <FailurePopup title="Couldn't Update Programme Level" subtitle={failure} onClose={() => setFailure(null)} />
+        </div>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup
+            title="Couldn't Load Programme Level"
+            subtitle={error instanceof AuthError ? (error.message || 'Failed to load programme level details.') : 'Failed to load programme level details.'}
+            onClose={handleClose}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading || !programLevel) {
+    return (
+      <div className="modal-overlay open" id="edit-alevel-modal">
+        <div className="modal modal-md" onClick={e => e.stopPropagation()}>
+          <div className="modal-hdr">
+            <div className="modal-title"><i className="lni lni-pencil"></i> Edit Programme Level</div>
+            <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
+            <span style={{ color: 'var(--g400)' }}>Loading programme level details…</span>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="modal-overlay open" id="new-alevel-modal">
+    <div className="modal-overlay open" id="edit-alevel-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
-          <div className="modal-title"><i className="lni lni-graduation"></i> Add Programme Level</div>
+          <div className="modal-title"><i className="lni lni-pencil"></i> Edit Programme Level — <span className="font-mono">{programLevel.levelCode}</span></div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
         <div className="g2">
@@ -133,7 +204,7 @@ export function ProgrammeLevelModal({ isOpen, onClose, showToast, createProgramL
             {errors.yearCount && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.yearCount}</p>}
           </div>
 
-          {/* Not part of the confirmed POST /api/v1/academic/program-levels
+          {/* Not part of the confirmed PUT /api/v1/academic/program-levels/:guid
           payload (semCount is presumably server-derived from yearCount) —
           kept for reference until/unless the backend accepts it.
           <div className="fg"><div className="lbl">Semester Count <span className="req">*</span></div><input className="ctrl" type="number" placeholder="e.g. 6" min={1} max={20} /></div>
@@ -189,7 +260,7 @@ export function ProgrammeLevelModal({ isOpen, onClose, showToast, createProgramL
             {errors.currency && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.currency}</p>}
           </div>
 
-          {/* Not part of the confirmed POST /api/v1/academic/program-levels
+          {/* Not part of the confirmed PUT /api/v1/academic/program-levels/:guid
           payload — kept for reference until/unless the backend accepts it.
           <div className="fg">
             <div className="lbl">No Internal Assessment?</div>
@@ -203,29 +274,8 @@ export function ProgrammeLevelModal({ isOpen, onClose, showToast, createProgramL
         <div className="info-box mt-3"><i className="lni lni-information"></i> These values auto-populate the Programme Master when this level is selected.</div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button
-            className="btn btn-primary"
-            disabled={createProgramLevel.isPending}
-            onClick={() => {
-              if (!validate()) return
-              createProgramLevel.mutate(
-                {
-                  levelCode,
-                  levelName,
-                  yearCount: +yearCount,
-                  minCreditLoad: +minCreditLoad,
-                  appFee: +appFee,
-                  lateFee: +lateFee,
-                  intCurrency: +currency,
-                },
-                {
-                  onSuccess: () => { setSaved(true); showToast('Programme Level added successfully') },
-                  onError: handleCreateError,
-                },
-              )
-            }}
-          >
-            <i className="lni lni-checkmark"></i> {createProgramLevel.isPending ? 'Adding…' : 'Save Level'}
+          <button className="btn btn-primary" disabled={updateProgramLevel.isPending} onClick={handleUpdate}>
+            <i className="lni lni-checkmark"></i> {updateProgramLevel.isPending ? 'Saving…' : 'Update Level'}
           </button>
         </div>
       </div>
