@@ -5,11 +5,13 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { NewEmployeeModal } from '@/components/modals/employee/NewEmployeeModal'
 import { EditEmployeeModal } from '@/components/modals/employee/EditEmployeeModal'
+import { AssignEmployeePermissionsModal } from '@/components/modals/employee/AssignEmployeePermissionsModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { useEmployees } from '@/hooks/employee/useEmployees'
+import { EmployeeListItem } from '@/lib/api/employee/employee'
 
 export default function Page() {
   const router = useRouter()
@@ -18,6 +20,7 @@ export default function Page() {
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingEmployeeGuid, setEditingEmployeeGuid] = useState<string | null>(null)
+  const [assigningPermissionsEmployee, setAssigningPermissionsEmployee] = useState<EmployeeListItem | null>(null)
 
   function nav(id: string) { router.push('/employee/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -27,6 +30,11 @@ export default function Page() {
   function openEditModal(employeeGuid: string) {
     setEditingEmployeeGuid(employeeGuid)
     openModal('edit-employee-modal')
+  }
+
+  function openAssignPermissionsModal(employee: EmployeeListItem) {
+    setAssigningPermissionsEmployee(employee)
+    openModal('assign-employee-permissions-modal')
   }
 
   useEffect(() => {
@@ -133,7 +141,16 @@ export default function Page() {
                 */}
                 {filteredRows.map(r => (
                   <tr key={r.employeeGuid}>
-                    <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.employeeGuid)}><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>
+                    <td>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.employeeGuid)}>
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>
+                        <button className="btn btn-neu btn-sm" onClick={() => openAssignPermissionsModal(r)}>
+                          <i className="lni lni-lock"></i> Assign Permissions
+                        </button>
+                      </ActionMenu>
+                    </td>
                     <td className="font-mono text-b700">{r.shortCode}</td>
                     <td><strong>{r.title} {r.firstName} {r.surname}</strong></td>
                     <td>{r.sex === 1 ? 'Male' : 'Female'}</td>
@@ -151,6 +168,12 @@ export default function Page() {
         onClose={() => closeModal('edit-employee-modal')}
         showToast={showToast}
         employeeGuid={editingEmployeeGuid}
+      />
+      <AssignEmployeePermissionsModal
+        isOpen={openModals.has('assign-employee-permissions-modal')}
+        onClose={() => closeModal('assign-employee-permissions-modal')}
+        showToast={showToast}
+        employee={assigningPermissionsEmployee}
       />
       <Toast toast={toast} />
     </>

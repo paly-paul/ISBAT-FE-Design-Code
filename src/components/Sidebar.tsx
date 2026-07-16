@@ -58,7 +58,7 @@ const ADMISSION_IDS = ADMISSION_SECTIONS.flatMap(s => s.items.map(i => i.id))
 const ACADEMIC_IDS = ['acad-dashboard', 'intake-master', 'skill-master', 'batch-management', 'room-management', 'session-movement', 'repetition-tag', 'course-units', 'programme-level', 'programme-group', 'programme-master', 'fee-structure', 'timetable', 'odl-applications', 'odl-reconciliation', 'student-lookup']
 const STUDENT_IDS = ['student-master']
 const EMPLOYEE_IDS = ['employee-master']
-const CONFIG_IDS = ['faculty-master', 'department-master', 'designation-master', 'stream-master', 'skill', 'ledger', 'campus-master', 'currency-master', 'country-master', 'permission-master']
+const CONFIG_IDS = ['faculty-master', 'department-master', 'designation-master', 'specialization', 'skill', 'ledger', 'campus-master', 'currency-master', 'country-master', 'permission-master', 'enquiry-status', 'followup-status']
 
 export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {
   const router = useRouter()
@@ -285,13 +285,15 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
               {sbItem('faculty-master', 'Faculty Master', 'library', undefined, 'config')}
               {sbItem('department-master', 'Department Master', 'briefcase', undefined, 'config')}
               {sbItem('designation-master', 'Designation Master', 'tag', undefined, 'config')}
-              {sbItem('stream-master', 'Specialization', 'certificate', undefined, 'config')}
+              {sbItem('specialization', 'Specialization', 'certificate', undefined, 'config')}
               {sbItem('skill', 'Skill Master', 'bulb', undefined, 'config')}
               {sbItem('ledger', 'Ledger Master', 'book', undefined, 'config')}
               {sbItem('campus-master', 'Campus Master', 'home', undefined, 'config')}
               {sbItem('currency-master', 'Currency Master', 'dollar', undefined, 'config')}
               {sbItem('country-master', 'Country Master', 'world', undefined, 'config')}
               {sbItem('permission-master', 'Permission Master', 'lock', undefined, 'config')}
+              {sbItem('enquiry-status', 'Enquiry Status', 'flag', undefined, 'config')}
+              {sbItem('followup-status', 'Followup Status', 'flag', undefined, 'config')}
             </>)}
 
             <div className="sb-panel-footer">S0 · Core Config</div>

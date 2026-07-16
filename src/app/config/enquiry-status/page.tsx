@@ -1,0 +1,129 @@
+'use client'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { ScrollTable } from '@/components/ScrollTable'
+import { ActionMenu } from '@/components/ActionMenu'
+import { Toast } from '@/components/Toast'
+import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { NewEnquiryStatusModal } from '@/components/modals/academic/NewEnquiryStatusModal'
+import { EditEnquiryStatusModal } from '@/components/modals/academic/EditEnquiryStatusModal'
+import { useEnquiryStatuses, useCreateEnquiryStatus, useUpdateEnquiryStatus, useDeleteEnquiryStatus, EnquiryStatus } from '@/hooks/config/useEnquiryStatuses'
+
+export default function Page() {
+  const router = useRouter()
+  const [openModals, setOpenModals] = useState<Set<string>>(new Set())
+  const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
+  const [editingEnquiryStatusGuid, setEditingEnquiryStatusGuid] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<EnquiryStatus | null>(null)
+
+  const { data: rows = [], isLoading } = useEnquiryStatuses()
+  const createEnquiryStatus = useCreateEnquiryStatus()
+  const updateEnquiryStatus = useUpdateEnquiryStatus()
+  const deleteEnquiryStatus = useDeleteEnquiryStatus()
+
+  function nav(id: string) { router.push('/config/' + id) }
+  function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
+  function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
+  function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  function openEditModal(guid: string) {
+    setEditingEnquiryStatusGuid(guid)
+    openModal('edit-enquiry-status-modal')
+  }
+
+  function confirmDeleteEnquiryStatus() {
+    if (!deleteTarget) return
+    deleteEnquiryStatus.mutate(deleteTarget.enquiryStatusGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Enquiry status deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete enquiry status', 'error'),
+    })
+  }
+
+  return (
+    <>
+      <div className="page active">
+        <div className="pg-hdr">
+          <div>
+            <div className="pg-title">Enquiry Status Master</div>
+            <div className="pg-sub">Manage the statuses used to track admission enquiry follow-ups</div>
+          </div>
+          <button className="btn btn-primary" onClick={() => openModal('new-enquiry-status-modal')}>
+            <i className="lni lni-plus"></i> Add Enquiry Status
+          </button>
+        </div>
+        <div className="card">
+          <div className="card-hdr">
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-flag"></i></span> Enquiry Statuses</div>
+          </div>
+          <ScrollTable>
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 48 }}></th>
+                  <th>Status Code</th>
+                  <th>Status Name</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading
+                  ? <TableLoadingState colSpan={999} />
+                  : rows.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
+                    : null}
+                {rows.map((r) => (
+                  <tr key={r.enquiryStatusGuid}>
+                    <td>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.enquiryStatusGuid)}>
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>
+                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                          <i className="lni lni-trash-can"></i> Delete
+                        </button>
+                      </ActionMenu>
+                    </td>
+                    <td className="font-mono font-bold">{r.enquiryStatusCode}</td>
+                    <td><strong>{r.enquiryStatusName}</strong></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollTable>
+        </div>
+      </div>
+      <NewEnquiryStatusModal
+        isOpen={openModals.has('new-enquiry-status-modal')}
+        onClose={() => closeModal('new-enquiry-status-modal')}
+        showToast={showToast}
+        createEnquiryStatus={createEnquiryStatus}
+      />
+      <EditEnquiryStatusModal
+        isOpen={openModals.has('edit-enquiry-status-modal')}
+        onClose={() => closeModal('edit-enquiry-status-modal')}
+        showToast={showToast}
+        enquiryStatusGuid={editingEnquiryStatusGuid}
+        updateEnquiryStatus={updateEnquiryStatus}
+      />
+      <Toast toast={toast} />
+
+      {deleteTarget && (
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
+            <div className="perm-delete-title">Delete {deleteTarget.enquiryStatusName}?</div>
+            <div className="perm-delete-sub">
+              This will permanently delete this enquiry status. This can&apos;t be undone.
+            </div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" disabled={deleteEnquiryStatus.isPending} onClick={confirmDeleteEnquiryStatus}>
+                <i className="lni lni-trash-can"></i> {deleteEnquiryStatus.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}

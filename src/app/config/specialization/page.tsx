@@ -8,26 +8,36 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { NewStreamModal } from '@/components/modals/academic/NewStreamModal'
 import { EditStreamModal } from '@/components/modals/academic/EditStreamModal'
-import { useStreams, useCreateStream, useUpdateStream, Stream } from '@/hooks/config/useStreams'
+import { useStreams, useCreateStream, useUpdateStream, useDeleteStream, Stream } from '@/hooks/config/useStreams'
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
-  const [editingStream, setEditingStream] = useState<Stream | null>(null)
+  const [editingStreamGuid, setEditingStreamGuid] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Stream | null>(null)
 
   const { data: rows = [], isLoading } = useStreams()
   const createStream = useCreateStream()
   const updateStream = useUpdateStream()
+  const deleteStream = useDeleteStream()
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  function openEditModal(stream: Stream) {
-    setEditingStream(stream)
+  function openEditModal(guid: string) {
+    setEditingStreamGuid(guid)
     openModal('edit-stream-modal')
+  }
+
+  function confirmDeleteStream() {
+    if (!deleteTarget) return
+    deleteStream.mutate(deleteTarget.streamGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Stream deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete stream', 'error'),
+    })
   }
 
   return (
@@ -62,11 +72,14 @@ export default function Page() {
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
                 {rows.map((r) => (
-                  <tr key={r.id}>
+                  <tr key={r.streamGuid}>
                     <td>
                       <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
+                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.streamGuid)}>
                           <i className="lni lni-pencil"></i> Edit
+                        </button>
+                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                          <i className="lni lni-trash-can"></i> Delete
                         </button>
                       </ActionMenu>
                     </td>
@@ -89,10 +102,28 @@ export default function Page() {
         isOpen={openModals.has('edit-stream-modal')}
         onClose={() => closeModal('edit-stream-modal')}
         showToast={showToast}
-        stream={editingStream}
+        streamGuid={editingStreamGuid}
         updateStream={updateStream}
       />
       <Toast toast={toast} />
+
+      {deleteTarget && (
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
+            <div className="perm-delete-title">Delete {deleteTarget.streamName}?</div>
+            <div className="perm-delete-sub">
+              This will permanently delete this stream. This can&apos;t be undone.
+            </div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" disabled={deleteStream.isPending} onClick={confirmDeleteStream}>
+                <i className="lni lni-trash-can"></i> {deleteStream.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
