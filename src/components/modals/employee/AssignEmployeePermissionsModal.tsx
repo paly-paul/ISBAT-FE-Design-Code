@@ -1,49 +1,128 @@
 'use client'
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../academic/SuccessPopup'
+import { FailurePopup } from '../academic/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { EmployeeListItem } from '@/lib/api/employee/employee'
-import { moduleIcon, moduleLabel } from '@/hooks/users/usePermissionCatalog'
-import { usePermissionWizard } from '@/hooks/users/usePermissionWizard'
+import { AuthError } from '@/lib/api/client'
+import { usePermissionGroups } from '@/hooks/config/usePermissionGroups'
+import { usePermissionCatalog, moduleIcon, moduleLabel } from '@/hooks/users/usePermissionCatalog'
+import { useAssignEmployeePermissionGroups, useEmployeePermissionGroups } from '@/hooks/employee/useEmployees'
+import { buildBreakdown } from '@/lib/permissionBreakdown'
 
-// Same module/permission-picking wizard as NewPermissionModal, reused as-is
-// via usePermissionWizard — but scoped to one employee instead of creating a
-// shared, named Permission Group. There's no "Group Name" field here: the
-// wizard's internal groupName state is silently seeded from the employee's
-// display name (below) purely so the hook's existing canSubmit/handleAddModule
-// gating — which requires a non-empty groupName — keeps working unmodified.
-//
-// No save API has been confirmed yet — "Confirm & Assign" only shows the
-// success screen and toasts locally. Swap handleAssign for a real mutation
-// once that endpoint is confirmed.
+// Unlike the group-builder wizard (New/EditPermissionModal), this modal only
+// lets you pick an existing group (created in Permission Master) and preview
+// what it grants — there's nothing to check/uncheck here, so it doesn't reuse
+// usePermissionWizard.
 interface AssignEmployeePermissionsModalProps extends ModalProps {
   employee: EmployeeListItem | null
 }
 
 export function AssignEmployeePermissionsModal({ isOpen, onClose, showToast, employee }: AssignEmployeePermissionsModalProps) {
+  const { data: groups = [] } = usePermissionGroups()
+  const { data: catalog = [] } = usePermissionCatalog()
+
+  const assignPermissionGroups = useAssignEmployeePermissionGroups()
   const {
-    moduleOptions, permissionsByModule, pagesByModule, permissionNameById,
-    saved, setSaved, confirming, setConfirming,
-    setGroupName, selectedModule, setSelectedModule,
-    blocks, blockRefs, deleteTarget, setDeleteTarget, deleteTargetBlock,
-    globalSearch, setGlobalSearch, globalMatches,
-    activeBlocks, canSubmit,
-    handleAddModule, handleGlobalSelect, toggleBlockOpen, updateBlockSearch,
-    toggleAll, togglePermission, confirmDelete, resetWizard,
-  } = usePermissionWizard()
+    data: assignedGroupIds,
+    isLoading: loadingAssignedGroups,
+    isError: assignedGroupsErrored,
+    error: assignedGroupsError,
+  } = useEmployeePermissionGroups(employee?.employeeGuid ?? null, isOpen)
+
+  const [selectedGroupId, setSelectedGroupId] = useState('')
+  const [loadedGroupIds, setLoadedGroupIds] = useState<string[]>([])
+  const [activeTab, setActiveTab] = useState<string | null>(null)
+  const [openModule, setOpenModule] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
+  const tabRefs = useRef<Partial<Record<string, HTMLButtonElement>>>({})
+  const [indicator, setIndicator] = useState({ left: 0, width: 0 })
+  // Tracks which employee we've already seeded loadedGroupIds for, so a
+  // background refetch of the assigned-groups query (e.g. window refocus)
+  // doesn't clobber in-progress edits while the modal stays open.
+  const seededForRef = useRef<string | null>(null)
 
   const employeeName = employee ? `${employee.title} ${employee.firstName} ${employee.surname}` : ''
 
+  const groupOptions = useMemo(
+    () => groups.map(g => ({ value: g.id, label: g.group + (loadedGroupIds.includes(g.id) ? ' (Added)' : '') })),
+    [groups, loadedGroupIds],
+  )
+  const loadedGroups = useMemo(() => groups.filter(g => loadedGroupIds.includes(g.id)), [groups, loadedGroupIds])
+
+  // What actually gets assigned is the union across every loaded group,
+  // regardless of which group's tab is currently being previewed.
+  const combinedBreakdown = useMemo(() => buildBreakdown(loadedGroups, catalog), [loadedGroups, catalog])
+
+  // Each tab previews just that one group's own grants.
+  const activeGroup = loadedGroups.find(g => g.id === activeTab) ?? null
+  const activeBreakdown = useMemo(
+    () => buildBreakdown(activeGroup ? [activeGroup] : [], catalog),
+    [activeGroup, catalog],
+  )
+
+  const hasGrantedPermissions = combinedBreakdown.some(b => b.grantedCount > 0)
+
+  // Accordion — switching tabs starts on the first module; otherwise keep
+  // whatever's open if still present.
   useEffect(() => {
-    if (isOpen && employee) setGroupName(employeeName)
-  }, [isOpen, employee, employeeName, setGroupName])
+    setOpenModule(prev => (prev && activeBreakdown.some(b => b.module === prev)) ? prev : (activeBreakdown[0]?.module ?? null))
+  }, [activeBreakdown])
+
+  // Fall back to the first remaining tab if the group it was showing gets removed.
+  useEffect(() => {
+    if (activeTab && !loadedGroupIds.includes(activeTab)) setActiveTab(loadedGroupIds[0] ?? null)
+  }, [activeTab, loadedGroupIds])
+
+  useLayoutEffect(() => {
+    const el = activeTab ? tabRefs.current[activeTab] : undefined
+    if (el) setIndicator({ left: el.offsetLeft, width: el.offsetWidth })
+  }, [activeTab, loadedGroups, isOpen])
+
+  // Seed the tabs from whatever the employee is already assigned, once per
+  // employee per time the modal is open — not on every background refetch.
+  useEffect(() => {
+    if (!isOpen || !employee) {
+      seededForRef.current = null
+      return
+    }
+    if (loadingAssignedGroups || !assignedGroupIds) return
+    if (seededForRef.current === employee.employeeGuid) return
+    const validIds = assignedGroupIds.filter(id => groups.some(g => g.id === id))
+    setLoadedGroupIds(validIds)
+    setActiveTab(validIds[0] ?? null)
+    seededForRef.current = employee.employeeGuid
+  }, [isOpen, employee, loadingAssignedGroups, assignedGroupIds, groups])
 
   if (!isOpen || !employee) return null
 
   function handleClose() {
-    resetWizard()
+    setSelectedGroupId('')
+    setLoadedGroupIds([])
+    setActiveTab(null)
+    setOpenModule(null)
+    setConfirming(false)
+    setSaved(false)
+    setFailure(null)
+    seededForRef.current = null
     onClose()
+  }
+
+  function handleAddGroup() {
+    if (!selectedGroupId) return
+    setLoadedGroupIds(prev => prev.includes(selectedGroupId) ? prev : [...prev, selectedGroupId])
+    setActiveTab(selectedGroupId)
+  }
+
+  function removeGroup(id: string) {
+    setLoadedGroupIds(prev => prev.filter(gid => gid !== id))
+  }
+
+  function toggleModuleOpen(module: string) {
+    setOpenModule(prev => prev === module ? null : module)
   }
 
   if (saved) {
@@ -56,9 +135,60 @@ export function AssignEmployeePermissionsModal({ isOpen, onClose, showToast, emp
     )
   }
 
+  if (failure) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup title="Couldn't Assign Permissions" subtitle={failure} onClose={() => setFailure(null)} />
+        </div>
+      </div>
+    )
+  }
+
+  if (assignedGroupsErrored) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup
+            title="Couldn't Load Current Permissions"
+            subtitle={assignedGroupsError instanceof AuthError ? (assignedGroupsError.message || 'Failed to load this employee’s current permissions.') : 'Failed to load this employee’s current permissions.'}
+            onClose={handleClose}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (loadingAssignedGroups) {
+    return (
+      <div className="modal-overlay open" id="assign-employee-permissions-modal">
+        <div className="modal modal-xl" onClick={e => e.stopPropagation()}>
+          <div className="modal-hdr">
+            <div className="modal-title"><i className="lni lni-lock"></i> Assign Permissions — <span className="font-mono">{employeeName}</span></div>
+            <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 220 }}>
+            <span style={{ color: 'var(--g400)' }}>Loading current permissions…</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const employeeGuid = employee.employeeGuid
+
   function handleAssign() {
-    setSaved(true)
-    showToast('Permissions assigned successfully')
+    assignPermissionGroups.mutate(
+      { employeeGuid, permissionGroupGuids: loadedGroupIds },
+      {
+        onSuccess: () => { setSaved(true); showToast('Permissions assigned successfully') },
+        onError: (error: Error) => {
+          // A missing record usually means the employee was deleted while the modal was open.
+          const notFound = error instanceof AuthError && error.code === 'not_found'
+          setFailure(notFound ? 'This employee no longer exists — it may have been deleted.' : (error.message || 'Failed to assign permissions. Please try again.'))
+        },
+      },
+    )
   }
 
   return (
@@ -73,120 +203,106 @@ export function AssignEmployeePermissionsModal({ isOpen, onClose, showToast, emp
           {!confirming ? (
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
               <div className="g3">
-                <div className="fg">
-                  <div className="lbl">Module</div>
+                <div className="fg span2">
+                  <div className="lbl">Permission Group</div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <SearchSelect placeholder="Select module…" options={moduleOptions} value={selectedModule} onChange={setSelectedModule} />
+                      <SearchSelect placeholder="Select permission group…" options={groupOptions} value={selectedGroupId} onChange={setSelectedGroupId} />
                     </div>
                     <button
                       type="button"
                       className="btn btn-neu"
                       style={{ width: 40, padding: 0, justifyContent: 'center', flexShrink: 0 }}
-                      title="Add module permissions"
-                      disabled={!selectedModule}
-                      onClick={handleAddModule}
+                      title="Add group permissions"
+                      disabled={!selectedGroupId}
+                      onClick={handleAddGroup}
                     >
                       <i className="lni lni-checkmark"></i>
                     </button>
                   </div>
                 </div>
-                <div className="fg span2" style={{ position: 'relative' }}>
-                  <div className="lbl">Search Permissions</div>
-                  <input
-                    className="ctrl"
-                    type="text"
-                    placeholder="Search by permission name…"
-                    value={globalSearch}
-                    onChange={e => setGlobalSearch(e.target.value)}
-                  />
-                  {globalMatches.length > 0 && (
-                    <div className="ss-drop" style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, zIndex: 50 }}>
-                      <div className="ss-opts">
-                        {globalMatches.map(({ module, permission }) => (
-                          <div
-                            key={`${module}-${permission.intPermission}`}
-                            className="col-filter-opt"
-                            onClick={() => handleGlobalSelect(module, permission)}
-                          >
-                            {permission.permissionName}
-                            <span style={{ color: 'var(--g400)', marginLeft: 6, fontSize: 11 }}>{moduleLabel(module)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
 
-              {blocks.length > 0 ? (
+              {loadedGroups.length > 0 ? (
                 <div className="fg" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                  <div className="lbl">Module Permissions</div>
-                  <div className="perm-blocks-scroll">
-                    {blocks.map(b => {
-                      const all = permissionsByModule[b.module] ?? []
-                      const allChecked = all.length > 0 && b.permissions.length === all.length
-                      const term = b.search.trim().toLowerCase()
-                      const visiblePages = (pagesByModule[b.module] ?? [])
-                        .map(pg => ({ page: pg.page, permissions: term ? pg.permissions.filter(p => p.permissionName.toLowerCase().includes(term)) : pg.permissions }))
-                        .filter(pg => pg.permissions.length > 0)
-                      return (
-                        <div
-                          key={b.module}
-                          ref={el => { if (el) blockRefs.current[b.module] = el }}
-                          className={`perm-block${b.open ? '' : ' closed'}`}
-                        >
-                          <div className="perm-block-hdr" onClick={() => toggleBlockOpen(b.module)}>
-                            <span onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center' }}>
-                              <input type="checkbox" checked={allChecked} onChange={() => toggleAll(b.module)} />
-                            </span>
-                            <i className={`lni lni-${moduleIcon(b.module)}`}></i>
-                            {moduleLabel(b.module)}
-                            <span className="badge badge-blue" style={{ marginLeft: 6 }}>{b.permissions.length}/{all.length}</span>
-                            <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>
-                              <button
-                                type="button"
-                                className="perm-block-delete"
-                                title="Remove this module"
-                                onClick={e => { e.stopPropagation(); setDeleteTarget(b.module) }}
-                              >
-                                <i className="lni lni-trash-can"></i>
-                              </button>
-                              <i className="lni lni-chevron-down perm-block-chevron"></i>
-                            </span>
-                          </div>
-                          <div className="perm-block-body">
-                            <input
-                              className="ctrl"
-                              type="text"
-                              placeholder="Search permissions in this module…"
-                              value={b.search}
-                              onClick={e => e.stopPropagation()}
-                              onChange={e => updateBlockSearch(b.module, e.target.value)}
-                              style={{ gridColumn: '1 / -1', fontSize: 12, height: 32 }}
-                            />
-                            {visiblePages.length === 0 ? (
-                              <div style={{ gridColumn: '1 / -1', fontSize: 12, color: 'var(--g400)', fontStyle: 'italic' }}>No matching permissions</div>
-                            ) : visiblePages.map(pg => (
+                  <div className="lbl">Permissions</div>
+                  <div className="tab-bar" style={{ marginBottom: 12 }}>
+                    {loadedGroups.map(g => (
+                      <button
+                        key={g.id}
+                        ref={el => { if (el) tabRefs.current[g.id] = el }}
+                        type="button"
+                        className={`tab-btn${activeTab === g.id ? ' active' : ''}`}
+                        onClick={() => setActiveTab(g.id)}
+                      >
+                        {g.group}
+                        <i
+                          className="lni lni-close"
+                          style={{ fontSize: 10 }}
+                          title={`Remove ${g.group}`}
+                          onClick={e => { e.stopPropagation(); removeGroup(g.id) }}
+                        ></i>
+                      </button>
+                    ))}
+                    <span className="tab-indicator" style={{ left: indicator.left, width: indicator.width }} />
+                  </div>
+                  <div key={activeTab} className="perm-blocks-scroll tab-panel-in">
+                    {activeBreakdown.length === 0 ? (
+                      <div style={{ fontSize: 12, color: 'var(--g400)', fontStyle: 'italic', padding: '8px 2px' }}>No permissions found in the catalog.</div>
+                    ) : activeBreakdown.map(b => (
+                      <div key={b.module} className={`perm-block${openModule === b.module ? '' : ' closed'}`}>
+                        <div className="perm-block-hdr" onClick={() => toggleModuleOpen(b.module)}>
+                          <i className={`lni lni-${moduleIcon(b.module)}`}></i>
+                          {moduleLabel(b.module)}
+                          <span className="badge badge-blue" style={{ marginLeft: 6 }}>{b.grantedCount}/{b.totalCount} Accessible</span>
+                          <i className="lni lni-chevron-down perm-block-chevron" style={{ marginLeft: 'auto' }}></i>
+                        </div>
+                        <div className="perm-block-body">
+                          {b.pages.map(pg => {
+                            const accessible = pg.permissions.filter(p => p.granted)
+                            const notAccessible = pg.permissions.filter(p => !p.granted)
+                            return (
                               <div key={pg.page} style={{ gridColumn: '1 / -1' }}>
                                 <div className="perm-page-title">
                                   <i className="lni lni-folder"></i>
                                   {pg.page}
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px 12px' }}>
-                                  {pg.permissions.map(p => (
-                                    <label key={p.intPermission} className="chk-item" style={{ cursor: 'pointer' }}>
-                                      <input type="checkbox" checked={b.permissions.includes(p.intPermission)} onChange={() => togglePermission(b.module, p.intPermission)} />
-                                      <span className="text-sm text-g700">{p.permissionName}</span>
-                                    </label>
-                                  ))}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                  <div style={{ borderRight: '1px dashed var(--g200)', paddingRight: 16 }}>
+                                    <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '.03em', marginBottom: 6 }}>
+                                      <i className="lni lni-checkmark-circle" style={{ marginRight: 4 }}></i>Accessible
+                                    </div>
+                                    {accessible.length > 0 ? (
+                                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                        {accessible.map(p => (
+                                          <span key={p.name} className="badge badge-green">{p.name}</span>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <div style={{ fontSize: 11.5, color: 'var(--g400)', fontStyle: 'italic' }}>None</div>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.03em', marginBottom: 6 }}>
+                                      <i className="lni lni-lock" style={{ marginRight: 4 }}></i>Not Accessible
+                                    </div>
+                                    {notAccessible.length > 0 ? (
+                                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                        {notAccessible.map(p => (
+                                          <span key={p.name} className="badge badge-grey">{p.name}</span>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <div style={{ fontSize: 11.5, color: 'var(--g400)', fontStyle: 'italic' }}>None</div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            ))}
-                          </div>
+                            )
+                          })}
                         </div>
-                      )
-                    })}
+                      </div>
+                    ))}
                   </div>
                 </div>
               ) : (
@@ -197,8 +313,8 @@ export function AssignEmployeePermissionsModal({ isOpen, onClose, showToast, emp
                     <span className="perm-empty-orbit book"><i className="lni lni-book"></i></span>
                     <span className="perm-empty-orbit pencil"><i className="lni lni-pencil-alt"></i></span>
                   </div>
-                  <div className="perm-empty-title">Fill in the details above to get started</div>
-                  <div className="perm-empty-sub">Choose a module, then tap the tick button to load its permissions here.</div>
+                  <div className="perm-empty-title">Pick a permission group above to get started</div>
+                  <div className="perm-empty-sub">Choose a group, then tap the tick button to preview the access it grants. Add more groups the same way — their access combines.</div>
                 </div>
               )}
             </div>
@@ -220,24 +336,32 @@ export function AssignEmployeePermissionsModal({ isOpen, onClose, showToast, emp
                 <i className="lni lni-user"></i>
                 <span>Assigning to: <strong>{employeeName}</strong> <span className="font-mono">({employee.shortCode})</span></span>
               </div>
+              <div className="info-box mb-3">
+                <i className="lni lni-lock"></i>
+                <span>Permission group{loadedGroups.length > 1 ? 's' : ''}: <strong>{loadedGroups.map(g => g.group).join(', ')}</strong></span>
+              </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
-                {activeBlocks.map(b => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {combinedBreakdown.filter(b => b.grantedCount > 0).map(b => (
                   <div key={b.module} style={{
-                    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                    padding: '12px 14px',
                     border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', background: 'var(--surface)',
                   }}>
-                    <span style={{
-                      width: 32, height: 32, borderRadius: 8, display: 'grid', placeItems: 'center',
-                      background: 'var(--b100)', color: 'var(--b700)', flexShrink: 0,
-                    }}>
-                      <i className={`lni lni-${moduleIcon(b.module)}`}></i>
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--g900)' }}>{moduleLabel(b.module)}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--g500)' }}>{b.permissions.map(id => permissionNameById[id] ?? id).join(', ')}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                      <span style={{
+                        width: 32, height: 32, borderRadius: 8, display: 'grid', placeItems: 'center',
+                        background: 'var(--b100)', color: 'var(--b700)', flexShrink: 0,
+                      }}>
+                        <i className={`lni lni-${moduleIcon(b.module)}`}></i>
+                      </span>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--g900)', flex: 1, minWidth: 0 }}>{moduleLabel(b.module)}</div>
+                      <span className="badge badge-green">{b.grantedCount} Accessible</span>
                     </div>
-                    <span className="badge badge-blue">{b.permissions.length}</span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {b.pages.flatMap(pg => pg.permissions.filter(p => p.granted).map(p => (
+                        <span key={p.name} className="badge badge-green">{p.name}</span>
+                      )))}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -249,7 +373,7 @@ export function AssignEmployeePermissionsModal({ isOpen, onClose, showToast, emp
           {!confirming ? (
             <>
               <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-              <button className="btn btn-primary" disabled={!canSubmit} onClick={() => setConfirming(true)}>
+              <button className="btn btn-primary" disabled={loadedGroups.length === 0 || !hasGrantedPermissions} onClick={() => setConfirming(true)}>
                 <i className="lni lni-checkmark"></i> Submit
               </button>
             </>
@@ -258,32 +382,12 @@ export function AssignEmployeePermissionsModal({ isOpen, onClose, showToast, emp
               <button className="btn btn-neu" onClick={() => setConfirming(false)}>
                 <i className="lni lni-arrow-left"></i> Back
               </button>
-              <button className="btn btn-success" onClick={handleAssign}>
-                <i className="lni lni-checkmark-circle"></i> Confirm & Assign
+              <button className="btn btn-success" disabled={assignPermissionGroups.isPending} onClick={handleAssign}>
+                <i className="lni lni-checkmark-circle"></i> {assignPermissionGroups.isPending ? 'Assigning…' : 'Confirm & Assign'}
               </button>
             </>
           )}
         </div>
-
-        {deleteTargetBlock && (
-          <div className="perm-delete-overlay" onClick={() => setDeleteTarget(null)}>
-            <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
-              <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
-              <div className="perm-delete-title">Remove {moduleLabel(deleteTargetBlock.module)}?</div>
-              <div className="perm-delete-sub">
-                This will remove {deleteTargetBlock.permissions.length > 0
-                  ? `all ${deleteTargetBlock.permissions.length} selected permission${deleteTargetBlock.permissions.length === 1 ? '' : 's'}`
-                  : 'this module'} from this assignment. This can&apos;t be undone.
-              </div>
-              <div className="perm-delete-actions">
-                <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
-                <button className="btn btn-danger" onClick={confirmDelete}>
-                  <i className="lni lni-trash-can"></i> Remove
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

@@ -2,9 +2,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// Real backend shape returned by GET /api/v1/academic/program-levels
-// (search-filterable via ?search=, NOT paginated — data is a flat array,
-// unlike the items/totalCount envelope the other academic master lists use).
+// Represents a programme level record returned by the API.
 export interface ProgramLevel {
   programLevelGuid: string
   levelCode: string
@@ -17,6 +15,11 @@ export interface ProgramLevel {
   intCurrency: number
   currencyCode: string
   currencyName: string
+  // Not confirmed present on GET (list/by-guid) — only proven via the real
+  // Create/Update payload requiring it (see ProgramLevelInput below; the
+  // backend rejected intCurrency with "Currency is required"). Optional
+  // until a real GET response confirms it's echoed back.
+  currencyGuid?: string
 }
 
 // Previous hardcoded rows (pre GET /api/v1/academic/program-levels
@@ -40,16 +43,17 @@ const mockProgramLevels: ProgramLevel[] = [
   { programLevelGuid: '6', levelCode: 'PHD',  levelName: 'Doctor of Philosophy (PhD)', yearCount: 3, semCount: 6, minCreditLoad: 0,   appFee: 50000, lateFee: 10000, intCurrency: 1, currencyCode: 'UGX', currencyName: 'Uganda Shilling' },
 ]
 
+// Fetch programme levels, optionally filtered by search text.
 export function getProgramLevels(search = ''): Promise<ProgramLevel[]> {
   if (MOCK_AUTH) return Promise.resolve(mockProgramLevels)
   const query = search ? `?search=${encodeURIComponent(search)}` : ''
   return apiGet<ProgramLevel[] | null>(`/api/v1/academic/program-levels${query}`).then(data => data ?? [])
 }
 
-// Confirmed create payload — notably does NOT include semCount (server-
-// derived from yearCount, presumably) even though the GET response returns
-// it, and doesn't include currencyCode/currencyName (server-resolved from
-// intCurrency), also present on the GET shape.
+// Payload used when creating or updating a programme level.
+// Confirmed via real testing: the backend rejects intCurrency (Currency
+// Master's legacy int) with "Currency is required" — it wants currencyGuid
+// instead, matching ProcBank/Exchange-Rate's convention elsewhere.
 export interface ProgramLevelInput {
   levelCode: string
   levelName: string
@@ -57,11 +61,12 @@ export interface ProgramLevelInput {
   minCreditLoad: number
   appFee: number
   lateFee: number
-  intCurrency: number
+  currencyGuid: string
 }
 
 let mockProgramLevelSeq = mockProgramLevels.length + 1
 
+// Create a new programme level and return the saved record.
 export function createProgramLevel(input: ProgramLevelInput): Promise<ProgramLevel> {
   if (MOCK_AUTH) {
     const level: ProgramLevel = {
@@ -74,11 +79,12 @@ export function createProgramLevel(input: ProgramLevelInput): Promise<ProgramLev
       minCreditLoad: input.minCreditLoad,
       appFee: input.appFee,
       lateFee: input.lateFee,
-      intCurrency: input.intCurrency,
-      // Server-resolved from intCurrency on the real GET response — no
+      // Server-resolved from currencyGuid on the real GET response — no
       // local currency list to cross-reference against here.
+      intCurrency: 0,
       currencyCode: '',
       currencyName: '',
+      currencyGuid: input.currencyGuid,
     }
     mockProgramLevels.push(level)
     return Promise.resolve(level)
@@ -86,6 +92,7 @@ export function createProgramLevel(input: ProgramLevelInput): Promise<ProgramLev
   return apiPost<ProgramLevel>('/api/v1/academic/program-levels', input)
 }
 
+// Fetch one programme level by its GUID.
 export function getProgramLevelById(guid: string): Promise<ProgramLevel> {
   if (MOCK_AUTH) {
     const existing = mockProgramLevels.find(p => p.programLevelGuid === guid)
@@ -95,7 +102,7 @@ export function getProgramLevelById(guid: string): Promise<ProgramLevel> {
   return apiGet<ProgramLevel>(`/api/v1/academic/program-levels/${guid}`)
 }
 
-// Same payload shape as create (see ProgramLevelInput above).
+// Update a programme level by GUID and return the updated record.
 export function updateProgramLevel(guid: string, input: ProgramLevelInput): Promise<ProgramLevel> {
   if (MOCK_AUTH) {
     const existing = mockProgramLevels.find(p => p.programLevelGuid === guid)
@@ -106,6 +113,7 @@ export function updateProgramLevel(guid: string, input: ProgramLevelInput): Prom
   return apiPut<ProgramLevel>(`/api/v1/academic/program-levels/${guid}`, input)
 }
 
+// Delete a programme level and return true when the API confirms success.
 export function deleteProgramLevel(guid: string): Promise<boolean> {
   if (MOCK_AUTH) {
     const index = mockProgramLevels.findIndex(p => p.programLevelGuid === guid)

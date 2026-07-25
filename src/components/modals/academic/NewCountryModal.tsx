@@ -31,10 +31,7 @@ export function NewCountryModal({ isOpen, onClose, showToast, createCountry }: N
     onClose()
   }
 
-  // Mirrors the real POST /api/v1/users/countries validation rules (all
-  // fields required; countryCode/countryPrefix max 10 chars, countryName/
-  // nationality max 100) so these surface inline instead of only after a
-  // failed request.
+  // Keep validation close to the form so errors appear immediately.
   function validate() {
     const e: Record<string, string> = {}
     if (!countryCode.trim())        e.countryCode   = 'Country Code is required'
@@ -49,9 +46,7 @@ export function NewCountryModal({ isOpen, onClose, showToast, createCountry }: N
     return Object.keys(e).length === 0
   }
 
-  // Maps the backend's { code, errors } failure shape (see countries.md) to
-  // an inline field error where the cause is actionable right there
-  // (duplicate countryCode); validation_error shows the failure popup instead.
+  // Show field-level errors for known issues and use the popup for everything else.
   function handleCreateError(error: Error) {
     const code = error instanceof AuthError ? error.code : undefined
     if (code === 'bad_request') {

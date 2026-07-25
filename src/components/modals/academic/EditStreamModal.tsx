@@ -24,9 +24,7 @@ export function EditStreamModal({ isOpen, onClose, showToast, streamGuid, update
   const [streamName, setStreamName] = useState('')
   const [errors, setErrors]         = useState<Record<string, string>>({})
 
-  // Prefill the form once the specialization has loaded. Re-runs whenever a
-  // different guid is fetched (react-query resets `stream` to undefined when
-  // streamGuid changes, so stale data never leaks between edits).
+  // Fill the form when the selected stream loads.
   useEffect(() => {
     if (!isOpen || !stream) return
     setStreamCode(stream.streamCode)

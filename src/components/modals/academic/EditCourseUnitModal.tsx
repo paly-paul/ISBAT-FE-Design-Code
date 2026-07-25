@@ -1,61 +1,165 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
+import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import { CourseUnitInput } from '@/lib/api/academic/courseUnit'
+import { useCourseUnit } from '@/hooks/academic/useCourseUnits'
+import { useRepetitionTags } from '@/hooks/academic/useRepetitionTags'
+import { useEmployees } from '@/hooks/employee/useEmployees'
+import { AuthError } from '@/lib/api/client'
 
-type Topic   = { name: string; studySeq: string; numClasses: string }
+type Topic   = { name: string; studySeq: string; taughtBy: string }
 type Chapter = { title: string; topics: Topic[] }
 
-function blankTopic(): Topic { return { name: '', studySeq: '', numClasses: '' } }
+function blankTopic(): Topic   { return { name: '', studySeq: '', taughtBy: '' } }
 function blankChapter(n: number): Chapter { return { title: `Chapter ${n}`, topics: [blankTopic()] } }
 
-const PREFILLED_CHAPTERS: Chapter[] = [
-  {
-    title: 'Chapter 1: Introduction to Programming',
-    topics: [
-      { name: 'What is a Program?',           studySeq: '1', numClasses: '2' },
-      { name: 'Variables and Data Types',      studySeq: '2', numClasses: '3' },
-    ],
-  },
-  {
-    title: 'Chapter 2: Control Structures',
-    topics: [
-      { name: 'Conditional Statements (if/else)', studySeq: '3', numClasses: '3' },
-      { name: 'Loops (for, while, do-while)',      studySeq: '4', numClasses: '4' },
-    ],
-  },
-]
+interface EditCourseUnitModalProps extends ModalProps {
+  courseUnitGuid: string | null
+  updateCourseUnit: {
+    mutate: (variables: { guid: string; input: CourseUnitInput }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
+    isPending: boolean
+  }
+}
 
-export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
+export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid, updateCourseUnit }: EditCourseUnitModalProps) {
+  const { data: courseUnit, isLoading, isError, error } = useCourseUnit(courseUnitGuid, isOpen)
+
   const [saved, setSaved]               = useState(false)
-  const [chapters, setChapters]         = useState<Chapter[]>(PREFILLED_CHAPTERS)
-  const [unitCode, setUnitCode]         = useState('IT101')
-  const [unitName, setUnitName]         = useState('Introduction to Programming')
-  const [numChapters, setNumChapters]   = useState('2')
-  const [credits, setCredits]           = useState('3')
-  const [unitType, setUnitType]         = useState('theory')
-  const [unitCategory, setUnitCategory] = useState('core')
+  const [failure, setFailure]           = useState<string | null>(null)
+  const [step, setStep]                 = useState(1)
+  const [chapters, setChapters]         = useState<Chapter[]>([blankChapter(1)])
+  const [unitCode, setUnitCode]         = useState('')
+  const [unitName, setUnitName]         = useState('')
+  const [numChapters, setNumChapters]   = useState('')
+  const [credits, setCredits]           = useState('')
+  // Unit type and category are not part of the current update payload, so the picker stays off for now.
+  // const [unitType, setUnitType]         = useState('')
+  // const [unitCategory, setUnitCategory] = useState('')
+  const [repetitionTagGuid, setRepetitionTagGuid] = useState('')
+  const [syllabusFile, setSyllabusFile] = useState<File | null>(null)
   const [errors, setErrors]               = useState<Record<string, string>>({})
   const [chapterErrors, setChapterErrors] = useState<string[]>([])
+  const [includeCW, setIncludeCW]       = useState(true)
+  const [includeCBT, setIncludeCBT]     = useState(true)
+  const [includeMid, setIncludeMid]     = useState(true)
+  const [cwAssessed, setCwAssessed]     = useState('25')
+  const [cbtAssessed, setCbtAssessed]   = useState('50')
+  const [ueAssessed, setUeAssessed]     = useState('100')
+  const [cwFinal, setCwFinal]           = useState('15')
+  const [cbtFinal, setCbtFinal]         = useState('15')
+  const [ueFinal, setUeFinal]           = useState('70')
 
-  function validate() {
+  const { data: repetitionTags = [] } = useRepetitionTags()
+  const repetitionTagOptions = repetitionTags.map(t => ({ value: t.courseUnitRepetitionGuid, label: `${t.tagCode} — ${t.tagName}` }))
+
+  const { data: employees = [] } = useEmployees()
+  const employeeOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
+
+  const finalTotal = (includeCW ? (+cwFinal || 0) : 0) + (includeCBT ? (+cbtFinal || 0) : 0) + (+ueFinal || 0)
+  const totalOk    = finalTotal === 100
+
+  function weightDesc(assessed: string, final: string) {
+    const a = +assessed, f = +final
+    if (!a || !f) return 'Assessed / Final weight'
+    return `${a} marks → prorated ${f} marks`
+  }
+
+  // Prefill the form when the selected course unit loads and reset the defaults for each edit.
+  useEffect(() => {
+    if (!isOpen || !courseUnit) return
+    setUnitCode(courseUnit.courseUnitCode)
+    setUnitName(courseUnit.courseUnitName)
+    setNumChapters(String(courseUnit.chapterCount))
+    setCredits(String(courseUnit.maxCredits))
+    setIncludeMid(!!courseUnit.mid)
+    setIncludeCW(!!courseUnit.cw)
+    setIncludeCBT(!!courseUnit.ca)
+    setRepetitionTagGuid(courseUnit.courseUnitRepetitionGuid ?? '')
+    setChapters(
+      courseUnit.outlines.length
+        ? courseUnit.outlines.map(o => ({
+            title: o.chapterName,
+            topics: o.topics.map(t => ({ name: t.courseUnitTopicDetails, studySeq: String(t.studySequence), taughtBy: t.employeeGuid })),
+          }))
+        : [blankChapter(1)]
+    )
+    setSyllabusFile(null)
+    setStep(1)
+    setErrors({})
+    setChapterErrors([])
+  }, [isOpen, courseUnit])
+
+  function validateStep1() {
     const e: Record<string, string> = {}
     if (!unitCode.trim())  e.unitCode     = 'Unit Code is required'
     if (!unitName.trim())  e.unitName     = 'Unit Name is required'
     if (!credits)          e.credits      = 'Credits is required'
-    if (!unitType)         e.unitType     = 'Please select a Unit Type'
-    if (!unitCategory)     e.unitCategory = 'Please select a Unit Category'
+    // if (!unitType)         e.unitType     = 'Please select a Unit Type'
+    // if (!unitCategory)     e.unitCategory = 'Please select a Unit Category'
     setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  function validateStep2() {
     const chapErrs = chapters.map(ch => ch.title.trim() ? '' : 'Chapter title is required')
     setChapterErrors(chapErrs)
-    return Object.keys(e).length === 0 && chapErrs.every(err => !err)
+    return chapErrs.every(err => !err)
   }
 
   if (!isOpen) return null
 
-  function handleClose() { setSaved(false); setChapters(PREFILLED_CHAPTERS); setErrors({}); setChapterErrors([]); onClose() }
+  function handleClose() {
+    setSaved(false); setFailure(null); setStep(1); setErrors({}); setChapterErrors([])
+    onClose()
+  }
 
+  function handleSubmit() {
+    if (!courseUnitGuid || !courseUnit || !validateStep2()) return
+    const outlines = chapters.map((ch, ci) => ({
+      chapter: ci + 1,
+      chapterName: ch.title,
+      topics: ch.topics.map(t => ({
+        courseUnitTopicDetails: t.name,
+        studySequence: +t.studySeq || 0,
+        taughtBy: t.taughtBy,
+      })),
+    }))
+    updateCourseUnit.mutate(
+      {
+        guid: courseUnitGuid,
+        input: {
+          courseUnitCode: unitCode,
+          courseUnitName: unitName,
+          maxCredits: +credits || 0,
+          chapterCount: chapters.length,
+          courseUnitRepetitionGuid: repetitionTagGuid || null,
+          mid: includeMid ? 1 : 0,
+          cw: includeCW ? 1 : 0,
+          ca: includeCBT ? 1 : 0,
+          // No UI control yet, and not part of the confirmed GET response
+          // to preserve from the loaded record — defaults to approved.
+          approved: 1,
+          cbtWeightage: +cbtFinal || 0,
+          cwWeightage: +cwFinal || 0,
+          ueWeightage: +ueFinal || 0,
+          outlines,
+          syllabus: syllabusFile,
+        },
+      },
+      {
+        onSuccess: () => { setSaved(true); showToast('Course unit updated successfully') },
+        onError: (error: Error) => {
+          const code = error instanceof AuthError ? error.code : undefined
+          setFailure(error.message || `Failed to update course unit${code ? ` (${code})` : ''}. Please try again.`)
+        },
+      },
+    )
+  }
+
+  // chapter helpers
   function addChapter() {
     setChapters(p => [...p, blankChapter(p.length + 1)])
     setChapterErrors(p => [...p, ''])
@@ -68,6 +172,8 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) 
     setChapters(p => p.map((c, i) => i === ci ? { ...c, title: v } : c))
     if (chapterErrors[ci]) setChapterErrors(p => p.map((e, i) => i === ci ? '' : e))
   }
+
+  // topic helpers
   function addTopic(ci: number) {
     setChapters(p => p.map((c, i) => i === ci ? { ...c, topics: [...c.topics, blankTopic()] } : c))
   }
@@ -91,6 +197,46 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) 
     )
   }
 
+  if (failure) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup title="Couldn't Update Course Unit" subtitle={failure} onClose={() => setFailure(null)} />
+        </div>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup
+            title="Couldn't Load Course Unit"
+            subtitle={error instanceof AuthError ? (error.message || 'Failed to load course unit details.') : 'Failed to load course unit details.'}
+            onClose={handleClose}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading || !courseUnit) {
+    return (
+      <div className="modal-overlay open" id="cu-edit-modal">
+        <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
+          <div className="modal-hdr">
+            <div className="modal-title"><i className="lni lni-pencil"></i> Edit Course Unit</div>
+            <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
+            <span style={{ color: 'var(--g400)' }}>Loading course unit details…</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="modal-overlay open" id="cu-edit-modal">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
@@ -99,7 +245,22 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) 
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
+        <div className="prog-steps">
+          <div className={`prog-step${step === 1 ? ' active' : ''}`}>
+            <span className="prog-step-num">1</span>
+            <span>Unit Details</span>
+          </div>
+          <div className="prog-step-line"></div>
+          <div className={`prog-step${step === 2 ? ' active' : ''}`}>
+            <span className="prog-step-num">2</span>
+            <span>Course Outline</span>
+          </div>
+        </div>
+
         <div className="modal-scroll">
+
+          {/* ── Step 1: Basic Info ─────────────────────────────── */}
+          {step === 1 && <>
 
           {/* ── Basic Info ─────────────────────────────────────── */}
           <div className="g3">
@@ -127,13 +288,11 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) 
               <div className="lbl">No. of Chapters</div>
               <input
                 className="ctrl"
-                style={errors.numChapters ? { borderColor: 'var(--red)' } : undefined}
                 type="number"
                 min={1}
                 value={numChapters}
-                onChange={e => { setNumChapters(e.target.value); if (errors.numChapters) setErrors(p => ({ ...p, numChapters: '' })) }}
+                onChange={e => setNumChapters(e.target.value)}
               />
-              {errors.numChapters && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.numChapters}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Credits <span className="req">*</span></div>
@@ -147,6 +306,9 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) 
               />
               {errors.credits && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.credits}</p>}
             </div>
+            {/* Unit Type / Unit Category pickers — no equivalent field on the
+                confirmed update payload yet (see CourseUnitInput in
+                lib/api/academic/courseUnit.ts).
             <div className="fg">
               <div className="lbl">Unit Type <span className="req">*</span></div>
               <SearchSelect
@@ -174,39 +336,47 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) 
               />
               {errors.unitCategory && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.unitCategory}</p>}
             </div>
+            */}
             <div className="fg span2">
               <div className="lbl">Repetition Tag</div>
               <SearchSelect
                 placeholder="— Select repetition tag —"
-                value="RT-CU-001"
-                options={[
-                  { value: 'RT-CU-001', label: 'RT-CU-001 — Standard repeat for failed units' },
-                  { value: 'RT-CU-002', label: 'RT-CU-002 — Supplementary repeat (one semester delay)' },
-                  { value: 'RT-CU-003', label: 'RT-CU-003 — Cross-programme shared unit' },
-                  { value: 'RT-CU-004', label: 'RT-CU-004 — Elective repeat (student choice)' },
-                ]}
+                value={repetitionTagGuid}
+                onChange={setRepetitionTagGuid}
+                options={repetitionTagOptions}
               />
             </div>
             <div className="fg span3">
               <div className="lbl">Include In</div>
               <div style={{ display: 'flex', gap: 28, marginTop: 8 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--g700)' }}>
-                  <input type="checkbox" defaultChecked style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }} />
+                  <input type="checkbox" checked={includeCBT} onChange={e => setIncludeCBT(e.target.checked)} style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }} />
                   Class Test
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--g700)' }}>
-                  <input type="checkbox" defaultChecked style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }} />
+                  <input
+                    type="checkbox"
+                    checked={includeMid}
+                    onChange={e => setIncludeMid(e.target.checked)}
+                    style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }}
+                  />
+                  Mid
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--g700)' }}>
+                  <input
+                    type="checkbox"
+                    checked={includeCW}
+                    onChange={e => {
+                      const checked = e.target.checked
+                      setIncludeCW(checked)
+                      // Checking Course Work auto-checks Mid too (same rule as the Add modal) — Mid can still be unchecked independently afterward.
+                      if (checked) setIncludeMid(true)
+                    }}
+                    style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }}
+                  />
                   Course Work
                 </label>
               </div>
-            </div>
-          </div>
-
-          {/* ── Assessment hint ───────────────────────────────── */}
-          <div className="my-[14px] px-4 py-3 bg-b50 border-[1.5px] border-[var(--b100)] rounded-[var(--rsm)]">
-            <div className="font-bold text-b700 uppercase mb-2" style={{ fontSize: 'var(--fs-xs)' }}>Assessment Components for this Unit Type</div>
-            <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>
-              Has <strong>Coursework (CW)</strong>: out of 25 → prorated to 15 &nbsp;|&nbsp; Has <strong>Class Test (CBT)</strong>: out of 50 → prorated to 15 &nbsp;|&nbsp; <strong>University Exam (UE)</strong>: out of 100 → prorated to 70
             </div>
           </div>
 
@@ -219,41 +389,140 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) 
                 <div className="mdl-section-sub">Set assessed vs. final-weight marks for each component</div>
               </div>
             </div>
-            <div className="g3">
-              <div className="p-3 bg-b50 border border-[var(--b100)] rounded-[var(--rsm)]">
-                <div className="font-bold text-b700 text-center mb-2" style={{ fontSize: 'var(--fs-xs)' }}>COURSEWORK (CW)</div>
-                <div className="flex items-center gap-2 justify-center">
-                  <input className="ctrl wt-input" type="number" defaultValue={25} min={0} />
-                  <span className="font-extrabold text-b800" style={{ fontSize: 'var(--fs-2xl)' }}>→</span>
-                  <input className="ctrl wt-input" type="number" defaultValue={15} min={0} />
+
+            {/* Column headers */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 88px 24px 88px 1fr', gap: '0 10px', alignItems: 'center', padding: '0 4px 10px', borderBottom: '1.5px solid var(--amber-bd)', marginBottom: 4 }}>
+              <span style={{ fontSize: 'var(--fs-xs)', fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Component</span>
+              <span style={{ fontSize: 'var(--fs-xs)', fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>Assessed</span>
+              <span />
+              <span style={{ fontSize: 'var(--fs-xs)', fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>Final Wt.</span>
+            </div>
+
+            {/* Rows */}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+
+              {/* CW row */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr 88px 24px 88px 1fr', gap: '0 10px',
+                alignItems: 'center', padding: '13px 4px',
+                borderBottom: '1px solid var(--g100)',
+                transition: 'opacity .2s',
+                ...(!includeCW ? { opacity: 0.38, filter: 'grayscale(0.5)', pointerEvents: 'none' } : {}),
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 3, height: 38, background: 'var(--b400)', borderRadius: 2, flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontSize: 'var(--fs-base)', fontWeight: 700, color: 'var(--b800)' }}>Coursework</div>
+                    <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--g400)', letterSpacing: '0.03em' }}>CW · Internal Assessment</div>
+                  </div>
+                  {!includeCW && <span style={{ fontSize: 'var(--fs-xs)', fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'var(--g200)', color: 'var(--g500)', textTransform: 'uppercase', marginLeft: 4 }}>Off</span>}
                 </div>
-                <div className="text-g500 text-center mt-[6px]" style={{ fontSize: 'var(--fs-2xs)' }}>Assessed / Final weight</div>
+                <input className="ctrl wt-input" type="number" value={cwAssessed} min={0} onChange={e => setCwAssessed(e.target.value)} style={{ textAlign: 'center' }} />
+                <span style={{ textAlign: 'center', fontWeight: 800, color: 'var(--b500)', fontSize: 18, lineHeight: 1 }}>→</span>
+                <input className="ctrl wt-input" type="number" value={cwFinal} min={0} onChange={e => setCwFinal(e.target.value)} style={{ textAlign: 'center' }} />
+                <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--g500)', paddingLeft: 4, lineHeight: 1.5 }}>{weightDesc(cwAssessed, cwFinal)}</span>
               </div>
-              <div className="p-3 bg-[var(--amber-bg)] border border-[var(--amber-bd)] rounded-[var(--rsm)]">
-                <div className="font-bold text-clr-amber text-center mb-2" style={{ fontSize: 'var(--fs-xs)' }}>CLASS TEST (CBT)</div>
-                <div className="flex items-center gap-2 justify-center">
-                  <input className="ctrl wt-input" type="number" defaultValue={50} min={0} />
-                  <span className="font-extrabold text-clr-amber" style={{ fontSize: 'var(--fs-2xl)' }}>→</span>
-                  <input className="ctrl wt-input" type="number" defaultValue={15} min={0} />
+
+              {/* CBT row */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr 88px 24px 88px 1fr', gap: '0 10px',
+                alignItems: 'center', padding: '13px 4px',
+                borderBottom: '1px solid var(--g100)',
+                transition: 'opacity .2s',
+                ...(!includeCBT ? { opacity: 0.38, filter: 'grayscale(0.5)', pointerEvents: 'none' } : {}),
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 3, height: 38, background: 'var(--amber)', borderRadius: 2, flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontSize: 'var(--fs-base)', fontWeight: 700, color: 'var(--g800)' }}>Class Test</div>
+                    <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--g400)', letterSpacing: '0.03em' }}>CBT · Internal Assessment</div>
+                  </div>
+                  {!includeCBT && <span style={{ fontSize: 'var(--fs-xs)', fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'var(--g200)', color: 'var(--g500)', textTransform: 'uppercase', marginLeft: 4 }}>Off</span>}
                 </div>
-                <div className="text-g500 text-center mt-[6px]" style={{ fontSize: 'var(--fs-2xs)' }}>Assessed / Final weight</div>
+                <input className="ctrl wt-input" type="number" value={cbtAssessed} min={0} onChange={e => setCbtAssessed(e.target.value)} style={{ textAlign: 'center' }} />
+                <span style={{ textAlign: 'center', fontWeight: 800, color: 'var(--amber)', fontSize: 18, lineHeight: 1 }}>→</span>
+                <input className="ctrl wt-input" type="number" value={cbtFinal} min={0} onChange={e => setCbtFinal(e.target.value)} style={{ textAlign: 'center' }} />
+                <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--g500)', paddingLeft: 4, lineHeight: 1.5 }}>{weightDesc(cbtAssessed, cbtFinal)}</span>
               </div>
-              <div className="p-3 bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rsm)]">
-                <div className="font-bold text-clr-green text-center mb-2" style={{ fontSize: 'var(--fs-xs)' }}>UNIVERSITY EXAM</div>
-                <div className="flex items-center gap-2 justify-center">
-                  <input className="ctrl wt-input" type="number" defaultValue={100} min={0} />
-                  <span className="font-extrabold text-clr-green" style={{ fontSize: 'var(--fs-2xl)' }}>→</span>
-                  <input className="ctrl wt-input" type="number" defaultValue={70} min={0} />
+
+              {/* UE row */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr 88px 24px 88px 1fr', gap: '0 10px',
+                alignItems: 'center', padding: '13px 4px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 3, height: 38, background: 'var(--green)', borderRadius: 2, flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontSize: 'var(--fs-base)', fontWeight: 700, color: 'var(--g800)' }}>University Exam</div>
+                    <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--g400)', letterSpacing: '0.03em' }}>UE · Final Examination</div>
+                  </div>
                 </div>
-                <div className="text-g500 text-center mt-[6px]" style={{ fontSize: 'var(--fs-2xs)' }}>Assessed / Final weight</div>
+                <input className="ctrl wt-input" type="number" value={ueAssessed} min={0} onChange={e => setUeAssessed(e.target.value)} style={{ textAlign: 'center' }} />
+                <span style={{ textAlign: 'center', fontWeight: 800, color: 'var(--green)', fontSize: 18, lineHeight: 1 }}>→</span>
+                <input className="ctrl wt-input" type="number" value={ueFinal} min={0} onChange={e => setUeFinal(e.target.value)} style={{ textAlign: 'center' }} />
+                <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--g500)', paddingLeft: 4, lineHeight: 1.5 }}>{weightDesc(ueAssessed, ueFinal)}</span>
               </div>
             </div>
-            <div className="mt-[10px] text-g500 text-right" style={{ fontSize: 'var(--fs-sm)' }}>
-              Final weight total: <strong className="text-clr-green">100</strong> / 100
+
+            {/* Breakdown bar + total */}
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1.5px solid var(--amber-bd)' }}>
+              <div style={{ display: 'flex', height: 7, borderRadius: 6, overflow: 'hidden', background: 'var(--g100)', gap: 2 }}>
+                {includeCW && +cwFinal > 0 && <div style={{ flex: +cwFinal, background: 'var(--b400)', transition: 'flex .3s' }} title={`CW: ${cwFinal} marks`} />}
+                {includeCBT && +cbtFinal > 0 && <div style={{ flex: +cbtFinal, background: 'var(--amber)', transition: 'flex .3s' }} title={`CBT: ${cbtFinal} marks`} />}
+                {+ueFinal > 0 && <div style={{ flex: +ueFinal, background: 'var(--green)', transition: 'flex .3s' }} title={`UE: ${ueFinal} marks`} />}
+                {!totalOk && finalTotal < 100 && <div style={{ flex: 100 - finalTotal, background: 'var(--g100)' }} />}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 9 }}>
+                <div style={{ display: 'flex', gap: 16 }}>
+                  {includeCW && <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--g500)', display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: 'var(--b400)' }} />CW · {cwFinal} marks</span>}
+                  {includeCBT && <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--g500)', display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: 'var(--amber)' }} />CBT · {cbtFinal} marks</span>}
+                  <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--g500)', display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: 'var(--green)' }} />UE · {ueFinal} marks</span>
+                </div>
+                <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--g500)' }}>
+                  Total: <strong style={{ color: totalOk ? 'var(--green)' : 'var(--red)' }}>{finalTotal}</strong> / 100
+                  {!totalOk && <span style={{ marginLeft: 8, fontSize: 'var(--fs-xs)', color: 'var(--red)' }}>⚠ Must equal 100</span>}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* ── Course Outline ────────────────────────────────── */}
+          {/* ── Approved Syllabus ─────────────────────────────── */}
+          <div className="mdl-section mdl-section--green">
+            <div className="mdl-section-hdr">
+              <span className="mdl-section-icon"><i className="lni lni-files"></i></span>
+              <div>
+                <div className="mdl-section-title">Approved Syllabus</div>
+                <div className="mdl-section-sub">Attach the NCHE / UVTOP-approved syllabus document for this unit</div>
+              </div>
+            </div>
+            <div className="file-zone">
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={e => setSyllabusFile(e.target.files?.[0] ?? null)}
+              />
+              <div className="file-zone-icon"><i className="lni lni-files"></i></div>
+              <p>
+                {syllabusFile
+                  ? syllabusFile.name
+                  : courseUnit.syllabus
+                    ? 'Replace the currently attached syllabus (optional)'
+                    : 'Upload approved syllabus document (PDF / Word)'}
+              </p>
+              <p className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>
+                {!syllabusFile && courseUnit.syllabus && (
+                  <>Current: <a href={courseUnit.syllabus} target="_blank" rel="noreferrer">view attached file</a> · </>
+                )}
+                Must conform to NCHE or UVTOP accreditation
+              </p>
+            </div>
+          </div>
+
+          </>}
+
+          {/* ── Step 2: Course Outline ────────────────────────── */}
+          {step === 2 && <>
+
           <div className="mdl-section mdl-section--blue">
             <div className="mdl-section-hdr">
               <span className="mdl-section-icon"><i className="lni lni-list"></i></span>
@@ -269,14 +538,19 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) 
             <div className="flex flex-col gap-4 mt-2">
               {chapters.map((ch, ci) => (
                 <div key={ci} style={{ border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
+
+                  {/* Chapter header */}
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', background: 'var(--b50)', borderBottom: '1px solid var(--b100)' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--b600)', whiteSpace: 'nowrap', paddingTop: 6 }}>Ch. {ci + 1}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--b600)', whiteSpace: 'nowrap', paddingTop: 6 }}>
+                      Ch. {ci + 1}
+                    </span>
                     <div style={{ flex: 1 }}>
                       <input
                         className="ctrl"
                         style={{ width: '100%', fontWeight: 600, ...(chapterErrors[ci] ? { borderColor: 'var(--red)' } : {}) }}
                         value={ch.title}
                         onChange={e => setChapterTitle(ci, e.target.value)}
+                        placeholder={`Chapter ${ci + 1} title`}
                       />
                       {chapterErrors[ci] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{chapterErrors[ci]}</p>}
                     </div>
@@ -286,17 +560,30 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) 
                       </button>
                     )}
                   </div>
+
+                  {/* Topic column headers */}
                   <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr 150px 130px 30px', gap: 6, padding: '6px 12px 2px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    <span></span><span>Topic</span><span>Study Sequence</span><span>No. of Classes</span><span></span>
+                    <span></span>
+                    <span>Topic</span>
+                    <span>Study Sequence</span>
+                    <span>Taught By</span>
+                    <span></span>
                   </div>
+
+                  {/* Topics */}
                   <div className="flex flex-col gap-1" style={{ padding: '4px 12px 10px' }}>
                     {ch.topics.map((t, ti) => (
                       <div key={ti} style={{ display: 'grid', gridTemplateColumns: '20px 1fr 150px 130px 30px', gap: 6, alignItems: 'center' }}>
                         <span style={{ fontSize: 11, color: 'var(--g400)', textAlign: 'center' }}>{ti + 1}.</span>
-                        <input className="ctrl" value={t.name}      onChange={e => setTopic(ci, ti, 'name',      e.target.value)} placeholder="Topic name" />
+                        <input className="ctrl" value={t.name} onChange={e => setTopic(ci, ti, 'name', e.target.value)} placeholder="e.g. Introduction to Arrays" />
                         <input className="ctrl" type="number" min={1} value={t.studySeq} onChange={e => setTopic(ci, ti, 'studySeq', e.target.value)} placeholder="e.g. 3" />
-                        <input className="ctrl" value={t.numClasses} onChange={e => setTopic(ci, ti, 'numClasses', e.target.value)} placeholder="e.g. 4" />
-                        <button className="btn btn-danger btn-sm" style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => removeTopic(ci, ti)} disabled={ch.topics.length === 1}>
+                        <SearchSelect placeholder="— Select —" value={t.taughtBy} onChange={v => setTopic(ci, ti, 'taughtBy', v)} options={employeeOptions} />
+                        <button
+                          className="btn btn-danger btn-sm"
+                          style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                          onClick={() => removeTopic(ci, ti)}
+                          disabled={ch.topics.length === 1}
+                        >
                           <i className="lni lni-trash-can"></i>
                         </button>
                       </div>
@@ -310,30 +597,28 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast }: ModalProps) 
             </div>
           </div>
 
-          {/* ── Approved Syllabus ─────────────────────────────── */}
-          <div className="mdl-section mdl-section--green">
-            <div className="mdl-section-hdr">
-              <span className="mdl-section-icon"><i className="lni lni-files"></i></span>
-              <div>
-                <div className="mdl-section-title">Approved Syllabus</div>
-                <div className="mdl-section-sub">Attach the NCHE / UVTOP-approved syllabus document for this unit</div>
-              </div>
-            </div>
-            <div className="file-zone">
-              <input type="file" accept=".pdf,.doc,.docx" />
-              <div className="file-zone-icon"><i className="lni lni-files"></i></div>
-              <p>Upload approved syllabus document (PDF / Word)</p>
-              <p className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>Must conform to NCHE or UVTOP accreditation</p>
-            </div>
-          </div>
+          </>}
 
         </div>
 
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => { if (validate()) setSaved(true) }}>
-            <i className="lni lni-checkmark"></i> Update Course Unit
-          </button>
+          <span className="flex-1"></span>
+          {step === 2 && (
+            <button className="btn btn-neu" onClick={() => setStep(1)}>
+              <i className="lni lni-arrow-left"></i> Back
+            </button>
+          )}
+          {step === 1 && (
+            <button className="btn btn-primary" onClick={() => { if (validateStep1()) setStep(2) }}>
+              Save &amp; Continue <i className="lni lni-arrow-right"></i>
+            </button>
+          )}
+          {step === 2 && (
+            <button className="btn btn-primary" disabled={updateCourseUnit.isPending} onClick={handleSubmit}>
+              <i className="lni lni-checkmark"></i> {updateCourseUnit.isPending ? 'Updating…' : 'Update Course Unit'}
+            </button>
+          )}
         </div>
       </div>
     </div>

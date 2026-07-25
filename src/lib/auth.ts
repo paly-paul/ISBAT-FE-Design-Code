@@ -27,9 +27,7 @@ export function staffLogin(staffId: string, password: string, trustDevice: boole
       maskedTarget: 'm***@isbat.ac.ug',
     })
   }
-  // The backend currently authenticates purely via Set-Cookie with no JSON
-  // body on success — data may be null. displayName then stays unknown here;
-  // the academic layout's refreshSession() fallback fetches it on mount.
+  // The API may return no body on success. We keep displayName optional.
   return apiPost<{ displayName: string } | null>('/api/v1/users/auth/login', {
     Username: staffId,
     Password: password,
@@ -53,7 +51,7 @@ export function studentLogin(studentId: string, password: string): Promise<Stude
       maskedTarget: 's***@student.isbat.ac.ug',
     })
   }
-  // See staffLogin — the backend may respond 2xx with no JSON body on success.
+  // The API may respond with no body on success.
   return apiPost<{ displayName: string } | null>('/api/v1/users/auth/login', {
     Username: studentId,
     Password: password,
@@ -71,8 +69,7 @@ export function refreshSession(): Promise<RefreshResult> {
   if (MOCK_AUTH) {
     return Promise.resolve({ displayName: 'Mock User' })
   }
-  // Like login, this may respond 2xx with no JSON body (cookies-only) — treat
-  // that as a valid, identity-less refresh rather than a failure.
+  // A cookie-only success is still a valid refresh.
   return apiPost<RefreshResult | null>('/api/v1/users/auth/refresh', {}).then(data => data ?? {})
 }
 

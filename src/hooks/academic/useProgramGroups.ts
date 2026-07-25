@@ -3,10 +3,7 @@ import { createProgramGroup, deleteProgramGroup, getProgramGroupById, getProgram
 
 const PROGRAM_GROUPS_KEY = ['programGroups']
 
-// Fetch a single page large enough to cover the whole list — nothing in
-// this codebase currently paginates the master lists client-side, so the
-// hook needs the full set in one request rather than the API's default
-// page=1/pageSize=10 (which would silently hide any row past the 10th).
+// Fetch a large page so the full list is available without client-side pagination.
 const PROGRAM_GROUPS_PAGE_SIZE = 1000
 
 export function useProgramGroups() {

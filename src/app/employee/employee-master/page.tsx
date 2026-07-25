@@ -6,6 +6,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { NewEmployeeModal } from '@/components/modals/employee/NewEmployeeModal'
 import { EditEmployeeModal } from '@/components/modals/employee/EditEmployeeModal'
 import { AssignEmployeePermissionsModal } from '@/components/modals/employee/AssignEmployeePermissionsModal'
+import { EditEmployeePermissionsModal } from '@/components/modals/employee/EditEmployeePermissionsModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -21,6 +22,7 @@ export default function Page() {
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingEmployeeGuid, setEditingEmployeeGuid] = useState<string | null>(null)
   const [assigningPermissionsEmployee, setAssigningPermissionsEmployee] = useState<EmployeeListItem | null>(null)
+  const [editingPermissionsEmployee, setEditingPermissionsEmployee] = useState<EmployeeListItem | null>(null)
 
   function nav(id: string) { router.push('/employee/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -37,6 +39,11 @@ export default function Page() {
     openModal('assign-employee-permissions-modal')
   }
 
+  function openEditPermissionsModal(employee: EmployeeListItem) {
+    setEditingPermissionsEmployee(employee)
+    openModal('edit-employee-permissions-modal')
+  }
+
   useEffect(() => {
     function closeFilter(e: MouseEvent) {
       const target = e.target as HTMLElement
@@ -46,9 +53,7 @@ export default function Page() {
     return () => document.removeEventListener('click', closeFilter)
   }, [])
 
-  // Previous mock shape (pre GET /api/v1/users/employees integration) — kept
-  // for reference until the remaining fields (qualification, specialisation,
-  // faculty, designation) are confirmed against the real backend contract.
+  // Keep the old mock table shape as a reference for the earlier UI version.
   // const rows = [
   //   { id: 'EMP-0001', name: 'Dr. Nakimuli Sarah',  email: 'snakimuli@isbatuniversity.ac.ug', qualification: 'PhD', qualDetail: 'PhD Computer Science',    qualSub: 'Makerere University · 2018',         specialisation: 'Machine Learning, Algorithms',     faculty: 'FCT', designation: 'Senior Lecturer', statusBadge: 'badge-green', statusLabel: 'Active' },
   //   { id: 'EMP-0002', name: 'Prof. Mukasa Charles', email: 'cmukasa@isbatuniversity.ac.ug', qualification: "Master's", qualDetail: 'PhD Business Administration', qualSub: 'University of Cape Town · 2012',      specialisation: 'Strategic Management, Finance',    faculty: 'FBM', designation: 'Senior Lecturer', statusBadge: 'badge-green', statusLabel: 'Active' },
@@ -57,15 +62,9 @@ export default function Page() {
   //   { id: 'EMP-0005', name: 'Mr. Okello Brian',    email: 'bokello@isbatuniversity.ac.ug', qualification: "Bachelor's", qualDetail: 'MBA Finance',               qualSub: 'Strathmore University · 2020',       specialisation: 'Corporate Finance, Accounting',    faculty: 'FBM', designation: 'Assistant Lecturer', statusBadge: 'badge-amber', statusLabel: 'On Leave' },
   // ]
 
-  // Shaped after GET /api/v1/users/employees ({ data: { items: [...] } }) —
-  // employeeGuid is kept as the row key only; shortCode is the
-  // user-facing identifier shown in the table. Backed by react-query so a
-  // successful create (which invalidates the 'employees' query) refetches
-  // the list and the new row shows up here automatically.
+  // Use the live API list and refresh it after create/update actions.
   const { data: rows = [], isLoading } = useEmployees()
-  // Newest first — employeeGuid isn't sequential, but shortCode's numeric
-  // suffix (e.g. 'AD/00121') is assigned in order, so it's the best
-  // available proxy for creation order (the API doesn't return a created-date).
+  // Sort newest first by the numeric short-code suffix, which is the best available proxy for creation order.
   const sortedRows = [...rows].sort((a, b) => {
     const numA = Number(a.shortCode.split('/').pop())
     const numB = Number(b.shortCode.split('/').pop())
@@ -149,6 +148,9 @@ export default function Page() {
                         <button className="btn btn-neu btn-sm" onClick={() => openAssignPermissionsModal(r)}>
                           <i className="lni lni-lock"></i> Assign Permissions
                         </button>
+                        <button className="btn btn-neu btn-sm" onClick={() => openEditPermissionsModal(r)}>
+                          <i className="lni lni-pencil-alt"></i> Edit Permissions
+                        </button>
                       </ActionMenu>
                     </td>
                     <td className="font-mono text-b700">{r.shortCode}</td>
@@ -174,6 +176,12 @@ export default function Page() {
         onClose={() => closeModal('assign-employee-permissions-modal')}
         showToast={showToast}
         employee={assigningPermissionsEmployee}
+      />
+      <EditEmployeePermissionsModal
+        isOpen={openModals.has('edit-employee-permissions-modal')}
+        onClose={() => closeModal('edit-employee-permissions-modal')}
+        showToast={showToast}
+        employee={editingPermissionsEmployee}
       />
       <Toast toast={toast} />
     </>

@@ -2,8 +2,7 @@ import { apiGet, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// Subset of Employee returned by GET /api/v1/users/employees list items —
-// the create response above returns the full Employee shape instead.
+// Lightweight employee record used by the list view.
 export interface EmployeeListItem {
   employeeGuid: string
   shortCode: string
@@ -22,10 +21,7 @@ interface EmployeeListResponse {
   pageSize: number
 }
 
-// Real backend shape returned by both GET /api/v1/users/employees (list
-// items) and POST /api/v1/users/employees (create response) — the list
-// response is a subset of these fields, the create response includes all of
-// them.
+// Full employee record returned by the API.
 export interface Employee {
   employeeGuid: string
   shortCode: string
@@ -50,10 +46,7 @@ export interface Employee {
   intDesignation?: number | null
 }
 
-// What's actually posted to create an employee. intDept/intDesignation are
-// required by the backend's FluentValidation ("Select Department/Designation
-// before proceeding!") even though the confirmed response shape above only
-// marks them optional/nullable on read.
+// Payload used when creating a new employee.
 export interface CreateEmployeeInput {
   category: number
   categoryPrefix: string
@@ -74,9 +67,7 @@ export interface CreateEmployeeInput {
   intDesignation: number
 }
 
-// Shaped after GET /api/v1/users/employees's sample response — backing
-// store for both getEmployees and createEmployee while NEXT_PUBLIC_AUTH_MOCK
-// is on, so a mock-created employee actually shows up in the list.
+// In-memory employee list used while mock auth is enabled.
 const mockEmployees: EmployeeListItem[] = [
   { employeeGuid: '487c8f38-9db6-45ee-897b-32e2942e8e21', shortCode: 'AD/00111', empName: 'DOE JOHN', title: 'Mr', surname: 'DOE', firstName: 'JOHN', sex: 1, isApproved: true },
   { employeeGuid: 'b48bd2c6-6db1-4860-9e2e-0572cf92c079', shortCode: 'AD/00103', empName: 'DOE JOHN', title: 'Mr', surname: 'DOE', firstName: 'JOHN', sex: 1, isApproved: true },
@@ -91,23 +82,18 @@ const mockEmployees: EmployeeListItem[] = [
 ]
 let mockEmployeeSeq = 121
 
-// Matches the real backend's empName composition, confirmed by comparing
-// create/update responses: surname + firstName + otherName (when present),
-// uppercased — e.g. surname 'DOE U', firstName 'JOHN U', otherName
-// 'UPDATED' -> 'DOE U JOHN U UPDATED'.
+// Build the display name in the same format returned by the API.
 function composeEmpName(surname: string, firstName: string, otherName: string | null): string {
   return [surname, firstName, otherName].filter(Boolean).join(' ').toUpperCase()
 }
 
+// Fetch the employee list for the UI.
 export function getEmployees(): Promise<EmployeeListItem[]> {
   if (MOCK_AUTH) return Promise.resolve(mockEmployees)
   return apiGet<EmployeeListResponse | null>('/api/v1/users/employees').then(data => data?.items ?? [])
 }
 
-// GET /api/v1/users/employees/{id} — full record for the Edit modal. The
-// list endpoint above only returns a subset of fields (EmployeeListItem), so
-// editing needs this separate per-id fetch to get birthDate, placeOfBirth,
-// intCountryCode/countryName, natId/nationalId, maritalStatus, etc.
+// Fetch the full employee record for the edit form.
 export function getEmployee(id: string): Promise<Employee> {
   if (MOCK_AUTH) {
     const listItem = mockEmployees.find(e => e.employeeGuid === id)
@@ -139,6 +125,7 @@ export function getEmployee(id: string): Promise<Employee> {
   return apiGet<Employee>(`/api/v1/users/employees/${id}`)
 }
 
+// Create a new employee and return the saved record.
 export function createEmployee(input: CreateEmployeeInput): Promise<Employee> {
   if (MOCK_AUTH) {
     const employee: Employee = {
@@ -177,6 +164,41 @@ export function createEmployee(input: CreateEmployeeInput): Promise<Employee> {
     return Promise.resolve(employee)
   }
   return apiPost<Employee>('/api/v1/users/employees', input)
+}
+
+export interface AssignPermissionGroupsInput {
+  permissionGroupGuids: string[]
+}
+
+// Keyed by employeeGuid — lets mock assign/get round-trip within a session
+// (an assign call updates this so a later get reflects it), same idea as
+// the other domains' mock in-memory arrays.
+const mockEmployeePermissionGroups: Record<string, string[]> = {}
+
+// Real shape: an array of { permissionGroupGuid, groupName, description } —
+// groupName/description are already available from Permission Master's own
+// list (usePermissionGroups), so only the guid is actually needed here.
+interface EmployeePermissionGroupApiItem {
+  permissionGroupGuid: string
+  groupName: string
+  description: string
+}
+
+// Fetch the permission group guids currently assigned to an employee.
+export function getEmployeePermissionGroups(employeeGuid: string): Promise<string[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockEmployeePermissionGroups[employeeGuid] ?? [])
+  return apiGet<EmployeePermissionGroupApiItem[] | null>(`/api/v1/users/admin/users/${employeeGuid}/permission-groups`)
+    .then(data => (data ?? []).map(g => g.permissionGroupGuid))
+}
+
+// Assign one or more permission groups (created in Permission Master) to an
+// employee. Replaces whatever permission groups the employee currently has.
+export function assignEmployeePermissionGroups(employeeGuid: string, input: AssignPermissionGroupsInput): Promise<void> {
+  if (MOCK_AUTH) {
+    mockEmployeePermissionGroups[employeeGuid] = input.permissionGroupGuids
+    return Promise.resolve()
+  }
+  return apiPut<void>(`/api/v1/users/admin/users/${employeeGuid}/permission-groups`, input)
 }
 
 export function updateEmployee(id: string, input: CreateEmployeeInput): Promise<Employee> {

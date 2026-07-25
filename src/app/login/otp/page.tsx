@@ -68,9 +68,7 @@ export default function OtpPage() {
     if (!flowState.challengeId || secondsLeft > 0) return
     setResending(true)
     setError(null)
-    // Re-use forgotStart with the staffId won't work here — we need a dedicated resend endpoint.
-    // For now, navigate back so the user can re-authenticate and trigger a new OTP.
-    // When the backend exposes POST /api/auth/otp/resend, wire it up here.
+    // Resend is still a placeholder for now.
     setSecondsLeft(RESEND_COOLDOWN)
     setDigits(['', '', '', '', '', ''])
     setResending(false)

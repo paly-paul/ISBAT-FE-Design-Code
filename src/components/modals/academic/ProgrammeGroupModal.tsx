@@ -47,7 +47,7 @@ export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramG
     return Object.keys(e).length === 0
   }
 
-  // Maps the backend's { code, errors } failure shape to an inline field
+  // Map known backend failures to field errors.
   // error where the cause is actionable right there (duplicate groupCode);
   // anything else shows the failure popup instead.
   function handleCreateError(error: Error) {

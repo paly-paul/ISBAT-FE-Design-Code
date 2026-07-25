@@ -2,16 +2,17 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// Real backend shape returned by GET (list + by-guid)/POST/PUT/DELETE
-// /api/v1/academic/specializations — id is now streamGuid.
+// Represents a stream record returned by the API.
 export interface Stream {
   streamGuid: string
   streamCode: string
   streamName: string
 }
 
+// Payload used when creating or updating a stream.
 export type StreamInput = Omit<Stream, 'streamGuid'>
 
+// Response wrapper for the paginated stream list endpoint.
 interface StreamListResponse {
   items: Stream[]
   totalCount: number
@@ -28,11 +29,13 @@ const mockStreams: Stream[] = [
   { streamGuid: '6', streamCode: 'MECH', streamName: 'Mechanical Engineering' },
 ]
 
+// Fetch the stream list, using mock data when the mock auth flag is enabled.
 export function getStreams(page = 1, pageSize = 10): Promise<Stream[]> {
   if (MOCK_AUTH) return Promise.resolve(mockStreams)
   return apiGet<StreamListResponse | null>(`/api/v1/academic/specializations?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
 }
 
+// Create a new stream and return the saved record.
 export function createStream(input: StreamInput): Promise<Stream> {
   if (MOCK_AUTH) {
     const stream: Stream = { streamGuid: crypto.randomUUID(), ...input }
@@ -42,6 +45,7 @@ export function createStream(input: StreamInput): Promise<Stream> {
   return apiPost<Stream>('/api/v1/academic/specializations', input)
 }
 
+// Fetch one stream by its GUID.
 export function getStreamById(guid: string): Promise<Stream> {
   if (MOCK_AUTH) {
     const existing = mockStreams.find(s => s.streamGuid === guid)
@@ -51,7 +55,7 @@ export function getStreamById(guid: string): Promise<Stream> {
   return apiGet<Stream>(`/api/v1/academic/specializations/${guid}`)
 }
 
-// Same payload shape as create (see StreamInput above).
+// Update a stream by GUID and return the updated record.
 export function updateStream(guid: string, input: StreamInput): Promise<Stream> {
   if (MOCK_AUTH) {
     const existing = mockStreams.find(s => s.streamGuid === guid)
@@ -62,7 +66,7 @@ export function updateStream(guid: string, input: StreamInput): Promise<Stream> 
   return apiPut<Stream>(`/api/v1/academic/specializations/${guid}`, input)
 }
 
-// DELETE /api/v1/academic/specializations/{guid} — soft-delete (data: true on success).
+// Delete a stream and return true when the API confirms success.
 export function deleteStream(guid: string): Promise<boolean> {
   if (MOCK_AUTH) {
     const index = mockStreams.findIndex(s => s.streamGuid === guid)

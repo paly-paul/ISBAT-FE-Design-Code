@@ -35,8 +35,7 @@ export function EditPermissionModal({ isOpen, onClose, showToast, permissionGrou
       setDeleteTarget(null)
       setGlobalSearch('')
     }
-    // Re-seed once the catalog finishes loading too, so ids aren't stuck
-    // under the 'Other' fallback bucket while moduleByPermissionId is empty.
+    // Refresh the wizard once the permission catalog is ready.
   }, [isOpen, permissionGroup, moduleByPermissionId])
 
   if (!isOpen || !permissionGroup) return null

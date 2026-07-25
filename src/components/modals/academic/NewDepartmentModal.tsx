@@ -54,10 +54,7 @@ export function NewDepartmentModal({ isOpen, onClose, showToast, createDepartmen
     return Object.keys(e).length === 0
   }
 
-  // Maps the backend's { code, errors } failure shape (see
-  // departments-and-designations.md) to inline field errors where the cause
-  // is actionable right there (duplicate shortCode); validation_error shows
-  // the failure popup instead.
+  // Map known backend failures to field errors and use the popup for anything else.
   function handleCreateError(error: Error) {
     const code = error instanceof AuthError ? error.code : undefined
     if (code === 'bad_request') {

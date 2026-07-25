@@ -2,11 +2,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// Previous mock-only shape (pre GET /api/v1/academic/faculties integration) —
-// kept for reference. The real API has a different field set (facultyGuid,
-// campusGuid/campusName, deanEmployeeGuid/deanName instead of id/dean, and no
-// programmes count), so create/update below still operate on the new shape
-// with mock data until POST/PUT are wired to the real endpoints.
+// Older mock shape kept for reference.
 // export interface Faculty {
 //   id: string
 //   code: string
@@ -40,10 +36,7 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 //   return Promise.resolve(existing)
 // }
 
-// Real backend shape returned by GET /api/v1/academic/faculties (paginated
-// list) — id is now facultyGuid; dean is split into deanEmployeeGuid/deanName
-// (deanName can be null); campusGuid/campusName are new; programmes isn't
-// returned by this endpoint.
+// Current API shape for faculties.
 export interface Faculty {
   facultyGuid: string
   facultyCode: string
@@ -54,11 +47,7 @@ export interface Faculty {
   deanName: string | null
 }
 
-// Confirmed via POST /api/v1/academic/faculties and reused as-is for PUT
-// /api/v1/academic/faculties/:facultyGuid (same body/validation per the
-// docs). The dean is chosen by employee (deanEmployeeGuid), not typed as a
-// name — deanName is a read-only field the backend derives for display, not
-// part of the input.
+// The create and update payload use the same fields.
 export type FacultyInput = {
   facultyCode: string
   facultyName: string
@@ -87,8 +76,7 @@ export function getFaculties(page = 1, pageSize = 10): Promise<Faculty[]> {
 
 export function createFaculty(input: FacultyInput): Promise<Faculty> {
   if (MOCK_AUTH) {
-    // campusName isn't known here in mock mode (no cross-module lookup) —
-    // fine for offline dev since it isn't exercised against a real backend.
+    // Mock mode does not know the campus name yet, so it stays empty.
     const faculty: Faculty = {
       facultyGuid: String(mockFacultySeq++),
       facultyCode: input.facultyCode,
@@ -104,9 +92,7 @@ export function createFaculty(input: FacultyInput): Promise<Faculty> {
   return apiPost<Faculty>('/api/v1/academic/faculties', input)
 }
 
-// Confirmed via PUT /api/v1/academic/faculties/:facultyGuid — same body as
-// create. Fails with 400 validation_error or 404 not_found (unknown
-// facultyGuid), both surfaced to the Edit modal via AuthError.
+// Updating a faculty uses the same payload as creating one.
 export function updateFaculty(id: string, input: FacultyInput): Promise<Faculty> {
   if (MOCK_AUTH) {
     const existing = mockFaculties.find(f => f.facultyGuid === id)

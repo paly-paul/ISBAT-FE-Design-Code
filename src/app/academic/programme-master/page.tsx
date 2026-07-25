@@ -8,6 +8,12 @@ import { SpecializationModal } from '@/components/modals/academic/Specialization
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { useCreateProgramMaster, useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useProgramGroups } from '@/hooks/academic/useProgramGroups'
+import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
+import { useFaculties } from '@/hooks/config/useFaculties'
+import { useStreams } from '@/hooks/config/useStreams'
 
 export default function Page() {
   const router = useRouter()
@@ -16,6 +22,7 @@ export default function Page() {
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [progMode, setProgMode] = useState<'add' | 'edit'>('add')
+  const createProgramMaster = useCreateProgramMaster()
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -31,13 +38,51 @@ export default function Page() {
     return () => document.removeEventListener('click', closeFilter)
   }, [])
 
-  const rows = [
-    { progCode: 'BCA-2026',    progName: 'Bachelor of Computer Appl. 2026',       group: 'BCA', level: "Bachelor's · 3yr / 6sem", faculty: 'FCT → Main Campus', accredDate: 'Jan 2026', expires: 'Jan 2031',         expiresBadge: 'badge-green', expiresIcon: '',                        noIA: 'No',  specializations: '—',                    admissionStatus: 'Active',   admissionBadge: 'badge-green', rowClass: '', variant: 'edit' },
-    { progCode: 'BCA-2021',    progName: 'Bachelor of Computer Appl. 2021',       group: 'BCA', level: "Bachelor's · 3yr / 6sem", faculty: 'FCT → Main Campus', accredDate: 'Jan 2021', expires: 'Jan 2026 — Retired', expiresBadge: 'badge-grey',  expiresIcon: '',                        noIA: 'No',  specializations: '—',                    admissionStatus: 'Inactive',  admissionBadge: 'badge-grey',  rowClass: '', variant: 'view' },
-    { progCode: 'BBA-2021',    progName: 'BBA Business Administration 2021',      group: 'BBA', level: "Bachelor's · 3yr / 6sem", faculty: 'FBM → Main Campus', accredDate: 'Oct 2021', expires: 'Oct 2026 — Expiring Soon', expiresBadge: 'badge-red', expiresIcon: 'lni lni-warning',  noIA: 'No',  specializations: '—',                    admissionStatus: 'Active',   admissionBadge: 'badge-green', rowClass: 'flagged', variant: 'renew' },
-    { progCode: 'MBA-2024',    progName: 'MBA Business Administration 2024',      group: 'MBA', level: "Master's · 2yr / 4sem",  faculty: 'FBM → Main Campus', accredDate: 'Mar 2024', expires: 'Mar 2029',         expiresBadge: 'badge-green', expiresIcon: '',                        noIA: 'No',  specializations: '3 Specializations',   admissionStatus: 'Active',   admissionBadge: 'badge-green', rowClass: '', variant: 'editspec' },
-    { progCode: 'PHD-CS-2023', progName: 'Doctor of Philosophy — CS 2023',       group: '—',   level: 'PhD · 3yr / 6sem',       faculty: 'FCT → Main Campus', accredDate: 'Jun 2023', expires: 'Jun 2028',         expiresBadge: 'badge-green', expiresIcon: '',                        noIA: 'Yes', specializations: '—',                    admissionStatus: 'Active',   admissionBadge: 'badge-green', rowClass: '', variant: 'edit' },
-  ]
+  // Previous hardcoded rows (pre GET /api/v1/academic/program-master
+  // integration) — kept for reference. The real response has no accreditation
+  // expiry date at all, and no per-row "variant" concept (edit/view/renew/
+  // editspec) — those were simulated purely for the mock UI, so the table
+  // below always shows the same action set instead.
+  // const rows = [
+  //   { progCode: 'BCA-2026',    progName: 'Bachelor of Computer Appl. 2026',       group: 'BCA', level: "Bachelor's · 3yr / 6sem", faculty: 'FCT → Main Campus', accredDate: 'Jan 2026', expires: 'Jan 2031',         expiresBadge: 'badge-green', expiresIcon: '',                        noIA: 'No',  specializations: '—',                    admissionStatus: 'Active',   admissionBadge: 'badge-green', rowClass: '', variant: 'edit' },
+  //   { progCode: 'BCA-2021',    progName: 'Bachelor of Computer Appl. 2021',       group: 'BCA', level: "Bachelor's · 3yr / 6sem", faculty: 'FCT → Main Campus', accredDate: 'Jan 2021', expires: 'Jan 2026 — Retired', expiresBadge: 'badge-grey',  expiresIcon: '',                        noIA: 'No',  specializations: '—',                    admissionStatus: 'Inactive',  admissionBadge: 'badge-grey',  rowClass: '', variant: 'view' },
+  //   { progCode: 'BBA-2021',    progName: 'BBA Business Administration 2021',      group: 'BBA', level: "Bachelor's · 3yr / 6sem", faculty: 'FBM → Main Campus', accredDate: 'Oct 2021', expires: 'Oct 2026 — Expiring Soon', expiresBadge: 'badge-red', expiresIcon: 'lni lni-warning',  noIA: 'No',  specializations: '—',                    admissionStatus: 'Active',   admissionBadge: 'badge-green', rowClass: 'flagged', variant: 'renew' },
+  //   { progCode: 'MBA-2024',    progName: 'MBA Business Administration 2024',      group: 'MBA', level: "Master's · 2yr / 4sem",  faculty: 'FBM → Main Campus', accredDate: 'Mar 2024', expires: 'Mar 2029',         expiresBadge: 'badge-green', expiresIcon: '',                        noIA: 'No',  specializations: '3 Specializations',   admissionStatus: 'Active',   admissionBadge: 'badge-green', rowClass: '', variant: 'editspec' },
+  //   { progCode: 'PHD-CS-2023', progName: 'Doctor of Philosophy — CS 2023',       group: '—',   level: 'PhD · 3yr / 6sem',       faculty: 'FCT → Main Campus', accredDate: 'Jun 2023', expires: 'Jun 2028',         expiresBadge: 'badge-green', expiresIcon: '',                        noIA: 'Yes', specializations: '—',                    admissionStatus: 'Active',   admissionBadge: 'badge-green', rowClass: '', variant: 'edit' },
+  // ]
+
+  // Real list + the lookups needed to resolve the guids it returns into
+  // display names (the list endpoint itself only echoes back guids).
+  const { data: programs = [], isLoading } = useProgramMasters()
+  const { data: programGroups = [] } = useProgramGroups()
+  const { data: programLevels = [] } = useProgramLevels()
+  const { data: faculties = [] } = useFaculties()
+  const { data: streams = [] } = useStreams()
+
+  const rows = programs.map(p => {
+    const group = programGroups.find(g => g.programGroupGuid === p.programGroupGuid)
+    const level = programLevels.find(l => l.programLevelGuid === p.programLevelGuid)
+    const faculty = faculties.find(f => f.facultyGuid === p.facultyGuid)
+    const specializationNames = p.streamGuids
+      .map(guid => streams.find(s => s.streamGuid === guid)?.streamName)
+      .filter((name): name is string => !!name)
+    return {
+      programGuid: p.programGuid,
+      progCode: p.programCode,
+      progName: p.programName,
+      group: group?.groupCode ?? '—',
+      level: level ? `${level.levelName} · ${p.yearCount}yr / ${p.semCount}sem` : `${p.yearCount}yr / ${p.semCount}sem`,
+      faculty: faculty ? `${faculty.facultyCode} → ${faculty.campusName}` : '—',
+      accredDate: new Date(p.dateAcc).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      noIA: p.noIa ? 'Yes' : 'No',
+      specializations: specializationNames.length > 0 ? specializationNames.join(', ') : '—',
+      admissionStatus: p.pgmStatus ? 'Active' : 'Inactive',
+    }
+  })
+
+  const groupFilterOpts = Array.from(new Set(rows.map(r => r.group)))
+  const levelFilterOpts = Array.from(new Set(rows.map(r => r.level)))
+
   const filteredRows = rows.filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   )
@@ -79,10 +124,6 @@ export default function Page() {
           <i className="lni lni-warning"></i> <span><strong>Versioning Rule:</strong> NCHE mandates a minimum 30–50% curriculum change every 5 years for reaccreditation. Old versions (e.g. BCA 2026) must remain <em>Inactive</em> so existing students continue on their curriculum. New versions (e.g. BCA 2031) are set <em>Active</em> for new admissions only.</span>
         </div>
 
-        <div className="danger-box mb-[14px]">
-          <i className="lni lni-volume-high"></i> <span><strong>Accreditation Alert:</strong> BBA 2021 version expires in <strong>6 months (Oct 2026)</strong>. Start NCHE reaccreditation process and prepare BBA 2027 curriculum version. <button className="btn btn-neu btn-sm ml-2" onClick={() => nav('programme-master')}>View →</button></span>
-        </div>
-
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-graduation"></i></span> All Programme Versions</div>
@@ -94,14 +135,23 @@ export default function Page() {
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
+              {/* Previous header (pre GET integration) — kept for reference; the Expires column
+                  has no backing field in the real response, so it's dropped rather than left blank.
               <thead><tr><th style={{ width: 48 }}></th><th>Prog. Code</th><th>Programme Name</th>{fth('Group', 'group', ['BCA', 'BBA', 'MBA', '—'])}{fth('Programme Level', 'level', ["Bachelor's · 3yr / 6sem", "Master's · 2yr / 4sem", 'PhD · 3yr / 6sem'])}<th>Faculty → Campus</th><th>Accreditation Date</th><th>Expires</th><th>No IA</th><th>Specializations</th>{fth('Admission Status', 'admissionStatus', ['Active', 'Inactive'])}</tr></thead>
+              */}
+              <thead><tr><th style={{ width: 48 }}></th><th>Prog. Code</th><th>Programme Name</th>{fth('Group', 'group', groupFilterOpts)}{fth('Programme Level', 'level', levelFilterOpts)}<th>Faculty → Campus</th><th>Accreditation Date</th><th>No IA</th><th>Specializations</th>{fth('Admission Status', 'admissionStatus', ['Active', 'Inactive'])}</tr></thead>
               <tbody>
-                {filteredRows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
-                  : null}
-                {filteredRows.map((r, i) => (
-                  <tr key={i} className={r.rowClass}>
+                {isLoading
+                  ? <TableLoadingState colSpan={999} />
+                  : filteredRows.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                    : null}
+                {filteredRows.map(r => (
+                  <tr key={r.programGuid}>
                     <td>
+                      {/* Previous per-row action variants (edit/view/renew/editspec) — simulated
+                          for the mock UI; the real list has no signal to pick between them, so
+                          every row gets the same action set now.
                       {r.variant === 'edit' && (
                         <ActionMenu>
                           <button className="btn btn-neu btn-sm" onClick={() => { setProgMode('edit'); openModal('new-prog-modal') }}><i className="lni lni-pencil"></i> Edit</button>
@@ -125,6 +175,12 @@ export default function Page() {
                           <button className="btn btn-neu btn-sm" onClick={() => openModal('specialization-modal')}><i className="lni lni-target"></i> Specializations</button>
                         </ActionMenu>
                       )}
+                      */}
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => { setProgMode('edit'); openModal('new-prog-modal') }}><i className="lni lni-pencil"></i> Edit</button>
+                        <button className="btn btn-neu btn-sm" onClick={() => nav('course-units')}><i className="lni lni-book"></i> Curriculum</button>
+                        <button className="btn btn-neu btn-sm" onClick={() => openModal('specialization-modal')}><i className="lni lni-target"></i> Specializations</button>
+                      </ActionMenu>
                     </td>
                     <td className={`font-mono text-[var(--fs-xs)] ${r.admissionStatus === 'Inactive' ? 'text-g400' : 'text-b700'}`}>{r.progCode}</td>
                     <td>{r.admissionStatus === 'Active' ? <strong>{r.progName}</strong> : r.progName}</td>
@@ -132,11 +188,14 @@ export default function Page() {
                     <td>{r.level}</td>
                     <td>{r.faculty}</td>
                     <td>{r.accredDate}</td>
+                    {/* Expires column — no accreditation expiry field exists in the real
+                        response, so there's nothing to compute this badge from.
                     <td>
                       <span className={`badge ${r.expiresBadge}`}>
                         {r.expiresIcon && <i className={r.expiresIcon}></i>} {r.expires}
                       </span>
                     </td>
+                    */}
                     <td>
                       {r.noIA === 'Yes'
                         ? <span className="badge badge-amber"><i className="lni lni-checkmark"></i> No Internal Assessment</span>
@@ -148,7 +207,7 @@ export default function Page() {
                     </td>
                     <td>
                       {r.admissionStatus === 'Active'
-                        ? <span className={`badge ${r.admissionBadge}`}><span className="bdot"></span>Active</span>
+                        ? <span className="badge badge-green"><span className="bdot"></span>Active</span>
                         : <span className="badge badge-grey">Inactive (existing students only)</span>
                       }
                     </td>
@@ -159,7 +218,13 @@ export default function Page() {
           </ScrollTable>
         </div>
       </div>
-      <ProgrammeModal isOpen={openModals.has('new-prog-modal')} onClose={() => closeModal('new-prog-modal')} showToast={showToast} mode={progMode === 'edit' ? 'edit' : undefined} />
+      <ProgrammeModal
+        isOpen={openModals.has('new-prog-modal')}
+        onClose={() => closeModal('new-prog-modal')}
+        showToast={showToast}
+        mode={progMode === 'edit' ? 'edit' : undefined}
+        createProgramMaster={createProgramMaster}
+      />
       <SpecializationModal isOpen={openModals.has('specialization-modal')} onClose={() => closeModal('specialization-modal')} showToast={showToast} />
       <Toast toast={toast} />
     </>

@@ -3,7 +3,7 @@ import { Dispatch, SetStateAction, ReactNode, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-export type RailId = 'admission' | 'academic' | 'student' | 'employee' | 'config'
+export type RailId = 'admission' | 'academic' | 'finance' | 'student' | 'employee' | 'config'
 
 interface SidebarProps {
   panelOpen: boolean
@@ -56,9 +56,10 @@ const ADMISSION_SECTIONS = [
 // Next's automatic viewport-based prefetch otherwise.
 const ADMISSION_IDS = ADMISSION_SECTIONS.flatMap(s => s.items.map(i => i.id))
 const ACADEMIC_IDS = ['acad-dashboard', 'intake-master', 'skill-master', 'batch-management', 'room-management', 'session-movement', 'repetition-tag', 'course-units', 'programme-level', 'programme-group', 'programme-master', 'fee-structure', 'timetable', 'odl-applications', 'odl-reconciliation', 'student-lookup']
+const FINANCE_IDS = ['cooperates', 'discounts', 'ledgers', 'currency-master', 'receipt-books', 'gen-sets', 'banks', 'bank-branches', 'proc-banks', 'proc-gl-accounts']
 const STUDENT_IDS = ['student-master']
 const EMPLOYEE_IDS = ['employee-master']
-const CONFIG_IDS = ['faculty-master', 'department-master', 'designation-master', 'specialization', 'skill', 'ledger', 'campus-master', 'currency-master', 'country-master', 'permission-master', 'enquiry-status', 'followup-status']
+const CONFIG_IDS = ['faculty-master', 'department-master', 'designation-master', 'specialization', 'skill', 'campus-master', 'country-master', 'permission-master', 'enquiry-status', 'enquiry-source', 'followup-status', 'followup-mode', 'interest-level', 'weekdays', 'unit-type', 'unit-category']
 
 export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {
   const router = useRouter()
@@ -68,12 +69,13 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
   useEffect(() => {
     ADMISSION_IDS.forEach(id => router.prefetch(`/admission/${id}`))
     ACADEMIC_IDS.forEach(id => router.prefetch(`/academic/${id}`))
+    FINANCE_IDS.forEach(id => router.prefetch(`/finance/${id}`))
     STUDENT_IDS.forEach(id => router.prefetch(`/student/${id}`))
     EMPLOYEE_IDS.forEach(id => router.prefetch(`/employee/${id}`))
     CONFIG_IDS.forEach(id => router.prefetch(`/config/${id}`))
   }, [router])
 
-  function sbItem(id: string, label: string, icon: string, badge?: { text: string; warn?: boolean }, prefix: 'academic' | 'student' | 'employee' | 'config' = 'academic') {
+  function sbItem(id: string, label: string, icon: string, badge?: { text: string; warn?: boolean }, prefix: 'academic' | 'finance' | 'student' | 'employee' | 'config' = 'academic') {
     const href = `/${prefix}/${id}`
     return (
       <Link href={href} className={`sb-item${currentPage === id ? ' active' : ''}`}>
@@ -122,10 +124,11 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
           <span className="rail-tooltip">{panelOpen && activeRail === 'academic' ? 'Hide panel' : 'Academic'}</span>
         </div>
         <div className="rail-divider"></div>
-        <div className="rail-item" data-mod="finance">
+        <div className={`rail-item${activeRail === 'finance' ? ' active' : ''}`} data-mod="finance" onClick={() => clickRail('finance')} style={{ cursor: 'pointer' }}>
           <span className="rail-icon"><i className="lni lni-dollar"></i></span>
           <span className="rail-label">Finance</span>
-          <span className="rail-tooltip">Finance</span>
+          {activeRail === 'finance' && panelOpen && <span className="rail-dot"></span>}
+          <span className="rail-tooltip">{panelOpen && activeRail === 'finance' ? 'Hide panel' : 'Finance'}</span>
         </div>
         <div className={`rail-item${activeRail === 'student' ? ' active' : ''}`} data-mod="student" onClick={() => clickRail('student')} style={{ cursor: 'pointer' }}>
           <span className="rail-icon"><i className="lni lni-user"></i></span>
@@ -249,6 +252,31 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
             <div className="sb-panel-footer">S2 · Academic Service</div>
           </>}
 
+          {activeRail === 'finance' && <>
+            <div className="sb-panel-hdr">
+              <div className="sb-panel-hdr-title">Module</div>
+              <div className="sb-panel-hdr-name"><i className="lni lni-dollar"></i> Finance</div>
+            </div>
+
+            {sbSection('sc-finance-core', 'Finance Core', <>
+              {sbItem('cooperates', 'Cooperates', 'handshake', undefined, 'finance')}
+              {sbItem('discounts', 'Discounts', 'tag', undefined, 'finance')}
+              {sbItem('ledgers', 'Ledgers', 'book', undefined, 'finance')}
+              {sbItem('currency-master', 'Currency Master', 'dollar', undefined, 'finance')}
+              {sbItem('receipt-books', 'Receipt Books', 'ticket', undefined, 'finance')}
+              {sbItem('gen-sets', 'General Settings', 'cog', undefined, 'finance')}
+            </>)}
+
+            {sbSection('sc-finance-banking', 'Banking', <>
+              {sbItem('banks', 'Banks', 'coin', undefined, 'finance')}
+              {sbItem('bank-branches', 'Bank Branches', 'map-marker', undefined, 'finance')}
+              {sbItem('proc-banks', 'Proc Banks', 'wallet', undefined, 'finance')}
+              {sbItem('proc-gl-accounts', 'Proc GL Accounts', 'calculator', undefined, 'finance')}
+            </>)}
+
+            <div className="sb-panel-footer">S5 · Finance Service</div>
+          </>}
+
           {activeRail === 'student' && <>
             <div className="sb-panel-hdr">
               <div className="sb-panel-hdr-title">Module</div>
@@ -281,19 +309,32 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
               <div className="sb-panel-hdr-name"><i className="lni lni-cog"></i> Configuration</div>
             </div>
 
-            {sbSection('sc-config', 'Core Configuration', <>
+            {sbSection('sc-config-org', 'Organization', <>
               {sbItem('faculty-master', 'Faculty Master', 'library', undefined, 'config')}
               {sbItem('department-master', 'Department Master', 'briefcase', undefined, 'config')}
               {sbItem('designation-master', 'Designation Master', 'tag', undefined, 'config')}
+              {sbItem('campus-master', 'Campus Master', 'home', undefined, 'config')}
+              {sbItem('country-master', 'Country Master', 'world', undefined, 'config')}
+            </>)}
+
+            {sbSection('sc-config-academic', 'Academic Setup', <>
               {sbItem('specialization', 'Specialization', 'certificate', undefined, 'config')}
               {sbItem('skill', 'Skill Master', 'bulb', undefined, 'config')}
-              {sbItem('ledger', 'Ledger Master', 'book', undefined, 'config')}
-              {sbItem('campus-master', 'Campus Master', 'home', undefined, 'config')}
-              {sbItem('currency-master', 'Currency Master', 'dollar', undefined, 'config')}
-              {sbItem('country-master', 'Country Master', 'world', undefined, 'config')}
-              {sbItem('permission-master', 'Permission Master', 'lock', undefined, 'config')}
+              {sbItem('unit-type', 'Unit Type Master', 'tag', undefined, 'config')}
+              {sbItem('unit-category', 'Unit Category Master', 'tag', undefined, 'config')}
+              {sbItem('weekdays', 'Weekdays', 'calendar', undefined, 'config')}
+            </>)}
+
+            {sbSection('sc-config-admissions', 'Admissions', <>
               {sbItem('enquiry-status', 'Enquiry Status', 'flag', undefined, 'config')}
-              {sbItem('followup-status', 'Followup Status', 'flag', undefined, 'config')}
+              {sbItem('enquiry-source', 'Enquiry Source', 'compass', undefined, 'config')}
+              {sbItem('followup-status', 'Followup Status', 'phone', undefined, 'config')}
+              {sbItem('followup-mode', 'Followup Mode', 'comments', undefined, 'config')}
+              {sbItem('interest-level', 'Interest Level', 'signal', undefined, 'config')}
+            </>)}
+
+            {sbSection('sc-config-access', 'Access Control', <>
+              {sbItem('permission-master', 'Permission Master', 'lock', undefined, 'config')}
             </>)}
 
             <div className="sb-panel-footer">S0 · Core Config</div>

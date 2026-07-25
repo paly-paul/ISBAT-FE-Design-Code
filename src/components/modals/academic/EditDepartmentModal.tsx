@@ -8,9 +8,7 @@ import { Department, DepartmentInput } from '@/lib/api/academic/department'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
 
-// Not part of the real GET /api/v1/users/departments response (which only
-// has shortCode/deptName/employeeGuid) — kept for reference until a
-// confirmed update payload says whether Faculty/Status still apply.
+// These fields are kept as a reference because the current API response does not include them.
 // const FACULTY_OPTIONS = [
 //   { value: 'Faculty of Computing',       label: 'Faculty of Computing' },
 //   { value: 'Faculty of Business',        label: 'Faculty of Business' },
@@ -61,10 +59,7 @@ export function EditDepartmentModal({ isOpen, onClose, showToast, department, up
     return Object.keys(e).length === 0
   }
 
-  // Maps the backend's { code, errors } failure shape (see
-  // departments-and-designations.md) to inline field errors where the cause
-  // is actionable right there (duplicate shortCode); validation_error and
-  // not_found show the failure popup instead.
+  // Show field-level errors when the cause is clear, otherwise use the popup.
   function handleUpdateError(error: Error) {
     const code = error instanceof AuthError ? error.code : undefined
     if (code === 'bad_request') {

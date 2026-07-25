@@ -39,10 +39,7 @@ export function EditCountryModal({ isOpen, onClose, showToast, country, updateCo
 
   function handleClose() { setSaved(false); setFailure(null); onClose() }
 
-  // Mirrors the real PUT /api/v1/users/countries/{id} validation rules (all
-  // fields required; countryCode/countryPrefix max 10 chars, countryName/
-  // nationality max 100) so these surface inline instead of only after a
-  // failed request.
+  // Keep validation close to the form so errors show up early.
   function validate() {
     const e: Record<string, string> = {}
     if (!countryCode.trim())        e.countryCode   = 'Country Code is required'
@@ -57,10 +54,7 @@ export function EditCountryModal({ isOpen, onClose, showToast, country, updateCo
     return Object.keys(e).length === 0
   }
 
-  // Maps the backend's { code, errors } failure shape (see countries.md) to
-  // an inline field error where the cause is actionable right there
-  // (duplicate countryCode); validation_error and not_found show the failure
-  // popup instead.
+  // Show field-level errors when the cause is clear, otherwise use the popup.
   function handleUpdateError(error: Error) {
     const code = error instanceof AuthError ? error.code : undefined
     if (code === 'bad_request') {

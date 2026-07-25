@@ -55,9 +55,7 @@ export function EditFacultyModal({ isOpen, onClose, showToast, faculty, updateFa
       {
         onSuccess: () => { setSaved(true); showToast('Faculty updated successfully') },
         onError: (error: Error) => {
-          // 404 not_found means the faculty was deleted elsewhere between
-          // opening this modal and submitting — everything else (400
-          // validation_error, etc.) just surfaces the backend's message.
+          // A missing record usually means the faculty was deleted while the modal was open.
           const notFound = error instanceof AuthError && error.code === 'not_found'
           setFailure(notFound ? 'This faculty no longer exists — it may have been deleted.' : (error.message || 'Failed to update faculty. Please try again.'))
         },

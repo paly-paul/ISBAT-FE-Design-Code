@@ -31,7 +31,7 @@ export default function StrengthBar({ level = 0 }: StrengthBarProps) {
   )
 }
 
-/** Compute strength level from a password string */
+// Estimate password strength from the input.
 export function computeStrength(pw: string): 0 | 1 | 2 | 3 {
   let score = 0
   if (pw.length >= 10) score++

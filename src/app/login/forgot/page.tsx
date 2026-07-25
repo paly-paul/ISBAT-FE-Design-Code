@@ -40,7 +40,7 @@ export default function ForgotPage() {
   const pwError = newPw ? validatePassword(newPw) : null
   const matchError = confirmPw && newPw !== confirmPw ? 'Passwords do not match.' : null
 
-  // Step 0 — Identify
+  // Step 1: identify the account
   async function handleIdentify(e: React.FormEvent) {
     e.preventDefault()
     const idErr = validateStaffId(staffId)
@@ -61,7 +61,7 @@ export default function ForgotPage() {
 
   function setSecondsCooldown() { setSecondsLeft(RESEND_COOLDOWN) }
 
-  // Step 1 — Verify OTP
+  // Step 2: verify the OTP
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault()
     const challengeId = getFlowState().forgotChallengeId
@@ -80,7 +80,7 @@ export default function ForgotPage() {
     }
   }
 
-  // Step 2 — New password
+  // Step 3: set a new password
   async function handleReset(e: React.FormEvent) {
     e.preventDefault()
     if (pwError || matchError) return

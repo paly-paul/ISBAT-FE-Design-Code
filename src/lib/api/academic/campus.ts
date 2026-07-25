@@ -40,8 +40,7 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 //   return Promise.resolve(existing)
 // }
 
-// Real backend shape returned by GET /api/v1/academic/campus (paginated
-// list) — id is now campusGuid.
+// Represents a campus record returned by the API.
 export interface Campus {
   campusGuid: string
   campusCode: string
@@ -51,8 +50,10 @@ export interface Campus {
   contact: string
 }
 
+// Payload used when creating or updating a campus.
 export type CampusInput = Omit<Campus, 'campusGuid'>
 
+// Response wrapper for the paginated campus list endpoint.
 interface CampusListResponse {
   items: Campus[]
   totalCount: number
@@ -73,9 +74,7 @@ export function getCampuses(page = 1, pageSize = 10): Promise<Campus[]> {
   return apiGet<CampusListResponse | null>(`/api/v1/academic/campus?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
 }
 
-// Lightweight lookup for the campus name filter dropdown — confirmed via GET
-// /api/v1/academic/campus/dropdown. Only campusGuid/campusName, unlike the
-// full paginated list from getCampuses above.
+// Lightweight data used for campus dropdowns.
 export interface CampusDropdownItem {
   campusGuid: string
   campusName: string
@@ -86,8 +85,7 @@ export function getCampusDropdown(): Promise<CampusDropdownItem[]> {
   return apiGet<CampusDropdownItem[] | null>('/api/v1/academic/campus/dropdown').then(data => data ?? [])
 }
 
-// Confirmed via POST /api/v1/academic/campus — request/response shape is
-// identical to CampusInput/Campus, no extra or renamed fields.
+// Create a campus and return the saved record.
 export function createCampus(input: CampusInput): Promise<Campus> {
   if (MOCK_AUTH) {
     const campus: Campus = { campusGuid: String(mockCampusSeq++), ...input }
@@ -97,9 +95,7 @@ export function createCampus(input: CampusInput): Promise<Campus> {
   return apiPost<Campus>('/api/v1/academic/campus', input)
 }
 
-// Confirmed via PUT /api/v1/academic/campus/:campusGuid — same body shape as
-// create. Fails with 400 validation_error or 404 not_found (bad/unknown
-// campusGuid), both surfaced to the Edit modal via AuthError.
+// Update an existing campus by ID and return the updated record.
 export function updateCampus(id: string, input: CampusInput): Promise<Campus> {
   if (MOCK_AUTH) {
     const existing = mockCampuses.find(c => c.campusGuid === id)
@@ -110,8 +106,7 @@ export function updateCampus(id: string, input: CampusInput): Promise<Campus> {
   return apiPut<Campus>(`/api/v1/academic/campus/${id}`, input)
 }
 
-// Confirmed via DELETE /api/v1/academic/campus/:campusGuid — soft-delete,
-// data is null on success. Fails with 404 not_found for an unknown campusGuid.
+// Delete a campus and return true when the API confirms success.
 export function deleteCampus(id: string): Promise<boolean> {
   if (MOCK_AUTH) {
     const index = mockCampuses.findIndex(c => c.campusGuid === id)

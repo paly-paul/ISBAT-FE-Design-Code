@@ -8,10 +8,7 @@ import { AuthError } from '@/lib/api/client'
 import { CreateIntakeInput } from '@/lib/api/academic/intake'
 import { useIntake } from '@/hooks/academic/useIntakes'
 
-// Nominal semester length sent as durationInWeeks on update — the backend
-// uses this value (not the actual span between semStart/term2End) for its
-// own end-date validation, so it has to stay a fixed number rather than
-// something derived from the dates being entered.
+// Default duration used until the calendar dates are available.
 const DEFAULT_SEMESTER_WEEKS = 15
 
 const MONTHS = [
@@ -36,7 +33,7 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
   const [saved, setSaved]   = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
 
-  // ── Step 1 — matches the top-level fields of GET /api/v1/academic/intakes/:intakeGuid ──
+  // First step: the main intake details.
   const [description, setDescription]     = useState('')
   const [financialYear, setFinancialYear] = useState('')
   const [examYear, setExamYear]           = useState('')
@@ -49,7 +46,7 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
   const [grievanceEndDate, setGrievanceEndDate]     = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // ── Step 2 — populated from academicCalendar[0] (semCode 1) and, if present, academicCalendar[1] (semCode 2) ──
+  // Second step: the semester calendar details.
   const [admissionStartDate, setAdmissionStartDate]     = useState('')
   const [admissionLateFeeDate, setAdmissionLateFeeDate] = useState('')
   const [admissionEndDate, setAdmissionEndDate]         = useState('')
@@ -85,16 +82,13 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
   const [secondFinalExamEndDate, setSecondFinalExamEndDate] = useState('')
   const [secondClearanceDate, setSecondClearanceDate] = useState('')
 
-  // GET gives every date back as a full datetime ("2026-07-01T00:00:00");
-  // <input type="date"> only wants the date part.
+  // The API returns full datetime values, so the form strips the time portion for date fields.
   function toDateInputValue(value: string | null | undefined): string {
     if (!value) return ''
     return value.includes('T') ? value.split('T')[0] : value
   }
 
-  // Prefill the form once the intake has loaded. Re-runs whenever a
-  // different intake is fetched (react-query resets `intake` to undefined
-  // when intakeGuid changes, so stale data never leaks between edits).
+  // Fill the form when the intake data loads.
   useEffect(() => {
     if (!isOpen || !intake) return
 
@@ -152,10 +146,20 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
     setStep(1)
   }, [isOpen, intake])
 
-  function calcDuration() {
-    if (!semStart || !term2End) return ''
+  // Estimate the visible duration in weeks from the semester dates.
+  function calcDurationWeeks(): number | null {
+    if (!semStart || !term2End) return null
     const ms = new Date(term2End).getTime() - new Date(semStart).getTime()
-    return ms > 0 ? String(Math.round(ms / (1000 * 60 * 60 * 24 * 7))) : ''
+    // Round up, not to nearest — the backend re-validates semesterEndDate
+    // against semStart + (durationInWeeks - 2) weeks, so rounding down here
+    // (Math.round can round down) computes a shorter span than what the user
+    // actually selected and rejects a perfectly valid end date.
+    return ms > 0 ? Math.ceil(ms / (1000 * 60 * 60 * 24 * 7)) : null
+  }
+
+  function calcDuration() {
+    const weeks = calcDurationWeeks()
+    return weeks === null ? '' : String(weeks)
   }
 
   function parseDate(value: string | null | undefined) {
@@ -171,9 +175,7 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
     return values.some(value => typeof value === 'string' && value.trim() !== '')
   }
 
-  // Same "" vs null handling as NewIntakeModal — the backend deserializes
-  // these straight into .NET DateTime fields, which rejects "" but accepts
-  // null, so an empty date input has to be converted before it goes out.
+  // Empty date inputs are sent as null so the API accepts them.
   function toApiDate(value: string): string | null {
     const trimmed = value.trim()
     if (!trimmed) return null
@@ -261,6 +263,11 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
       if (!examYear.trim())       e.examYear       = 'Exam Year is required'
       if (!examMonth)             e.examMonth      = 'Please select an Exam Month'
       if (!intakeSeq.trim())      e.intakeSeq      = 'Intake Sequence is required'
+      // Confirmed required by the backend (validation_error: "must not be
+      // empty") despite CreateIntakeInput typing these as nullable.
+      if (!lastDateForReRegistration) e.lastDateForReRegistration = 'Last Date for Re-registration is required'
+      if (!grievanceStartDate)        e.grievanceStartDate        = 'Grievance Start Date is required'
+      if (!grievanceEndDate)          e.grievanceEndDate          = 'Grievance End Date is required'
     }
 
     if (stepNumber === 2) {
@@ -273,11 +280,12 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
       if (!term2End) e.term2End = 'Semester end date is required'
 
       // No client-side cap on how far term2End can be from semStart — the
-      // backend enforces its own max-end-date rule (based on the
-      // durationInWeeks we send it) and returns a validation_error with the
-      // real limit, surfaced via the failure screen. Hardcoding a guessed
-      // limit here twice produced a cap that didn't match confirmed backend
-      // behavior, rejecting valid dates.
+      // backend enforces its own max-end-date rule (semesterStartDate +
+      // (durationInWeeks - 2) weeks), but durationInWeeks itself is now
+      // derived from these same two dates (see calcDurationWeeks() /
+      // handleUpdate), so that check is satisfied by construction. A
+      // validation_error would still surface via the failure screen if the
+      // backend ever disagrees.
       if (semStartDate && semEndDate && semEndDate < semStartDate) {
         e.term2End = 'Semester end date must be on or after the semester start date'
       }
@@ -417,7 +425,7 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
     )
   }
 
-  // We don't have a confirmed list of failure codes for this endpoint yet
+  // This endpoint does not expose a confirmed failure-code list yet.
   // (unlike countries/departments), so anything the API sends back just
   // shows the failure screen with whatever message it gave us — same as
   // NewIntakeModal's create-error handling.
@@ -437,7 +445,9 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
       intakes: Number(intakeSeq),
       examMonth: Number(examMonth),
       month: MONTHS.find(m => m.value === examMonth)?.label ?? '',
-      durationInWeeks: DEFAULT_SEMESTER_WEEKS,
+      // See DEFAULT_SEMESTER_WEEKS comment above — must be the actual
+      // semester span (+2 buffer weeks), not a fixed nominal number.
+      durationInWeeks: (calcDurationWeeks() ?? (DEFAULT_SEMESTER_WEEKS - 2)) + 2,
       lastDateForReRegistration: toApiDate(lastDateForReRegistration),
       currentIntake,
       grievanceStartDate: toApiDate(grievanceStartDate),
@@ -557,16 +567,19 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
                 </div>
               </div>
               <div className="fg">
-                <div className="lbl">Last Date for Re-registration</div>
-                <input className="ctrl" type="date" value={lastDateForReRegistration} onChange={e => setLastDateForReRegistration(e.target.value)} />
+                <div className="lbl">Last Date for Re-registration <span className="req">*</span></div>
+                <input className="ctrl" style={errors.lastDateForReRegistration ? { borderColor: 'var(--red)' } : undefined} type="date" value={lastDateForReRegistration} onChange={e => { setLastDateForReRegistration(e.target.value); if (errors.lastDateForReRegistration) setErrors(p => ({ ...p, lastDateForReRegistration: '' })) }} />
+                {errors.lastDateForReRegistration && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lastDateForReRegistration}</p>}
               </div>
               <div className="fg">
-                <div className="lbl">Grievance Start Date</div>
-                <input className="ctrl" type="date" value={grievanceStartDate} onChange={e => setGrievanceStartDate(e.target.value)} />
+                <div className="lbl">Grievance Start Date <span className="req">*</span></div>
+                <input className="ctrl" style={errors.grievanceStartDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={grievanceStartDate} onChange={e => { setGrievanceStartDate(e.target.value); if (errors.grievanceStartDate) setErrors(p => ({ ...p, grievanceStartDate: '' })) }} />
+                {errors.grievanceStartDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.grievanceStartDate}</p>}
               </div>
               <div className="fg">
-                <div className="lbl">Grievance End Date</div>
-                <input className="ctrl" type="date" value={grievanceEndDate} onChange={e => setGrievanceEndDate(e.target.value)} />
+                <div className="lbl">Grievance End Date <span className="req">*</span></div>
+                <input className="ctrl" style={errors.grievanceEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={grievanceEndDate} onChange={e => { setGrievanceEndDate(e.target.value); if (errors.grievanceEndDate) setErrors(p => ({ ...p, grievanceEndDate: '' })) }} />
+                {errors.grievanceEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.grievanceEndDate}</p>}
               </div>
             </div>
           )}

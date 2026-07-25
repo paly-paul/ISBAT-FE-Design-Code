@@ -54,7 +54,7 @@ export default function Page() {
         </div>
         <div className="card">
           <div className="card-hdr">
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-flag"></i></span> Followup Statuses</div>
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-phone"></i></span> Followup Statuses</div>
           </div>
           <ScrollTable>
             <table>

@@ -8,9 +8,7 @@ export interface ModuleBlock {
   search: string
 }
 
-// The saved group only stores a flat permission id list — regroup by module
-// using the catalog's id → module lookup (module attribution only exists in
-// the catalog, not on the saved group itself).
+// Rebuild saved permissions into module blocks using the catalog lookup.
 function blocksFromPermissionIds(permissionIds: number[], moduleByPermissionId: Record<number, string>): ModuleBlock[] {
   const byModule: Record<string, number[]> = {}
   for (const id of permissionIds) {
@@ -21,17 +19,11 @@ function blocksFromPermissionIds(permissionIds: number[], moduleByPermissionId: 
   return Object.entries(byModule).map(([module, perms], i) => ({ module, open: i === 0, permissions: perms, search: '' }))
 }
 
-// Shared state/logic behind the Add/Edit Permission Group wizard — catalog
-// lookups, per-module accordion blocks, global permission search, and the
-// module dropdown's "(Added)" labeling. Used by both NewPermissionModal and
-// EditPermissionModal; the two differ only in how they seed initial state
-// and what they do on submit (create vs update).
+// Shared state and logic for the permission-group wizard used in create and edit flows.
 export function usePermissionWizard() {
   const { data: catalog = [] } = usePermissionCatalog()
 
-  // The catalog can contain multiple entries sharing the same mainModule —
-  // merge their permissions instead of overwriting. Permissions now sit two
-  // levels deep (subModule -> pages -> permissions).
+  // Merge permissions from catalog entries that share the same module.
   const permissionsByModule = useMemo(() => {
     const map: Record<string, CatalogPermission[]> = {}
     for (const m of catalog) {
@@ -41,8 +33,7 @@ export function usePermissionWizard() {
     return map
   }, [catalog])
 
-  // Checkbox groups within a module block are titled by "page" — merge
-  // pages across subModules sharing the same mainModule, same as above.
+  // Merge page groups that belong to the same module.
   const pagesByModule = useMemo(() => {
     const map: Record<string, CatalogPage[]> = {}
     for (const m of catalog) {
@@ -65,9 +56,7 @@ export function usePermissionWizard() {
     return map
   }, [permissionsByModule])
 
-  // A saved group's own reported id for a permission can drift from the
-  // cached catalog's id for the "same" permission (two separate endpoints) —
-  // reconcile by name, which is what's actually displayed and stable.
+  // Match permissions by name when the saved group and catalog use different IDs.
   const catalogIdByName = useMemo(() => {
     const map: Record<string, number> = {}
     for (const perms of Object.values(permissionsByModule)) {
@@ -86,7 +75,7 @@ export function usePermissionWizard() {
   const [globalSearch, setGlobalSearch] = useState('')
   const blockRefs = useRef<Partial<Record<string, HTMLDivElement>>>({})
 
-  // Recomputed whenever blocks changes so already-added modules show as such.
+  // Recompute the module dropdown labels whenever the selected blocks change.
   const moduleOptions = useMemo(() => {
     const seen = new Set<string>()
     const addedModules = new Set(blocks.map(b => b.module))

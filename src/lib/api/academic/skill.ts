@@ -1,6 +1,4 @@
-// Mock-only for now — the academic master endpoints aren't implemented on
-// the real backend yet. Swap these for apiGet/apiPost calls (see
-// src/lib/api/client.ts) once the API is available.
+// Mock-only skill helpers for now.
 
 export interface Skill {
   id: string
@@ -20,16 +18,19 @@ const mockSkills: Skill[] = [
   { id: '8', skillName: 'Operating Systems' },
 ]
 
+// Return the mock skill list.
 export function getSkills(): Promise<Skill[]> {
   return Promise.resolve(mockSkills)
 }
 
+// Create a new skill entry and return it.
 export function createSkill(input: SkillInput): Promise<Skill> {
   const skill: Skill = { id: String(mockSkills.length + 1), ...input }
   mockSkills.push(skill)
   return Promise.resolve(skill)
 }
 
+// Update an existing skill entry and return it.
 export function updateSkill(id: string, input: SkillInput): Promise<Skill> {
   const existing = mockSkills.find(s => s.id === id)
   if (!existing) return Promise.reject(new Error('Skill not found'))

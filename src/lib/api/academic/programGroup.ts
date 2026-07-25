@@ -2,9 +2,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// Real backend shape returned by GET /api/v1/academic/program-groups
-// (paginated — items/totalCount/pageNumber/pageSize, same envelope as
-// faculty/designation/department/etc.)
+// Represents a programme group record returned by the API.
 export interface ProgramGroup {
   programGroupGuid: string
   groupCode: string
@@ -31,6 +29,7 @@ const mockProgramGroups: ProgramGroup[] = [
   { programGroupGuid: '4', groupCode: 'BEng', groupName: 'Bachelor of Engineering (Civil)',      programLevelGuid: '4', programLevelName: 'Bachelor of Engineering' },
 ]
 
+// Response wrapper for the paginated programme group list endpoint.
 interface ProgramGroupListResponse {
   items: ProgramGroup[]
   totalCount: number
@@ -38,14 +37,13 @@ interface ProgramGroupListResponse {
   pageSize: number
 }
 
+// Fetch the programme group list, using mock data when the mock auth flag is enabled.
 export function getProgramGroups(page = 1, pageSize = 10): Promise<ProgramGroup[]> {
   if (MOCK_AUTH) return Promise.resolve(mockProgramGroups)
   return apiGet<ProgramGroupListResponse | null>(`/api/v1/academic/program-groups?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
 }
 
-// Confirmed create payload — programLevelName is server-resolved from
-// programLevelGuid, so it isn't sent, even though it's present on the GET
-// response shape.
+// Payload used when creating or updating a programme group.
 export interface ProgramGroupInput {
   groupCode: string
   groupName: string
@@ -54,6 +52,7 @@ export interface ProgramGroupInput {
 
 let mockProgramGroupSeq = mockProgramGroups.length + 1
 
+// Create a new programme group and return the saved record.
 export function createProgramGroup(input: ProgramGroupInput): Promise<ProgramGroup> {
   if (MOCK_AUTH) {
     const group: ProgramGroup = {
@@ -71,10 +70,7 @@ export function createProgramGroup(input: ProgramGroupInput): Promise<ProgramGro
   return apiPost<ProgramGroup>('/api/v1/academic/program-groups', input)
 }
 
-// GET/PUT single-record endpoints — inferred as /api/v1/academic/program-groups/:guid,
-// following the same base-path/:guid convention as every other real-wired
-// domain in this app (program-levels, designation, faculty, etc.); not
-// separately confirmed against the backend.
+// Fetch one programme group by its GUID.
 export function getProgramGroupById(guid: string): Promise<ProgramGroup> {
   if (MOCK_AUTH) {
     const existing = mockProgramGroups.find(g => g.programGroupGuid === guid)
@@ -84,7 +80,7 @@ export function getProgramGroupById(guid: string): Promise<ProgramGroup> {
   return apiGet<ProgramGroup>(`/api/v1/academic/program-groups/${guid}`)
 }
 
-// Same payload shape as create (see ProgramGroupInput above).
+// Update a programme group by GUID and return the updated record.
 export function updateProgramGroup(guid: string, input: ProgramGroupInput): Promise<ProgramGroup> {
   if (MOCK_AUTH) {
     const existing = mockProgramGroups.find(g => g.programGroupGuid === guid)
@@ -95,6 +91,7 @@ export function updateProgramGroup(guid: string, input: ProgramGroupInput): Prom
   return apiPut<ProgramGroup>(`/api/v1/academic/program-groups/${guid}`, input)
 }
 
+// Delete a programme group and return true when the API confirms success.
 export function deleteProgramGroup(guid: string): Promise<boolean> {
   if (MOCK_AUTH) {
     const index = mockProgramGroups.findIndex(g => g.programGroupGuid === guid)

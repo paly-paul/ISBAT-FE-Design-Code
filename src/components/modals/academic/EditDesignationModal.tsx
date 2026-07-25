@@ -8,10 +8,7 @@ import { Designation, DesignationInput } from '@/lib/api/academic/designation'
 import { useDepartments } from '@/hooks/config/useDepartments'
 import { AuthError } from '@/lib/api/client'
 
-// Not part of the real GET /api/v1/users/designations response (which
-// references departments by numeric intDept, not a name string) — kept for
-// reference. The Department dropdown below is now backed by the real
-// departments list (useDepartments) instead of this hardcoded set.
+// These department options are kept as a reference; the form now uses the live departments list.
 // const DEPARTMENT_OPTIONS = [
 //   { value: 'Computer Science',        label: 'Computer Science' },
 //   { value: 'Information Technology',  label: 'Information Technology' },
@@ -59,10 +56,7 @@ export function EditDesignationModal({ isOpen, onClose, showToast, designation, 
     return Object.keys(e).length === 0
   }
 
-  // Maps the backend's { code, errors } failure shape (see
-  // departments-and-designations.md) to inline field errors where the cause
-  // is actionable right there (duplicate designationName); validation_error
-  // and not_found (bad intDept reference) show the failure popup instead.
+  // Show field-level errors when the cause is clear, otherwise use the popup.
   function handleUpdateError(error: Error) {
     const code = error instanceof AuthError ? error.code : undefined
     if (code === 'bad_request') {

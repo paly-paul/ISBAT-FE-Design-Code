@@ -9,18 +9,13 @@ import { useDepartments } from '@/hooks/config/useDepartments'
 import { useDesignations } from '@/hooks/config/useDesignations'
 import { useCountries } from '@/hooks/config/useCountries'
 
-// Only category confirmed against the real create payload so far
-// ({ category: 1, categoryPrefix: 'AD' }) — add more once the backend
-// confirms other employee categories.
+// Only one employee category is confirmed by the API for now.
 const CATEGORIES: { label: string; category: number; prefix: string }[] = [
   { label: 'Administrative Staff', category: 1, prefix: 'AD' },
 ]
 
 const TITLES = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof']
-// Numeric mappings below (sex, marital status, religion) aren't confirmed by
-// a backend lookup endpoint yet — sequential ids are a placeholder guess.
-// Country is the exception: it's backed by the real GET /api/v1/users/countries
-// list (useCountries), keyed by intCountryCode.
+// The lookup values below are placeholders until the API provides fuller options.
 const SEXES = ['Male', 'Female', 'Others']
 const MARITAL_STATUSES = ['Single', 'Married', 'Divorced', 'Widow', 'Widower', 'Separated']
 const RELIGIONS = ['Christian', 'Muslim', 'Hindu', 'Other']
@@ -54,7 +49,7 @@ export function NewEmployeeModal({ isOpen, onClose, showToast }: ModalProps) {
   const [department, setDepartment] = useState('')
   const [designation, setDesignation] = useState('')
 
-  // ── Fields matching POST /api/v1/users/employees ──────────────────────
+  // These fields match the employee create payload.
   const [category, setCategory] = useState(CATEGORIES[0].label)
   const [title, setTitle] = useState('')
   const [firstName, setFirstName] = useState('')
@@ -84,9 +79,7 @@ export function NewEmployeeModal({ isOpen, onClose, showToast }: ModalProps) {
     ? designations.find(d => d.designationName === designation && String(d.intDept) === String(selectedDept.intDept))
     : undefined
 
-  // Mirrors the backend's FluentValidation rules for POST/PUT
-  // /api/v1/users/employees, so the same messages surface inline instead of
-  // only after a failed request.
+  // Reuse the API validation messages so the form shows issues immediately.
   function validate(): Record<string, string> {
     const e: Record<string, string> = {}
     const selectedCategory = CATEGORIES.find(c => c.label === category)
@@ -194,7 +187,7 @@ export function NewEmployeeModal({ isOpen, onClose, showToast }: ModalProps) {
 
         <div className="modal-scroll">
 
-          {/* ── Personal Details (matches POST /api/v1/users/employees) ── */}
+          {/* Personal Details */}
           <div className="sec-divider">Personal Details</div>
           <div className="g3">
             <div className="fg">
