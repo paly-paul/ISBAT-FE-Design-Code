@@ -2,9 +2,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// Previous mock-only shape (pre GET /api/v1/users/countries integration) —
-// kept for reference until create/update get confirmed against the real
-// backend contract.
+// Older mock shape kept for reference.
 // export interface Country {
 //   id: string
 //   countryCode: string
@@ -44,8 +42,7 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 //   return Promise.resolve(existing)
 // }
 
-// Real backend shape returned by GET /api/v1/users/countries — id is now
-// intCountryCode, and defaultCountry is still a 0/1 flag rather than a bool.
+// Current API shape for countries.
 export interface Country {
   intCountryCode: number
   countryCode: string
@@ -64,8 +61,7 @@ interface CountryListResponse {
   pageSize: number
 }
 
-// Backing store used only when NEXT_PUBLIC_AUTH_MOCK is on — GET, create,
-// and update are all wired to the real endpoints otherwise.
+// This in-memory list is used only in mock mode.
 const mockCountries: Country[] = [
   { intCountryCode: 1, countryCode: 'UGA', countryName: 'Uganda',        nationality: 'Ugandan',        defaultCountry: 1, countryPrefix: '+256' },
   { intCountryCode: 2, countryCode: 'KEN', countryName: 'Kenya',          nationality: 'Kenyan',         defaultCountry: 0, countryPrefix: '+254' },
@@ -82,8 +78,7 @@ export function getCountries(page = 1, pageSize = 10): Promise<Country[]> {
   return apiGet<CountryListResponse | null>(`/api/v1/users/countries?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
 }
 
-// Previous mock-only createCountry (pre POST /api/v1/users/countries
-// integration) — kept for reference.
+// Older mock create helper kept for reference.
 // export function createCountry(input: CountryInput): Promise<Country> {
 //   const country: Country = { intCountryCode: mockCountries.length + 1, ...input }
 //   mockCountries.push(country)
@@ -99,8 +94,7 @@ export function createCountry(input: CountryInput): Promise<Country> {
   return apiPost<Country>('/api/v1/users/countries', input)
 }
 
-// Previous mock-only updateCountry (pre PUT /api/v1/users/countries/{id}
-// integration) — kept for reference.
+// Older mock update helper kept for reference.
 // export function updateCountry(id: string, input: CountryInput): Promise<Country> {
 //   const existing = mockCountries.find(c => String(c.intCountryCode) === id)
 //   if (!existing) return Promise.reject(new Error('Country not found'))

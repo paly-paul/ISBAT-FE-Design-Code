@@ -1,9 +1,6 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? ''
 
-// The dev backend is tunneled through ngrok's free tier, which serves an
-// HTML "you're about to visit..." interstitial (ERR_NGROK_6024) instead of
-// the real response for any request that looks browser-originated — this
-// header opts out of that. No-op against a real gateway that isn't ngrok.
+// Skip ngrok's browser warning page for local gateway requests.
 const NGROK_HEADERS = { 'ngrok-skip-browser-warning': 'true' }
 
 export class AuthError extends Error {
@@ -16,16 +13,14 @@ export class AuthError extends Error {
   }
 }
 
-// Endpoints that must never trigger the refresh-and-retry dance: an
-// "unauthorized" here means bad credentials or a dead refresh token, not an
-// expired access token to recover from.
+// These auth routes should not trigger a refresh loop.
 const AUTH_ENDPOINTS = ['/auth/login', '/auth/refresh', '/auth/logout']
 
 function isAuthEndpoint(path: string): boolean {
   return AUTH_ENDPOINTS.some(endpoint => path.includes(endpoint))
 }
 
-// Deduped in-flight refresh so concurrent 401s trigger a single refresh call.
+// Prevent duplicate refresh calls when several requests fail at once.
 let refreshInFlight: Promise<void> | null = null
 
 function refreshAccessToken(): Promise<void> {
@@ -43,10 +38,7 @@ function redirectToLogin() {
   if (typeof window !== 'undefined') window.location.href = '/login'
 }
 
-// Only a definitive rejection from the refresh endpoint itself (refresh token
-// expired/invalid) should force a logout. A network blip, timeout, or gateway
-// hiccup while calling /auth/refresh throws a plain error (not AuthError) and
-// should surface as a normal failure instead — the session may still be fine.
+// Only a real refresh failure should log the user out.
 async function handleUnauthorized(): Promise<void> {
   try {
     await refreshAccessToken()
@@ -56,8 +48,7 @@ async function handleUnauthorized(): Promise<void> {
   }
 }
 
-// Legacy raw-JSON endpoints (no envelope) — still used by auth flows the real
-// backend hasn't implemented yet (OTP, forgot password, activation).
+// Some auth endpoints still use the older plain JSON format.
 export async function post<T>(path: string, body: unknown, retried = false): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
@@ -130,6 +121,67 @@ export async function apiPost<T>(path: string, body: unknown, retried = false): 
     // Some endpoints (e.g. login) authenticate purely via Set-Cookie and
     // respond 2xx with no parseable JSON body — that's a legitimate success,
     // not an error, so resolve with null data rather than throwing.
+    if (!envelope) return null as T
+    if (!envelope.success) {
+      throw new AuthError(envelope.code ?? 'unknown', envelope.errors?.[0] ?? envelope.message ?? undefined)
+    }
+    return envelope.data as T
+  }
+
+  throw new AuthError(envelope?.code ?? 'unknown', envelope?.errors?.[0] ?? envelope?.message ?? undefined)
+}
+
+// multipart/form-data variant of apiPost — for endpoints that accept a file
+// alongside regular fields (e.g. course unit syllabus upload). No
+// Content-Type header: the browser sets the multipart boundary itself when
+// FormData is passed straight through to fetch.
+export async function apiPostForm<T>(path: string, formData: FormData, retried = false): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: NGROK_HEADERS,
+    credentials: 'include',
+    body: formData,
+  })
+
+  const envelope = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
+  const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
+
+  if (unauthorized && !isAuthEndpoint(path) && !retried) {
+    await handleUnauthorized()
+    return apiPostForm<T>(path, formData, true)
+  }
+
+  if (res.ok) {
+    if (!envelope) return null as T
+    if (!envelope.success) {
+      throw new AuthError(envelope.code ?? 'unknown', envelope.errors?.[0] ?? envelope.message ?? undefined)
+    }
+    return envelope.data as T
+  }
+
+  throw new AuthError(envelope?.code ?? 'unknown', envelope?.errors?.[0] ?? envelope?.message ?? undefined)
+}
+
+// multipart/form-data variant of apiPut — mirrors apiPostForm for endpoints
+// that accept an optional file on update too (e.g. course unit syllabus
+// replace).
+export async function apiPutForm<T>(path: string, formData: FormData, retried = false): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'PUT',
+    headers: NGROK_HEADERS,
+    credentials: 'include',
+    body: formData,
+  })
+
+  const envelope = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
+  const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
+
+  if (unauthorized && !isAuthEndpoint(path) && !retried) {
+    await handleUnauthorized()
+    return apiPutForm<T>(path, formData, true)
+  }
+
+  if (res.ok) {
     if (!envelope) return null as T
     if (!envelope.success) {
       throw new AuthError(envelope.code ?? 'unknown', envelope.errors?.[0] ?? envelope.message ?? undefined)

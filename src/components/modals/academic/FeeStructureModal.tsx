@@ -3,6 +3,10 @@ import { useState, useEffect } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useCurrencies } from '@/hooks/finance/useCurrencies'
+import { useCreateProgramFeeStructureHeader, ProgramFeeStructureHeaderInput } from '@/hooks/academic/useProgramFeeStructure'
 
 /* ─────────────────────────────────────────────────────────
    OLD MODAL (commented out — kept for reference)
@@ -63,15 +67,6 @@ export function FeeStructureModal_OLD({ isOpen, onClose, showToast }: ModalProps
 }
    ───────────────────────────────────────────────────────── */
 
-const PROGRAMMES = [
-  { value: 'BSCS-2026', label: 'BSc. Computer Science (BSCS-2026)' },
-  { value: 'BSIT-2025', label: 'BSc. Information Technology (BSIT-2025)' },
-  { value: 'BBA-2024',  label: 'Bachelor of Business Administration (BBA-2024)' },
-  { value: 'MBA-2024',  label: 'Master of Business Administration (MBA-2024)' },
-  { value: 'BENG-2026', label: 'BEng. Electrical Engineering (BENG-2026)' },
-  { value: 'BCOM-2025', label: 'BCom. Accounting & Finance (BCOM-2025)' },
-]
-
 const CURRENCIES = ['UGX', 'USD', 'KES', 'EUR', 'GBP']
 const LEDGERS = [
   'Tuition Fee', 'Examination Fee', 'Registration Fee', 'Library Fee',
@@ -92,6 +87,17 @@ type Structure = {
   discountType: string
   createdVia: 'new' | 'copy'
   semFees: SemFees
+  // Header-level fields for the Programfee-structure/hd POST.
+  localOrForeign: boolean
+  amtPer: string
+  lef: string
+  lefCurrency: string
+  cef: string
+  cefCurrency: string
+  ace: string
+  aceCurrency: string
+  headerSaved: boolean
+  feeHdGuid: string | null
 }
 
 function blankItem(id: number): FeeItem {
@@ -108,7 +114,10 @@ const DEFAULT_SEM_FEES: SemFees = Array.from({ length: NUM_SEMS }, (_, i) =>
 )
 
 function makeDefaultStructures(): Structure[] {
-  return [{ id: 1, programme: '', feeCode: '', description: '', currency: 'UGX', intake: '', discountType: 'Amount', createdVia: 'new', semFees: DEFAULT_SEM_FEES }]
+  return [{
+    id: 1, programme: '', feeCode: '', description: '', currency: 'UGX', intake: '', discountType: 'Amount', createdVia: 'new', semFees: DEFAULT_SEM_FEES,
+    localOrForeign: false, amtPer: '', lef: '', lefCurrency: '', cef: '', cefCurrency: '', ace: '', aceCurrency: '', headerSaved: false, feeHdGuid: null,
+  }]
 }
 
 let nextId = 200
@@ -117,6 +126,18 @@ let nextStructId = 100
 type EditData = { programmeCode: string; intake: string; feeCode: string; description: string; currency: string }
 
 export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }: ModalProps & { mode?: 'edit'; editData?: EditData }) {
+  const { data: programs = [] }   = useProgramMasters()
+  const { data: intakes = [] }    = useIntakes()
+  const { data: currencies = [] } = useCurrencies()
+  const createFeeStructureHeader  = useCreateProgramFeeStructureHeader()
+
+  const programOptions = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
+  // Same real intakeGuid convention as ProgrammeModal's Intake step.
+  const intakeOptions  = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
+  // Currency.intCurrency (a number) is what the header payload's Lec/Cec/Acec
+  // fields need — same convention as ProgrammeModal's fee-line ledger currency.
+  const currencyIntOptions = currencies.map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` }))
+
   const [saved, setSaved]           = useState(false)
   const [structures, setStructures] = useState<Structure[]>(() =>
     mode === 'edit' && editData
@@ -145,9 +166,46 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   const activeComplete = structureComplete(active)
   const allComplete    = structures.every(structureComplete)
 
+  // Saves just the active structure's header (Programfee-structure/hd) —
+  // the per-semester fee lines are saved separately by the second button.
+  function handleSaveHeader() {
+    if (!activeComplete) return
+    if (!active.programme) {
+      showToast('Please select a programme first.', 'error')
+      return
+    }
+    const payload: ProgramFeeStructureHeaderInput = {
+      feeCode: active.feeCode,
+      feeDesc: active.description,
+      status: true,
+      localOrForeign: active.localOrForeign,
+      programGuid: active.programme,
+      lef: active.lef ? +active.lef : null,
+      cef: active.cef ? +active.cef : null,
+      ace: active.ace ? +active.ace : null,
+      lec: active.lefCurrency ? +active.lefCurrency : null,
+      cec: active.cefCurrency ? +active.cefCurrency : null,
+      acec: active.aceCurrency ? +active.aceCurrency : null,
+      calcType: active.discountType === 'Percentage' ? 2 : 1,
+      amtPer: active.amtPer ? +active.amtPer : null,
+      intakeGuid: active.intake || null,
+    }
+    const savedIdx = activeIdx
+    createFeeStructureHeader.mutate(payload, {
+      onSuccess: header => {
+        setStructures(prev => prev.map((s, i) => i === savedIdx ? { ...s, headerSaved: true, feeHdGuid: header.feeHdGuid } : s))
+        showToast('Fee structure header saved.', 'success')
+      },
+      onError: (error: Error) => showToast(error.message || 'Failed to save fee structure header.', 'error'),
+    })
+  }
+
   // ── Structure management ─────────────────────────────────
   function addStructure() {
-    const newStruct: Structure = { id: nextStructId++, programme: '', feeCode: '', description: '', currency: 'UGX', intake: '', discountType: 'Amount', createdVia: 'new', semFees: Array.from({ length: NUM_SEMS }, () => []) }
+    const newStruct: Structure = {
+      id: nextStructId++, programme: '', feeCode: '', description: '', currency: 'UGX', intake: '', discountType: 'Amount', createdVia: 'new', semFees: Array.from({ length: NUM_SEMS }, () => []),
+      localOrForeign: false, amtPer: '', lef: '', lefCurrency: '', cef: '', cefCurrency: '', ace: '', aceCurrency: '', headerSaved: false, feeHdGuid: null,
+    }
     setStructures(prev => [...prev, newStruct])
     setActiveIdx(structures.length)
   }
@@ -158,8 +216,12 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
     setActiveIdx(prev => (prev >= idx && prev > 0 ? prev - 1 : prev))
   }
 
-  function updateStructureMeta(field: 'programme' | 'feeCode' | 'description' | 'currency' | 'intake' | 'discountType', val: string) {
-    setStructures(prev => prev.map((s, i) => i === activeIdx ? { ...s, [field]: val } : s))
+  function updateStructureMeta(field: 'programme' | 'feeCode' | 'description' | 'currency' | 'intake' | 'discountType' | 'amtPer' | 'lef' | 'lefCurrency' | 'cef' | 'cefCurrency' | 'ace' | 'aceCurrency', val: string) {
+    setStructures(prev => prev.map((s, i) => i === activeIdx ? { ...s, [field]: val, headerSaved: false } : s))
+  }
+
+  function updateLocalOrForeign(val: string) {
+    setStructures(prev => prev.map((s, i) => i === activeIdx ? { ...s, localOrForeign: val === 'true', headerSaved: false } : s))
   }
 
   // ── Fee item management (scoped to active structure) ─────
@@ -283,7 +345,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                     placeholder="— Select a programme to begin —"
                     value={active.programme}
                     onChange={val => updateStructureMeta('programme', val)}
-                    options={PROGRAMMES}
+                    options={programOptions}
                   />
                 </div>
               </div>
@@ -346,16 +408,21 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                     placeholder="— Select intake —"
                     value={active.intake}
                     onChange={val => updateStructureMeta('intake', val)}
-                    options={[
-                      { value: '20241', label: '20241 — Spring 2024' },
-                      { value: '20261', label: '20261 — Spring 2026' },
-                      { value: '20262', label: '20262 — Fall 2026' },
-                      { value: '20271', label: '20271 — Spring 2027' },
-                      { value: '20272', label: '20272 — Fall 2027' },
-                    ]}
+                    options={intakeOptions}
                   />
                   </div>
                 </div>
+              </div>
+              <div className="fg m-0">
+                <div className="lbl">Student Type</div>
+                <SearchSelect
+                  options={[
+                    { value: 'false', label: 'Local' },
+                    { value: 'true',  label: 'Foreign / International' },
+                  ]}
+                  value={String(active.localOrForeign)}
+                  onChange={updateLocalOrForeign}
+                />
               </div>
             </div>
 
@@ -375,15 +442,20 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                   <div className="lbl">{active.discountType === 'Percentage' ? 'Lumpsum Discount Percentage' : 'Lumpsum Discount Amount'}</div>
                   <div className="flex items-center gap-2">
                     <span className="text-g500 font-bold min-w-[28px] text-center" style={{ fontSize: 'var(--fs-sm)' }}>{active.discountType === 'Percentage' ? '%' : active.currency}</span>
-                    <input className="ctrl flex-1" type="number" placeholder="0" min={0} max={active.discountType === 'Percentage' ? 100 : undefined} />
+                    <input className="ctrl flex-1" type="number" placeholder="0" min={0} max={active.discountType === 'Percentage' ? 100 : undefined} value={active.amtPer} onChange={e => updateStructureMeta('amtPer', e.target.value)} />
                   </div>
                 </div>
-                <div className="fg m-0"><div className="lbl">Lateral Entry Fee</div><input className="ctrl" type="number" placeholder="0" min={0} /></div>
-                <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={CURRENCIES} /></div>
-                <div className="fg m-0"><div className="lbl">Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} /></div>
-                <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={CURRENCIES} /></div>
-                <div className="fg m-0"><div className="lbl">Aptech Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} /></div>
-                <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={CURRENCIES} /></div>
+                <div className="fg m-0"><div className="lbl">Lateral Entry Fee</div><input className="ctrl" type="number" placeholder="0" min={0} value={active.lef} onChange={e => updateStructureMeta('lef', e.target.value)} /></div>
+                <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={currencyIntOptions} value={active.lefCurrency} onChange={val => updateStructureMeta('lefCurrency', val)} /></div>
+                <div className="fg m-0"><div className="lbl">Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} value={active.cef} onChange={e => updateStructureMeta('cef', e.target.value)} /></div>
+                <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={currencyIntOptions} value={active.cefCurrency} onChange={val => updateStructureMeta('cefCurrency', val)} /></div>
+                <div className="fg m-0"><div className="lbl">Aptech Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} value={active.ace} onChange={e => updateStructureMeta('ace', e.target.value)} /></div>
+                <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={currencyIntOptions} value={active.aceCurrency} onChange={val => updateStructureMeta('aceCurrency', val)} /></div>
+              </div>
+              <div className="flex justify-end mt-3">
+                <button className="btn btn-primary" onClick={handleSaveHeader} disabled={!activeComplete || createFeeStructureHeader.isPending}>
+                  <i className="lni lni-checkmark"></i> {createFeeStructureHeader.isPending ? 'Saving…' : active.headerSaved ? 'Header Saved' : 'Save Fee Structure'}
+                </button>
               </div>
             </div>
 
@@ -440,6 +512,11 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                   </div>
                 )
               })}
+              <div className="flex justify-end mt-2">
+                <button className="btn btn-primary" onClick={() => setSaved(true)} disabled={!allComplete}>
+                  <i className="lni lni-checkmark"></i> Save Fee Structure
+                </button>
+              </div>
             </div>
             </div>{/* end gate wrapper */}
           </div>
@@ -447,9 +524,9 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
 
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => setSaved(true)} disabled={!allComplete}>
+          {/* <button className="btn btn-primary" onClick={() => setSaved(true)} disabled={!allComplete}>
             <i className="lni lni-checkmark"></i> Save Fee Structure
-          </button>
+          </button> */}
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
+// Represents a follow-up status record returned by the API.
 export interface FollowUpStatus {
   followUpStatusGuid: string
   followUpStatusName: string
@@ -10,19 +11,21 @@ export interface FollowUpStatus {
   isClose: number
 }
 
+// Payload used when creating or updating a follow-up status.
 export type FollowUpStatusInput = Omit<FollowUpStatus, 'followUpStatusGuid'>
 
-// Backing store used only when NEXT_PUBLIC_AUTH_MOCK is on — GET, POST,
-// PUT, and DELETE are all wired to the real endpoints otherwise.
+// In-memory list used only when mock auth is enabled.
 const mockFollowUpStatuses: FollowUpStatus[] = [
   { followUpStatusGuid: 'dcc20a08-3d99-4cff-8b15-510a1e743bae', followUpStatusName: 'Test', followUpStatusCode: 'T1', isClose: 1 },
 ]
 
+// Fetch all follow-up statuses.
 export function getFollowUpStatuses(): Promise<FollowUpStatus[]> {
   if (MOCK_AUTH) return Promise.resolve(mockFollowUpStatuses)
   return apiGet<FollowUpStatus[] | null>('/api/v1/admissions/follow-up-statuses').then(data => data ?? [])
 }
 
+// Create a new follow-up status and return the saved record.
 export function createFollowUpStatus(input: FollowUpStatusInput): Promise<FollowUpStatus> {
   if (MOCK_AUTH) {
     const followUpStatus: FollowUpStatus = { followUpStatusGuid: crypto.randomUUID(), ...input }
@@ -32,6 +35,7 @@ export function createFollowUpStatus(input: FollowUpStatusInput): Promise<Follow
   return apiPost<FollowUpStatus>('/api/v1/admissions/follow-up-statuses', input)
 }
 
+// Fetch one follow-up status by its GUID.
 export function getFollowUpStatusById(guid: string): Promise<FollowUpStatus> {
   if (MOCK_AUTH) {
     const existing = mockFollowUpStatuses.find(s => s.followUpStatusGuid === guid)
@@ -41,7 +45,7 @@ export function getFollowUpStatusById(guid: string): Promise<FollowUpStatus> {
   return apiGet<FollowUpStatus>(`/api/v1/admissions/follow-up-statuses/${guid}`)
 }
 
-// Same payload shape as create (see FollowUpStatusInput above).
+// Update a follow-up status by GUID and return the updated record.
 export function updateFollowUpStatus(guid: string, input: FollowUpStatusInput): Promise<FollowUpStatus> {
   if (MOCK_AUTH) {
     const existing = mockFollowUpStatuses.find(s => s.followUpStatusGuid === guid)
@@ -52,7 +56,7 @@ export function updateFollowUpStatus(guid: string, input: FollowUpStatusInput): 
   return apiPut<FollowUpStatus>(`/api/v1/admissions/follow-up-statuses/${guid}`, input)
 }
 
-// DELETE /api/v1/admissions/follow-up-statuses/{guid} — soft-delete (data: true on success).
+// Delete a follow-up status and return true when the API confirms success.
 export function deleteFollowUpStatus(guid: string): Promise<boolean> {
   if (MOCK_AUTH) {
     const index = mockFollowUpStatuses.findIndex(s => s.followUpStatusGuid === guid)

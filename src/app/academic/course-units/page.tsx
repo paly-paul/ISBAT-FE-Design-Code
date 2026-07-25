@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
@@ -7,85 +7,122 @@ import { CourseUnitModal } from '@/components/modals/academic/CourseUnitModal'
 import { EditCourseUnitModal } from '@/components/modals/academic/EditCourseUnitModal'
 import { ElectiveSelectModal } from '@/components/modals/academic/ElectiveSelectModal'
 import { Toast } from '@/components/Toast'
-import { FilterTh } from '@/components/FilterTh'
+// import { FilterTh } from '@/components/FilterTh' — unused now that no column has a real filterable categorical field (see fth() below)
 import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { useCourseUnits, useCreateCourseUnit, useUpdateCourseUnit, useDeleteCourseUnit, CourseUnit } from '@/hooks/academic/useCourseUnits'
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
-  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  // The filter state is kept for future table filtering, but the current view does not need it yet.
+  const [editingCourseUnitGuid, setEditingCourseUnitGuid] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<CourseUnit | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  useEffect(() => {
-    function closeFilter(e: MouseEvent) {
-      const target = e.target as HTMLElement
-      if (!target.closest('th')) setOpenFilter(null)
-    }
-    document.addEventListener('click', closeFilter)
-    return () => document.removeEventListener('click', closeFilter)
-  }, [])
+  function openEditModal(guid: string) {
+    setEditingCourseUnitGuid(guid)
+    openModal('cu-edit-modal')
+  }
 
-  const rows = [
-    { code: 'IT101',      name: 'Introduction to Programming',                    programme: 'BSc. IT', sem: 'Sem 1', credits: 3, unitType: 'Theory',    category: 'Core',                  hasCW: 'Yes', hasCBT: 'Yes', proration: 'CW25→15 / CBT50→15 / UE100→70',             syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
-    { code: 'IT102',      name: 'Computer Organisation',                          programme: 'BSc. IT', sem: 'Sem 1', credits: 3, unitType: 'Theory',    category: 'Core',                  hasCW: 'Yes', hasCBT: 'No',  proration: 'CW25→15 / UE100→70',                        syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
-    { code: 'IT104',      name: 'Programming Lab',                                programme: 'BSc. IT', sem: 'Sem 1', credits: 2, unitType: 'Practical', category: 'Core',                  hasCW: 'Yes', hasCBT: 'No',  proration: 'CW25→15 / Practical UE',                     syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
-    { code: 'IT105',      name: 'Systems & Lab (Combined)',                       programme: 'BSc. IT', sem: 'Sem 2', credits: 4, unitType: 'Combined',  category: 'Core',                  hasCW: 'Yes', hasCBT: 'Yes', proration: 'Theory IA + Practical UE (no Practical IA)', syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
-    { code: 'MBA501',     name: 'MBA Internship Project',                         programme: 'MBA',     sem: 'Sem 4', credits: 6, unitType: 'Project',   category: 'Core',                  hasCW: 'No',  hasCBT: 'No',  proration: 'Evaluated after 2 months',                   syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
-    { code: 'MBA301-FIN', name: 'Financial Risk Management',                      programme: 'MBA',     sem: 'Sem 3', credits: 3, unitType: 'Theory',    category: 'Specialization',        hasCW: 'Yes', hasCBT: 'Yes', proration: 'CW25→15 / CBT50→15 / UE100→70',             syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
-    { code: 'IT-ELEC-1',  name: 'Elective: Remote Sensing / Renewable Energy / Radar Nav.', programme: 'BSc. IT', sem: 'Sem 5', credits: 3, unitType: 'Theory', category: 'Elective (batch-level)', hasCW: 'Yes', hasCBT: 'Yes', proration: 'CW25→15 / CBT50→15 / UE100→70', syllabus: 'Pending Selection', syllabusOk: false, rowClass: '', variant: 'elective' },
-    { code: 'BBA301',     name: 'Strategic Management',                           programme: 'BBA',     sem: 'Sem 3', credits: 4, unitType: 'Theory',    category: 'Core',                  hasCW: 'Yes', hasCBT: 'Yes', proration: 'CW25→15 / CBT50→15 / UE100→70',             syllabus: 'Missing',  syllabusOk: false, rowClass: 'flagged', variant: 'syllabus' },
-    { code: 'IT103',      name: 'Engineering Maths I',                            programme: 'BSc. IT', sem: 'Sem 1', credits: 3, unitType: 'Theory',    category: 'Core',                  hasCW: 'No',  hasCBT: 'No',  proration: 'UE100→100',                                  syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
-  ]
+  function confirmDeleteCourseUnit() {
+    if (!deleteTarget) return
+    deleteCourseUnit.mutate(deleteTarget.courseUnitGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Course unit deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete course unit', 'error'),
+    })
+  }
+
+  // Filter popover close handling is kept for future use.
+  // useEffect(() => {
+  //   function closeFilter(e: MouseEvent) {
+  //     const target = e.target as HTMLElement
+  //     if (!target.closest('th')) setOpenFilter(null)
+  //   }
+  //   document.addEventListener('click', closeFilter)
+  //   return () => document.removeEventListener('click', closeFilter)
+  // }, [])
+
+  // Legacy rows are kept here as a reference to the earlier mock layout.
+  // const rows = [
+  //   { code: 'IT101',      name: 'Introduction to Programming',                    programme: 'BSc. IT', sem: 'Sem 1', credits: 3, unitType: 'Theory',    category: 'Core',                  hasCW: 'Yes', hasCBT: 'Yes', proration: 'CW25→15 / CBT50→15 / UE100→70',             syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
+  //   { code: 'IT102',      name: 'Computer Organisation',                          programme: 'BSc. IT', sem: 'Sem 1', credits: 3, unitType: 'Theory',    category: 'Core',                  hasCW: 'Yes', hasCBT: 'No',  proration: 'CW25→15 / UE100→70',                        syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
+  //   { code: 'IT104',      name: 'Programming Lab',                                programme: 'BSc. IT', sem: 'Sem 1', credits: 2, unitType: 'Practical', category: 'Core',                  hasCW: 'Yes', hasCBT: 'No',  proration: 'CW25→15 / Practical UE',                     syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
+  //   { code: 'IT105',      name: 'Systems & Lab (Combined)',                       programme: 'BSc. IT', sem: 'Sem 2', credits: 4, unitType: 'Combined',  category: 'Core',                  hasCW: 'Yes', hasCBT: 'Yes', proration: 'Theory IA + Practical UE (no Practical IA)', syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
+  //   { code: 'MBA501',     name: 'MBA Internship Project',                         programme: 'MBA',     sem: 'Sem 4', credits: 6, unitType: 'Project',   category: 'Core',                  hasCW: 'No',  hasCBT: 'No',  proration: 'Evaluated after 2 months',                   syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
+  //   { code: 'MBA301-FIN', name: 'Financial Risk Management',                      programme: 'MBA',     sem: 'Sem 3', credits: 3, unitType: 'Theory',    category: 'Specialization',        hasCW: 'Yes', hasCBT: 'Yes', proration: 'CW25→15 / CBT50→15 / UE100→70',             syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
+  //   { code: 'IT-ELEC-1',  name: 'Elective: Remote Sensing / Renewable Energy / Radar Nav.', programme: 'BSc. IT', sem: 'Sem 5', credits: 3, unitType: 'Theory', category: 'Elective (batch-level)', hasCW: 'Yes', hasCBT: 'Yes', proration: 'CW25→15 / CBT50→15 / UE100→70', syllabus: 'Pending Selection', syllabusOk: false, rowClass: '', variant: 'elective' },
+  //   { code: 'BBA301',     name: 'Strategic Management',                           programme: 'BBA',     sem: 'Sem 3', credits: 4, unitType: 'Theory',    category: 'Core',                  hasCW: 'Yes', hasCBT: 'Yes', proration: 'CW25→15 / CBT50→15 / UE100→70',             syllabus: 'Missing',  syllabusOk: false, rowClass: 'flagged', variant: 'syllabus' },
+  //   { code: 'IT103',      name: 'Engineering Maths I',                            programme: 'BSc. IT', sem: 'Sem 1', credits: 3, unitType: 'Theory',    category: 'Core',                  hasCW: 'No',  hasCBT: 'No',  proration: 'UE100→100',                                  syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
+  // ]
+
+  const { data: rows = [], isLoading } = useCourseUnits()
+  const createCourseUnit = useCreateCourseUnit()
+  const updateCourseUnit = useUpdateCourseUnit()
+  const deleteCourseUnit = useDeleteCourseUnit()
   const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
+    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
   )
 
-  function fth(label: string, col: string, opts: string[]) {
-    return (
-      <FilterTh
-        label={label}
-        opts={opts}
-        isOpen={openFilter === col}
-        activeFilter={filters[col] ?? []}
-        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
-        onClose={() => setOpenFilter(null)}
-      />
-    )
+  // Column filter-popover helper — unused now that no column has a real
+  // filterable categorical field (see the commented-out fth() calls in the
+  // table header below).
+  // function fth(label: string, col: string, opts: string[]) {
+  //   return (
+  //     <FilterTh
+  //       label={label}
+  //       opts={opts}
+  //       isOpen={openFilter === col}
+  //       activeFilter={filters[col] ?? []}
+  //       onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
+  //       onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
+  //       onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
+  //       onClose={() => setOpenFilter(null)}
+  //     />
+  //   )
+  // }
+
+  // Flag badges for mid/cw/ca — these are 0/1 numeric flags on the real
+  // response (same convention as isClose/defaultCountry elsewhere), not the
+  // old mock's Yes/No strings.
+  function flagBadge(val: number) {
+    return val
+      ? <span className="badge badge-green"><i className="lni lni-checkmark"></i></span>
+      : <span className="badge badge-red"><i className="lni lni-close"></i></span>
   }
 
-  function cwBadge(val: string, isPractical?: boolean) {
-    if (val === 'Yes') return <span className="badge badge-green"><i className="lni lni-checkmark"></i></span>
-    if (isPractical) return <span className="badge badge-red"><i className="lni lni-close"></i> (Practical — no CBT)</span>
-    return <span className="badge badge-red"><i className="lni lni-close"></i></span>
-  }
-
-  function cbtBadge(r: typeof rows[0]) {
-    if (r.hasCBT === 'Yes' && r.unitType === 'Combined') return <span className="badge badge-green"><i className="lni lni-checkmark"></i> (Theory only)</span>
-    if (r.hasCBT === 'Yes') return <span className="badge badge-green"><i className="lni lni-checkmark"></i></span>
-    if (r.unitType === 'Practical') return <span className="badge badge-red"><i className="lni lni-close"></i> (Practical — no CBT)</span>
-    return <span className="badge badge-red"><i className="lni lni-close"></i></span>
-  }
-
-  function typeBadge(t: string) {
-    if (t === 'Theory') return <span className="badge badge-blue">Theory</span>
-    if (t === 'Practical') return <span className="badge badge-green">Practical</span>
-    if (t === 'Combined') return <span className="badge badge-amber">Combined</span>
-    return <span className="badge badge-purple">Project</span>
-  }
-
-  function catBadge(c: string) {
-    if (c === 'Specialization') return <span className="badge badge-cyan">Specialization</span>
-    if (c === 'Elective (batch-level)') return <span className="badge badge-amber">Elective (batch-level)</span>
-    return <span className="badge badge-grey">Core</span>
-  }
+  // Legacy badge helpers are kept for the older mock data shape.
+  // function cwBadge(val: string, isPractical?: boolean) {
+  //   if (val === 'Yes') return <span className="badge badge-green"><i className="lni lni-checkmark"></i></span>
+  //   if (isPractical) return <span className="badge badge-red"><i className="lni lni-close"></i> (Practical — no CBT)</span>
+  //   return <span className="badge badge-red"><i className="lni lni-close"></i></span>
+  // }
+  //
+  // function cbtBadge(r: typeof rows[0]) {
+  //   if (r.hasCBT === 'Yes' && r.unitType === 'Combined') return <span className="badge badge-green"><i className="lni lni-checkmark"></i> (Theory only)</span>
+  //   if (r.hasCBT === 'Yes') return <span className="badge badge-green"><i className="lni lni-checkmark"></i></span>
+  //   if (r.unitType === 'Practical') return <span className="badge badge-red"><i className="lni lni-close"></i> (Practical — no CBT)</span>
+  //   return <span className="badge badge-red"><i className="lni lni-close"></i></span>
+  // }
+  //
+  // function typeBadge(t: string) {
+  //   if (t === 'Theory') return <span className="badge badge-blue">Theory</span>
+  //   if (t === 'Practical') return <span className="badge badge-green">Practical</span>
+  //   if (t === 'Combined') return <span className="badge badge-amber">Combined</span>
+  //   return <span className="badge badge-purple">Project</span>
+  // }
+  //
+  // function catBadge(c: string) {
+  //   if (c === 'Specialization') return <span className="badge badge-cyan">Specialization</span>
+  //   if (c === 'Elective (batch-level)') return <span className="badge badge-amber">Elective (batch-level)</span>
+  //   return <span className="badge badge-grey">Core</span>
+  // }
 
   return (
     <>
@@ -119,19 +156,46 @@ export default function Page() {
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
-              <thead><tr><th style={{ width: 48 }}></th><th>Code</th><th>Unit Name</th>{fth('Programme', 'programme', ['BSc. IT', 'BBA', 'MBA'])}{fth('Sem', 'sem', ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5'])}<th>Credits</th>{fth('Unit Type', 'unitType', ['Theory', 'Practical', 'Combined', 'Project'])}{fth('Category', 'category', ['Core', 'Specialization', 'Elective (batch-level)'])}{fth('Has CW', 'hasCW', ['Yes', 'No'])}{fth('Has CBT', 'hasCBT', ['Yes', 'No'])}<th>Proration</th><th>Syllabus</th></tr></thead>
+              <thead>
+                <tr>
+                  <th style={{ width: 48 }}></th>
+                  <th>Code</th>
+                  <th>Unit Name</th>
+                  {/* Programme/Sem filter columns — no equivalent field on the real GET response yet.
+                  {fth('Programme', 'programme', ['BSc. IT', 'BBA', 'MBA'])}
+                  {fth('Sem', 'sem', ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5'])}
+                  */}
+                  <th>Credits</th>
+                  <th>Chapters</th>
+                  {/* Unit Type/Category filter columns — no equivalent field on the real GET response yet.
+                  {fth('Unit Type', 'unitType', ['Theory', 'Practical', 'Combined', 'Project'])}
+                  {fth('Category', 'category', ['Core', 'Specialization', 'Elective (batch-level)'])}
+                  */}
+                  <th>Mid</th>
+                  <th>CW</th>
+                  <th>CA</th>
+                  {/* Old Has CBT / Proration columns — no equivalent field on the real GET response yet.
+                  {fth('Has CBT', 'hasCBT', ['Yes', 'No'])}
+                  <th>Proration</th>
+                  */}
+                  <th>Syllabus</th>
+                </tr>
+              </thead>
               <tbody>
-                {filteredRows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
-                  : null}
-                {filteredRows.map((r, i) => (
-                  <tr key={i} className={r.rowClass}>
+                {isLoading
+                  ? <TableLoadingState colSpan={999} />
+                  : filteredRows.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                    : null}
+                {filteredRows.map((r) => (
+                  <tr key={r.courseUnitGuid}>
                     <td>
-                      {r.variant === 'edit' && (
-                        <ActionMenu>
-                          <button className="btn btn-neu btn-sm" onClick={() => openModal('cu-edit-modal')}><i className="lni lni-pencil"></i> Edit</button>
-                        </ActionMenu>
-                      )}
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.courseUnitGuid)}><i className="lni lni-pencil"></i> Edit</button>
+                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>
+                      </ActionMenu>
+                      {/* Elective/syllabus-missing action variants — drove off mock-only
+                          fields (variant, syllabusOk) with no real equivalent yet.
                       {r.variant === 'elective' && (
                         <ActionMenu>
                           <button className="btn btn-neu btn-sm" onClick={() => openModal('cu-edit-modal')}><i className="lni lni-pencil"></i> Edit</button>
@@ -144,24 +208,19 @@ export default function Page() {
                           <button className="btn btn-amber btn-sm" onClick={() => openModal('cu-edit-modal')}>Upload Syllabus</button>
                         </ActionMenu>
                       )}
+                      */}
                     </td>
-                    <td className="font-mono text-b700" style={{ fontSize: 'var(--fs-xs)' }}>{r.code}</td>
-                    <td><strong>{r.name}</strong></td>
-                    <td>{r.programme}</td>
-                    <td><span className="pill pill-blue">{r.sem}</span></td>
-                    <td>{r.credits}</td>
-                    <td>{typeBadge(r.unitType)}</td>
-                    <td>{catBadge(r.category)}</td>
-                    <td>{cwBadge(r.hasCW)}</td>
-                    <td>{cbtBadge(r)}</td>
-                    <td className="font-mono text-[var(--fs-xs)]">{r.proration}</td>
+                    <td className="font-mono text-b700" style={{ fontSize: 'var(--fs-xs)' }}>{r.courseUnitCode}</td>
+                    <td><strong>{r.courseUnitName}</strong></td>
+                    <td>{r.maxCredits}</td>
+                    <td>{r.chapterCount}</td>
+                    <td>{flagBadge(r.mid)}</td>
+                    <td>{r.cw}</td>
+                    <td>{r.ca}</td>
                     <td>
-                      {r.syllabusOk
+                      {r.syllabus
                         ? <span className="badge badge-green">Attached</span>
-                        : r.syllabus === 'Pending Selection'
-                          ? <span className="badge badge-amber"><i className="lni lni-warning"></i> Pending Selection</span>
-                          : <span className="badge badge-red"><i className="lni lni-warning"></i> Missing</span>
-                      }
+                        : <span className="badge badge-red"><i className="lni lni-warning"></i> Missing</span>}
                     </td>
                   </tr>
                 ))}
@@ -170,10 +229,34 @@ export default function Page() {
           </ScrollTable>
         </div>
       </div>
-      <CourseUnitModal     isOpen={openModals.has('cu-new-modal')}  onClose={() => closeModal('cu-new-modal')}  showToast={showToast} />
-      <EditCourseUnitModal isOpen={openModals.has('cu-edit-modal')} onClose={() => closeModal('cu-edit-modal')} showToast={showToast} />
+      <CourseUnitModal     isOpen={openModals.has('cu-new-modal')}  onClose={() => closeModal('cu-new-modal')}  showToast={showToast} createCourseUnit={createCourseUnit} />
+      <EditCourseUnitModal
+        isOpen={openModals.has('cu-edit-modal')}
+        onClose={() => closeModal('cu-edit-modal')}
+        showToast={showToast}
+        courseUnitGuid={editingCourseUnitGuid}
+        updateCourseUnit={updateCourseUnit}
+      />
       <ElectiveSelectModal isOpen={openModals.has('elective-select-modal')} onClose={() => closeModal('elective-select-modal')} showToast={showToast} />
       <Toast toast={toast} />
+
+      {deleteTarget && (
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
+            <div className="perm-delete-title">Delete {deleteTarget.courseUnitCode}?</div>
+            <div className="perm-delete-sub">
+              This will permanently delete this course unit. This can&apos;t be undone.
+            </div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" disabled={deleteCourseUnit.isPending} onClick={confirmDeleteCourseUnit}>
+                <i className="lni lni-trash-can"></i> {deleteCourseUnit.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

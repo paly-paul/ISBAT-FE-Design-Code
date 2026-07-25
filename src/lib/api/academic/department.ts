@@ -2,9 +2,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// Previous mock-only shape (pre GET /api/v1/users/departments integration) —
-// kept for reference until faculty/status get confirmed against the real
-// backend contract (the real list endpoint doesn't return them).
+// Older mock shape kept for reference.
 // export interface Department {
 //   id: string
 //   shortCode: string
@@ -41,9 +39,7 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 //   return Promise.resolve(existing)
 // }
 
-// Real backend shape returned by GET/POST /api/v1/users/departments — id is
-// now intDept, faculty/status aren't part of the response, and employeeGuid
-// (the Head of Department) is nullable when unassigned.
+// Current API shape for departments.
 export interface Department {
   intDept: number
   shortCode: string
@@ -94,7 +90,7 @@ export function updateDepartment(id: string, input: DepartmentInput): Promise<De
   return apiPut<Department>(`/api/v1/users/departments/${id}`, input)
 }
 
-// DELETE /api/v1/users/departments/{id} — soft-delete (data: true on success).
+// Delete a department. The API returns true on success.
 export function deleteDepartment(id: string): Promise<boolean> {
   if (MOCK_AUTH) {
     const index = mockDepartments.findIndex(d => String(d.intDept) === id)

@@ -2,10 +2,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// Previous mock-only shape (pre GET /api/v1/users/designations integration) —
-// kept for reference until a confirmed create/update payload says whether
-// the department name string still applies (the real list endpoint only
-// returns intDept, a numeric department reference).
+// Older mock shape kept for reference.
 // export interface Designation {
 //   id: string
 //   designationName: string
@@ -40,17 +37,17 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 //   return Promise.resolve(existing)
 // }
 
-// Real backend shape returned by GET /api/v1/users/designations (paginated
-// list) — id is now intDesignation, and department is a numeric intDept
-// reference rather than a department name string.
+// Represents a designation record returned by the API.
 export interface Designation {
   intDesignation: number
   designationName: string
   intDept: number
 }
 
+// Payload used when creating or updating a designation.
 export type DesignationInput = Omit<Designation, 'intDesignation'>
 
+// Response wrapper used by the paginated designation list endpoint.
 interface DesignationListResponse {
   items: Designation[]
   totalCount: number
@@ -68,11 +65,13 @@ const mockDesignations: Designation[] = [
 ]
 let mockDesignationSeq = mockDesignations.length + 1
 
+// Fetch the designation list, using mock data when the mock auth flag is enabled.
 export function getDesignations(page = 1, pageSize = 10): Promise<Designation[]> {
   if (MOCK_AUTH) return Promise.resolve(mockDesignations)
   return apiGet<DesignationListResponse | null>(`/api/v1/users/designations?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
 }
 
+// Create a new designation and return the saved record.
 export function createDesignation(input: DesignationInput): Promise<Designation> {
   if (MOCK_AUTH) {
     const designation: Designation = { intDesignation: mockDesignationSeq++, ...input }
@@ -82,6 +81,7 @@ export function createDesignation(input: DesignationInput): Promise<Designation>
   return apiPost<Designation>('/api/v1/users/designations', input)
 }
 
+// Update an existing designation by ID and return the updated record.
 export function updateDesignation(id: string, input: DesignationInput): Promise<Designation> {
   if (MOCK_AUTH) {
     const existing = mockDesignations.find(d => String(d.intDesignation) === id)
@@ -92,7 +92,7 @@ export function updateDesignation(id: string, input: DesignationInput): Promise<
   return apiPut<Designation>(`/api/v1/users/designations/${id}`, input)
 }
 
-// DELETE /api/v1/users/designations/{id} — soft-delete (data: true on success).
+// Delete a designation and return true when the API confirms success.
 export function deleteDesignation(id: string): Promise<boolean> {
   if (MOCK_AUTH) {
     const index = mockDesignations.findIndex(d => String(d.intDesignation) === id)

@@ -1,0 +1,146 @@
+'use client'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { ScrollTable } from '@/components/ScrollTable'
+import { ActionMenu } from '@/components/ActionMenu'
+import { Toast } from '@/components/Toast'
+import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { NewProcGlAccountModal } from '@/components/modals/finance/NewProcGlAccountModal'
+import { EditProcGlAccountModal } from '@/components/modals/finance/EditProcGlAccountModal'
+import { useProcGlAccounts, useCreateProcGlAccount, useUpdateProcGlAccount, useDeleteProcGlAccount, ProcGlAccount } from '@/hooks/finance/useProcGlAccounts'
+import { STATUS_LABELS, TYPE_LABELS } from '@/lib/api/finance/procGlAccount'
+
+export default function Page() {
+  const router = useRouter()
+  const [openModals, setOpenModals] = useState<Set<string>>(new Set())
+  const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
+  const [editingAccountGuid, setEditingAccountGuid] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ProcGlAccount | null>(null)
+
+  const { data: rows = [], isLoading } = useProcGlAccounts()
+  const createProcGlAccount = useCreateProcGlAccount()
+  const updateProcGlAccount = useUpdateProcGlAccount()
+  const deleteProcGlAccount = useDeleteProcGlAccount()
+
+  function nav(id: string) { router.push('/finance/' + id) }
+  function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
+  function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
+  function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  function openEditModal(guid: string) {
+    setEditingAccountGuid(guid)
+    openModal('edit-proc-gl-account-modal')
+  }
+
+  function confirmDeleteProcGlAccount() {
+    if (!deleteTarget) return
+    deleteProcGlAccount.mutate(deleteTarget.procGlAccountGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('GL account deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete GL account', 'error'),
+    })
+  }
+
+  return (
+    <>
+      <div className="page active">
+        <div className="pg-hdr">
+          <div>
+            <div className="pg-title">Proc GL Account Master</div>
+            <div className="pg-sub">Manage the general ledger accounts used for procurement postings</div>
+          </div>
+          <button className="btn btn-primary" onClick={() => openModal('new-proc-gl-account-modal')}>
+            <i className="lni lni-plus"></i> Add GL Account
+          </button>
+        </div>
+        <div className="card">
+          <div className="card-hdr">
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-calculator"></i></span> GL Accounts</div>
+          </div>
+          <ScrollTable>
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 48 }}></th>
+                  <th>Short Code</th>
+                  <th>Account Name</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Blocked</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading
+                  ? <TableLoadingState colSpan={999} />
+                  : rows.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
+                    : null}
+                {rows.map((r) => (
+                  <tr key={r.procGlAccountGuid}>
+                    <td>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.procGlAccountGuid)}>
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>
+                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                          <i className="lni lni-trash-can"></i> Delete
+                        </button>
+                      </ActionMenu>
+                    </td>
+                    <td className="font-mono font-bold">{r.shortCode}</td>
+                    <td><strong>{r.accName}</strong></td>
+                    <td>{TYPE_LABELS[r.type] ?? <span className="text-g400">—</span>}</td>
+                    <td>
+                      {STATUS_LABELS[r.status] === 'Active'
+                        ? <span className="badge badge-green"><i className="lni lni-checkmark"></i> Active</span>
+                        : <span className="badge badge-grey">Inactive</span>
+                      }
+                    </td>
+                    <td>
+                      {r.blocked
+                        ? <span className="badge badge-red">Blocked</span>
+                        : <span className="badge badge-grey">No</span>
+                      }
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollTable>
+        </div>
+      </div>
+      <NewProcGlAccountModal
+        isOpen={openModals.has('new-proc-gl-account-modal')}
+        onClose={() => closeModal('new-proc-gl-account-modal')}
+        showToast={showToast}
+        createProcGlAccount={createProcGlAccount}
+      />
+      <EditProcGlAccountModal
+        isOpen={openModals.has('edit-proc-gl-account-modal')}
+        onClose={() => closeModal('edit-proc-gl-account-modal')}
+        showToast={showToast}
+        procGlAccountGuid={editingAccountGuid}
+        updateProcGlAccount={updateProcGlAccount}
+      />
+      <Toast toast={toast} />
+
+      {deleteTarget && (
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
+            <div className="perm-delete-title">Delete {deleteTarget.accName}?</div>
+            <div className="perm-delete-sub">
+              This will permanently delete this GL account. This can&apos;t be undone.
+            </div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" disabled={deleteProcGlAccount.isPending} onClick={confirmDeleteProcGlAccount}>
+                <i className="lni lni-trash-can"></i> {deleteProcGlAccount.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}

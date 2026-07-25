@@ -6,7 +6,7 @@ import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ProgramLevelInput } from '@/lib/api/academic/programLevel'
 import { useProgramLevel } from '@/hooks/academic/useProgramLevels'
-import { useCurrencies } from '@/hooks/config/useCurrencies'
+import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { AuthError } from '@/lib/api/client'
 
 interface EditProgrammeLevelModalProps extends ModalProps {
@@ -31,8 +31,12 @@ export function EditProgrammeLevelModal({ isOpen, onClose, showToast, programLev
   const [currency, setCurrency]           = useState('')
   const [errors, setErrors]               = useState<Record<string, string>>({})
 
-  const { data: currencies = [] } = useCurrencies()
-  const currencyOptions = currencies.map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` }))
+  // useFinanceCurrencies (not useCurrencies/currencyMaster.ts) — this is the
+  // source with a confirmed real currencyGuid, which the create/update
+  // payload needs (confirmed via real backend testing: sending Currency
+  // Master's intCurrency gets rejected with "Currency is required").
+  const { data: currencies = [] } = useFinanceCurrencies()
+  const currencyOptions = currencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))
 
   // Prefill the form once the programme level has loaded. Re-runs whenever a
   // different guid is fetched (react-query resets `programLevel` to
@@ -46,7 +50,7 @@ export function EditProgrammeLevelModal({ isOpen, onClose, showToast, programLev
     setMinCreditLoad(String(programLevel.minCreditLoad))
     setAppFee(String(programLevel.appFee))
     setLateFee(String(programLevel.lateFee))
-    setCurrency(String(programLevel.intCurrency))
+    setCurrency(programLevel.currencyGuid ?? '')
     setErrors({})
   }, [isOpen, programLevel])
 
@@ -74,7 +78,7 @@ export function EditProgrammeLevelModal({ isOpen, onClose, showToast, programLev
     return Object.keys(e).length === 0
   }
 
-  // Maps the backend's { code, errors } failure shape to an inline field
+  // Map known backend failures to field errors.
   // error where the cause is actionable right there (duplicate levelCode);
   // anything else shows the failure popup instead — same convention as
   // ProgrammeLevelModal's create-error handling.
@@ -99,7 +103,7 @@ export function EditProgrammeLevelModal({ isOpen, onClose, showToast, programLev
           minCreditLoad: +minCreditLoad,
           appFee: +appFee,
           lateFee: +lateFee,
-          intCurrency: +currency,
+          currencyGuid: currency,
         },
       },
       {

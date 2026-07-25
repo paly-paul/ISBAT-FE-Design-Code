@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createEmployee, CreateEmployeeInput, Employee, EmployeeListItem, getEmployee, getEmployees, updateEmployee } from '@/lib/api/employee/employee'
+import { assignEmployeePermissionGroups, createEmployee, CreateEmployeeInput, Employee, EmployeeListItem, getEmployee, getEmployeePermissionGroups, getEmployees, updateEmployee } from '@/lib/api/employee/employee'
 
 const EMPLOYEES_KEY = ['employees']
+const EMPLOYEE_PERMISSION_GROUPS_KEY = ['employeePermissionGroups']
 
 export function useEmployees() {
   return useQuery({
@@ -41,6 +42,29 @@ export function useUpdateEmployee() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: CreateEmployeeInput }) => updateEmployee(id, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY }),
+  })
+}
+
+// Fetches the permission group guids already assigned to an employee, for
+// the assign-permissions modal to seed its tabs from. Only enabled while the
+// modal is actually open with an employee, same convention as the other
+// fetch-by-guid queries (e.g. useLedger).
+export function useEmployeePermissionGroups(employeeGuid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...EMPLOYEE_PERMISSION_GROUPS_KEY, employeeGuid],
+    queryFn: () => getEmployeePermissionGroups(employeeGuid as string),
+    enabled: enabled && !!employeeGuid,
+  })
+}
+
+export function useAssignEmployeePermissionGroups() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ employeeGuid, permissionGroupGuids }: { employeeGuid: string; permissionGroupGuids: string[] }) =>
+      assignEmployeePermissionGroups(employeeGuid, { permissionGroupGuids }),
+    onSuccess: (_data, { employeeGuid }) => {
+      queryClient.invalidateQueries({ queryKey: [...EMPLOYEE_PERMISSION_GROUPS_KEY, employeeGuid] })
+    },
   })
 }
 

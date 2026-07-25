@@ -11,14 +11,7 @@ export default function AcademicLayout({ children }: { children: React.ReactNode
   const [profileOpen, setProfileOpen] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const [activeRail, setActiveRail] = useState<RailId>('academic')
-  // sessionStorage doesn't exist during SSR, so reading it in a lazy useState
-  // initializer made the server's HTML (always the spinner branch below)
-  // diverge from the client's first hydration-matching render (immediately
-  // authenticated, if identity was already stored) — a hydration mismatch.
-  // Start from the SSR-safe defaults and sync synchronously via
-  // useLayoutEffect instead (below), which runs before the browser paints —
-  // an already-authenticated user still never sees the spinner flash, but
-  // the server and the client's initial render now agree.
+  // Restore the saved identity before paint to avoid a loader flash.
   const [displayName, setDisplayName] = useState<string | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
@@ -27,11 +20,7 @@ export default function AcademicLayout({ children }: { children: React.ReactNode
 
   const currentPage = pathname.split('/').pop() ?? 'acad-dashboard'
 
-  // Runs before paint, client-only (never during SSR) — if identity is
-  // already known, this beats the browser's first paint so there's no
-  // visible spinner flash. The effect below still runs after and handles
-  // the "not yet known" fallback (refreshSession) plus the redirect-on-failure
-  // case; re-reading identity there when this already found it is a no-op.
+  // Use the saved identity before the first paint so the screen does not flash the loader.
   useLayoutEffect(() => {
     const identity = getSessionIdentity()
     if (identity) {
@@ -40,13 +29,7 @@ export default function AcademicLayout({ children }: { children: React.ReactNode
     }
   }, [])
 
-  // Identity is stored client-side once login/OTP succeeds (see src/lib/session.ts),
-  // so a normal mount or page reload never needs to hit the network — it just
-  // reads it back. refreshSession() is only a fallback for a fresh tab / restored
-  // browser session where cookies are still valid but local identity was never set
-  // (sessionStorage doesn't survive a closed tab). Ongoing expiry during use is
-  // handled reactively by the API client (src/lib/api/client.ts), which
-  // refreshes-and-retries on any unauthorized response — no polling needed here.
+  // Use the saved identity first and refresh the session only if needed.
   useEffect(() => {
     let cancelled = false
 
@@ -76,8 +59,7 @@ export default function AcademicLayout({ children }: { children: React.ReactNode
     }
   }, [router])
 
-  // Scroll to top on navigation — the sidebar panel is left as the user set
-  // it (open/closed, collapsed sections) rather than being force-closed here.
+  // Reset scroll when the route changes.
   useEffect(() => {
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [pathname])

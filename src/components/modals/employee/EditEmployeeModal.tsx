@@ -9,18 +9,13 @@ import { useDepartments } from '@/hooks/config/useDepartments'
 import { useDesignations } from '@/hooks/config/useDesignations'
 import { useCountries } from '@/hooks/config/useCountries'
 
-// Only category confirmed against the real create payload so far
-// ({ category: 1, categoryPrefix: 'AD' }) — add more once the backend
-// confirms other employee categories.
+// Only one employee category is confirmed for now.
 const CATEGORIES: { label: string; category: number; prefix: string }[] = [
   { label: 'Administrative Staff', category: 1, prefix: 'AD' },
 ]
 
 const TITLES = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof']
-// Numeric mappings below (sex, marital status, religion) aren't confirmed by
-// a backend lookup endpoint yet — sequential ids are a placeholder guess.
-// Country is the exception: it's backed by the real GET /api/v1/users/countries
-// list (useCountries), keyed by intCountryCode.
+// The lookup values below are placeholders until the API provides fuller options.
 const SEXES = ['Male', 'Female', 'Others']
 const MARITAL_STATUSES = ['Single', 'Married', 'Divorced', 'Widow', 'Widower', 'Separated']
 const RELIGIONS = ['Christian', 'Muslim', 'Hindu', 'Other']
@@ -58,8 +53,7 @@ export function EditEmployeeModal({ isOpen, onClose, showToast, employeeGuid }: 
   const [department, setDepartment] = useState('')
   const [designation, setDesignation] = useState('')
 
-  // ── Fields matching GET/PUT /api/v1/users/employees/{id} — seeded from
-  // the real GET response below, submitted via the real PUT on save. ─────
+  // These fields match the employee update payload.
   const [category, setCategory] = useState(CATEGORIES[0].label)
   const [title, setTitle] = useState('')
   const [firstName, setFirstName] = useState('')
@@ -89,9 +83,7 @@ export function EditEmployeeModal({ isOpen, onClose, showToast, employeeGuid }: 
     ? designations.find(d => d.designationName === designation && String(d.intDept) === String(selectedDept.intDept))
     : undefined
 
-  // Mirrors the backend's FluentValidation rules for POST/PUT
-  // /api/v1/users/employees, so the same messages surface inline instead of
-  // only after a failed request.
+  // Reuse the API validation messages so issues appear in the form immediately.
   function validate(): Record<string, string> {
     const e: Record<string, string> = {}
     const selectedCategory = CATEGORIES.find(c => c.label === category)
@@ -117,10 +109,7 @@ export function EditEmployeeModal({ isOpen, onClose, showToast, employeeGuid }: 
     setErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
   }
 
-  // Normally backed by the real countries list — if the employee's
-  // intCountryCode isn't in the current list (e.g. a deleted country), fall
-  // back to showing its countryName from the employee record so the field
-  // doesn't appear blank.
+  // If the saved country is no longer in the current list, show the employee's stored country name as a fallback.
   const countryOptions = useMemo(() => {
     const opts = countries.map(c => ({ value: String(c.intCountryCode), label: c.countryName }))
     if (employee?.intCountryCode != null && employee.countryName && !countries.some(c => c.intCountryCode === employee.intCountryCode)) {

@@ -5,7 +5,7 @@ import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ProgramLevelInput } from '@/lib/api/academic/programLevel'
-import { useCurrencies } from '@/hooks/config/useCurrencies'
+import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { AuthError } from '@/lib/api/client'
 
 interface ProgrammeLevelModalProps extends ModalProps {
@@ -27,8 +27,12 @@ export function ProgrammeLevelModal({ isOpen, onClose, showToast, createProgramL
   const [currency, setCurrency]         = useState('')
   const [errors, setErrors]             = useState<Record<string, string>>({})
 
-  const { data: currencies = [] } = useCurrencies()
-  const currencyOptions = currencies.map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` }))
+  // useFinanceCurrencies (not useCurrencies/currencyMaster.ts) — this is the
+  // source with a confirmed real currencyGuid, which the create/update
+  // payload needs (confirmed via real backend testing: sending Currency
+  // Master's intCurrency gets rejected with "Currency is required").
+  const { data: currencies = [] } = useFinanceCurrencies()
+  const currencyOptions = currencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))
 
   if (!isOpen) return null
 
@@ -56,7 +60,7 @@ export function ProgrammeLevelModal({ isOpen, onClose, showToast, createProgramL
     return Object.keys(e).length === 0
   }
 
-  // Maps the backend's { code, errors } failure shape to an inline field
+  // Map known backend failures to field errors.
   // error where the cause is actionable right there (duplicate levelCode);
   // anything else shows the failure popup instead.
   function handleCreateError(error: Error) {
@@ -216,7 +220,7 @@ export function ProgrammeLevelModal({ isOpen, onClose, showToast, createProgramL
                   minCreditLoad: +minCreditLoad,
                   appFee: +appFee,
                   lateFee: +lateFee,
-                  intCurrency: +currency,
+                  currencyGuid: currency,
                 },
                 {
                   onSuccess: () => { setSaved(true); showToast('Programme Level added successfully') },

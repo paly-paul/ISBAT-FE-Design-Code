@@ -2,34 +2,57 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
+import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import { CourseUnitInput } from '@/lib/api/academic/courseUnit'
+import { useRepetitionTags } from '@/hooks/academic/useRepetitionTags'
+import { useEmployees } from '@/hooks/employee/useEmployees'
+import { AuthError } from '@/lib/api/client'
 
-type Topic   = { name: string; studySeq: string; numClasses: string }
+type Topic   = { name: string; studySeq: string; taughtBy: string }
 type Chapter = { title: string; topics: Topic[] }
 
-function blankTopic(): Topic   { return { name: '', studySeq: '', numClasses: '' } }
+function blankTopic(): Topic   { return { name: '', studySeq: '', taughtBy: '' } }
 function blankChapter(n: number): Chapter { return { title: `Chapter ${n}`, topics: [blankTopic()] } }
 
-export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
+interface CourseUnitModalProps extends ModalProps {
+  createCourseUnit: {
+    mutate: (input: CourseUnitInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
+    isPending: boolean
+  }
+}
+
+export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }: CourseUnitModalProps) {
   const [saved, setSaved]               = useState(false)
+  const [failure, setFailure]           = useState<string | null>(null)
   const [step, setStep]                 = useState(1)
   const [chapters, setChapters]         = useState<Chapter[]>([blankChapter(1)])
   const [unitCode, setUnitCode]         = useState('')
   const [unitName, setUnitName]         = useState('')
   const [numChapters, setNumChapters]   = useState('')
   const [credits, setCredits]           = useState('')
-  const [unitType, setUnitType]         = useState('')
-  const [unitCategory, setUnitCategory] = useState('')
+  // Unit type and category are not part of the current create payload, so the picker stays off for now.
+  // const [unitType, setUnitType]         = useState('')
+  // const [unitCategory, setUnitCategory] = useState('')
+  const [repetitionTagGuid, setRepetitionTagGuid] = useState('')
+  const [syllabusFile, setSyllabusFile] = useState<File | null>(null)
   const [errors, setErrors]               = useState<Record<string, string>>({})
   const [chapterErrors, setChapterErrors] = useState<string[]>([])
   const [includeCW, setIncludeCW]       = useState(true)
   const [includeCBT, setIncludeCBT]     = useState(true)
+  const [includeMid, setIncludeMid]     = useState(true)
   const [cwAssessed, setCwAssessed]     = useState('25')
   const [cbtAssessed, setCbtAssessed]   = useState('50')
   const [ueAssessed, setUeAssessed]     = useState('100')
   const [cwFinal, setCwFinal]           = useState('15')
   const [cbtFinal, setCbtFinal]         = useState('15')
   const [ueFinal, setUeFinal]           = useState('70')
+
+  const { data: repetitionTags = [] } = useRepetitionTags()
+  const repetitionTagOptions = repetitionTags.map(t => ({ value: t.courseUnitRepetitionGuid, label: `${t.tagCode} — ${t.tagName}` }))
+
+  const { data: employees = [] } = useEmployees()
+  const employeeOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
 
   const finalTotal = (includeCW ? (+cwFinal || 0) : 0) + (includeCBT ? (+cbtFinal || 0) : 0) + (+ueFinal || 0)
   const totalOk    = finalTotal === 100
@@ -45,8 +68,8 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
     if (!unitCode.trim())  e.unitCode     = 'Unit Code is required'
     if (!unitName.trim())  e.unitName     = 'Unit Name is required'
     if (!credits)          e.credits      = 'Credits is required'
-    if (!unitType)         e.unitType     = 'Please select a Unit Type'
-    if (!unitCategory)     e.unitCategory = 'Please select a Unit Category'
+    // if (!unitType)         e.unitType     = 'Please select a Unit Type'
+    // if (!unitCategory)     e.unitCategory = 'Please select a Unit Category'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -60,11 +83,52 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
   if (!isOpen) return null
 
   function handleClose() {
-    setSaved(false); setStep(1); setChapters([blankChapter(1)]); setErrors({}); setChapterErrors([])
-    setIncludeCW(true); setIncludeCBT(true)
+    setSaved(false); setFailure(null); setStep(1); setChapters([blankChapter(1)]); setErrors({}); setChapterErrors([])
+    setUnitCode(''); setUnitName(''); setNumChapters(''); setCredits(''); setRepetitionTagGuid('')
+    setSyllabusFile(null)
+    setIncludeCW(true); setIncludeCBT(true); setIncludeMid(true)
     setCwAssessed('25'); setCbtAssessed('50'); setUeAssessed('100')
     setCwFinal('15'); setCbtFinal('15'); setUeFinal('70')
     onClose()
+  }
+
+  function handleSubmit() {
+    if (!validateStep2()) return
+    const outlines = chapters.map((ch, ci) => ({
+      chapter: ci + 1,
+      chapterName: ch.title,
+      topics: ch.topics.map(t => ({
+        courseUnitTopicDetails: t.name,
+        studySequence: +t.studySeq || 0,
+        taughtBy: t.taughtBy,
+      })),
+    }))
+    createCourseUnit.mutate(
+      {
+        courseUnitCode: unitCode,
+        courseUnitName: unitName,
+        maxCredits: +credits || 0,
+        chapterCount: chapters.length,
+        courseUnitRepetitionGuid: repetitionTagGuid || null,
+        mid: includeMid ? 1 : 0,
+        cw: includeCW ? 1 : 0,
+        ca: includeCBT ? 1 : 0,
+        // No UI control yet — defaults new units to approved.
+        approved: 1,
+        cbtWeightage: +cbtFinal || 0,
+        cwWeightage: +cwFinal || 0,
+        ueWeightage: +ueFinal || 0,
+        outlines,
+        syllabus: syllabusFile,
+      },
+      {
+        onSuccess: () => { setSaved(true); showToast('Course unit added successfully') },
+        onError: (error: Error) => {
+          const code = error instanceof AuthError ? error.code : undefined
+          setFailure(error.message || `Failed to add course unit${code ? ` (${code})` : ''}. Please try again.`)
+        },
+      },
+    )
   }
 
   // chapter helpers
@@ -100,6 +164,16 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
           <SuccessPopup title="Course Unit Saved!" subtitle="The new course unit has been added successfully." onClose={handleClose} />
+        </div>
+      </div>
+    )
+  }
+
+  if (failure) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup title="Couldn't Add Course Unit" subtitle={failure} onClose={() => setFailure(null)} />
         </div>
       </div>
     )
@@ -180,6 +254,9 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
               />
               {errors.credits && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.credits}</p>}
             </div>
+            {/* Unit Type / Unit Category pickers — no equivalent field on the
+                confirmed create payload yet (see CourseUnitInput in
+                lib/api/academic/courseUnit.ts).
             <div className="fg">
               <div className="lbl">Unit Type <span className="req">*</span></div>
               <SearchSelect
@@ -209,16 +286,14 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
               />
               {errors.unitCategory && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.unitCategory}</p>}
             </div>
+            */}
             <div className="fg span2">
               <div className="lbl">Repetition Tag</div>
               <SearchSelect
                 placeholder="— Select repetition tag —"
-                options={[
-                  { value: 'RT-CU-001', label: 'RT-CU-001 — Standard repeat for failed units' },
-                  { value: 'RT-CU-002', label: 'RT-CU-002 — Supplementary repeat (one semester delay)' },
-                  { value: 'RT-CU-003', label: 'RT-CU-003 — Cross-programme shared unit' },
-                  { value: 'RT-CU-004', label: 'RT-CU-004 — Elective repeat (student choice)' },
-                ]}
+                value={repetitionTagGuid}
+                onChange={setRepetitionTagGuid}
+                options={repetitionTagOptions}
               />
             </div>
             <div className="fg span3">
@@ -229,7 +304,26 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
                   Class Test
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--g700)' }}>
-                  <input type="checkbox" checked={includeCW} onChange={e => setIncludeCW(e.target.checked)} style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }} />
+                  <input
+                    type="checkbox"
+                    checked={includeMid}
+                    onChange={e => setIncludeMid(e.target.checked)}
+                    style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }}
+                  />
+                  Mid
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--g700)' }}>
+                  <input
+                    type="checkbox"
+                    checked={includeCW}
+                    onChange={e => {
+                      const checked = e.target.checked
+                      setIncludeCW(checked)
+                      // Checking Course Work auto-checks Mid too (per request) — Mid can still be unchecked independently afterward.
+                      if (checked) setIncludeMid(true)
+                    }}
+                    style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }}
+                  />
                   Course Work
                 </label>
               </div>
@@ -353,10 +447,14 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
               </div>
             </div>
             <div className="file-zone">
-              <input type="file" accept=".pdf,.doc,.docx" />
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={e => setSyllabusFile(e.target.files?.[0] ?? null)}
+              />
               <div className="file-zone-icon"><i className="lni lni-files"></i></div>
-              <p>Upload approved syllabus document (PDF / Word)</p>
-              <p className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>Must conform to NCHE or UVTOP accreditation</p>
+              <p>{syllabusFile ? syllabusFile.name : 'Upload approved syllabus document (PDF / Word)'}</p>
+              <p className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>Must conform to NCHE or UVTOP accreditation — optional, can be added later</p>
             </div>
           </div>
 
@@ -408,7 +506,7 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
                     <span></span>
                     <span>Topic</span>
                     <span>Study Sequence</span>
-                    <span>No. of Classes</span>
+                    <span>Taught By</span>
                     <span></span>
                   </div>
 
@@ -419,7 +517,7 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
                         <span style={{ fontSize: 11, color: 'var(--g400)', textAlign: 'center' }}>{ti + 1}.</span>
                         <input className="ctrl" value={t.name} onChange={e => setTopic(ci, ti, 'name', e.target.value)} placeholder="e.g. Introduction to Arrays" />
                         <input className="ctrl" type="number" min={1} value={t.studySeq} onChange={e => setTopic(ci, ti, 'studySeq', e.target.value)} placeholder="e.g. 3" />
-                        <input className="ctrl" value={t.numClasses} onChange={e => setTopic(ci, ti, 'numClasses', e.target.value)} placeholder="e.g. 4" />
+                        <SearchSelect placeholder="— Select —" value={t.taughtBy} onChange={v => setTopic(ci, ti, 'taughtBy', v)} options={employeeOptions} />
                         <button
                           className="btn btn-danger btn-sm"
                           style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
@@ -457,8 +555,8 @@ export function CourseUnitModal({ isOpen, onClose, showToast }: ModalProps) {
             </button>
           )}
           {step === 2 && (
-            <button className="btn btn-primary" onClick={() => { if (validateStep2()) setSaved(true) }}>
-              <i className="lni lni-checkmark"></i> Save Course Unit
+            <button className="btn btn-primary" disabled={createCourseUnit.isPending} onClick={handleSubmit}>
+              <i className="lni lni-checkmark"></i> {createCourseUnit.isPending ? 'Saving…' : 'Save Course Unit'}
             </button>
           )}
         </div>

@@ -1,0 +1,129 @@
+'use client'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { ScrollTable } from '@/components/ScrollTable'
+import { ActionMenu } from '@/components/ActionMenu'
+import { Toast } from '@/components/Toast'
+import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { NewCooperateModal } from '@/components/modals/finance/NewCooperateModal'
+import { EditCooperateModal } from '@/components/modals/finance/EditCooperateModal'
+import { useCooperates, useCreateCooperate, useUpdateCooperate, useDeleteCooperate, Cooperate } from '@/hooks/finance/useCooperates'
+
+export default function Page() {
+  const router = useRouter()
+  const [openModals, setOpenModals] = useState<Set<string>>(new Set())
+  const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
+  const [editingCooperateGuid, setEditingCooperateGuid] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Cooperate | null>(null)
+
+  const { data: rows = [], isLoading } = useCooperates()
+  const createCooperate = useCreateCooperate()
+  const updateCooperate = useUpdateCooperate()
+  const deleteCooperate = useDeleteCooperate()
+
+  function nav(id: string) { router.push('/finance/' + id) }
+  function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
+  function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
+  function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  function openEditModal(guid: string) {
+    setEditingCooperateGuid(guid)
+    openModal('edit-cooperate-modal')
+  }
+
+  function confirmDeleteCooperate() {
+    if (!deleteTarget) return
+    deleteCooperate.mutate(deleteTarget.cooperateGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Cooperate deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete cooperate', 'error'),
+    })
+  }
+
+  return (
+    <>
+      <div className="page active">
+        <div className="pg-hdr">
+          <div>
+            <div className="pg-title">Cooperate Master</div>
+            <div className="pg-sub">Manage corporate partners linked to student fee accounts</div>
+          </div>
+          <button className="btn btn-primary" onClick={() => openModal('new-cooperate-modal')}>
+            <i className="lni lni-plus"></i> Add Cooperate
+          </button>
+        </div>
+        <div className="card">
+          <div className="card-hdr">
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-handshake"></i></span> Cooperates</div>
+          </div>
+          <ScrollTable>
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 48 }}></th>
+                  <th>Cooperate Code</th>
+                  <th>Cooperate Name</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading
+                  ? <TableLoadingState colSpan={999} />
+                  : rows.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
+                    : null}
+                {rows.map((r) => (
+                  <tr key={r.cooperateGuid}>
+                    <td>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.cooperateGuid)}>
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>
+                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                          <i className="lni lni-trash-can"></i> Delete
+                        </button>
+                      </ActionMenu>
+                    </td>
+                    <td className="font-mono font-bold uppercase">{r.cooperateCode}</td>
+                    <td><strong>{r.cooperateName}</strong></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollTable>
+        </div>
+      </div>
+      <NewCooperateModal
+        isOpen={openModals.has('new-cooperate-modal')}
+        onClose={() => closeModal('new-cooperate-modal')}
+        showToast={showToast}
+        createCooperate={createCooperate}
+      />
+      <EditCooperateModal
+        isOpen={openModals.has('edit-cooperate-modal')}
+        onClose={() => closeModal('edit-cooperate-modal')}
+        showToast={showToast}
+        cooperateGuid={editingCooperateGuid}
+        updateCooperate={updateCooperate}
+      />
+      <Toast toast={toast} />
+
+      {deleteTarget && (
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
+            <div className="perm-delete-title">Delete {deleteTarget.cooperateName}?</div>
+            <div className="perm-delete-sub">
+              This will permanently delete this cooperate. This can&apos;t be undone.
+            </div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" disabled={deleteCooperate.isPending} onClick={confirmDeleteCooperate}>
+                <i className="lni lni-trash-can"></i> {deleteCooperate.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}

@@ -8,6 +8,8 @@ import { EditRepTagModal } from '@/components/modals/academic/EditRepTagModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { useRepetitionTags, useCreateRepetitionTag, useUpdateRepetitionTag, useDeleteRepetitionTag, RepetitionTag } from '@/hooks/academic/useRepetitionTags'
 
 export default function Page() {
   const router = useRouter()
@@ -15,11 +17,26 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [editingRepTagGuid, setEditingRepTagGuid] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<RepetitionTag | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  function openEditModal(guid: string) {
+    setEditingRepTagGuid(guid)
+    openModal('edit-rep-tag-modal')
+  }
+
+  function confirmDeleteRepetitionTag() {
+    if (!deleteTarget) return
+    deleteRepetitionTag.mutate(deleteTarget.courseUnitRepetitionGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Repetition tag deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete repetition tag', 'error'),
+    })
+  }
 
   useEffect(() => {
     function closeFilter(e: MouseEvent) {
@@ -30,15 +47,23 @@ export default function Page() {
     return () => document.removeEventListener('click', closeFilter)
   }, [])
 
-  const rows = [
-    { code: 'RT-CU-001', description: 'Standard repeat for failed course units',       level: "Bachelor's Degree"    },
-    { code: 'RT-CU-002', description: 'Supplementary exam carry-forward repeat',        level: 'Diploma'              },
-    { code: 'RT-CU-003', description: 'Medical or special consideration repeat',        level: "Master's Degree"      },
-    { code: 'RT-CU-004', description: 'Retake after academic probation',                level: "Bachelor's Degree"    },
-    { code: 'RT-CU-005', description: 'Credit exemption repeat for lateral entrants',   level: 'Postgraduate Diploma' },
-  ]
+  // Previous hardcoded rows (pre GET /api/v1/academic/course-unit-repetitions
+  // integration) — kept here for reference until the backend fields are
+  // fully confirmed.
+  // const rows = [
+  //   { code: 'RT-CU-001', description: 'Standard repeat for failed course units',       level: "Bachelor's Degree"    },
+  //   { code: 'RT-CU-002', description: 'Supplementary exam carry-forward repeat',        level: 'Diploma'              },
+  //   { code: 'RT-CU-003', description: 'Medical or special consideration repeat',        level: "Master's Degree"      },
+  //   { code: 'RT-CU-004', description: 'Retake after academic probation',                level: "Bachelor's Degree"    },
+  //   { code: 'RT-CU-005', description: 'Credit exemption repeat for lateral entrants',   level: 'Postgraduate Diploma' },
+  // ]
+
+  const { data: rows = [], isLoading } = useRepetitionTags()
+  const createRepetitionTag = useCreateRepetitionTag()
+  const updateRepetitionTag = useUpdateRepetitionTag()
+  const deleteRepetitionTag = useDeleteRepetitionTag()
   const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
+    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
   )
 
   function fth(label: string, col: string, opts: string[]) {
@@ -82,19 +107,30 @@ export default function Page() {
                   <th style={{ width: 48 }}></th>
                   <th>Repetition Tag Code</th>
                   <th>Description</th>
-                  {fth('Programme Level', 'level', ["Bachelor's Degree", 'Diploma', "Master's Degree", 'Postgraduate Diploma', 'Certificate', 'PhD / Doctorate'])}
+                  {fth('Programme Level', 'levelName', ["Bachelor's Degree", 'Diploma', "Master's Degree", 'Postgraduate Diploma', 'Certificate', 'PhD / Doctorate'])}
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
-                  : null}
-                {filteredRows.map((r, i) => (
-                  <tr key={i}>
-                    <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => openModal('edit-rep-tag-modal')}><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>
-                    <td className="font-mono font-bold text-b700">{r.code}</td>
-                    <td>{r.description}</td>
-                    <td><span className="badge badge-blue">{r.level}</span></td>
+                {isLoading
+                  ? <TableLoadingState colSpan={999} />
+                  : filteredRows.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                    : null}
+                {filteredRows.map((r) => (
+                  <tr key={r.courseUnitRepetitionGuid}>
+                    <td>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.courseUnitRepetitionGuid)}>
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>
+                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                          <i className="lni lni-trash-can"></i> Delete
+                        </button>
+                      </ActionMenu>
+                    </td>
+                    <td className="font-mono font-bold text-b700">{r.tagCode}</td>
+                    <td>{r.tagName}</td>
+                    <td><span className="badge badge-blue">{r.levelName}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -102,9 +138,33 @@ export default function Page() {
           </ScrollTable>
         </div>
       </div>
-      <NewRepTagModal  isOpen={openModals.has('new-rep-tag-modal')}  onClose={() => closeModal('new-rep-tag-modal')}  showToast={showToast} />
-      <EditRepTagModal isOpen={openModals.has('edit-rep-tag-modal')} onClose={() => closeModal('edit-rep-tag-modal')} showToast={showToast} />
+      <NewRepTagModal  isOpen={openModals.has('new-rep-tag-modal')}  onClose={() => closeModal('new-rep-tag-modal')}  showToast={showToast} createRepetitionTag={createRepetitionTag} />
+      <EditRepTagModal
+        isOpen={openModals.has('edit-rep-tag-modal')}
+        onClose={() => closeModal('edit-rep-tag-modal')}
+        showToast={showToast}
+        courseUnitRepetitionGuid={editingRepTagGuid}
+        updateRepetitionTag={updateRepetitionTag}
+      />
       <Toast toast={toast} />
+
+      {deleteTarget && (
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
+            <div className="perm-delete-title">Delete {deleteTarget.tagCode}?</div>
+            <div className="perm-delete-sub">
+              This will permanently delete this repetition tag. This can&apos;t be undone.
+            </div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" disabled={deleteRepetitionTag.isPending} onClick={confirmDeleteRepetitionTag}>
+                <i className="lni lni-trash-can"></i> {deleteRepetitionTag.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

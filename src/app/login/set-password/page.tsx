@@ -38,8 +38,7 @@ export default function SetPasswordPage() {
     setConfirmPasswordError(confirmErr)
     if (idErr || pwErr || confirmErr) return
 
-    // No confirmed verify-employee/set-password endpoint yet — this is a
-    // UI-only shell for now, same as the rest of this mock-first prototype.
+    // This is still a UI-only shell until the password endpoint is available.
     router.push('/login')
   }
 

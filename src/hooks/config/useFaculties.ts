@@ -3,19 +3,14 @@ import { Faculty, FacultyInput, createFaculty, deleteFaculty, getFaculties, upda
 
 const FACULTIES_KEY = ['faculties']
 
-// Fetch a single page large enough to cover the whole list — nothing in
-// this codebase currently paginates the master lists client-side, so the
-// hook needs the full set in one request rather than the API's default
-// page=1/pageSize=10 (which was silently hiding any row past the 10th).
+// Load enough rows to cover the full faculty list in one request.
 const FACULTIES_PAGE_SIZE = 1000
 
 export function useFaculties() {
   return useQuery({
     queryKey: FACULTIES_KEY,
     queryFn: () => getFaculties(1, FACULTIES_PAGE_SIZE),
-    // Never treat the cached list as stale on its own — only refetch when a
-    // mutation (create/update) explicitly invalidates this key below,
-    // instead of on every remount/window focus.
+    // Keep the list cached until a mutation invalidates it.
     staleTime: Infinity,
     gcTime: Infinity,
   })

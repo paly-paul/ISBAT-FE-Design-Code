@@ -11,10 +11,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { useIntakes, useCreateIntake, useUpdateIntake, useDeleteIntake, Intake } from '@/hooks/academic/useIntakes'
 
-// Turns one of the backend's raw date-time strings (e.g. "2024-02-28T00:00:00")
-// into the short "28 Feb 2024" style already used everywhere else on this
-// page. Falls back to an em dash if the date is missing or can't be parsed,
-// so a bad/blank value from the API never crashes the table.
+// Format API dates for the table and fall back to a dash if the value is invalid.
 function formatDate(value: string | undefined | null): string {
   if (!value) return '—'
   const parsed = new Date(value)
@@ -22,19 +19,12 @@ function formatDate(value: string | undefined | null): string {
   return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-// The API gives us a single starting year (e.g. financialYear: 2024). The
-// design expects the "2024–25" style academic-year span you'd say out loud,
-// so this just adds one year and takes the last two digits — it's a display
-// choice, not a second field the backend sends us.
+// Convert the backend year into the display format used on the page.
 function formatFinancialYear(startYear: number): string {
   return `${startYear}–${String(startYear + 1).slice(-2)}`
 }
 
-// This used to be a guess (see the commented-out version below) because the
-// very first GET sample had no code/id field at all. The POST
-// /api/v1/academic/intakes response cleared that up — the backend really
-// does hand back an intakeCode (e.g. 20264) — so this now just reads the
-// real field instead of inventing one.
+// Read the real intake code from the API instead of deriving it by hand.
 // function deriveIntakeCode(intake: Intake): string {
 //   return `${intake.financialYear}${intake.intakes}`
 // }
@@ -73,22 +63,14 @@ export default function Page() {
     return () => document.removeEventListener('click', closeFilter)
   }, [])
 
-  // Previous hard-coded rows (before GET /api/v1/academic/intakes was wired
-  // up) — left here for reference so you can see how the table used to be
-  // shaped. The real intake object doesn't have most of these fields under
-  // these names, so the mapping below (see `intakes` and `filteredRows`)
-  // works out the closest real equivalent for each column instead.
+  // The old table shape is kept as a reference to the earlier mock version.
   // const rows = [
   //   { code: '20261', desc: 'Spring 2026', finYear: '2025–26', semStart: '01 Feb 2026', term1End: '30 Mar 2026', term2End: '31 May 2026', grievEnd: '10 Jun 2026', reentry: '15 Jun 2026', academic: 'Current', admission: '—', rowClass: 'selected-row', editBtn: true },
   //   { code: '20262', desc: 'Fall 2026',   finYear: '2026–27', semStart: '01 Aug 2026', term1End: '30 Sep 2026', term2End: '30 Nov 2026', grievEnd: '10 Dec 2026', reentry: '15 Dec 2026', academic: '—',       admission: 'Current', rowClass: '', editBtn: true },
   //   { code: '20253', desc: 'Autumn 2025', finYear: '2025–26', semStart: '01 Sep 2025', term1End: '31 Oct 2025', term2End: '31 Dec 2025', grievEnd: '10 Jan 2026', reentry: '15 Jan 2026', academic: 'Closed',  admission: 'Closed',  rowClass: '', editBtn: false },
   // ]
 
-  // Live data from GET /api/v1/academic/intakes. `intakes` here is the list
-  // of raw records from the backend; the table below reads straight from it
-  // (through `filteredRows`) instead of a separately-shaped `rows` array,
-  // since every displayed column now comes from a real field (or a small,
-  // clearly-labelled formatting step on top of one).
+  // The table reads the live intake data directly and only formats a few fields for display.
   const { data: intakes = [], isLoading } = useIntakes()
 
   // Used to build a stand-in row key (financialYear + examYear + intakes +
@@ -104,14 +86,7 @@ export default function Page() {
   const updateIntake = useUpdateIntake()
   const deleteIntake = useDeleteIntake()
 
-  // First term/semester block for an intake, used for the Sem Start / Term1
-  // End / Term2 End columns. An intake can technically have more than one
-  // calendar entry, but the table only has room for one row per intake, so
-  // we show the first one and leave the rest for the detail/edit view.
-  // Some intakes come back from the API with no academicCalendar at all
-  // (undefined, not just an empty array), so this has to check for that
-  // before reaching for [0] — otherwise a plan with no calendar set up yet
-  // would crash the whole table instead of just showing blank dates.
+  // Use the first calendar entry for the table view and keep the rest for the detail view.
   function firstCalendarEntry(intake: Intake) {
     return intake.academicCalendar?.[0]
   }

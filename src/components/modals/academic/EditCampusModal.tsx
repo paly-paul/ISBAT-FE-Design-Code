@@ -64,9 +64,7 @@ export function EditCampusModal({ isOpen, onClose, showToast, campus, updateCamp
       {
         onSuccess: () => { setSaved(true); showToast('Campus updated successfully') },
         onError: (error: Error) => {
-          // 404 not_found means the campus was deleted elsewhere between
-          // opening this modal and submitting — everything else (400
-          // validation_error, etc.) just surfaces the backend's message.
+          // A missing record usually means the campus was deleted while the modal was open.
           const notFound = error instanceof AuthError && error.code === 'not_found'
           setFailure(notFound ? 'This campus no longer exists — it may have been deleted.' : (error.message || 'Failed to update campus. Please try again.'))
         },
