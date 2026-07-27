@@ -1,0 +1,46 @@
+meta {
+  name: Create Application Payment
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admissions/application-payments
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  intEnquiry: 1
+  enquiryGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  oDelIntApplication: 0
+  studentName: John Doe
+  intakeGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  campusGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  programGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  semesterGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  batchGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  intBatchTime: 1
+  intFee: 1
+  countryCode: UG
+  mobile: 700000000
+  email: john.doe@example.com
+  exemptionType: null
+  payDate: 2026-07-21
+  payType: 1
+  amount: 50000.00
+  currencyGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  exRate: 1.0
+  bankGuid: null
+  receiptBookGuid: null
+  remarks: Application payment
+  payProofFile: null
+}
+
+docs {
+  Records an application payment. Accepts multipart/form-data to support an optional payment proof file upload.
+  `currencyGuid` replaces the old `intCurrency` integer field. `semesterGuid` replaces the old `semCode` integer field.
+
+  Success (201): data = CreateApplicationPaymentResponse.
+  Failure: 400 `validation_error`.
+}

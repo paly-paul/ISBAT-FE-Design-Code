@@ -1,0 +1,17 @@
+meta {
+  name: List Follow-Up Modes
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admissions/followup-modes
+  body: none
+  auth: none
+}
+
+docs {
+  Returns all follow-up modes (e.g. Phone Call, Email, Walk-In).
+  
+  Success (200): data = List<FollowUpModeDto>.
+}

@@ -3647,12 +3647,11 @@ body:has(.modal-overlay.open) {
 }
 
 @media(max-width:900px) {
-  .sb-rail {
-    display: none
-  }
-
+  /* Rail stays visible (it's the only way to switch modules) — only the
+     wider slide-out panel becomes an overlay instead of pushing content,
+     so .main keeps rail-w of margin but never adds panel-w here. */
   .main {
-    margin-left: 0 !important;
+    margin-left: var(--rail-w) !important;
     padding: 18px 20px
   }
 

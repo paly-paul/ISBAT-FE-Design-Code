@@ -59,7 +59,7 @@ const ACADEMIC_IDS = ['acad-dashboard', 'intake-master', 'skill-master', 'batch-
 const FINANCE_IDS = ['cooperates', 'discounts', 'ledgers', 'currency-master', 'receipt-books', 'gen-sets', 'banks', 'bank-branches', 'proc-banks', 'proc-gl-accounts']
 const STUDENT_IDS = ['student-master']
 const EMPLOYEE_IDS = ['employee-master']
-const CONFIG_IDS = ['faculty-master', 'department-master', 'designation-master', 'specialization', 'skill', 'campus-master', 'country-master', 'permission-master', 'enquiry-status', 'enquiry-source', 'followup-status', 'followup-mode', 'interest-level', 'weekdays', 'unit-type', 'unit-category']
+const CONFIG_IDS = ['faculty-master', 'department-master', 'designation-master', 'specialization', 'skill', 'campus-master', 'country-master', 'permission-master', 'enquiry-status', 'enquiry-source', 'enquiry-source-master', 'followup-status', 'followup-mode', 'interest-level', 'weekdays', 'unit-type', 'unit-category']
 
 export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {
   const router = useRouter()
@@ -327,7 +327,8 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
 
             {sbSection('sc-config-admissions', 'Admissions', <>
               {sbItem('enquiry-status', 'Enquiry Status', 'flag', undefined, 'config')}
-              {sbItem('enquiry-source', 'Enquiry Source', 'compass', undefined, 'config')}
+              {sbItem('enquiry-source', 'Isbat Enquiry Source', 'compass', undefined, 'config')}
+              {sbItem('enquiry-source-master', 'Enquiry Source', 'volume', undefined, 'config')}
               {sbItem('followup-status', 'Followup Status', 'phone', undefined, 'config')}
               {sbItem('followup-mode', 'Followup Mode', 'comments', undefined, 'config')}
               {sbItem('interest-level', 'Interest Level', 'signal', undefined, 'config')}

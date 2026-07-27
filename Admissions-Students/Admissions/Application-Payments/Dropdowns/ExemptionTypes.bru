@@ -1,0 +1,17 @@
+meta {
+  name: Get Exemption Types
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admissions/application-payments/dropdowns/exemption-types
+  body: none
+  auth: none
+}
+
+docs {
+  Returns the list of fee exemption types available for application payments.
+
+  Success (200): data = List<ExemptionTypeDto>.
+}

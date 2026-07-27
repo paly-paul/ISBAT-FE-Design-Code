@@ -1,0 +1,26 @@
+meta {
+  name: List Enquiries
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admissions/enquiries?page=1&pageSize=10
+  body: none
+  auth: none
+}
+
+params:query {
+  page: 1
+  pageSize: 10
+}
+
+vars:pre-request {
+  baseUrl: https://localhost:44396
+}
+
+docs {
+  Returns a paginated list of admission enquiries.
+  
+  Success (200): data = PagedResult<EnquiryDto>.
+}

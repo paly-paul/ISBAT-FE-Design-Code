@@ -714,7 +714,7 @@ export function NewIntakeModal({ isOpen, onClose, showToast, createIntake }: New
           )}
           {step === 1 && (
             <button className="btn btn-primary" onClick={() => { if (validate()) setStep(2) }}>
-              Save & Continue <i className="lni lni-arrow-right"></i>
+              Continue <i className="lni lni-arrow-right"></i>
             </button>
           )}
           {step === 2 && (

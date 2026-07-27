@@ -1,0 +1,17 @@
+meta {
+  name: Enquiry Dropdown
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admissions/enquiries/dropdown
+  body: none
+  auth: none
+}
+
+docs {
+  Returns a flat list of enquiries for use in dropdowns.
+
+  Success (200): data = List<EnquiryDropdownItemDto>.
+}

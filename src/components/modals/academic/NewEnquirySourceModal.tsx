@@ -36,7 +36,7 @@ export function NewEnquirySourceModal({ isOpen, onClose, showToast, createEnquir
     return (
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
-          <SuccessPopup title="Enquiry Source Added!" subtitle="The new enquiry source has been saved successfully." onClose={handleClose} />
+          <SuccessPopup title="Isbat Enquiry Source Added!" subtitle="The new Isbat enquiry source has been saved successfully." onClose={handleClose} />
         </div>
       </div>
     )
@@ -46,7 +46,7 @@ export function NewEnquirySourceModal({ isOpen, onClose, showToast, createEnquir
     return (
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
-          <FailurePopup title="Couldn't Add Enquiry Source" subtitle={failure} onClose={() => setFailure(null)} />
+          <FailurePopup title="Couldn't Add Isbat Enquiry Source" subtitle={failure} onClose={() => setFailure(null)} />
         </div>
       </div>
     )
@@ -56,7 +56,7 @@ export function NewEnquirySourceModal({ isOpen, onClose, showToast, createEnquir
     <div className="modal-overlay open" id="new-enquiry-source-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
-          <div className="modal-title"><i className="lni lni-compass"></i> Add Enquiry Source</div>
+          <div className="modal-title"><i className="lni lni-compass"></i> Add Isbat Enquiry Source</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
         <div className="fg">
@@ -81,13 +81,13 @@ export function NewEnquirySourceModal({ isOpen, onClose, showToast, createEnquir
               createEnquirySource.mutate(
                 { sourceName },
                 {
-                  onSuccess: () => { setSaved(true); showToast('Enquiry source added successfully') },
-                  onError: (error: Error) => setFailure(error.message || 'Failed to add enquiry source. Please try again.'),
+                  onSuccess: () => { setSaved(true); showToast('Isbat enquiry source added successfully') },
+                  onError: (error: Error) => setFailure(error.message || 'Failed to add Isbat enquiry source. Please try again.'),
                 },
               )
             }}
           >
-            <i className="lni lni-checkmark"></i> {createEnquirySource.isPending ? 'Adding…' : 'Add Enquiry Source'}
+            <i className="lni lni-checkmark"></i> {createEnquirySource.isPending ? 'Adding…' : 'Add Isbat Enquiry Source'}
           </button>
         </div>
       </div>

@@ -52,8 +52,8 @@ export function EditEnquirySourceModal({ isOpen, onClose, showToast, isbatSource
     updateEnquirySource.mutate(
       { guid: isbatSourceGuid, input: { sourceName } },
       {
-        onSuccess: () => { setSaved(true); showToast('Enquiry source updated successfully') },
-        onError: (error: Error) => setFailure(error.message || 'Failed to update enquiry source. Please try again.'),
+        onSuccess: () => { setSaved(true); showToast('Isbat enquiry source updated successfully') },
+        onError: (error: Error) => setFailure(error.message || 'Failed to update Isbat enquiry source. Please try again.'),
       },
     )
   }
@@ -62,7 +62,7 @@ export function EditEnquirySourceModal({ isOpen, onClose, showToast, isbatSource
     return (
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
-          <SuccessPopup title="Enquiry Source Updated!" subtitle="Your changes have been saved successfully." onClose={handleClose} />
+          <SuccessPopup title="Isbat Enquiry Source Updated!" subtitle="Your changes have been saved successfully." onClose={handleClose} />
         </div>
       </div>
     )
@@ -72,7 +72,7 @@ export function EditEnquirySourceModal({ isOpen, onClose, showToast, isbatSource
     return (
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
-          <FailurePopup title="Couldn't Update Enquiry Source" subtitle={failure} onClose={() => setFailure(null)} />
+          <FailurePopup title="Couldn't Update Isbat Enquiry Source" subtitle={failure} onClose={() => setFailure(null)} />
         </div>
       </div>
     )
@@ -83,8 +83,8 @@ export function EditEnquirySourceModal({ isOpen, onClose, showToast, isbatSource
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
           <FailurePopup
-            title="Couldn't Load Enquiry Source"
-            subtitle={error instanceof AuthError ? (error.message || 'Failed to load enquiry source details.') : 'Failed to load enquiry source details.'}
+            title="Couldn't Load Isbat Enquiry Source"
+            subtitle={error instanceof AuthError ? (error.message || 'Failed to load Isbat enquiry source details.') : 'Failed to load Isbat enquiry source details.'}
             onClose={handleClose}
           />
         </div>
@@ -97,11 +97,11 @@ export function EditEnquirySourceModal({ isOpen, onClose, showToast, isbatSource
       <div className="modal-overlay open" id="edit-enquiry-source-modal">
         <div className="modal modal-md" onClick={e => e.stopPropagation()}>
           <div className="modal-hdr">
-            <div className="modal-title"><i className="lni lni-pencil"></i> Edit Enquiry Source</div>
+            <div className="modal-title"><i className="lni lni-pencil"></i> Edit Isbat Enquiry Source</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
-            <span style={{ color: 'var(--g400)' }}>Loading enquiry source details…</span>
+            <span style={{ color: 'var(--g400)' }}>Loading Isbat enquiry source details…</span>
           </div>
         </div>
       </div>
@@ -112,7 +112,7 @@ export function EditEnquirySourceModal({ isOpen, onClose, showToast, isbatSource
     <div className="modal-overlay open" id="edit-enquiry-source-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
-          <div className="modal-title"><i className="lni lni-pencil"></i> Edit Enquiry Source</div>
+          <div className="modal-title"><i className="lni lni-pencil"></i> Edit Isbat Enquiry Source</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
         <div className="fg">
@@ -129,7 +129,7 @@ export function EditEnquirySourceModal({ isOpen, onClose, showToast, isbatSource
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
           <button className="btn btn-primary" disabled={updateEnquirySource.isPending} onClick={handleSubmit}>
-            <i className="lni lni-checkmark"></i> {updateEnquirySource.isPending ? 'Updating…' : 'Update Enquiry Source'}
+            <i className="lni lni-checkmark"></i> {updateEnquirySource.isPending ? 'Updating…' : 'Update Isbat Enquiry Source'}
           </button>
         </div>
       </div>

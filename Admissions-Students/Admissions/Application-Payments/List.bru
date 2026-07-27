@@ -1,0 +1,23 @@
+meta {
+  name: List Application Payments
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admissions/application-payments?intakeCode=0&page=1&pageSize=10
+  body: none
+  auth: none
+}
+
+params:query {
+  intakeCode: 0
+  page: 1
+  pageSize: 10
+}
+
+docs {
+  Returns a paginated list of application payments. Filter by `intakeCode` (0 = all).
+
+  Success (200): data = PagedResult<ApplicationPaymentListItemDto>.
+}
