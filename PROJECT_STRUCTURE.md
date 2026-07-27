@@ -34,12 +34,12 @@ No test framework.
 
 /admission                         → redirects to /admission/dashboard
 /admission/dashboard               → admission pipeline overview
-/admission/online-enquiry          → online enquiry list
+/admission/online-enquiry          → online enquiry form              ← real hook layer (POST /api/v1/admissions/enquiries; enquirySource hardcoded to 1 for this page — see note below)
 /admission/kiosk-enquiry           → self-service kiosk enquiry
-/admission/ondesk-enquiry          → on-desk enquiry
-/admission/enquiry-list            → enquiry list
-/admission/enquiry-followup-master → enquiry followup master
-/admission/enquiry-followup        → enquiry followup
+/admission/ondesk-enquiry          → on-desk enquiry form             ← real hook layer (same create endpoint as online-enquiry; enquirySource hardcoded to 2, unconfirmed against a spec)
+/admission/enquiry-list            → enquiry list                     ← real hook layer (paginated GET; "View" opens EnquiryAssignModal to assign Advisor/Programme/Campus)
+/admission/enquiry-followup-master → enquiry followup master          ← real hook layer (ALL follow-ups, paginated; "+ Add Follow-up" create form has heavily-unconfirmed int fields — see note below)
+/admission/enquiry-followup        → enquiry followup                 ← real hook layer (follow-ups scoped to the authenticated advisor via GetByAdvisor, paginated; no create form here)
 /admission/payment                 → application payment
 /admission/filing                  → application filing
 /admission/vetting                 → vetting desk
@@ -54,7 +54,7 @@ No test framework.
 /academic/acad-dashboard           → academic dashboard
 /academic/intake-master            → intake management                  ← real hook layer
 /academic/skill-master             → skill/competency tags (batch/curriculum) — NOT the same as /config/skill
-/academic/batch-management         → batch setup & editing
+/academic/batch-management         → batch setup & editing              ← real hook layer (full CRUD; intProgram/intSem/intStream/batchTime/bInCharge are int-only FKs with no confirmed guid mapping — see note below)
 /academic/room-management          → room/venue management
 /academic/session-movement         → session movement / repeat
 /academic/repetition-tag           → repetition tag master              ← real hook layer
@@ -62,7 +62,7 @@ No test framework.
 /academic/programme-level          → programme level master             ← real hook layer (Create/Update send currencyGuid — see note below)
 /academic/programme-group          → programme groups                   ← real hook layer
 /academic/programme-master         → programme builder (multi-step modal) ← real hook layer (create + list confirmed — create via apiPostForm/multipart, list via GET ?search=; fee-line ledger wired to the real Finance Ledger master; Update/Delete/GetByGuid still unconfirmed, Edit mode still local-only)
-/academic/fee-structure            → fee structure & items               (still fully mock — standalone page, unrelated to Programme Master's embedded fee-structure step)
+/academic/fee-structure            → fee structure & items               ← partially real (standalone page, unrelated to Programme Master's embedded fee-structure step — see note below; the header Save button is wired to a real endpoint, the per-semester line-item Save button is still a mock stub)
 /academic/timetable                → timetable slots
 /academic/odl-applications         → ODL applications
 /academic/odl-reconciliation       → ODL payment reconciliation
@@ -89,13 +89,15 @@ No test framework.
 /config/country-master             → country master                     ← real hook layer
 /config/permission-master          → permission group master (wizard)   ← real hook layer
 /config/enquiry-status             → admission enquiry status master     ← real hook layer (/api/v1/admissions/enquiry-statuses)
-/config/enquiry-source             → admission enquiry source master     ← real hook layer (/api/v1/admissions/isbat-enquiry-sources; single-field: sourceName)
+/config/enquiry-source             → "Isbat Enquiry Source" in the UI    ← real hook layer (/api/v1/admissions/isbat-enquiry-sources; single-field: sourceName; display label renamed from "Enquiry Source" — route/file/hook names unchanged)
+/config/enquiry-source-master      → "Enquiry Source" in the UI          ← real hook layer (a DIFFERENT resource from the one above: /api/v1/admissions/enquiry-sources, single-field: enquirySourceName, own guid space — see note below)
 /config/followup-status            → admission enquiry followup status master ← real hook layer (/api/v1/admissions/follow-up-statuses; has an isClose 0/1 flag)
 /config/followup-mode              → admission followup mode master      ← real hook layer (/api/v1/admissions/followup-modes; single-field: followUpModeName)
 /config/interest-level             → admission interest level master     ← real hook layer (/api/v1/admissions/interest-levels; single-field: interestLevelName)
 /config/weekdays                   → weekday master                     ← real hook layer (/api/v1/academic/weekdays)
 /config/unit-type                  → unit type master                   ← real hook layer
 /config/unit-category               → unit category master               ← real hook layer
+/config/batch-times                → batch time master                  ← real hook layer (/api/v1/academic/batchtimes; two plain fields: batchTime/batchTimeCode; fully confirmed CRUD, no int-enum gotchas)
 
 /finance                           → redirects to /finance/cooperates
 /finance/cooperates                → corporate partner master           ← real hook layer (/api/v1/finance/cooperates)
@@ -118,6 +120,10 @@ No test framework.
 
 **Enquiry Source, Followup Mode, and Interest Level are new Admission-domain masters that live under `/config/*`** (in the sidebar's Config → Admissions group, alongside Enquiry Status and Followup Status) even though their API/hook files live in `src/lib/api/admission/` and `src/hooks/admission/` — same "route module vs. code location" split as the pre-existing Faculty/Campus/etc.
 
+**There are now two, unrelated "Enquiry Source" masters, both under `/config/*` Admissions.** `/config/enquiry-source` backs `isbat-enquiry-sources` (`enquirySource.ts`, `isbatSourceGuid`/`sourceName`) and is now labeled **"Isbat Enquiry Source"** in the sidebar/page UI to disambiguate it. `/config/enquiry-source-master` is a newer, genuinely separate resource — plain `enquiry-sources` (`enquirySourceMaster.ts`, own file: `src/lib/api/admission/enquirySourceMaster.ts` / `src/hooks/admission/useEnquirySourceMasters.ts` / `src/app/config/enquiry-source-master/page.tsx`), labeled just **"Enquiry Source"**. The two are NOT interchangeable — they have different guids, different field names, and different backend tables. `Enquiry.sourceName` (the admission enquiry record) is populated from this second master's `enquirySourceName`, not from the Isbat one.
+
+**Batch Times (`/config/batch-times`) lives under Config → Academic Setup despite backing `/api/v1/academic/batchtimes`** — same "route module vs. code location" split as Intake/Programme Level/Programme Group; its API/hook files live in `src/lib/api/academic/batchTime.ts` / `src/hooks/config/useBatchTimes.ts`.
+
 ---
 
 ## src/ Directory Layout
@@ -134,16 +140,21 @@ src/
 │   ├── admission/
 │   │   ├── layout.tsx          # own panelOpen/collapsedSections/activeRail state; initial panelOpen is false only on /admission/applicant-profile
 │   │   ├── page.tsx            # redirect → /admission/dashboard
-│   │   └── dashboard/, online-enquiry/, kiosk-enquiry/, ondesk-enquiry/, enquiry-list/,
-│   │       enquiry-followup-master/, enquiry-followup/, payment/, filing/, vetting/,
-│   │       registration/, applicants/, applicant-profile/, enquiry-form/
+│   │   ├── dashboard/, kiosk-enquiry/, payment/, filing/, vetting/,
+│   │   │   registration/, applicants/, applicant-profile/, enquiry-form/
+│   │   ├── online-enquiry/page.tsx    ← useCreateEnquiry(); First/Last Name/Phone/Email/DOB/Campus/Intake/Programme/Enquiry Source all real, enquirySource hardcoded to 1
+│   │   ├── ondesk-enquiry/page.tsx    ← same useCreateEnquiry(); enquirySource hardcoded to 2 (unconfirmed); Enquiry Channel/Preferred Study Mode kept but decorative, not sent
+│   │   ├── enquiry-list/page.tsx      ← useEnquiries(page, pageSize) (real, paginated); "View" opens EnquiryAssignModal
+│   │   ├── enquiry-followup-master/page.tsx ← useEnquiryFollowUps(page, pageSize) (ALL follow-ups); "+ Add Follow-up" → NewFollowUpLogModal; "View" → EnquiryAssignModal
+│   │   └── enquiry-followup/page.tsx        ← useEnquiryFollowUpsByAdvisor(page, pageSize) (advisor-scoped); "View" → EnquiryAssignModal; no create form on this page
 │   ├── academic/
 │   │   ├── layout.tsx          # own panelOpen/collapsedSections/activeRail state + real session check (see Auth section) — the ONLY layout with an auth gate
 │   │   ├── page.tsx            # redirect → /academic/acad-dashboard
-│   │   ├── acad-dashboard/, intake-master/ (← useIntakes), skill-master/, batch-management/,
+│   │   ├── acad-dashboard/, intake-master/ (← useIntakes), skill-master/,
 │   │   │   room-management/, session-movement/, repetition-tag/, course-units/, programme-level/,
 │   │   │   programme-group/, programme-master/, fee-structure/, timetable/, odl-applications/,
 │   │   │   odl-reconciliation/, student-lookup/
+│   │   ├── batch-management/page.tsx  ← useBatches(pageNumber, pageSize) (real, full CRUD); Programme/Semester/Stream/Batch Time columns resolved by list-position guess, not a confirmed id — see Data & API Architecture
 │   │   └── [10 sidebar-orphaned pages: allocation/, results/, class-test/, coursework/,
 │   │       university-exam/, fee-clearance/, grievance/, qual-equating/, access-gate/,
 │   │       odel-student-preview/]
@@ -165,13 +176,15 @@ src/
 │   │   ├── specialization/page.tsx     ← useStreams/useCreateStream/useUpdateStream/useDeleteStream (renamed from stream-master; type/hook/file still say "Stream")
 │   │   ├── skill/page.tsx              ← useSkills (still mock)
 │   │   ├── enquiry-status/page.tsx     ← useEnquiryStatuses/useCreateEnquiryStatus/useUpdateEnquiryStatus/useDeleteEnquiryStatus
-│   │   ├── enquiry-source/page.tsx     ← useEnquirySources/useCreateEnquirySource/useUpdateEnquirySource/useDeleteEnquirySource (hooks/lib live under .../admission/, not .../config/)
+│   │   ├── enquiry-source/page.tsx     ← useEnquirySources/useCreateEnquirySource/useUpdateEnquirySource/useDeleteEnquirySource (hooks/lib live under .../admission/, not .../config/); UI label "Isbat Enquiry Source"
+│   │   ├── enquiry-source-master/page.tsx ← useEnquirySourceMasters/useCreateEnquirySourceMaster/useUpdateEnquirySourceMaster/useDeleteEnquirySourceMaster (hooks/lib under .../admission/); a DIFFERENT resource from enquiry-source above — see note above the directory tree; PUT/DELETE/GetByGuid inferred by REST convention, not confirmed against a spec
 │   │   ├── followup-status/page.tsx    ← useFollowUpStatuses/useCreateFollowUpStatus/useUpdateFollowUpStatus/useDeleteFollowUpStatus
 │   │   ├── followup-mode/page.tsx      ← useFollowUpModes/useCreateFollowUpMode/useUpdateFollowUpMode/useDeleteFollowUpMode (hooks/lib under .../admission/)
 │   │   ├── interest-level/page.tsx     ← useInterestLevels/useCreateInterestLevel/useUpdateInterestLevel/useDeleteInterestLevel (hooks/lib under .../admission/)
 │   │   ├── weekdays/page.tsx           ← useWeekdays/useCreateWeekday/useUpdateWeekday/useDeleteWeekday
 │   │   ├── unit-type/page.tsx          ← useUnitTypes/useCreateUnitType/useUpdateUnitType/useDeleteUnitType
-│   │   └── unit-category/page.tsx      ← useUnitCategories/useCreateUnitCategory/useUpdateUnitCategory/useDeleteUnitCategory
+│   │   ├── unit-category/page.tsx      ← useUnitCategories/useCreateUnitCategory/useUpdateUnitCategory/useDeleteUnitCategory
+│   │   └── batch-times/page.tsx        ← useBatchTimes/useCreateBatchTime/useUpdateBatchTime/useDeleteBatchTime (hooks/lib under .../academic/); fully confirmed CRUD spec, no int-enum gotchas
 │   └── finance/
 │       ├── layout.tsx           # own panelOpen/collapsedSections/activeRail state, no auth gate
 │       ├── page.tsx             # redirect → /finance/cooperates
@@ -204,8 +217,10 @@ src/
 │       │   │   New/EditFollowUpStatusModal.tsx, New/EditWeekdayModal.tsx           # real mutations, all Edit variants fetch fresh by guid (useX(guid, isOpen)) rather than reusing the row from the list
 │       │   ├── New/EditEnquirySourceModal.tsx, New/EditFollowUpModeModal.tsx,
 │       │   │   New/EditInterestLevelModal.tsx    # real mutations, single-field forms, fetch-by-guid Edit convention; import from @/lib/api/admission/* + @/hooks/admission/*
-│       │   ├── New/EditIntakeModal.tsx, New/EditBatchModal.tsx, New/EditRoomModal.tsx,
+│       │   ├── New/EditIntakeModal.tsx, New/EditRoomModal.tsx,
 │       │   │   RoomMgmtModal.tsx, New/EditRepTagModal.tsx                          # Intake modals require lastDateForReRegistration/grievanceStartDate/grievanceEndDate (backend-confirmed, despite the type marking them nullable) and compute durationInWeeks with Math.ceil, not Math.round — see note below
+│       │   ├── NewBatchModal.tsx / EditBatchModal.tsx     # real; intProgram/intSem/intStream/batchTime/bInCharge sent as list position (unconfirmed id) — see Data & API Architecture; Edit can't prefill Stream (no reverse int→guid map) or Batch In-Charge (not returned by GetByGuid at all), both must be re-picked every edit
+│       │   ├── NewBatchTimeModal.tsx / EditBatchTimeModal.tsx    # real, fetch-by-guid Edit convention; fully confirmed 2-field CRUD (batchTime/batchTimeCode), no gotchas
 │       │   ├── CourseUnitModal.tsx / EditCourseUnitModal.tsx / ElectiveSelectModal.tsx
 │       │   ├── ProgrammeModal.tsx (multi-step) / ProgrammeLevelModal.tsx / ProgrammeGroupModal.tsx / SpecializationModal.tsx
 │       │   │   # ProgrammeModal's fee-line Ledger dropdown is wired to the real Finance Ledger master (useLedgers) — previously hardcoded to one fake ledger regardless of selection
@@ -229,21 +244,30 @@ src/
 │       ├── student/
 │       │   ├── NewStudentModal.tsx / EditStudentModal.tsx / StudentProfileModal.tsx
 │       └── admission/
-│           ├── EnquiryFormModal.tsx / StudentProfileModal.tsx / ImportSourceModal.tsx / ImportCrmModal.tsx / ImportOdelModal.tsx
-│           ├── LogFollowupModal.tsx / AllocateFollowupModal.tsx / VettingReviewModal.tsx / CompleteRegistrationModal.tsx
+│           ├── EnquiryFormModal.tsx / StudentProfileModal.tsx / ImportSourceModal.tsx / ImportCrmModal.tsx / ImportOdelModal.tsx    # still mock — EnquiryFormModal ("New Enquiry" on enquiry-list) has no API wiring at all, just a local setSaved(true)
+│           ├── EnquiryAssignModal.tsx      # real; fetch-by-guid (useEnquiry), PUT /api/v1/admissions/enquiries/:guid; shows the enquiry read-only (name/phone/email/date/source/remarks — none of these are in the update payload) plus editable Advisor/Programme/Campus (campusGuid required); reused as the "View" action on enquiry-list, enquiry-followup-master, AND enquiry-followup
+│           ├── NewFollowUpLogModal.tsx     # real POST /api/v1/admissions/enquiry-followups, but intEnquiry/followUpStatus/followUpMode/enquiryStatus/interestLevel are all sent as 1-based list position, not a confirmed backend id — see Data & API Architecture note
+│           ├── LogFollowupModal.tsx / AllocateFollowupModal.tsx    # orphaned — both fully mock, no longer imported by any page (enquiry-followup/enquiry-followup-master were rewired onto EnquiryAssignModal/NewFollowUpLogModal instead); left in place, not deleted
+│           ├── VettingReviewModal.tsx / CompleteRegistrationModal.tsx
 │           └── RejectModal.tsx / OnboardModal.tsx
 ├── hooks/
 │   ├── config/                  # react-query "use-case" layer for most /config/* pages — one file per domain
 │   │   ├── useFaculties.ts / useCampuses.ts / useCountries.ts / useDepartments.ts / useDesignations.ts / usePermissionGroups.ts
 │   │   ├── useStreams.ts (backs /config/specialization) / useEnquiryStatuses.ts / useFollowUpStatuses.ts / useWeekdays.ts   (all real; each exports a useX(guid, enabled) single-record query for its Edit modal)
 │   │   ├── useUnitTypes.ts / useUnitCategories.ts   (real; same useX(guid, enabled) convention)
+│   │   ├── useBatchTimes.ts    (real; backs /config/batch-times; lib file lives under lib/api/academic/ not lib/api/config/ — same split as useStreams/useEnquiryStatuses)
 │   │   └── useSkills.ts    (still mock underneath)
-│   ├── admission/               # new — react-query layer for Admission-domain masters that route under /config/*
-│   │   └── useEnquirySources.ts / useInterestLevels.ts / useFollowUpModes.ts   (all real; useX(guid, enabled) convention for Edit modals)
+│   ├── admission/               # react-query layer for Admission-domain masters/features that route under /config/* or /admission/*
+│   │   ├── useEnquirySources.ts / useInterestLevels.ts / useFollowUpModes.ts   (all real; useX(guid, enabled) convention for Edit modals)
+│   │   ├── useEnquirySourceMasters.ts   # real; backs /config/enquiry-source-master (the OTHER "Enquiry Source" — see note above the directory tree)
+│   │   ├── useEnquiries.ts     # real; useEnquiries(page, pageSize) list, useCreateEnquiry(), useEnquiry(guid, enabled), useUpdateEnquiry() — backs online-enquiry/ondesk-enquiry (create) and enquiry-list/EnquiryAssignModal (list, get, update)
+│   │   └── useEnquiryFollowUps.ts   # real; useEnquiryFollowUps(page, pageSize) (all), useEnquiryFollowUpsByAdvisor(page, pageSize) (advisor-scoped, distinct cache key), useCreateEnquiryFollowUp() (heavily unconfirmed fields — see Data & API Architecture)
 │   ├── academic/
 │   │   ├── useIntakes.ts        # kept "academic" naming (backs /academic/intake-master)
 │   │   ├── useProgramLevels.ts / useProgramGroups.ts   # real; back /academic/programme-level and /academic/programme-group
-│   │   └── useRepetitionTags.ts / useCourseUnits.ts / useProgramMaster.ts   # real; back /academic/repetition-tag, /course-units, /programme-master (useProgramMaster.ts now also exports useProgramMasters() — the confirmed list query)
+│   │   ├── useRepetitionTags.ts / useCourseUnits.ts / useProgramMaster.ts   # real; back /academic/repetition-tag, /course-units, /programme-master (useProgramMaster.ts now also exports useProgramMasters() — the confirmed list query)
+│   │   ├── useBatches.ts       # real; backs /academic/batch-management; useBatches(pageNumber, pageSize), useBatch(guid, enabled), full CRUD
+│   │   └── useSemesters.ts     # real, GET-only; useSemestersForProgram(programGuid, enabled) — cascading Semester dropdown for Batch create/edit and the batch-management table's semester-name resolution
 │   ├── finance/
 │   │   ├── useCooperates.ts / useDiscounts.ts / useLedgers.ts / useReceiptBooks.ts / useGenSets.ts / useBanks.ts /
 │   │   │   useBankBranches.ts / useProcGlAccounts.ts / useProcBanks.ts   (all real; useX(guid, enabled) convention for Edit modals except useReceiptBooks — no GetByGuid endpoint)
@@ -266,13 +290,19 @@ src/
         │   ├── faculty.ts / campus.ts / country.ts / designation.ts / department.ts / permissionGroup.ts / intake.ts
         │   │   / programLevel.ts / programGroup.ts / stream.ts / enquiryStatus.ts / followUpStatus.ts / weekday.ts
         │   │   / unitType.ts / unitCategory.ts / repetitionTag.ts / courseUnit.ts / programMaster.ts                   (real)
+        │   ├── batch.ts           # /api/v1/academic/batches; full CRUD real, but intProgram/intSem/intStream/batchTime/bInCharge are int-only FKs with no confirmed guid source anywhere — see Data & API Architecture
+        │   ├── batchTime.ts       # /api/v1/academic/batchtimes; backs /config/batch-times (route lives in Config, code lives here); fully confirmed 2-field CRUD, no gotchas
+        │   ├── semester.ts        # /api/v1/academic/semesters/dropdownforprogram; GET-only, {semesterGuid, semName} scoped to a programGuid — no numeric id exposed
         │   └── skill.ts                                                                                              (still mock)
         │   # currency.ts and ledger.ts used to live here — currency.ts moved to lib/api/finance/currencyMaster.ts,
         │   # ledger.ts was deleted outright (superseded by the real lib/api/finance/ledger.ts)
-        ├── admission/             # new — per-domain data-access modules for Admission-domain masters routed under /config/*
-        │   ├── enquirySource.ts   # /api/v1/admissions/isbat-enquiry-sources
+        ├── admission/             # per-domain data-access modules for Admission-domain masters/features routed under /config/* or /admission/*
+        │   ├── enquirySource.ts   # /api/v1/admissions/isbat-enquiry-sources; UI label "Isbat Enquiry Source"
+        │   ├── enquirySourceMaster.ts  # /api/v1/admissions/enquiry-sources — a DIFFERENT resource from enquirySource.ts above, own guid space; backs /config/enquiry-source-master, UI label plain "Enquiry Source"
         │   ├── followUpMode.ts    # /api/v1/admissions/followup-modes
-        │   └── interestLevel.ts   # /api/v1/admissions/interest-levels
+        │   ├── interestLevel.ts   # /api/v1/admissions/interest-levels
+        │   ├── enquiry.ts         # /api/v1/admissions/enquiries; full CRUD real (list paginated, create, getById, update); EnquiryUpdateInput is a narrower shape than the create input — see Data & API Architecture
+        │   └── enquiryFollowUp.ts # /api/v1/admissions/enquiry-followups; list + getbyadvisor real and fully resolved (name strings, no numeric ids at all); create is real-endpoint-real but intEnquiry/followUpStatus/followUpMode/enquiryStatus/interestLevel have no confirmed numeric source — see Data & API Architecture
         ├── finance/               # per-domain data-access modules for /finance/* — all real
         │   ├── cooperate.ts       # /api/v1/finance/cooperates
         │   ├── discount.ts        # /api/v1/finance/discounts; calcType/status int enums — see Data & API Architecture note
@@ -329,6 +359,9 @@ src/app/<module>/<domain>/page.tsx → thin: reads the hook, tracks which row is
 | `programMaster.ts` | Real (create + list) | Backs `/academic/programme-master`; create goes through `apiPostForm` (`/api/v1/academic/program-master/save-complete`, multipart); list hits `GET /api/v1/academic/program-master?search=`. The confirmed list response replaced the old guessed `ProgramMaster` type — notably `streamGuids: string[]` (plural array; create only accepts one `streamGuid`), `currencyGuid` (nullable, seen `null` in every sample so far) instead of create's `currencyCode`, and `yearCount`/`semCount` echoed back directly rather than needing a separate programLevel lookup. GetById/Update/Delete still unconfirmed — Edit mode remains local-only. The table resolves `programGroupGuid`/`programLevelGuid`/`facultyGuid`/`streamGuids` to display names client-side via `useProgramGroups`/`useProgramLevels`/`useFaculties`/`useStreams`. Fee-line `intLedger`/`ledgerGuid`/`ledgerNum` are sourced from the real `useLedgers()` (previously hardcoded to one fake ledger regardless of the dropdown selection) |
 | `employee.ts` (own `src/lib/api/employee/`) | Real | `isApproved: boolean`, not a status string. Also `assignEmployeePermissionGroups`/`getEmployeePermissionGroups` (`PUT`/`GET /api/v1/users/admin/users/{employeeGuid}/permission-groups`) — see the Employee Permission Groups note below the table |
 | `permissionCatalog.ts` (own `src/lib/api/users/`) | Real | |
+| `batchTime.ts` | Real | Backs `/config/batch-times`; `/api/v1/academic/batchtimes`; two plain fields (`batchTime` max 50 chars, `batchTimeCode` max 10 chars); full CRUD incl. delete; fully confirmed spec, no int-enum surprises — the reference implementation to copy for a genuinely clean new master |
+| `semester.ts` | Real, GET-only | `/api/v1/academic/semesters/dropdownforprogram?programGuid=`; `{semesterGuid, semName}[]` scoped to one programme; no numeric id exposed, no Semester Master page of its own — dropdown lookup only, used by Batch create/edit |
+| `batch.ts` | Real (full CRUD) | Backs `/academic/batch-management`; `/api/v1/academic/batches`. **`intProgram`/`intSem`/`intStream`/`batchTime`/`bInCharge` are legacy int FKs with no confirmed guid-based source anywhere reachable from the frontend** — checked ProgramMaster, Stream, BatchTime (incl. its own `/batchtimes/dropdown`), Semester (`dropdownforprogram`), and Employee; all only expose guids, even in dedicated dropdown endpoints. Create/Edit forms send each as **that option's 1-based position in its fetched list** (not a confirmed id) — flagged in-UI via a warning banner. The list table resolves Programme/Semester/Stream/Batch Time names the same way, in reverse (`list[intValue - 1]`); Semester additionally requires guessing `intProgram → programGuid` first, then fetching *that* programme's semester list and guessing again — two compounded guesses. `Update` per `Update.bru` only actually applies `intStream`/`bStartDate`/`bEndDate`/`bInCharge` — `batchCode`/`batchTime` are accepted in the body (required by validation) but silently ignored server-side, so `EditBatchModal` just echoes back the existing values for those two rather than offering a picker. `GetByGuid` doesn't return `bInCharge` at all, so Edit can never prefill it — must be re-selected on every edit, same for Stream (no reverse int→guid map). Treat anything created/updated through these forms as unverified until the backend confirms the real int mappings |
 | `skill.ts` | **Still mock-only** | |
 
 `currency.ts` and `ledger.ts` used to live in this folder — both have since moved out: `currency.ts` relocated (as-is) to `lib/api/finance/currencyMaster.ts`, and the old mock-only `ledger.ts` was deleted outright now that Finance's real `lib/api/finance/ledger.ts` is the only ledger master.
@@ -339,15 +372,18 @@ To migrate another page to this pattern: copy the shape of `faculty.ts` + `useFa
 
 **Employee Permission Groups (`AssignEmployeePermissionsModal.tsx` / `EditEmployeePermissionsModal.tsx`, both in `modals/employee/`):** two separate actions on `/employee/employee-master` that both let you pick one or more Permission Master groups (`usePermissionGroups()`), preview each group's accessible/not-accessible breakdown per module/page — walked against the *full* permission catalog (`usePermissionCatalog()`), not just the group's own permission list, via `buildBreakdown()` in `src/lib/permissionBreakdown.ts` — and save the combined set via `useAssignEmployeePermissionGroups()` (`PUT`). Both modals seed their starting tabs from `useEmployeePermissionGroups(employeeGuid, isOpen)` (`GET`) and call the identical mutation on submit. They're kept as two separate components/buttons per product request even though they're functionally near-identical — a real tradeoff, since any future behavior change needs updating in both places rather than one shared implementation.
 
-**Admission module (`src/lib/api/admission/*`) — new, all real, route under `/config/*`:**
+**Admission module (`src/lib/api/admission/*`) — real, routed under `/config/*` and `/admission/*`:**
 
 | Domain | Status | Notes |
 |---|---|---|
-| `enquirySource.ts` | Real | Backs `/config/enquiry-source`; `/api/v1/admissions/isbat-enquiry-sources`; single field (`sourceName`); full CRUD, fetch-by-guid Edit convention |
+| `enquirySource.ts` | Real | Backs `/config/enquiry-source` (UI label "Isbat Enquiry Source"); `/api/v1/admissions/isbat-enquiry-sources`; single field (`sourceName`), keyed by `isbatSourceGuid`; full CRUD, fetch-by-guid Edit convention |
+| `enquirySourceMaster.ts` | Real | Backs `/config/enquiry-source-master` (UI label plain "Enquiry Source") — a genuinely **different** resource from `enquirySource.ts`, own guid space (`enquirySourceGuid`), single field `enquirySourceName`; `/api/v1/admissions/enquiry-sources`; full CRUD, fetch-by-guid Edit convention |
 | `followUpMode.ts` | Real | Backs `/config/followup-mode`; `/api/v1/admissions/followup-modes`; single field (`followUpModeName`); same conventions |
 | `interestLevel.ts` | Real | Backs `/config/interest-level`; `/api/v1/admissions/interest-levels`; single field (`interestLevelName`); same conventions |
+| `enquiry.ts` | Real | Backs `/admission/online-enquiry`, `/admission/ondesk-enquiry` (create), `/admission/enquiry-list` + `EnquiryAssignModal` (list/getById/update); `/api/v1/admissions/enquiries`. Create payload confirmed via `Create.bru` (`intakeGuid`/`campusGuid`/`programGuid` are real guids — `intIsbatSource` is the one field with no confirmed source, always sent `null`; `enquirySource` is hardcoded per-page: `1` for online, `2` for on-desk, unconfirmed). List/GetByGuid return a richer `EnquiryDto` (adds `enquiryStatus`/`followUpStatus`/`intIsbatSource` as raw ints with no confirmed label mapping, plus `campusName`/`programName` which are always `null` — resolved client-side instead). `EnquiryUpdateInput` (via `Update.bru`) is a **materially narrower** shape than create — only `advisorGuid`/`programGuid`/`campusGuid` (campusGuid required), not a full edit of the original fields |
+| `enquiryFollowUp.ts` | Real (list); real endpoint, unconfirmed fields (create) | Backs `/admission/enquiry-followup-master` (list = ALL, create), `/admission/enquiry-followup` (list = `getbyadvisor`, scoped server-side, same `EnquiryFollowUpListDto` shape); `/api/v1/admissions/enquiry-followups` + `/getbyadvisor`. List DTOs fully resolve `enquiryStatusName`/`followUpStatusName`/`enquirySourceName` as strings server-side — no ints to resolve. **Create (`Create.bru`) is a different story**: `intEnquiry`/`followUpStatus`/`followUpMode`/`enquiryStatus`/`interestLevel` are all required ints with no confirmed guid-based source anywhere (checked Enquiry's own GetByGuid/List, and the FollowUpStatus/FollowUpMode/InterestLevel/EnquiryStatus masters' real GET responses — all guid+name only, even their dedicated `/dropdown` endpoints). `NewFollowUpLogModal` sends each as that option's 1-based list position — flagged via an in-modal warning banner |
 
-All three: GET returns a plain array (`data: [...]`, not the paginated `items` envelope), matching `weekday.ts`'s shape. PUT/DELETE/GetByGuid follow the same `/{guid}` REST convention as the rest of the app by inference — not explicitly confirmed against a spec for any of these three.
+`enquirySource.ts`/`enquirySourceMaster.ts`/`followUpMode.ts`/`interestLevel.ts`: GET returns a plain array (`data: [...]`, not the paginated `items` envelope), matching `weekday.ts`'s shape. PUT/DELETE/GetByGuid follow the same `/{guid}` REST convention as the rest of the app by inference — not explicitly confirmed against a spec for any of them. `enquiry.ts`/`enquiryFollowUp.ts` are both paginated (`items`/`totalCount`/`pageNumber`/`pageSize` envelope), fully confirmed via real sample responses.
 
 **Finance module (`src/lib/api/finance/*`) — all real:**
 
@@ -373,6 +409,10 @@ All three: GET returns a plain array (`data: [...]`, not the paginated `items` e
 3. **GenSet** (`genSet.ts`, `/api/v1/finance/gen-sets`) — a wholly separate generic lookup table; a currency can also be represented here as `{ type: "CCY", condition: "UGX" }` with its own `genSetGuid`, unrelated to either of the above.
 
 When wiring a new domain's currency field, check whether it wants `intCurrency` or `currencyGuid` before assuming — and if `currencyGuid`, source it from `useFinanceCurrencies()`, not `useCurrencies()`.
+
+**Gotcha — some endpoints want a legacy int FK that genuinely has no guid-based source anywhere:** distinct from the "which currency guid" gotcha above, a handful of newer endpoints (`batch.ts`'s create/list, `enquiryFollowUp.ts`'s create) require plain-number foreign keys (`intProgram`, `intSem`, `intStream`, `batchTime`, `bInCharge`, `intEnquiry`, `followUpStatus`, `followUpMode`, `enquiryStatus`, `interestLevel`) where the corresponding master — even checked via its own dedicated `/dropdown` endpoint — only ever returns a guid, never a matching int. This was confirmed the hard way across several rounds this session (Program Master, Stream, BatchTime, Semester's `dropdownforprogram`, FollowUpStatus/FollowUpMode/InterestLevel/EnquiryStatus real GET responses all checked). The one exception found so far was `Enquiry.intIsbatSource`, which *is* a real populated int on the Enquiry entity despite the Isbat Enquiry Source master itself only exposing a guid — so it's always worth checking a *related* entity's own response before concluding a field is totally unreachable, not just the obvious master's list/dropdown.
+
+**Working pattern for these (adopted this session, not a backend fix):** build the picker as a real dropdown sourced from the actual master (good UX, and the guid is genuinely useful for other purposes), but submit **that option's 1-based position in its fetched list** as the numeric value — clearly flagged in an in-UI warning banner and in code comments, never silently. The same heuristic is applied in reverse for read-side display (`list[intValue - 1]`) where a page wants to show a name instead of a raw number (e.g. `batch-management`'s table) — reverse resolution is strictly a cosmetic best-effort guess, never used to decide what gets sent anywhere. Anything created or updated through one of these forms should be treated as **unverified** until the backend confirms the real int↔guid mapping; when that happens, the fix is contained to one mapping point per field, not a rewrite.
 
 ---
 
@@ -429,7 +469,8 @@ Controlled number inputs must use `string` state (e.g. `useState('25')`) so back
 
 - **Rail** (left icon strip): Admission, Academic, Finance, Student, Attendance (locked), Analytics (locked), Employee, Config, then a spacer and Admin/User & Role (locked). Finance is a full rail like Admission/Academic/Student/Employee/Config, with its own `finance/layout.tsx` (no auth gate, same as Config/Employee/Student). Clicking the active rail's own icon toggles the panel open/closed; clicking a different rail switches `activeRail` and forces the panel open.
 - **Panel** nav items render as `next/link` `<Link>` elements (not `<div onClick={router.push}>`), so browser-native ctrl/cmd-click "open in new tab" and right-click work, and Next can prefetch them.
-- **Config panel is grouped into four collapsible sub-sections** (via `sbSection(...)`): **Organization** (Faculty, Department, Designation, Campus, Country), **Academic Setup** (Specialization, Skill, Unit Type, Unit Category, Weekdays), **Admissions** (Enquiry Status, Enquiry Source, Followup Status, Followup Mode, Interest Level), **Access Control** (Permission Master). The old flat "Core Configuration" single section — and its short-lived "Finance" sub-section holding Ledger/Currency Master — no longer exist; both left Config for Finance.
+- **Config panel is grouped into four collapsible sub-sections** (via `sbSection(...)`): **Organization** (Faculty, Department, Designation, Campus, Country), **Academic Setup** (Specialization, Skill, Unit Type, Unit Category, Weekdays, **Batch Times**), **Admissions** (Enquiry Status, **Isbat Enquiry Source**, **Enquiry Source**, Followup Status, Followup Mode, Interest Level), **Access Control** (Permission Master). The old flat "Core Configuration" single section — and its short-lived "Finance" sub-section holding Ledger/Currency Master — no longer exist; both left Config for Finance.
+- **The rail (module icon strip) is "always visible" per its own code comment, but was actually `display: none` below `max-width:900px`** — a real bug (no substitute UI to switch modules on mobile; the hamburger button only toggles the *current* module's panel open/closed). Fixed: `.sb-rail`'s `display:none` was removed and `.main`'s mobile margin override changed from `margin-left: 0 !important` to `margin-left: var(--rail-w) !important`, so the rail stays visible and reserves its own space while the wider slide-out panel still overlays content instead of pushing it, matching the existing desktop overlay behavior for the panel.
 - **Finance panel is grouped into two sub-sections**: **Finance Core** (Cooperates, Discounts, Ledgers, Currency Master, Receipt Books, General Settings) and **Banking** (Banks, Bank Branches, Proc Banks, Proc GL Accounts).
 - On mount, `Sidebar` also eagerly calls `router.prefetch()` for **every** route across all six modules (not just the active rail), since a rail's `<Link>`s don't exist in the DOM — and so can't self-prefetch — until that rail is actually clicked once.
 - A small circular `.sb-toggle` button is pinned to the sidebar's right edge (`position: absolute; right: -12px` relative to the fixed-position `.sidebar`) to manually collapse/expand the panel, independent of the rail-click toggle.
@@ -440,10 +481,11 @@ Controlled number inputs must use `string` state (e.g. `useState('25')`) so back
 
 ## Auth, Sessions & Cookies
 
-- **Tokens:** the .NET backend issues httpOnly cookies (`erp_access`, `erp_refresh`-equivalent) on login/refresh responses. Client JS never reads these directly, and has no way to read the access token's expiry client-side.
+- **Tokens:** the .NET backend issues httpOnly cookies (`erp_access`, `erp_refresh` — both names confirmed via a real browser cookie dump) on login/refresh responses. Client JS never reads these directly, and has no way to read the access token's expiry client-side.
 - **Reactive refresh-and-retry (`src/lib/api/client.ts`):** every real call (`post`/`get`/`apiPost`/`apiPut`/`apiDelete`/`apiGet`) detects an "unauthorized" response and, for any endpoint other than `/auth/login`, `/auth/refresh`, `/auth/logout`, calls a shared `handleUnauthorized()` helper which refreshes (deduped across concurrent 401s via one in-flight promise) and retries the original call once. **Only a definitive `AuthError` from the refresh call itself triggers a hard redirect to `/login`** — a network error/timeout hitting `/auth/refresh` throws a plain error instead and is left to surface as a normal failure, so a transient blip doesn't force a logout. There is no proactive polling; refresh only fires reactively on a real 401, or once on `academic/layout.tsx` mount as a fallback (below).
 - **Session identity (`src/lib/session.ts`):** `setSessionIdentity({ displayName })` is set the moment login/OTP actually succeeds. `academic/layout.tsx` reads `getSessionIdentity()` **synchronously via a lazy `useState` initializer**, so an already-authenticated user navigating in from another module skips any auth-check spinner entirely; it only awaits `refreshSession()` (with a spinner) when identity truly isn't known locally yet (fresh tab / restored session). `academic/layout.tsx` is the *only* layout with this gate — Config/Employee/Student/Admission/Finance layouts render Header/Sidebar immediately with no auth check and no real `displayName` (Header defaults to `"Administrator"`).
-- **`middleware.ts`** (repo root, edge runtime): coarse presence-check guard — redirects to `/login` only when the path starts with `/academic` and the `erp_access` cookie is absent. **`/config/*`, `/employee/*`, `/student/*`, `/admission/*`, `/finance/*` are NOT covered by this guard** — only `academic/layout.tsx`'s own client-side check protects the Academic module; the other modules currently have no route-level protection at all beyond whatever the backend itself enforces per-request. Skipped entirely when `NEXT_PUBLIC_AUTH_MOCK=true`.
+- **`middleware.ts`** (repo root, edge runtime): coarse presence-check guard — redirects to `/login` only when the path starts with `/academic` and the `erp_refresh` cookie is absent (**not** `erp_access` — see the fix note below). **`/config/*`, `/employee/*`, `/student/*`, `/admission/*`, `/finance/*` are NOT covered by this guard** — only `academic/layout.tsx`'s own client-side check protects the Academic module; the other modules currently have no route-level protection at all beyond whatever the backend itself enforces per-request. Skipped entirely when `NEXT_PUBLIC_AUTH_MOCK=true`.
+- **Fixed this session — middleware was gating on the wrong cookie.** `erp_access` is a short-lived **session cookie** (`Expires: Session`, ~15min JWT inside — confirmed via a real browser cookie dump) that's gone after any browser restart, while `erp_refresh` is long-lived (~1 week real expiry). Gating the guard on `erp_access` alone forced a fresh login far more often than the refresh token's actual lifetime warranted — once `erp_access` was gone but `erp_refresh` was still valid, the client-side silent-refresh fallback in `academic/layout.tsx` (described above) never got a chance to run, because middleware bounced the request to `/login` before any client code executed. Now middleware only redirects when there's no session at all (no `erp_refresh`); if `erp_access` is missing but `erp_refresh` is present, the request is let through and `academic/layout.tsx`'s existing `refreshSession()` fallback handles it silently.
 - **Empty-body responses:** the real backend can respond `200` with no parseable JSON body (cookies-only auth). `apiPost`/`apiGet`/etc. treat that as success with `null` data — callers that expect an array must normalize `null` to `[]` themselves.
 
 ### Mock Credentials (`NEXT_PUBLIC_AUTH_MOCK=true`)
@@ -491,9 +533,3 @@ Tailwind config maps all CSS variables to Tailwind names (`bg-b500`, `text-g400`
 | `NEXT_PUBLIC_API_GATEWAY_URL` | Base URL for API calls (empty = relative paths in dev, proxied via `next.config.mjs` rewrites to `API_GATEWAY_URL`) |
 | `API_GATEWAY_URL` | Server-only: actual backend URL the Next server proxies `/api/*` to (not exposed to the browser). If unset, the rewrite is skipped entirely rather than producing an invalid `"undefined/api/*"` destination that would fail the build. |
 | `NEXT_PUBLIC_AUTH_MOCK` | `"true"` → skip real auth API, use hardcoded mock login/OTP/refresh responses, and skip the `middleware.ts` cookie guard. Also gates each `src/lib/api/**` domain module independently — see the Data & API Architecture table for which ones actually check it. |
-
----
-
-## Reference Bruno Collections (repo root)
-
-Root-level `Admissions/` and `Finance/` directories are [Bruno](https://www.usebruno.com/) API-collection files (`.bru`) — request/response specs for the real backend, not app source. Not part of the Next.js build; useful for confirming exact field names, enum values, and payload shapes before wiring a new domain (several real mismatches this round — `discount.ts`'s `calcType`, `programLevel.ts`'s `currencyGuid` — were only caught by cross-checking these). `Finance/Enums/*.bru` in particular documents every int-enum's value↔label mapping.
