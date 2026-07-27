@@ -59,7 +59,7 @@ const ACADEMIC_IDS = ['acad-dashboard', 'intake-master', 'skill-master', 'batch-
 const FINANCE_IDS = ['cooperates', 'discounts', 'ledgers', 'currency-master', 'receipt-books', 'gen-sets', 'banks', 'bank-branches', 'proc-banks', 'proc-gl-accounts']
 const STUDENT_IDS = ['student-master']
 const EMPLOYEE_IDS = ['employee-master']
-const CONFIG_IDS = ['faculty-master', 'department-master', 'designation-master', 'specialization', 'skill', 'campus-master', 'country-master', 'permission-master', 'enquiry-status', 'enquiry-source', 'enquiry-source-master', 'followup-status', 'followup-mode', 'interest-level', 'weekdays', 'unit-type', 'unit-category']
+const CONFIG_IDS = ['faculty-master', 'department-master', 'designation-master', 'specialization', 'skill', 'campus-master', 'country-master', 'permission-master', 'enquiry-status', 'enquiry-source', 'enquiry-source-master', 'followup-status', 'followup-mode', 'interest-level', 'weekdays', 'unit-type', 'unit-category', 'batch-times']
 
 export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {
   const router = useRouter()
@@ -323,6 +323,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
               {sbItem('unit-type', 'Unit Type Master', 'tag', undefined, 'config')}
               {sbItem('unit-category', 'Unit Category Master', 'tag', undefined, 'config')}
               {sbItem('weekdays', 'Weekdays', 'calendar', undefined, 'config')}
+              {sbItem('batch-times', 'Batch Times', 'timer', undefined, 'config')}
             </>)}
 
             {sbSection('sc-config-admissions', 'Admissions', <>

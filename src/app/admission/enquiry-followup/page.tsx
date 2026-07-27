@@ -4,51 +4,50 @@ import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
-import { SearchSelect } from '@/components/SearchSelect'
-import { LogFollowupModal, FollowupRecord } from '@/components/modals/admission/LogFollowupModal'
+import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignModal'
+import { useEnquiryFollowUpsByAdvisor } from '@/hooks/admission/useEnquiryFollowUps'
+import { useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
+import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 
-const INITIAL_ROWS: FollowupRecord[] = [
-  { ref: 'ENQ-26-0046', name: 'Nambi Doreen',   assignedTo: 'Jane Nalule',      followupDate: '2026-07-05', priority: 'Medium', status: 'Upcoming' },
-  { ref: 'ENQ-26-0044', name: 'Atim Connie',    assignedTo: 'David Okwir',      followupDate: '2026-07-03', priority: 'Low',    status: 'Due Today' },
-  { ref: 'ENQ-26-0042', name: 'Okello Joseph',  assignedTo: 'Jane Nalule',      followupDate: '2026-06-20', priority: 'High',   status: 'Overdue' },
-  { ref: 'ENQ-26-0041', name: 'Nakato Sarah',   assignedTo: 'David Okwir',      followupDate: '2026-06-15', priority: 'Medium', status: 'Overdue' },
-  { ref: 'ENQ-26-0039', name: 'Ssali Brian',    assignedTo: 'Peter Ssentongo',  followupDate: '2026-06-10', priority: 'Low',    status: 'Completed' },
-  { ref: 'ENQ-26-0038', name: 'Mugisha Brian',  assignedTo: 'Grace Achieng',    followupDate: '2026-06-08', priority: 'Medium', status: 'Completed' },
-]
+const PAGE_SIZE = 10
 
-function priorityBadge(p: string) {
-  return p === 'High' ? 'badge-red' : p === 'Medium' ? 'badge-amber' : 'badge-grey'
-}
-
-function statusBadge(s: string) {
-  const map: Record<string, string> = { Overdue: 'badge-red', 'Due Today': 'badge-amber', Upcoming: 'badge-blue', Completed: 'badge-green' }
-  return map[s] || 'badge-grey'
+function nameBadge(name: string | null, cls: string) {
+  if (!name) return <span className="badge badge-grey">—</span>
+  return <span className={`badge ${cls}`}>{name}</span>
 }
 
 export default function EnquiryFollowupPage() {
   const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
-  const [rows, setRows] = useState<FollowupRecord[]>(INITIAL_ROWS)
-  const [selected, setSelected] = useState<FollowupRecord | null>(null)
-  const [statusFilter, setStatusFilter] = useState('')
+  const [page, setPage] = useState(1)
+  const [viewingGuid, setViewingGuid] = useState<string | null>(null)
+
+  const { data, isLoading } = useEnquiryFollowUpsByAdvisor(page, PAGE_SIZE)
+  const rows = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const updateEnquiry = useUpdateEnquiry()
+
+  // programName comes back null on every row from the real API — resolve it
+  // client-side, same fallback pattern as enquiry-list/enquiry-followup-master.
+  const { data: programs = [] } = useProgramMasters()
+  function resolveProgramName(row: { programGuid: string | null; programName: string | null }) {
+    if (row.programName) return row.programName
+    if (!row.programGuid) return '—'
+    return programs.find(p => p.programGuid === row.programGuid)?.programName ?? '—'
+  }
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
 
-  function handleLog(row: FollowupRecord) { setSelected(row); openModal('log-followup-modal') }
-
-  function applyLog(ref: string, outcome: string, completed: boolean) {
-    setRows(prev => prev.map(r => r.ref === ref ? { ...r, status: completed ? 'Completed' : r.status } : r))
+  function openViewModal(guid: string) {
+    setViewingGuid(guid)
+    openModal('enquiry-assign-modal')
   }
-
-  const filtered = rows.filter(r => !statusFilter || r.status === statusFilter)
-
-  const dueToday  = rows.filter(r => r.status === 'Due Today').length
-  const overdue   = rows.filter(r => r.status === 'Overdue').length
-  const upcoming  = rows.filter(r => r.status === 'Upcoming').length
-  const completed = rows.filter(r => r.status === 'Completed').length
 
   return (
     <div id="page-enquiry-followup">
@@ -62,70 +61,72 @@ export default function EnquiryFollowupPage() {
         </div>
       </div>
 
+      {/* Only Total Follow-ups is wired to real data (totalCount) — the old
+          Overdue/Due Today/Upcoming/Completed tiles depended on a
+          client-only status bucket that doesn't exist on the real
+          EnquiryFollowUpListDto, so they're dropped rather than faked. */}
       <div className="stats-row">
-        <div className="stat-card [--b700:var(--red)] [--b400:#f87171]">
-          <div className="flex items-center gap-2 mb-1"><i className="lni lni-warning text-clr-red" /><span className="text-sm text-g500">Overdue</span></div>
-          <p className="text-2xl font-semibold text-clr-red">{overdue}</p>
-        </div>
-        <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]">
-          <div className="flex items-center gap-2 mb-1"><i className="lni lni-timer text-clr-amber" /><span className="text-sm text-g500">Due Today</span></div>
-          <p className="text-2xl font-semibold text-clr-amber">{dueToday}</p>
-        </div>
         <div className="stat-card">
-          <div className="flex items-center gap-2 mb-1"><i className="lni lni-calendar text-b500" /><span className="text-sm text-g500">Upcoming</span></div>
-          <p className="text-2xl font-semibold text-g900">{upcoming}</p>
-        </div>
-        <div className="stat-card [--b700:var(--green)] [--b400:#34d399]">
-          <div className="flex items-center gap-2 mb-1"><i className="lni lni-checkmark text-clr-green" /><span className="text-sm text-g500">Completed</span></div>
-          <p className="text-2xl font-semibold text-clr-green">{completed}</p>
+          <div className="flex items-center gap-2 mb-1"><i className="lni lni-users text-b500" /><span className="text-sm text-g500">Total Follow-ups</span></div>
+          <p className="text-2xl font-semibold text-g900">{totalCount.toLocaleString()}</p>
         </div>
       </div>
 
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-g800">Allocated Follow-ups &mdash; 2026</h2>
-          <div className="flex gap-2">
-            <SearchSelect
-              className="w-40"
-              options={[{ value: '', label: 'All Statuses' }, { value: 'Overdue', label: 'Overdue' }, { value: 'Due Today', label: 'Due Today' }, { value: 'Upcoming', label: 'Upcoming' }, { value: 'Completed', label: 'Completed' }]}
-              value={statusFilter}
-              onChange={setStatusFilter}
-            />
-          </div>
+          <h2 className="text-base font-semibold text-g800">Allocated Follow-ups</h2>
         </div>
         <ScrollTable>
           <table>
-            <thead><tr><th style={{ width: 48 }}></th><th>Enq. Ref</th><th>Name</th><th>Assigned To</th><th>Follow-up Date</th><th>Priority</th><th>Status</th></tr></thead>
+            <thead><tr><th style={{ width: 48 }}></th><th>Enq. Ref</th><th>Student Name</th><th>Programme Interest</th><th>Enquiry Status</th><th>Follow-up Status</th><th>Source</th><th>Next Follow-up</th></tr></thead>
             <tbody>
-              {filtered.map(r => (
-                <tr key={r.ref}>
+              {isLoading
+                ? <TableLoadingState colSpan={999} />
+                : rows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
+                  : null}
+              {rows.map(r => (
+                <tr key={r.enquiryGuid}>
                   <td>
                     <ActionMenu>
                       <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/payment')}><i className="lni lni-arrow-right" /> Convert</button>
-                      {r.status !== 'Completed'
-                        ? <button className="btn btn-neu btn-sm" onClick={() => handleLog(r)}><i className="lni lni-phone" /> Log Follow-up</button>
-                        : <button className="btn btn-neu btn-sm" onClick={() => handleLog(r)}><i className="lni lni-eye" /> View</button>}
+                      <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.enquiryGuid)}><i className="lni lni-eye" /> View</button>
                     </ActionMenu>
                   </td>
-                  <td className="font-mono text-sm">{r.ref}</td>
-                  <td>{r.name}</td>
-                  <td>{r.assignedTo}</td>
-                  <td className="text-sm text-g600">{r.followupDate}</td>
-                  <td><span className={`badge ${priorityBadge(r.priority)}`}>{r.priority}</span></td>
-                  <td><span className={`badge ${statusBadge(r.status)}`}>{r.status}</span></td>
+                  <td className="font-mono text-sm">{r.enquiryCode}</td>
+                  <td>{r.studentName}</td>
+                  <td>{resolveProgramName(r)}</td>
+                  <td>{nameBadge(r.enquiryStatusName, 'badge-amber')}</td>
+                  <td>{nameBadge(r.followUpStatusName, 'badge-blue')}</td>
+                  <td>{nameBadge(r.enquirySourceName, 'badge-grey')}</td>
+                  <td className="text-sm text-g600">{r.nextFollowDate ? r.nextFollowDate.slice(0, 10) : '—'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </ScrollTable>
+
+        {totalCount > 0 && (
+          <div className="flex items-center justify-between mt-3" style={{ fontSize: 12.5, color: 'var(--g500)' }}>
+            <span>Page {page} of {totalPages} · {totalCount.toLocaleString()} follow-ups</span>
+            <div className="flex gap-2">
+              <button className="btn btn-neu btn-sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
+                <i className="lni lni-chevron-left" /> Previous
+              </button>
+              <button className="btn btn-neu btn-sm" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
+                Next <i className="lni lni-chevron-right" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      <LogFollowupModal
-        isOpen={openModals.has('log-followup-modal')}
-        onClose={() => closeModal('log-followup-modal')}
+      <EnquiryAssignModal
+        isOpen={openModals.has('enquiry-assign-modal')}
+        onClose={() => closeModal('enquiry-assign-modal')}
         showToast={showToast}
-        record={selected}
-        onLog={applyLog}
+        enquiryGuid={viewingGuid}
+        updateEnquiry={updateEnquiry}
       />
       <Toast toast={toast} />
     </div>

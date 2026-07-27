@@ -1,166 +1,219 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useMemo } from 'react'
+import { useQueries } from '@tanstack/react-query'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { NewBatchModal } from '@/components/modals/academic/NewBatchModal'
 import { EditBatchModal } from '@/components/modals/academic/EditBatchModal'
 import { Toast } from '@/components/Toast'
-import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
-import { SearchSelect } from '@/components/SearchSelect'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { useBatches, useCreateBatch, useUpdateBatch, useDeleteBatch, Batch } from '@/hooks/academic/useBatches'
+import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useStreams } from '@/hooks/config/useStreams'
+import { useBatchTimes } from '@/hooks/config/useBatchTimes'
+import { getSemestersForProgram } from '@/lib/api/academic/semester'
+
+const PAGE_SIZE = 20
+
+// Same 1-based "list position = legacy int id" heuristic used to WRITE
+// intProgram/intStream/batchTime on create — applied here in reverse to
+// resolve a name for display. Neither direction is a confirmed mapping
+// (see the note on Batch in lib/api/academic/batch.ts), so a resolved name
+// is a best-effort guess, not verified fact — out-of-range falls back to
+// the raw "#N" so a bad guess is at least visible as a guess rather than
+// silently showing nothing.
+function resolveByPosition<T>(list: T[], intValue: number, label: (item: T) => string): string {
+  const item = list[intValue - 1]
+  return item ? label(item) : `#${intValue}`
+}
 
 export default function Page() {
-  const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [filters, setFilters] = useState<Record<string, string[]>>({})
-  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [editingBatchGuid, setEditingBatchGuid] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Batch | null>(null)
 
-  function nav(id: string) { router.push('/academic/' + id) }
+  const { data, isLoading } = useBatches(page, PAGE_SIZE)
+  const rows = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const createBatch = useCreateBatch()
+  const updateBatch  = useUpdateBatch()
+  const deleteBatch  = useDeleteBatch()
+
+  const { data: programs = [] }   = useProgramMasters()
+  const { data: streams = [] }    = useStreams()
+  const { data: batchTimes = [] } = useBatchTimes()
+
+  function programName(intProgram: number) {
+    return resolveByPosition(programs, intProgram, p => p.programName)
+  }
+  function streamName(intStream: number) {
+    return resolveByPosition(streams, intStream, s => s.streamName)
+  }
+  function batchTimeName(batchTime: number) {
+    return resolveByPosition(batchTimes, batchTime, b => b.batchTime)
+  }
+
+  // Semester is scoped per-programme (no global semester list), so
+  // resolving it means: guess this row's programGuid from intProgram, fetch
+  // that programme's semester list, then apply the same position guess a
+  // second time within it — two compounded guesses, weaker than the other
+  // three columns. Only fetched for the distinct programGuids actually
+  // present on the current page.
+  const programGuidsOnPage = useMemo(() => {
+    const guids = rows.map(r => programs[r.intProgram - 1]?.programGuid).filter((g): g is string => !!g)
+    return Array.from(new Set(guids))
+  }, [rows, programs])
+
+  const semesterQueries = useQueries({
+    queries: programGuidsOnPage.map(programGuid => ({
+      queryKey: ['semesters', 'forProgram', programGuid],
+      queryFn: () => getSemestersForProgram(programGuid),
+      staleTime: Infinity,
+      gcTime: Infinity,
+    })),
+  })
+
+  const semestersByProgram = useMemo(() => {
+    const map: Record<string, { semesterGuid: string; semName: string }[]> = {}
+    programGuidsOnPage.forEach((guid, i) => { map[guid] = semesterQueries[i]?.data ?? [] })
+    return map
+  }, [programGuidsOnPage, semesterQueries])
+
+  function semesterName(intProgram: number, intSem: number) {
+    const programGuid = programs[intProgram - 1]?.programGuid
+    if (!programGuid) return `#${intSem}`
+    return resolveByPosition(semestersByProgram[programGuid] ?? [], intSem, s => s.semName)
+  }
+
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  useEffect(() => {
-    function closeFilter(e: MouseEvent) {
-      const target = e.target as HTMLElement
-      if (!target.closest('th')) setOpenFilter(null)
-    }
-    document.addEventListener('click', closeFilter)
-    return () => document.removeEventListener('click', closeFilter)
-  }, [])
+  function openEditModal(guid: string) {
+    setEditingBatchGuid(guid)
+    openModal('edit-batch-modal')
+  }
 
-  const rows = [
-    { batchCode: 'BSC-IT-S26-DA',  programme: 'BSc. IT 2026',  progTag: 'BCA-2026', semester: 'Sem 1', type: 'Day',     subBatch: 'DA (sub-batch A)',              subBadge: 'badge-grey',  students: 42,  incharge: 'Dr. Ssekibuule Ronald', ttBadge: 'badge-green', ttLabel: 'Set',     ttIcon: true,  rowClass: '',       variant: 'edit' },
-    { batchCode: 'BSC-IT-S26-DB',  programme: 'BSc. IT 2026',  progTag: 'BCA-2026', semester: 'Sem 1', type: 'Day',     subBatch: 'DB (sub-batch B)',              subBadge: 'badge-blue',  students: 38,  incharge: 'Ms. Namutebi Joyce',    ttBadge: 'badge-green', ttLabel: 'Set',     ttIcon: true,  rowClass: '',       variant: 'edit' },
-    { batchCode: 'BBA-S26-DA',     programme: 'BBA 2021',      progTag: 'BBA-2021', semester: 'Sem 3', type: 'Day',     subBatch: 'DA',                            subBadge: 'badge-grey',  students: 38,  incharge: 'Prof. Mukasa Charles',  ttBadge: 'badge-amber', ttLabel: 'Draft',   ttIcon: false, rowClass: '',       variant: 'edit' },
-    { batchCode: 'MBA-S26-EA',     programme: 'MBA 2024',      progTag: 'MBA-2024', semester: 'Sem 1', type: 'Evening', subBatch: 'EA',                            subBadge: 'badge-grey',  students: 24,  incharge: 'Dr. Kato Andrew',       ttBadge: 'badge-green', ttLabel: 'Set',     ttIcon: true,  rowClass: '',       variant: 'edit' },
-    { batchCode: 'BSC-VFX-S26-??', programme: 'BSc. VFX 2026', progTag: 'VFX-2026', semester: 'Sem 1', type: 'Day',     subBatch: '102 students — needs sub-batching', subBadge: 'badge-amber', students: 102, incharge: '—',                ttBadge: 'badge-red',   ttLabel: 'Not Set', ttIcon: false, rowClass: 'flagged', variant: 'split' },
-  ]
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
-  )
-
-  function fth(label: string, col: string, opts: string[]) {
-    return (
-      <FilterTh
-        label={label}
-        opts={opts}
-        isOpen={openFilter === col}
-        activeFilter={filters[col] ?? []}
-        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
-        onClose={() => setOpenFilter(null)}
-      />
-    )
+  function confirmDeleteBatch() {
+    if (!deleteTarget) return
+    deleteBatch.mutate(deleteTarget.batchGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Batch deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete batch', 'error'),
+    })
   }
 
   return (
     <>
       <div className="page active">
         <div className="pg-hdr">
-          <div><div className="pg-title">Batch Management</div><div className="pg-sub">Create batches per intake · Auto-generate batch codes · Sub-batch large cohorts · Assign Batch In-Charge</div></div>
+          <div><div className="pg-title">Batch Management</div><div className="pg-sub">Create batches per intake · Assign Batch In-Charge</div></div>
           <button className="btn btn-primary" onClick={() => openModal('new-batch-modal')}><i className="lni lni-plus"></i> Create Batch</button>
         </div>
 
-        <div className="info-box mb-[14px]">
-          <i className="lni lni-information"></i> <span>Batch Code is <strong>system-generated</strong> as: <span className="font-mono bg-[var(--b100)] py-[2px] px-[6px] rounded">Course Code + Session/Year + Batch Type + Sub-Batch</span> e.g. <strong>BSc-VFX-S26-DA</strong>. Large cohorts (100+ students) are split into <strong>sub-batches (DA, DB)</strong> of ~50 for separate timetabling and faculty allocation.</span>
-        </div>
         <div className="warn-box mb-[14px]">
           <i className="lni lni-warning"></i> <span>Admissions occur <strong>every semester (twice a year)</strong>. A new batch must be created for each intake. <strong>Specialization</strong> is assigned to the individual student — not the batch. <strong>Batch In-Charges</strong> can view batch reports but have no direct relation to programme courses.</span>
         </div>
-        <div className="info-box mb-[18px]">
-          <i className="lni lni-cog"></i> <span><strong>Automation:</strong> Batch creation can be triggered automatically during intake setup. Enabling <strong>Create Batches</strong> on the Create New Intake form will generate batches for all active programmes at the back end — no manual entry needed.</span>
-        </div>
 
+        {/* Programme/Semester/Stream/Batch Time names below are resolved by
+            list position, not a confirmed id mapping — see resolveByPosition
+            above and the note on Batch in lib/api/academic/batch.ts. */}
         <div className="g4 mb-[18px]">
-          <div className="stat-card"><div className="stat-lbl">Active Batches</div><div className="stat-num">18</div><div className="stat-sub up">Spring 2026</div></div>
-          <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]"><div className="stat-lbl">Pending Sub-batch</div><div className="stat-num text-clr-amber">3</div><div className="stat-sub warn">Cohorts &gt; 50 students</div></div>
-          <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Students</div><div className="stat-num text-clr-green">1,284</div><div className="stat-sub up">Across all batches</div></div>
-          <div className="stat-card [--b700:var(--purple)] [--b400:#a78bfa]"><div className="stat-lbl">Batch In-Charges</div><div className="stat-num text-clr-purple">18</div><div className="stat-sub up">Assigned</div></div>
+          <div className="stat-card"><div className="stat-lbl">Total Batches</div><div className="stat-num">{totalCount.toLocaleString()}</div></div>
         </div>
 
         <div className="card">
           <div className="card-hdr">
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-users"></i></span> Active Batches — Spring 2026 (20261)</div>
-            <div className="flex gap-2">
-              <SearchSelect className="w-auto text-[var(--fs-sm)]" options={['All Programmes', 'BSc. IT', 'BBA', 'MBA', 'BEng. Civil']} />
-              <SearchSelect className="w-auto text-[var(--fs-sm)]" options={['All Types', 'Day', 'Evening', 'Weekend', 'Distance/Online']} />
-              <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
-            </div>
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-users"></i></span> Batches</div>
           </div>
-          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
+          <ScrollTable>
             <table>
-              <thead><tr><th style={{ width: 48 }}></th><th>Batch Code</th>{fth('Programme (Version)', 'programme', ['BSc. IT 2026', 'BBA 2021', 'MBA 2024', 'BSc. VFX 2026'])}{fth('Semester', 'semester', ['Sem 1', 'Sem 3'])}{fth('Type', 'type', ['Day', 'Evening', 'Weekend'])}<th>Sub-Batch</th><th>Students</th><th>Batch In-Charge</th><th>Timetable</th></tr></thead>
+              <thead>
+                <tr>
+                  <th style={{ width: 48 }}></th>
+                  <th>Batch Code</th>
+                  <th>Programme</th>
+                  <th>Semester</th>
+                  <th>Stream</th>
+                  <th>Batch Time</th>
+                  <th>Start Date</th>
+                  <th>End Date</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
               <tbody>
-                {filteredRows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
-                  : null}
-                {filteredRows.map((r, i) => (
-                  <tr key={i} className={r.rowClass}>
+                {isLoading
+                  ? <TableLoadingState colSpan={999} />
+                  : rows.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
+                    : null}
+                {rows.map(r => (
+                  <tr key={r.batchGuid}>
                     <td>
                       <ActionMenu>
-                        {r.variant === 'edit'
-                          ? <button className="btn btn-neu btn-sm" onClick={() => openModal('edit-batch-modal')}><i className="lni lni-pencil"></i> Edit</button>
-                          : <button className="btn btn-amber btn-sm" onClick={() => openModal('new-batch-modal')}>Split → Sub-batches</button>
-                        }
+                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.batchGuid)}><i className="lni lni-pencil"></i> Edit</button>
+                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>
                       </ActionMenu>
                     </td>
-                    <td>
-                      <span className={`font-bold font-mono ${r.variant === 'split' ? 'text-clr-amber' : 'text-blue'}`}>{r.batchCode}</span>
-                    </td>
-                    <td>{r.programme} <span className="pill pill-blue">{r.progTag}</span></td>
-                    <td>{r.semester}</td>
-                    <td>
-                      <span className={`badge ${r.type === 'Evening' ? 'badge-purple' : 'badge-blue'}`}>{r.type}</span>
-                    </td>
-                    <td>
-                      <span className={`badge ${r.subBadge}`}>
-                        {r.subBadge === 'badge-amber' && <i className="lni lni-warning"></i>} {r.subBatch}
-                      </span>
-                    </td>
-                    <td>{r.students}</td>
-                    <td>{r.incharge}</td>
-                    <td>
-                      <span className={`badge ${r.ttBadge}`}>
-                        {r.ttIcon && <i className="lni lni-checkmark"></i>} {r.ttLabel}
-                      </span>
-                    </td>
+                    <td><span className="font-bold font-mono text-blue">{r.batchCode}</span></td>
+                    <td title="Best-effort match by list position, not a confirmed id">{programName(r.intProgram)}</td>
+                    <td title="Best-effort match by list position, not a confirmed id">{semesterName(r.intProgram, r.intSem)}</td>
+                    <td title="Best-effort match by list position, not a confirmed id">{streamName(r.intStream)}</td>
+                    <td title="Best-effort match by list position, not a confirmed id">{batchTimeName(r.batchTime)}</td>
+                    <td className="text-sm text-g600">{r.bStartDate ? r.bStartDate.slice(0, 10) : '—'}</td>
+                    <td className="text-sm text-g600">{r.bEndDate ? r.bEndDate.slice(0, 10) : '—'}</td>
+                    <td><span className={`badge ${r.active ? 'badge-green' : 'badge-grey'}`}>{r.active ? 'Active' : 'Inactive'}</span></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </ScrollTable>
-        </div>
 
-        <div className="card">
-          <div className="card-hdr">
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-cog"></i></span> Batch Code Generator</div>
-            <span className="badge badge-blue">Auto-generated</span>
-          </div>
-          <div className="g4">
-            <div className="fg"><div className="lbl">Course Code</div><input className="ctrl" type="text" placeholder="e.g. BSC-IT" /></div>
-            <div className="fg"><div className="lbl">Session / Year</div>
-              <SearchSelect options={[{ value: 'S26', label: 'S26 (Spring 2026)' }, { value: 'F26', label: 'F26 (Fall 2026)' }, { value: 'S27', label: 'S27 (Spring 2027)' }]} />
+          {totalCount > 0 && (
+            <div className="flex items-center justify-between mt-3" style={{ fontSize: 12.5, color: 'var(--g500)' }}>
+              <span>Page {page} of {totalPages} · {totalCount.toLocaleString()} batches</span>
+              <div className="flex gap-2">
+                <button className="btn btn-neu btn-sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
+                  <i className="lni lni-chevron-left" /> Previous
+                </button>
+                <button className="btn btn-neu btn-sm" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
+                  Next <i className="lni lni-chevron-right" />
+                </button>
+              </div>
             </div>
-            <div className="fg"><div className="lbl">Batch Type</div>
-              <SearchSelect options={[{ value: 'D', label: 'D — Day' }, { value: 'E', label: 'E — Evening' }, { value: 'W', label: 'W — Weekend' }, { value: 'O', label: 'O — Distance/Online' }]} />
-            </div>
-            <div className="fg"><div className="lbl">Sub-batch</div>
-              <SearchSelect options={[{ value: 'A', label: 'A (first sub-batch)' }, { value: 'B', label: 'B (second sub-batch)' }, { value: 'C', label: 'C (third sub-batch)' }]} />
-            </div>
-          </div>
-          <div className="mt-[14px] p-[14px] bg-b50 border-[1.5px] border-[var(--b200)] rounded-[var(--rsm)] flex items-center gap-4">
-            <span className="text-[var(--fs-xs)] font-bold text-g500 uppercase">Generated Batch Code:</span>
-            <span className="font-mono text-[var(--fs-2xl)] font-extrabold text-b800">BSC-IT-S26-DA</span>
-          </div>
+          )}
         </div>
       </div>
-      <NewBatchModal isOpen={openModals.has('new-batch-modal')} onClose={() => closeModal('new-batch-modal')} showToast={showToast} />
-      <EditBatchModal isOpen={openModals.has('edit-batch-modal')} onClose={() => closeModal('edit-batch-modal')} showToast={showToast} />
+      <NewBatchModal isOpen={openModals.has('new-batch-modal')} onClose={() => closeModal('new-batch-modal')} showToast={showToast} createBatch={createBatch} />
+      <EditBatchModal
+        isOpen={openModals.has('edit-batch-modal')}
+        onClose={() => closeModal('edit-batch-modal')}
+        showToast={showToast}
+        batchGuid={editingBatchGuid}
+        updateBatch={updateBatch}
+      />
       <Toast toast={toast} />
+
+      {deleteTarget && (
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
+            <div className="perm-delete-title">Delete {deleteTarget.batchCode}?</div>
+            <div className="perm-delete-sub">
+              This will permanently delete this batch. This can&apos;t be undone.
+            </div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" disabled={deleteBatch.isPending} onClick={confirmDeleteBatch}>
+                <i className="lni lni-trash-can"></i> {deleteBatch.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
