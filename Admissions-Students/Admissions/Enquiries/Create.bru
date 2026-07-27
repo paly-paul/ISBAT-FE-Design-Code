@@ -1,0 +1,41 @@
+meta {
+  name: Create Enquiry
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admissions/enquiries
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "intakeGuid": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "campusGuid": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "enquirySource": 1,
+    "studentName": "John Doe",
+    "enquiryDate": "2026-07-21T00:00:00",
+    "mobile": "0700000000",
+    "email": "john.doe@example.com",
+    "countryCode": "UG",
+    "dob": "2000-01-01T00:00:00",
+    "remarks": null,
+    "programGuid": null,
+    "intIsbatSource": null,
+    "sourceName": null,
+    "enquiryTag": null
+  }
+}
+
+docs {
+  Creates a new admission enquiry.
+
+  Success (201): data = created EnquiryDto.
+  Failure: 400 `validation_error`.
+}

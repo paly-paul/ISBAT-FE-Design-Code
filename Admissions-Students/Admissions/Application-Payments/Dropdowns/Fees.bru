@@ -1,0 +1,21 @@
+meta {
+  name: Get Fee Dropdown
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admissions/application-payments/dropdowns/fees?programGuid=3fa85f64-5717-4562-b3fc-2c963f66afa6
+  body: none
+  auth: none
+}
+
+params:query {
+  programGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+}
+
+docs {
+  Returns fee heads available for a given program.
+
+  Success (200): data = List<ProgramFeeHeadInfoDto>.
+}

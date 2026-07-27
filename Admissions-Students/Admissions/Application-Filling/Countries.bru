@@ -1,0 +1,17 @@
+meta {
+  name: Countries Dropdown
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admissions/application-filling/countries
+  body: none
+  auth: none
+}
+
+docs {
+  Returns a list of countries for the nationality/country of origin dropdown on the application form.
+
+  Success (200): data = List<CountryDropdownDto>.
+}

@@ -1,0 +1,25 @@
+meta {
+  name: Get Follow-Ups By Advisor
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admissions/enquiry-followups/getbyadvisor?page=1&pageSize=10
+  body: none
+  auth: none
+}
+
+params:query {
+  page: 1
+  pageSize: 10
+  date: ~
+
+}
+
+docs {
+  Returns a paginated list of follow-ups assigned to the currently authenticated advisor.
+  Optionally filter by date (ISO 8601).
+
+  Success (200): data = PagedResult<EnquiryFollowUpListDto>.
+}

@@ -1,42 +1,44 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
-import { NewEnquirySourceModal } from '@/components/modals/academic/NewEnquirySourceModal'
-import { EditEnquirySourceModal } from '@/components/modals/academic/EditEnquirySourceModal'
-import { useEnquirySources, useCreateEnquirySource, useUpdateEnquirySource, useDeleteEnquirySource, EnquirySource } from '@/hooks/admission/useEnquirySources'
+import { NewEnquirySourceMasterModal } from '@/components/modals/academic/NewEnquirySourceMasterModal'
+import { EditEnquirySourceMasterModal } from '@/components/modals/academic/EditEnquirySourceMasterModal'
+import { useEnquirySourceMasters, useCreateEnquirySourceMaster, useUpdateEnquirySourceMaster, useDeleteEnquirySourceMaster, EnquirySourceMaster } from '@/hooks/admission/useEnquirySourceMasters'
 
 export default function Page() {
-  const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingSourceGuid, setEditingSourceGuid] = useState<string | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<EnquirySource | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<EnquirySourceMaster | null>(null)
 
-  const { data: rows = [], isLoading } = useEnquirySources()
-  const createEnquirySource = useCreateEnquirySource()
-  const updateEnquirySource = useUpdateEnquirySource()
-  const deleteEnquirySource = useDeleteEnquirySource()
+  // No created-date field on this record (just guid + name) — approximate
+  // "newest first" by reversing the list, assuming the backend returns rows
+  // in insertion order. .slice() first so react-query's cached array (rows)
+  // isn't mutated in place by reverse().
+  const { data: rows = [], isLoading } = useEnquirySourceMasters()
+  const rowsNewestFirst = rows.slice().reverse()
+  const createEnquirySourceMaster = useCreateEnquirySourceMaster()
+  const updateEnquirySourceMaster = useUpdateEnquirySourceMaster()
+  const deleteEnquirySourceMaster = useDeleteEnquirySourceMaster()
 
-  function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
   function openEditModal(guid: string) {
     setEditingSourceGuid(guid)
-    openModal('edit-enquiry-source-modal')
+    openModal('edit-enquiry-source-master-modal')
   }
 
-  function confirmDeleteEnquirySource() {
+  function confirmDeleteEnquirySourceMaster() {
     if (!deleteTarget) return
-    deleteEnquirySource.mutate(deleteTarget.isbatSourceGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Isbat enquiry source deleted successfully') },
-      onError: (error: Error) => showToast(error.message || 'Failed to delete Isbat enquiry source', 'error'),
+    deleteEnquirySourceMaster.mutate(deleteTarget.enquirySourceGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Enquiry source deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete enquiry source', 'error'),
     })
   }
 
@@ -45,16 +47,16 @@ export default function Page() {
       <div className="page active">
         <div className="pg-hdr">
           <div>
-            <div className="pg-title">Isbat Enquiry Source Master</div>
+            <div className="pg-title">Enquiry Source Master</div>
             <div className="pg-sub">Manage the channels through which admission enquiries originate</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-enquiry-source-modal')}>
-            <i className="lni lni-plus"></i> Add Isbat Enquiry Source
+          <button className="btn btn-primary" onClick={() => openModal('new-enquiry-source-master-modal')}>
+            <i className="lni lni-plus"></i> Add Enquiry Source
           </button>
         </div>
         <div className="card">
           <div className="card-hdr">
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-compass"></i></span> Isbat Enquiry Sources</div>
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-volume"></i></span> Enquiry Sources</div>
           </div>
           <ScrollTable>
             <table>
@@ -67,14 +69,14 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : rows.length === 0
+                  : rowsNewestFirst.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
-                {rows.map((r) => (
-                  <tr key={r.isbatSourceGuid}>
+                {rowsNewestFirst.map((r) => (
+                  <tr key={r.enquirySourceGuid}>
                     <td>
                       <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.isbatSourceGuid)}>
+                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.enquirySourceGuid)}>
                           <i className="lni lni-pencil"></i> Edit
                         </button>
                         <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
@@ -82,7 +84,7 @@ export default function Page() {
                         </button>
                       </ActionMenu>
                     </td>
-                    <td><strong>{r.sourceName}</strong></td>
+                    <td><strong>{r.enquirySourceName}</strong></td>
                   </tr>
                 ))}
               </tbody>
@@ -90,18 +92,18 @@ export default function Page() {
           </ScrollTable>
         </div>
       </div>
-      <NewEnquirySourceModal
-        isOpen={openModals.has('new-enquiry-source-modal')}
-        onClose={() => closeModal('new-enquiry-source-modal')}
+      <NewEnquirySourceMasterModal
+        isOpen={openModals.has('new-enquiry-source-master-modal')}
+        onClose={() => closeModal('new-enquiry-source-master-modal')}
         showToast={showToast}
-        createEnquirySource={createEnquirySource}
+        createEnquirySourceMaster={createEnquirySourceMaster}
       />
-      <EditEnquirySourceModal
-        isOpen={openModals.has('edit-enquiry-source-modal')}
-        onClose={() => closeModal('edit-enquiry-source-modal')}
+      <EditEnquirySourceMasterModal
+        isOpen={openModals.has('edit-enquiry-source-master-modal')}
+        onClose={() => closeModal('edit-enquiry-source-master-modal')}
         showToast={showToast}
-        isbatSourceGuid={editingSourceGuid}
-        updateEnquirySource={updateEnquirySource}
+        enquirySourceGuid={editingSourceGuid}
+        updateEnquirySourceMaster={updateEnquirySourceMaster}
       />
       <Toast toast={toast} />
 
@@ -109,14 +111,14 @@ export default function Page() {
         <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
           <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
             <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
-            <div className="perm-delete-title">Delete {deleteTarget.sourceName}?</div>
+            <div className="perm-delete-title">Delete {deleteTarget.enquirySourceName}?</div>
             <div className="perm-delete-sub">
-              This will permanently delete this Isbat enquiry source. This can&apos;t be undone.
+              This will permanently delete this enquiry source. This can&apos;t be undone.
             </div>
             <div className="perm-delete-actions">
               <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button className="btn btn-danger" disabled={deleteEnquirySource.isPending} onClick={confirmDeleteEnquirySource}>
-                <i className="lni lni-trash-can"></i> {deleteEnquirySource.isPending ? 'Deleting…' : 'Delete'}
+              <button className="btn btn-danger" disabled={deleteEnquirySourceMaster.isPending} onClick={confirmDeleteEnquirySourceMaster}>
+                <i className="lni lni-trash-can"></i> {deleteEnquirySourceMaster.isPending ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>
