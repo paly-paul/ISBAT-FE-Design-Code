@@ -1,0 +1,22 @@
+meta {
+  name: Delete Program
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/academic/program-master/:programGuid
+  body: none
+  auth: none
+}
+
+params:path {
+  programGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+}
+
+docs {
+  Soft-deletes a program.
+
+  Success (200): { "success": true, "data": null, "message": null, "code": null }
+  Failure: 404 `not_found` if no program with that GUID.
+}

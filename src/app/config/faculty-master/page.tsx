@@ -9,8 +9,12 @@ import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { useFaculties, useCreateFaculty, useUpdateFaculty, useDeleteFaculty, Faculty } from '@/hooks/config/useFaculties'
 import { useEmployees } from '@/hooks/employee/useEmployees'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -77,6 +81,8 @@ export default function Page() {
   // hardcoded list.
   const deanOptions = Array.from(new Set(rows.map(deanDisplayName).filter(name => name !== '—')))
 
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+
   function fth(label: string, col: string, opts: string[]) {
     return (
       <FilterTh
@@ -124,7 +130,7 @@ export default function Page() {
                   </tr>
                 ))}
                 */}
-                {filteredRows.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.facultyGuid}>
                     <td>
                       <ActionMenu>
@@ -141,6 +147,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="faculties" onPageChange={setPage} />
         </div>
       </div>
       <NewFacultyModal

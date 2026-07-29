@@ -5,6 +5,10 @@ import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
+
+const PAGE_SIZE = 10
 
 const ALL_APPLICANTS = [
   { ref: 'ADM-26-0023', name: 'Aisha Nakamya',   src: 'Direct', prog: 'BSCS', type: 'Full-time', fee: 'Paid',    stage: 'Vetting',    date: '12 Jun 2026' },
@@ -38,6 +42,8 @@ export default function ApplicantsPage() {
     const matchStage = stageFilter === 'All' || a.stage === stageFilter
     return matchSearch && matchStage
   })
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filtered, PAGE_SIZE)
 
   return (
     <div id="page-applicants">
@@ -81,10 +87,10 @@ export default function ApplicantsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((a, i) => (
+              {pageItems.map((a, i) => (
                 <tr key={a.ref} className="border-b border-g100 hover:bg-g50">
                   <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/registration')}><i className="lni lni-eye" /> View</button></ActionMenu></td>
-                  <td className="py-2.5 text-g400">{i + 1}</td>
+                  <td className="py-2.5 text-g400">{(page - 1) * PAGE_SIZE + i + 1}</td>
                   <td className="py-2.5 font-mono text-xs text-b600">{a.ref}</td>
                   <td className="py-2.5 text-g800 font-medium">{a.name}</td>
                   <td className="py-2.5"><span className={`badge ${srcBadge(a.src)}`}>{a.src}</span></td>
@@ -101,6 +107,7 @@ export default function ApplicantsPage() {
             </tbody>
           </table>
         </ScrollTable>
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="applicants" onPageChange={setPage} />
       </div>
 
       <Toast toast={toast} />

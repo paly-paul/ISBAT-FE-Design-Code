@@ -11,8 +11,12 @@ import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { EmployeeListItem } from '@/lib/api/employee/employee'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -80,6 +84,8 @@ export default function Page() {
     })
   )
 
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+
   function fth(label: string, col: string, opts: string[]) {
     return (
       <FilterTh
@@ -138,7 +144,7 @@ export default function Page() {
                   </tr>
                 ))}
                 */}
-                {filteredRows.map(r => (
+                {pageItems.map(r => (
                   <tr key={r.employeeGuid}>
                     <td>
                       <ActionMenu>
@@ -162,6 +168,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="employees" onPageChange={setPage} />
         </div>
       </div>
       <NewEmployeeModal isOpen={openModals.has('new-employee-modal')} onClose={() => closeModal('new-employee-modal')} showToast={showToast} />

@@ -1612,8 +1612,12 @@ textarea.ctrl {
   color: var(--g400)
 }
 
-/* Application Payment */
-#page-payment .g2 {
+/* Application Payment — direct-child combinator (not a plain descendant
+   selector) so this only targets the outer Left-form/Right-preview split,
+   not every plain 2-column field grid nested inside the form (Fee
+   Structure/Exemption Type/Payment Method etc. were getting unintentionally
+   squashed into this same lopsided 1.4fr/280px split otherwise). */
+#page-payment > .g2 {
   grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr)
 }
 
@@ -1635,13 +1639,47 @@ textarea.ctrl {
   margin-bottom: 0
 }
 
-#page-payment .g2>div:nth-child(2)>.card:first-child {
+/* Pipeline steps wrapping onto a second row recomputed flex-basis per row,
+   so row 2's steps came out a different width than row 1's — keep it to one
+   row and scroll horizontally instead, so every step stays equal-sized and aligned.
+   Arrows sit beside the scroll strip (not overlaid on top of it), so they don't
+   cover the first/last step. */
+#page-payment .pip-scroll-host {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#page-payment .pip-scroll-host .tbl-arrow {
+  position: static;
+  transform: none;
+  flex-shrink: 0;
+}
+
+#page-payment .pipeline {
+  flex: 1;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+#page-payment .pipeline::-webkit-scrollbar {
+  display: none
+}
+
+#page-payment .pip-step {
+  flex: 1 1 0;
+}
+
+#page-payment > .g2>div:nth-child(2)>.card:first-child {
   position: sticky;
   top: calc(var(--pmt-sticky-h, 240px) + 10px);
 }
 
-@media(max-width:900px) {
-  #page-payment .g2 {
+@media(max-width:1024px) {
+  #page-payment > .g2 {
     grid-template-columns: 1fr
   }
 
@@ -1650,8 +1688,18 @@ textarea.ctrl {
     margin: 0 0 16px
   }
 
-  #page-payment .g2>div:nth-child(2)>.card:first-child {
+  #page-payment > .g2>div:nth-child(2)>.card:first-child {
     position: static
+  }
+}
+
+/* Filing page's dense 3-column field rows and the "Link to Payment Record" row
+   were only stacking at the app-wide 900px breakpoint — same fix as payment's
+   .g2 above, just moved earlier to 1024px for this page. */
+@media(max-width:1024px) {
+  #page-filing .g2,
+  #page-filing .g3 {
+    grid-template-columns: 1fr
   }
 }
 
@@ -1718,6 +1766,7 @@ textarea.ctrl {
   background: transparent;
   cursor: not-allowed
 }
+
 
 .amt-val-cur {
   font-size: 14px;
@@ -3177,6 +3226,115 @@ body:has(.modal-overlay.open) {
   min-height: 0;
   overflow: auto;
   padding: 18px 22px;
+}
+
+/* ═══════════════════════════════════════
+   FEE STRUCTURE MODAL — responsive layout
+   (sidebar + fixed-column fee-item grid replaced
+   with classes so breakpoints can reflow them —
+   inline styles can't be overridden by media queries)
+═══════════════════════════════════════ */
+.fsm-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.fsm-sidebar {
+  width: 210px;
+  flex-shrink: 0;
+  border-right: 1.5px solid var(--g200);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+.fsm-main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 18px 22px;
+}
+
+.fsm-item-hdr,
+.fsm-item-row {
+  display: grid;
+  grid-template-columns: 28px minmax(120px, 1fr) minmax(90px, 110px) minmax(130px, 150px) minmax(140px, 1fr) 32px;
+  gap: 6px;
+}
+
+.fsm-item-hdr {
+  padding: 0 0 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--g400);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.fsm-item-row {
+  align-items: center;
+}
+
+@media(max-width:1024px) {
+  #new-fee-structure-modal .g3,
+  #new-fee-structure-modal .g4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .fsm-sidebar {
+    width: 176px;
+  }
+
+  .fsm-main {
+    padding: 16px 18px;
+  }
+}
+
+@media(max-width:760px) {
+  .fsm-layout {
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .fsm-sidebar {
+    width: 100%;
+    max-height: 160px;
+    border-right: none;
+    border-bottom: 1.5px solid var(--g200);
+  }
+
+  .fsm-main {
+    padding: 14px 16px;
+  }
+
+  .fsm-item-hdr,
+  .fsm-item-row {
+    grid-template-columns: 24px minmax(90px, 1fr) 80px 100px minmax(110px, 1fr) 28px;
+    gap: 4px;
+  }
+}
+
+@media(max-width:520px) {
+  #new-fee-structure-modal .g3,
+  #new-fee-structure-modal .g4 {
+    grid-template-columns: 1fr;
+  }
+
+  .fsm-item-hdr {
+    display: none;
+  }
+
+  .fsm-item-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid var(--g200);
+    border-radius: var(--rxs);
+    margin-bottom: 6px;
+  }
 }
 
 /* ═══════════════════════════════════════

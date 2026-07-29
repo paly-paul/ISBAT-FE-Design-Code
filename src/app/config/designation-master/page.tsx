@@ -7,10 +7,14 @@ import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { NewDesignationModal } from '@/components/modals/academic/NewDesignationModal'
 import { EditDesignationModal } from '@/components/modals/academic/EditDesignationModal'
 import { useDesignations, useCreateDesignation, useUpdateDesignation, useDeleteDesignation, Designation } from '@/hooks/config/useDesignations'
 import { useDepartments } from '@/hooks/config/useDepartments'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -66,6 +70,8 @@ export default function Page() {
       return v.includes(cell)
     })
   )
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function fth(label: string, col: string, opts: string[]) {
     return (
@@ -137,7 +143,7 @@ export default function Page() {
                   </tr>
                 ))}
                 */}
-                {filteredRows.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.intDesignation}>
                     <td>
                       <ActionMenu>
@@ -156,6 +162,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="designations" onPageChange={setPage} />
         </div>
       </div>
       <NewDesignationModal

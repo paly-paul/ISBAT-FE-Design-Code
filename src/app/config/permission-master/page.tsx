@@ -8,7 +8,11 @@ import { EditPermissionModal } from '@/components/modals/academic/EditPermission
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { usePermissionGroups, useCreatePermissionGroup, useUpdatePermissionGroup, PermissionGroup } from '@/hooks/config/usePermissionGroups'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -20,6 +24,8 @@ export default function Page() {
   const sortedRows = [...rows].reverse()
   const createPermissionGroup = useCreatePermissionGroup()
   const updatePermissionGroup = useUpdatePermissionGroup()
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(sortedRows, PAGE_SIZE)
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -62,7 +68,7 @@ export default function Page() {
                   : sortedRows.length === 0
                     ? <EmptyState colSpan={3} />
                     : null}
-                {sortedRows.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.id}>
                     <td>
                       <ActionMenu>
@@ -78,6 +84,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="permission groups" onPageChange={setPage} />
         </div>
       </div>
       <NewPermissionModal

@@ -9,6 +9,10 @@ import { StudentProfileModal, StudentRecord } from '@/components/modals/student/
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
+
+const PAGE_SIZE = 10
 
 function statusBadge(status: string) {
   const map: Record<string, string> = { Active: 'badge-green', Suspended: 'badge-red', Deferred: 'badge-amber', Graduated: 'badge-blue' }
@@ -47,6 +51,8 @@ export default function Page() {
   const filteredRows = rows.filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   )
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function fth(label: string, col: string, opts: string[]) {
     return (
@@ -88,7 +94,7 @@ export default function Page() {
                 {filteredRows.length === 0
                   ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
                   : null}
-                {filteredRows.map((r, i) => (
+                {pageItems.map((r, i) => (
                   <tr key={i}>
                     <td>
                       <ActionMenu>
@@ -106,6 +112,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="students" onPageChange={setPage} />
         </div>
       </div>
       <NewStudentModal isOpen={openModals.has('new-student-modal')} onClose={() => closeModal('new-student-modal')} showToast={showToast} />

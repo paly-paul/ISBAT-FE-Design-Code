@@ -4,6 +4,10 @@ import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
+
+const PAGE_SIZE = 10
 
 const PIPELINE = [
   { label: 'App. Payment',   status: 'done',   note: '23 paid' },
@@ -105,6 +109,7 @@ export default function DashboardPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [hoveredSrc, setHoveredSrc] = useState<string | null>(null)
   const segments = donutSegments()
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(RECENT_APPS, PAGE_SIZE)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -271,7 +276,7 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {RECENT_APPS.map(app => (
+              {pageItems.map(app => (
                 <tr key={app.ref} className="border-b border-g100 hover:bg-g50 transition-colors">
                   <td>
                     <ActionMenu>
@@ -316,6 +321,7 @@ export default function DashboardPage() {
             </tbody>
           </table>
         </ScrollTable>
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="applications" onPageChange={setPage} />
       </div>
 
       {/* Bottom panels */}

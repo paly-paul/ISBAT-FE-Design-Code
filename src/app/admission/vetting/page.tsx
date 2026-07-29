@@ -6,6 +6,10 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
 import { RejectModal } from '@/components/modals/admission/RejectModal'
 import { VettingReviewModal, VettingApplicant } from '@/components/modals/admission/VettingReviewModal'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
+
+const PAGE_SIZE = 10
 
 const QUEUE = [
   { ref: 'APP-2025-0041', name: 'Nakato Sarah',       programme: 'BSc Computer Science',       type: 'Direct',   docs: '3/4', submitted: '6h ago',  status: 'Pending' },
@@ -25,11 +29,17 @@ export default function VettingPage() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [filterProg, setFilterProg] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [search, setSearch] = useState('')
   const [selectedApplicant, setSelectedApplicant] = useState<VettingApplicant | null>(null)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
+
+  const q = search.trim().toLowerCase()
+  const filteredQueue = QUEUE.filter(row => !q || row.ref.toLowerCase().includes(q) || row.name.toLowerCase().includes(q))
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredQueue, PAGE_SIZE)
 
   function handleReview(row: typeof QUEUE[number]) {
     setSelectedApplicant({ ref: row.ref, name: row.name, programme: row.programme, type: row.type, docs: row.docs, submitted: row.submitted })
@@ -44,6 +54,10 @@ export default function VettingPage() {
           <p className="text-sm text-g500 mt-1">Assistant Registrar reviews documents &amp; minimum standards</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative">
+            <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm" />
+            <input className="ctrl pl-8 w-56" placeholder="Search Application Ref No. / Student…" value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
           <SearchSelect
             options={[
               { value: 'all', label: 'All Programmes' },
@@ -89,7 +103,10 @@ export default function VettingPage() {
           <table>
             <thead><tr><th style={{ width: 48 }}></th><th>App. Ref</th><th>Applicant Name</th><th>Programme</th><th>Type</th><th>Documents</th><th>Submitted</th><th>Status</th></tr></thead>
             <tbody>
-              {QUEUE.map(row => (
+              {filteredQueue.length === 0 && (
+                <tr><td colSpan={8} className="py-8 text-center text-g400">No applicants match &quot;{search}&quot;.</td></tr>
+              )}
+              {pageItems.map(row => (
                 <tr key={row.ref}>
                   <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => handleReview(row)}><i className="lni lni-eye" /> Review</button></ActionMenu></td>
                   <td className="font-mono text-sm">{row.ref}</td>
@@ -104,6 +121,7 @@ export default function VettingPage() {
             </tbody>
           </table>
         </ScrollTable>
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="applicants" onPageChange={setPage} />
       </div>
 
       <VettingReviewModal

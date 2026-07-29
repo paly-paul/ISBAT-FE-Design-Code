@@ -1,0 +1,35 @@
+meta {
+  name: Copy Fee Header
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/academic/Programfee-structure/hd/copy
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "sourceFeeHdGuid": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "targetProgramGuid": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    "targetIntakeGuid": null,
+    "newFeeCode": "TUI-BSC",
+    "newFeeDesc": "Tuition Fee - BSc Programs"
+  }
+}
+
+docs {
+  Copies an existing fee header (and its structure) to a different program with a new code and
+  description. Useful for applying a standard fee structure across multiple programs.
+  sourceFeeHdGuid/targetProgramGuid: required. newFeeCode: required, max 50 chars.
+  newFeeDesc: required, max 100 chars. targetIntakeGuid: optional.
+
+  Success: 201 Created, data is the newly created fee header on the target program.
+  Failures: 400 validation_error, 404 not_found (source fee header or target program not found).
+}

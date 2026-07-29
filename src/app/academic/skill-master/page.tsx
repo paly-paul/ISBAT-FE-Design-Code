@@ -7,6 +7,10 @@ import { AddSkillModal } from '@/components/modals/academic/AddSkillModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
+
+const PAGE_SIZE = 10
 
 type Role = 'lecturer' | 'dean'
 type ApprovalStatus = 'Approved' | 'Pending' | 'Rejected' | 'Details Requested'
@@ -74,6 +78,7 @@ export default function Page() {
   }).filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   )
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(visibleRows, PAGE_SIZE)
 
   function approvalBadge(status: ApprovalStatus) {
     if (status === 'Approved')          return <span className="badge badge-green"><i className="lni lni-checkmark"></i> Approved</span>
@@ -187,7 +192,7 @@ export default function Page() {
                 {visibleRows.length === 0
                   ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
                   : null}
-                {visibleRows.map((r, i) => {
+                {pageItems.map((r, i) => {
                   const approval = approvals[r.name] ?? 'Pending'
                   return (
                     <tr key={i} className={approval === 'Rejected' ? 'flagged' : r.completeStatus === 'Incomplete' ? 'flagged' : ''}>
@@ -244,6 +249,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="skills" onPageChange={setPage} />
         </div>
       </div>
 

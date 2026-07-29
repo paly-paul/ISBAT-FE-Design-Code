@@ -1,0 +1,24 @@
+meta {
+  name: List Programs
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/academic/program-master?search=
+  body: none
+  auth: none
+}
+
+params:query {
+  search:
+}
+
+docs {
+  Returns all active programs. Optional free-text `search` filters on `programCode` or `programName`.
+
+  Note: docs/api/README.md flags Program Master reads as one of the few endpoints that may return the
+  raw array directly instead of the standard `{ success, data, message, code }` envelope, even though
+  the example in program-master.md shows the envelope. Check the actual response shape at runtime.
+  Each item is a program master object including `streamGuids` and nested `semesters`.
+}

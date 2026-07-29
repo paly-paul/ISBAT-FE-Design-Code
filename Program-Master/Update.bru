@@ -1,0 +1,39 @@
+meta {
+  name: Update Program
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{baseUrl}}/api/v1/academic/program-master/:programGuid
+  body: multipartForm
+  auth: none
+}
+
+params:path {
+  programGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+}
+
+body:multipart-form {
+  programCode: BSCS
+  programName: Bachelor of Science in Computer Science
+  programLevelGuid: b2c3d4e5-f6a7-48b9-c0d1-e2f3a4b5c6d7
+  pgmStatus: true
+  noIa: false
+  programGroupGuid: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+  unitCount: 24
+  appFee: 50000
+  lateFee: 10000
+  facultyGuid: c3d4e5f6-a7b8-49c0-d1e2-f3a4b5c6d7e8
+  currencyGuid: a1b2c3d4-e5f6-4789-abcd-ef0123456789
+  dateAcc: 2022-01-15T00:00:00
+  streamGuid: d4e5f6a7-b8c9-40d1-e2f3-a4b5c6d7e8f9
+  intakeGuid: e5f6a7b8-c9d0-4e1f-a2b3-c4d5e6f7a8b9
+}
+
+docs {
+  Updates an existing program. Sent as multipart/form-data; fields are the same as Create.
+
+  Success (200): `data` is the updated program object.
+  Failures: 400 `validation_error`; 404 `not_found` if no program with that GUID.
+}

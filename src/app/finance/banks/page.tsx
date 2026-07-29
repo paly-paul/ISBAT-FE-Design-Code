@@ -6,10 +6,14 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { NewBankModal } from '@/components/modals/finance/NewBankModal'
 import { EditBankModal } from '@/components/modals/finance/EditBankModal'
 import { useBanks, useCreateBank, useUpdateBank, useDeleteBank, Bank } from '@/hooks/finance/useBanks'
 import { STATUS_LABELS } from '@/lib/api/finance/procBank'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -32,6 +36,8 @@ export default function Page() {
     setEditingBankGuid(guid)
     openModal('edit-bank-modal')
   }
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
 
   function confirmDeleteBank() {
     if (!deleteTarget) return
@@ -75,7 +81,7 @@ export default function Page() {
                   : rows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
-                {rows.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.bankGuid}>
                     <td>
                       <ActionMenu>
@@ -102,6 +108,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="banks" onPageChange={setPage} />
         </div>
       </div>
       <NewBankModal

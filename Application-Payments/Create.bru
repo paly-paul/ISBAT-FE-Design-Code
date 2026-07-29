@@ -1,0 +1,55 @@
+meta {
+  name: Create Application Payment
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admissions/application-payments
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  enquiryGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  oDelIntApplication: 0
+  studentName: John Doe
+  intakeGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  campusGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  programGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  semesterGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  batchGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  batchTimeGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  feeHdGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  countryGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  mobile: 700000000
+  email: john.doe@example.com
+  exemptionTypeGuid: null
+  payDate: 28/Jul/2026
+  payType: 1
+  amount: 50000.00
+  currencyGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  exRate: 1.0
+  bankGuid: null
+  receiptBookGuid: null
+  remarks: Application payment
+  payProofFile: null
+}
+
+docs {
+  Records an application payment. Accepts multipart/form-data to support an optional payment proof file upload.
+
+  Field notes:
+  - `enquiryGuid` (optional): links the payment to an existing enquiry.
+  - `programGuid`: GUID of the programme — stored directly; no integer lookup required.
+  - `batchTimeGuid` replaces old `intBatchTime` integer field.
+  - `feeHdGuid` replaces old `intFee` integer field.
+  - `countryGuid` replaces old `countryCode` string field.
+  - `exemptionTypeGuid` replaces old `exemptionType` integer field.
+  - `payDate` must be in dd/MMM/yyyy format (e.g. 28/Jul/2026).
+  - When `exemptionTypeGuid` is provided, `amount`, `currencyGuid`, `exRate`, `payType`, and `receiptBookGuid` are not required.
+  - `bankGuid` is required when `payType > 1` (non-cash payments).
+
+  Success (201): data = CreateApplicationPaymentResponse.
+  Failure: 400 `validation_error` or `bad_request`.
+}

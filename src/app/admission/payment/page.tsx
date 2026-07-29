@@ -1,11 +1,26 @@
 'use client'
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ImportSourceModal } from '@/components/modals/admission/ImportSourceModal'
 import { ImportCrmModal } from '@/components/modals/admission/ImportCrmModal'
 import { ImportOdelModal } from '@/components/modals/admission/ImportOdelModal'
 import { SearchSelect } from '@/components/SearchSelect'
+import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useCampuses } from '@/hooks/config/useCampuses'
+import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
+import { useBatchTimes } from '@/hooks/config/useBatchTimes'
+import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
+import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
+import {
+  useApplicationPaymentBanks,
+  useApplicationPaymentBatches,
+  useApplicationPaymentExemptionTypes,
+  useApplicationPaymentFees,
+  useApplicationPaymentTypes,
+  useCreateApplicationPayment,
+} from '@/hooks/admission/useApplicationPayments'
 
 const PIPELINE = [
   { label: 'App. Payment',  desc: 'Current step', status: 'active' },
@@ -15,37 +30,64 @@ const PIPELINE = [
   { label: 'Registration',  desc: '',              status: '' },
 ]
 
-const INTAKES       = ['Spring 2026 (20261)', 'Fall 2026 (20262)', 'Autumn 2025 (20253)']
+// Application Source and Receipt Type have no counterpart on
+// POST /api/v1/admissions/application-payments — kept as decorative/local
+// fields (not sent) rather than dropped, since removing UI wasn't asked for.
 const SOURCES       = ['Walk-in (Direct)', 'From Enquiry', 'ODel Online App.', 'CRM (Merito)', 'Staff Referral', 'Online Enquiry']
-const CAMPUSES      = ['Main Campus', 'City Campus', 'Jinja Road Campus']
-const PROGRAMMES    = ['BSc. Computer Science', 'MBA Business Admin', 'BSc. Information Technology', 'Diploma in Nursing', 'BCom. Accounting', 'BEng. Civil Engineering']
-const FEE_STRUCTURES = ['Standard', 'International', 'Scholarship', 'Staff Discount']
-const SEMESTERS     = ['Semester 1', 'Semester 2', 'Semester 3']
-const BATCH_TIMES   = ['Morning', 'Afternoon', 'Evening', 'Weekend']
-const EXEMPTIONS    = ['-- None (Pay Full Fee) --', 'HTC Waiver', 'Sponsorship', 'Existing Student']
-const PAY_METHODS   = ['Cash', 'Bank Transfer']
-const RECEIPT_BOOKS = ['RB-2026-001', 'RB-2026-002', 'RB-2026-003']
 const RECEIPT_TYPES = ['Official Receipt', 'Duplicate', 'Triplicate']
-const BANKS         = ['Stanbic Bank', 'DFCU Bank', 'Centenary Bank', 'Bank of Africa', 'Equity Bank']
+
+// UI-only — the confirmed payload's `mobile` field is raw digits with no
+// country prefix (see Create.bru's "700000000" example), so this dropdown
+// never feeds the API; it's here purely so the phone number reads naturally.
+const COUNTRY_CODES = [
+  { value: '+256', label: '+256 · Uganda' },
+  { value: '+254', label: '+254 · Kenya' },
+  { value: '+255', label: '+255 · Tanzania' },
+  { value: '+250', label: '+250 · Rwanda' },
+  { value: '+257', label: '+257 · Burundi' },
+  { value: '+211', label: '+211 · South Sudan' },
+  { value: '+243', label: '+243 · DR Congo' },
+  { value: '+91',  label: '+91 · India' },
+  { value: '+44',  label: '+44 · United Kingdom' },
+  { value: '+1',   label: '+1 · USA/Canada' },
+]
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+// Create.bru requires payDate as dd/MMM/yyyy (e.g. "28/Jul/2026") — the
+// <input type="date"> gives us yyyy-mm-dd, so convert before submitting.
+function formatBruDate(yyyyMmDd: string): string {
+  const [y, m, d] = yyyyMmDd.split('-').map(Number)
+  if (!y || !m || !d) return ''
+  return `${String(d).padStart(2, '0')}/${MONTHS[m - 1]}/${y}`
+}
+
+interface Option { value: string; label: string }
+
+function labelFor(options: Option[], value: string): string {
+  return options.find(o => o.value === value)?.label ?? ''
+}
 
 interface FormData {
-  intake: string; source: string; firstName: string; lastName: string
-  phone: string; email: string; campus: string; programme: string
-  feeStructure: string; semester: string; batchTime: string
-  exemption: string; payMethod: string
-  receiptBook: string; receiptType: string; feeAmount: string
+  intakeGuid: string; source: string; firstName: string; lastName: string
+  phoneCode: string; phone: string; email: string
+  campusGuid: string; programGuid: string; semesterGuid: string; batchTimeGuid: string; batchGuid: string
+  feeHdGuid: string
+  exemptionTypeGuid: string; payType: string
+  receiptBookGuid: string; receiptType: string; feeAmount: string; currencyGuid: string
   receiptNo: string; paymentDate: string
-  bankName: string; bankRef: string; remarks: string
+  bankGuid: string; bankRef: string; remarks: string
 }
 
 const initialForm: FormData = {
-  intake: 'Spring 2026 (20261)', source: 'Walk-in (Direct)',
-  firstName: '', lastName: '', phone: '', email: '',
-  campus: '', programme: '', feeStructure: '', semester: '', batchTime: '',
-  exemption: '-- None (Pay Full Fee) --', payMethod: 'Cash',
-  receiptBook: '', receiptType: 'Official Receipt', feeAmount: '50000',
+  intakeGuid: '', source: 'Walk-in (Direct)',
+  firstName: '', lastName: '', phoneCode: '+256', phone: '', email: '',
+  campusGuid: '', programGuid: '', semesterGuid: '', batchTimeGuid: '', batchGuid: '',
+  feeHdGuid: '',
+  exemptionTypeGuid: '', payType: '',
+  receiptBookGuid: '', receiptType: 'Official Receipt', feeAmount: '', currencyGuid: '',
   receiptNo: '', paymentDate: '',
-  bankName: '', bankRef: '', remarks: '',
+  bankGuid: '', bankRef: '', remarks: '',
 }
 
 function Field({ label, req, children, span2 }: { label: string; req?: boolean; children: React.ReactNode; span2?: boolean }) {
@@ -73,24 +115,159 @@ export default function PaymentPage() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [showReceipt, setShowReceipt] = useState(false)
   const [form, setForm]         = useState<FormData>({ ...initialForm })
+  const [payProofFile, setPayProofFile] = useState<File | null>(null)
+
+  // Displayed exchange rates — kept as controlled state (not just readOnly
+  // display) so the submitted exRate actually matches what's shown here.
+  const [usdRate, setUsdRate] = useState('3720')
+  const [kesRate, setKesRate] = useState('28.5')
+
+  const pipelineRef = useRef<HTMLDivElement>(null)
+  const [canPipLeft, setCanPipLeft]   = useState(false)
+  const [canPipRight, setCanPipRight] = useState(false)
+
+  function checkPipelineScroll() {
+    const el = pipelineRef.current
+    if (!el) return
+    setCanPipLeft(el.scrollLeft > 4)
+    setCanPipRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+  }
+
+  useEffect(() => {
+    checkPipelineScroll()
+    const el = pipelineRef.current
+    const ro = new ResizeObserver(checkPipelineScroll)
+    if (el) ro.observe(el)
+    window.addEventListener('resize', checkPipelineScroll)
+    return () => { ro.disconnect(); window.removeEventListener('resize', checkPipelineScroll) }
+  }, [])
+
+  function scrollPipeline(dir: 'left' | 'right') {
+    pipelineRef.current?.scrollBy({ left: dir === 'right' ? 200 : -200, behavior: 'smooth' })
+  }
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
 
   const set = (k: keyof FormData, v: string) => setForm(prev => ({ ...prev, [k]: v }))
-  const isWaived = form.exemption !== '-- None (Pay Full Fee) --'
-  const isBank   = form.payMethod === 'Bank Transfer'
+
+  // Cascading resets: changing an upstream selection invalidates whatever
+  // was scoped to it downstream (Batch depends on Programme+Semester+Batch
+  // Time; Semester and Fee Structure depend on Programme).
+  function setProgram(v: string) { setForm(prev => ({ ...prev, programGuid: v, semesterGuid: '', batchGuid: '', feeHdGuid: '' })) }
+  function setSemester(v: string) { setForm(prev => ({ ...prev, semesterGuid: v, batchGuid: '' })) }
+  function setBatchTime(v: string) { setForm(prev => ({ ...prev, batchTimeGuid: v, batchGuid: '' })) }
+
+  // ── Real data ──────────────────────────────────────────────────────────
+  const { data: intakes = [] }       = useIntakes()
+  const { data: campuses = [] }      = useCampuses()
+  const { data: programs = [] }      = useProgramMasters()
+  const { data: semesters = [] }     = useSemestersForProgram(form.programGuid, !!form.programGuid)
+  const { data: batchTimes = [] }    = useBatchTimes()
+  const { data: batches = [] }       = useApplicationPaymentBatches(form.programGuid, form.semesterGuid, form.batchTimeGuid, !!form.programGuid && !!form.semesterGuid && !!form.batchTimeGuid)
+  const { data: fees = [] }          = useApplicationPaymentFees(form.programGuid, !!form.programGuid)
+  const { data: exemptionTypes = [] } = useApplicationPaymentExemptionTypes()
+  const { data: paymentTypes = [] }  = useApplicationPaymentTypes()
+  const { data: currencies = [] }    = useFinanceCurrencies()
+  const { data: banks = [] }         = useApplicationPaymentBanks()
+  // The payment-scoped Dropdowns/ReceiptBooks.bru endpoint 500s server-side
+  // (undocumented required "category" int query param) — fall back to the
+  // already-working generic Finance Receipt Books endpoint instead. Same
+  // receiptBookGuid/bookCode shape, just the full master list rather than a
+  // payment-filtered one, so only offer Active (status === 1) ones here.
+  const { data: allReceiptBooks = [] } = useReceiptBooks()
+  const receiptBooks = allReceiptBooks.filter(r => r.status === 1)
+  const createPayment = useCreateApplicationPayment()
+
+  const intakeOptions   = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
+  const campusOptions   = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
+  const programOptions  = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
+  const semesterOptions = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
+  const batchTimeOptions = batchTimes.map(bt => ({ value: bt.batchTimeGuid, label: bt.batchTime }))
+  const batchOptions    = batches.map(b => ({ value: b.batchGuid, label: b.batchCode }))
+  const feeOptions      = fees.map(f => ({ value: f.feeHdGuid, label: `${f.feeDesc} (${f.feeCode})` }))
+  const exemptionOptions: Option[] = [{ value: '', label: '-- None (Pay Full Fee) --' }, ...exemptionTypes.map(e => ({ value: e.exemptionTypeGuid, label: e.exemptionTypeName }))]
+  const payTypeOptions  = paymentTypes.map(t => ({ value: String(t.payType), label: t.paymentTypeName }))
+  const currencyOptions = currencies.map(c => ({ value: c.currencyGuid, label: c.currencyCode }))
+  const bankOptions     = banks.map(b => ({ value: b.bankGuid, label: b.bankName }))
+  const receiptBookOptions = receiptBooks.map(r => ({ value: r.receiptBookGuid, label: r.bookCode }))
+
+  const isWaived = !!form.exemptionTypeGuid
+  const isBank   = !isWaived && Number(form.payType) > 1
+
+  // Fee Amount is manual-entry only — a first attempt tried to auto-fill it
+  // from the selected Fee Structure's dropdown entry, but the real DTO
+  // (confirmed via a live response) has no flat currency amount field, only
+  // amtPer (a percentage of something unconfirmed), so there's nothing to
+  // auto-fill from yet.
+
+  const selectedCurrency = currencies.find(c => c.currencyGuid === form.currencyGuid)
+  const exRate = selectedCurrency?.currencyCode === 'USD' ? Number(usdRate) || 1
+    : selectedCurrency?.currencyCode === 'KES' ? Number(kesRate) || 1
+    : 1
 
   function handleSubmit() {
-    if (!form.firstName || !form.lastName || !form.phone) {
-      showToast('Please fill all required fields', 'error'); return
+    const missing: string[] = []
+    if (!form.firstName) missing.push('First Name')
+    if (!form.lastName) missing.push('Last Name')
+    if (!form.phone) missing.push('Phone')
+    if (!form.intakeGuid) missing.push('Intake')
+    if (!form.campusGuid) missing.push('Campus')
+    if (!form.programGuid) missing.push('Programme')
+    if (!form.semesterGuid) missing.push('Semester')
+    if (!form.batchTimeGuid) missing.push('Batch Time')
+    if (!form.batchGuid) missing.push('Batch')
+    if (!form.feeHdGuid) missing.push('Fee Structure')
+    if (!form.paymentDate) missing.push('Payment Date')
+    if (!isWaived) {
+      if (!form.payType) missing.push('Payment Method')
+      if (!form.currencyGuid) missing.push('Currency')
+      if (!form.receiptBookGuid) missing.push('Receipt Book')
+      if (!form.feeAmount) missing.push('Application Fee Amount')
+      if (isBank && !form.bankGuid) missing.push('Bank Name')
     }
-    setShowReceipt(true)
-    showToast('Payment saved & receipt generated', 'success')
+    if (missing.length) {
+      showToast(`Please fill: ${missing.join(', ')}`, 'error')
+      return
+    }
+
+    createPayment.mutate(
+      {
+        // Import-from-Enquiry is still a mock flow (ImportSourceModal etc.
+        // don't fetch real enquiries yet) — nothing to link here until that's wired.
+        enquiryGuid: null,
+        studentName: `${form.firstName} ${form.lastName}`.trim(),
+        intakeGuid: form.intakeGuid,
+        campusGuid: form.campusGuid,
+        programGuid: form.programGuid,
+        semesterGuid: form.semesterGuid,
+        batchGuid: form.batchGuid,
+        batchTimeGuid: form.batchTimeGuid,
+        feeHdGuid: form.feeHdGuid,
+        mobile: form.phone.trim(),
+        email: form.email.trim() || null,
+        exemptionTypeGuid: form.exemptionTypeGuid || null,
+        payDate: formatBruDate(form.paymentDate),
+        payType: isWaived ? null : Number(form.payType),
+        amount: isWaived ? null : Number(form.feeAmount || 0),
+        currencyGuid: isWaived ? null : form.currencyGuid,
+        exRate: isWaived ? null : exRate,
+        bankGuid: isBank ? (form.bankGuid || null) : null,
+        receiptBookGuid: isWaived ? null : (form.receiptBookGuid || null),
+        remarks: form.remarks.trim() || null,
+        payProofFile,
+      },
+      {
+        onSuccess: () => { setShowReceipt(true); showToast('Payment saved & receipt generated', 'success') },
+        onError: (error: Error) => showToast(error.message || 'Failed to save payment. Please try again.', 'error'),
+      },
+    )
   }
 
-  function handleClear() { setForm({ ...initialForm }); setShowReceipt(false) }
+  function handleClear() {
+    setForm({ ...initialForm }); setShowReceipt(false); setPayProofFile(null)
+  }
 
   return (
     <div id="page-payment" className="flex flex-col gap-0">
@@ -105,12 +282,12 @@ export default function PaymentPage() {
           <span className="badge-green text-[11px] px-2 py-0.5 rounded-md font-semibold">Auto-fetched</span>
           <div className="flex items-center gap-1.5 ml-2">
             <span className="text-g500" style={{ fontSize: 'var(--fs-xs)' }}>1 USD =</span>
-            <input className="ctrl text-center font-semibold" style={{ width: 70, padding: '3px 6px', fontSize: 13 }} defaultValue="3720" readOnly />
+            <input className="ctrl text-center font-semibold" style={{ width: 70, padding: '3px 6px', fontSize: 13 }} value={usdRate} onChange={e => setUsdRate(e.target.value)} readOnly />
             <span className="badge-blue text-[11px] px-1.5 py-0.5 rounded font-bold">UGX</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-g500" style={{ fontSize: 'var(--fs-xs)' }}>1 KES =</span>
-            <input className="ctrl text-center font-semibold" style={{ width: 70, padding: '3px 6px', fontSize: 13 }} defaultValue="28.5" readOnly />
+            <input className="ctrl text-center font-semibold" style={{ width: 70, padding: '3px 6px', fontSize: 13 }} value={kesRate} onChange={e => setKesRate(e.target.value)} readOnly />
             <span className="badge-blue text-[11px] px-1.5 py-0.5 rounded font-bold">UGX</span>
           </div>
           <span className="text-[11px] text-g400 ml-auto">Last updated: Today 08:30 AM</span>
@@ -123,7 +300,7 @@ export default function PaymentPage() {
         <div className="pg-hdr">
           <div>
             <div className="pg-title">Stage 1 · Application Payment</div>
-            <div className="pg-sub">Collect 50,000 UGX application fee · Supports Cash &amp; Bank Transfer · Generates official receipt</div>
+            <div className="pg-sub">Collect application fee · Supports Cash &amp; Bank Transfer · Generates official receipt</div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/dashboard')}>
@@ -142,19 +319,31 @@ export default function PaymentPage() {
         </div>
 
         {/* Pipeline */}
-        <div className="pipeline">
-          {PIPELINE.map((step, i) => (
-            <React.Fragment key={step.label}>
-              <div className={`pip-step${step.status ? ` ${step.status}` : ''}`}>
-                <div className="pip-circle">{i + 1}</div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="pip-label">{step.label}</span>
-                  {step.desc && <span className="pip-desc">{step.desc}</span>}
+        <div className="pip-scroll-host">
+          {canPipLeft && (
+            <button className="tbl-arrow tbl-arrow-l" onClick={() => scrollPipeline('left')} aria-label="Scroll left">
+              <i className="lni lni-chevron-left" />
+            </button>
+          )}
+          <div className="pipeline" ref={pipelineRef} onScroll={checkPipelineScroll}>
+            {PIPELINE.map((step, i) => (
+              <React.Fragment key={step.label}>
+                <div className={`pip-step${step.status ? ` ${step.status}` : ''}`}>
+                  <div className="pip-circle">{i + 1}</div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="pip-label">{step.label}</span>
+                    {step.desc && <span className="pip-desc">{step.desc}</span>}
+                  </div>
                 </div>
-              </div>
-              {i < PIPELINE.length - 1 && <div className="pip-line" />}
-            </React.Fragment>
-          ))}
+                {i < PIPELINE.length - 1 && <div className="pip-line" />}
+              </React.Fragment>
+            ))}
+          </div>
+          {canPipRight && (
+            <button className="tbl-arrow tbl-arrow-r" onClick={() => scrollPipeline('right')} aria-label="Scroll right">
+              <i className="lni lni-chevron-right" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -173,7 +362,7 @@ export default function PaymentPage() {
 
             <div className="g2 mb-4">
               <Field label="Intake" req>
-                <SearchSelect options={INTAKES} value={form.intake} onChange={v => set('intake', v)} />
+                <SearchSelect options={intakeOptions} value={form.intakeGuid} placeholder="-- Select Intake --" onChange={v => set('intakeGuid', v)} />
               </Field>
               <Field label="Application Source" req>
                 <SearchSelect options={SOURCES} value={form.source} onChange={v => set('source', v)} />
@@ -204,9 +393,9 @@ export default function PaymentPage() {
                 <input className="ctrl" placeholder="e.g. Nakato" value={form.lastName} onChange={e => set('lastName', e.target.value)} />
               </Field>
               <Field label="Phone" req>
-                <div className="inp-wrap">
-                  <i className="inp-icon lni lni-phone" />
-                  <input className="ctrl" placeholder="+256 700 000 000" value={form.phone} onChange={e => set('phone', e.target.value)} />
+                <div className="flex gap-2">
+                  <SearchSelect options={COUNTRY_CODES} value={form.phoneCode} onChange={v => set('phoneCode', v)} style={{ width: 108, flexShrink: 0 }} />
+                  <input className="ctrl flex-1" placeholder="700 000 000" value={form.phone} onChange={e => set('phone', e.target.value)} />
                 </div>
               </Field>
               <Field label="Email">
@@ -216,19 +405,27 @@ export default function PaymentPage() {
                 </div>
               </Field>
               <Field label="Campus" req>
-                <SearchSelect options={CAMPUSES} value={form.campus} placeholder="-- Select Campus --" onChange={v => set('campus', v)} />
+                <SearchSelect options={campusOptions} value={form.campusGuid} placeholder="-- Select Campus --" onChange={v => set('campusGuid', v)} />
               </Field>
               <Field label="Interested Programme" req>
-                <SearchSelect options={PROGRAMMES} value={form.programme} placeholder="-- Select Campus First --" onChange={v => set('programme', v)} />
+                <SearchSelect options={programOptions} value={form.programGuid} placeholder="-- Select Programme --" onChange={setProgram} />
               </Field>
               <Field label="Fee Structure" req>
-                <SearchSelect options={FEE_STRUCTURES} value={form.feeStructure} placeholder="-- Auto-loaded --" onChange={v => set('feeStructure', v)} />
+                <SearchSelect options={feeOptions} value={form.feeHdGuid} placeholder={form.programGuid ? '-- Select Fee Structure --' : '-- Select Programme First --'} onChange={v => set('feeHdGuid', v)} />
               </Field>
               <Field label="Semester" req>
-                <SearchSelect options={SEMESTERS} value={form.semester} placeholder="-- Select Semester --" onChange={v => set('semester', v)} />
+                <SearchSelect options={semesterOptions} value={form.semesterGuid} placeholder={form.programGuid ? '-- Select Semester --' : '-- Select Programme First --'} onChange={setSemester} />
               </Field>
               <Field label="Batch Time" req>
-                <SearchSelect options={BATCH_TIMES} value={form.batchTime} placeholder="-- Select --" onChange={v => set('batchTime', v)} />
+                <SearchSelect options={batchTimeOptions} value={form.batchTimeGuid} placeholder="-- Select --" onChange={setBatchTime} />
+              </Field>
+              <Field label="Batch" req>
+                <SearchSelect
+                  options={batchOptions}
+                  value={form.batchGuid}
+                  placeholder={form.programGuid && form.semesterGuid && form.batchTimeGuid ? '-- Select Batch --' : '-- Select Programme, Semester & Batch Time First --'}
+                  onChange={v => set('batchGuid', v)}
+                />
               </Field>
             </div>
           </div>
@@ -242,19 +439,19 @@ export default function PaymentPage() {
 
             {isWaived && (
               <div className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-lg bg-clr-amber-bg border border-clr-amber-bd text-clr-amber" style={{ fontSize: 'var(--fs-sm)' }}>
-                <i className="lni lni-warning" /> Fee exemption active: <strong>{form.exemption}</strong>
+                <i className="lni lni-warning" /> Fee exemption active: <strong>{labelFor(exemptionOptions, form.exemptionTypeGuid)}</strong>
               </div>
             )}
 
             <div className="g2 mb-4">
               <Field label="Exemption Type">
-                <SearchSelect options={EXEMPTIONS} value={form.exemption} onChange={v => set('exemption', v)} />
+                <SearchSelect options={exemptionOptions} value={form.exemptionTypeGuid} onChange={v => set('exemptionTypeGuid', v)} />
               </Field>
-              <Field label="Payment Method" req>
-                <SearchSelect options={PAY_METHODS} value={form.payMethod} onChange={v => set('payMethod', v)} />
+              <Field label="Payment Method" req={!isWaived}>
+                <SearchSelect options={payTypeOptions} value={form.payType} placeholder="-- Select Payment Method --" onChange={v => set('payType', v)} />
               </Field>
-              <Field label="Receipt Book" req>
-                <SearchSelect options={RECEIPT_BOOKS} value={form.receiptBook} placeholder="-- Select Receipt Book --" onChange={v => set('receiptBook', v)} />
+              <Field label="Receipt Book" req={!isWaived}>
+                <SearchSelect options={receiptBookOptions} value={form.receiptBookGuid} placeholder="-- Select Receipt Book --" onChange={v => set('receiptBookGuid', v)} />
               </Field>
               <Field label="Receipt Type" req>
                 <SearchSelect options={RECEIPT_TYPES} value={form.receiptType} onChange={v => set('receiptType', v)} />
@@ -274,19 +471,20 @@ export default function PaymentPage() {
                       onChange={e => set('feeAmount', e.target.value)}
                       disabled={isWaived}
                     />
-                    <span className="amt-val-cur">UGX</span>
+                    <SearchSelect options={currencyOptions} value={form.currencyGuid} onChange={v => set('currencyGuid', v)}
+                      style={{ width: 84, flexShrink: 0 }} />
                   </div>
                   <p className="amt-val-hint">
-                    {isWaived ? 'Fee waived — exemption applied.' : 'Default 50,000 UGX — edit if a different fee applies.'}
+                    {isWaived ? 'Fee waived — exemption applied.' : 'Enter the application fee amount.'}
                   </p>
                   {isWaived && <p className="amt-waived-lbl">✓ WAIVED</p>}
                 </div>
-                <span className="badge-amber text-xs px-2 py-1 rounded-md font-bold">UGX</span>
+                <span className="badge-amber text-xs px-2 py-1 rounded-md font-bold">{selectedCurrency?.currencyCode ?? '—'}</span>
               </div>
             </div>
 
             <div className="g2 mt-4">
-              <Field label="Receipt / Reference No." req>
+              <Field label="Receipt / Reference No.">
                 <input className="ctrl" placeholder="e.g. REC-2026-001142" value={form.receiptNo} onChange={e => set('receiptNo', e.target.value)} />
               </Field>
               <Field label="Payment Date" req>
@@ -294,14 +492,24 @@ export default function PaymentPage() {
               </Field>
             </div>
 
+            <Field label="Receipt Upload" span2>
+              <div className="file-zone">
+                <input type="file" accept="image/*,.pdf" onChange={e => setPayProofFile(e.target.files?.[0] ?? null)} />
+                <i className="lni lni-upload text-g400" style={{ fontSize: 20 }} />
+                <span className="text-g500" style={{ fontSize: 'var(--fs-sm)' }}>
+                  {payProofFile ? payProofFile.name : 'Click to upload or drag & drop a scanned receipt'}
+                </span>
+              </div>
+            </Field>
+
             {isBank && (
               <div className="mt-4 p-4 rounded-xl bg-g50 border border-g200">
                 <h3 className="font-semibold text-g700 mb-3" style={{ fontSize: 'var(--fs-sm)' }}>Bank Transfer Details</h3>
                 <div className="g2">
                   <Field label="Bank Name" req>
-                    <SearchSelect options={BANKS} value={form.bankName} placeholder="Select bank" onChange={v => set('bankName', v)} />
+                    <SearchSelect options={bankOptions} value={form.bankGuid} placeholder="Select bank" onChange={v => set('bankGuid', v)} />
                   </Field>
-                  <Field label="Bank Transaction Ref" req>
+                  <Field label="Bank Transaction Ref">
                     <input className="ctrl" placeholder="TXN-XXXXXXX" value={form.bankRef} onChange={e => set('bankRef', e.target.value)} />
                   </Field>
                   <Field label="Bank Deposit Slip" span2>
@@ -321,15 +529,15 @@ export default function PaymentPage() {
                 value={form.remarks} onChange={e => set('remarks', e.target.value)} />
             </div>
 
-            <div className="flex items-center gap-3 mt-5 pt-4 border-t border-g100">
+            <div className="flex items-center gap-3 mt-5 pt-4 border-t border-g100 flex-wrap">
               <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/dashboard')}>
                 <i className="lni lni-close" /> Cancel / Close
               </button>
               <button className="btn btn-neu btn-sm" onClick={handleClear}>
                 <i className="lni lni-reload" /> Clear
               </button>
-              <button className="btn btn-primary ml-auto" onClick={handleSubmit}>
-                <i className="lni lni-credit-cards" /> Save Payment &amp; Generate Receipt →
+              <button className="btn btn-primary ml-auto" disabled={createPayment.isPending} onClick={handleSubmit}>
+                <i className="lni lni-credit-cards" /> {createPayment.isPending ? 'Saving…' : 'Save Payment & Generate Receipt →'}
               </button>
             </div>
           </div>
@@ -351,11 +559,11 @@ export default function PaymentPage() {
                     ['Receipt No.', form.receiptNo || 'RCT-AUTO'],
                     ['Date', form.paymentDate || new Date().toLocaleDateString()],
                     ['Candidate', `${form.firstName} ${form.lastName}`.trim()],
-                    ['Programme', form.programme],
-                    ['Campus', form.campus],
-                    ['Intake', form.intake],
-                    ['Amount', `${form.feeAmount} UGX`],
-                    ['Method', form.payMethod],
+                    ['Programme', labelFor(programOptions, form.programGuid)],
+                    ['Campus', labelFor(campusOptions, form.campusGuid)],
+                    ['Intake', labelFor(intakeOptions, form.intakeGuid)],
+                    ['Amount', isWaived ? 'Waived' : `${form.feeAmount} ${selectedCurrency?.currencyCode ?? ''}`],
+                    ['Method', isWaived ? 'Waived' : labelFor(payTypeOptions, form.payType)],
                   ].map(([label, value]) => (
                     <div key={label} className="flex justify-between py-1">
                       <span className="text-g500">{label}</span>
@@ -367,7 +575,7 @@ export default function PaymentPage() {
                   This is a computer-generated receipt. No signature required.
                 </div>
               </div>
-              <div className="flex items-center gap-3 mt-4">
+              <div className="flex items-center gap-3 mt-4 flex-wrap">
                 <button className="btn btn-neu btn-sm"><i className="lni lni-printer" /> Print Receipt</button>
                 <button className="btn btn-primary btn-sm ml-auto" onClick={() => router.push('/admission/filing')}>
                   Proceed to Filing <i className="lni lni-arrow-right" />
@@ -389,17 +597,18 @@ export default function PaymentPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <PreviewRow label="Intake"            value={form.intake} />
+              <PreviewRow label="Intake"            value={labelFor(intakeOptions, form.intakeGuid)} />
               <PreviewRow label="Application Source" value={form.source} />
               <PreviewRow label="First Name"         value={form.firstName} />
               <PreviewRow label="Last Name"          value={form.lastName} />
-              <PreviewRow label="Phone"              value={form.phone} />
+              <PreviewRow label="Phone"              value={form.phone ? `${form.phoneCode} ${form.phone}` : ''} />
               <PreviewRow label="Email"              value={form.email} />
-              <PreviewRow label="Campus"             value={form.campus} />
-              <PreviewRow label="Programme"          value={form.programme} />
-              <PreviewRow label="Fee Structure"      value={form.feeStructure} />
-              <PreviewRow label="Semester"           value={form.semester} />
-              <PreviewRow label="Batch Time"         value={form.batchTime} />
+              <PreviewRow label="Campus"             value={labelFor(campusOptions, form.campusGuid)} />
+              <PreviewRow label="Programme"          value={labelFor(programOptions, form.programGuid)} />
+              <PreviewRow label="Fee Structure"      value={labelFor(feeOptions, form.feeHdGuid)} />
+              <PreviewRow label="Semester"           value={labelFor(semesterOptions, form.semesterGuid)} />
+              <PreviewRow label="Batch Time"         value={labelFor(batchTimeOptions, form.batchTimeGuid)} />
+              <PreviewRow label="Batch"              value={labelFor(batchOptions, form.batchGuid)} />
             </div>
 
             <hr className="border-g200 my-4" />
@@ -409,7 +618,7 @@ export default function PaymentPage() {
                 <span className="prev-lbl">Fee Status</span>
                 <span className="prev-sep">:</span>
                 <span className="prev-val text-clr-green font-bold">
-                  {isWaived ? 'Waived' : `UGX ${parseInt(form.feeAmount || '0').toLocaleString()}`}
+                  {isWaived ? 'Waived' : `${selectedCurrency?.currencyCode ?? ''} ${parseInt(form.feeAmount || '0').toLocaleString()}`}
                 </span>
               </div>
               <div className="prev-row">

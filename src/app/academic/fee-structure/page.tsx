@@ -5,6 +5,10 @@ import { FeeStructureModal } from '@/components/modals/academic/FeeStructureModa
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
+
+const PAGE_SIZE = 10
 
 type FeeRecord = {
   id: number
@@ -42,6 +46,8 @@ export default function Page() {
     showToast('Fee structure removed.', '')
   }
 
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(records, PAGE_SIZE)
+
   return (
     <>
       <div className="page active">
@@ -71,7 +77,7 @@ export default function Page() {
               </tr>
             </thead>
             <tbody>
-              {records.map(r => (
+              {pageItems.map(r => (
                 <tr key={r.id}>
                   <td>
                     <ActionMenu>
@@ -87,6 +93,7 @@ export default function Page() {
             </tbody>
           </table>
         </ScrollTable>
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="fee items" onPageChange={setPage} />
       </div>
 
       <FeeStructureModal isOpen={openModals.has('new-fee-structure-modal')} onClose={() => closeModal('new-fee-structure-modal')} showToast={showToast} nav={nav} />

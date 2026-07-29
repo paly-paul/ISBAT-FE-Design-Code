@@ -6,9 +6,13 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { NewBatchTimeModal } from '@/components/modals/academic/NewBatchTimeModal'
 import { EditBatchTimeModal } from '@/components/modals/academic/EditBatchTimeModal'
 import { useBatchTimes, useCreateBatchTime, useUpdateBatchTime, useDeleteBatchTime, BatchTime } from '@/hooks/config/useBatchTimes'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -21,6 +25,8 @@ export default function Page() {
   const createBatchTime = useCreateBatchTime()
   const updateBatchTime = useUpdateBatchTime()
   const deleteBatchTime = useDeleteBatchTime()
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -71,7 +77,7 @@ export default function Page() {
                   : rows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
-                {rows.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.batchTimeGuid}>
                     <td>
                       <ActionMenu>
@@ -90,6 +96,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="batch times" onPageChange={setPage} />
         </div>
       </div>
       <NewBatchTimeModal

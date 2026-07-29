@@ -5,9 +5,13 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { NewEnquirySourceMasterModal } from '@/components/modals/academic/NewEnquirySourceMasterModal'
 import { EditEnquirySourceMasterModal } from '@/components/modals/academic/EditEnquirySourceMasterModal'
 import { useEnquirySourceMasters, useCreateEnquirySourceMaster, useUpdateEnquirySourceMaster, useDeleteEnquirySourceMaster, EnquirySourceMaster } from '@/hooks/admission/useEnquirySourceMasters'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
@@ -24,6 +28,8 @@ export default function Page() {
   const createEnquirySourceMaster = useCreateEnquirySourceMaster()
   const updateEnquirySourceMaster = useUpdateEnquirySourceMaster()
   const deleteEnquirySourceMaster = useDeleteEnquirySourceMaster()
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rowsNewestFirst, PAGE_SIZE)
 
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
@@ -72,7 +78,7 @@ export default function Page() {
                   : rowsNewestFirst.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
-                {rowsNewestFirst.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.enquirySourceGuid}>
                     <td>
                       <ActionMenu>
@@ -90,6 +96,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="enquiry sources" onPageChange={setPage} />
         </div>
       </div>
       <NewEnquirySourceMasterModal

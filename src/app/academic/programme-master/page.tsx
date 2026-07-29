@@ -9,11 +9,15 @@ import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
-import { useCreateProgramMaster, useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
+import { useCreateProgramMaster, useDeleteProgramMasterComplete, useProgramMasters, useUpdateProgramMasterComplete } from '@/hooks/academic/useProgramMaster'
 import { useProgramGroups } from '@/hooks/academic/useProgramGroups'
 import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
 import { useFaculties } from '@/hooks/config/useFaculties'
 import { useStreams } from '@/hooks/config/useStreams'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -22,12 +26,24 @@ export default function Page() {
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [progMode, setProgMode] = useState<'add' | 'edit'>('add')
+  const [editingProgramGuid, setEditingProgramGuid] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ programGuid: string; progName: string } | null>(null)
   const createProgramMaster = useCreateProgramMaster()
+  const updateProgramMasterComplete = useUpdateProgramMasterComplete()
+  const deleteProgramMasterComplete = useDeleteProgramMasterComplete()
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  function confirmDeleteProgram() {
+    if (!deleteTarget) return
+    deleteProgramMasterComplete.mutate(deleteTarget.programGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Programme deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete programme', 'error'),
+    })
+  }
 
   useEffect(() => {
     function closeFilter(e: MouseEvent) {
@@ -87,6 +103,8 @@ export default function Page() {
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   )
 
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+
   function fth(label: string, col: string, opts: string[]) {
     return (
       <FilterTh
@@ -107,7 +125,7 @@ export default function Page() {
       <div className="page active">
         <div className="pg-hdr">
           <div><div className="pg-title">Programme Master</div><div className="pg-sub">Define programme versions · Manage active/inactive status · Accreditation tracking · Specializations</div></div>
-          <button className="btn btn-primary" onClick={() => { setProgMode('add'); openModal('new-prog-modal') }}><i className="lni lni-plus"></i> Add Programme Version</button>
+          <button className="btn btn-primary" onClick={() => { setProgMode('add'); setEditingProgramGuid(null); openModal('new-prog-modal') }}><i className="lni lni-plus"></i> Add Programme Version</button>
         </div>
 
         <div className="flex items-center gap-2 mb-[18px] flex-wrap">
@@ -146,7 +164,7 @@ export default function Page() {
                   : filteredRows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
                     : null}
-                {filteredRows.map(r => (
+                {pageItems.map(r => (
                   <tr key={r.programGuid}>
                     <td>
                       {/* Previous per-row action variants (edit/view/renew/editspec) — simulated
@@ -177,9 +195,10 @@ export default function Page() {
                       )}
                       */}
                       <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => { setProgMode('edit'); openModal('new-prog-modal') }}><i className="lni lni-pencil"></i> Edit</button>
+                        <button className="btn btn-neu btn-sm" onClick={() => { setProgMode('edit'); setEditingProgramGuid(r.programGuid); openModal('new-prog-modal') }}><i className="lni lni-pencil"></i> Edit</button>
                         <button className="btn btn-neu btn-sm" onClick={() => nav('course-units')}><i className="lni lni-book"></i> Curriculum</button>
                         <button className="btn btn-neu btn-sm" onClick={() => openModal('specialization-modal')}><i className="lni lni-target"></i> Specializations</button>
+                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget({ programGuid: r.programGuid, progName: r.progName })}><i className="lni lni-trash-can"></i> Delete</button>
                       </ActionMenu>
                     </td>
                     <td className={`font-mono text-[var(--fs-xs)] ${r.admissionStatus === 'Inactive' ? 'text-g400' : 'text-b700'}`}>{r.progCode}</td>
@@ -216,6 +235,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="programmes" onPageChange={setPage} />
         </div>
       </div>
       <ProgrammeModal
@@ -223,10 +243,31 @@ export default function Page() {
         onClose={() => closeModal('new-prog-modal')}
         showToast={showToast}
         mode={progMode === 'edit' ? 'edit' : undefined}
+        programGuid={editingProgramGuid}
+        initialCurrencyGuid={programs.find(p => p.programGuid === editingProgramGuid)?.currencyGuid ?? null}
         createProgramMaster={createProgramMaster}
+        updateProgramMasterComplete={updateProgramMasterComplete}
       />
       <SpecializationModal isOpen={openModals.has('specialization-modal')} onClose={() => closeModal('specialization-modal')} showToast={showToast} />
       <Toast toast={toast} />
+
+      {deleteTarget && (
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
+            <div className="perm-delete-title">Delete {deleteTarget.progName}?</div>
+            <div className="perm-delete-sub">
+              This will permanently delete this programme version and all its course units and fee structures. This can&apos;t be undone.
+            </div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" disabled={deleteProgramMasterComplete.isPending} onClick={confirmDeleteProgram}>
+                <i className="lni lni-trash-can"></i> {deleteProgramMasterComplete.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

@@ -6,10 +6,14 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { NewDiscountModal } from '@/components/modals/finance/NewDiscountModal'
 import { EditDiscountModal } from '@/components/modals/finance/EditDiscountModal'
 import { useDiscounts, useCreateDiscount, useUpdateDiscount, useDeleteDiscount, Discount } from '@/hooks/finance/useDiscounts'
 import { CALC_TYPE_LABELS, CALC_TYPE_VALUES } from '@/lib/api/finance/discount'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -32,6 +36,8 @@ export default function Page() {
     setEditingDiscountGuid(guid)
     openModal('edit-discount-modal')
   }
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
 
   function confirmDeleteDiscount() {
     if (!deleteTarget) return
@@ -76,7 +82,7 @@ export default function Page() {
                   : rows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
-                {rows.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.discountGuid}>
                     <td>
                       <ActionMenu>
@@ -108,6 +114,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="discounts" onPageChange={setPage} />
         </div>
       </div>
       <NewDiscountModal

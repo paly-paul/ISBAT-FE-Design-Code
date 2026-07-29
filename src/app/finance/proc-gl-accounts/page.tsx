@@ -6,10 +6,14 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { NewProcGlAccountModal } from '@/components/modals/finance/NewProcGlAccountModal'
 import { EditProcGlAccountModal } from '@/components/modals/finance/EditProcGlAccountModal'
 import { useProcGlAccounts, useCreateProcGlAccount, useUpdateProcGlAccount, useDeleteProcGlAccount, ProcGlAccount } from '@/hooks/finance/useProcGlAccounts'
 import { STATUS_LABELS, TYPE_LABELS } from '@/lib/api/finance/procGlAccount'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -32,6 +36,8 @@ export default function Page() {
     setEditingAccountGuid(guid)
     openModal('edit-proc-gl-account-modal')
   }
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
 
   function confirmDeleteProcGlAccount() {
     if (!deleteTarget) return
@@ -75,7 +81,7 @@ export default function Page() {
                   : rows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
-                {rows.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.procGlAccountGuid}>
                     <td>
                       <ActionMenu>
@@ -107,6 +113,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="GL accounts" onPageChange={setPage} />
         </div>
       </div>
       <NewProcGlAccountModal
