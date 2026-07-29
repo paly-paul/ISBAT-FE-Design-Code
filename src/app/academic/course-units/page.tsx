@@ -10,7 +10,11 @@ import { Toast } from '@/components/Toast'
 // import { FilterTh } from '@/components/FilterTh' — unused now that no column has a real filterable categorical field (see fth() below)
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { useCourseUnits, useCreateCourseUnit, useUpdateCourseUnit, useDeleteCourseUnit, CourseUnit } from '@/hooks/academic/useCourseUnits'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -69,6 +73,8 @@ export default function Page() {
   const filteredRows = rows.filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
   )
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   // Column filter-popover helper — unused now that no column has a real
   // filterable categorical field (see the commented-out fth() calls in the
@@ -187,7 +193,7 @@ export default function Page() {
                   : filteredRows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
                     : null}
-                {filteredRows.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.courseUnitGuid}>
                     <td>
                       <ActionMenu>
@@ -227,6 +233,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="course units" onPageChange={setPage} />
         </div>
       </div>
       <CourseUnitModal     isOpen={openModals.has('cu-new-modal')}  onClose={() => closeModal('cu-new-modal')}  showToast={showToast} createCourseUnit={createCourseUnit} />

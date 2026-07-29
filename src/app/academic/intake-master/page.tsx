@@ -9,7 +9,11 @@ import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { useIntakes, useCreateIntake, useUpdateIntake, useDeleteIntake, Intake } from '@/hooks/academic/useIntakes'
+
+const PAGE_SIZE = 10
 
 // Format API dates for the table and fall back to a dash if the value is invalid.
 function formatDate(value: string | undefined | null): string {
@@ -100,6 +104,8 @@ export default function Page() {
       return true
     })
   )
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function fth(label: string, col: string, opts: string[]) {
     return (
@@ -243,7 +249,7 @@ export default function Page() {
                   </tr>
                 ))}
                 */}
-                {filteredRows.map((r) => {
+                {pageItems.map((r) => {
                   // const calendar = firstCalendarEntry(r) // only used by the Sem Start / Term1 End / Term2 End columns, commented out below
                   return (
                     <tr key={r.intakeGuid} className={r.currentIntake ? 'selected-row' : ''}>
@@ -269,6 +275,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="intakes" onPageChange={setPage} />
         </div>
       </div>
       <NewIntakeModal

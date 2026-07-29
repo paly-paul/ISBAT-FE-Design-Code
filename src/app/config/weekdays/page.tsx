@@ -6,9 +6,13 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { NewWeekdayModal } from '@/components/modals/academic/NewWeekdayModal'
 import { EditWeekdayModal } from '@/components/modals/academic/EditWeekdayModal'
 import { useWeekdays, useCreateWeekday, useUpdateWeekday, useDeleteWeekday, Weekday } from '@/hooks/config/useWeekdays'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -21,6 +25,8 @@ export default function Page() {
   const createWeekday = useCreateWeekday()
   const updateWeekday = useUpdateWeekday()
   const deleteWeekday = useDeleteWeekday()
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -71,7 +77,7 @@ export default function Page() {
                   : rows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
-                {rows.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.weekDayGuid}>
                     <td>
                       <ActionMenu>
@@ -90,6 +96,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="weekdays" onPageChange={setPage} />
         </div>
       </div>
       <NewWeekdayModal

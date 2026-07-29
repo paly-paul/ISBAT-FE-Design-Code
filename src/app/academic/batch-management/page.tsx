@@ -36,7 +36,14 @@ export default function Page() {
   const [deleteTarget, setDeleteTarget] = useState<Batch | null>(null)
 
   const { data, isLoading } = useBatches(page, PAGE_SIZE)
-  const rows = data?.items ?? []
+  // Batch has no createdAt field — bStartDate is the only temporal signal
+  // available, so "newest to oldest" sorts by that, descending. getBatches()
+  // is server-paginated with no confirmed sort param, so this only orders
+  // rows within the currently loaded page, not across the full dataset.
+  const rows = useMemo(
+    () => [...(data?.items ?? [])].sort((a, b) => (b.bStartDate ?? '').localeCompare(a.bStartDate ?? '')),
+    [data],
+  )
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const createBatch = useCreateBatch()

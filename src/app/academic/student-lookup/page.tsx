@@ -5,6 +5,18 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
+
+const PAGE_SIZE = 10
+
+const STUDENT_ROWS = [
+  { studentNo: 'ISB/2026/0142', name: 'Nakato Sarah Bridget',  email: 'nakato.s@students.isbatuniversity.ac.ug',    programme: 'BSc. Computer Science',          yearSem: 'Year 1 · Sem 1', intake: 'Spring 2026', ayBadge: 'badge-blue', ayText: '2025–2026', feeBadge: 'badge-green', feeText: 'Cleared 100%',      statusBadge: 'badge-green', statusText: 'Active' },
+  { studentNo: 'ISB/2026/0141', name: 'Okello James Patrick',   email: 'okello.j@students.isbatuniversity.ac.ug',    programme: 'MBA Business Admin (ODL)',       yearSem: 'Year 1 · Sem 1', intake: 'Spring 2026', ayBadge: 'badge-blue', ayText: '2025–2026', feeBadge: 'badge-green', feeText: 'Cleared 100%',      statusBadge: 'badge-green', statusText: 'Active' },
+  { studentNo: 'ISB/2026/0140', name: 'Tumukunde Alice Grace',  email: 'tumukunde.a@students.isbatuniversity.ac.ug', programme: 'Diploma in Nursing',             yearSem: 'Year 1 · Sem 1', intake: 'Spring 2026', ayBadge: 'badge-blue', ayText: '2025–2026', feeBadge: 'badge-amber', feeText: 'Partial 60%',       statusBadge: 'badge-green', statusText: 'Active' },
+  { studentNo: 'ISB/2025/0089', name: 'Mugume Robert',          email: 'mugume.r@students.isbatuniversity.ac.ug',    programme: 'BSc. Information Technology',    yearSem: 'Year 1 · Sem 2', intake: 'Fall 2025',   ayBadge: 'badge-blue', ayText: '2025–2026', feeBadge: 'badge-red',   feeText: 'Outstanding 35%',   statusBadge: 'badge-amber', statusText: 'Access Blocked' },
+  { studentNo: 'ISB/2024/0028', name: 'Akello Diana',           email: 'akello.d@students.isbatuniversity.ac.ug',    programme: 'BBA',                            yearSem: 'Year 2 · Sem 4', intake: 'Spring 2024', ayBadge: 'badge-grey', ayText: '2023–2024', feeBadge: 'badge-green', feeText: 'Cleared 100%',      statusBadge: 'badge-green', statusText: 'Active' },
+]
 
 export default function Page() {
   const router = useRouter()
@@ -15,6 +27,8 @@ export default function Page() {
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(STUDENT_ROWS, PAGE_SIZE)
 
   return (
     <>
@@ -60,14 +74,23 @@ export default function Page() {
             <table>
               <thead><tr><th>Student No.</th><th>Name</th><th>Programme</th><th>Year / Sem</th><th>Intake</th><th>Academic Year</th><th>Fee Status</th><th>Status</th><th className="w-[160px]">Action</th></tr></thead>
               <tbody>
-                <tr><td><span className="text-blue font-bold font-mono">ISB/2026/0142</span></td><td><strong>Nakato Sarah Bridget</strong><div className="text-[var(--fs-xs)] text-g500">nakato.s@students.isbatuniversity.ac.ug</div></td><td>BSc. Computer Science</td><td>Year 1 · Sem 1</td><td>Spring 2026</td><td><span className="badge badge-blue">2025–2026</span></td><td><span className="badge badge-green">Cleared 100%</span></td><td><span className="badge badge-green"><span className="bdot"></span>Active</span></td><td><ActionMenu><button className="btn btn-neu btn-sm"><i className="lni lni-eye"></i> View</button><button className="btn btn-primary btn-sm"><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td></tr>
-                <tr><td><span className="text-blue font-bold font-mono">ISB/2026/0141</span></td><td><strong>Okello James Patrick</strong><div className="text-[var(--fs-xs)] text-g500">okello.j@students.isbatuniversity.ac.ug</div></td><td>MBA Business Admin (ODL)</td><td>Year 1 · Sem 1</td><td>Spring 2026</td><td><span className="badge badge-blue">2025–2026</span></td><td><span className="badge badge-green">Cleared 100%</span></td><td><span className="badge badge-green"><span className="bdot"></span>Active</span></td><td><ActionMenu><button className="btn btn-neu btn-sm"><i className="lni lni-eye"></i> View</button><button className="btn btn-primary btn-sm"><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td></tr>
-                <tr><td><span className="text-blue font-bold font-mono">ISB/2026/0140</span></td><td><strong>Tumukunde Alice Grace</strong><div className="text-[var(--fs-xs)] text-g500">tumukunde.a@students.isbatuniversity.ac.ug</div></td><td>Diploma in Nursing</td><td>Year 1 · Sem 1</td><td>Spring 2026</td><td><span className="badge badge-blue">2025–2026</span></td><td><span className="badge badge-amber">Partial 60%</span></td><td><span className="badge badge-green"><span className="bdot"></span>Active</span></td><td><ActionMenu><button className="btn btn-neu btn-sm"><i className="lni lni-eye"></i> View</button><button className="btn btn-primary btn-sm"><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td></tr>
-                <tr><td><span className="text-blue font-bold font-mono">ISB/2025/0089</span></td><td><strong>Mugume Robert</strong><div className="text-[var(--fs-xs)] text-g500">mugume.r@students.isbatuniversity.ac.ug</div></td><td>BSc. Information Technology</td><td>Year 1 · Sem 2</td><td>Fall 2025</td><td><span className="badge badge-blue">2025–2026</span></td><td><span className="badge badge-red">Outstanding 35%</span></td><td><span className="badge badge-amber"><span className="bdot"></span>Access Blocked</span></td><td><ActionMenu><button className="btn btn-neu btn-sm"><i className="lni lni-eye"></i> View</button><button className="btn btn-primary btn-sm"><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td></tr>
-                <tr><td><span className="text-blue font-bold font-mono">ISB/2024/0028</span></td><td><strong>Akello Diana</strong><div className="text-[var(--fs-xs)] text-g500">akello.d@students.isbatuniversity.ac.ug</div></td><td>BBA</td><td>Year 2 · Sem 4</td><td>Spring 2024</td><td><span className="badge badge-grey">2023–2024</span></td><td><span className="badge badge-green">Cleared 100%</span></td><td><span className="badge badge-green"><span className="bdot"></span>Active</span></td><td><ActionMenu><button className="btn btn-neu btn-sm"><i className="lni lni-eye"></i> View</button><button className="btn btn-primary btn-sm"><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td></tr>
+                {pageItems.map(r => (
+                  <tr key={r.studentNo}>
+                    <td><span className="text-blue font-bold font-mono">{r.studentNo}</span></td>
+                    <td><strong>{r.name}</strong><div className="text-[var(--fs-xs)] text-g500">{r.email}</div></td>
+                    <td>{r.programme}</td>
+                    <td>{r.yearSem}</td>
+                    <td>{r.intake}</td>
+                    <td><span className={`badge ${r.ayBadge}`}>{r.ayText}</span></td>
+                    <td><span className={`badge ${r.feeBadge}`}>{r.feeText}</span></td>
+                    <td><span className={`badge ${r.statusBadge}`}><span className="bdot"></span>{r.statusText}</span></td>
+                    <td><ActionMenu><button className="btn btn-neu btn-sm"><i className="lni lni-eye"></i> View</button><button className="btn btn-primary btn-sm"><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="students" onPageChange={setPage} />
         </div>
       </div>
       <Toast toast={toast} />

@@ -6,9 +6,13 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { NewCooperateModal } from '@/components/modals/finance/NewCooperateModal'
 import { EditCooperateModal } from '@/components/modals/finance/EditCooperateModal'
 import { useCooperates, useCreateCooperate, useUpdateCooperate, useDeleteCooperate, Cooperate } from '@/hooks/finance/useCooperates'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -31,6 +35,8 @@ export default function Page() {
     setEditingCooperateGuid(guid)
     openModal('edit-cooperate-modal')
   }
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
 
   function confirmDeleteCooperate() {
     if (!deleteTarget) return
@@ -71,7 +77,7 @@ export default function Page() {
                   : rows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
-                {rows.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.cooperateGuid}>
                     <td>
                       <ActionMenu>
@@ -90,6 +96,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="cooperates" onPageChange={setPage} />
         </div>
       </div>
       <NewCooperateModal

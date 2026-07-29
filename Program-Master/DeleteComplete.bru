@@ -1,0 +1,22 @@
+meta {
+  name: Delete Program Complete
+  type: http
+  seq: 8
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/academic/program-master/:programGuid/delete-complete
+  body: none
+  auth: none
+}
+
+params:path {
+  programGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+}
+
+docs {
+  Soft-deletes a program along with all its course units, fee headers, and fee lines in one request.
+
+  Success (200): { "success": true, "data": true, "message": "Program and all related data deleted successfully." }
+  Failure: 404 `not_found` if no program with that GUID.
+}

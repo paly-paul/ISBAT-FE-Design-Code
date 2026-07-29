@@ -1,0 +1,42 @@
+meta {
+  name: Update Fee Header
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/api/v1/academic/Programfee-structure/hd
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "feeHdGuid": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "feeCode": "TUI",
+    "feeDesc": "Tuition Fee",
+    "status": true,
+    "localOrForeign": false,
+    "programGuid": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "lef": null,
+    "cef": null,
+    "ace": null,
+    "lec": null,
+    "cec": null,
+    "acec": null,
+    "calcType": 1,
+    "amtPer": null,
+    "intakeGuid": null
+  }
+}
+
+docs {
+  Updates an existing fee header. feeHdGuid in the body identifies which header to update.
+
+  Success (200): data is the updated fee header object.
+  Failures: 404 not_found (no fee header with that feeHdGuid).
+}

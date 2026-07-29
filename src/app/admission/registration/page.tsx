@@ -4,8 +4,13 @@ import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { SearchSelect } from '@/components/SearchSelect'
 import { OnboardModal } from '@/components/modals/admission/OnboardModal'
 import { CompleteRegistrationModal } from '@/components/modals/admission/CompleteRegistrationModal'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
+
+const PAGE_SIZE = 10
 
 const REG_PIPELINE = [
   { label: 'App. Payment',  status: 'done',   note: '23 paid' },
@@ -16,9 +21,15 @@ const REG_PIPELINE = [
 ]
 
 const REG_ROWS = [
-  { ref: 'ADM-26-0019', name: 'Esther Tumukunde', prog: 'BSCS', type: 'Regular',       fee: 'Paid',     canReg: true },
-  { ref: 'ADM-26-0017', name: 'Grace Nampijja',   prog: 'BBA',  type: 'Lateral Entry', fee: 'Paid',     canReg: true },
-  { ref: 'ADM-26-0016', name: 'James Okello',      prog: 'BSIT', type: 'Regular',       fee: 'Not Paid', canReg: false },
+  { ref: 'ADM-26-0019', name: 'Esther Tumukunde', prog: 'BSCS', type: 'Regular',       fee: 'Paid',     canReg: true,  intake: 'Spring 2026' },
+  { ref: 'ADM-26-0017', name: 'Grace Nampijja',   prog: 'BBA',  type: 'Lateral Entry', fee: 'Paid',     canReg: true,  intake: 'Fall 2026' },
+  { ref: 'ADM-26-0016', name: 'James Okello',      prog: 'BSIT', type: 'Regular',       fee: 'Not Paid', canReg: false, intake: 'Spring 2026' },
+]
+
+const INTAKE_OPTIONS = [
+  { value: 'all', label: 'All Intakes' },
+  { value: 'Spring 2026', label: 'Spring 2026' },
+  { value: 'Fall 2026', label: 'Fall 2026' },
 ]
 
 export default function RegistrationPage() {
@@ -26,10 +37,20 @@ export default function RegistrationPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [selectedStudent, setSelectedStudent] = useState<typeof REG_ROWS[0] | null>(null)
+  const [search, setSearch] = useState('')
+  const [filterIntake, setFilterIntake] = useState('all')
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
+
+  const q = search.trim().toLowerCase()
+  const filteredRows = REG_ROWS.filter(r =>
+    (filterIntake === 'all' || r.intake === filterIntake) &&
+    (!q || r.ref.toLowerCase().includes(q) || r.name.toLowerCase().includes(q))
+  )
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function handleRegister(row: typeof REG_ROWS[0]) {
     setSelectedStudent(row); openModal('complete-registration-modal')
@@ -79,8 +100,15 @@ export default function RegistrationPage() {
       </div>
 
       <div className="card mb-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <h2 className="text-base font-semibold text-g800">Provisionally Admitted &mdash; Awaiting Final Registration</h2>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative">
+              <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm" />
+              <input className="ctrl pl-8 w-56" placeholder="Search App. Ref No. / Student…" value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+            <SearchSelect options={INTAKE_OPTIONS} value={filterIntake} onChange={setFilterIntake} />
+          </div>
         </div>
         <ScrollTable>
           <table>
@@ -88,11 +116,14 @@ export default function RegistrationPage() {
               <tr className="text-left text-g500 border-b border-g200">
                 <th style={{ width: 48 }}></th><th className="pb-2 font-medium">App. Ref</th><th className="pb-2 font-medium">Student Name</th>
                 <th className="pb-2 font-medium">Programme</th><th className="pb-2 font-medium">Admission Type</th>
-                <th className="pb-2 font-medium">Reg. Fee ($250)</th>
+                <th className="pb-2 font-medium">Intake</th><th className="pb-2 font-medium">Reg. Fee ($250)</th>
               </tr>
             </thead>
             <tbody>
-              {REG_ROWS.map(r => (
+              {filteredRows.length === 0 && (
+                <tr><td colSpan={7} className="py-8 text-center text-g400">No students match the current search / filter.</td></tr>
+              )}
+              {pageItems.map(r => (
                 <tr key={r.ref} className="border-b border-g100 hover:bg-g50">
                   <td>
                     <ActionMenu>
@@ -105,12 +136,14 @@ export default function RegistrationPage() {
                   <td className="py-2.5 text-g800">{r.name}</td>
                   <td className="py-2.5">{r.prog}</td>
                   <td className="py-2.5">{r.type}</td>
+                  <td className="py-2.5">{r.intake}</td>
                   <td className="py-2.5"><span className={r.fee === 'Paid' ? 'badge badge-green' : 'badge badge-red'}>{r.fee}</span></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </ScrollTable>
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="students" onPageChange={setPage} />
       </div>
 
       <CompleteRegistrationModal

@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
@@ -9,13 +9,14 @@ import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
 import { useProgramGroups } from '@/hooks/academic/useProgramGroups'
 import { useFaculties } from '@/hooks/config/useFaculties'
 import { useCurrencies } from '@/hooks/finance/useCurrencies'
+import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useStreams } from '@/hooks/config/useStreams'
 import { useCourseUnits } from '@/hooks/academic/useCourseUnits'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useUnitTypes } from '@/hooks/config/useUnitTypes'
 import { useUnitCategories } from '@/hooks/config/useUnitCategories'
 import { useLedgers } from '@/hooks/finance/useLedgers'
-import { ProgramUnitInput, FeeStructureInput } from '@/hooks/academic/useProgramMaster'
+import { ProgramUnitInput, FeeStructureInput, ProgramUnitUpdateInput, FeeStructureUpdateInput, ProgramMasterUpdateInput, useProgramMasterFullDetails } from '@/hooks/academic/useProgramMaster'
 import { AuthError } from '@/lib/api/client'
 
 // Toggle between UGX and USD.
@@ -33,7 +34,10 @@ const CALC_TYPES = [
 const NUM_SEMS = 6
 
 // SearchSelect works with strings, so store the selected currency id as text.
-type FeeItem     = { id: number; title: string; amount: string; currency: string; ledger: string }
+// currencyGuid is the edit-mode counterpart of currency (intCurrency) — Update
+// wants a real currencyGuid on FeeLines where Create wants intCurrency, see
+// the note on ProgramMasterUpdateInput in lib/api/academic/programMaster.ts.
+type FeeItem     = { id: number; title: string; amount: string; currency: string; currencyGuid: string; ledger: string }
 type SemFees     = FeeItem[][]
 type CUItem      = { id: number; guid: string; code: string; name: string; credits: number; unitType: string; unitCat: string }
 type SemUnits    = CUItem[][]
@@ -52,6 +56,10 @@ type FeeStructure = {
   description: string
   localOrForeign: string
   intakeCode: string
+  // Edit-mode counterpart of intakeCode — Update wants a real intakeGuid on
+  // each FeeStructure where Create wants intakeCode, see the note on
+  // ProgramMasterUpdateInput in lib/api/academic/programMaster.ts.
+  intakeGuid: string
   discountType: string
   discountAmount: string
   lateralEntryFee: string
@@ -64,14 +72,14 @@ type FeeStructure = {
 }
 
 function blankItem(id: number): FeeItem {
-  return { id, title: '', amount: '', currency: '', ledger: '' }
+  return { id, title: '', amount: '', currency: '', currencyGuid: '', ledger: '' }
 }
 
 const DEFAULT_SEM_FEES: SemFees = Array.from({ length: NUM_SEMS }, (_, i) =>
   i === 0
     ? [
-        { id: 1, title: 'Tuition Fee',       amount: '750000', currency: '', ledger: '' },
-        { id: 2, title: 'Semester Entry Fee', amount: '50000',  currency: '', ledger: '' },
+        { id: 1, title: 'Tuition Fee',       amount: '750000', currency: '', currencyGuid: '', ledger: '' },
+        { id: 2, title: 'Semester Entry Fee', amount: '50000',  currency: '', currencyGuid: '', ledger: '' },
       ]
     : []
 )
@@ -83,6 +91,7 @@ function blankFeeStructure(id: number): FeeStructure {
     description: '',
     localOrForeign: 'false',
     intakeCode: '',
+    intakeGuid: '',
     discountType: '1',
     discountAmount: '',
     lateralEntryFee: '',
@@ -136,13 +145,25 @@ let nextFeeStructId = 10
 
 interface ProgrammeModalProps extends ModalProps {
   mode?: 'edit'
+  // Which programme is being edited — only relevant when mode === 'edit'.
+  programGuid?: string | null
+  // GetFullDetails.bru doesn't return a currency for the programme, but
+  // GetByGuid.bru's own docs confirm it returns "the same shape as the
+  // list" — and the list's ProgramMaster.currencyGuid, while nullable, is
+  // already loaded in page.tsx. Passed in from there rather than issuing a
+  // second network call for data already in memory.
+  initialCurrencyGuid?: string | null
   createProgramMaster: {
     mutate: (input: ProgramMasterInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
     isPending: boolean
   }
+  updateProgramMasterComplete?: {
+    mutate: (vars: { programGuid: string; input: ProgramMasterUpdateInput }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
+    isPending: boolean
+  }
 }
 
-export function ProgrammeModal({ isOpen, onClose, showToast, mode, createProgramMaster }: ProgrammeModalProps) {
+export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, initialCurrencyGuid, createProgramMaster, updateProgramMasterComplete }: ProgrammeModalProps) {
   const [step, setStep]           = useState(1)
   const [saved, setSaved]         = useState(false)
   const [failure, setFailure]     = useState<string | null>(null)
@@ -164,6 +185,17 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, createProgram
   const [appFee, setAppFee] = useState('')
   const [lateFee, setLateFee] = useState('')
   const [currencyCode, setCurrencyCode] = useState('')
+  // Edit-mode counterpart of currencyCode — Update wants a real currencyGuid
+  // where Create wants Currency.intCurrency. Prefilled from initialCurrencyGuid
+  // (the list row's own currencyGuid) below, not from full-details, which
+  // doesn't return one — but that list field has been observed null in every
+  // real sample seen so far, so this may still come up empty and need picking.
+  const [currencyGuid, setCurrencyGuid] = useState('')
+
+  useEffect(() => {
+    if (isOpen && mode === 'edit') setCurrencyGuid(initialCurrencyGuid ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, mode, initialCurrencyGuid])
   const [unitCount, setUnitCount] = useState('')
   const [dateAcc, setDateAcc] = useState('')
   const [streamGuid, setStreamGuid] = useState('')
@@ -189,6 +221,12 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, createProgram
   // Currency.intCurrency (a number), not the currency code — see the
   // ProgramMasterInput/FeeStructureInput comments for why.
   const currencyIntOptions = currencies.map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` }))
+
+  // Edit-only: Update wants a real currencyGuid, confirmed via the "three
+  // currency guid spaces" gotcha elsewhere in this app — useFinanceCurrencies()
+  // carries the real one, unlike useCurrencies() (Currency Master) above.
+  const { data: financeCurrencies = [] } = useFinanceCurrencies()
+  const financeCurrencyOptions = financeCurrencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))
 
   const { data: streams = [] } = useStreams()
   const streamOptions = streams.map(s => ({ value: s.streamGuid, label: `${s.streamCode} — ${s.streamName}` }))
@@ -223,6 +261,88 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, createProgram
   const intakeOptions = intakes.map(i => ({ value: String(i.intakeCode), label: `${i.intakeCode} — ${i.description}` }))
   const programIntakeOptions = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
 
+  // Full course-unit/fee-structure breakdown for the programme being edited —
+  // update-complete fully replaces both collections, so this is required to
+  // prefill Steps 2/3 before saving, not just a nicety. See the note on
+  // ProgramMasterFullDetails in lib/api/academic/programMaster.ts.
+  const { data: fullDetails } = useProgramMasterFullDetails(programGuid ?? null, isOpen && mode === 'edit' && !!programGuid)
+
+  useEffect(() => {
+    if (mode !== 'edit' || !fullDetails) return
+
+    setProgramCode(fullDetails.programCode)
+    setProgramName(fullDetails.programName)
+    setProgramGroupGuid(fullDetails.programGroupGuid)
+    setProgramLevelGuid(fullDetails.programLevelGuid)
+    setFacultyGuid(fullDetails.facultyGuid)
+    setAppFee(String(fullDetails.appFee))
+    setLateFee(String(fullDetails.lateFee))
+    setUnitCount(String(fullDetails.unitCount))
+    setDateAcc(fullDetails.dateAcc ? fullDetails.dateAcc.slice(0, 10) : '')
+    // full-details returns streamGuids (plural) but update-complete only
+    // accepts one — same "create only accepts one streamGuid" limitation
+    // documented on ProgramMasterInput.
+    setStreamGuid(fullDetails.streamGuids[0] ?? '')
+    setIntakeGuid(fullDetails.intakeGuid ?? '')
+    setPgmStatus(fullDetails.pgmStatus)
+    setNoIa(fullDetails.noIa)
+
+    const units: SemUnits = Array.from({ length: NUM_SEMS }, () => [])
+    fullDetails.programUnits.forEach(u => {
+      const si = u.semCode - 1
+      if (si < 0 || si >= NUM_SEMS) return
+      const cu = courseUnits.find(c => c.courseUnitGuid === u.courseUnitGuid)
+      units[si].push({
+        id: nextCUId++,
+        guid: u.courseUnitGuid,
+        code: u.courseUnitCode,
+        name: u.courseUnitName,
+        credits: cu?.maxCredits ?? 0,
+        unitType: u.unitTypeGuid,
+        unitCat: u.unitCatGuid,
+      })
+    })
+    setSemUnits(units)
+
+    const structures: FeeStructure[] = fullDetails.feeStructures.length > 0
+      ? fullDetails.feeStructures.map(s => {
+          const semFees: SemFees = Array.from({ length: NUM_SEMS }, () => [])
+          s.feeLines.forEach(l => {
+            const si = l.semCode - 1
+            if (si < 0 || si >= NUM_SEMS) return
+            semFees[si].push({
+              id: nextId++,
+              title: '',
+              amount: String(l.amount),
+              currency: '',
+              currencyGuid: l.currencyGuid,
+              ledger: l.ledgerGuid,
+            })
+          })
+          return {
+            id: nextFeeStructId++,
+            feeCode: s.feeCode,
+            description: s.feeDesc,
+            localOrForeign: String(s.localOrForeign),
+            intakeCode: '',
+            intakeGuid: s.intakeGuid ?? '',
+            discountType: String(s.calcType),
+            discountAmount: s.amtPer != null ? String(s.amtPer) : '',
+            lateralEntryFee: s.lef != null ? String(s.lef) : '',
+            lateralEntryFeeCurrency: s.lec != null ? String(s.lec) : '',
+            creditExemptionFee: s.cef != null ? String(s.cef) : '',
+            creditExemptionFeeCurrency: s.cec != null ? String(s.cec) : '',
+            aptechCreditExemptionFee: s.ace != null ? String(s.ace) : '',
+            aptechCreditExemptionFeeCurrency: s.acec != null ? String(s.acec) : '',
+            semFees,
+          }
+        })
+      : makeDefaultFeeStructures()
+    setFeeStructures(structures)
+    setActiveFeeIdx(0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullDetails, mode])
+
   function selectProgramLevel(guid: string) {
     setProgramLevelGuid(guid)
     if (step1Errors.programLevelGuid) setStep1Errors(p => ({ ...p, programLevelGuid: '' }))
@@ -242,7 +362,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, createProgram
     if (!facultyGuid) e.facultyGuid = 'Please select a Faculty'
     if (!appFee) e.appFee = 'Application Fee is required'
     if (!lateFee) e.lateFee = 'Late Fee is required'
-    if (!currencyCode) e.currencyCode = 'Please select a Currency'
+    if (mode === 'edit' ? !currencyGuid : !currencyCode) e.currencyCode = 'Please select a Currency'
     if (!unitCount) e.unitCount = 'No. of Course Units is required'
     if (!dateAcc) e.dateAcc = 'Accreditation Date is required'
     if (!streamGuid) e.streamGuid = 'Please select a Specialization'
@@ -260,7 +380,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, createProgram
   }
   // Every fee item needs a currency and ledger selected; otherwise the payload sends 0/empty and the backend rejects it.
   function feeStructHasCurrencyGaps(s: FeeStructure) {
-    return s.semFees.some(items => items.some(item => !item.currency))
+    return s.semFees.some(items => items.some(item => (mode === 'edit' ? !item.currencyGuid : !item.currency)))
   }
   function feeStructHasLedgerGaps(s: FeeStructure) {
     return s.semFees.some(items => items.some(item => !item.ledger))
@@ -269,6 +389,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, createProgram
   const anyCurrencyGaps   = feeStructures.some(feeStructHasCurrencyGaps)
   const anyLedgerGaps     = feeStructures.some(feeStructHasLedgerGaps)
   const allFeeComplete    = feeStructures.every(feeStructComplete) && !anyCurrencyGaps && !anyLedgerGaps
+  const isSaving = mode === 'edit' ? !!updateProgramMasterComplete?.isPending : createProgramMaster.isPending
 
   function handleClose() {
     setStep(1); setSaved(false); setFailure(null)
@@ -277,14 +398,75 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, createProgram
     setSemUnits(Array.from({ length: NUM_SEMS }, () => []))
     setPendingSel(Array(NUM_SEMS).fill(''))
     setProgramCode(''); setProgramName(''); setProgramGroupGuid(''); setProgramLevelGuid('')
-    setFacultyGuid(''); setAppFee(''); setLateFee(''); setCurrencyCode(''); setUnitCount('')
+    setFacultyGuid(''); setAppFee(''); setLateFee(''); setCurrencyCode(''); setCurrencyGuid(''); setUnitCount('')
     setDateAcc(''); setStreamGuid(''); setIntakeGuid(''); setPgmStatus(true); setNoIa(false); setAccLetterFile(null); setStep1Errors({})
     onClose()
   }
 
   function handleFinalSubmit() {
-    // Edit mode is still local-only until the update endpoint is confirmed.
-    if (mode === 'edit') { setSaved(true); return }
+    if (mode === 'edit') {
+      if (!programGuid || !updateProgramMasterComplete) return
+      if (!validateStep1()) { setStep(1); return }
+
+      const programUnits: ProgramUnitUpdateInput[] = semUnits.flatMap((units, si) =>
+        units.map(u => ({
+          semCode: si + 1,
+          courseUnitGuid: u.guid,
+          streamGuid,
+          unitTypeGuid: u.unitType,
+          unitCatGuid: u.unitCat,
+          flag: 0,
+        }))
+      )
+
+      const feeStructuresPayload: FeeStructureUpdateInput[] = feeStructures.map(s => ({
+        feeCode: s.feeCode,
+        feeDesc: s.description,
+        status: true,
+        localOrForeign: s.localOrForeign === 'true',
+        lef: s.lateralEntryFee ? +s.lateralEntryFee : null,
+        cef: s.creditExemptionFee ? +s.creditExemptionFee : null,
+        ace: s.aptechCreditExemptionFee ? +s.aptechCreditExemptionFee : null,
+        lec: s.lateralEntryFeeCurrency ? +s.lateralEntryFeeCurrency : null,
+        cec: s.creditExemptionFeeCurrency ? +s.creditExemptionFeeCurrency : null,
+        acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
+        calcType: +s.discountType || 1,
+        amtPer: s.discountAmount ? +s.discountAmount : null,
+        intakeGuid: s.intakeGuid || null,
+        feeLines: s.semFees.flatMap((items, si) =>
+          items.map(item => {
+            const ledger = ledgers.find(l => l.ledgerGuid === item.ledger)
+            return {
+              semCode: si + 1,
+              ledgerGuid: item.ledger,
+              currencyGuid: item.currencyGuid,
+              ledgerNum: ledger?.ledgerNum ?? 0,
+              amount: +item.amount || 0,
+            }
+          })
+        ),
+      }))
+
+      const updateInput: ProgramMasterUpdateInput = {
+        programCode, programName, programLevelGuid, pgmStatus, noIa, programGroupGuid,
+        unitCount: +unitCount || 0, appFee: +appFee || 0, lateFee: +lateFee || 0,
+        facultyGuid, currencyGuid, dateAcc: `${dateAcc}T00:00:00`, streamGuid, intakeGuid,
+        programUnits, feeStructures: feeStructuresPayload, accLetterFile,
+      }
+
+      updateProgramMasterComplete.mutate(
+        { programGuid, input: updateInput },
+        {
+          onSuccess: () => { setSaved(true); showToast('Programme updated successfully') },
+          onError: (error: Error) => {
+            const code = error instanceof AuthError ? error.code : undefined
+            setFailure(error.message || `Failed to update programme${code ? ` (${code})` : ''}. Please try again.`)
+          },
+        },
+      )
+      return
+    }
+
     if (!validateStep1()) { setStep(1); return }
 
     const programUnits: ProgramUnitInput[] = semUnits.flatMap((units, si) =>
@@ -574,14 +756,27 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, createProgram
                       onChange={e => { setLateFee(e.target.value); if (step1Errors.lateFee) setStep1Errors(p => ({ ...p, lateFee: '' })) }}
                       style={step1Errors.lateFee ? { borderColor: 'var(--red)' } : undefined}
                     />
-                    <SearchSelect
-                      placeholder="Currency"
-                      value={currencyCode}
-                      onChange={v => { setCurrencyCode(v); if (step1Errors.currencyCode) setStep1Errors(p => ({ ...p, currencyCode: '' })) }}
-                      options={currencyIntOptions}
-                    />
+                    {mode === 'edit' ? (
+                      <SearchSelect
+                        placeholder="Currency"
+                        value={currencyGuid}
+                        onChange={v => { setCurrencyGuid(v); if (step1Errors.currencyCode) setStep1Errors(p => ({ ...p, currencyCode: '' })) }}
+                        options={financeCurrencyOptions}
+                      />
+                    ) : (
+                      <SearchSelect
+                        placeholder="Currency"
+                        value={currencyCode}
+                        onChange={v => { setCurrencyCode(v); if (step1Errors.currencyCode) setStep1Errors(p => ({ ...p, currencyCode: '' })) }}
+                        options={currencyIntOptions}
+                      />
+                    )}
                   </div>
-                  <div className="text-g500 mt-[5px]" style={{ fontSize: 'var(--fs-xs)' }}>Pre-loaded from the selected Programme Level. Override per programme if needed.</div>
+                  <div className="text-g500 mt-[5px]" style={{ fontSize: 'var(--fs-xs)' }}>
+                    {mode === 'edit'
+                      ? (currencyGuid ? 'Pre-filled from the existing programme — override if needed.' : 'Not available on the existing programme record — please select it.')
+                      : 'Pre-loaded from the selected Programme Level. Override per programme if needed.'}
+                  </div>
                   {(step1Errors.appFee || step1Errors.lateFee || step1Errors.currencyCode) && (
                     <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.appFee || step1Errors.lateFee || step1Errors.currencyCode}</p>
                   )}
@@ -851,7 +1046,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, createProgram
                   </div>
                   <div className="fg m-0">
                     <div className="lbl">Intake</div>
-                    <SearchSelect placeholder="— Select intake —" value={activeFeeStruct.intakeCode} onChange={val => updateFeeStructureMeta('intakeCode', val)} options={intakeOptions} />
+                    {mode === 'edit' ? (
+                      <SearchSelect placeholder="— Select intake —" value={activeFeeStruct.intakeGuid} onChange={val => updateFeeStructureMeta('intakeGuid', val)} options={programIntakeOptions} />
+                    ) : (
+                      <SearchSelect placeholder="— Select intake —" value={activeFeeStruct.intakeCode} onChange={val => updateFeeStructureMeta('intakeCode', val)} options={intakeOptions} />
+                    )}
                   </div>
                 </div>
 
@@ -908,8 +1107,12 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, createProgram
                   {activeFeeStruct.semFees.map((items, si) => {
                     const isOpen = feeAccordion === si
                     const total  = items.reduce((s, f) => s + (parseFloat(f.amount) || 0), 0)
-                    // items[0].currency holds Currency.intCurrency (a string) now, not a code — resolve it back to a code for display.
-                    const totalCurrencyCode = currencies.find(c => String(c.intCurrency) === items[0]?.currency)?.currencyCode ?? ''
+                    // items[0].currency holds Currency.intCurrency (a string) in create mode, or
+                    // items[0].currencyGuid holds a real currencyGuid in edit mode — resolve
+                    // back to a code for display either way.
+                    const totalCurrencyCode = mode === 'edit'
+                      ? financeCurrencies.find(c => c.currencyGuid === items[0]?.currencyGuid)?.currencyCode ?? ''
+                      : currencies.find(c => String(c.intCurrency) === items[0]?.currency)?.currencyCode ?? ''
                     return (
                       <div key={si} style={{ border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
                         <button
@@ -944,7 +1147,10 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, createProgram
                                   </div>
                                   <input className="ctrl" value={f.title}  onChange={e => updateItem(si, f.id, 'title',  e.target.value)} placeholder="e.g. Tuition Fee" />
                                   <input className="ctrl" value={f.amount} onChange={e => updateItem(si, f.id, 'amount', e.target.value)} type="number" min={0} placeholder="0" />
-                                  <SearchSelect placeholder="— Currency —" options={currencyIntOptions} value={f.currency} onChange={val => updateItem(si, f.id, 'currency', val)} />
+                                  {mode === 'edit'
+                                    ? <SearchSelect placeholder="— Currency —" options={financeCurrencyOptions} value={f.currencyGuid} onChange={val => updateItem(si, f.id, 'currencyGuid', val)} />
+                                    : <SearchSelect placeholder="— Currency —" options={currencyIntOptions} value={f.currency} onChange={val => updateItem(si, f.id, 'currency', val)} />
+                                  }
                                   <SearchSelect placeholder="— Select Ledger —" options={ledgerOptions} value={f.ledger} onChange={val => updateItem(si, f.id, 'ledger', val)} />
                                   <button className="btn btn-danger btn-sm" style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => removeItem(si, f.id)}><i className="lni lni-trash-can"></i></button>
                                 </div>
@@ -981,8 +1187,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, createProgram
             <span style={{ color: 'var(--red)', fontSize: 12 }}>Select a currency and ledger for every fee item before saving</span>
           )}
           {step === 3 && (
-            <button className="btn btn-primary" onClick={handleFinalSubmit} disabled={!allFeeComplete || createProgramMaster.isPending}>
-              <i className="lni lni-checkmark"></i> {createProgramMaster.isPending ? 'Saving…' : `${mode === 'edit' ? 'Update' : 'Save'} Programme`}
+            <button className="btn btn-primary" onClick={handleFinalSubmit} disabled={!allFeeComplete || isSaving}>
+              <i className="lni lni-checkmark"></i> {isSaving ? 'Saving…' : `${mode === 'edit' ? 'Update' : 'Save'} Programme`}
             </button>
           )}
         </div>

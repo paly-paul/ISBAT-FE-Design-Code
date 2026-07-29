@@ -6,9 +6,13 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { NewSkillModal } from '@/components/modals/academic/NewSkillModal'
 import { EditSkillModal } from '@/components/modals/academic/EditSkillModal'
 import { useSkills, useCreateSkill, useUpdateSkill, Skill } from '@/hooks/config/useSkills'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -19,6 +23,8 @@ export default function Page() {
   const { data: rows = [], isLoading } = useSkills()
   const createSkill = useCreateSkill()
   const updateSkill = useUpdateSkill()
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -60,7 +66,7 @@ export default function Page() {
                   : rows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
-                {rows.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.id}>
                     <td>
                       <ActionMenu>
@@ -75,6 +81,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="skills" onPageChange={setPage} />
         </div>
       </div>
       <NewSkillModal

@@ -1,0 +1,22 @@
+meta {
+  name: Delete Complete Fee Header
+  type: http
+  seq: 9
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/academic/Programfee-structure/hd/:feeHdGuid/delete-complete
+  body: none
+  auth: none
+}
+
+params:path {
+  feeHdGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+}
+
+docs {
+  Soft-deletes a fee header and all its associated fee lines in a single call.
+
+  Success (200): data is true.
+  Failures: 404 not_found (no fee header with that feeHdGuid).
+}

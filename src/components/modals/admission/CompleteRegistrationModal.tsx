@@ -10,12 +10,18 @@ export interface RegistrationStudent {
 
 const PROFILE_DETAILS: Record<string, {
   dob: string; gender: string; nationality: string; nationalId: string
-  phone: string; email: string; address: string; intake: string; campus: string; submitted: string
+  phone: string; email: string; address: string; intake: string; campus: string; faculty: string; submitted: string
 }> = {
-  'ADM-26-0019': { dob: '22 Feb 2005', gender: 'Female', nationality: 'Ugandan', nationalId: 'CM05022212345', phone: '+256 701 556 234', email: 'esther.tk@gmail.com',        address: 'Ntinda, Kampala',     intake: 'September 2026', campus: 'Main Campus',        submitted: '3 weeks ago' },
-  'ADM-26-0017': { dob: '09 Jun 2004', gender: 'Female', nationality: 'Ugandan', nationalId: 'CM04060998765', phone: '+256 772 331 890', email: 'grace.nampijja@gmail.com', address: 'Bugolobi, Kampala',   intake: 'September 2026', campus: 'City Campus',        submitted: '2 weeks ago' },
-  'ADM-26-0016': { dob: '15 Oct 2003', gender: 'Male',   nationality: 'Ugandan', nationalId: 'CM03101554321', phone: '+256 704 220 117', email: 'james.okello@gmail.com',   address: 'Jinja Road, Kampala', intake: 'September 2026', campus: 'Jinja Road Campus', submitted: '5 weeks ago' },
+  'ADM-26-0019': { dob: '22 Feb 2005', gender: 'Female', nationality: 'Ugandan', nationalId: 'CM05022212345', phone: '+256 701 556 234', email: 'esther.tk@gmail.com',        address: 'Ntinda, Kampala',     intake: 'September 2026', campus: 'Main Campus',        faculty: 'Faculty of Computing & Informatics', submitted: '3 weeks ago' },
+  'ADM-26-0017': { dob: '09 Jun 2004', gender: 'Female', nationality: 'Ugandan', nationalId: 'CM04060998765', phone: '+256 772 331 890', email: 'grace.nampijja@gmail.com', address: 'Bugolobi, Kampala',   intake: 'September 2026', campus: 'City Campus',        faculty: 'Faculty of Business & Management',   submitted: '2 weeks ago' },
+  'ADM-26-0016': { dob: '15 Oct 2003', gender: 'Male',   nationality: 'Ugandan', nationalId: 'CM03101554321', phone: '+256 704 220 117', email: 'james.okello@gmail.com',   address: 'Jinja Road, Kampala', intake: 'September 2026', campus: 'Jinja Road Campus', faculty: 'Faculty of Computing & Informatics', submitted: '5 weeks ago' },
 }
+
+const SEMESTERS = ['Semester 1', 'Semester 2', 'Semester 3']
+const BATCHES   = ['BSCVFXS27DA', 'BSCVFXS27DB', 'BBAMGT27EA', 'ITINFO27DA']
+
+// Mock stand-in for the real Finance Ledger master's priority ordering.
+const LEDGER_PRIORITY = '1. Registration Fee → 2. Tuition → 3. Library / IT Levy'
 
 const REG_CHECKLIST = [
   { label: 'Provisional Admission Letter issued',                 result: 'done'    as const },
@@ -35,11 +41,18 @@ export function CompleteRegistrationModal({ isOpen, onClose, student, onOnboard 
   const [paymentType, setPaymentType] = useState('Cash')
   const [receiptBook, setReceiptBook] = useState('')
   const [showBankFields, setShowBankFields] = useState(false)
+  const [semester, setSemester] = useState('')
+  const [batch, setBatch] = useState('')
+  const [aptechExemption, setAptechExemption] = useState(false)
+  const [isRefugeeStudent, setIsRefugeeStudent] = useState(false)
+  const [refugeeId, setRefugeeId] = useState('')
 
   useEffect(() => {
     if (student) {
       setAdmissionType(student.type === 'Lateral Entry' ? 'Lateral Entry' : 'Regular Entry (Semester 1)')
       setPaymentType('Cash'); setReceiptBook(''); setShowBankFields(false)
+      setSemester(''); setBatch(''); setAptechExemption(false)
+      setIsRefugeeStudent(false); setRefugeeId('')
     }
   }, [student])
 
@@ -52,10 +65,6 @@ export function CompleteRegistrationModal({ isOpen, onClose, student, onOnboard 
   const details = PROFILE_DETAILS[student.ref] ?? PROFILE_DETAILS['ADM-26-0019']
   const [firstName, ...rest] = student.name.split(' ')
   const lastName = rest.join(' ')
-  const slug = student.name.toLowerCase().split(' ').join('.')
-  const numSuffix = student.ref.split('-').pop()?.padStart(4, '0') ?? '0000'
-  const studentNumber = `ISB/2026/${numSuffix}`
-  const universityEmail = `${slug}.${numSuffix}@students.isbatuniversity.ac.ug`
 
   return (
     <div className="modal-overlay open">
@@ -134,17 +143,49 @@ export function CompleteRegistrationModal({ isOpen, onClose, student, onOnboard 
                 />
               </div>
 
-              <div className="flex flex-col gap-2 mt-2">
+              <label className="flex items-center gap-2 mt-2" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={aptechExemption} onChange={e => setAptechExemption(e.target.checked)} style={{ width: 16, height: 16 }} />
+                <span className="font-medium text-g700">Aptech Credit Exemption Student?</span>
+              </label>
+
+              <label className="flex items-center gap-2 mt-2" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={isRefugeeStudent} onChange={e => setIsRefugeeStudent(e.target.checked)} style={{ width: 16, height: 16 }} />
+                <span className="font-medium text-g700">Refugee Student?</span>
+              </label>
+              {isRefugeeStudent && (
+                <div className="rounded-lg p-3 mt-2 bg-b50 border border-b200">
+                  <div className="fg mb-2">
+                    <label className="lbl">Refugee ID <span className="req">*</span></label>
+                    <input className="ctrl bg-white" placeholder="Refugee ID number" value={refugeeId} onChange={e => setRefugeeId(e.target.value)} />
+                  </div>
+                  <div className="g3">
+                    <div><span className="text-xs text-g400 block">Faculty</span><span className="text-sm font-semibold text-g800">{details.faculty}</span></div>
+                    <div><span className="text-xs text-g400 block">Intake</span><span className="text-sm font-semibold text-g800">{details.intake}</span></div>
+                    <div><span className="text-xs text-g400 block">Campus</span><span className="text-sm font-semibold text-g800">{details.campus}</span></div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2 mt-3">
                 <div className="flex justify-between text-sm"><span className="text-g600">Semester 1 Tuition</span><span className="font-semibold text-g800">As per fee structure</span></div>
                 <div className="flex justify-between text-sm"><span className="text-g600">Registration Fee (paid)</span><span className="font-semibold flex items-center gap-1" style={{ color: 'var(--green)' }}>$250 <i className="lni lni-checkmark-circle" /></span></div>
                 <div className="flex justify-between text-sm"><span className="text-g600">Semester Entry Fee (paid)</span><span className="font-semibold flex items-center gap-1" style={{ color: 'var(--green)' }}>Included in $250 <i className="lni lni-checkmark-circle" /></span></div>
                 <div className="flex justify-between text-sm"><span className="text-g600">Library / IT Levy</span><span className="font-semibold text-g800">150,000 UGX</span></div>
+                <div className="flex justify-between text-sm"><span className="text-g600">Ledger Priority</span><span className="font-semibold text-g800 text-right" style={{ maxWidth: '60%' }}>{LEDGER_PRIORITY}</span></div>
                 <div className="sec-divider my-1" />
                 <div className="flex justify-between text-sm"><span className="font-semibold text-g800">Entry Point</span><span className="font-semibold text-b600">Semester 1</span></div>
               </div>
 
               <p className="text-xs font-bold uppercase tracking-wide mt-4 mb-2" style={{ color: 'var(--b600)' }}>Registration Payment Details</p>
               <div className="g2">
+                <div className="fg">
+                  <label className="lbl">Semester <span className="req">*</span></label>
+                  <SearchSelect placeholder="-- Select Semester --" options={SEMESTERS} value={semester} onChange={setSemester} />
+                </div>
+                <div className="fg">
+                  <label className="lbl">Batch <span className="req">*</span></label>
+                  <SearchSelect placeholder="-- Select Batch --" options={BATCHES} value={batch} onChange={setBatch} />
+                </div>
                 <div className="fg">
                   <label className="lbl">Payment Type <span className="req">*</span></label>
                   <SearchSelect options={['Cash', 'Bank Transfer', 'Mobile Money']} value={paymentType} onChange={handlePaymentTypeChange} />
@@ -168,8 +209,14 @@ export function CompleteRegistrationModal({ isOpen, onClose, student, onOnboard 
 
               <div className="rounded-lg p-3 mt-2 bg-g100 border border-g200">
                 <p className="text-[10px] font-bold uppercase tracking-wide mb-2 text-g400">Auto-generated on Registration</p>
-                <div className="fg"><label className="lbl">Student Number</label><input className="ctrl bg-white" readOnly value={studentNumber || ''} /></div>
-                <div className="fg mb-0"><label className="lbl">University Email</label><input className="ctrl bg-white" readOnly value={universityEmail || ''} /></div>
+                <div className="fg">
+                  <label className="lbl">Student Number</label>
+                  <input className="ctrl bg-white text-g400 italic" readOnly value="Generated once registration is completed" />
+                </div>
+                <div className="fg mb-0">
+                  <label className="lbl">University Email</label>
+                  <input className="ctrl bg-white text-g400 italic" readOnly value="Generated once registration is completed" />
+                </div>
               </div>
 
               <h3 className="text-sm font-semibold text-g700 mb-3 mt-5"><i className="lni lni-bookmark mr-1" /> Final Documentation Check</h3>

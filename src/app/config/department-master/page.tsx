@@ -7,9 +7,13 @@ import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { NewDepartmentModal } from '@/components/modals/academic/NewDepartmentModal'
 import { EditDepartmentModal } from '@/components/modals/academic/EditDepartmentModal'
 import { useDepartments, useCreateDepartment, useUpdateDepartment, useDeleteDepartment, Department } from '@/hooks/config/useDepartments'
+
+const PAGE_SIZE = 10
 
 function StatusBadge({ status }: { status: string }) {
   if (status === 'Active') return <span className="badge-green">{status}</span>
@@ -60,6 +64,8 @@ export default function Page() {
   const filteredRows = rows.filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
   )
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function fth(label: string, col: string, opts: string[]) {
     return (
@@ -135,7 +141,7 @@ export default function Page() {
                   </tr>
                 ))}
                 */}
-                {filteredRows.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.intDept}>
                     <td>
                       <ActionMenu>
@@ -154,6 +160,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="departments" onPageChange={setPage} />
         </div>
       </div>
       <NewDepartmentModal

@@ -6,10 +6,14 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { NewReceiptBookModal } from '@/components/modals/finance/NewReceiptBookModal'
 import { EditReceiptBookModal } from '@/components/modals/finance/EditReceiptBookModal'
 import { useReceiptBooks, useCreateReceiptBook, useUpdateReceiptBook, useDeleteReceiptBook, ReceiptBook } from '@/hooks/finance/useReceiptBooks'
 import { STATUS_LABELS, CATEGORY_LABELS, BOOK_CATEGORY_LABELS } from '@/lib/api/finance/receiptBook'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -32,6 +36,8 @@ export default function Page() {
     setEditingBook(book)
     openModal('edit-receipt-book-modal')
   }
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
 
   function confirmDeleteReceiptBook() {
     if (!deleteTarget) return
@@ -79,7 +85,7 @@ export default function Page() {
                   : rows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
-                {rows.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.receiptBookGuid}>
                     <td>
                       <ActionMenu>
@@ -110,6 +116,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="receipt books" onPageChange={setPage} />
         </div>
       </div>
       <NewReceiptBookModal

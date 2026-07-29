@@ -6,9 +6,13 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { NewFollowUpModeModal } from '@/components/modals/academic/NewFollowUpModeModal'
 import { EditFollowUpModeModal } from '@/components/modals/academic/EditFollowUpModeModal'
 import { useFollowUpModes, useCreateFollowUpMode, useUpdateFollowUpMode, useDeleteFollowUpMode, FollowUpMode } from '@/hooks/admission/useFollowUpModes'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -21,6 +25,8 @@ export default function Page() {
   const createFollowUpMode = useCreateFollowUpMode()
   const updateFollowUpMode = useUpdateFollowUpMode()
   const deleteFollowUpMode = useDeleteFollowUpMode()
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -70,7 +76,7 @@ export default function Page() {
                   : rows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
-                {rows.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.followUpModeGuid}>
                     <td>
                       <ActionMenu>
@@ -88,6 +94,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="followup modes" onPageChange={setPage} />
         </div>
       </div>
       <NewFollowUpModeModal

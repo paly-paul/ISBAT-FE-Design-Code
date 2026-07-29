@@ -1,0 +1,22 @@
+meta {
+  name: Get Payment Proof
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admissions/application-payments/proof/:intApplication
+  body: none
+  auth: none
+}
+
+params:path {
+  intApplication: 1
+}
+
+docs {
+  Returns the payment proof file info for a given application.
+
+  Success (200): data = PaymentProofFileDto.
+  Failure: 404 `not_found`.
+}

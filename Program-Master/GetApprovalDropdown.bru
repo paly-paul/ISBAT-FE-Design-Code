@@ -1,0 +1,17 @@
+meta {
+  name: Get Program Approval Dropdown
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/academic/program-approval/dropdown
+  body: none
+  auth: none
+}
+
+docs {
+  Returns all programs available in the approval workflow.
+
+  Success (200): standard envelope, `data` is an array of `{ programGuid, programName }`.
+}

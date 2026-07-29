@@ -1,4 +1,4 @@
-import { apiGet, apiPostForm } from '../client'
+import { apiDelete, apiGet, apiPostForm, apiPutForm } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -191,4 +191,242 @@ export function getProgramMasters(search = ''): Promise<ProgramMaster[]> {
   if (MOCK_AUTH) return Promise.resolve(mockProgramMasters)
   return apiGet<ProgramMaster[] | null>(`/api/v1/academic/program-master?search=${encodeURIComponent(search)}`)
     .then(data => data ?? [])
+}
+
+// --- Full details / Update / Delete ---------------------------------------
+// Confirmed via Program-Master/GetFullDetails.bru — full course-unit and
+// fee-structure breakdown for one programme, used to prefill the Edit
+// modal's 3 steps before an update-complete call (which fully replaces
+// both collections, so editing without this would silently wipe them).
+export interface ProgramUnitDetail {
+  semCode: number
+  courseUnitGuid: string
+  courseUnitCode: string
+  courseUnitName: string
+  streamGuid: string | null
+  streamName: string | null
+  unitTypeGuid: string
+  unitTypeName: string
+  unitCatGuid: string
+  unitCatName: string
+  flag: number
+}
+
+export interface FeeLineDetail {
+  semCode: number
+  ledgerGuid: string
+  currencyGuid: string
+  ledgerNum: number
+  amount: number
+}
+
+export interface FeeStructureDetail {
+  feeHdGuid: string
+  feeCode: string
+  feeDesc: string
+  status: boolean
+  localOrForeign: boolean
+  intakeGuid: string | null
+  calcType: number
+  amtPer: number | null
+  lef: number | null
+  cef: number | null
+  lec: number | null
+  cec: number | null
+  ace: number | null
+  acec: number | null
+  feeLines: FeeLineDetail[]
+}
+
+export interface ProgramMasterFullDetails {
+  programGuid: string
+  programCode: string
+  programName: string
+  pgmStatus: boolean
+  noIa: boolean
+  programGroupGuid: string
+  unitCount: number
+  programLevelGuid: string
+  yearCount: number
+  semCount: number
+  facultyGuid: string
+  dateAcc: string
+  accLetter: string | null
+  appFee: number
+  lateFee: number
+  intakeGuid: string | null
+  streamGuids: string[]
+  semesters: unknown[]
+  programUnits: ProgramUnitDetail[]
+  feeStructures: FeeStructureDetail[]
+}
+
+export function getProgramMasterFullDetails(programGuid: string): Promise<ProgramMasterFullDetails> {
+  if (MOCK_AUTH) {
+    const existing = mockProgramMasters.find(p => p.programGuid === programGuid)
+    if (!existing) return Promise.reject(new Error('Programme not found'))
+    return Promise.resolve({ ...existing, streamGuids: existing.streamGuids, semesters: [], programUnits: [], feeStructures: [] })
+  }
+  return apiGet<ProgramMasterFullDetails>(`/api/v1/academic/program-master/${programGuid}/full-details`)
+}
+
+// One course unit assigned to a semester, for update-complete — same guids
+// as ProgramUnitInput, just under UnitTypeGuid/UnitCatGuid keys instead of
+// UnitType/UnitCat (see appendProgramUnitsForUpdate below).
+export interface ProgramUnitUpdateInput {
+  semCode: number
+  courseUnitGuid: string
+  streamGuid: string
+  unitTypeGuid: string
+  unitCatGuid: string
+  flag: number
+}
+
+// Confirmed via UpdateComplete.bru: CurrencyGuid (a real guid) replaces
+// Create's IntLedger+IntCurrency pair.
+export interface FeeLineUpdateInput {
+  semCode: number
+  ledgerGuid: string
+  currencyGuid: string
+  ledgerNum: number
+  amount: number
+}
+
+// Confirmed via UpdateComplete.bru: IntakeGuid (a real guid) replaces
+// Create's IntakeCode (a number). Lec/Cec/Acec are NOT confirmed to have
+// switched to guids the way CurrencyGuid/IntakeGuid did — the docs list
+// them under the same short names with no "Guid" suffix, unlike the fields
+// that did change — so they're treated as still intCurrency-based here,
+// same as Create, until a real response proves otherwise.
+export interface FeeStructureUpdateInput {
+  feeCode: string
+  feeDesc: string
+  status: boolean
+  localOrForeign: boolean
+  lef: number | null
+  cef: number | null
+  ace: number | null
+  lec: number | null
+  cec: number | null
+  acec: number | null
+  calcType: number
+  amtPer: number | null
+  intakeGuid: string | null
+  feeLines: FeeLineUpdateInput[]
+}
+
+// Confirmed via UpdateComplete.bru — deliberately a separate interface from
+// ProgramMasterInput rather than a variant of it: several fields genuinely
+// differ in kind (currencyGuid vs currencyCode), not just name.
+export interface ProgramMasterUpdateInput {
+  programCode: string
+  programName: string
+  programLevelGuid: string
+  pgmStatus: boolean
+  noIa: boolean
+  programGroupGuid: string
+  unitCount: number
+  appFee: number
+  lateFee: number
+  facultyGuid: string
+  currencyGuid: string
+  dateAcc: string
+  streamGuid: string
+  intakeGuid: string
+  programUnits: ProgramUnitUpdateInput[]
+  feeStructures: FeeStructureUpdateInput[]
+  accLetterFile?: File | null
+}
+
+// Bracket notation (ProgramUnits[i][Field]) — confirmed via UpdateComplete.bru,
+// genuinely different from Create's dot notation (appendProgramUnits above).
+function appendProgramUnitsForUpdate(formData: FormData, units: ProgramUnitUpdateInput[]) {
+  units.forEach((u, i) => {
+    formData.append(`ProgramUnits[${i}][SemCode]`, String(u.semCode))
+    formData.append(`ProgramUnits[${i}][CourseUnitGuid]`, u.courseUnitGuid)
+    formData.append(`ProgramUnits[${i}][StreamGuid]`, u.streamGuid)
+    formData.append(`ProgramUnits[${i}][UnitTypeGuid]`, u.unitTypeGuid)
+    formData.append(`ProgramUnits[${i}][UnitCatGuid]`, u.unitCatGuid)
+    formData.append(`ProgramUnits[${i}][Flag]`, String(u.flag))
+  })
+}
+
+function appendFeeStructuresForUpdate(formData: FormData, structures: FeeStructureUpdateInput[]) {
+  structures.forEach((s, i) => {
+    formData.append(`FeeStructures[${i}][FeeCode]`, s.feeCode)
+    formData.append(`FeeStructures[${i}][FeeDesc]`, s.feeDesc)
+    formData.append(`FeeStructures[${i}][Status]`, String(s.status))
+    formData.append(`FeeStructures[${i}][LocalOrForeign]`, String(s.localOrForeign))
+    if (s.lef !== null) formData.append(`FeeStructures[${i}][Lef]`, String(s.lef))
+    if (s.cef !== null) formData.append(`FeeStructures[${i}][Cef]`, String(s.cef))
+    if (s.ace !== null) formData.append(`FeeStructures[${i}][Ace]`, String(s.ace))
+    if (s.lec !== null) formData.append(`FeeStructures[${i}][Lec]`, String(s.lec))
+    if (s.cec !== null) formData.append(`FeeStructures[${i}][Cec]`, String(s.cec))
+    if (s.acec !== null) formData.append(`FeeStructures[${i}][Acec]`, String(s.acec))
+    formData.append(`FeeStructures[${i}][CalcType]`, String(s.calcType))
+    if (s.amtPer !== null) formData.append(`FeeStructures[${i}][AmtPer]`, String(s.amtPer))
+    if (s.intakeGuid) formData.append(`FeeStructures[${i}][IntakeGuid]`, s.intakeGuid)
+    s.feeLines.forEach((l, j) => {
+      formData.append(`FeeStructures[${i}][FeeLines][${j}][SemCode]`, String(l.semCode))
+      formData.append(`FeeStructures[${i}][FeeLines][${j}][LedgerGuid]`, l.ledgerGuid)
+      formData.append(`FeeStructures[${i}][FeeLines][${j}][CurrencyGuid]`, l.currencyGuid)
+      formData.append(`FeeStructures[${i}][FeeLines][${j}][LedgerNum]`, String(l.ledgerNum))
+      formData.append(`FeeStructures[${i}][FeeLines][${j}][Amount]`, String(l.amount))
+    })
+  })
+}
+
+export function updateProgramMasterComplete(programGuid: string, input: ProgramMasterUpdateInput): Promise<ProgramMaster> {
+  if (MOCK_AUTH) {
+    const existing = mockProgramMasters.find(p => p.programGuid === programGuid)
+    if (!existing) return Promise.reject(new Error('Programme not found'))
+    Object.assign(existing, {
+      programCode: input.programCode,
+      programName: input.programName,
+      pgmStatus: input.pgmStatus,
+      noIa: input.noIa,
+      programGroupGuid: input.programGroupGuid,
+      unitCount: input.unitCount,
+      appFee: input.appFee,
+      lateFee: input.lateFee,
+      programLevelGuid: input.programLevelGuid,
+      facultyGuid: input.facultyGuid,
+      currencyGuid: input.currencyGuid,
+      dateAcc: input.dateAcc,
+      streamGuids: [input.streamGuid],
+      intakeGuid: input.intakeGuid,
+    })
+    return Promise.resolve(existing)
+  }
+
+  const formData = new FormData()
+  formData.append('programCode', input.programCode)
+  formData.append('programName', input.programName)
+  formData.append('pgmStatus', String(input.pgmStatus))
+  formData.append('noIa', String(input.noIa))
+  formData.append('programGroupGuid', input.programGroupGuid)
+  formData.append('unitCount', String(input.unitCount))
+  formData.append('appFee', String(input.appFee))
+  formData.append('lateFee', String(input.lateFee))
+  formData.append('programLevelGuid', input.programLevelGuid)
+  formData.append('facultyGuid', input.facultyGuid)
+  formData.append('currencyGuid', input.currencyGuid)
+  formData.append('dateAcc', input.dateAcc)
+  formData.append('streamGuid', input.streamGuid)
+  formData.append('intakeGuid', input.intakeGuid)
+  appendProgramUnitsForUpdate(formData, input.programUnits)
+  appendFeeStructuresForUpdate(formData, input.feeStructures)
+  if (input.accLetterFile) formData.append('accLetterFile', input.accLetterFile)
+  return apiPutForm<ProgramMaster>(`/api/v1/academic/program-master/${programGuid}/update-complete`, formData)
+}
+
+// Soft-deletes the programme plus all its course units/fee data in one call.
+export function deleteProgramMasterComplete(programGuid: string): Promise<boolean> {
+  if (MOCK_AUTH) {
+    const index = mockProgramMasters.findIndex(p => p.programGuid === programGuid)
+    if (index === -1) return Promise.reject(new Error('Programme not found'))
+    mockProgramMasters.splice(index, 1)
+    return Promise.resolve(true)
+  }
+  return apiDelete<boolean>(`/api/v1/academic/program-master/${programGuid}/delete-complete`)
 }

@@ -6,9 +6,13 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { NewCurrencyModal } from '@/components/modals/finance/NewCurrencyModal'
 import { EditCurrencyModal } from '@/components/modals/finance/EditCurrencyModal'
 import { useCurrencies, useCreateCurrency, useUpdateCurrency, Currency } from '@/hooks/finance/useCurrencies'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -29,6 +33,8 @@ export default function Page() {
     setEditingCurrency(currency)
     openModal('edit-currency-modal')
   }
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
 
   return (
     <>
@@ -62,7 +68,7 @@ export default function Page() {
                   : rows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
-                {rows.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.intCurrency}>
                     <td>
                       <ActionMenu>
@@ -83,6 +89,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="currencies" onPageChange={setPage} />
         </div>
       </div>
       <NewCurrencyModal

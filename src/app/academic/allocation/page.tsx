@@ -7,6 +7,10 @@ import { AllocImportModal } from '@/components/modals/academic/AllocImportModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
@@ -40,6 +44,7 @@ export default function Page() {
   const filteredRows = rows.filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   )
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function fth(label: string, col: string, opts: string[]) {
     return (
@@ -98,7 +103,7 @@ export default function Page() {
                 {filteredRows.length === 0
                   ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
                   : null}
-                {filteredRows.map((r, i) => (
+                {pageItems.map((r, i) => (
                   <tr key={i} className={r.rowClass}>
                     <td>
                       <ActionMenu>
@@ -130,6 +135,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="allocations" onPageChange={setPage} />
         </div>
       </div>
       <AllocImportModal isOpen={openModals.has('alloc-import-modal')} onClose={() => closeModal('alloc-import-modal')} showToast={showToast} />

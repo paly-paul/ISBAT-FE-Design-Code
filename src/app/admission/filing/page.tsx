@@ -3,13 +3,21 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
-
-const APPLICANTS = [
-  { id: 'APP-2026-0023', name: 'Nakato Sarah',    course: 'BSc Computer Science',       intake: 'Jan 2026', fee: '2,400,000 UGX' },
-  { id: 'APP-2026-0022', name: 'Okello James',    course: 'BBA Management',              intake: 'Jan 2026', fee: '1,800,000 UGX' },
-  { id: 'APP-2026-0021', name: 'Tumukunde Alice', course: 'BSc Information Technology',  intake: 'May 2026', fee: '2,200,000 UGX' },
-  { id: 'APP-2026-0019', name: 'Nampijja Grace',  course: 'BA Education',                intake: 'May 2026', fee: '1,600,000 UGX' },
-]
+import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useCampuses } from '@/hooks/config/useCampuses'
+import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
+import { useBatchTimes } from '@/hooks/config/useBatchTimes'
+import { useApplicationPaymentBatches, useApplicationPaymentFees } from '@/hooks/admission/useApplicationPayments'
+import {
+  FilingApplicationSearchResult,
+  useDeleteQualification,
+  useSaveGeneral,
+  useSaveQualification,
+  useSearchApplicationsForFiling,
+  useSubmitApplication,
+  useUploadPhoto,
+} from '@/hooks/admission/useApplicationFiling'
 
 type Tab = 'personal' | 'qualifications' | 'family' | 'documents'
 const TABS: { id: Tab; label: string; icon: string }[] = [
@@ -19,12 +27,44 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'documents',      label: 'Documents',        icon: 'lni-folder-2' },
 ]
 
+// NATIONALITIES/RELIGIONS/MARITAL and the Passport Expiry/Country of
+// Issue/Visa Number/Visa Type/UNHCR Case Number/Country of Origin fields
+// below have no counterpart anywhere in the Application Filling API docs —
+// kept as decorative/local fields (not sent), same treatment as Application
+// Source/Receipt Type on the payment page.
 const NATIONALITIES  = ['Ugandan', 'Kenyan', 'Tanzanian', 'Rwandan', 'Burundian', 'South Sudanese', 'Congolese', 'Other']
 const RELIGIONS      = ['Christian', 'Muslim', 'Hindu', 'Buddhist', 'Other']
 const MARITAL        = ['Single', 'Married', 'Divorced', 'Widowed']
-const GENDERS        = ['Male', 'Female', 'Other']
-const QUAL_TYPES     = ['O-Level', 'A-Level', 'Diploma', 'Certificate', 'Degree', 'Masters']
+// The API's gender field is a byte with only two values (0 = Female, 1 = Male) — no third option to encode.
+const GENDERS        = ['Male', 'Female']
 const SPONSOR_TYPES  = ['Self', 'Parent/Guardian', 'Government', 'Organization', 'Other']
+const COUNTRY_CODES  = [
+  { value: '+256', label: '+256 · Uganda' },
+  { value: '+254', label: '+254 · Kenya' },
+  { value: '+255', label: '+255 · Tanzania' },
+  { value: '+250', label: '+250 · Rwanda' },
+  { value: '+257', label: '+257 · Burundi' },
+  { value: '+211', label: '+211 · South Sudan' },
+  { value: '+243', label: '+243 · DR Congo' },
+  { value: '+91',  label: '+91 · India' },
+  { value: '+44',  label: '+44 · United Kingdom' },
+  { value: '+1',   label: '+1 · USA/Canada' },
+]
+
+interface QualRow {
+  id: number
+  institution: string
+  university: string
+  passYear: string
+  grade: string
+  yearsTaken: string
+  proofFile: File | null
+  savedId: number | null
+}
+
+function emptyQualRow(id: number): QualRow {
+  return { id, institution: '', university: '', passYear: '', grade: '', yearsTaken: '', proofFile: null, savedId: null }
+}
 
 function Field({ label, req, children, span }: { label: string; req?: boolean; span?: number; children: React.ReactNode }) {
   return (
@@ -34,11 +74,23 @@ function Field({ label, req, children, span }: { label: string; req?: boolean; s
     </div>
   )
 }
-function Input({ placeholder, type = 'text', readOnly }: { placeholder?: string; type?: string; readOnly?: boolean }) {
+function Input({ placeholder, type = 'text', readOnly, value, onChange }: { placeholder?: string; type?: string; readOnly?: boolean; value?: string; onChange?: (v: string) => void }) {
+  if (value !== undefined) {
+    return <input className="ctrl" type={type} placeholder={placeholder} readOnly={readOnly} value={value} onChange={e => onChange?.(e.target.value)} />
+  }
   return <input className="ctrl" type={type} placeholder={placeholder} readOnly={readOnly} />
 }
-function Select({ options, placeholder }: { options: string[]; placeholder?: string }) {
-  return <SearchSelect placeholder={placeholder || 'Select...'} options={options} />
+function Select({ options, placeholder, value, onChange }: { options: string[]; placeholder?: string; value?: string; onChange?: (v: string) => void }) {
+  return <SearchSelect placeholder={placeholder || 'Select...'} options={options} value={value} onChange={onChange} />
+}
+function FileZone({ hint = 'Click to upload', file, onChange }: { hint?: string; file?: File | null; onChange?: (f: File | null) => void }) {
+  return (
+    <div className="file-zone">
+      <input type="file" onChange={e => onChange?.(e.target.files?.[0] ?? null)} />
+      <i className="lni lni-cloud-upload file-zone-icon" />
+      <p>{file ? file.name : hint}</p>
+    </div>
+  )
 }
 
 const PIPELINE = [
@@ -50,19 +102,223 @@ export default function FilingPage() {
   const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('personal')
-  const [selectedApplicant, setSelectedApplicant] = useState<typeof APPLICANTS[0] | null>(null)
-  const [showApplicantDropdown, setShowApplicantDropdown] = useState(false)
-  const [applicantSearch, setApplicantSearch] = useState('')
-  const [showCourseDetails, setShowCourseDetails] = useState(false)
-  const [qualificationRows, setQualificationRows] = useState([{ id: 1 }])
-  const [experienceRows, setExperienceRows] = useState([{ id: 1 }])
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  const filtered = APPLICANTS.filter(a => `${a.id} ${a.name}`.toLowerCase().includes(applicantSearch.toLowerCase()))
+  // ── Link to Payment Record ──────────────────────────────────────────────
+  const [applicantSearch, setApplicantSearch] = useState('')
+  const [showApplicantDropdown, setShowApplicantDropdown] = useState(false)
+  const [selectedApplication, setSelectedApplication] = useState<FilingApplicationSearchResult | null>(null)
+  const { data: searchResults } = useSearchApplicationsForFiling(applicantSearch, 1, 20, showApplicantDropdown)
+  const searchItems = searchResults?.items ?? []
 
-  const selectApplicant = (a: typeof APPLICANTS[0]) => {
-    setSelectedApplicant(a); setShowApplicantDropdown(false); setApplicantSearch(''); setShowCourseDetails(true)
+  function selectApplication(a: FilingApplicationSearchResult) {
+    setSelectedApplication(a); setShowApplicantDropdown(false); setApplicantSearch('')
+  }
+
+  // ── General (Personal Info tab) ─────────────────────────────────────────
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [gender, setGender] = useState('')
+  const [dob, setDob] = useState('')
+  const [nationality, setNationality] = useState('')
+  const [nationalId, setNationalId] = useState('')
+  const [nationalIdFile, setNationalIdFile] = useState<File | null>(null)
+  const [email, setEmail] = useState('')
+  const [phoneCode, setPhoneCode] = useState('+256')
+  const [phone, setPhone] = useState('')
+  const [passportNo, setPassportNo] = useState('')
+  const [passportFile, setPassportFile] = useState<File | null>(null)
+  const [vStartDate, setVStartDate] = useState('')
+  const [vEndDate, setVEndDate] = useState('')
+  const [visaFile, setVisaFile] = useState<File | null>(null)
+  const [isRefugee, setIsRefugee] = useState(false)
+  const [refugeeId, setRefugeeId] = useState('')
+  const [refugeeFile, setRefugeeFile] = useState<File | null>(null)
+  const isForeign = nationality !== '' && nationality !== 'Ugandan'
+
+  const [intakeGuid, setIntakeGuid] = useState('')
+  const [campusGuid, setCampusGuid] = useState('')
+  const [programGuid, setProgramGuidState] = useState('')
+  const [semesterGuid, setSemesterGuidState] = useState('')
+  const [batchTimeGuid, setBatchTimeGuidState] = useState('')
+  const [batchGuid, setBatchGuid] = useState('')
+  const [feeHdGuid, setFeeHdGuid] = useState('')
+
+  function setProgramGuid(v: string) { setProgramGuidState(v); setSemesterGuidState(''); setBatchGuid(''); setFeeHdGuid('') }
+  function setSemesterGuid(v: string) { setSemesterGuidState(v); setBatchGuid('') }
+  function setBatchTimeGuid(v: string) { setBatchTimeGuidState(v); setBatchGuid('') }
+
+  const [generalSaved, setGeneralSaved] = useState(false)
+  const [intApplication, setIntApplication] = useState<number | null>(null)
+
+  const { data: intakes = [] }    = useIntakes()
+  const { data: campuses = [] }   = useCampuses()
+  const { data: programs = [] }   = useProgramMasters()
+  const { data: semesters = [] }  = useSemestersForProgram(programGuid, !!programGuid)
+  const { data: batchTimes = [] } = useBatchTimes()
+  const { data: batches = [] }    = useApplicationPaymentBatches(programGuid, semesterGuid, batchTimeGuid, !!programGuid && !!semesterGuid && !!batchTimeGuid)
+  const { data: fees = [] }       = useApplicationPaymentFees(programGuid, !!programGuid)
+
+  const intakeOptions    = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
+  const campusOptions    = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
+  const programOptions   = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
+  const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
+  const batchTimeOptions = batchTimes.map(bt => ({ value: bt.batchTimeGuid, label: bt.batchTime }))
+  const batchOptions     = batches.map(b => ({ value: b.batchGuid, label: b.batchCode }))
+  const feeOptions       = fees.map(f => ({ value: f.feeHdGuid, label: `${f.feeDesc} (${f.feeCode})` }))
+
+  // ── Sponsor (Family tab fields that actually map to the API) ────────────
+  const [spName, setSpName] = useState('')
+  const [spEmail, setSpEmail] = useState('')
+  const [spPhone, setSpPhone] = useState('')
+
+  const saveGeneral = useSaveGeneral()
+
+  function handleSaveGeneralAndAdvance() {
+    if (!selectedApplication) { showToast('Select an application above first', 'error'); return }
+    if (!campusGuid || !programGuid || !feeHdGuid) { showToast('Campus, Programme and Fee Structure are required', 'error'); return }
+    if (isRefugee && !refugeeId.trim()) { showToast('Refugee ID is required for refugee students', 'error'); return }
+
+    // Intake.intakeCode is a number on the wire (e.g. 20264) — this API's
+    // intakeCode field is a plain string (e.g. "2026"), so stringify it.
+    const selectedIntake = intakes.find(i => i.intakeGuid === intakeGuid)
+
+    saveGeneral.mutate(
+      {
+        appRefNo: selectedApplication.appRefNo,
+        enquiryGuid: null,
+        intakeCode: selectedIntake ? String(selectedIntake.intakeCode) : null,
+        emailId: email.trim() || null,
+        dob: dob || null,
+        firstName: firstName.trim() || null,
+        lastName: lastName.trim() || null,
+        gender: gender === 'Male' ? 1 : gender === 'Female' ? 0 : null,
+        phone: phone.trim() || null,
+        nationalId: nationalId.trim() || null,
+        nationalIdFile,
+        passportNo: passportNo.trim() || null,
+        passportFile,
+        vStartDate: vStartDate || null,
+        vEndDate: vEndDate || null,
+        visaFile,
+        spName: spName.trim() || null,
+        spEmail: spEmail.trim() || null,
+        spPhone: spPhone.trim() || null,
+        campusGuid, programGuid, feeHdGuid,
+        semesterGuid: semesterGuid || null,
+        batchTimeGuid: batchTimeGuid || null,
+        batchGuid: batchGuid || null,
+        refugee: isRefugee ? 1 : 0,
+        refugeeId: isRefugee ? refugeeId.trim() || null : null,
+        refugeeFile,
+      },
+      {
+        onSuccess: res => {
+          setIntApplication(res.intApplication); setGeneralSaved(true)
+          showToast('Application details saved', 'success'); setActiveTab('qualifications')
+        },
+        onError: (error: Error) => showToast(error.message || 'Failed to save application details', 'error'),
+      },
+    )
+  }
+
+  // ── Qualifications ──────────────────────────────────────────────────────
+  const [qualRows, setQualRows] = useState<QualRow[]>([emptyQualRow(1)])
+  const [experienceRows, setExperienceRows] = useState([{ id: 1 }])
+  const saveQualification = useSaveQualification()
+  const deleteQualification = useDeleteQualification()
+
+  function updateQualRow(id: number, patch: Partial<QualRow>) {
+    setQualRows(rows => rows.map(r => (r.id === id ? { ...r, ...patch } : r)))
+  }
+
+  function handleSaveQualRow(row: QualRow) {
+    if (!selectedApplication) { showToast('Select an application above first', 'error'); return }
+    if (!row.institution.trim() || !row.university.trim() || !row.passYear || !row.grade.trim() || !row.yearsTaken || !row.proofFile) {
+      showToast('Institution, University, Year, Grade, Duration and Proof Document are all required', 'error'); return
+    }
+    saveQualification.mutate(
+      {
+        appRefNo: selectedApplication.appRefNo,
+        institution: row.institution.trim(),
+        university: row.university.trim(),
+        passYear: Number(row.passYear),
+        grade: row.grade.trim(),
+        yearsTaken: Number(row.yearsTaken),
+        proofFile: row.proofFile,
+      },
+      {
+        onSuccess: res => { updateQualRow(row.id, { savedId: res.intApplicationQual }); showToast('Qualification saved', 'success') },
+        onError: (error: Error) => showToast(error.message || 'Failed to save qualification', 'error'),
+      },
+    )
+  }
+
+  function handleDeleteQualRow(row: QualRow) {
+    if (row.savedId == null) { setQualRows(rows => rows.filter(r => r.id !== row.id)); return }
+    deleteQualification.mutate(row.savedId, {
+      onSuccess: () => { setQualRows(rows => rows.filter(r => r.id !== row.id)); showToast('Qualification removed', 'success') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete qualification', 'error'),
+    })
+  }
+
+  function renderQualRow(row: QualRow) {
+    const saved = row.savedId != null
+    return (
+      <div key={row.id} className="mb-3 p-3 rounded-lg border border-g200">
+        <div className="g3">
+          <Field label="Institution" req><Input placeholder="School / University" value={row.institution} onChange={v => updateQualRow(row.id, { institution: v })} readOnly={saved} /></Field>
+          <Field label="University / Awarding Board" req><Input placeholder="e.g. Makerere University" value={row.university} onChange={v => updateQualRow(row.id, { university: v })} readOnly={saved} /></Field>
+          <Field label="Year" req><Input type="number" placeholder="2023" value={row.passYear} onChange={v => updateQualRow(row.id, { passYear: v })} readOnly={saved} /></Field>
+        </div>
+        <div className="g3 mt-3">
+          <Field label="Grade" req><Input placeholder="e.g. First Class, 4.2 CGPA" value={row.grade} onChange={v => updateQualRow(row.id, { grade: v })} readOnly={saved} /></Field>
+          <Field label="Duration (Years)" req><Input type="number" placeholder="3" value={row.yearsTaken} onChange={v => updateQualRow(row.id, { yearsTaken: v })} readOnly={saved} /></Field>
+          <Field label="Proof Document" req>
+            {saved
+              ? <p className="text-sm text-g500 mt-1">{row.proofFile?.name ?? 'Uploaded'}</p>
+              : <FileZone file={row.proofFile} onChange={f => updateQualRow(row.id, { proofFile: f })} />}
+          </Field>
+        </div>
+        <div className="flex justify-end items-center gap-2 mt-3">
+          {saved
+            ? <span className="badge badge-green"><i className="lni lni-checkmark-circle" /> Saved</span>
+            : <button className="btn text-xs" disabled={saveQualification.isPending} onClick={() => handleSaveQualRow(row)}>
+                {saveQualification.isPending ? 'Saving…' : 'Save Qualification'}
+              </button>}
+          <button className="btn btn-neu text-xs" disabled={deleteQualification.isPending} onClick={() => handleDeleteQualRow(row)}>
+            <i className="lni lni-trash-can" /> {saved ? 'Delete' : 'Remove'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Documents / Photo / Submit ──────────────────────────────────────────
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoSaved, setPhotoSaved] = useState(false)
+  const [declarationAccepted, setDeclarationAccepted] = useState(false)
+  const uploadPhoto = useUploadPhoto()
+  const submitApplication = useSubmitApplication()
+
+  const qualifiedCount = qualRows.filter(r => r.savedId != null).length
+  const canSubmit = generalSaved && intApplication != null && qualifiedCount > 0 && declarationAccepted
+
+  function handleSavePhoto() {
+    if (!selectedApplication || !photoFile) return
+    uploadPhoto.mutate({ appRefNo: selectedApplication.appRefNo, photo: photoFile }, {
+      onSuccess: () => { setPhotoSaved(true); showToast('Photo uploaded', 'success') },
+      onError: (error: Error) => showToast(error.message || 'Failed to upload photo', 'error'),
+    })
+  }
+
+  function handleSubmitApplication() {
+    if (!selectedApplication || intApplication == null) return
+    submitApplication.mutate({ intApplication, appRefNo: selectedApplication.appRefNo }, {
+      onSuccess: () => { showToast('Application submitted for vetting', 'success'); router.push('/admission/vetting') },
+      onError: (error: Error) => showToast(error.message || 'Failed to submit application', 'error'),
+    })
   }
 
   return (
@@ -90,145 +346,239 @@ export default function FilingPage() {
           <div className="fg">
             <label className="lbl">Applicant<span className="req">*</span></label>
             <div className="relative">
-              <input className="ctrl" placeholder="Search applicant ID or name..."
-                value={selectedApplicant ? `${selectedApplicant.id} — ${selectedApplicant.name}` : applicantSearch}
-                onChange={e => { setApplicantSearch(e.target.value); setShowApplicantDropdown(true); setSelectedApplicant(null); setShowCourseDetails(false) }}
+              <input className="ctrl" placeholder="Search applicant ref no, name, email or phone..."
+                value={selectedApplication ? `${selectedApplication.appRefNo} — ${selectedApplication.studentName ?? ''}` : applicantSearch}
+                onChange={e => { setApplicantSearch(e.target.value); setShowApplicantDropdown(true); setSelectedApplication(null) }}
                 onFocus={() => setShowApplicantDropdown(true)} />
               {showApplicantDropdown && (
                 <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-g200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
-                  {filtered.length === 0 && <div className="p-3 text-sm text-g400">No results</div>}
-                  {filtered.map(a => (
-                    <button key={a.id} className="w-full text-left px-4 py-2 text-sm hover:bg-b50 flex justify-between" onClick={() => selectApplicant(a)}>
-                      <span className="font-medium text-g800">{a.id}</span><span className="text-g500">{a.name}</span>
+                  {searchItems.length === 0 && <div className="p-3 text-sm text-g400">No results</div>}
+                  {searchItems.map(a => (
+                    <button key={a.appRefNo} className="w-full text-left px-4 py-2 text-sm hover:bg-b50 flex justify-between" onClick={() => selectApplication(a)}>
+                      <span className="font-medium text-g800">{a.appRefNo}</span><span className="text-g500">{a.studentName}</span>
                     </button>
                   ))}
                 </div>
               )}
             </div>
           </div>
-          <Field label="Enquiry Code">
-            <input className="ctrl" placeholder="ENQ-XXXX" readOnly value={selectedApplicant ? `ENQ-${selectedApplicant.id.split('-')[2]}` : ''} />
+          <Field label="Application Reference Number">
+            <input className="ctrl" placeholder="APP2026/1" readOnly value={selectedApplication?.appRefNo ?? ''} />
           </Field>
         </div>
-        {showCourseDetails && selectedApplicant && (
+        {selectedApplication && (
           <div className="info-box mt-4">
             <div className="g3">
-              <div><span className="text-xs text-g400 block">Course</span><span className="text-sm font-semibold text-g800">{selectedApplicant.course}</span></div>
-              <div><span className="text-xs text-g400 block">Intake</span><span className="text-sm font-semibold text-g800">{selectedApplicant.intake}</span></div>
-              <div><span className="text-xs text-g400 block">Fee</span><span className="text-sm font-semibold text-g800">{selectedApplicant.fee}</span></div>
+              <div><span className="text-xs text-g400 block">Status</span><span className="text-sm font-semibold text-g800">{selectedApplication.status ?? '—'}</span></div>
+              <div><span className="text-xs text-g400 block">Email</span><span className="text-sm font-semibold text-g800">{selectedApplication.email ?? '—'}</span></div>
+              <div><span className="text-xs text-g400 block">Phone</span><span className="text-sm font-semibold text-g800">{selectedApplication.phone ?? '—'}</span></div>
             </div>
           </div>
         )}
       </div>
 
       <div className="card p-0 overflow-hidden">
-        <div className="flex border-b border-g200">
-          {TABS.map(t => (
-            <button key={t.id} className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${activeTab === t.id ? 'border-b500 text-b600 bg-b50' : 'border-transparent text-g500 hover:text-g700'}`} onClick={() => setActiveTab(t.id)}>
-              <i className={`lni ${t.icon}`} /> {t.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="p-5">
-          {activeTab === 'personal' && (
-            <div>
-              <div className="flex items-start gap-5 mb-5">
-                <div className="file-zone w-32 h-32 flex-shrink-0"><input type="file" accept="image/*" /><i className="lni lni-camera-2 file-zone-icon" /><p>Profile Photo</p></div>
-                <div className="flex-1">
-                  <div className="g3"><Field label="First Name" req><Input placeholder="First name" /></Field><Field label="Middle Name"><Input placeholder="Middle name" /></Field><Field label="Last Name" req><Input placeholder="Last name" /></Field></div>
-                  <div className="g3 mt-3"><Field label="Gender" req><Select options={GENDERS} /></Field><Field label="Date of Birth" req><Input type="date" /></Field><Field label="Nationality" req><Select options={NATIONALITIES} /></Field></div>
-                </div>
-              </div>
-              <div className="g3"><Field label="National ID"><Input placeholder="CM-XXXXX-XXXX" /></Field><Field label="Email" req><Input type="email" placeholder="email@example.com" /></Field><Field label="Phone" req><Input placeholder="+256 7XX XXX XXX" /></Field></div>
-              <div className="g3 mt-3"><Field label="Residential Address" span={2}><Input placeholder="Full address" /></Field><Field label="University Email"><Input readOnly placeholder="Auto-generated" /></Field></div>
-              <div className="g3 mt-3"><Field label="Religion"><Select options={RELIGIONS} /></Field><Field label="Marital Status"><Select options={MARITAL} /></Field><div className="fg" /></div>
-              <div className="sec-divider mt-5">Passport &amp; Visa Details</div>
-              <div className="g3 mt-3"><Field label="Passport Number"><Input placeholder="AB1234567" /></Field><Field label="Passport Expiry"><Input type="date" /></Field><Field label="Country of Issue"><Select options={NATIONALITIES} /></Field></div>
-              <div className="g3 mt-3"><Field label="Visa Number"><Input placeholder="VIS-XXXX" /></Field><Field label="Visa Type"><Select options={['Student', 'Work', 'Tourist', 'Diplomatic']} /></Field><Field label="Visa Expiry"><Input type="date" /></Field></div>
-              <div className="sec-divider mt-5">Refugee Details</div>
-              <div className="g3 mt-3"><Field label="Refugee Status"><Select options={['Not Applicable', 'Refugee', 'Asylum Seeker']} /></Field><Field label="UNHCR Case Number"><Input placeholder="UNH-XXXX" /></Field><Field label="Country of Origin"><Select options={NATIONALITIES} /></Field></div>
-              <div className="flex justify-end mt-5"><button className="btn" onClick={() => setActiveTab('qualifications')}>Next: Qualifications <i className="lni lni-arrow-right" /></button></div>
-            </div>
-          )}
-
-          {activeTab === 'qualifications' && (
-            <div>
-              <div className="sec-divider">Highest Qualification</div>
-              <div className="g3 mt-3"><Field label="Type" req><Select options={QUAL_TYPES} /></Field><Field label="Institution" req><Input placeholder="School / University" /></Field><Field label="Year" req><Input type="number" placeholder="2023" /></Field></div>
-              <div className="g3 mt-3"><Field label="Index No."><Input placeholder="U0001/001" /></Field><Field label="Percentage / GPA"><Input placeholder="e.g. 78% or 4.2" /></Field><Field label="Duration (Years)"><Input type="number" placeholder="3" /></Field></div>
-              <div className="sec-divider mt-5 flex items-center justify-between">
-                <span>Additional Qualifications</span>
-                <button className="btn text-xs" onClick={() => setQualificationRows(r => [...r, { id: Date.now() }])}><i className="lni lni-plus" /> Add Row</button>
-              </div>
-              {qualificationRows.map(row => (
-                <div key={row.id} className="g3 mt-3 items-end"><Field label="Type"><Select options={QUAL_TYPES} /></Field><Field label="Institution"><Input placeholder="Institution" /></Field><Field label="Year"><Input type="number" placeholder="Year" /></Field></div>
-              ))}
-              <div className="sec-divider mt-5 flex items-center justify-between">
-                <span>Work Experience</span>
-                <button className="btn text-xs" onClick={() => setExperienceRows(r => [...r, { id: Date.now() }])}><i className="lni lni-plus" /> Add Entry</button>
-              </div>
-              {experienceRows.map(row => (
-                <div key={row.id} className="g3 mt-3"><Field label="Organization"><Input placeholder="Company / Organization" /></Field><Field label="Role"><Input placeholder="Job title" /></Field><Field label="Duration"><Input placeholder="e.g. 2 years" /></Field></div>
-              ))}
-              <div className="flex justify-between mt-5">
-                <button className="btn" onClick={() => setActiveTab('personal')}><i className="lni lni-arrow-left" /> Personal Info</button>
-                <button className="btn" onClick={() => setActiveTab('family')}>Next: Family Details <i className="lni lni-arrow-right" /></button>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'family' && (
-            <div>
-              <div className="sec-divider">Father / Guardian</div>
-              <div className="g3 mt-3"><Field label="Full Name"><Input placeholder="Father's / Guardian's name" /></Field><Field label="Phone"><Input placeholder="+256 7XX XXX XXX" /></Field><Field label="Occupation"><Input placeholder="Occupation" /></Field></div>
-              <div className="g3 mt-3"><Field label="Email"><Input type="email" placeholder="email@example.com" /></Field><div className="fg" /><div className="fg" /></div>
-              <div className="sec-divider mt-5">Mother</div>
-              <div className="g3 mt-3"><Field label="Full Name"><Input placeholder="Mother's name" /></Field><Field label="Phone"><Input placeholder="+256 7XX XXX XXX" /></Field><Field label="Occupation"><Input placeholder="Occupation" /></Field></div>
-              <div className="g3 mt-3"><Field label="Email"><Input type="email" placeholder="email@example.com" /></Field><div className="fg" /><div className="fg" /></div>
-              <div className="sec-divider mt-5">Emergency Contact</div>
-              <div className="g3 mt-3"><Field label="Name" req><Input placeholder="Contact person" /></Field><Field label="Relationship"><Input placeholder="e.g. Uncle" /></Field><Field label="Phone" req><Input placeholder="+256 7XX XXX XXX" /></Field></div>
-              <div className="sec-divider mt-5">Family Address</div>
-              <div className="g3 mt-3"><Field label="District"><Input placeholder="District" /></Field><Field label="Sub-county"><Input placeholder="Sub-county" /></Field><Field label="Village / Street"><Input placeholder="Village" /></Field></div>
-              <div className="sec-divider mt-5">Sponsorship Details</div>
-              <div className="g3 mt-3"><Field label="Sponsor Type" req><Select options={SPONSOR_TYPES} /></Field><Field label="Sponsor Name"><Input placeholder="Sponsor name" /></Field><Field label="Sponsor Contact"><Input placeholder="Phone / Email" /></Field></div>
-              <div className="flex justify-between mt-5">
-                <button className="btn" onClick={() => setActiveTab('qualifications')}><i className="lni lni-arrow-left" /> Qualifications</button>
-                <button className="btn" onClick={() => setActiveTab('documents')}>Next: Documents <i className="lni lni-arrow-right" /></button>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'documents' && (
-            <div>
-              <div className="grid grid-cols-3 gap-4 mb-5">
-                {['Passport Photo', 'National ID Copy', 'O-Level Certificate', 'A-Level Certificate', 'Diploma Certificate', 'Recommendation Letter'].map(doc => (
-                  <div key={doc} className="file-zone"><input type="file" /><i className="lni lni-cloud-upload file-zone-icon" /><p>{doc}</p></div>
-                ))}
-              </div>
-              <div className="sec-divider">Upload Status</div>
-              <div className="checklist mt-3">
-                {[
-                  { label: 'Passport Photo', status: 'pending' }, { label: 'National ID Copy', status: 'pending' },
-                  { label: 'O-Level Certificate', status: 'pending' }, { label: 'A-Level Certificate', status: 'pending', optional: true },
-                  { label: 'Diploma Certificate', status: 'pending', optional: true }, { label: 'Recommendation Letter', status: 'pending', optional: true },
-                ].map(item => (
-                  <div key={item.label} className={`chk-item ${item.status}`}>
-                    <i className={`lni ${item.status === 'pass' ? 'lni-checkmark-circle' : 'lni-timer'}`} />
-                    <span className="flex-1 text-sm text-g700">{item.label}</span>
-                    <span className="chk-status text-xs">{item.optional ? 'Optional' : 'Required'} &middot; {item.status === 'pass' ? 'Uploaded' : 'Pending'}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-between mt-5">
-                <button className="btn" onClick={() => setActiveTab('family')}><i className="lni lni-arrow-left" /> Family</button>
-                <button className="btn bg-b500 text-white" onClick={() => { showToast('Application submitted for vetting', 'success'); router.push('/admission/vetting') }}>
-                  <i className="lni lni-checkmark" /> Submit Application for Vetting
+        {!selectedApplication ? (
+          <div className="p-8 text-center text-g400">
+            <i className="lni lni-search-alt" style={{ fontSize: 28 }} />
+            <p className="mt-2">Select an application above to begin filing.</p>
+          </div>
+        ) : (
+          <>
+            <div className="flex border-b border-g200">
+              {TABS.map(t => (
+                <button key={t.id} className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${activeTab === t.id ? 'border-b500 text-b600 bg-b50' : 'border-transparent text-g500 hover:text-g700'}`} onClick={() => setActiveTab(t.id)}>
+                  <i className={`lni ${t.icon}`} /> {t.label}
                 </button>
-              </div>
+              ))}
             </div>
-          )}
-        </div>
+
+            <div className="p-5">
+              {activeTab === 'personal' && (
+                <div>
+                  <div className="flex items-start gap-5 mb-5">
+                    <div className="file-zone w-32 h-32 flex-shrink-0"><input type="file" accept="image/*" /><i className="lni lni-camera-2 file-zone-icon" /><p>Profile Photo</p></div>
+                    <div className="flex-1">
+                      <div className="g3"><Field label="First Name" req><Input placeholder="First name" value={firstName} onChange={setFirstName} /></Field><Field label="Middle Name"><Input placeholder="Middle name" /></Field><Field label="Last Name" req><Input placeholder="Last name" value={lastName} onChange={setLastName} /></Field></div>
+                      <div className="g3 mt-3"><Field label="Gender" req><Select options={GENDERS} value={gender} onChange={setGender} /></Field><Field label="Date of Birth" req><Input type="date" value={dob} onChange={setDob} /></Field><Field label="Nationality" req><Select options={NATIONALITIES} value={nationality} onChange={setNationality} /></Field></div>
+                    </div>
+                  </div>
+                  <div className="g3">
+                    <Field label="National ID"><Input placeholder="CM-XXXXX-XXXX" value={nationalId} onChange={setNationalId} /></Field>
+                    <Field label="Email" req><Input type="email" placeholder="email@example.com" value={email} onChange={setEmail} /></Field>
+                    <Field label="Phone" req>
+                      <div className="flex gap-2">
+                        <SearchSelect options={COUNTRY_CODES} value={phoneCode} onChange={setPhoneCode} style={{ width: 108, flexShrink: 0 }} />
+                        <input className="ctrl flex-1" placeholder="7XX XXX XXX" value={phone} onChange={e => setPhone(e.target.value)} />
+                      </div>
+                    </Field>
+                  </div>
+                  <div className="g3 mt-3">
+                    <Field label="National ID Copy"><FileZone file={nationalIdFile} onChange={setNationalIdFile} /></Field>
+                    <Field label="Residential Address" span={2}><Input placeholder="Full address" /></Field>
+                  </div>
+                  <div className="g3 mt-3"><Field label="University Email"><Input readOnly placeholder="Auto-generated" /></Field><Field label="Religion"><Select options={RELIGIONS} /></Field><Field label="Marital Status"><Select options={MARITAL} /></Field></div>
+
+                  <div className="sec-divider mt-5">Programme Details</div>
+                  <div className="g3 mt-3">
+                    <Field label="Intake"><SearchSelect options={intakeOptions} value={intakeGuid} placeholder="-- Select Intake --" onChange={setIntakeGuid} /></Field>
+                    <Field label="Campus" req><SearchSelect options={campusOptions} value={campusGuid} placeholder="-- Select Campus --" onChange={setCampusGuid} /></Field>
+                    <Field label="Programme" req><SearchSelect options={programOptions} value={programGuid} placeholder="-- Select Programme --" onChange={setProgramGuid} /></Field>
+                  </div>
+                  <div className="g3 mt-3">
+                    <Field label="Fee Structure" req><SearchSelect options={feeOptions} value={feeHdGuid} placeholder={programGuid ? '-- Select Fee Structure --' : '-- Select Programme First --'} onChange={setFeeHdGuid} /></Field>
+                    <Field label="Semester"><SearchSelect options={semesterOptions} value={semesterGuid} placeholder={programGuid ? '-- Select Semester --' : '-- Select Programme First --'} onChange={setSemesterGuid} /></Field>
+                    <Field label="Batch Time"><SearchSelect options={batchTimeOptions} value={batchTimeGuid} placeholder="-- Select --" onChange={setBatchTimeGuid} /></Field>
+                  </div>
+                  <div className="g3 mt-3">
+                    <Field label="Batch">
+                      <SearchSelect
+                        options={batchOptions}
+                        value={batchGuid}
+                        placeholder={programGuid && semesterGuid && batchTimeGuid ? '-- Select Batch --' : '-- Select Programme, Semester & Batch Time First --'}
+                        onChange={setBatchGuid}
+                      />
+                    </Field>
+                  </div>
+
+                  <div className="sec-divider mt-5">Passport &amp; Visa Details</div>
+                  {!isForeign ? (
+                    <p className="text-g400 mt-2" style={{ fontSize: 'var(--fs-xs)' }}>Applies to non-Ugandan nationals — select a Nationality above to unlock.</p>
+                  ) : (
+                    <>
+                      <div className="g3 mt-3"><Field label="Passport Number"><Input placeholder="AB1234567" value={passportNo} onChange={setPassportNo} /></Field><Field label="Passport Expiry"><Input type="date" /></Field><Field label="Country of Issue"><Select options={NATIONALITIES} /></Field></div>
+                      <div className="g3 mt-3">
+                        <Field label="Passport Copy"><FileZone file={passportFile} onChange={setPassportFile} /></Field>
+                        <Field label="Visa Number"><Input placeholder="VIS-XXXX" /></Field>
+                        <Field label="Visa Type"><Select options={['Student', 'Work', 'Tourist', 'Diplomatic']} /></Field>
+                      </div>
+                      <div className="g3 mt-3">
+                        <Field label="Visa Start Date"><Input type="date" value={vStartDate} onChange={setVStartDate} /></Field>
+                        <Field label="Visa Expiry"><Input type="date" value={vEndDate} onChange={setVEndDate} /></Field>
+                        <Field label="Visa Copy"><FileZone file={visaFile} onChange={setVisaFile} /></Field>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="sec-divider mt-5">Refugee Details</div>
+                  {!isForeign ? (
+                    <p className="text-g400 mt-2" style={{ fontSize: 'var(--fs-xs)' }}>Applies to non-Ugandan nationals — select a Nationality above to unlock.</p>
+                  ) : (
+                    <>
+                      <label className="flex items-center gap-2 mt-3" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={isRefugee} onChange={e => setIsRefugee(e.target.checked)} style={{ width: 16, height: 16 }} />
+                        <span className="font-medium text-g700">Refugee / Asylum Seeker Student?</span>
+                      </label>
+                      {isRefugee && (
+                        <div className="g3 mt-3">
+                          <Field label="Refugee ID" req><Input placeholder="Refugee ID number" value={refugeeId} onChange={setRefugeeId} /></Field>
+                          <Field label="UNHCR Case Number"><Input placeholder="UNH-XXXX" /></Field>
+                          <Field label="Refugee Certificate"><FileZone file={refugeeFile} onChange={setRefugeeFile} /></Field>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  <div className="flex justify-end mt-5">
+                    <button className="btn" disabled={saveGeneral.isPending} onClick={handleSaveGeneralAndAdvance}>
+                      {saveGeneral.isPending ? 'Saving…' : <>Save &amp; Next: Qualifications <i className="lni lni-arrow-right" /></>}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'qualifications' && (
+                <div>
+                  <div className="sec-divider">Highest Qualification</div>
+                  {renderQualRow(qualRows[0])}
+                  <div className="sec-divider mt-5 flex items-center justify-between">
+                    <span>Additional Qualifications</span>
+                    <button className="btn text-xs" onClick={() => setQualRows(rows => [...rows, emptyQualRow(Date.now())])}><i className="lni lni-plus" /> Add Row</button>
+                  </div>
+                  {qualRows.slice(1).map(row => renderQualRow(row))}
+                  <div className="sec-divider mt-5 flex items-center justify-between">
+                    <span>Work Experience</span>
+                    <button className="btn text-xs" onClick={() => setExperienceRows(r => [...r, { id: Date.now() }])}><i className="lni lni-plus" /> Add Entry</button>
+                  </div>
+                  {experienceRows.map(row => (
+                    <div key={row.id} className="g3 mt-3"><Field label="Organization"><Input placeholder="Company / Organization" /></Field><Field label="Role"><Input placeholder="Job title" /></Field><Field label="Duration"><Input placeholder="e.g. 2 years" /></Field></div>
+                  ))}
+                  <div className="flex justify-between mt-5">
+                    <button className="btn" onClick={() => setActiveTab('personal')}><i className="lni lni-arrow-left" /> Personal Info</button>
+                    <button className="btn" onClick={() => setActiveTab('family')}>Next: Family Details <i className="lni lni-arrow-right" /></button>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'family' && (
+                <div>
+                  <div className="sec-divider">Father / Guardian</div>
+                  <div className="g3 mt-3"><Field label="Full Name"><Input placeholder="Father's / Guardian's name" /></Field><Field label="Phone"><Input placeholder="+256 7XX XXX XXX" /></Field><Field label="Occupation"><Input placeholder="Occupation" /></Field></div>
+                  <div className="g3 mt-3"><Field label="Email"><Input type="email" placeholder="email@example.com" /></Field><div className="fg" /><div className="fg" /></div>
+                  <div className="sec-divider mt-5">Mother</div>
+                  <div className="g3 mt-3"><Field label="Full Name"><Input placeholder="Mother's name" /></Field><Field label="Phone"><Input placeholder="+256 7XX XXX XXX" /></Field><Field label="Occupation"><Input placeholder="Occupation" /></Field></div>
+                  <div className="g3 mt-3"><Field label="Email"><Input type="email" placeholder="email@example.com" /></Field><div className="fg" /><div className="fg" /></div>
+                  <div className="sec-divider mt-5">Emergency Contact</div>
+                  <div className="g3 mt-3"><Field label="Name" req><Input placeholder="Contact person" /></Field><Field label="Relationship"><Input placeholder="e.g. Uncle" /></Field><Field label="Phone" req><Input placeholder="+256 7XX XXX XXX" /></Field></div>
+                  <div className="sec-divider mt-5">Family Address</div>
+                  <div className="g3 mt-3"><Field label="District"><Input placeholder="District" /></Field><Field label="Sub-county"><Input placeholder="Sub-county" /></Field><Field label="Village / Street"><Input placeholder="Village" /></Field></div>
+                  <div className="sec-divider mt-5">Sponsorship Details</div>
+                  <div className="g3 mt-3"><Field label="Sponsor Type"><Select options={SPONSOR_TYPES} /></Field><Field label="Sponsor Name"><Input placeholder="Sponsor name" value={spName} onChange={setSpName} /></Field><Field label="Sponsor Phone"><Input placeholder="+256 7XX XXX XXX" value={spPhone} onChange={setSpPhone} /></Field></div>
+                  <div className="g3 mt-3"><Field label="Sponsor Email"><Input type="email" placeholder="sponsor@email.com" value={spEmail} onChange={setSpEmail} /></Field><div className="fg" /><div className="fg" /></div>
+                  <div className="flex justify-between mt-5">
+                    <button className="btn" onClick={() => setActiveTab('qualifications')}><i className="lni lni-arrow-left" /> Qualifications</button>
+                    <button className="btn" onClick={() => setActiveTab('documents')}>Next: Documents <i className="lni lni-arrow-right" /></button>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'documents' && (
+                <div>
+                  <div className="sec-divider">Student Photo</div>
+                  <div className="g2 mt-3">
+                    <Field label="Photo" req><FileZone hint="Click to upload passport-style photo (JPG/JPEG/PNG/BMP)" file={photoFile} onChange={setPhotoFile} /></Field>
+                    <div className="flex items-end">
+                      <button className="btn text-xs" disabled={!photoFile || uploadPhoto.isPending || photoSaved} onClick={handleSavePhoto}>
+                        {photoSaved ? <><i className="lni lni-checkmark-circle" /> Uploaded</> : uploadPhoto.isPending ? 'Uploading…' : 'Upload Photo'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="sec-divider mt-5">Application Status</div>
+                  <div className="checklist mt-3">
+                    <div className={`chk-item ${generalSaved ? 'pass' : 'pending'}`}>
+                      <i className={`lni ${generalSaved ? 'lni-checkmark-circle' : 'lni-timer'}`} />
+                      <span className="flex-1 text-sm text-g700">Personal &amp; Programme Details</span>
+                      <span className="chk-status text-xs">{generalSaved ? 'Saved' : 'Not saved yet'}</span>
+                    </div>
+                    <div className={`chk-item ${qualifiedCount > 0 ? 'pass' : 'pending'}`}>
+                      <i className={`lni ${qualifiedCount > 0 ? 'lni-checkmark-circle' : 'lni-timer'}`} />
+                      <span className="flex-1 text-sm text-g700">Qualifications</span>
+                      <span className="chk-status text-xs">{qualifiedCount} saved</span>
+                    </div>
+                    <div className={`chk-item ${photoSaved ? 'pass' : 'pending'}`}>
+                      <i className={`lni ${photoSaved ? 'lni-checkmark-circle' : 'lni-timer'}`} />
+                      <span className="flex-1 text-sm text-g700">Student Photo</span>
+                      <span className="chk-status text-xs">{photoSaved ? 'Uploaded' : 'Pending'}</span>
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-2 mt-5" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={declarationAccepted} onChange={e => setDeclarationAccepted(e.target.checked)} style={{ width: 16, height: 16 }} />
+                    <span className="font-medium text-g700">I confirm the information provided is correct.</span>
+                  </label>
+
+                  <div className="flex justify-between mt-5">
+                    <button className="btn" onClick={() => setActiveTab('family')}><i className="lni lni-arrow-left" /> Family</button>
+                    <button className="btn bg-b500 text-white" disabled={!canSubmit || submitApplication.isPending} onClick={handleSubmitApplication}>
+                      <i className="lni lni-checkmark" /> {submitApplication.isPending ? 'Submitting…' : 'Submit Application for Vetting'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       <Toast toast={toast} />

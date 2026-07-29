@@ -1,0 +1,24 @@
+meta {
+  name: Get Program By Guid
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/academic/program-master/:programGuid
+  body: none
+  auth: none
+}
+
+params:path {
+  programGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+}
+
+docs {
+  Returns a single program. `data` is a single program master object (same shape as the list).
+
+  Note: docs/api/README.md flags Program Master reads as one of the few endpoints that may return the
+  raw object directly instead of the standard envelope. Check the actual response shape at runtime.
+
+  Failure: 404 `not_found` if no program with that GUID.
+}

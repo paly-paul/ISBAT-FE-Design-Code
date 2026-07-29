@@ -1,10 +1,23 @@
 'use client'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ConfirmMovementModal } from '@/components/modals/academic/ConfirmMovementModal'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
+
+const PAGE_SIZE = 10
+
+const MOVEMENT_ROWS = [
+  { studentNo: 'ISB/2026/0142', name: 'Nakato Sarah B.',  programme: 'BSc. IT', stage: 'Sem 2→3', currFee: <span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span>,           nextFee: <span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span>,     subjectClearance: <span className="badge badge-green"><i className="lni lni-checkmark"></i> 78% passed</span>,           sponsored: '—' as ReactNode, outcome: <span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span>, rowClass: '' },
+  { studentNo: 'ISB/2026/0099', name: 'Okello James P.',  programme: 'BBA',     stage: 'Sem 1→2', currFee: <span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span>,           nextFee: <span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span>,     subjectClearance: <span className="badge badge-grey">Not checked (Sem1→2)</span>,                                        sponsored: '—' as ReactNode, outcome: <span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span>, rowClass: '' },
+  { studentNo: 'ISB/2026/0034', name: 'Abubakar Faisal',  programme: 'BSc. IT', stage: 'Sem 2→3', currFee: <span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span>,           nextFee: <span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span>,     subjectClearance: <span className="badge badge-red"><i className="lni lni-close"></i> 38% passed</span>,                 sponsored: '—' as ReactNode, outcome: <span className="badge badge-cyan">Yet to Clear</span>,                                       rowClass: '' },
+  { studentNo: 'ISB/2026/0213', name: 'Byamukama Robert', programme: 'BEng.',   stage: 'Sem 2→3', currFee: <span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span>,           nextFee: <span className="badge badge-red"><i className="lni lni-close"></i> Not paid</span>,       subjectClearance: <span className="badge badge-green"><i className="lni lni-checkmark"></i> 65% passed</span>,           sponsored: '—' as ReactNode, outcome: <span className="badge badge-amber">Yet to register</span>,                                   rowClass: 'flagged' },
+  { studentNo: 'ISB/2025/0388', name: 'Musoke David',     programme: 'BBA',     stage: 'Sem 3→4', currFee: <span className="badge badge-red"><i className="lni lni-close"></i> 15% only</span>,             nextFee: '—' as ReactNode,                                                                     subjectClearance: <span className="badge badge-grey">Not checked (fee failed)</span>,                                    sponsored: '—' as ReactNode, outcome: <span className="badge badge-red"><i className="lni lni-close"></i> Dropout</span>,          rowClass: '' },
+  { studentNo: 'ISB/2026/0051', name: 'Uwase Claudine',   programme: 'MBA',     stage: 'Sem 2→3', currFee: <span className="badge badge-green"><i className="lni lni-checkmark"></i> (Sponsored)</span>,   nextFee: <span className="badge badge-green"><i className="lni lni-checkmark"></i> (Sponsored)</span>, subjectClearance: <span className="badge badge-green"><i className="lni lni-checkmark"></i> 82% passed</span>,           sponsored: <span className="badge badge-blue"><i className="lni lni-checkmark"></i> Sponsored</span>, outcome: <span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span>, rowClass: '' },
+]
 
 export default function Page() {
   const router = useRouter()
@@ -15,6 +28,8 @@ export default function Page() {
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(MOVEMENT_ROWS, PAGE_SIZE)
 
   return (
     <>
@@ -130,15 +145,23 @@ export default function Page() {
             <table>
               <thead><tr><th>Student No.</th><th>Name</th><th>Programme</th><th>Stage</th><th>Curr. Sem Fee</th><th>Next Sem Entry Fee</th><th>Subject Clearance</th><th>Sponsored</th><th>Movement Outcome</th></tr></thead>
               <tbody>
-                <tr><td className="font-mono text-[var(--fs-xs)]">ISB/2026/0142</td><td><strong>Nakato Sarah B.</strong></td><td>BSc. IT</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 78% passed</span></td><td>—</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td></tr>
-                <tr><td className="font-mono text-[var(--fs-xs)]">ISB/2026/0099</td><td><strong>Okello James P.</strong></td><td>BBA</td><td>Sem 1→2</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td><span className="badge badge-grey">Not checked (Sem1→2)</span></td><td>—</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td></tr>
-                <tr><td className="font-mono text-[var(--fs-xs)]">ISB/2026/0034</td><td><strong>Abubakar Faisal</strong></td><td>BSc. IT</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Paid</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> 38% passed</span></td><td>—</td><td><span className="badge badge-cyan">Yet to Clear</span></td></tr>
-                <tr className="flagged"><td className="font-mono text-[var(--fs-xs)]">ISB/2026/0213</td><td><strong>Byamukama Robert</strong></td><td>BEng.</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 100%</span></td><td><span className="badge badge-red"><i className="lni lni-close"></i> Not paid</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 65% passed</span></td><td>—</td><td><span className="badge badge-amber">Yet to register</span></td></tr>
-                <tr><td className="font-mono text-[var(--fs-xs)]">ISB/2025/0388</td><td><strong>Musoke David</strong></td><td>BBA</td><td>Sem 3→4</td><td><span className="badge badge-red"><i className="lni lni-close"></i> 15% only</span></td><td>—</td><td><span className="badge badge-grey">Not checked (fee failed)</span></td><td>—</td><td><span className="badge badge-red"><i className="lni lni-close"></i> Dropout</span></td></tr>
-                <tr><td className="font-mono text-[var(--fs-xs)]">ISB/2026/0051</td><td><strong>Uwase Claudine</strong></td><td>MBA</td><td>Sem 2→3</td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> (Sponsored)</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> (Sponsored)</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> 82% passed</span></td><td><span className="badge badge-blue"><i className="lni lni-checkmark"></i> Sponsored</span></td><td><span className="badge badge-green"><i className="lni lni-checkmark"></i> Registered</span></td></tr>
+                {pageItems.map(r => (
+                  <tr key={r.studentNo} className={r.rowClass}>
+                    <td className="font-mono text-[var(--fs-xs)]">{r.studentNo}</td>
+                    <td><strong>{r.name}</strong></td>
+                    <td>{r.programme}</td>
+                    <td>{r.stage}</td>
+                    <td>{r.currFee}</td>
+                    <td>{r.nextFee}</td>
+                    <td>{r.subjectClearance}</td>
+                    <td>{r.sponsored}</td>
+                    <td>{r.outcome}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="movements" onPageChange={setPage} />
           <div className="g4 mb-[14px]">
             <div className="p-3 bg-[var(--green-bg)] border border-[var(--green-bd)] rounded-[var(--rsm)] text-center"><div className="text-[var(--fs-xs)] text-clr-green font-bold">REGISTERED</div><div className="text-[var(--fs-xl)] font-extrabold text-clr-green font-sans">1,169</div></div>
             <div className="p-3 bg-[var(--red-bg)] border border-[var(--red-bd)] rounded-[var(--rsm)] text-center"><div className="text-[var(--fs-xs)] text-clr-red font-bold">DROPOUT</div><div className="text-[var(--fs-xl)] font-extrabold text-clr-red font-sans">12</div></div>

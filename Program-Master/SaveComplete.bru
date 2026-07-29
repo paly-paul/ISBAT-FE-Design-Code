@@ -1,0 +1,65 @@
+meta {
+  name: Save Program Complete
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/academic/program-master/save-complete
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  programCode: BSCS
+  programName: Bachelor of Science in Computer Science
+  pgmStatus: true
+  noIa: false
+  programGroupGuid: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+  unitCount: 24
+  appFee: 50000
+  lateFee: 10000
+  programLevelGuid: b2c3d4e5-f6a7-48b9-c0d1-e2f3a4b5c6d7
+  facultyGuid: c3d4e5f6-a7b8-49c0-d1e2-f3a4b5c6d7e8
+  currencyGuid: a1b2c3d4-e5f6-4789-abcd-ef0123456789
+  dateAcc: 2022-01-15T00:00:00
+  streamGuid: d4e5f6a7-b8c9-40d1-e2f3-a4b5c6d7e8f9
+  intakeGuid: e5f6a7b8-c9d0-4e1f-a2b3-c4d5e6f7a8b9
+  ProgramUnits[0][SemCode]: 101
+  ProgramUnits[0][CourseUnitGuid]: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+  ProgramUnits[0][StreamGuid]:
+  ProgramUnits[0][UnitTypeGuid]: b1c2d3e4-f5a6-4789-bcde-f01234567890
+  ProgramUnits[0][UnitCatGuid]: c2d3e4f5-a6b7-4890-cdef-012345678901
+  ProgramUnits[0][Flag]: 1
+  ProgramUnits[1][SemCode]: 102
+  ProgramUnits[1][CourseUnitGuid]: 8d0f7780-8536-51ef-a55c-f18302a01fb8
+  ProgramUnits[1][StreamGuid]:
+  ProgramUnits[1][UnitTypeGuid]: b1c2d3e4-f5a6-4789-bcde-f01234567890
+  ProgramUnits[1][UnitCatGuid]: c2d3e4f5-a6b7-4890-cdef-012345678901
+  ProgramUnits[1][Flag]: 1
+  FeeStructures[0][FeeCode]: TUI
+  FeeStructures[0][FeeDesc]: Tuition Fee
+  FeeStructures[0][Status]: true
+  FeeStructures[0][LocalOrForeign]: false
+  FeeStructures[0][CalcType]: 1
+  FeeStructures[0][AmtPer]: 100
+  FeeStructures[0][IntakeGuid]: e5f6a7b8-c9d0-4e1f-a2b3-c4d5e6f7a8b9
+  FeeStructures[0][FeeLines][0][SemCode]: 101
+  FeeStructures[0][FeeLines][0][LedgerGuid]: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+  FeeStructures[0][FeeLines][0][CurrencyGuid]: a1b2c3d4-e5f6-4789-abcd-ef0123456789
+  FeeStructures[0][FeeLines][0][LedgerNum]: 1
+  FeeStructures[0][FeeLines][0][Amount]: 1500000
+}
+
+docs {
+  Creates or replaces a program and its full structure in one request (multipart/form-data).
+  Nested arrays use bracket notation: ProgramUnits[n][Field] and FeeStructures[n][FeeLines][m][Field].
+  An optional accLetterFile can be attached as a file part named accLetterFile.
+
+  ProgramUnits fields: SemCode (int), CourseUnitGuid, StreamGuid (optional), UnitTypeGuid, UnitCatGuid, Flag (1=Core, 2=Elective).
+  FeeStructures fields: FeeCode, FeeDesc, Status, LocalOrForeign, CalcType, AmtPer, Lef, Cef, Ace, Lec, Cec, Acec, IntakeGuid, FeeLines[].
+  FeeLines fields: SemCode, LedgerGuid, CurrencyGuid, LedgerNum, Amount.
+
+  Success: 201 Created, data is the saved program GUID.
+  Failures: 400 validation_error, 404 not_found (if any referenced GUID does not exist).
+}

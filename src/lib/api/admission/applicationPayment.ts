@@ -1,0 +1,168 @@
+import { apiGet, apiPostForm } from '../client'
+
+const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
+
+// Confirmed via Application-Payments/Create.bru — multipart/form-data (not
+// JSON), so this always goes through apiPostForm, not apiPost, to support the
+// optional payProofFile upload.
+//
+// countryGuid is deliberately NOT part of this input: there's no guid-bearing
+// Country master anywhere in this codebase yet (config/country-master's
+// Country type only exposes intCountryCode, an int) — send the payload
+// without it until a real source is confirmed, rather than guessing.
+//
+// oDelIntApplication has no documented semantics beyond the sample value in
+// Create.bru — always sent as 0 until clarified.
+export interface ApplicationPaymentInput {
+  enquiryGuid: string | null
+  studentName: string
+  intakeGuid: string
+  campusGuid: string
+  programGuid: string
+  semesterGuid: string
+  batchGuid: string
+  batchTimeGuid: string
+  feeHdGuid: string
+  mobile: string
+  email: string | null
+  // Per Create.bru docs: when this is set, amount/currencyGuid/exRate/payType/
+  // receiptBookGuid are not required server-side — all four are nullable here
+  // and omitted from the multipart body entirely when null, rather than sent
+  // as empty/zero values.
+  exemptionTypeGuid: string | null
+  // dd/MMM/yyyy, e.g. "28/Jul/2026" — see formatBruDate in the payment page.
+  payDate: string
+  payType: number | null
+  amount: number | null
+  currencyGuid: string | null
+  exRate: number | null
+  // Per Create.bru docs: required when payType > 1 (non-cash payments).
+  bankGuid: string | null
+  receiptBookGuid: string | null
+  remarks: string | null
+  payProofFile: File | null
+}
+
+// --- Payment-scoped dropdown DTOs -----------------------------------------
+// These six endpoints (Application-Payments/Dropdowns/*.bru) exist on the
+// backend but the .bru docs only name the response type, not its exact
+// fields. The shapes below are a best-effort guess (guid + name, matching
+// this app's existing conventions for the same concepts elsewhere, e.g.
+// Bank.bankName, ReceiptBook.bookCode) — verify against a real network
+// response once the dev backend is reachable and correct these if they
+// differ, same as any other "unconfirmed" note in this codebase.
+
+export interface BankAccountInfoDto {
+  bankGuid: string
+  bankName: string
+}
+
+export interface BatchInfoDto {
+  batchGuid: string
+  batchCode: string
+}
+
+export interface ExemptionTypeDto {
+  exemptionTypeGuid: string
+  exemptionTypeName: string
+}
+
+// Confirmed via a real GET dropdowns/fees?programGuid= response — there is
+// no flat "amount" field on this DTO (a first guess assumed one and used it
+// to auto-fill the Application Fee Amount field, which was wrong). amtPer
+// looks like a percentage rather than a currency amount, and what it's a
+// percentage OF isn't confirmed, so it's not used for anything yet — Fee
+// Amount stays manual-entry only.
+export interface ProgramFeeHeadInfoDto {
+  feeHdGuid: string
+  feeCode: string
+  feeDesc: string
+  intProgram: number
+  status: number
+  amtPer: number
+}
+
+export interface PaymentTypeDto {
+  payType: number
+  paymentTypeName: string
+}
+
+// Success (201) per Create.bru docs: "data = CreateApplicationPaymentResponse."
+// Exact fields aren't shown in the .bru sample — left unknown until seen.
+export type CreateApplicationPaymentResponse = unknown
+
+const mockBanks: BankAccountInfoDto[] = [{ bankGuid: 'mock-bank-1', bankName: 'Stanbic Bank' }]
+const mockBatches: BatchInfoDto[] = [{ batchGuid: 'mock-batch-1', batchCode: 'BSCVFXS27DA' }]
+const mockExemptionTypes: ExemptionTypeDto[] = [{ exemptionTypeGuid: 'mock-exemption-1', exemptionTypeName: 'HTC Waiver' }]
+const mockFees: ProgramFeeHeadInfoDto[] = [{ feeHdGuid: 'mock-fee-1', feeCode: 'STD', feeDesc: 'Standard Application Fee', intProgram: 0, status: 1, amtPer: 0 }]
+const mockPaymentTypes: PaymentTypeDto[] = [
+  { payType: 1, paymentTypeName: 'Cash' },
+  { payType: 2, paymentTypeName: 'Bank Transfer' },
+]
+
+export function getApplicationPaymentBanks(): Promise<BankAccountInfoDto[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockBanks)
+  return apiGet<BankAccountInfoDto[] | null>('/api/v1/admissions/application-payments/dropdowns/banks').then(data => data ?? [])
+}
+
+export function getApplicationPaymentBatches(programGuid: string, semesterGuid: string, batchTimeGuid: string): Promise<BatchInfoDto[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockBatches)
+  return apiGet<BatchInfoDto[] | null>(
+    `/api/v1/admissions/application-payments/dropdowns/batches?programGuid=${programGuid}&semesterGuid=${semesterGuid}&batchTimeGuid=${batchTimeGuid}`,
+  ).then(data => data ?? [])
+}
+
+export function getApplicationPaymentExemptionTypes(): Promise<ExemptionTypeDto[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockExemptionTypes)
+  return apiGet<ExemptionTypeDto[] | null>('/api/v1/admissions/application-payments/dropdowns/exemption-types').then(data => data ?? [])
+}
+
+export function getApplicationPaymentFees(programGuid: string): Promise<ProgramFeeHeadInfoDto[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockFees)
+  return apiGet<ProgramFeeHeadInfoDto[] | null>(`/api/v1/admissions/application-payments/dropdowns/fees?programGuid=${programGuid}`).then(data => data ?? [])
+}
+
+export function getApplicationPaymentTypes(): Promise<PaymentTypeDto[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockPaymentTypes)
+  return apiGet<PaymentTypeDto[] | null>('/api/v1/admissions/application-payments/dropdowns/payment-types').then(data => data ?? [])
+}
+
+// Dropdowns/ReceiptBooks.bru (GET .../dropdowns/receipt-books) is NOT wired
+// here — confirmed via a live call that it 500s server-side with
+// "Required parameter \"int category\" was not provided from query string",
+// an undocumented required param with no confirmed value. The payment page
+// uses the generic, already-working GET /api/v1/finance/receipt-books
+// (lib/api/finance/receiptBook.ts, useReceiptBooks()) instead — same
+// receiptBookGuid/bookCode shape, confirmed via a real response.
+
+export function createApplicationPayment(input: ApplicationPaymentInput): Promise<CreateApplicationPaymentResponse> {
+  if (MOCK_AUTH) {
+    return Promise.resolve({ intApplication: Math.floor(Math.random() * 100000), studentName: input.studentName })
+  }
+
+  const formData = new FormData()
+  if (input.enquiryGuid) formData.append('enquiryGuid', input.enquiryGuid)
+  formData.append('oDelIntApplication', '0')
+  formData.append('studentName', input.studentName)
+  formData.append('intakeGuid', input.intakeGuid)
+  formData.append('campusGuid', input.campusGuid)
+  formData.append('programGuid', input.programGuid)
+  formData.append('semesterGuid', input.semesterGuid)
+  formData.append('batchGuid', input.batchGuid)
+  formData.append('batchTimeGuid', input.batchTimeGuid)
+  formData.append('feeHdGuid', input.feeHdGuid)
+  formData.append('mobile', input.mobile)
+  if (input.email) formData.append('email', input.email)
+  if (input.exemptionTypeGuid) formData.append('exemptionTypeGuid', input.exemptionTypeGuid)
+  formData.append('payDate', input.payDate)
+  if (input.payType != null) formData.append('payType', String(input.payType))
+  if (input.amount != null) formData.append('amount', String(input.amount))
+  if (input.currencyGuid) formData.append('currencyGuid', input.currencyGuid)
+  if (input.exRate != null) formData.append('exRate', String(input.exRate))
+  if (input.bankGuid) formData.append('bankGuid', input.bankGuid)
+  if (input.receiptBookGuid) formData.append('receiptBookGuid', input.receiptBookGuid)
+  if (input.remarks) formData.append('remarks', input.remarks)
+  if (input.payProofFile) formData.append('payProofFile', input.payProofFile)
+
+  return apiPostForm<CreateApplicationPaymentResponse>('/api/v1/admissions/application-payments', formData)
+}

@@ -1,0 +1,22 @@
+meta {
+  name: Get Complete Fee Header
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/academic/Programfee-structure/hd/:feeHdGuid/complete
+  body: none
+  auth: none
+}
+
+params:path {
+  feeHdGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+}
+
+docs {
+  Returns a fee header with all its active fee lines, including semesterGuid and semCode per line.
+
+  Success (200): data is the fee header with feeLines array.
+  Failures: 404 not_found (no fee header with that feeHdGuid).
+}
