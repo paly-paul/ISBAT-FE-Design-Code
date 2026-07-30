@@ -22,6 +22,7 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   // The filter state is kept for future table filtering, but the current view does not need it yet.
+  const [search, setSearch] = useState('')
   const [editingCourseUnitGuid, setEditingCourseUnitGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<CourseUnit | null>(null)
 
@@ -72,6 +73,7 @@ export default function Page() {
   const deleteCourseUnit = useDeleteCourseUnit()
   const filteredRows = rows.filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
+    && (!search.trim() || `${r.courseUnitCode} ${r.courseUnitName}`.toLowerCase().includes(search.trim().toLowerCase()))
   )
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
@@ -135,7 +137,13 @@ export default function Page() {
       <div className="page active">
         <div className="pg-hdr">
           <div><div className="pg-title">Course Units Master (Curriculum)</div><div className="pg-sub">Define subjects per semester · Set Unit Type and Category · Attach approved syllabus · Configure assessment components</div></div>
-          <button className="btn btn-primary" onClick={() => openModal('cu-new-modal')}><i className="lni lni-plus"></i> Add Course Unit</button>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm"></i>
+              <input className="ctrl pl-8 w-56" placeholder="Search by code or name…" value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+            <button className="btn btn-primary" onClick={() => openModal('cu-new-modal')}><i className="lni lni-plus"></i> Add Course Unit</button>
+          </div>
         </div>
         <div className="g2 mb-[14px]">
           <div className="info-box"><i className="lni lni-clipboard"></i> Assessment proration: <strong>CW 25→15 · CBT 50→15 · UE 100→70.</strong> Total credits across all semesters must meet the programme&apos;s <strong>minimum credit load</strong> (e.g. 132 for BBA). All units must align with approved syllabus from <strong>NCHE or UVTOP</strong>.</div>

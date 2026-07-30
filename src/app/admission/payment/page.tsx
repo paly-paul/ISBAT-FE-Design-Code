@@ -14,8 +14,10 @@ import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
+import { useBanks } from '@/hooks/finance/useBanks'
+import { useCountries } from '@/hooks/config/useCountries'
+import { useEnquiries } from '@/hooks/admission/useEnquiries'
 import {
-  useApplicationPaymentBanks,
   useApplicationPaymentExemptionTypes,
   useApplicationPaymentFees,
   useApplicationPaymentTypes,
@@ -69,25 +71,25 @@ function labelFor(options: Option[], value: string): string {
 }
 
 interface FormData {
-  intakeGuid: string; source: string; firstName: string; lastName: string
-  phoneCode: string; phone: string; email: string
+  intakeGuid: string; enquiryGuid: string; source: string; firstName: string; lastName: string
+  phoneCode: string; phone: string; email: string; countryGuid: string
   campusGuid: string; programGuid: string; semesterGuid: string; batchTimeGuid: string; batchGuid: string
   feeHdGuid: string
   exemptionTypeGuid: string; payType: string
   receiptBookGuid: string; receiptType: string; feeAmount: string; currencyGuid: string
   receiptNo: string; paymentDate: string
-  bankGuid: string; bankRef: string; remarks: string
+  bankGuid: string; remarks: string
 }
 
 const initialForm: FormData = {
-  intakeGuid: '', source: 'Walk-in (Direct)',
-  firstName: '', lastName: '', phoneCode: '+256', phone: '', email: '',
+  intakeGuid: '', enquiryGuid: '', source: 'Walk-in (Direct)',
+  firstName: '', lastName: '', phoneCode: '+256', phone: '', email: '', countryGuid: '',
   campusGuid: '', programGuid: '', semesterGuid: '', batchTimeGuid: '', batchGuid: '',
   feeHdGuid: '',
   exemptionTypeGuid: '', payType: '',
   receiptBookGuid: '', receiptType: 'Official Receipt', feeAmount: '', currencyGuid: '',
   receiptNo: '', paymentDate: '',
-  bankGuid: '', bankRef: '', remarks: '',
+  bankGuid: '', remarks: '',
 }
 
 function Field({ label, req, children, span2 }: { label: string; req?: boolean; children: React.ReactNode; span2?: boolean }) {
@@ -160,6 +162,12 @@ export default function PaymentPage() {
   function setBatchTime(v: string) { setForm(prev => ({ ...prev, batchTimeGuid: v, batchGuid: '' })) }
 
   // ── Real data ──────────────────────────────────────────────────────────
+  // enquiryGuid is CONFIRMED required on Create (the .bru docs mark it
+  // "optional" but a real 400 reproduced by removing only this field from
+  // an otherwise-working payload proves otherwise) — every payment must
+  // link to a real enquiry. Loads the first 100 (of 11k+ — see
+  // useEnquiries' own note) for this dropdown rather than the full list.
+  const { data: enquiriesData }      = useEnquiries(1, 100)
   const { data: intakes = [] }       = useIntakes()
   const { data: campuses = [] }      = useCampuses()
   const { data: programs = [] }      = useProgramMasters()
@@ -181,7 +189,13 @@ export default function PaymentPage() {
   const { data: exemptionTypes = [] } = useApplicationPaymentExemptionTypes()
   const { data: paymentTypes = [] }  = useApplicationPaymentTypes()
   const { data: currencies = [] }    = useFinanceCurrencies()
-  const { data: banks = [] }         = useApplicationPaymentBanks()
+  // The payment-scoped Dropdowns/Banks.bru endpoint has the same "unconfirmed
+  // shape" risk as the other payment-scoped dropdowns — uses the generic,
+  // already-real Finance Banks endpoint instead (confirmed identical
+  // bankGuid/bankName shape via a live response). Status enum is 1 =
+  // Inactive, 2 = Active (see lib/api/finance/bank.ts) — only offer Active.
+  const { data: allBanks = [] }      = useBanks()
+  const banks = allBanks.filter(b => b.status === 2)
   // The payment-scoped Dropdowns/ReceiptBooks.bru endpoint 500s server-side
   // (undocumented required "category" int query param) — fall back to the
   // already-working generic Finance Receipt Books endpoint instead. Same
@@ -189,23 +203,39 @@ export default function PaymentPage() {
   // payment-filtered one, so only offer Active (status === 1) ones here.
   const { data: allReceiptBooks = [] } = useReceiptBooks()
   const receiptBooks = allReceiptBooks.filter(r => r.status === 1)
+  // No dedicated Countries dropdown under Application-Payments — reuses the
+  // same real, guid-bearing Country source as Country Master and Filing
+  // (GET /api/v1/users/countries), confirmed end-to-end via a real
+  // successful payment.
+  const { data: countries = [] }     = useCountries()
   const createPayment = useCreateApplicationPayment()
 
+  const enquiryOptions  = (enquiriesData?.items ?? []).map(e => ({ value: e.enquiryGuid, label: `${e.studentName} (${e.enquiryCode})` }))
   const intakeOptions   = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   const campusOptions   = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions  = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
+  const countryOptions  = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
   const semesterOptions = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
   const batchTimeOptions = batchTimes.map(bt => ({ value: bt.batchTimeGuid, label: bt.batchTime }))
   const batchOptions    = batches.map(b => ({ value: b.batchGuid, label: b.batchCode }))
   const feeOptions      = fees.map(f => ({ value: f.feeHdGuid, label: `${f.feeDesc} (${f.feeCode})` }))
-  const exemptionOptions: Option[] = [{ value: '', label: '-- None (Pay Full Fee) --' }, ...exemptionTypes.map(e => ({ value: e.exemptionTypeGuid, label: e.exemptionTypeName }))]
+  const exemptionOptions: Option[] = [{ value: '', label: '-- None (Pay Full Fee) --' }, ...exemptionTypes.map(e => ({ value: e.exemptionTypeGuid, label: e.label }))]
   const payTypeOptions  = paymentTypes.map(t => ({ value: String(t.intPaymentType), label: t.paymentTypeName }))
   const currencyOptions = currencies.map(c => ({ value: c.currencyGuid, label: c.currencyCode }))
   const bankOptions     = banks.map(b => ({ value: b.bankGuid, label: b.bankName }))
   const receiptBookOptions = receiptBooks.map(r => ({ value: r.receiptBookGuid, label: r.bookCode }))
 
   const isWaived = !!form.exemptionTypeGuid
-  const isBank   = !isWaived && Number(form.payType) > 1
+  // Per Create.bru docs, bankGuid's requirement is tied only to payType > 1
+  // — exemption only makes payType/amount/currencyGuid/exRate/receiptBookGuid
+  // "not required", not forbidden. isBank previously also checked !isWaived,
+  // which silently forced bankGuid to null on submit any time an exemption
+  // was selected — even though the Bank Transfer Details section stayed
+  // visible and let you pick one. Now reflects the actual Payment Method
+  // selection regardless of waived status.
+  const isBank   = Number(form.payType) > 1
+  const selectedBankGuid = isBank ? (form.bankGuid || null) : null
+  const showBankDetails = isBank
 
   // Fee Amount is manual-entry only — a first attempt tried to auto-fill it
   // from the selected Fee Structure's dropdown entry, but the real DTO
@@ -220,10 +250,12 @@ export default function PaymentPage() {
 
   function handleSubmit() {
     const missing: string[] = []
+    if (!form.enquiryGuid) missing.push('Enquiry')
     if (!form.firstName) missing.push('First Name')
     if (!form.lastName) missing.push('Last Name')
     if (!form.phone) missing.push('Phone')
     if (!form.intakeGuid) missing.push('Intake')
+    if (!form.countryGuid) missing.push('Country')
     if (!form.campusGuid) missing.push('Campus')
     if (!form.programGuid) missing.push('Programme')
     if (!form.semesterGuid) missing.push('Semester')
@@ -245,9 +277,8 @@ export default function PaymentPage() {
 
     createPayment.mutate(
       {
-        // Import-from-Enquiry is still a mock flow (ImportSourceModal etc.
-        // don't fetch real enquiries yet) — nothing to link here until that's wired.
-        enquiryGuid: null,
+        enquiryGuid: form.enquiryGuid,
+        oDelIntApplication: 0,
         studentName: `${form.firstName} ${form.lastName}`.trim(),
         intakeGuid: form.intakeGuid,
         campusGuid: form.campusGuid,
@@ -256,16 +287,17 @@ export default function PaymentPage() {
         batchGuid: form.batchGuid,
         batchTimeGuid: form.batchTimeGuid,
         feeHdGuid: form.feeHdGuid,
+        countryGuid: form.countryGuid,
         mobile: form.phone.trim(),
         email: form.email.trim() || null,
         exemptionTypeGuid: form.exemptionTypeGuid || null,
         payDate: formatBruDate(form.paymentDate),
-        payType: isWaived ? null : Number(form.payType),
-        amount: isWaived ? null : Number(form.feeAmount || 0),
-        currencyGuid: isWaived ? null : form.currencyGuid,
-        exRate: isWaived ? null : exRate,
-        bankGuid: isBank ? (form.bankGuid || null) : null,
-        receiptBookGuid: isWaived ? null : (form.receiptBookGuid || null),
+        payType: Number(form.payType || 1),
+        amount: Number(form.feeAmount || 0),
+        currencyGuid: form.currencyGuid || null,
+        exRate: exRate || 1,
+        bankGuid: selectedBankGuid,
+        receiptBookGuid: form.receiptBookGuid || null,
         remarks: form.remarks.trim() || null,
         payProofFile,
       },
@@ -372,6 +404,9 @@ export default function PaymentPage() {
             </div>
 
             <div className="g2 mb-4">
+              <Field label="Enquiry" req>
+                <SearchSelect options={enquiryOptions} value={form.enquiryGuid} placeholder="-- Select Enquiry --" onChange={v => set('enquiryGuid', v)} />
+              </Field>
               <Field label="Intake" req>
                 <SearchSelect options={intakeOptions} value={form.intakeGuid} placeholder="-- Select Intake --" onChange={v => set('intakeGuid', v)} />
               </Field>
@@ -414,6 +449,9 @@ export default function PaymentPage() {
                   <i className="inp-icon lni lni-envelope" />
                   <input className="ctrl" type="email" placeholder="applicant@email.com" value={form.email} onChange={e => set('email', e.target.value)} />
                 </div>
+              </Field>
+              <Field label="Country" req>
+                <SearchSelect options={countryOptions} value={form.countryGuid} placeholder="-- Select Country --" onChange={v => set('countryGuid', v)} />
               </Field>
               <Field label="Campus" req>
                 <SearchSelect options={campusOptions} value={form.campusGuid} placeholder="-- Select Campus --" onChange={v => set('campusGuid', v)} />
@@ -476,11 +514,12 @@ export default function PaymentPage() {
                 <div className="flex-1">
                   <div className="amt-val-wrap">
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9.]*"
                       className="amt-val-input"
                       value={form.feeAmount}
                       onChange={e => set('feeAmount', e.target.value)}
-                      disabled={isWaived}
                     />
                     <SearchSelect options={currencyOptions} value={form.currencyGuid} onChange={v => set('currencyGuid', v)}
                       style={{ width: 84, flexShrink: 0 }} />
@@ -513,23 +552,17 @@ export default function PaymentPage() {
               </div>
             </Field>
 
-            {isBank && (
+            {showBankDetails && (
               <div className="mt-4 p-4 rounded-xl bg-g50 border border-g200">
                 <h3 className="font-semibold text-g700 mb-3" style={{ fontSize: 'var(--fs-sm)' }}>Bank Transfer Details</h3>
-                <div className="g2">
-                  <Field label="Bank Name" req>
-                    <SearchSelect options={bankOptions} value={form.bankGuid} placeholder="Select bank" onChange={v => set('bankGuid', v)} />
-                  </Field>
-                  <Field label="Bank Transaction Ref">
-                    <input className="ctrl" placeholder="TXN-XXXXXXX" value={form.bankRef} onChange={e => set('bankRef', e.target.value)} />
-                  </Field>
-                  <Field label="Bank Deposit Slip" span2>
-                    <div className="file-zone">
-                      <i className="lni lni-upload text-g400" style={{ fontSize: 20 }} />
-                      <span className="text-g500" style={{ fontSize: 'var(--fs-sm)' }}>Click to upload or drag &amp; drop</span>
-                    </div>
-                  </Field>
-                </div>
+                <Field label="Bank Name" req>
+                  <select className="ctrl" value={form.bankGuid} onChange={e => set('bankGuid', e.target.value)}>
+                    <option value="">Select bank</option>
+                    {bankOptions.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </Field>
               </div>
             )}
 

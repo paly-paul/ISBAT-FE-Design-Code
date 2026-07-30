@@ -70,8 +70,16 @@ export function NewEmployeeModal({ isOpen, onClose, showToast }: ModalProps) {
   const { data: departments = [] } = useDepartments()
   const { data: designations = [] } = useDesignations()
   const { data: countries = [] } = useCountries()
-  const countryOptions = countries.map(c => ({ value: String(c.intCountryCode), label: c.countryName }))
-  const defaultCountryCode = countries.find(c => c.defaultCountry === 1)?.intCountryCode ?? 1
+  // Country only ever exposes a countryGuid (no int code — the old
+  // intCountryCode field was a fabrication that never existed on the real
+  // response, see the note in lib/api/academic/country.ts), but Employee's
+  // own intCountryCode is a genuinely separate, real int field with no
+  // confirmed mapping back to a country. Sent as the option's 1-based list
+  // position, same workaround convention as Batch's bInCharge — flagged,
+  // not a confirmed id.
+  const countryOptions = countries.map((c, i) => ({ value: String(i + 1), label: c.countryName }))
+  const defaultCountryIndex = countries.findIndex(c => c.defaultCountry === 1)
+  const defaultCountryCode = defaultCountryIndex >= 0 ? defaultCountryIndex + 1 : 1
   const departmentOptions = departments.map(d => d.deptName)
   const selectedDept = departments.find(d => d.deptName === department)
   const designationOptions = selectedDept ? designations.filter(d => String(d.intDept) === String(selectedDept.intDept)).map(d => d.designationName) : []

@@ -75,7 +75,13 @@ export function EditEmployeeModal({ isOpen, onClose, showToast, employeeGuid }: 
   const { data: departments = [] } = useDepartments()
   const { data: designations = [] } = useDesignations()
   const { data: countries = [] } = useCountries()
-  const defaultCountryCode = countries.find(c => c.defaultCountry === 1)?.intCountryCode ?? 1
+  // Country only ever exposes a countryGuid — the old intCountryCode field
+  // was a fabrication that never existed on the real response (see
+  // lib/api/academic/country.ts) — Employee's own intCountryCode has no
+  // confirmed mapping to a real country, so it's treated as the option's
+  // 1-based list position, same workaround convention as Batch's bInCharge.
+  const defaultCountryIndex = countries.findIndex(c => c.defaultCountry === 1)
+  const defaultCountryCode = defaultCountryIndex >= 0 ? defaultCountryIndex + 1 : 1
   const departmentOptions = departments.map(d => d.deptName)
   const selectedDept = departments.find(d => d.deptName === department)
   const designationOptions = selectedDept ? designations.filter(d => String(d.intDept) === String(selectedDept.intDept)).map(d => d.designationName) : []
@@ -109,11 +115,14 @@ export function EditEmployeeModal({ isOpen, onClose, showToast, employeeGuid }: 
     setErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
   }
 
-  // If the saved country is no longer in the current list, show the employee's stored country name as a fallback.
+  // If the employee's saved intCountryCode falls outside the current list's
+  // position range, show their stored country name as a fallback rather
+  // than a blank/mismatched selection.
   const countryOptions = useMemo(() => {
-    const opts = countries.map(c => ({ value: String(c.intCountryCode), label: c.countryName }))
-    if (employee?.intCountryCode != null && employee.countryName && !countries.some(c => c.intCountryCode === employee.intCountryCode)) {
-      opts.push({ value: String(employee.intCountryCode), label: employee.countryName })
+    const opts = countries.map((c, i) => ({ value: String(i + 1), label: c.countryName }))
+    const saved = employee?.intCountryCode
+    if (saved != null && employee?.countryName && (saved < 1 || saved > countries.length)) {
+      opts.push({ value: String(saved), label: employee.countryName })
     }
     return opts
   }, [countries, employee])

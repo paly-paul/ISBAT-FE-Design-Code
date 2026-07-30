@@ -41,7 +41,7 @@ export default function Page() {
 
   function confirmDeleteCountry() {
     if (!deleteTarget) return
-    deleteCountry.mutate(String(deleteTarget.intCountryCode), {
+    deleteCountry.mutate(deleteTarget.countryGuid, {
       onSuccess: () => { setDeleteTarget(null); showToast('Country deleted successfully') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete country', 'error'),
     })
@@ -149,7 +149,7 @@ export default function Page() {
                     ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
                     : null}
                 {pageItems.map((r) => (
-                  <tr key={r.intCountryCode}>
+                  <tr key={r.countryGuid}>
                     <td>
                       <ActionMenu>
                         <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
