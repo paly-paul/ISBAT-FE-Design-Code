@@ -11,8 +11,14 @@ import { NewFollowUpLogModal } from '@/components/modals/admission/NewFollowUpLo
 import { useEnquiryFollowUps, useCreateEnquiryFollowUp } from '@/hooks/admission/useEnquiryFollowUps'
 import { useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { usePagination } from '@/hooks/usePagination'
 
 const PAGE_SIZE = 10
+// Fetched once at a size large enough to cover the whole list (917 rows in
+// the sample data, per useEnquiryFollowUps.ts) so the search box below can
+// filter client-side across every follow-up, not just the current server
+// page — same approach as batch-management/page.tsx.
+const FETCH_ALL_PAGE_SIZE = 1000
 
 function nameBadge(name: string | null, cls: string) {
   if (!name) return <span className="badge badge-grey">—</span>
@@ -23,13 +29,11 @@ export default function EnquiryFollowupMasterPage() {
   const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
-  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
   const [viewingGuid, setViewingGuid] = useState<string | null>(null)
 
-  const { data, isLoading } = useEnquiryFollowUps(page, PAGE_SIZE)
-  const rows = data?.items ?? []
-  const totalCount = data?.totalCount ?? 0
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const { data, isLoading } = useEnquiryFollowUps(1, FETCH_ALL_PAGE_SIZE)
+  const allRows = data?.items ?? []
   const updateEnquiry = useUpdateEnquiry()
   const createFollowUp = useCreateEnquiryFollowUp()
 
@@ -41,6 +45,15 @@ export default function EnquiryFollowupMasterPage() {
     if (!row.programGuid) return '—'
     return programs.find(p => p.programGuid === row.programGuid)?.programName ?? '—'
   }
+
+  const filteredRows = allRows.filter(r => {
+    if (!search.trim()) return true
+    const term = search.trim().toLowerCase()
+    return `${r.enquiryCode} ${r.studentName} ${resolveProgramName(r)} ${r.enquiryStatusName ?? ''} ${r.followUpStatusName ?? ''} ${r.enquirySourceName ?? ''}`
+      .toLowerCase()
+      .includes(term)
+  })
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -71,13 +84,17 @@ export default function EnquiryFollowupMasterPage() {
       <div className="stats-row">
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1"><i className="lni lni-users text-b500" /><span className="text-sm text-g500">Total Follow-ups</span></div>
-          <p className="text-2xl font-semibold text-g900">{totalCount.toLocaleString()}</p>
+          <p className="text-2xl font-semibold text-g900">{allRows.length.toLocaleString()}</p>
         </div>
       </div>
 
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-g800">Follow-up Register</h2>
+          <div className="relative">
+            <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm"></i>
+            <input className="ctrl pl-8 w-56" placeholder="Search by name, ref, status…" value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
         </div>
         <ScrollTable>
           <table>
@@ -85,10 +102,10 @@ export default function EnquiryFollowupMasterPage() {
             <tbody>
               {isLoading
                 ? <TableLoadingState colSpan={999} />
-                : rows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
+                : filteredRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
                   : null}
-              {rows.map(r => (
+              {pageItems.map(r => (
                 <tr key={r.enquiryGuid}>
                   <td>
                     <ActionMenu>
@@ -138,7 +155,7 @@ export default function EnquiryFollowupMasterPage() {
         isOpen={openModals.has('new-followup-log-modal')}
         onClose={() => closeModal('new-followup-log-modal')}
         showToast={showToast}
-        enquiries={rows}
+        enquiries={allRows}
         createFollowUp={createFollowUp}
       />
       <Toast toast={toast} />

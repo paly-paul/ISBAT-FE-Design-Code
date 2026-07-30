@@ -67,7 +67,7 @@ export function EditCountryModal({ isOpen, onClose, showToast, country, updateCo
   function handleSubmit() {
     if (!country || !validate()) return
     updateCountry.mutate(
-      { id: String(country.intCountryCode), input: { countryCode, countryName, nationality, countryPrefix, defaultCountry: defaultCountry ? 1 : 0 } },
+      { id: country.countryGuid, input: { countryCode, countryName, nationality, countryPrefix, defaultCountry: defaultCountry ? 1 : 0 } },
       {
         onSuccess: () => { setSaved(true); showToast('Country updated successfully') },
         onError: handleUpdateError,

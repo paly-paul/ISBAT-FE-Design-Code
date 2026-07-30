@@ -42,9 +42,15 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 //   return Promise.resolve(existing)
 // }
 
-// Current API shape for countries.
+// Confirmed via a real GET /api/v1/users/countries response — countryGuid
+// is a real, confirmed guid (verified end-to-end: sending it as
+// Application-Payments' countryGuid produced a successful payment). The
+// previous intCountryCode field was a total fabrication — it never existed
+// on this endpoint's response at all, silently breaking every consumer that
+// relied on it (this page's own row key/delete id, and the Employee
+// modals' country dropdown — see the notes there).
 export interface Country {
-  intCountryCode: number
+  countryGuid: string
   countryCode: string
   countryName: string
   nationality: string
@@ -52,7 +58,7 @@ export interface Country {
   countryPrefix: string
 }
 
-export type CountryInput = Omit<Country, 'intCountryCode'>
+export type CountryInput = Omit<Country, 'countryGuid'>
 
 interface CountryListResponse {
   items: Country[]
@@ -63,14 +69,14 @@ interface CountryListResponse {
 
 // This in-memory list is used only in mock mode.
 const mockCountries: Country[] = [
-  { intCountryCode: 1, countryCode: 'UGA', countryName: 'Uganda',        nationality: 'Ugandan',        defaultCountry: 1, countryPrefix: '+256' },
-  { intCountryCode: 2, countryCode: 'KEN', countryName: 'Kenya',          nationality: 'Kenyan',         defaultCountry: 0, countryPrefix: '+254' },
-  { intCountryCode: 3, countryCode: 'TZA', countryName: 'Tanzania',       nationality: 'Tanzanian',      defaultCountry: 0, countryPrefix: '+255' },
-  { intCountryCode: 4, countryCode: 'RWA', countryName: 'Rwanda',         nationality: 'Rwandan',        defaultCountry: 0, countryPrefix: '+250' },
-  { intCountryCode: 5, countryCode: 'SSD', countryName: 'South Sudan',    nationality: 'South Sudanese', defaultCountry: 0, countryPrefix: '+211' },
-  { intCountryCode: 6, countryCode: 'COD', countryName: 'DR Congo',       nationality: 'Congolese',      defaultCountry: 0, countryPrefix: '+243' },
-  { intCountryCode: 7, countryCode: 'GBR', countryName: 'United Kingdom', nationality: 'British',        defaultCountry: 0, countryPrefix: '+44'  },
-  { intCountryCode: 8, countryCode: 'IND', countryName: 'India',          nationality: 'Indian',         defaultCountry: 0, countryPrefix: '+91'  },
+  { countryGuid: 'mock-country-ug', countryCode: 'UGA', countryName: 'Uganda',        nationality: 'Ugandan',        defaultCountry: 1, countryPrefix: '+256' },
+  { countryGuid: 'mock-country-ke', countryCode: 'KEN', countryName: 'Kenya',          nationality: 'Kenyan',         defaultCountry: 0, countryPrefix: '+254' },
+  { countryGuid: 'mock-country-tz', countryCode: 'TZA', countryName: 'Tanzania',       nationality: 'Tanzanian',      defaultCountry: 0, countryPrefix: '+255' },
+  { countryGuid: 'mock-country-rw', countryCode: 'RWA', countryName: 'Rwanda',         nationality: 'Rwandan',        defaultCountry: 0, countryPrefix: '+250' },
+  { countryGuid: 'mock-country-ss', countryCode: 'SSD', countryName: 'South Sudan',    nationality: 'South Sudanese', defaultCountry: 0, countryPrefix: '+211' },
+  { countryGuid: 'mock-country-cd', countryCode: 'COD', countryName: 'DR Congo',       nationality: 'Congolese',      defaultCountry: 0, countryPrefix: '+243' },
+  { countryGuid: 'mock-country-gb', countryCode: 'GBR', countryName: 'United Kingdom', nationality: 'British',        defaultCountry: 0, countryPrefix: '+44'  },
+  { countryGuid: 'mock-country-in', countryCode: 'IND', countryName: 'India',          nationality: 'Indian',         defaultCountry: 0, countryPrefix: '+91'  },
 ]
 
 export function getCountries(page = 1, pageSize = 10): Promise<Country[]> {
@@ -78,33 +84,18 @@ export function getCountries(page = 1, pageSize = 10): Promise<Country[]> {
   return apiGet<CountryListResponse | null>(`/api/v1/users/countries?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
 }
 
-// Older mock create helper kept for reference.
-// export function createCountry(input: CountryInput): Promise<Country> {
-//   const country: Country = { intCountryCode: mockCountries.length + 1, ...input }
-//   mockCountries.push(country)
-//   return Promise.resolve(country)
-// }
-
 export function createCountry(input: CountryInput): Promise<Country> {
   if (MOCK_AUTH) {
-    const country: Country = { intCountryCode: mockCountries.length + 1, ...input }
+    const country: Country = { countryGuid: crypto.randomUUID(), ...input }
     mockCountries.push(country)
     return Promise.resolve(country)
   }
   return apiPost<Country>('/api/v1/users/countries', input)
 }
 
-// Older mock update helper kept for reference.
-// export function updateCountry(id: string, input: CountryInput): Promise<Country> {
-//   const existing = mockCountries.find(c => String(c.intCountryCode) === id)
-//   if (!existing) return Promise.reject(new Error('Country not found'))
-//   Object.assign(existing, input)
-//   return Promise.resolve(existing)
-// }
-
 export function updateCountry(id: string, input: CountryInput): Promise<Country> {
   if (MOCK_AUTH) {
-    const existing = mockCountries.find(c => String(c.intCountryCode) === id)
+    const existing = mockCountries.find(c => c.countryGuid === id)
     if (!existing) return Promise.reject(new Error('Country not found'))
     Object.assign(existing, input)
     return Promise.resolve(existing)
@@ -115,7 +106,7 @@ export function updateCountry(id: string, input: CountryInput): Promise<Country>
 // DELETE /api/v1/users/countries/{id} — soft-delete (data: true on success).
 export function deleteCountry(id: string): Promise<boolean> {
   if (MOCK_AUTH) {
-    const index = mockCountries.findIndex(c => String(c.intCountryCode) === id)
+    const index = mockCountries.findIndex(c => c.countryGuid === id)
     if (index === -1) return Promise.reject(new Error('Country not found'))
     mockCountries.splice(index, 1)
     return Promise.resolve(true)

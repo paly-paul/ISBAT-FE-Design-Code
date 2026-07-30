@@ -1,19 +1,21 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
+import { SuccessPopup } from '@/components/modals/academic/SuccessPopup'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 import { useBatches } from '@/hooks/academic/useBatches'
+import { useCountries } from '@/hooks/config/useCountries'
+import { useEnquiries } from '@/hooks/admission/useEnquiries'
 import { useApplicationPaymentFees } from '@/hooks/admission/useApplicationPayments'
 import {
   FilingApplicationSearchResult,
   useDeleteQualification,
-  useFilingCountries,
   useSaveGeneral,
   useSaveQualification,
   useSearchApplicationsForFiling,
@@ -29,10 +31,13 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'documents',      label: 'Documents',        icon: 'lni-folder-2' },
 ]
 
-// Nationality now uses the real countries dropdown (see useFilingCountries)
-// since Application-Filling/SaveGeneral.bru confirms countryGuid is a real
-// field. RELIGIONS/MARITAL and the Passport Expiry/Country of Issue/Visa
-// Number/Visa Type/UNHCR Case Number fields below still have no counterpart
+// Nationality/Sponsor Country use the real, confirmed guid-bearing Country
+// source — GET /api/v1/users/countries (useCountries(), same one Country
+// Master uses) — not Application-Filling's own Countries.bru dropdown,
+// which turned out to have no guid at all (see the note on
+// CountryDropdownDto in lib/api/admission/applicationFiling.ts).
+// RELIGIONS/MARITAL and the Passport Expiry/Country of Issue/Visa Number/
+// Visa Type/UNHCR Case Number fields below still have no counterpart
 // anywhere in the Application Filling docs — kept as decorative/local
 // fields (not sent), same treatment as Application Source/Receipt Type on
 // the payment page. Country of Issue keeps this local list rather than the
@@ -98,6 +103,12 @@ function FileZone({ hint = 'Click to upload', file, onChange }: { hint?: string;
   )
 }
 
+// firstName often carries the full name with lastName null in real data
+// (see FilingApplicationSearchResult) — join whatever's present.
+function applicantName(a: FilingApplicationSearchResult): string {
+  return [a.firstName, a.lastName].filter(Boolean).join(' ').trim()
+}
+
 const PIPELINE = [
   { label: 'Payment', done: true }, { label: 'Filing', active: true },
   { label: 'Vetting', done: false }, { label: 'Registration', done: false }, { label: 'Onboarding', done: false },
@@ -114,14 +125,69 @@ export default function FilingPage() {
   const [applicantSearch, setApplicantSearch] = useState('')
   const [showApplicantDropdown, setShowApplicantDropdown] = useState(false)
   const [selectedApplication, setSelectedApplication] = useState<FilingApplicationSearchResult | null>(null)
+  const [submitted, setSubmitted] = useState(false)
   const { data: searchResults } = useSearchApplicationsForFiling(applicantSearch, 1, 20, showApplicantDropdown)
   const searchItems = searchResults?.items ?? []
 
+  // Once an application is picked, warn on leaving until it's actually been
+  // submitted for vetting — covers tab close/refresh/typing a new URL/
+  // navigating to an external site. beforeunload never fires for in-app
+  // client-side route changes (Next.js router.push), so this doesn't
+  // interfere with the redirect after a successful submit; the explicit
+  // "Stage 1" button below is guarded separately since that's an in-app
+  // navigation this page controls directly.
+  const hasUnsavedWork = !!selectedApplication && !submitted
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (!hasUnsavedWork) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedWork])
+
+  function confirmLeave() {
+    return !hasUnsavedWork || window.confirm("You have unsaved changes on this application. If you leave now, they won't be saved. Continue?")
+  }
+
+  // Prefills the editable Personal Info fields from the search result —
+  // this data is already known server-side, no reason to make the counsellor
+  // retype it. Everything set here stays a normal controlled input
+  // afterward, so it can still be corrected before saving. Uses the raw
+  // Programme Details setters (not the cascade-reset wrappers) since those
+  // wrappers would otherwise clear semesterGuid/feeHdGuid right back out
+  // immediately after this sets them.
   function selectApplication(a: FilingApplicationSearchResult) {
     setSelectedApplication(a); setShowApplicantDropdown(false); setApplicantSearch('')
+
+    setFirstName(a.firstName?.trim() ?? '')
+    setLastName(a.lastName?.trim() ?? '')
+    setGender(a.gender === 1 ? 'Male' : a.gender === 0 ? 'Female' : '')
+    setDob(a.dob ? a.dob.slice(0, 10) : '')
+    setCountryGuid(a.countryGuid ?? '')
+    setNationalId(a.nationalId ?? '')
+    setEmail(a.emailId ?? '')
+    setPhone(a.phone ?? '')
+    setPassportNo(a.passportNo ?? '')
+    setIsRefugee(a.refugee === 1)
+    setRefugeeId(a.refugeeId ?? '')
+
+    setIntakeGuid(a.intakeGuid ?? '')
+    setCampusGuid(a.campusGuid ?? '')
+    setProgramGuidState(a.programGuid ?? '')
+    setSemesterGuidState(a.semesterGuid ?? '')
+    setFeeHdGuid(a.feeHdGuid ?? '')
   }
 
   // ── General (Personal Info tab) ─────────────────────────────────────────
+  // SaveGeneral.bru marks enquiryGuid "(optional)" — same claim Create.bru
+  // made about Application-Payments' identical field, which turned out to
+  // be false (confirmed by reproducing a 400 with only that field removed
+  // from an otherwise-working payload). Not independently confirmed here
+  // yet, but wired as required defensively given that precedent — worth
+  // testing whether omitting it here also 400s.
+  const [enquiryGuid, setEnquiryGuid] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [gender, setGender] = useState('')
@@ -156,6 +222,7 @@ export default function FilingPage() {
   const [generalSaved, setGeneralSaved] = useState(false)
   const [intApplication, setIntApplication] = useState<number | null>(null)
 
+  const { data: enquiriesData }   = useEnquiries(1, 100)
   const { data: intakes = [] }    = useIntakes()
   const { data: campuses = [] }   = useCampuses()
   const { data: programs = [] }   = useProgramMasters()
@@ -170,8 +237,9 @@ export default function FilingPage() {
     b.programGuid === programGuid && b.semesterGuid === semesterGuid && b.batchTimeGuid === batchTimeGuid,
   )
   const { data: fees = [] }       = useApplicationPaymentFees(programGuid, !!programGuid)
-  const { data: countries = [] }  = useFilingCountries()
+  const { data: countries = [] }  = useCountries()
 
+  const enquiryOptions   = (enquiriesData?.items ?? []).map(e => ({ value: e.enquiryGuid, label: `${e.studentName} (${e.enquiryCode})` }))
   const intakeOptions    = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   const campusOptions    = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions   = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
@@ -181,11 +249,8 @@ export default function FilingPage() {
   const feeOptions       = fees.map(f => ({ value: f.feeHdGuid, label: `${f.feeDesc} (${f.feeCode})` }))
   const countryOptions   = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
 
-  // Passport/Visa/Refugee sections only apply to non-Ugandan nationals —
-  // matched by name since CountryDropdownDto's shape doesn't confirm any
-  // other "is home country" flag.
-  const selectedCountryName = countries.find(c => c.countryGuid === countryGuid)?.countryName ?? ''
-  const isForeign = countryGuid !== '' && selectedCountryName.toLowerCase() !== 'uganda'
+  // Passport/Visa/Refugee sections only apply to non-home-country nationals.
+  const isForeign = countryGuid !== '' && !countries.find(c => c.countryGuid === countryGuid)?.defaultCountry
 
   // ── Sponsor (Family tab fields that actually map to the API) ────────────
   const [spName, setSpName] = useState('')
@@ -197,6 +262,7 @@ export default function FilingPage() {
 
   function handleSaveGeneralAndAdvance() {
     if (!selectedApplication) { showToast('Select an application above first', 'error'); return }
+    if (!enquiryGuid) { showToast('Enquiry is required', 'error'); return }
     if (!campusGuid || !programGuid || !feeHdGuid) { showToast('Campus, Programme and Fee Structure are required', 'error'); return }
     if (isRefugee && !refugeeId.trim()) { showToast('Refugee ID is required for refugee students', 'error'); return }
 
@@ -207,7 +273,7 @@ export default function FilingPage() {
     saveGeneral.mutate(
       {
         appRefNo: selectedApplication.appRefNo,
-        enquiryGuid: null,
+        enquiryGuid,
         intakeCode: selectedIntake ? String(selectedIntake.intakeCode) : null,
         emailId: email.trim() || null,
         dob: dob || null,
@@ -234,7 +300,7 @@ export default function FilingPage() {
         refugee: isRefugee ? 1 : 0,
         refugeeId: isRefugee ? refugeeId.trim() || null : null,
         refugeeFile,
-      },
+      } as const,
       {
         onSuccess: res => {
           setIntApplication(res.intApplication); setGeneralSaved(true)
@@ -338,7 +404,12 @@ export default function FilingPage() {
   function handleSubmitApplication() {
     if (!selectedApplication || intApplication == null) return
     submitApplication.mutate({ intApplication, appRefNo: selectedApplication.appRefNo }, {
-      onSuccess: () => { showToast('Application submitted for vetting', 'success'); router.push('/admission/vetting') },
+      // setSubmitted(true) both stops the unsaved-changes warning and
+      // triggers the full-screen success popup below — the actual redirect
+      // happens from the popup's own onClose (click Continue, or its
+      // auto-close timer) rather than immediately, matching the
+      // confirmation pattern used elsewhere in this app (e.g. NewBatchModal).
+      onSuccess: () => setSubmitted(true),
       onError: (error: Error) => showToast(error.message || 'Failed to submit application', 'error'),
     })
   }
@@ -350,7 +421,7 @@ export default function FilingPage() {
           <h1 className="text-xl font-bold text-g900">Stage 2 &middot; Application Filing</h1>
           <p className="text-sm text-g500 mt-1">Counsellor enters applicant details, qualifications, family info and uploads documents.</p>
         </div>
-        <button className="btn" onClick={() => router.push('/admission/payment')}><i className="lni lni-arrow-left" /> Stage 1</button>
+        <button className="btn" onClick={() => { if (confirmLeave()) router.push('/admission/payment') }}><i className="lni lni-arrow-left" /> Stage 1</button>
       </div>
 
       <div className="pipeline">
@@ -369,7 +440,7 @@ export default function FilingPage() {
             <label className="lbl">Applicant<span className="req">*</span></label>
             <div className="relative">
               <input className="ctrl" placeholder="Search applicant ref no, name, email or phone..."
-                value={selectedApplication ? `${selectedApplication.appRefNo} — ${selectedApplication.studentName ?? ''}` : applicantSearch}
+                value={selectedApplication ? `${selectedApplication.appRefNo} — ${applicantName(selectedApplication)}` : applicantSearch}
                 onChange={e => { setApplicantSearch(e.target.value); setShowApplicantDropdown(true); setSelectedApplication(null) }}
                 onFocus={() => setShowApplicantDropdown(true)} />
               {showApplicantDropdown && (
@@ -377,7 +448,7 @@ export default function FilingPage() {
                   {searchItems.length === 0 && <div className="p-3 text-sm text-g400">No results</div>}
                   {searchItems.map(a => (
                     <button key={a.appRefNo} className="w-full text-left px-4 py-2 text-sm hover:bg-b50 flex justify-between" onClick={() => selectApplication(a)}>
-                      <span className="font-medium text-g800">{a.appRefNo}</span><span className="text-g500">{a.studentName}</span>
+                      <span className="font-medium text-g800">{a.appRefNo}</span><span className="text-g500">{applicantName(a)}</span>
                     </button>
                   ))}
                 </div>
@@ -391,8 +462,9 @@ export default function FilingPage() {
         {selectedApplication && (
           <div className="info-box mt-4">
             <div className="g3">
-              <div><span className="text-xs text-g400 block">Status</span><span className="text-sm font-semibold text-g800">{selectedApplication.status ?? '—'}</span></div>
-              <div><span className="text-xs text-g400 block">Email</span><span className="text-sm font-semibold text-g800">{selectedApplication.email ?? '—'}</span></div>
+              {/* saveStatus is an int-encoded enum with no confirmed label mapping — show raw, don't guess. */}
+              <div><span className="text-xs text-g400 block">Save Status</span><span className="text-sm font-semibold text-g800">{selectedApplication.saveStatus ?? '—'}</span></div>
+              <div><span className="text-xs text-g400 block">Email</span><span className="text-sm font-semibold text-g800">{selectedApplication.emailId ?? '—'}</span></div>
               <div><span className="text-xs text-g400 block">Phone</span><span className="text-sm font-semibold text-g800">{selectedApplication.phone ?? '—'}</span></div>
             </div>
           </div>
@@ -421,7 +493,7 @@ export default function FilingPage() {
                   <div className="flex items-start gap-5 mb-5">
                     <div className="file-zone w-32 h-32 flex-shrink-0"><input type="file" accept="image/*" /><i className="lni lni-camera-2 file-zone-icon" /><p>Profile Photo</p></div>
                     <div className="flex-1">
-                      <div className="g3"><Field label="First Name" req><Input placeholder="First name" value={firstName} onChange={setFirstName} /></Field><Field label="Middle Name"><Input placeholder="Middle name" /></Field><Field label="Last Name" req><Input placeholder="Last name" value={lastName} onChange={setLastName} /></Field></div>
+                      <div className="g3"><Field label="First Name" req><Input placeholder="First name" value={firstName} onChange={setFirstName} /></Field>{/* <Field label="Middle Name"><Input placeholder="Middle name" /></Field> */}<Field label="Last Name" req><Input placeholder="Last name" value={lastName} onChange={setLastName} /></Field></div>
                       <div className="g3 mt-3"><Field label="Gender" req><Select options={GENDERS} value={gender} onChange={setGender} /></Field><Field label="Date of Birth" req><Input type="date" value={dob} onChange={setDob} /></Field><Field label="Nationality" req><SearchSelect options={countryOptions} value={countryGuid} placeholder="-- Select Country --" onChange={setCountryGuid} /></Field></div>
                     </div>
                   </div>
@@ -437,22 +509,23 @@ export default function FilingPage() {
                   </div>
                   <div className="g3 mt-3">
                     <Field label="National ID Copy"><FileZone file={nationalIdFile} onChange={setNationalIdFile} /></Field>
-                    <Field label="Residential Address" span={2}><Input placeholder="Full address" /></Field>
+                    {/* <Field label="Residential Address" span={2}><Input placeholder="Full address" /></Field> */}
                   </div>
-                  <div className="g3 mt-3"><Field label="University Email"><Input readOnly placeholder="Auto-generated" /></Field><Field label="Religion"><Select options={RELIGIONS} /></Field><Field label="Marital Status"><Select options={MARITAL} /></Field></div>
+                  {/* <div className="g3 mt-3"><Field label="University Email"><Input readOnly placeholder="Auto-generated" /></Field><Field label="Religion"><Select options={RELIGIONS} /></Field><Field label="Marital Status"><Select options={MARITAL} /></Field></div> */}
 
                   <div className="sec-divider mt-5">Programme Details</div>
                   <div className="g3 mt-3">
+                    <Field label="Enquiry" req><SearchSelect options={enquiryOptions} value={enquiryGuid} placeholder="-- Select Enquiry --" onChange={setEnquiryGuid} /></Field>
                     <Field label="Intake"><SearchSelect options={intakeOptions} value={intakeGuid} placeholder="-- Select Intake --" onChange={setIntakeGuid} /></Field>
                     <Field label="Campus" req><SearchSelect options={campusOptions} value={campusGuid} placeholder="-- Select Campus --" onChange={setCampusGuid} /></Field>
-                    <Field label="Programme" req><SearchSelect options={programOptions} value={programGuid} placeholder="-- Select Programme --" onChange={setProgramGuid} /></Field>
                   </div>
                   <div className="g3 mt-3">
+                    <Field label="Programme" req><SearchSelect options={programOptions} value={programGuid} placeholder="-- Select Programme --" onChange={setProgramGuid} /></Field>
                     <Field label="Fee Structure" req><SearchSelect options={feeOptions} value={feeHdGuid} placeholder={programGuid ? '-- Select Fee Structure --' : '-- Select Programme First --'} onChange={setFeeHdGuid} /></Field>
                     <Field label="Semester"><SearchSelect options={semesterOptions} value={semesterGuid} placeholder={programGuid ? '-- Select Semester --' : '-- Select Programme First --'} onChange={setSemesterGuid} /></Field>
-                    <Field label="Batch Time"><SearchSelect options={batchTimeOptions} value={batchTimeGuid} placeholder="-- Select --" onChange={setBatchTimeGuid} /></Field>
                   </div>
                   <div className="g3 mt-3">
+                    <Field label="Batch Time"><SearchSelect options={batchTimeOptions} value={batchTimeGuid} placeholder="-- Select --" onChange={setBatchTimeGuid} /></Field>
                     <Field label="Batch">
                       <SearchSelect
                         options={batchOptions}
@@ -468,11 +541,11 @@ export default function FilingPage() {
                     <p className="text-g400 mt-2" style={{ fontSize: 'var(--fs-xs)' }}>Applies to non-Ugandan nationals — select a Nationality above to unlock.</p>
                   ) : (
                     <>
-                      <div className="g3 mt-3"><Field label="Passport Number"><Input placeholder="AB1234567" value={passportNo} onChange={setPassportNo} /></Field><Field label="Passport Expiry"><Input type="date" /></Field><Field label="Country of Issue"><Select options={COUNTRIES_OF_ISSUE} /></Field></div>
+                      <div className="g3 mt-3"><Field label="Passport Number"><Input placeholder="AB1234567" value={passportNo} onChange={setPassportNo} /></Field>{/* <Field label="Passport Expiry"><Input type="date" /></Field><Field label="Country of Issue"><Select options={COUNTRIES_OF_ISSUE} /></Field> */}</div>
                       <div className="g3 mt-3">
                         <Field label="Passport Copy"><FileZone file={passportFile} onChange={setPassportFile} /></Field>
-                        <Field label="Visa Number"><Input placeholder="VIS-XXXX" /></Field>
-                        <Field label="Visa Type"><Select options={['Student', 'Work', 'Tourist', 'Diplomatic']} /></Field>
+                        {/* <Field label="Visa Number"><Input placeholder="VIS-XXXX" /></Field>
+                        <Field label="Visa Type"><Select options={['Student', 'Work', 'Tourist', 'Diplomatic']} /></Field> */}
                       </div>
                       <div className="g3 mt-3">
                         <Field label="Visa Start Date"><Input type="date" value={vStartDate} onChange={setVStartDate} /></Field>
@@ -494,12 +567,24 @@ export default function FilingPage() {
                       {isRefugee && (
                         <div className="g3 mt-3">
                           <Field label="Refugee ID" req><Input placeholder="Refugee ID number" value={refugeeId} onChange={setRefugeeId} /></Field>
-                          <Field label="UNHCR Case Number"><Input placeholder="UNH-XXXX" /></Field>
+                          {/* <Field label="UNHCR Case Number"><Input placeholder="UNH-XXXX" /></Field> */}
                           <Field label="Refugee Certificate"><FileZone file={refugeeFile} onChange={setRefugeeFile} /></Field>
                         </div>
                       )}
                     </>
                   )}
+
+                  <div className="sec-divider mt-5">Sponsorship Details</div>
+                  <div className="g3 mt-3">
+                    <Field label="Sponsor Name"><Input placeholder="Sponsor name" value={spName} onChange={setSpName} /></Field>
+                    <Field label="Sponsor Phone"><Input placeholder="+256 7XX XXX XXX" value={spPhone} onChange={setSpPhone} /></Field>
+                    <Field label="Sponsor Email"><Input type="email" placeholder="sponsor@email.com" value={spEmail} onChange={setSpEmail} /></Field>
+                  </div>
+                  <div className="g3 mt-3">
+                    <Field label="Sponsor Country"><SearchSelect options={countryOptions} value={spCountryGuid} placeholder="-- Select Country --" onChange={setSpCountryGuid} /></Field>
+                    <div className="fg" />
+                    <div className="fg" />
+                  </div>
 
                   <div className="flex justify-end mt-5">
                     <button className="btn" disabled={saveGeneral.isPending} onClick={handleSaveGeneralAndAdvance}>
@@ -518,13 +603,13 @@ export default function FilingPage() {
                     <button className="btn text-xs" onClick={() => setQualRows(rows => [...rows, emptyQualRow(Date.now())])}><i className="lni lni-plus" /> Add Row</button>
                   </div>
                   {qualRows.slice(1).map(row => renderQualRow(row))}
-                  <div className="sec-divider mt-5 flex items-center justify-between">
+                  {/* <div className="sec-divider mt-5 flex items-center justify-between">
                     <span>Work Experience</span>
                     <button className="btn text-xs" onClick={() => setExperienceRows(r => [...r, { id: Date.now() }])}><i className="lni lni-plus" /> Add Entry</button>
                   </div>
                   {experienceRows.map(row => (
                     <div key={row.id} className="g3 mt-3"><Field label="Organization"><Input placeholder="Company / Organization" /></Field><Field label="Role"><Input placeholder="Job title" /></Field><Field label="Duration"><Input placeholder="e.g. 2 years" /></Field></div>
-                  ))}
+                  ))} */}
                   <div className="flex justify-between mt-5">
                     <button className="btn" onClick={() => setActiveTab('personal')}><i className="lni lni-arrow-left" /> Personal Info</button>
                     <button className="btn" onClick={() => setActiveTab('family')}>Next: Family Details <i className="lni lni-arrow-right" /></button>
@@ -534,7 +619,7 @@ export default function FilingPage() {
 
               {activeTab === 'family' && (
                 <div>
-                  <div className="sec-divider">Father / Guardian</div>
+                  {/* <div className="sec-divider">Father / Guardian</div>
                   <div className="g3 mt-3"><Field label="Full Name"><Input placeholder="Father's / Guardian's name" /></Field><Field label="Phone"><Input placeholder="+256 7XX XXX XXX" /></Field><Field label="Occupation"><Input placeholder="Occupation" /></Field></div>
                   <div className="g3 mt-3"><Field label="Email"><Input type="email" placeholder="email@example.com" /></Field><div className="fg" /><div className="fg" /></div>
                   <div className="sec-divider mt-5">Mother</div>
@@ -544,9 +629,9 @@ export default function FilingPage() {
                   <div className="g3 mt-3"><Field label="Name" req><Input placeholder="Contact person" /></Field><Field label="Relationship"><Input placeholder="e.g. Uncle" /></Field><Field label="Phone" req><Input placeholder="+256 7XX XXX XXX" /></Field></div>
                   <div className="sec-divider mt-5">Family Address</div>
                   <div className="g3 mt-3"><Field label="District"><Input placeholder="District" /></Field><Field label="Sub-county"><Input placeholder="Sub-county" /></Field><Field label="Village / Street"><Input placeholder="Village" /></Field></div>
-                  <div className="sec-divider mt-5">Sponsorship Details</div>
-                  <div className="g3 mt-3"><Field label="Sponsor Type"><Select options={SPONSOR_TYPES} /></Field><Field label="Sponsor Name"><Input placeholder="Sponsor name" value={spName} onChange={setSpName} /></Field><Field label="Sponsor Phone"><Input placeholder="+256 7XX XXX XXX" value={spPhone} onChange={setSpPhone} /></Field></div>
-                  <div className="g3 mt-3"><Field label="Sponsor Email"><Input type="email" placeholder="sponsor@email.com" value={spEmail} onChange={setSpEmail} /></Field><Field label="Sponsor Country"><SearchSelect options={countryOptions} value={spCountryGuid} placeholder="-- Select Country --" onChange={setSpCountryGuid} /></Field><div className="fg" /></div>
+                  <div className="sec-divider mt-5">Sponsorship Details</div> */}
+                  <p className="text-g400 text-sm">Sponsorship details are in the Personal Info tab.</p>
+                  
                   <div className="flex justify-between mt-5">
                     <button className="btn" onClick={() => setActiveTab('qualifications')}><i className="lni lni-arrow-left" /> Qualifications</button>
                     <button className="btn" onClick={() => setActiveTab('documents')}>Next: Documents <i className="lni lni-arrow-right" /></button>
@@ -604,6 +689,18 @@ export default function FilingPage() {
       </div>
 
       <Toast toast={toast} />
+
+      {submitted && (
+        <div className="modal-overlay open">
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <SuccessPopup
+              title="Application Submitted!"
+              subtitle={`${selectedApplication?.appRefNo ?? 'Application'} has been submitted for vetting.`}
+              onClose={() => router.push('/admission/vetting')}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -4,17 +4,27 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 // Confirmed via Application-Payments/Create.bru — multipart/form-data (not
 // JSON), so this always goes through apiPostForm, not apiPost, to support the
-// optional payProofFile upload.
+// payProofFile upload.
 //
-// countryGuid is deliberately NOT part of this input: there's no guid-bearing
-// Country master anywhere in this codebase yet (config/country-master's
-// Country type only exposes intCountryCode, an int) — send the payload
-// without it until a real source is confirmed, rather than guessing.
+// countryGuid ("replaces old countryCode string field") is a real, required
+// field per Create.bru's docs — CONFIRMED via a real successful payment
+// (201, appRefNo returned) sent with a genuine countryGuid. The Application-
+// Filling Countries dropdown (GET .../application-filling/countries) has no
+// guid at all and is NOT the right source — the real one is GET
+// /api/v1/users/countries (lib/api/academic/country.ts, useCountries()),
+// same endpoint Country Master and Application-Filling's SaveGeneral now
+// use.
+//
+// enquiryGuid is CONFIRMED required despite Create.bru's docs explicitly
+// marking it "(optional)" — reproduced a real 400 by removing only this
+// field from an otherwise-working payload. Every payment must link to a
+// real enquiry (see useEnquiries() on the payment page).
 //
 // oDelIntApplication has no documented semantics beyond the sample value in
 // Create.bru — always sent as 0 until clarified.
 export interface ApplicationPaymentInput {
-  enquiryGuid: string | null
+  enquiryGuid: string
+  oDelIntApplication: number
   studentName: string
   intakeGuid: string
   campusGuid: string
@@ -23,6 +33,7 @@ export interface ApplicationPaymentInput {
   batchGuid: string
   batchTimeGuid: string
   feeHdGuid: string
+  countryGuid: string
   mobile: string
   email: string | null
   // Per Create.bru docs: when this is set, amount/currencyGuid/exRate/payType/
@@ -62,9 +73,15 @@ export interface BatchInfoDto {
   batchCode: string
 }
 
+// Confirmed via a real dropdowns/exemption-types response — the display
+// field is label, not exemptionTypeName as first guessed (that guess left
+// the dropdown's option labels blank since e.exemptionTypeName was always
+// undefined). value (an int) also comes back but isn't used — the guid is
+// what's sent on create.
 export interface ExemptionTypeDto {
   exemptionTypeGuid: string
-  exemptionTypeName: string
+  value: number
+  label: string
 }
 
 // Confirmed via a real GET dropdowns/fees?programGuid= response — there is
@@ -97,7 +114,11 @@ export type CreateApplicationPaymentResponse = unknown
 
 const mockBanks: BankAccountInfoDto[] = [{ bankGuid: 'mock-bank-1', bankName: 'Stanbic Bank' }]
 const mockBatches: BatchInfoDto[] = [{ batchGuid: 'mock-batch-1', batchCode: 'BSCVFXS27DA' }]
-const mockExemptionTypes: ExemptionTypeDto[] = [{ exemptionTypeGuid: 'mock-exemption-1', exemptionTypeName: 'HTC Waiver' }]
+const mockExemptionTypes: ExemptionTypeDto[] = [
+  { exemptionTypeGuid: 'mock-exemption-1', value: 1, label: 'HEC' },
+  { exemptionTypeGuid: 'mock-exemption-2', value: 2, label: 'Sponsorship' },
+  { exemptionTypeGuid: 'mock-exemption-3', value: 3, label: 'Existing Student' },
+]
 const mockFees: ProgramFeeHeadInfoDto[] = [{ feeHdGuid: 'mock-fee-1', feeCode: 'STD', feeDesc: 'Standard Application Fee', intProgram: 0, status: 1, amtPer: 0 }]
 const mockPaymentTypes: PaymentTypeDto[] = [
   { intPaymentType: 1, paymentTypeName: 'Cash' },
@@ -147,8 +168,8 @@ export function createApplicationPayment(input: ApplicationPaymentInput): Promis
   }
 
   const formData = new FormData()
-  if (input.enquiryGuid) formData.append('enquiryGuid', input.enquiryGuid)
-  formData.append('oDelIntApplication', '0')
+  formData.append('enquiryGuid', input.enquiryGuid)
+  formData.append('oDelIntApplication', String(input.oDelIntApplication ?? 0))
   formData.append('studentName', input.studentName)
   formData.append('intakeGuid', input.intakeGuid)
   formData.append('campusGuid', input.campusGuid)
@@ -157,18 +178,20 @@ export function createApplicationPayment(input: ApplicationPaymentInput): Promis
   formData.append('batchGuid', input.batchGuid)
   formData.append('batchTimeGuid', input.batchTimeGuid)
   formData.append('feeHdGuid', input.feeHdGuid)
+  formData.append('countryGuid', input.countryGuid)
   formData.append('mobile', input.mobile)
-  if (input.email) formData.append('email', input.email)
-  if (input.exemptionTypeGuid) formData.append('exemptionTypeGuid', input.exemptionTypeGuid)
+  formData.append('email', input.email ?? '')
+  formData.append('exemptionTypeGuid', input.exemptionTypeGuid ?? '')
   formData.append('payDate', input.payDate)
-  if (input.payType != null) formData.append('payType', String(input.payType))
-  if (input.amount != null) formData.append('amount', String(input.amount))
-  if (input.currencyGuid) formData.append('currencyGuid', input.currencyGuid)
-  if (input.exRate != null) formData.append('exRate', String(input.exRate))
-  if (input.bankGuid) formData.append('bankGuid', input.bankGuid)
-  if (input.receiptBookGuid) formData.append('receiptBookGuid', input.receiptBookGuid)
-  if (input.remarks) formData.append('remarks', input.remarks)
+  formData.append('payType', String(input.payType ?? 1))
+  formData.append('amount', String(input.amount ?? 0))
+  formData.append('currencyGuid', input.currencyGuid ?? '')
+  formData.append('exRate', String(input.exRate ?? 1))
+  formData.append('bankGuid', input.bankGuid ?? '')
+  formData.append('receiptBookGuid', input.receiptBookGuid ?? '')
+  formData.append('remarks', input.remarks ?? '')
   if (input.payProofFile) formData.append('payProofFile', input.payProofFile)
+  else formData.append('payProofFile', '')
 
   return apiPostForm<CreateApplicationPaymentResponse>('/api/v1/admissions/application-payments', formData)
 }

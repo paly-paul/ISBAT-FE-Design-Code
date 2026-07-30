@@ -136,6 +136,17 @@ export async function apiPost<T>(path: string, body: unknown, retried = false): 
 // Content-Type header: the browser sets the multipart boundary itself when
 // FormData is passed straight through to fetch.
 export async function apiPostForm<T>(path: string, formData: FormData, retried = false): Promise<T> {
+  // Debug: log FormData keys before sending
+  console.log(`📡 apiPostForm to ${path}`)
+  console.log('📦 FormData entries:')
+  for (const [key, value] of formData.entries()) {
+    if (value instanceof File) {
+      console.log(`   ${key}: [File] ${value.name} (${value.size} bytes, ${value.type})`)
+    } else {
+      console.log(`   ${key}: "${value}"`)
+    }
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: NGROK_HEADERS,
@@ -143,7 +154,12 @@ export async function apiPostForm<T>(path: string, formData: FormData, retried =
     body: formData,
   })
 
-  const envelope = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
+  console.log(`📥 Response status: ${res.status}`)
+  
+  const responseText = await res.text()
+  console.log(`📄 Response body: ${responseText || '(empty)'}`)
+  
+  const envelope = responseText ? (JSON.parse(responseText) as ApiEnvelope<T>) : null
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
