@@ -87,10 +87,14 @@ function composeEmpName(surname: string, firstName: string, otherName: string | 
   return [surname, firstName, otherName].filter(Boolean).join(' ').toUpperCase()
 }
 
-// Fetch the employee list for the UI.
-export function getEmployees(): Promise<EmployeeListItem[]> {
+// Fetch the employee list for the UI. The backend paginates this endpoint
+// (defaults to pageSize: 10 when unspecified — confirmed via a real
+// response), so page/pageSize must be sent explicitly or the table only ever
+// sees the first page no matter what the client-side Pagination component
+// does on top of it. Same convention as getFaculties/getEmployees siblings.
+export function getEmployees(page = 1, pageSize = 10): Promise<EmployeeListItem[]> {
   if (MOCK_AUTH) return Promise.resolve(mockEmployees)
-  return apiGet<EmployeeListResponse | null>('/api/v1/users/employees').then(data => data?.items ?? [])
+  return apiGet<EmployeeListResponse | null>(`/api/v1/users/employees?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
 }
 
 // Fetch the full employee record for the edit form.

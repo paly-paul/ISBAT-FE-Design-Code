@@ -19,11 +19,12 @@ interface NewBatchModalProps extends ModalProps {
   }
 }
 
-// intProgram/intSem/intStream/batchTime/bInCharge are all unconfirmed
-// numbers — see the long note on Batch in lib/api/academic/batch.ts. Every
-// dropdown here is real (backed by the actual masters), but the value sent
-// for these five fields is that option's 1-based position in its list, not
-// a confirmed id — same approach used for enquiry-followup's Create form.
+// Programme/Semester/Stream/Batch Time are now sent as real guids
+// (confirmed via the updated Create schema — see BatchCreateInput in
+// lib/api/academic/batch.ts). Batch In-Charge is the one field still
+// unconfirmed — Employee only ever exposes employeeGuid, no matching int —
+// so it's still sent as that option's 1-based position in its list, same
+// approach used for enquiry-followup's Create form.
 export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBatchModalProps) {
   const { data: programs = [] } = useProgramMasters()
   const { data: intakes = [] }  = useIntakes()
@@ -36,39 +37,39 @@ export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBa
 
   const programOptions   = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   const intakeOptions    = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
-  const semesterOptions  = semesters.map((s, i) => ({ value: String(i), label: s.semName }))
-  const streamOptions    = streams.map((s, i) => ({ value: String(i), label: s.streamName }))
-  const batchTimeOptions = batchTimes.map((b, i) => ({ value: String(i), label: b.batchTime }))
+  const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
+  const streamOptions    = streams.map(s => ({ value: s.streamGuid, label: s.streamName }))
+  const batchTimeOptions = batchTimes.map(b => ({ value: b.batchTimeGuid, label: b.batchTime }))
   const advisorOptions   = employees.map((e, i) => ({ value: String(i), label: e.empName }))
 
   const [saved, setSaved]     = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
-  const [intakeGuid, setIntakeGuid]   = useState('')
-  const [semesterIdx, setSemesterIdx] = useState('')
-  const [streamIdx, setStreamIdx]     = useState('')
-  const [timeIdx, setTimeIdx]         = useState('')
-  const [inChargeIdx, setInChargeIdx] = useState('')
-  const [startDate, setStartDate]     = useState('')
-  const [endDate, setEndDate]         = useState('')
-  const [errors, setErrors]           = useState<Record<string, string>>({})
+  const [intakeGuid, setIntakeGuid]       = useState('')
+  const [semesterGuid, setSemesterGuid]   = useState('')
+  const [streamGuid, setStreamGuid]       = useState('')
+  const [batchTimeGuid, setBatchTimeGuid] = useState('')
+  const [inChargeIdx, setInChargeIdx]     = useState('')
+  const [startDate, setStartDate]         = useState('')
+  const [endDate, setEndDate]             = useState('')
+  const [errors, setErrors]               = useState<Record<string, string>>({})
 
   if (!isOpen) return null
 
   function handleClose() {
     setSaved(false); setFailure(null)
-    setProgramGuid(''); setIntakeGuid(''); setSemesterIdx(''); setStreamIdx(''); setTimeIdx(''); setInChargeIdx('')
+    setProgramGuid(''); setIntakeGuid(''); setSemesterGuid(''); setStreamGuid(''); setBatchTimeGuid(''); setInChargeIdx('')
     setStartDate(''); setEndDate(''); setErrors({})
     onClose()
   }
 
   function validate() {
     const e: Record<string, string> = {}
-    if (!programGuid)  e.programGuid = 'Please select a Programme'
-    if (!intakeGuid)   e.intakeGuid = 'Please select an Intake'
-    if (!semesterIdx)  e.semesterIdx = 'Please select a Semester'
-    if (!streamIdx)    e.streamIdx = 'Please select a Stream'
-    if (!timeIdx)      e.timeIdx = 'Please select a Batch Time'
-    if (!inChargeIdx)  e.inChargeIdx = 'Please select a Batch In-Charge'
+    if (!programGuid)    e.programGuid = 'Please select a Programme'
+    if (!intakeGuid)     e.intakeGuid = 'Please select an Intake'
+    if (!semesterGuid)   e.semesterGuid = 'Please select a Semester'
+    if (!streamGuid)     e.streamGuid = 'Please select a Stream'
+    if (!batchTimeGuid)  e.batchTimeGuid = 'Please select a Batch Time'
+    if (!inChargeIdx)    e.inChargeIdx = 'Please select a Batch In-Charge'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -79,10 +80,10 @@ export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBa
     if (!intake) return
     createBatch.mutate(
       {
-        intProgram: programs.findIndex(p => p.programGuid === programGuid) + 1,
-        intSem: Number(semesterIdx) + 1,
-        intStream: Number(streamIdx) + 1,
-        batchTime: Number(timeIdx) + 1,
+        programGuid,
+        semesterGuid,
+        streamGuid,
+        batchTimeGuid,
         bStartDate: startDate ? `${startDate}T00:00:00` : null,
         bEndDate: endDate ? `${endDate}T00:00:00` : null,
         bInCharge: Number(inChargeIdx) + 1,
@@ -126,7 +127,7 @@ export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBa
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', background: 'var(--amber-bg)', border: '1px solid var(--amber-bd)', borderRadius: 'var(--rxs)', marginBottom: 14 }}>
           <i className="lni lni-warning" style={{ color: 'var(--amber)', marginTop: 2 }}></i>
           <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>
-            Programme/Semester/Stream/Batch Time/Batch In-Charge are sent as list position, not a confirmed backend id — this may create the batch against the wrong record until the real mapping is confirmed. Batch Code is generated by the backend.
+            Batch In-Charge is sent as list position, not a confirmed backend id — this may assign the wrong person until the real mapping is confirmed. Batch Code is generated by the backend.
           </span>
         </div>
 
@@ -137,7 +138,7 @@ export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBa
               placeholder="— Select programme —"
               options={programOptions}
               value={programGuid}
-              onChange={val => { setProgramGuid(val); setSemesterIdx(''); if (errors.programGuid) setErrors(p => ({ ...p, programGuid: '' })) }}
+              onChange={val => { setProgramGuid(val); setSemesterGuid(''); if (errors.programGuid) setErrors(p => ({ ...p, programGuid: '' })) }}
             />
             {errors.programGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programGuid}</p>}
           </div>
@@ -148,18 +149,18 @@ export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBa
           </div>
           <div className="fg">
             <div className="lbl">Semester <span className="req">*</span></div>
-            <SearchSelect placeholder={programGuid ? '— Select semester —' : 'Select a programme first'} options={semesterOptions} value={semesterIdx} onChange={val => { setSemesterIdx(val); if (errors.semesterIdx) setErrors(p => ({ ...p, semesterIdx: '' })) }} />
-            {errors.semesterIdx && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.semesterIdx}</p>}
+            <SearchSelect placeholder={programGuid ? '— Select semester —' : 'Select a programme first'} options={semesterOptions} value={semesterGuid} onChange={val => { setSemesterGuid(val); if (errors.semesterGuid) setErrors(p => ({ ...p, semesterGuid: '' })) }} />
+            {errors.semesterGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.semesterGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Stream <span className="req">*</span></div>
-            <SearchSelect placeholder="— Select stream —" options={streamOptions} value={streamIdx} onChange={val => { setStreamIdx(val); if (errors.streamIdx) setErrors(p => ({ ...p, streamIdx: '' })) }} />
-            {errors.streamIdx && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.streamIdx}</p>}
+            <SearchSelect placeholder="— Select stream —" options={streamOptions} value={streamGuid} onChange={val => { setStreamGuid(val); if (errors.streamGuid) setErrors(p => ({ ...p, streamGuid: '' })) }} />
+            {errors.streamGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.streamGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Batch Time <span className="req">*</span></div>
-            <SearchSelect placeholder="— Select batch time —" options={batchTimeOptions} value={timeIdx} onChange={val => { setTimeIdx(val); if (errors.timeIdx) setErrors(p => ({ ...p, timeIdx: '' })) }} />
-            {errors.timeIdx && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.timeIdx}</p>}
+            <SearchSelect placeholder="— Select batch time —" options={batchTimeOptions} value={batchTimeGuid} onChange={val => { setBatchTimeGuid(val); if (errors.batchTimeGuid) setErrors(p => ({ ...p, batchTimeGuid: '' })) }} />
+            {errors.batchTimeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.batchTimeGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Batch In-Charge <span className="req">*</span></div>

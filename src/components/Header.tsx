@@ -1,5 +1,6 @@
 'use client'
 import React, { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { logout } from '@/lib/auth'
 import { clearSessionIdentity } from '@/lib/session'
 
@@ -20,6 +21,7 @@ function initialsOf(name: string): string {
 
 export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, profileRef, onSignOut, displayName = 'Administrator' }: HeaderProps) {
   const [signingOut, setSigningOut] = useState(false)
+  const queryClient = useQueryClient()
 
   async function handleSignOut(e: React.MouseEvent) {
     e.stopPropagation()
@@ -30,6 +32,13 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
       // Ignore — still sign the user out locally even if the API call fails.
     } finally {
       clearSessionIdentity()
+      // onSignOut() navigates client-side (router.push), which does not
+      // reset the app's single long-lived QueryClient (see providers.tsx) —
+      // without this, every cached query (menu, employees, ...), including
+      // any that's cached in an error state, survives into the next login
+      // and can serve stale/wrong-user data or a stale error instead of a
+      // genuinely fresh fetch.
+      queryClient.clear()
       onSignOut()
     }
   }

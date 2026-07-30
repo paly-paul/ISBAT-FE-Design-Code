@@ -1,7 +1,9 @@
 'use client'
-import { Dispatch, SetStateAction, ReactNode, useEffect } from 'react'
+import { Dispatch, SetStateAction, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useMenu } from '@/hooks/users/useMenu'
+import { MenuNode } from '@/lib/api/users/menu'
 
 export type RailId = 'admission' | 'academic' | 'finance' | 'student' | 'employee' | 'config'
 
@@ -15,85 +17,127 @@ interface SidebarProps {
   setActiveRail: Dispatch<SetStateAction<RailId>>
 }
 
-const ADMISSION_SECTIONS = [
-  {
-    id: 'sc-enq',
-    label: 'Enquiry',
-    items: [
-      { id: 'online-enquiry',  label: 'Online Enquiry',     icon: 'display' },
-      { id: 'kiosk-enquiry',   label: 'Self-Service Kiosk', icon: 'tab' },
-      { id: 'ondesk-enquiry',  label: 'On-Desk Enquiry',    icon: 'pencil-alt' },
-      { id: 'enquiry-list',    label: 'Enquiry List',       icon: 'folder',    badge: '8' },
-      { id: 'enquiry-followup-master', label: 'Enquiry Followup Master', icon: 'calendar' },
-      { id: 'enquiry-followup',        label: 'Enquiry Followup',        icon: 'phone', badgeWarn: '4' },
-    ],
-  },
-  {
-    id: 'sc-adm-flow',
-    label: 'Admission Flow',
-    items: [
-      { id: 'dashboard',    label: 'Dashboard',          icon: 'dashboard' },
-      { id: 'payment',      label: 'Application Payment', icon: 'credit-cards',  badge: '12' },
-      { id: 'filing',       label: 'Application Filing',  icon: 'pencil-alt',    badgeWarn: '7' },
-      { id: 'vetting',      label: 'Vetting Desk',        icon: 'search-alt',    badgeWarn: '5' },
-      { id: 'registration', label: "Registrar's Desk",    icon: 'graduation',    badgeGreen: '3' },
-    ],
-  },
-  {
-    id: 'sc-adm-rec',
-    label: 'Records',
-    items: [
-      { id: 'applicants', label: 'All Applicants', icon: 'users' },
-      { id: 'receipts',   label: 'Receipts',       icon: 'files' },
-      { id: 'reports',    label: 'Reports',        icon: 'bar-chart' },
-    ],
-  },
+interface RailDef {
+  id: RailId
+  name: string
+  fallbackIcon: string
+  footer: string
+}
+
+// name must match the top-level `name` field the menu API returns for that
+// module — used to look the node up in the fetched tree.
+const RAIL_DEFS: RailDef[] = [
+  { id: 'admission', name: 'Admission', fallbackIcon: 'lni lni-clipboard', footer: 'S1 · Admission Service' },
+  { id: 'academic', name: 'Academic', fallbackIcon: 'lni lni-graduation', footer: 'S2 · Academic Service' },
+  { id: 'finance', name: 'Finance', fallbackIcon: 'lni lni-dollar', footer: 'S5 · Finance Service' },
+  { id: 'student', name: 'Student', fallbackIcon: 'lni lni-user', footer: 'S10 · Student Service' },
+  { id: 'employee', name: 'Employee', fallbackIcon: 'lni lni-briefcase', footer: 'S4 · Employee Service' },
+  { id: 'config', name: 'Config', fallbackIcon: 'lni lni-cog', footer: 'S0 · Core Config' },
 ]
 
-// Kept in sync with the item ids rendered below — used only to warm the
-// route cache on mount so a sidebar click doesn't wait on a cold chunk/RSC
-// fetch. The sidebar uses div+onClick (not next/link), so none of these get
-// Next's automatic viewport-based prefetch otherwise.
-const ADMISSION_IDS = ADMISSION_SECTIONS.flatMap(s => s.items.map(i => i.id))
-const ACADEMIC_IDS = ['acad-dashboard', 'intake-master', 'skill-master', 'batch-management', 'room-management', 'session-movement', 'repetition-tag', 'course-units', 'programme-level', 'programme-group', 'programme-master', 'fee-structure', 'timetable', 'odl-applications', 'odl-reconciliation', 'student-lookup']
-const FINANCE_IDS = ['cooperates', 'discounts', 'ledgers', 'currency-master', 'receipt-books', 'gen-sets', 'banks', 'bank-branches', 'proc-banks', 'proc-gl-accounts']
-const STUDENT_IDS = ['student-master']
-const EMPLOYEE_IDS = ['employee-master']
-const CONFIG_IDS = ['faculty-master', 'department-master', 'designation-master', 'specialization', 'skill', 'campus-master', 'country-master', 'permission-master', 'enquiry-status', 'enquiry-source', 'enquiry-source-master', 'followup-status', 'followup-mode', 'interest-level', 'weekdays', 'unit-type', 'unit-category', 'batch-times']
+// Cosmetic-only counters — the menu API carries no notion of these, so they
+// stay local and are keyed by the leaf's url slug. Real permission data from
+// the API still decides what's visible; this only decorates what's shown.
+const BADGES: Record<string, { text: string; variant?: 'warn' | 'green' }> = {
+  'enquiry-list': { text: '8' },
+  'enquiry-followup': { text: '4', variant: 'warn' },
+  payment: { text: '12' },
+  filing: { text: '7', variant: 'warn' },
+  vetting: { text: '5', variant: 'warn' },
+  registration: { text: '3', variant: 'green' },
+  'session-movement': { text: '1', variant: 'warn' },
+  'odl-applications': { text: '7' },
+  'odl-reconciliation': { text: '4', variant: 'warn' },
+}
+
+function slug(s: string) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+}
+
+// The backend's `url` field is a bare slug ("permission-master"), not the
+// full path ("/config/permission-master") docs/MENU_ROUTES_REFERENCE.md
+// specified — confirmed via a real /me/menu response. A relative href would
+// resolve against whatever page the user is currently on (e.g. clicking a
+// Config item while on /academic/* would 404 at /academic/permission-master),
+// so every leaf is resolved against its own module's route segment here.
+// Still honours an absolute path if the backend ever does send one.
+function resolveHref(url: string, railId: RailId): string {
+  return url.startsWith('/') ? url : `/${railId}/${url}`
+}
+
+function idFromUrl(url: string): string {
+  return url.split('/').filter(Boolean).pop()!
+}
+
+function collectUrls(menu: MenuNode[], railDefs: RailDef[]): string[] {
+  const out: string[] = []
+  function walk(nodes: MenuNode[], railId: RailId) {
+    for (const n of nodes) {
+      if (n.url) out.push(resolveHref(n.url, railId))
+      if (n.children.length) walk(n.children, railId)
+    }
+  }
+  for (const moduleNode of menu) {
+    const def = railDefs.find(d => d.name === moduleNode.name)
+    if (def) walk(moduleNode.children, def.id)
+  }
+  return out
+}
 
 export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {
   const router = useRouter()
+  const { data, isLoading, isError, refetch } = useMenu()
+  const menu = data?.menu
+  const isFallback = data?.isFallback ?? false
 
-  // Warm every module route once on mount so navigation is instant regardless
-  // of which rail the user switches to first.
+  // Warm every permitted route once the menu loads, so navigation is instant
+  // regardless of which rail the user switches to first. Unlike the old
+  // hardcoded id lists, this only prefetches routes the user can actually see.
   useEffect(() => {
-    ADMISSION_IDS.forEach(id => router.prefetch(`/admission/${id}`))
-    ACADEMIC_IDS.forEach(id => router.prefetch(`/academic/${id}`))
-    FINANCE_IDS.forEach(id => router.prefetch(`/finance/${id}`))
-    STUDENT_IDS.forEach(id => router.prefetch(`/student/${id}`))
-    EMPLOYEE_IDS.forEach(id => router.prefetch(`/employee/${id}`))
-    CONFIG_IDS.forEach(id => router.prefetch(`/config/${id}`))
-  }, [router])
+    if (!menu) return
+    collectUrls(menu, RAIL_DEFS).forEach(url => router.prefetch(url))
+  }, [menu, router])
 
-  function sbItem(id: string, label: string, icon: string, badge?: { text: string; warn?: boolean }, prefix: 'academic' | 'finance' | 'student' | 'employee' | 'config' = 'academic') {
-    const href = `/${prefix}/${id}`
+  const moduleByName = useMemo(() => {
+    const map = new Map<string, MenuNode>()
+    menu?.forEach(n => map.set(n.name, n))
+    return map
+  }, [menu])
+
+  function sbItem(item: MenuNode, railId: RailId) {
+    const iconClass = item.icon ?? 'lni lni-dot'
+    if (!item.url) {
+      return (
+        <span key={item.name} className="sb-item sb-item-disabled" aria-disabled="true" title="No page yet">
+          <span className="sb-icon"><i className={iconClass}></i></span>
+          {item.name}
+          <span className="sb-badge sb-badge-soon">Soon</span>
+        </span>
+      )
+    }
+    const id = idFromUrl(item.url)
+    const href = resolveHref(item.url, railId)
+    const badge = BADGES[id]
     return (
-      <Link href={href} className={`sb-item${currentPage === id ? ' active' : ''}`}>
-        <span className="sb-icon"><i className={`lni lni-${icon}`}></i></span>
-        {label}
-        {badge && <span className={`sb-badge${badge.warn ? ' warn' : ''}`}>{badge.text}</span>}
+      <Link key={href} href={href} className={`sb-item${currentPage === id ? ' active' : ''}`}>
+        <span className="sb-icon"><i className={iconClass}></i></span>
+        {item.name}
+        {badge && <span className={`sb-badge${badge.variant ? ' ' + badge.variant : ''}`}>{badge.text}</span>}
       </Link>
     )
   }
 
-  function sbSection(id: string, label: string, children: ReactNode) {
+  function sbSection(moduleName: string, section: MenuNode, railId: RailId) {
+    const id = `sc-${slug(moduleName)}-${slug(section.name)}`
     const collapsed = collapsedSections.has(id)
     return (
-      <div className={`sb-collapse${collapsed ? ' closed' : ''}`}>
+      <div key={id} className={`sb-collapse${collapsed ? ' closed' : ''}`}>
         <div className="sb-group-hdr" onClick={() => toggleCollapse(id)}>
-          <span>{label}</span><span className="sb-chevron">{collapsed ? '▸' : '▾'}</span>
+          <span>{section.name}</span><span className="sb-chevron">{collapsed ? '▸' : '▾'}</span>
         </div>
-        <div className="sb-collapse-body">{children}</div>
+        <div className="sb-collapse-body">
+          {section.children.map(item => sbItem(item, railId))}
+        </div>
       </div>
     )
   }
@@ -107,35 +151,62 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
     }
   }
 
+  function renderRailSlot(def: RailDef) {
+    if (isLoading) return <div key={def.id} className="rail-item rail-item-skeleton" aria-hidden="true" />
+    if (isError) return null
+    const node = moduleByName.get(def.name)
+    if (!node) return null
+    const icon = node.icon ?? def.fallbackIcon
+    return (
+      <div
+        key={def.id}
+        className={`rail-item${activeRail === def.id ? ' active' : ''}`}
+        data-mod={def.id}
+        onClick={() => clickRail(def.id)}
+        style={{ cursor: 'pointer' }}
+      >
+        <span className="rail-icon"><i className={icon}></i></span>
+        <span className="rail-label">{node.name}</span>
+        {activeRail === def.id && panelOpen && <span className="rail-dot"></span>}
+        <span className="rail-tooltip">{panelOpen && activeRail === def.id ? 'Hide panel' : node.name}</span>
+      </div>
+    )
+  }
+
+  function renderPanel(def: RailDef) {
+    const node = moduleByName.get(def.name)
+    if (!node) {
+      return (
+        <div className="sb-panel-noaccess">
+          <i className="lni lni-lock"></i>
+          <div className="sb-panel-error-title">No access to {def.name}</div>
+          <div className="sb-panel-error-sub">You don&apos;t have permission to view this module.</div>
+        </div>
+      )
+    }
+    return (
+      <>
+        <div className="sb-panel-hdr">
+          <div className="sb-panel-hdr-title">Module</div>
+          <div className="sb-panel-hdr-name"><i className={node.icon ?? def.fallbackIcon}></i> {node.name}</div>
+        </div>
+        {node.children.map(section => (section.children.length > 0 ? sbSection(node.name, section, def.id) : sbItem(section, def.id)))}
+        <div className="sb-panel-footer">{def.footer}</div>
+      </>
+    )
+  }
+
+  const activeDef = RAIL_DEFS.find(d => d.id === activeRail)!
+
   return (
     <div className="sidebar">
       <div className="sb-rail bg-bg">
-        <div className={`rail-item${activeRail === 'admission' ? ' active' : ''}`} data-mod="admission" onClick={() => clickRail('admission')} style={{ cursor: 'pointer' }}>
-          <span className="rail-icon"><i className="lni lni-clipboard"></i></span>
-          <span className="rail-label">Admission</span>
-          {activeRail === 'admission' && panelOpen && <span className="rail-dot"></span>}
-          <span className="rail-tooltip">{panelOpen && activeRail === 'admission' ? 'Hide panel' : 'Admission'}</span>
-        </div>
+        {renderRailSlot(RAIL_DEFS[0])}
         <div className="rail-divider"></div>
-        <div className={`rail-item${activeRail === 'academic' ? ' active' : ''}`} data-mod="academic" onClick={() => clickRail('academic')} style={{ cursor: 'pointer' }}>
-          <span className="rail-icon"><i className="lni lni-graduation"></i></span>
-          <span className="rail-label">Academic</span>
-          {activeRail === 'academic' && panelOpen && <span className="rail-dot"></span>}
-          <span className="rail-tooltip">{panelOpen && activeRail === 'academic' ? 'Hide panel' : 'Academic'}</span>
-        </div>
+        {renderRailSlot(RAIL_DEFS[1])}
         <div className="rail-divider"></div>
-        <div className={`rail-item${activeRail === 'finance' ? ' active' : ''}`} data-mod="finance" onClick={() => clickRail('finance')} style={{ cursor: 'pointer' }}>
-          <span className="rail-icon"><i className="lni lni-dollar"></i></span>
-          <span className="rail-label">Finance</span>
-          {activeRail === 'finance' && panelOpen && <span className="rail-dot"></span>}
-          <span className="rail-tooltip">{panelOpen && activeRail === 'finance' ? 'Hide panel' : 'Finance'}</span>
-        </div>
-        <div className={`rail-item${activeRail === 'student' ? ' active' : ''}`} data-mod="student" onClick={() => clickRail('student')} style={{ cursor: 'pointer' }}>
-          <span className="rail-icon"><i className="lni lni-user"></i></span>
-          <span className="rail-label">Student</span>
-          {activeRail === 'student' && panelOpen && <span className="rail-dot"></span>}
-          <span className="rail-tooltip">{panelOpen && activeRail === 'student' ? 'Hide panel' : 'Student'}</span>
-        </div>
+        {renderRailSlot(RAIL_DEFS[2])}
+        {renderRailSlot(RAIL_DEFS[3])}
         <div className="rail-item locked" data-mod="attendance">
           <span className="rail-icon"><i className="lni lni-alarm-clock"></i></span>
           <span className="rail-label">Attendance</span>
@@ -146,18 +217,8 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
           <span className="rail-label">Analytics</span>
           <span className="rail-tooltip">Analytics · Coming Soon</span>
         </div>
-        <div className={`rail-item${activeRail === 'employee' ? ' active' : ''}`} data-mod="employee" onClick={() => clickRail('employee')} style={{ cursor: 'pointer' }}>
-          <span className="rail-icon"><i className="lni lni-briefcase"></i></span>
-          <span className="rail-label">Employee</span>
-          {activeRail === 'employee' && panelOpen && <span className="rail-dot"></span>}
-          <span className="rail-tooltip">{panelOpen && activeRail === 'employee' ? 'Hide panel' : 'Employee'}</span>
-        </div>
-        <div className={`rail-item${activeRail === 'config' ? ' active' : ''}`} data-mod="config" onClick={() => clickRail('config')} style={{ cursor: 'pointer' }}>
-          <span className="rail-icon"><i className="lni lni-cog"></i></span>
-          <span className="rail-label">Config</span>
-          {activeRail === 'config' && panelOpen && <span className="rail-dot"></span>}
-          <span className="rail-tooltip">{panelOpen && activeRail === 'config' ? 'Hide panel' : 'Core Config'}</span>
-        </div>
+        {renderRailSlot(RAIL_DEFS[4])}
+        {renderRailSlot(RAIL_DEFS[5])}
         <div className="rail-spacer"></div>
         <div className="rail-divider"></div>
         <div className="rail-item locked" data-mod="userrole">
@@ -169,179 +230,35 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
 
       <div className={`sb-panel-shell${panelOpen ? ' open' : ''}`}>
         <div className={`sb-panel${panelOpen ? ' active' : ''}`}>
-
-          {activeRail === 'admission' && <>
-            <div className="sb-panel-hdr">
-              <div className="sb-panel-hdr-title">Module</div>
-              <div className="sb-panel-hdr-name"><i className="lni lni-clipboard"></i> Admission</div>
+          {isLoading && (
+            <div className="sb-panel-skeleton">
+              <div className="sb-skel-line" style={{ width: '58%' }}></div>
+              <div className="sb-skel-line" style={{ width: '82%' }}></div>
+              <div className="sb-skel-line" style={{ width: '68%' }}></div>
+              <div className="sb-skel-line" style={{ width: '74%' }}></div>
+              <div className="sb-skel-line" style={{ width: '50%' }}></div>
             </div>
-
-            {ADMISSION_SECTIONS.map(section => {
-              const collapsed = collapsedSections.has(section.id)
-              return (
-                <div key={section.id} className={`sb-collapse${collapsed ? ' closed' : ''}`}>
-                  <div className="sb-group-hdr" onClick={() => toggleCollapse(section.id)}>
-                    <span>{section.label}</span>
-                    <span className="sb-chevron">{collapsed ? '▸' : '▾'}</span>
-                  </div>
-                  <div className="sb-collapse-body">
-                    {section.items.map(item => (
-                      <Link
-                        key={item.id}
-                        href={`/admission/${item.id}`}
-                        className={`sb-item${currentPage === item.id ? ' active' : ''}`}
-                      >
-                        <span className="sb-icon"><i className={`lni lni-${item.icon}`}></i></span>
-                        {item.label}
-                        {'badge' in item && item.badge && <span className="sb-badge">{item.badge}</span>}
-                        {'badgeWarn' in item && item.badgeWarn && <span className="sb-badge warn">{item.badgeWarn}</span>}
-                        {'badgeGreen' in item && item.badgeGreen && <span className="sb-badge green">{item.badgeGreen}</span>}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-
-            <div className="sb-panel-footer">S1 · Admission Service</div>
-          </>}
-
-          {activeRail === 'academic' && <>
-            <div className="sb-panel-hdr">
-              <div className="sb-panel-hdr-title">Module</div>
-              <div className="sb-panel-hdr-name"><i className="lni lni-graduation"></i> Academic</div>
+          )}
+          {isError && (
+            <div className="sb-panel-error">
+              <i className="lni lni-warning"></i>
+              <div className="sb-panel-error-title">Couldn&apos;t load menu</div>
+              <div className="sb-panel-error-sub">Check your connection and try again.</div>
+              <button className="btn btn-neu btn-sm" onClick={() => refetch()}>
+                <i className="lni lni-reload"></i> Retry
+              </button>
             </div>
-
-            {sbSection('sc-overview', 'Overview', <>
-              {sbItem('acad-dashboard', 'Dashboard', 'dashboard')}
-            </>)}
-
-            {sbSection('sc-core', 'Academic Core', <>
-              {sbItem('intake-master', 'Intake Master', 'calendar')}
-              {sbItem('skill-master', 'Skill Management', 'bulb')}
-              {sbItem('batch-management', 'Batch Management', 'users')}
-              {sbItem('room-management', 'Room Management', 'home')}
-              {sbItem('session-movement', 'Session Movement', 'reload', { text: '1', warn: true })}
-            </>)}
-
-            {sbSection('sc-cu-master', 'Course Unit Master', <>
-              {sbItem('repetition-tag', 'Repetition Tag', 'reload')}
-              {sbItem('course-units', 'Course Units', 'book')}
-            </>)}
-
-            {sbSection('sc-prog', 'Programme Master', <>
-              {sbItem('programme-level', 'Programme Level', 'layers')}
-              {sbItem('programme-group', 'Programme Group', 'folder')}
-              {sbItem('programme-master', 'Programme Master', 'graduation')}
-              {sbItem('fee-structure', 'Fee Structure', 'dollar')}
-            </>)}
-
-            {sbSection('sc-tt', 'Timetable', <>
-              {sbItem('timetable', 'Timetable', 'calendar')}
-            </>)}
-
-            {sbSection('sc-odl', 'ODL Applications', <>
-              {sbItem('odl-applications', 'ODL Applications', 'world', { text: '7' })}
-              {sbItem('odl-reconciliation', 'Payment Reconciliation', 'credit-cards', { text: '4', warn: true })}
-            </>)}
-
-            {sbSection('sc-cross', 'Cross-Module', <>
-              {sbItem('student-lookup', 'Student Lookup', 'user')}
-            </>)}
-
-            <div className="sb-panel-footer">S2 · Academic Service</div>
-          </>}
-
-          {activeRail === 'finance' && <>
-            <div className="sb-panel-hdr">
-              <div className="sb-panel-hdr-title">Module</div>
-              <div className="sb-panel-hdr-name"><i className="lni lni-dollar"></i> Finance</div>
+          )}
+          {!isLoading && !isError && isFallback && (
+            <div className="sb-panel-fallback" title="Couldn't verify permissions from the server — showing the full navigation menu instead. Access shown here isn't confirmed.">
+              <i className="lni lni-warning"></i>
+              <span>Menu permissions unavailable — showing full navigation</span>
+              <button className="sb-panel-fallback-retry" onClick={() => refetch()} aria-label="Retry loading real permissions">
+                <i className="lni lni-reload"></i>
+              </button>
             </div>
-
-            {sbSection('sc-finance-core', 'Finance Core', <>
-              {sbItem('cooperates', 'Cooperates', 'handshake', undefined, 'finance')}
-              {sbItem('discounts', 'Discounts', 'tag', undefined, 'finance')}
-              {sbItem('ledgers', 'Ledgers', 'book', undefined, 'finance')}
-              {sbItem('currency-master', 'Currency Master', 'dollar', undefined, 'finance')}
-              {sbItem('receipt-books', 'Receipt Books', 'ticket', undefined, 'finance')}
-              {sbItem('gen-sets', 'General Settings', 'cog', undefined, 'finance')}
-            </>)}
-
-            {sbSection('sc-finance-banking', 'Banking', <>
-              {sbItem('banks', 'Banks', 'coin', undefined, 'finance')}
-              {sbItem('bank-branches', 'Bank Branches', 'map-marker', undefined, 'finance')}
-              {sbItem('proc-banks', 'Proc Banks', 'wallet', undefined, 'finance')}
-              {sbItem('proc-gl-accounts', 'Proc GL Accounts', 'calculator', undefined, 'finance')}
-            </>)}
-
-            <div className="sb-panel-footer">S5 · Finance Service</div>
-          </>}
-
-          {activeRail === 'student' && <>
-            <div className="sb-panel-hdr">
-              <div className="sb-panel-hdr-title">Module</div>
-              <div className="sb-panel-hdr-name"><i className="lni lni-user"></i> Student</div>
-            </div>
-
-            {sbSection('sc-student-core', 'Student Records', <>
-              {sbItem('student-master', 'Student Master', 'graduation', undefined, 'student')}
-            </>)}
-
-            <div className="sb-panel-footer">S10 · Student Service</div>
-          </>}
-
-          {activeRail === 'employee' && <>
-            <div className="sb-panel-hdr">
-              <div className="sb-panel-hdr-title">Module</div>
-              <div className="sb-panel-hdr-name"><i className="lni lni-briefcase"></i> Employee</div>
-            </div>
-
-            {sbSection('sc-employee-core', 'Employee Records', <>
-              {sbItem('employee-master', 'Employee Master', 'user', undefined, 'employee')}
-            </>)}
-
-            <div className="sb-panel-footer">S4 · Employee Service</div>
-          </>}
-
-          {activeRail === 'config' && <>
-            <div className="sb-panel-hdr">
-              <div className="sb-panel-hdr-title">Module</div>
-              <div className="sb-panel-hdr-name"><i className="lni lni-cog"></i> Configuration</div>
-            </div>
-
-            {sbSection('sc-config-org', 'Organization', <>
-              {sbItem('faculty-master', 'Faculty Master', 'library', undefined, 'config')}
-              {sbItem('department-master', 'Department Master', 'briefcase', undefined, 'config')}
-              {sbItem('designation-master', 'Designation Master', 'tag', undefined, 'config')}
-              {sbItem('campus-master', 'Campus Master', 'home', undefined, 'config')}
-              {sbItem('country-master', 'Country Master', 'world', undefined, 'config')}
-            </>)}
-
-            {sbSection('sc-config-academic', 'Academic Setup', <>
-              {sbItem('specialization', 'Specialization', 'certificate', undefined, 'config')}
-              {sbItem('skill', 'Skill Master', 'bulb', undefined, 'config')}
-              {sbItem('unit-type', 'Unit Type Master', 'tag', undefined, 'config')}
-              {sbItem('unit-category', 'Unit Category Master', 'tag', undefined, 'config')}
-              {sbItem('weekdays', 'Weekdays', 'calendar', undefined, 'config')}
-              {sbItem('batch-times', 'Batch Times', 'timer', undefined, 'config')}
-            </>)}
-
-            {sbSection('sc-config-admissions', 'Admissions', <>
-              {sbItem('enquiry-status', 'Enquiry Status', 'flag', undefined, 'config')}
-              {sbItem('enquiry-source', 'Isbat Enquiry Source', 'compass', undefined, 'config')}
-              {sbItem('enquiry-source-master', 'Enquiry Source', 'volume', undefined, 'config')}
-              {sbItem('followup-status', 'Followup Status', 'phone', undefined, 'config')}
-              {sbItem('followup-mode', 'Followup Mode', 'comments', undefined, 'config')}
-              {sbItem('interest-level', 'Interest Level', 'signal', undefined, 'config')}
-            </>)}
-
-            {sbSection('sc-config-access', 'Access Control', <>
-              {sbItem('permission-master', 'Permission Master', 'lock', undefined, 'config')}
-            </>)}
-
-            <div className="sb-panel-footer">S0 · Core Config</div>
-          </>}
-
+          )}
+          {!isLoading && !isError && renderPanel(activeDef)}
         </div>
       </div>
 

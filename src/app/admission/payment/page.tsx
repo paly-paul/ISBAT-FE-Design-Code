@@ -11,11 +11,11 @@ import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
+import { useBatches } from '@/hooks/academic/useBatches'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import {
   useApplicationPaymentBanks,
-  useApplicationPaymentBatches,
   useApplicationPaymentExemptionTypes,
   useApplicationPaymentFees,
   useApplicationPaymentTypes,
@@ -165,7 +165,18 @@ export default function PaymentPage() {
   const { data: programs = [] }      = useProgramMasters()
   const { data: semesters = [] }     = useSemestersForProgram(form.programGuid, !!form.programGuid)
   const { data: batchTimes = [] }    = useBatchTimes()
-  const { data: batches = [] }       = useApplicationPaymentBatches(form.programGuid, form.semesterGuid, form.batchTimeGuid, !!form.programGuid && !!form.semesterGuid && !!form.batchTimeGuid)
+  // The payment-scoped Dropdowns/Batches.bru endpoint returns a real 200
+  // with an empty array for combinations that do have a matching batch in
+  // the generic Batches list — its filtering logic looks broken server-side,
+  // not just unconfirmed. Falls back to the already-confirmed-correct
+  // generic Batches list (same one Batch Management uses, real
+  // programGuid/semesterGuid/batchTimeGuid), filtered client-side instead.
+  // Same "payment-scoped endpoint is unreliable, use the generic one"
+  // pattern as the Receipt Books field below.
+  const { data: allBatchesData }     = useBatches(1, 1000)
+  const batches = (allBatchesData?.items ?? []).filter(b =>
+    b.programGuid === form.programGuid && b.semesterGuid === form.semesterGuid && b.batchTimeGuid === form.batchTimeGuid,
+  )
   const { data: fees = [] }          = useApplicationPaymentFees(form.programGuid, !!form.programGuid)
   const { data: exemptionTypes = [] } = useApplicationPaymentExemptionTypes()
   const { data: paymentTypes = [] }  = useApplicationPaymentTypes()
@@ -188,7 +199,7 @@ export default function PaymentPage() {
   const batchOptions    = batches.map(b => ({ value: b.batchGuid, label: b.batchCode }))
   const feeOptions      = fees.map(f => ({ value: f.feeHdGuid, label: `${f.feeDesc} (${f.feeCode})` }))
   const exemptionOptions: Option[] = [{ value: '', label: '-- None (Pay Full Fee) --' }, ...exemptionTypes.map(e => ({ value: e.exemptionTypeGuid, label: e.exemptionTypeName }))]
-  const payTypeOptions  = paymentTypes.map(t => ({ value: String(t.payType), label: t.paymentTypeName }))
+  const payTypeOptions  = paymentTypes.map(t => ({ value: String(t.intPaymentType), label: t.paymentTypeName }))
   const currencyOptions = currencies.map(c => ({ value: c.currencyGuid, label: c.currencyCode }))
   const bankOptions     = banks.map(b => ({ value: b.bankGuid, label: b.bankName }))
   const receiptBookOptions = receiptBooks.map(r => ({ value: r.receiptBookGuid, label: r.bookCode }))

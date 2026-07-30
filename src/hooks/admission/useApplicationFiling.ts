@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteQualification,
+  getFilingCountries,
   saveGeneral,
   saveQualification,
   SaveGeneralInput,
@@ -11,6 +12,15 @@ import {
 } from '@/lib/api/admission/applicationFiling'
 
 const FILING_KEY = ['application-filing']
+
+export function useFilingCountries() {
+  return useQuery({
+    queryKey: [...FILING_KEY, 'countries'],
+    queryFn: () => getFilingCountries(),
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
 
 export function useSearchApplicationsForFiling(searchTerm: string, pageNumber: number, pageSize: number, enabled: boolean) {
   return useQuery({
@@ -53,6 +63,7 @@ export function useSubmitApplication() {
 }
 
 export type {
+  CountryDropdownDto,
   FilingApplicationSearchResult,
   SaveGeneralInput,
   SaveGeneralResponse,
