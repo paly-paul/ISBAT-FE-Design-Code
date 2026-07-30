@@ -1,13 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { assignEmployeePermissionGroups, createEmployee, CreateEmployeeInput, Employee, EmployeeListItem, getEmployee, getEmployeePermissionGroups, getEmployees, updateEmployee } from '@/lib/api/employee/employee'
+import { MENU_KEY } from '@/hooks/users/useMenu'
 
 const EMPLOYEES_KEY = ['employees']
 const EMPLOYEE_PERMISSION_GROUPS_KEY = ['employeePermissionGroups']
 
+// Load enough rows to cover the full employee list (226+ seen in practice)
+// in one request — the page itself paginates client-side on top of this.
+const EMPLOYEES_PAGE_SIZE = 1000
+
 export function useEmployees() {
   return useQuery({
     queryKey: EMPLOYEES_KEY,
-    queryFn: getEmployees,
+    queryFn: () => getEmployees(1, EMPLOYEES_PAGE_SIZE),
     // Never treat the cached list as stale on its own — only refetch when a
     // mutation (create/update) explicitly invalidates this key below,
     // instead of on every remount/window focus.
@@ -64,6 +69,12 @@ export function useAssignEmployeePermissionGroups() {
       assignEmployeePermissionGroups(employeeGuid, { permissionGroupGuids }),
     onSuccess: (_data, { employeeGuid }) => {
       queryClient.invalidateQueries({ queryKey: [...EMPLOYEE_PERMISSION_GROUPS_KEY, employeeGuid] })
+      // Only actually changes anything when the assigned employee is the
+      // logged-in user themselves (e.g. an admin testing on their own
+      // account) — /me/menu is scoped server-side to the caller, so
+      // assigning some other employee's permissions has no effect on this
+      // tab's menu and this invalidation is a harmless no-op refetch there.
+      queryClient.invalidateQueries({ queryKey: MENU_KEY })
     },
   })
 }

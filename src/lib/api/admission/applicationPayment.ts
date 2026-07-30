@@ -82,8 +82,12 @@ export interface ProgramFeeHeadInfoDto {
   amtPer: number
 }
 
+// Confirmed via a real dropdowns/payment-types response — the id field is
+// intPaymentType, not payType as first guessed (that guess produced a
+// literal "NaN" in the submitted payType field, since String(undefined)
+// then Number("undefined") both silently fail without throwing).
 export interface PaymentTypeDto {
-  payType: number
+  intPaymentType: number
   paymentTypeName: string
 }
 
@@ -96,8 +100,10 @@ const mockBatches: BatchInfoDto[] = [{ batchGuid: 'mock-batch-1', batchCode: 'BS
 const mockExemptionTypes: ExemptionTypeDto[] = [{ exemptionTypeGuid: 'mock-exemption-1', exemptionTypeName: 'HTC Waiver' }]
 const mockFees: ProgramFeeHeadInfoDto[] = [{ feeHdGuid: 'mock-fee-1', feeCode: 'STD', feeDesc: 'Standard Application Fee', intProgram: 0, status: 1, amtPer: 0 }]
 const mockPaymentTypes: PaymentTypeDto[] = [
-  { payType: 1, paymentTypeName: 'Cash' },
-  { payType: 2, paymentTypeName: 'Bank Transfer' },
+  { intPaymentType: 1, paymentTypeName: 'Cash' },
+  { intPaymentType: 2, paymentTypeName: 'Cheque' },
+  { intPaymentType: 3, paymentTypeName: 'Bank' },
+  { intPaymentType: 4, paymentTypeName: 'DD' },
 ]
 
 export function getApplicationPaymentBanks(): Promise<BankAccountInfoDto[]> {

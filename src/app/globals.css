@@ -734,6 +734,114 @@ body {
   flex-shrink: 0;
 }
 
+/* Menu-permission loading/error/empty states (src/hooks/users/useMenu.ts) */
+.rail-item-skeleton {
+  background: rgba(255, 255, 255, .35);
+  animation: pulse 1.4s ease-in-out infinite;
+  cursor: default;
+}
+
+.sb-panel-skeleton {
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sb-skel-line {
+  height: 11px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .4);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.sb-panel-error,
+.sb-panel-noaccess {
+  padding: 32px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+
+.sb-panel-error i.lni,
+.sb-panel-noaccess i.lni {
+  font-size: 26px;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.sb-panel-error-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sb-text);
+}
+
+.sb-panel-error-sub {
+  font-size: 11.5px;
+  color: #94a3b8;
+  margin-bottom: 8px;
+}
+
+/* Shown when /me/menu failed and the sidebar is running on fallback,
+   full-navigation data instead of real permissions (see MenuResult.isFallback
+   in src/lib/api/users/menu.ts) — deliberately visible, never silent. */
+.sb-panel-fallback {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 10px 10px 0;
+  padding: 8px 10px;
+  background: var(--amber-bg);
+  border: 1.5px solid var(--amber-bd);
+  border-radius: var(--rxs);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #92400e;
+}
+
+.sb-panel-fallback i.lni-warning {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.sb-panel-fallback span {
+  flex: 1;
+}
+
+.sb-panel-fallback-retry {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: .75;
+  padding: 2px;
+  display: flex;
+}
+
+.sb-panel-fallback-retry:hover {
+  opacity: 1;
+}
+
+/* Nav item with no page behind it yet (e.g. Receipts/Reports) */
+.sb-item-disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.sb-item-disabled:hover {
+  background: none;
+  box-shadow: none;
+}
+
+.sb-badge-soon {
+  background: rgba(148, 163, 184, .25);
+  color: #94a3b8;
+}
+
 /* ── PANEL TOGGLE — circular arrow button pinned to the sidebar's right edge ── */
 .sb-toggle {
   position: absolute;

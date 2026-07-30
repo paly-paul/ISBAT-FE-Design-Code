@@ -274,8 +274,8 @@ export function EditEmployeePermissionsModal({ isOpen, onClose, showToast, emplo
                                     </div>
                                     {accessible.length > 0 ? (
                                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                        {accessible.map(p => (
-                                          <span key={p.name} className="badge badge-green">{p.name}</span>
+                                        {accessible.map((p, i) => (
+                                          <span key={`${p.name}-${i}`} className="badge badge-green">{p.name}</span>
                                         ))}
                                       </div>
                                     ) : (
@@ -288,8 +288,8 @@ export function EditEmployeePermissionsModal({ isOpen, onClose, showToast, emplo
                                     </div>
                                     {notAccessible.length > 0 ? (
                                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                        {notAccessible.map(p => (
-                                          <span key={p.name} className="badge badge-grey">{p.name}</span>
+                                        {notAccessible.map((p, i) => (
+                                          <span key={`${p.name}-${i}`} className="badge badge-grey">{p.name}</span>
                                         ))}
                                       </div>
                                     ) : (
@@ -358,8 +358,8 @@ export function EditEmployeePermissionsModal({ isOpen, onClose, showToast, emplo
                       <span className="badge badge-green">{b.grantedCount} Accessible</span>
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {b.pages.flatMap(pg => pg.permissions.filter(p => p.granted).map(p => (
-                        <span key={p.name} className="badge badge-green">{p.name}</span>
+                      {b.pages.flatMap(pg => pg.permissions.filter(p => p.granted).map((p, i) => (
+                        <span key={`${pg.page}-${p.name}-${i}`} className="badge badge-green">{p.name}</span>
                       )))}
                     </div>
                   </div>

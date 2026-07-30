@@ -24,6 +24,7 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
   const [editingEmployeeGuid, setEditingEmployeeGuid] = useState<string | null>(null)
   const [assigningPermissionsEmployee, setAssigningPermissionsEmployee] = useState<EmployeeListItem | null>(null)
   const [editingPermissionsEmployee, setEditingPermissionsEmployee] = useState<EmployeeListItem | null>(null)
@@ -74,15 +75,17 @@ export default function Page() {
     const numB = Number(b.shortCode.split('/').pop())
     return numB - numA
   })
-  const filteredRows = sortedRows.filter(r =>
-    Object.entries(filters).every(([k, v]) => {
+  const filteredRows = sortedRows.filter(r => {
+    const matchesFilters = Object.entries(filters).every(([k, v]) => {
       if (!v.length) return true
       const cell = k === 'sex' ? (r.sex === 1 ? 'Male' : 'Female')
         : k === 'status' ? (r.isApproved ? 'Approved' : 'Pending')
         : String((r as unknown as Record<string, unknown>)[k])
       return v.includes(cell)
     })
-  )
+    const matchesSearch = !search || r.empName.toLowerCase().includes(search.toLowerCase()) || r.shortCode.toLowerCase().includes(search.toLowerCase())
+    return matchesFilters && matchesSearch
+  })
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
@@ -106,7 +109,13 @@ export default function Page() {
       <div className="page active">
         <div className="pg-hdr">
           <div><div className="pg-title">Employee Master</div><div className="pg-sub">All employees · Captures qualification details · Linked to Faculty &amp; Course Allocation</div></div>
-          <button className="btn btn-primary" onClick={() => openModal('new-employee-modal')}><i className="lni lni-plus"></i> Add Employee</button>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm"></i>
+              <input className="ctrl pl-8 w-56" placeholder="Search by name or code…" value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+            <button className="btn btn-primary" onClick={() => openModal('new-employee-modal')}><i className="lni lni-plus"></i> Add Employee</button>
+          </div>
         </div>
 
         <div className="info-box mb-[14px]">
@@ -128,7 +137,7 @@ export default function Page() {
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
                   : filteredRows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0) || !!search} onClearFilters={() => { setFilters({}); setSearch('') }} />
                     : null}
                 {/* Previous row markup (pre GET /api/v1/users/employees integration) — kept for reference.
                 {filteredRows.map((r, i) => (

@@ -25,13 +25,16 @@ interface FilingApplicationSearchResponse {
   pageSize: number
 }
 
-// Confirmed via the Application Filling API docs' "Dummy Payload" table for
-// POST /general. countryGuid/spCountryGuid are deliberately NOT included —
-// the docs say they must come from "the Identity module countries GET API,"
-// but the only countries endpoint wired anywhere in this codebase
-// (GET /api/v1/users/countries) has no guid field at all, only
-// intCountryCode — same gap as countryGuid on the application-payments
-// Create payload. Omit rather than guess until a real guid source exists.
+// Confirmed via Application-Filling/SaveGeneral.bru — countryGuid/
+// spCountryGuid ARE real fields ("countryGuid replaces old intCountry +
+// countryCode fields", "spCountryGuid replaces old spCountryCode field"),
+// sourced from the dedicated Application-Filling/Countries.bru dropdown
+// (GET .../application-filling/countries) — a different, guid-bearing
+// endpoint from GET /api/v1/users/countries (which only exposes
+// intCountryCode, no guid, and is unrelated to this form). Previously
+// omitted entirely on the mistaken assumption that no guid-bearing Country
+// source existed anywhere — same gap application-payments' Create payload
+// still has, and that one's real Country source hasn't been found yet.
 export interface SaveGeneralInput {
   appRefNo: string
   enquiryGuid: string | null
@@ -41,6 +44,7 @@ export interface SaveGeneralInput {
   firstName: string | null
   lastName: string | null
   gender: number | null
+  countryGuid: string | null
   phone: string | null
   nationalId: string | null
   nationalIdFile: File | null
@@ -51,6 +55,7 @@ export interface SaveGeneralInput {
   visaFile: File | null
   spName: string | null
   spEmail: string | null
+  spCountryGuid: string | null
   spPhone: string | null
   campusGuid: string
   programGuid: string
@@ -61,6 +66,16 @@ export interface SaveGeneralInput {
   refugee: number
   refugeeId: string | null
   refugeeFile: File | null
+}
+
+// Confirmed via Application-Filling/Countries.bru that this endpoint exists
+// and feeds the nationality/country-of-origin dropdown, but the docs don't
+// name CountryDropdownDto's exact fields — modeled defensively off this
+// app's naming conventions elsewhere (guid + name). Verify against a real
+// response and correct if they differ, same as any other unconfirmed shape.
+export interface CountryDropdownDto {
+  countryGuid: string
+  countryName: string
 }
 
 export interface SaveGeneralResponse {
@@ -94,6 +109,17 @@ const mockSearchResults: FilingApplicationSearchResult[] = [
   { appRefNo: 'APP2026/1', intApplication: 1, applicationGuid: 'mock-app-1', status: 'Paid', studentName: 'Nakato Sarah', email: 'nakato.s@example.com', phone: '700000001' },
 ]
 
+const mockCountries: CountryDropdownDto[] = [
+  { countryGuid: 'mock-country-ug', countryName: 'Uganda' },
+  { countryGuid: 'mock-country-ke', countryName: 'Kenya' },
+  { countryGuid: 'mock-country-tz', countryName: 'Tanzania' },
+]
+
+export function getFilingCountries(): Promise<CountryDropdownDto[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockCountries)
+  return apiGet<CountryDropdownDto[] | null>('/api/v1/admissions/application-filling/countries').then(data => data ?? [])
+}
+
 export function searchApplicationsForFiling(searchTerm: string, pageNumber = 1, pageSize = 20): Promise<FilingApplicationSearchResponse> {
   if (MOCK_AUTH) {
     const items = searchTerm.trim()
@@ -120,6 +146,7 @@ export function saveGeneral(input: SaveGeneralInput): Promise<SaveGeneralRespons
   if (input.firstName) formData.append('firstName', input.firstName)
   if (input.lastName) formData.append('lastName', input.lastName)
   if (input.gender != null) formData.append('gender', String(input.gender))
+  if (input.countryGuid) formData.append('countryGuid', input.countryGuid)
   if (input.phone) formData.append('phone', input.phone)
   if (input.nationalId) formData.append('nationalId', input.nationalId)
   if (input.nationalIdFile) formData.append('nationalIdFile', input.nationalIdFile)
@@ -130,6 +157,7 @@ export function saveGeneral(input: SaveGeneralInput): Promise<SaveGeneralRespons
   if (input.visaFile) formData.append('visaFile', input.visaFile)
   if (input.spName) formData.append('spName', input.spName)
   if (input.spEmail) formData.append('spEmail', input.spEmail)
+  if (input.spCountryGuid) formData.append('spCountryGuid', input.spCountryGuid)
   if (input.spPhone) formData.append('spPhone', input.spPhone)
   formData.append('campusGuid', input.campusGuid)
   formData.append('programGuid', input.programGuid)

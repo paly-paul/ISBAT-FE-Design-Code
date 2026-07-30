@@ -2,22 +2,18 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// Confirmed via a real GET /api/v1/academic/batches response and
-// Scheduling/Batches/*.bru. A batch is students enrolled in a specific
-// program-semester combination for a given intake. intProgram/intSem/
-// intStream/batchTime are all legacy int FKs with NO confirmed guid-based
-// counterpart anywhere reachable from the frontend — ProgramMaster, Stream,
-// BatchTime, and Semester (DropdownForProgram) all only expose guids, even
-// in their dedicated dropdown endpoints. Don't guess label mappings for
-// display — show the raw numbers, same convention as Enquiry's
-// enquirySource/enquiryStatus.
+// Confirmed via a real GET /api/v1/academic/batches response — the legacy
+// intProgram/intSem/intStream/batchTime int FKs (with no confirmed guid
+// counterpart) have been replaced with real guids on the read side too, not
+// just Create/Update. A batch is students enrolled in a specific
+// program-semester combination for a given intake.
 export interface Batch {
   batchGuid: string
   batchCode: string
-  intProgram: number
-  intSem: number
-  intStream: number
-  batchTime: number
+  programGuid: string
+  semesterGuid: string
+  streamGuid: string
+  batchTimeGuid: string
   bStartDate: string | null
   bEndDate: string | null
   // 0/1 flag, not a multi-value enum — same convention as country.ts's
@@ -32,41 +28,39 @@ interface BatchListResult {
   pageSize: number
 }
 
-// Confirmed via Create.bru. intProgram/intSem/intStream/batchTime/
-// bInCharge/intakeCode: required, > 0. bStartDate/bEndDate: optional.
-// intakeCode is the one field here with a real confirmed source
-// (Intake.intakeCode) — the rest have no guid-based master exposing a
-// matching int, see the note on Batch above.
+// Confirmed via the updated Create/Update schema — programGuid/semesterGuid/
+// streamGuid/batchTimeGuid are now real guids, resolving the old int-FK-
+// with-no-guid-source gap for four of the five previously unconfirmed
+// fields. bInCharge is still a plain number with no confirmed guid or real
+// int source anywhere (Employee only ever exposes employeeGuid) — kept as
+// the option's 1-based list position, same workaround as before, flagged
+// in-UI. intakeCode is Intake.intakeCode, unchanged.
 export interface BatchCreateInput {
-  intProgram: number
-  intSem: number
-  intStream: number
-  batchTime: number
+  programGuid: string
+  semesterGuid: string
+  streamGuid: string
+  batchTimeGuid: string
   bStartDate: string | null
   bEndDate: string | null
   bInCharge: number
   intakeCode: number
 }
 
-// Confirmed via Update.bru: only intStream/bStartDate/bEndDate/bInCharge
-// are actually applied by the backend. batchCode and batchTime are accepted
-// in the body (both required as non-empty/>0 by validation) but are NOT
-// applied — batchCode is immutable after creation, batchTime is currently
-// ignored server-side. Callers should just echo back the existing record's
-// batchCode/batchTime rather than offering a picker for either.
-export interface BatchUpdateInput {
-  batchCode: string
-  batchTime: number
-  intStream: number
-  bStartDate: string | null
-  bEndDate: string | null
-  bInCharge: number
-}
+// Confirmed: Update now takes the identical shape as Create — a full
+// replace, not the old narrower intStream/dates/bInCharge-only body where
+// batchCode/batchTime were required but silently ignored. GET
+// /batches/:guid now returns matching guid fields too (confirmed via a real
+// list response — see Batch above), so EditBatchModal prefills Programme/
+// Semester/Stream/Batch Time from the fetched record. Intake and Batch
+// In-Charge still can't be prefilled — Batch's GET shape has no intake
+// field at all, and no confirmed guid/int source for the employee either
+// (see the note in NewBatchModal) — both must be re-picked on every edit.
+export type BatchUpdateInput = BatchCreateInput
 
 let mockBatchSeq = 1
 
 const mockBatches: Batch[] = [
-  { batchGuid: 'd7b04278-21ef-4cfa-8bee-ff336f08e344', batchCode: 'CSF26MRNA', intProgram: 1, intSem: 1, intStream: 1, batchTime: 1, bStartDate: '2024-02-12T00:00:00', bEndDate: '2024-06-07T00:00:00', active: 1 },
+  { batchGuid: 'd7b04278-21ef-4cfa-8bee-ff336f08e344', batchCode: 'CSF26MRNA', programGuid: 'mock-program-1', semesterGuid: 'mock-semester-1', streamGuid: 'mock-stream-1', batchTimeGuid: 'mock-batchtime-1', bStartDate: '2024-02-12T00:00:00', bEndDate: '2024-06-07T00:00:00', active: 1 },
 ]
 
 // Lists batches (paginated).
@@ -85,10 +79,10 @@ export function createBatch(input: BatchCreateInput): Promise<Batch> {
     const batch: Batch = {
       batchGuid: crypto.randomUUID(),
       batchCode: `MOCK-${mockBatchSeq++}`,
-      intProgram: input.intProgram,
-      intSem: input.intSem,
-      intStream: input.intStream,
-      batchTime: input.batchTime,
+      programGuid: input.programGuid,
+      semesterGuid: input.semesterGuid,
+      streamGuid: input.streamGuid,
+      batchTimeGuid: input.batchTimeGuid,
       bStartDate: input.bStartDate,
       bEndDate: input.bEndDate,
       active: 1,
@@ -114,7 +108,10 @@ export function updateBatch(guid: string, input: BatchUpdateInput): Promise<Batc
   if (MOCK_AUTH) {
     const existing = mockBatches.find(b => b.batchGuid === guid)
     if (!existing) return Promise.reject(new Error('Batch not found'))
-    existing.intStream = input.intStream
+    existing.programGuid = input.programGuid
+    existing.semesterGuid = input.semesterGuid
+    existing.streamGuid = input.streamGuid
+    existing.batchTimeGuid = input.batchTimeGuid
     existing.bStartDate = input.bStartDate
     existing.bEndDate = input.bEndDate
     return Promise.resolve(existing)

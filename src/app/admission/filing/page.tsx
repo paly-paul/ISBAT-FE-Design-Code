@@ -8,10 +8,12 @@ import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
-import { useApplicationPaymentBatches, useApplicationPaymentFees } from '@/hooks/admission/useApplicationPayments'
+import { useBatches } from '@/hooks/academic/useBatches'
+import { useApplicationPaymentFees } from '@/hooks/admission/useApplicationPayments'
 import {
   FilingApplicationSearchResult,
   useDeleteQualification,
+  useFilingCountries,
   useSaveGeneral,
   useSaveQualification,
   useSearchApplicationsForFiling,
@@ -27,12 +29,15 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'documents',      label: 'Documents',        icon: 'lni-folder-2' },
 ]
 
-// NATIONALITIES/RELIGIONS/MARITAL and the Passport Expiry/Country of
-// Issue/Visa Number/Visa Type/UNHCR Case Number/Country of Origin fields
-// below have no counterpart anywhere in the Application Filling API docs —
-// kept as decorative/local fields (not sent), same treatment as Application
-// Source/Receipt Type on the payment page.
-const NATIONALITIES  = ['Ugandan', 'Kenyan', 'Tanzanian', 'Rwandan', 'Burundian', 'South Sudanese', 'Congolese', 'Other']
+// Nationality now uses the real countries dropdown (see useFilingCountries)
+// since Application-Filling/SaveGeneral.bru confirms countryGuid is a real
+// field. RELIGIONS/MARITAL and the Passport Expiry/Country of Issue/Visa
+// Number/Visa Type/UNHCR Case Number fields below still have no counterpart
+// anywhere in the Application Filling docs — kept as decorative/local
+// fields (not sent), same treatment as Application Source/Receipt Type on
+// the payment page. Country of Issue keeps this local list rather than the
+// real dropdown since it isn't part of any confirmed payload.
+const COUNTRIES_OF_ISSUE = ['Ugandan', 'Kenyan', 'Tanzanian', 'Rwandan', 'Burundian', 'South Sudanese', 'Congolese', 'Other']
 const RELIGIONS      = ['Christian', 'Muslim', 'Hindu', 'Buddhist', 'Other']
 const MARITAL        = ['Single', 'Married', 'Divorced', 'Widowed']
 // The API's gender field is a byte with only two values (0 = Female, 1 = Male) — no third option to encode.
@@ -121,7 +126,7 @@ export default function FilingPage() {
   const [lastName, setLastName] = useState('')
   const [gender, setGender] = useState('')
   const [dob, setDob] = useState('')
-  const [nationality, setNationality] = useState('')
+  const [countryGuid, setCountryGuid] = useState('')
   const [nationalId, setNationalId] = useState('')
   const [nationalIdFile, setNationalIdFile] = useState<File | null>(null)
   const [email, setEmail] = useState('')
@@ -135,7 +140,6 @@ export default function FilingPage() {
   const [isRefugee, setIsRefugee] = useState(false)
   const [refugeeId, setRefugeeId] = useState('')
   const [refugeeFile, setRefugeeFile] = useState<File | null>(null)
-  const isForeign = nationality !== '' && nationality !== 'Ugandan'
 
   const [intakeGuid, setIntakeGuid] = useState('')
   const [campusGuid, setCampusGuid] = useState('')
@@ -157,8 +161,16 @@ export default function FilingPage() {
   const { data: programs = [] }   = useProgramMasters()
   const { data: semesters = [] }  = useSemestersForProgram(programGuid, !!programGuid)
   const { data: batchTimes = [] } = useBatchTimes()
-  const { data: batches = [] }    = useApplicationPaymentBatches(programGuid, semesterGuid, batchTimeGuid, !!programGuid && !!semesterGuid && !!batchTimeGuid)
+  // Same payment-scoped Dropdowns/Batches.bru endpoint that turned out
+  // unreliable on the Payment page (200 with an empty array for
+  // combinations that do have a matching batch) — use the generic,
+  // already-confirmed-correct Batches list filtered client-side instead.
+  const { data: allBatchesData }  = useBatches(1, 1000)
+  const batches = (allBatchesData?.items ?? []).filter(b =>
+    b.programGuid === programGuid && b.semesterGuid === semesterGuid && b.batchTimeGuid === batchTimeGuid,
+  )
   const { data: fees = [] }       = useApplicationPaymentFees(programGuid, !!programGuid)
+  const { data: countries = [] }  = useFilingCountries()
 
   const intakeOptions    = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   const campusOptions    = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
@@ -167,10 +179,18 @@ export default function FilingPage() {
   const batchTimeOptions = batchTimes.map(bt => ({ value: bt.batchTimeGuid, label: bt.batchTime }))
   const batchOptions     = batches.map(b => ({ value: b.batchGuid, label: b.batchCode }))
   const feeOptions       = fees.map(f => ({ value: f.feeHdGuid, label: `${f.feeDesc} (${f.feeCode})` }))
+  const countryOptions   = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
+
+  // Passport/Visa/Refugee sections only apply to non-Ugandan nationals —
+  // matched by name since CountryDropdownDto's shape doesn't confirm any
+  // other "is home country" flag.
+  const selectedCountryName = countries.find(c => c.countryGuid === countryGuid)?.countryName ?? ''
+  const isForeign = countryGuid !== '' && selectedCountryName.toLowerCase() !== 'uganda'
 
   // ── Sponsor (Family tab fields that actually map to the API) ────────────
   const [spName, setSpName] = useState('')
   const [spEmail, setSpEmail] = useState('')
+  const [spCountryGuid, setSpCountryGuid] = useState('')
   const [spPhone, setSpPhone] = useState('')
 
   const saveGeneral = useSaveGeneral()
@@ -194,6 +214,7 @@ export default function FilingPage() {
         firstName: firstName.trim() || null,
         lastName: lastName.trim() || null,
         gender: gender === 'Male' ? 1 : gender === 'Female' ? 0 : null,
+        countryGuid: countryGuid || null,
         phone: phone.trim() || null,
         nationalId: nationalId.trim() || null,
         nationalIdFile,
@@ -204,6 +225,7 @@ export default function FilingPage() {
         visaFile,
         spName: spName.trim() || null,
         spEmail: spEmail.trim() || null,
+        spCountryGuid: spCountryGuid || null,
         spPhone: spPhone.trim() || null,
         campusGuid, programGuid, feeHdGuid,
         semesterGuid: semesterGuid || null,
@@ -400,7 +422,7 @@ export default function FilingPage() {
                     <div className="file-zone w-32 h-32 flex-shrink-0"><input type="file" accept="image/*" /><i className="lni lni-camera-2 file-zone-icon" /><p>Profile Photo</p></div>
                     <div className="flex-1">
                       <div className="g3"><Field label="First Name" req><Input placeholder="First name" value={firstName} onChange={setFirstName} /></Field><Field label="Middle Name"><Input placeholder="Middle name" /></Field><Field label="Last Name" req><Input placeholder="Last name" value={lastName} onChange={setLastName} /></Field></div>
-                      <div className="g3 mt-3"><Field label="Gender" req><Select options={GENDERS} value={gender} onChange={setGender} /></Field><Field label="Date of Birth" req><Input type="date" value={dob} onChange={setDob} /></Field><Field label="Nationality" req><Select options={NATIONALITIES} value={nationality} onChange={setNationality} /></Field></div>
+                      <div className="g3 mt-3"><Field label="Gender" req><Select options={GENDERS} value={gender} onChange={setGender} /></Field><Field label="Date of Birth" req><Input type="date" value={dob} onChange={setDob} /></Field><Field label="Nationality" req><SearchSelect options={countryOptions} value={countryGuid} placeholder="-- Select Country --" onChange={setCountryGuid} /></Field></div>
                     </div>
                   </div>
                   <div className="g3">
@@ -446,7 +468,7 @@ export default function FilingPage() {
                     <p className="text-g400 mt-2" style={{ fontSize: 'var(--fs-xs)' }}>Applies to non-Ugandan nationals — select a Nationality above to unlock.</p>
                   ) : (
                     <>
-                      <div className="g3 mt-3"><Field label="Passport Number"><Input placeholder="AB1234567" value={passportNo} onChange={setPassportNo} /></Field><Field label="Passport Expiry"><Input type="date" /></Field><Field label="Country of Issue"><Select options={NATIONALITIES} /></Field></div>
+                      <div className="g3 mt-3"><Field label="Passport Number"><Input placeholder="AB1234567" value={passportNo} onChange={setPassportNo} /></Field><Field label="Passport Expiry"><Input type="date" /></Field><Field label="Country of Issue"><Select options={COUNTRIES_OF_ISSUE} /></Field></div>
                       <div className="g3 mt-3">
                         <Field label="Passport Copy"><FileZone file={passportFile} onChange={setPassportFile} /></Field>
                         <Field label="Visa Number"><Input placeholder="VIS-XXXX" /></Field>
@@ -524,7 +546,7 @@ export default function FilingPage() {
                   <div className="g3 mt-3"><Field label="District"><Input placeholder="District" /></Field><Field label="Sub-county"><Input placeholder="Sub-county" /></Field><Field label="Village / Street"><Input placeholder="Village" /></Field></div>
                   <div className="sec-divider mt-5">Sponsorship Details</div>
                   <div className="g3 mt-3"><Field label="Sponsor Type"><Select options={SPONSOR_TYPES} /></Field><Field label="Sponsor Name"><Input placeholder="Sponsor name" value={spName} onChange={setSpName} /></Field><Field label="Sponsor Phone"><Input placeholder="+256 7XX XXX XXX" value={spPhone} onChange={setSpPhone} /></Field></div>
-                  <div className="g3 mt-3"><Field label="Sponsor Email"><Input type="email" placeholder="sponsor@email.com" value={spEmail} onChange={setSpEmail} /></Field><div className="fg" /><div className="fg" /></div>
+                  <div className="g3 mt-3"><Field label="Sponsor Email"><Input type="email" placeholder="sponsor@email.com" value={spEmail} onChange={setSpEmail} /></Field><Field label="Sponsor Country"><SearchSelect options={countryOptions} value={spCountryGuid} placeholder="-- Select Country --" onChange={setSpCountryGuid} /></Field><div className="fg" /></div>
                   <div className="flex justify-between mt-5">
                     <button className="btn" onClick={() => setActiveTab('qualifications')}><i className="lni lni-arrow-left" /> Qualifications</button>
                     <button className="btn" onClick={() => setActiveTab('documents')}>Next: Documents <i className="lni lni-arrow-right" /></button>
