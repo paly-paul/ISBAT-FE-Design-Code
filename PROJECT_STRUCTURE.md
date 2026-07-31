@@ -134,6 +134,10 @@ No test framework.
 
 **Batch Times (`/config/batch-times`) lives under Config → Academic Setup despite backing `/api/v1/academic/batchtimes`** — same "route module vs. code location" split as Intake/Programme Level/Programme Group; its API/hook files live in `src/lib/api/academic/batchTime.ts` / `src/hooks/config/useBatchTimes.ts`.
 
+**`/finance/dashboard` through `/finance/student-statements` (8 pages) are a new "Payment Collection" + "Reports & Statements" sidebar group, built directly from a reference HTML mockup (`ISBAT_ERP_Finance (1).html`) rather than from a backend spec.** All eight are mock/static — no CRUD endpoints were given for this workflow, so nothing here persists. The only real wiring inside them: Payment Console's Bank Name and Receipt Book dropdowns pull from the real `useBanks()`/`useReceiptBooks()`, and its student-ledger math (currency conversion, priority-based allocation, a 5% final-installment discount, sub-500 rounding write-off) is genuine client-side business logic over a small hardcoded student roster — just not backed by a real payment-recording endpoint. Root `/finance` now redirects to `/finance/dashboard` (was `/finance/cooperates`).
+
+**`/academic/skill-master` is now real hook layer** (`GET/POST/PUT/DELETE /api/v1/users/skills`) — a lecturer-skill approval workflow, genuinely unrelated to `/config/skill` (a plain skill-name catalog, still mock, backed by `lib/api/academic/skill.ts`). Don't conflate the two similarly-shaped hooks: `hooks/config/useSkills.ts` (mock, backs `/config/skill`) vs. `hooks/academic/useLecturerSkills.ts` (real, backs `/academic/skill-master`). The list/GetByGuid responses only ever return a raw `intEmployee` int, never an `employeeGuid` — there's no confirmed way to resolve it against the real Employee master, so the table displays `Employee #<n>` and Edit's Faculty Member field can't be prefilled (must be re-picked every time, same class of gap as `batch.ts`'s `bInCharge`). No approve/reject endpoint was given, so the old Dean-approval UI (role switcher, Approve/Reject actions) was dropped rather than faked.
+
 ---
 
 ## src/ Directory Layout
@@ -162,7 +166,7 @@ src/
 │   ├── academic/
 │   │   ├── layout.tsx          # own panelOpen/collapsedSections/activeRail state + real session check (see Auth section) — the ONLY layout with an auth gate
 │   │   ├── page.tsx            # redirect → /academic/acad-dashboard
-│   │   ├── acad-dashboard/, intake-master/ (← useIntakes), skill-master/,
+│   │   ├── acad-dashboard/, intake-master/ (← useIntakes), skill-master/ (← useLecturerSkills, real; full CRUD),
 │   │   │   room-management/, session-movement/, repetition-tag/, course-units/, programme-level/,
 │   │   │   programme-group/, programme-master/, fee-structure/, timetable/, odl-applications/,
 │   │   │   odl-reconciliation/, student-lookup/
@@ -199,7 +203,12 @@ src/
 │   │   └── batch-times/page.tsx        ← useBatchTimes/useCreateBatchTime/useUpdateBatchTime/useDeleteBatchTime (hooks/lib under .../academic/); fully confirmed CRUD spec, no int-enum gotchas
 │   └── finance/
 │       ├── layout.tsx           # own panelOpen/collapsedSections/activeRail state, no auth gate
-│       ├── page.tsx             # redirect → /finance/cooperates
+│       ├── page.tsx             # redirect → /finance/dashboard (was /finance/cooperates)
+│       ├── dashboard/, payment-console/, payment-history/, ledger-adjustments/,
+│       │   exchange-rates/, advanced-payments/, financial-reports/, student-statements/
+│       │   # all mock/static, built from ISBAT_ERP_Finance (1).html — see note above the directory tree.
+│       │   # payment-console/page.tsx is the one exception: its Bank Name/Receipt Book dropdowns use
+│       │   # the real useBanks()/useReceiptBooks(); AdjustLedgerModal (modals/finance/) is toast-only, no endpoint
 │       ├── cooperates/page.tsx       ← useCooperates/useCreateCooperate/useUpdateCooperate/useDeleteCooperate
 │       ├── discounts/page.tsx        ← useDiscounts/useCreateDiscount/useUpdateDiscount/useDeleteDiscount (calcType/status int enums — see note below)
 │       ├── ledgers/page.tsx          ← useLedgers/useCreateLedger/useUpdateLedger/useDeleteLedger
@@ -240,7 +249,7 @@ src/
 │       │   │   # ProgrammeModal Edit mode now real: useProgramMasterFullDetails(programGuid) prefills all 3 steps (scalars, per-semester course units, fee structures), Currency prefilled from the list row's currencyGuid; submit calls useUpdateProgramMasterComplete() (apiPutForm .../update-complete); page.tsx's Delete action calls useDeleteProgramMasterComplete() (.../delete-complete)
 │       │   │   # ProgrammeLevelModal/EditProgrammeLevelModal source Currency from useFinanceCurrencies (currencyGuid), not useCurrencies (intCurrency) — see note below
 │       │   ├── FeeStructureModal.tsx / FeeItemModal.tsx    # standalone /academic/fee-structure page — real: per-semester accordion driven by useSemestersForProgram (real semesterGuid, not a fixed Sem 1-6 range), fee-item Currency/Ledger sourced from useFinanceCurrencies/useLedgers; bottom-right Save loops useSaveProgramFeeStructureComplete() once per structure (combined header+lines POST) — payload confirmed correct against SaveCompleteHeader.bru, but the dev backend currently 405s the route (Allow: GET) — see Data & API Architecture. Responsive layout (sidebar/grids/fee-item-row) uses dedicated `.fsm-*` classes in globals.css instead of inline pixel styles, so breakpoints can reach them
-│       │   ├── AddSkillModal.tsx (role-aware: lecturer vs dean — unrelated to skill/page.tsx)
+│       │   ├── AddSkillModal.tsx / EditLecturerSkillModal.tsx    # backs /academic/skill-master, real; fetch-by-guid Edit convention; Faculty Member picker can't be prefilled on Edit — see note above the directory tree; unrelated to skill/page.tsx's own New/EditSkillModal.tsx (still mock)
 │       │   └── AddSlotModal.tsx / TtImportModal.tsx / AllocImportModal.tsx / ConfirmMovementModal.tsx
 │       ├── finance/
 │       │   ├── New/EditCooperateModal.tsx
@@ -251,7 +260,8 @@ src/
 │       │   ├── New/EditGenSetModal.tsx             # real mutations, fetch-by-guid Edit convention
 │       │   ├── New/EditBankModal.tsx, New/EditBankBranchModal.tsx   # real mutations, fetch-by-guid Edit convention
 │       │   ├── New/EditProcGlAccountModal.tsx       # status/type converted label↔int at the mutation boundary
-│       │   └── New/EditProcBankModal.tsx            # Currency dropdown sourced from useFinanceCurrencies(), not useCurrencies()
+│       │   ├── New/EditProcBankModal.tsx            # Currency dropdown sourced from useFinanceCurrencies(), not useCurrencies()
+│       │   └── AdjustLedgerModal.tsx                 # backs /finance/ledger-adjustments; still mock — logs a toast only, no backing endpoint
 │       ├── employee/
 │       │   ├── NewEmployeeModal.tsx / EditEmployeeModal.tsx    # real mutations; Country dropdown sourced from useCountries()
 │       │   └── AssignEmployeePermissionsModal.tsx / EditEmployeePermissionsModal.tsx    # two separate entry points onto the same view-then-edit flow — pick one or more Permission Master groups via tabs (add/remove), preview each as an Accessible/Not-Accessible breakdown, save via the same PUT; share buildBreakdown() from lib/permissionBreakdown.ts. Kept as two components/buttons per product request even though they're functionally near-identical
@@ -284,7 +294,8 @@ src/
 │   │   ├── useRepetitionTags.ts / useCourseUnits.ts / useProgramMaster.ts   # real; back /academic/repetition-tag, /course-units, /programme-master (useProgramMaster.ts also exports useProgramMasters() the list query, useProgramMasterFullDetails(guid, enabled) for Edit prefill, useUpdateProgramMasterComplete(), useDeleteProgramMasterComplete())
 │   │   ├── useProgramFeeStructure.ts   # real; useSaveProgramFeeStructureComplete() — combined header+lines POST, backs /academic/fee-structure's Save button (see Data & API Architecture for the live 405 gotcha)
 │   │   ├── useBatches.ts       # real; backs /academic/batch-management; useBatches(pageNumber, pageSize), useBatch(guid, enabled), full CRUD
-│   │   └── useSemesters.ts     # real, GET-only; useSemestersForProgram(programGuid, enabled) — cascading Semester dropdown for Batch create/edit, batch-management's semester-name resolution, and FeeStructureModal's per-semester accordion
+│   │   ├── useSemesters.ts     # real, GET-only; useSemestersForProgram(programGuid, enabled) — cascading Semester dropdown for Batch create/edit, batch-management's semester-name resolution, and FeeStructureModal's per-semester accordion
+│   │   └── useLecturerSkills.ts # real; backs /academic/skill-master (lib file lives under lib/api/users/, not lib/api/academic/ — the REST resource is /api/v1/users/skills); useLecturerSkills(), useLecturerSkill(guid, enabled), full CRUD — NOT hooks/config/useSkills.ts (that one's mock, backs /config/skill)
 │   ├── finance/
 │   │   ├── useCooperates.ts / useDiscounts.ts / useLedgers.ts / useReceiptBooks.ts / useGenSets.ts / useBanks.ts /
 │   │   │   useBankBranches.ts / useProcGlAccounts.ts / useProcBanks.ts   (all real; useX(guid, enabled) convention for Edit modals except useReceiptBooks — no GetByGuid endpoint)
@@ -313,7 +324,7 @@ src/
         │   ├── batch.ts           # /api/v1/academic/batches; full CRUD real, but intProgram/intSem/intStream/batchTime/bInCharge are int-only FKs with no confirmed guid source anywhere — see Data & API Architecture
         │   ├── batchTime.ts       # /api/v1/academic/batchtimes; backs /config/batch-times (route lives in Config, code lives here); fully confirmed 2-field CRUD, no gotchas
         │   ├── semester.ts        # /api/v1/academic/semesters/dropdownforprogram; GET-only, {semesterGuid, semName} scoped to a programGuid — no numeric id exposed
-        │   └── skill.ts                                                                                              (still mock)
+        │   └── skill.ts                                                                                              (still mock; backs /config/skill — NOT /academic/skill-master, which is real and lives in lib/api/users/skills.ts instead)
         │   # currency.ts and ledger.ts used to live here — currency.ts moved to lib/api/finance/currencyMaster.ts,
         │   # ledger.ts was deleted outright (superseded by the real lib/api/finance/ledger.ts)
         ├── admission/             # per-domain data-access modules for Admission-domain masters/features routed under /config/* or /admission/*
@@ -341,6 +352,7 @@ src/
         │   └── employee.ts        # real; EmployeeListItem uses isApproved: boolean (not a status string). Also assignEmployeePermissionGroups/getEmployeePermissionGroups (PUT/GET /api/v1/users/admin/users/{employeeGuid}/permission-groups) — GET's real shape is an array of {permissionGroupGuid, groupName, description} objects (not bare guid strings as first assumed), mapped down to just the guids since names/descriptions are already available from Permission Master's own list
         └── users/
             ├── permissionCatalog.ts   # real; GET permission catalog for the wizard
+            ├── skills.ts              # real; backs /academic/skill-master (LecturerSkill: lecturerSkillGuid/intEmployee/skillName/proficiency/approvalStatus/approvedByIntUser/approvedDate); full CRUD via /api/v1/users/skills (+ /:guid) — GetByGuid/list only ever return intEmployee, never employeeGuid, despite Create/Update requiring a real employeeGuid — see note above the directory tree
             └── menu.ts                # getMenu() → GET /api/v1/users/me/menu; MenuNode/MenuPermissions types, mock full-nav tree, HARDCODED_EMPLOYEE_MODULE merge, MENU_API_DISABLED kill switch — see Sidebar & Navigation below
 ```
 
@@ -386,7 +398,7 @@ src/app/<module>/<domain>/page.tsx → thin: reads the hook, tracks which row is
 | `batchTime.ts` | Real | Backs `/config/batch-times`; `/api/v1/academic/batchtimes`; two plain fields (`batchTime` max 50 chars, `batchTimeCode` max 10 chars); full CRUD incl. delete; fully confirmed spec, no int-enum surprises — the reference implementation to copy for a genuinely clean new master |
 | `semester.ts` | Real, GET-only | `/api/v1/academic/semesters/dropdownforprogram?programGuid=`; `{semesterGuid, semName}[]` scoped to one programme; no numeric id exposed, no Semester Master page of its own — dropdown lookup only, used by Batch create/edit |
 | `batch.ts` | Real (full CRUD) | Backs `/academic/batch-management`; `/api/v1/academic/batches`. **Confirmed via a real GET response and the updated Create/Update schema: `programGuid`/`semesterGuid`/`streamGuid`/`batchTimeGuid` are now real guids**, resolving the old "legacy int FK with no guid source" gap for four of the five previously-unconfirmed fields — this replaces the earlier list-position-guessing workaround for those four; `NewBatchModal`/`EditBatchModal` now use plain guid dropdowns and the list table resolves Programme/Semester/Stream/Batch Time names via direct `.find()` lookups, no more reverse `list[intValue - 1]` guessing. `bInCharge` is the one field still unresolved — still a plain number with no confirmed guid or real int source anywhere (Employee only ever exposes `employeeGuid`) — kept as the option's 1-based list position, flagged in-UI via a warning banner. `Update` is now confirmed to take the **identical shape as Create — a full replace**, not the old narrower `intStream`/dates/`bInCharge`-only body. `GetByGuid` still doesn't return `bInCharge` at all (must be re-picked on every edit) and Batch has no `intake` field at all on read, so Intake also can't be prefilled on Edit. The page is fetched once at `pageSize=1000` and paginated/searched client-side (`usePagination` + a search box), replacing the old server-side pagination; dates are formatted "Date Month(name) Year" |
-| `skill.ts` | **Still mock-only** | |
+| `skill.ts` | **Still mock-only** | Backs `/config/skill` — NOT `/academic/skill-master`, which is real via `lib/api/users/skills.ts` (see the Users module table below) |
 
 `currency.ts` and `ledger.ts` used to live in this folder — both have since moved out: `currency.ts` relocated (as-is) to `lib/api/finance/currencyMaster.ts`, and the old mock-only `ledger.ts` was deleted outright now that Finance's real `lib/api/finance/ledger.ts` is the only ledger master.
 
@@ -441,6 +453,14 @@ When wiring a new domain's currency field, check whether it wants `intCurrency` 
 **Gotcha — a `405 Method Not Allowed` on a route that matches the `.bru` spec exactly means the backend hasn't deployed that verb yet, not a frontend contract bug:** hit once with `programFeeStructure.ts`'s `save-complete` endpoint — URL, JSON body, and every field name matched `SaveCompleteHeader.bru` exactly, yet the live dev backend 405'd. The response's `Allow` header (visible in the Network tab) is the tell — it lists which methods the route *does* accept (`Allow: GET` in that case), confirming the route exists server-side but only a `GET` handler is wired up. Don't "fix" this by guessing a different verb or reshaping the payload to match `GET` semantics — that would contradict the documented contract for no reason. Leave the frontend implementation matching the spec and flag it as a backend deployment gap.
 
 **Working pattern for these:** build the picker as a real dropdown sourced from the actual master (good UX, and the guid is genuinely useful for other purposes), but submit **that option's 1-based position in its fetched list** as the numeric value — clearly flagged in an in-UI warning banner and in code comments, never silently. The same heuristic is applied in reverse for read-side display (`list[intValue - 1]`) where a page wants to show a name instead of a raw number — reverse resolution is strictly a cosmetic best-effort guess, never used to decide what gets sent anywhere. Anything created or updated through one of these forms should be treated as **unverified** until the backend confirms the real int↔guid mapping; when that happens, the fix is contained to one mapping point per field, not a rewrite — this is exactly what happened with `batch.ts`'s `intProgram`/`intSem`/`intStream`/`batchTime` (see the Gotcha above): once the real guids surfaced, `batch-management`'s table switched from `list[intValue - 1]` reverse-guessing to direct `.find()` lookups, and only `bInCharge` still uses the position workaround.
+
+**Users module (`src/lib/api/users/*`):**
+
+| Domain | Status | Notes |
+|---|---|---|
+| `skills.ts` | Real | Backs `/academic/skill-master`'s lecturer-skill approval workflow — `LecturerSkill` (`lecturerSkillGuid`/`intEmployee`/`skillName`/`proficiency`/`approvalStatus`/`approvedByIntUser`/`approvedDate`); full CRUD via `/api/v1/users/skills` (+ `/:guid` for Get/Update/Delete). **List and GetByGuid only ever return `intEmployee`** (a raw int), never `employeeGuid` — but Create/Update both require a real `employeeGuid`, and `Employee`/`EmployeeListItem` expose no matching int to reverse it against. Same "int FK with no confirmed guid source" shape as `batch.ts`'s `bInCharge`: the table displays `Employee #<n>` raw, and Edit's Faculty Member picker starts blank and must be re-selected every time — flagged via an in-modal warning banner. `proficiency`'s int↔label mapping (1/2/3, seen in sample data) isn't documented anywhere — assumed ascending Familiar/Proficient/Expert, flagged as unconfirmed in code. No approve/reject endpoint exists, so the old Dean-approval UI (role switcher, Approve/Reject actions) was dropped rather than faked with a mutation that wouldn't persist |
+
+Genuinely different from `lib/api/academic/skill.ts` (still mock, backs `/config/skill`, a flat skill-name catalog with no employee/proficiency/approval concept at all) — see the note above the directory tree.
 
 ---
 
