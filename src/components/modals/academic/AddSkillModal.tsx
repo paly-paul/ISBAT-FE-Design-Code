@@ -2,40 +2,70 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
+import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import { useEmployees } from '@/hooks/employee/useEmployees'
+import { CreateLecturerSkillInput } from '@/lib/api/users/skills'
 
-const ALL_LECTURERS = [
-  'Dr. Ssekibuule Ronald (FCT)',
-  'Ms. Namutebi Joyce (FCT)',
-  'Dr. Kibira Moses (FCT)',
-  'Prof. Mukasa Charles (FBM)',
-  'Ms. Atim Grace (FBM)',
+// Ascending-competence reading of the wire's bare proficiency int (1/2/3
+// seen in sample data) — not confirmed against a spec, see the gotcha note
+// on LecturerSkill in lib/api/users/skills.ts.
+const PROFICIENCY_OPTIONS = [
+  { value: '1', label: 'Familiar' },
+  { value: '2', label: 'Proficient' },
+  { value: '3', label: 'Expert' },
 ]
 
 interface AddSkillModalProps extends ModalProps {
-  role?: 'lecturer' | 'dean'
-  currentUser?: { name: string; faculty: string }
+  createSkill: {
+    mutate: (input: CreateLecturerSkillInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
+    isPending: boolean
+  }
 }
 
-export function AddSkillModal({ isOpen, onClose, showToast, role = 'lecturer', currentUser }: AddSkillModalProps) {
-  const [saved, setSaved] = useState(false)
+export function AddSkillModal({ isOpen, onClose, showToast, createSkill }: AddSkillModalProps) {
+  const { data: employees = [] } = useEmployees()
+  const [saved, setSaved]           = useState(false)
+  const [failure, setFailure]       = useState<string | null>(null)
+  const [employeeGuid, setEmployeeGuid] = useState('')
+  const [skillName, setSkillName]   = useState('')
+  const [proficiency, setProficiency] = useState('1')
+  const [approved, setApproved]     = useState(true)
+  const [errors, setErrors]         = useState<Record<string, string>>({})
 
   if (!isOpen) return null
 
-  const isLecturer = role === 'lecturer'
-  const isDean     = role === 'dean'
+  const employeeOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
 
-  function handleClose() { setSaved(false); onClose() }
+  function handleClose() {
+    setSaved(false); setFailure(null)
+    setEmployeeGuid(''); setSkillName(''); setProficiency('1'); setApproved(true); setErrors({})
+    onClose()
+  }
+
+  function validate() {
+    const e: Record<string, string> = {}
+    if (!employeeGuid) e.employeeGuid = 'Faculty member is required'
+    if (!skillName.trim()) e.skillName = 'Skill / subject area is required'
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
 
   if (saved) {
     return (
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
-          <SuccessPopup
-            title="Skills Saved!"
-            subtitle={isDean ? 'Skills saved and automatically approved.' : 'Skills submitted and pending Dean approval.'}
-            onClose={handleClose}
-          />
+          <SuccessPopup title="Skill Saved!" subtitle="The skill has been added to the lecturer's profile." onClose={handleClose} />
+        </div>
+      </div>
+    )
+  }
+
+  if (failure) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup title="Couldn't Add Skill" subtitle={failure} onClose={() => setFailure(null)} />
         </div>
       </div>
     )
@@ -45,78 +75,61 @@ export function AddSkillModal({ isOpen, onClose, showToast, role = 'lecturer', c
     <div className="modal-overlay open" id="add-skill-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
-          <div className="modal-title"><i className="lni lni-bulb"></i> Add / Update Skills</div>
-          <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
+          <div className="modal-title"><i className="lni lni-bulb"></i> Add Skill</div>
+          <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
-        {/* Role context banner */}
-        {isLecturer && (
-          <div className="info-box mb-3" style={{ background: 'var(--b50)', borderColor: 'var(--b200)' }}>
-            <i className="lni lni-user" style={{ color: 'var(--b500)' }}></i>
-            <span>Adding skills as <strong>{currentUser?.name}</strong>. Skills will be submitted as <strong>Pending</strong> until approved by your Dean.</span>
-          </div>
-        )}
-        {isDean && (
-          <div className="info-box mb-3" style={{ background: 'var(--green-bg)', borderColor: 'var(--green-bd)' }}>
-            <i className="lni lni-checkmark" style={{ color: 'var(--green)' }}></i>
-            <span>Adding skills as <strong>Dean</strong>. Skills added on behalf of a lecturer are automatically set to <strong>Approved</strong>.</span>
-          </div>
-        )}
-
-        {/* Faculty Member field */}
         <div className="fg mb-3">
           <div className="lbl">Faculty Member <span className="req">*</span></div>
-          {isLecturer ? (
-            <input
-              className="ctrl"
-              type="text"
-              value={`${currentUser?.name} (${currentUser?.faculty})`}
-              disabled
-              style={{ background: 'var(--g100)', color: 'var(--g500)', cursor: 'not-allowed' }}
-            />
-          ) : (
-            <SearchSelect
-              placeholder="— Select lecturer —"
-              options={ALL_LECTURERS}
-            />
-          )}
-          {isLecturer && (
-            <div className="hint" style={{ marginTop: 4, fontSize: 11.5, color: 'var(--g400)' }}>
-              Locked to your account — you can only submit skills for yourself.
-            </div>
-          )}
+          <SearchSelect
+            placeholder="— Select faculty member —"
+            options={employeeOptions}
+            value={employeeGuid}
+            onChange={v => { setEmployeeGuid(v); if (errors.employeeGuid) setErrors(p => ({ ...p, employeeGuid: '' })) }}
+          />
+          {errors.employeeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.employeeGuid}</p>}
         </div>
 
-        <div className="sec-divider">Subject Expertise Areas</div>
-        <div className="flex flex-col gap-2 mb-[10px]">
-          <div className="flex gap-2 items-center">
-            <input className="ctrl flex-1" type="text" placeholder="Skill / Subject area (e.g. Data Structures)" />
-            <SearchSelect options={['Expert', 'Proficient', 'Familiar']} style={{ width: 130, flexShrink: 0 }} />
-            <button className="btn btn-danger btn-sm" style={{ flexShrink: 0, width: 36, padding: '0 0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><i className="lni lni-trash-can"></i></button>
+        <div className="sec-divider">Skill / Subject Area</div>
+        <div className="g2 mb-3">
+          <div className="fg span2">
+            <div className="lbl">Skill Name <span className="req">*</span></div>
+            <input
+              className="ctrl" type="text" placeholder="e.g. Data Structures"
+              value={skillName}
+              onChange={e => { setSkillName(e.target.value); if (errors.skillName) setErrors(p => ({ ...p, skillName: '' })) }}
+              style={errors.skillName ? { borderColor: 'var(--red)' } : undefined}
+            />
+            {errors.skillName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.skillName}</p>}
+          </div>
+          <div className="fg">
+            <div className="lbl">Proficiency</div>
+            <SearchSelect options={PROFICIENCY_OPTIONS} value={proficiency} onChange={setProficiency} />
           </div>
         </div>
-        <button className="btn btn-neu btn-sm mb-3"><i className="lni lni-plus"></i> Add Skill Row</button>
 
-        {/* Approval status preview */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
-          background: isDean ? 'var(--green-bg)' : 'var(--gold-bg)',
-          border: `1px solid ${isDean ? 'var(--green-bd)' : 'var(--gold-bd)'}`,
-          borderRadius: 'var(--rxs)', fontSize: 12, marginBottom: 14,
-        }}>
-          <i className={`lni ${isDean ? 'lni-checkmark' : 'lni-timer'}`}
-             style={{ color: isDean ? 'var(--green)' : 'var(--gold)' }}></i>
-          <span style={{ color: 'var(--g600)' }}>
-            {isDean
-              ? 'These skills will be saved as Approved immediately.'
-              : 'These skills will be saved as Pending — awaiting Dean approval.'}
-          </span>
-        </div>
+        <label className="flex items-center gap-[7px] cursor-pointer mb-3" style={{ fontSize: 13 }}>
+          <input type="checkbox" checked={approved} onChange={e => setApproved(e.target.checked)} />
+          <span>Mark as Approved (skip Pending review)</span>
+        </label>
 
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => setSaved(true)}>
-            <i className="lni lni-checkmark"></i> Save Skills
+          <button
+            className="btn btn-primary"
+            disabled={createSkill.isPending}
+            onClick={() => {
+              if (!validate()) return
+              createSkill.mutate(
+                { employeeGuid, skillName: skillName.trim(), proficiency: Number(proficiency), approved: approved ? 1 : 0 },
+                {
+                  onSuccess: () => { setSaved(true); showToast('Skill added successfully') },
+                  onError: (error: Error) => setFailure(error.message || 'Failed to add skill. Please try again.'),
+                },
+              )
+            }}
+          >
+            <i className="lni lni-checkmark"></i> {createSkill.isPending ? 'Saving…' : 'Save Skill'}
           </button>
         </div>
       </div>

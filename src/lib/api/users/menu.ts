@@ -97,6 +97,18 @@ const mockMenu: MenuNode[] = [
     ]),
   ]),
   module_('Finance', 'dollar', [
+    section('Payment Collection', [
+      leaf('Dashboard', 'dashboard', '/finance/dashboard'),
+      leaf('Payment Console', 'credit-cards', '/finance/payment-console'),
+      leaf('Payment History', 'bar-chart', '/finance/payment-history'),
+      leaf('Ledger Adjustments', 'lock', '/finance/ledger-adjustments'),
+      leaf('Exchange Rates', 'world', '/finance/exchange-rates'),
+      leaf('Advanced Payments', 'wallet', '/finance/advanced-payments'),
+    ]),
+    section('Reports & Statements', [
+      leaf('Financial Reports', 'bar-chart', '/finance/financial-reports'),
+      leaf('Student Statements', 'files', '/finance/student-statements'),
+    ]),
     section('Finance Core', [
       leaf('Cooperates', 'handshake', '/finance/cooperates'),
       leaf('Discounts', 'tag', '/finance/discounts'),

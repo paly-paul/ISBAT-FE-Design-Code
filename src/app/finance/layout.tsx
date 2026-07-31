@@ -13,7 +13,7 @@ export default function FinanceLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname()
   const router = useRouter()
 
-  const currentPage = pathname.split('/').pop() ?? 'cooperates'
+  const currentPage = pathname.split('/').pop() ?? 'dashboard'
 
   // Scroll to top on navigation — the sidebar panel is left as the user set
   // it (open/closed, collapsed sections) rather than being force-closed here.

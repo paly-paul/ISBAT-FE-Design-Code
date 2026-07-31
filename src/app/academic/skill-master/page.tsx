@@ -1,16 +1,47 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
-import { AddSkillModal } from '@/components/modals/academic/AddSkillModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
+import { AddSkillModal } from '@/components/modals/academic/AddSkillModal'
+import { EditLecturerSkillModal } from '@/components/modals/academic/EditLecturerSkillModal'
+import { useLecturerSkills, useCreateLecturerSkill, useUpdateLecturerSkill, useDeleteLecturerSkill, LecturerSkill } from '@/hooks/academic/useLecturerSkills'
 
 const PAGE_SIZE = 10
+
+// Assumed reading of the wire's bare proficiency int — see the gotcha note
+// on LecturerSkill in lib/api/users/skills.ts.
+const PROFICIENCY_LABELS: Record<number, string> = { 1: 'Familiar', 2: 'Proficient', 3: 'Expert' }
+
+function approvalBadge(status: string) {
+  if (status === 'Approved') return <span className="badge badge-green"><i className="lni lni-checkmark"></i> Approved</span>
+  if (status === 'Rejected') return <span className="badge badge-red"><i className="lni lni-close"></i> Rejected</span>
+  if (status === 'Pending')  return <span className="badge badge-amber"><i className="lni lni-timer"></i> Pending</span>
+  return <span className="badge badge-grey">{status}</span>
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Previous mock shape — kept for reference, not deleted. The old UI grouped
+   fictional per-lecturer rows (faculty, eligible subjects, current load,
+   check-ins, completion status) that have no equivalent in the real
+   GET /api/v1/users/skills response, which is a flat list of individual
+   skill entries keyed by a raw intEmployee with no name/faculty attached.
+   The lecturer/dean role switcher also relied on matching a mock "current
+   user" by name — there's no real endpoint here to resolve "who am I" against
+   an intEmployee, so that demo device was dropped along with it.
 
 type Role = 'lecturer' | 'dean'
 type ApprovalStatus = 'Approved' | 'Pending' | 'Rejected' | 'Details Requested'
@@ -35,57 +66,56 @@ const INITIAL_APPROVALS: Record<string, ApprovalStatus> = {
   'Prof. Mukasa Charles':  'Approved',
   'Ms. Atim Grace':        'Details Requested',
 }
+───────────────────────────────────────────────────────────────────────── */
 
 export default function Page() {
   const router = useRouter()
-  const [role, setRole]         = useState<Role>('lecturer')
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]       = useState<{ msg: string; type: string } | null>(null)
-  const [approvals, setApprovals] = useState<Record<string, ApprovalStatus>>(INITIAL_APPROVALS)
+  const [search, setSearch]     = useState('')
   const [filters, setFilters]   = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
-
-  const currentUser = MOCK_USERS[role]
+  const [editingSkillGuid, setEditingSkillGuid] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<LecturerSkill | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  function handleApproval(name: string, status: ApprovalStatus) {
-    setApprovals(prev => ({ ...prev, [name]: status }))
-    const messages: Record<ApprovalStatus, string> = {
-      'Approved':          `Skills approved for ${name}.`,
-      'Rejected':          `Skills rejected for ${name}.`,
-      'Details Requested': `Details requested from ${name}.`,
-      'Pending':           `${name} reset to Pending.`,
-    }
-    showToast(messages[status], status === 'Approved' ? 'success' : '')
+  const { data: skills = [], isLoading } = useLecturerSkills()
+  const createSkill = useCreateLecturerSkill()
+  const updateSkill = useUpdateLecturerSkill()
+  const deleteSkill  = useDeleteLecturerSkill()
+
+  function openEditModal(guid: string) {
+    setEditingSkillGuid(guid)
+    openModal('edit-lecturer-skill-modal')
   }
 
-  useEffect(() => {
-    function closeFilter(e: MouseEvent) {
-      const target = e.target as HTMLElement
-      if (!target.closest('th')) setOpenFilter(null)
-    }
-    document.addEventListener('click', closeFilter)
-    return () => document.removeEventListener('click', closeFilter)
-  }, [])
-
-  const visibleRows = BASE_ROWS.filter(r => {
-    if (role === 'lecturer') return r.name === currentUser.name
-    return r.faculty === currentUser.faculty
-  }).filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
-  )
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(visibleRows, PAGE_SIZE)
-
-  function approvalBadge(status: ApprovalStatus) {
-    if (status === 'Approved')          return <span className="badge badge-green"><i className="lni lni-checkmark"></i> Approved</span>
-    if (status === 'Rejected')          return <span className="badge badge-red"><i className="lni lni-close"></i> Rejected</span>
-    if (status === 'Details Requested') return <span className="badge badge-blue"><i className="lni lni-question-circle"></i> Details Requested</span>
-    return <span className="badge badge-amber"><i className="lni lni-timer"></i> Pending</span>
+  function confirmDeleteSkill() {
+    if (!deleteTarget) return
+    deleteSkill.mutate(deleteTarget.lecturerSkillGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Skill deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete skill', 'error'),
+    })
   }
+
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return skills
+      .filter(s => !q || s.skillName.toLowerCase().includes(q) || String(s.intEmployee).includes(q))
+      .filter(s => Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((s as unknown as Record<string, unknown>)[k]))))
+  }, [skills, search, filters])
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+
+  const stats = useMemo(() => ({
+    total: skills.length,
+    approved: skills.filter(s => s.approvalStatus === 'Approved').length,
+    pending: skills.filter(s => s.approvalStatus === 'Pending').length,
+    employees: new Set(skills.map(s => s.intEmployee)).size,
+  }), [skills])
 
   function fth(label: string, col: string, opts: string[]) {
     return (
@@ -107,145 +137,74 @@ export default function Page() {
       <div className="page active">
         <div className="pg-hdr">
           <div>
-            <div className="pg-title">Skill Management Master</div>
-            <div className="pg-sub">
-              {role === 'lecturer'
-                ? `Your personal skill profile · ${currentUser.name} · Pending Dean approval`
-                : `Dean view · ${currentUser.faculty} faculty · Manage and approve lecturer skills`}
-            </div>
+            <div className="pg-title">Lecturer Skill Management</div>
+            <div className="pg-sub">Employee skill profiles · Proficiency levels · Dean approval status</div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button className="btn btn-neu btn-sm" onClick={() => nav('allocation')}>→ Proceed to Allocation</button>
             <button className="btn btn-primary" onClick={() => openModal('add-skill-modal')}><i className="lni lni-plus"></i> Add Skill</button>
           </div>
         </div>
 
-        {/* Demo role switcher */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18,
-          padding: '10px 14px', background: 'var(--gold-bg)', border: '1.5px solid var(--gold-bd)',
-          borderRadius: 'var(--rsm)', fontSize: 12.5,
-        }}>
-          <i className="lni lni-eye" style={{ color: 'var(--gold)', fontSize: 15 }}></i>
-          <span style={{ color: 'var(--g600)', fontWeight: 600 }}>Demo — viewing as:</span>
-          <div className="tgl-group" style={{ gap: 4 }}>
-            <button className={`tgl-btn${role === 'lecturer' ? ' tgl-active' : ''}`} onClick={() => { setRole('lecturer'); setFilters({}) }}>
-              <i className="lni lni-user"></i> Lecturer · Ms. Namutebi Joyce
-            </button>
-            <button className={`tgl-btn${role === 'dean' ? ' tgl-active' : ''}`} onClick={() => { setRole('dean'); setFilters({}) }}>
-              <i className="lni lni-apartment"></i> Dean · Dr. Ssekibuule Ronald (FCT)
-            </button>
-          </div>
+        <div className="info-box mb-[18px]">
+          <i className="lni lni-information"></i>
+          <span>Employee is shown as a raw ID — the skills list only returns <code>intEmployee</code>, with no name or faculty attached and no confirmed way to resolve it against the real Employee master.</span>
         </div>
 
-        {role === 'lecturer' && (
-          <div className="warn-box mb-[18px]">
-            <i className="lni lni-information"></i>
-            <span>You are viewing your own skill profile. Skills you submit will have <strong>Pending</strong> status until approved by your Dean. You can only see and edit your own skills.</span>
-          </div>
-        )}
-        {role === 'dean' && (
-          <div className="warn-box mb-[18px]">
-            <i className="lni lni-warning"></i>
-            <span><strong>Dean View:</strong> You can approve, reject, or request details for skills submitted by lecturers in your faculty. Skills you add on behalf of a lecturer are automatically <strong>Approved</strong>.</span>
-          </div>
-        )}
-
         <div className="g4 mb-[18px]">
-          <div className="stat-card"><div className="stat-lbl">Total Faculty</div><div className="stat-num">28</div><div className="stat-sub up">Teaching this intake</div></div>
-          <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Skills Approved</div><div className="stat-num text-clr-green">24</div><div className="stat-sub up">Ready for allocation</div></div>
-          <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]"><div className="stat-lbl">Pending Approval</div><div className="stat-num text-clr-amber">4</div><div className="stat-sub warn">Awaiting Dean review</div></div>
-          <div className="stat-card [--b700:var(--purple)] [--b400:#a78bfa]"><div className="stat-lbl">Total Skills Logged</div><div className="stat-num text-clr-purple">142</div><div className="stat-sub up">Across all faculty</div></div>
+          <div className="stat-card"><div className="stat-lbl">Total Skills Logged</div><div className="stat-num">{stats.total}</div><div className="stat-sub up">Across all employees</div></div>
+          <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Approved</div><div className="stat-num text-green">{stats.approved}</div><div className="stat-sub up">Ready for allocation</div></div>
+          <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]"><div className="stat-lbl">Pending Approval</div><div className="stat-num text-amber">{stats.pending}</div><div className="stat-sub warn">Awaiting Dean review</div></div>
+          <div className="stat-card [--b700:var(--purple)] [--b400:#a78bfa]"><div className="stat-lbl">Employees</div><div className="stat-num text-clr-purple">{stats.employees}</div><div className="stat-sub">With skills logged</div></div>
         </div>
 
         <div className="card">
           <div className="card-hdr">
-            <div className="card-title">
-              <span className="ctitle-icon"><i className="lni lni-bulb"></i></span>
-              {role === 'lecturer' ? 'My Skill Profile' : 'Faculty Skill Register'}
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-bulb"></i></span> Lecturer Skills</div>
+            <div className="relative">
+              <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm"></i>
+              <input className="ctrl pl-8" style={{ width: 220 }} placeholder="Search skill or employee ID…" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            {role === 'dean' && (
-              <div className="flex gap-2">
-                <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Faculty</option><option>FCT</option><option>FBM</option><option>FEN</option></select>
-                <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Statuses</option><option>Approved</option><option>Pending</option><option>Rejected</option><option>Details Requested</option></select>
-                <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
-              </div>
-            )}
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead>
                 <tr>
-                  {role === 'dean' && <th>Approval Actions</th>}
                   <th style={{ width: 48 }}></th>
-                  {role === 'dean' && <th>Faculty Name</th>}
-                  {role === 'dean' && fth('Faculty', 'faculty', ['FCT', 'FBM'])}
-                  <th>Skills / Subject Areas</th>
-                  <th>Eligible Subjects</th>
-                  <th>Current Load</th>
-                  <th>Check-ins</th>
-                  <th>Approval Status</th>
-                  {fth('Completion', 'completeStatus', ['Complete', 'Incomplete', 'Partial'])}
+                  <th>Employee</th>
+                  <th>Skill Name</th>
+                  <th>Proficiency</th>
+                  {fth('Approval Status', 'approvalStatus', ['Approved', 'Pending', 'Rejected'])}
+                  <th>Approved By</th>
+                  <th>Approved Date</th>
                 </tr>
               </thead>
               <tbody>
-                {visibleRows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
-                  : null}
-                {pageItems.map((r, i) => {
-                  const approval = approvals[r.name] ?? 'Pending'
-                  return (
-                    <tr key={i} className={approval === 'Rejected' ? 'flagged' : r.completeStatus === 'Incomplete' ? 'flagged' : ''}>
-                      {role === 'dean' && (
-                        <td>
-                          <div className="flex gap-1 flex-wrap">
-                            {approval !== 'Approved' && (
-                              <button className="btn btn-sm" style={{ background: 'var(--green-bg)', color: 'var(--green)', border: '1px solid var(--green-bd)', fontSize: 11 }}
-                                onClick={() => handleApproval(r.name, 'Approved')}>
-                                <i className="lni lni-checkmark"></i> Approve
-                              </button>
-                            )}
-                            {approval !== 'Rejected' && (
-                              <button className="btn btn-sm" style={{ background: 'var(--red-bg)', color: 'var(--red)', border: '1px solid var(--red-bd)', fontSize: 11 }}
-                                onClick={() => handleApproval(r.name, 'Rejected')}>
-                                <i className="lni lni-close"></i> Reject
-                              </button>
-                            )}
-                            {approval !== 'Details Requested' && (
-                              <button className="btn btn-neu btn-sm" style={{ fontSize: 11 }}
-                                onClick={() => handleApproval(r.name, 'Details Requested')}>
-                                <i className="lni lni-question-circle"></i> Ask for Details
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      )}
-                      <td>
-                        <ActionMenu>
-                          {r.completeStatus === 'Complete'   && <button className="btn btn-neu btn-sm" onClick={() => openModal('skill-edit-modal')}><i className="lni lni-pencil"></i> {role === 'dean' ? 'Edit' : 'Edit Skills'}</button>}
-                          {r.completeStatus === 'Incomplete' && <button className="btn btn-amber btn-sm" onClick={() => openModal('add-skill-modal')}>Add Skills →</button>}
-                          {r.completeStatus === 'Partial'    && <button className="btn btn-amber btn-sm" onClick={() => openModal('skill-edit-modal')}>Update Skills →</button>}
-                        </ActionMenu>
-                      </td>
-                      {role === 'dean' && <td><strong>{r.name}</strong></td>}
-                      {role === 'dean' && <td>{r.faculty}</td>}
-                      <td>
-                        {r.skills.length === 0
-                          ? <span className="text-muted">— No skills entered —</span>
-                          : <div className="flex gap-1 flex-wrap">{r.skills.map(s => <span key={s} className="pill pill-blue">{s}</span>)}</div>}
-                      </td>
-                      <td>{r.eligible}</td>
-                      <td><span className={`badge ${r.loadBadge}`}>{r.load}</span></td>
-                      <td>{r.checkins}</td>
-                      <td>{approvalBadge(approval)}</td>
-                      <td>
-                        {r.completeStatus === 'Complete'   && <span className="badge badge-green"><i className="lni lni-checkmark"></i> Complete</span>}
-                        {r.completeStatus === 'Incomplete' && <span className="badge badge-red"><i className="lni lni-close"></i> Incomplete</span>}
-                        {r.completeStatus === 'Partial'    && <span className="badge badge-amber"><i className="lni lni-warning"></i> Partial</span>}
-                      </td>
-                    </tr>
-                  )
-                })}
+                {isLoading
+                  ? <TableLoadingState colSpan={999} />
+                  : filteredRows.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={!!search || Object.values(filters).some(v => v.length > 0)} onClearFilters={() => { setSearch(''); setFilters({}) }} />
+                    : null}
+                {pageItems.map(s => (
+                  <tr key={s.lecturerSkillGuid}>
+                    <td>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(s.lecturerSkillGuid)}>
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>
+                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(s)}>
+                          <i className="lni lni-trash-can"></i> Delete
+                        </button>
+                      </ActionMenu>
+                    </td>
+                    <td className="font-mono text-blue">Employee #{s.intEmployee}</td>
+                    <td><strong>{s.skillName || <span className="text-muted">— Unnamed —</span>}</strong></td>
+                    <td><span className="pill pill-blue">{PROFICIENCY_LABELS[s.proficiency] ?? `Level ${s.proficiency}`}</span></td>
+                    <td>{approvalBadge(s.approvalStatus)}</td>
+                    <td className="text-muted">{s.approvedByIntUser ?? '—'}</td>
+                    <td className="text-muted">{formatDate(s.approvedDate)}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </ScrollTable>
@@ -257,17 +216,34 @@ export default function Page() {
         isOpen={openModals.has('add-skill-modal')}
         onClose={() => closeModal('add-skill-modal')}
         showToast={showToast}
-        role={role}
-        currentUser={currentUser}
+        createSkill={createSkill}
       />
-      <AddSkillModal
-        isOpen={openModals.has('skill-edit-modal')}
-        onClose={() => closeModal('skill-edit-modal')}
+      <EditLecturerSkillModal
+        isOpen={openModals.has('edit-lecturer-skill-modal')}
+        onClose={() => closeModal('edit-lecturer-skill-modal')}
         showToast={showToast}
-        role={role}
-        currentUser={currentUser}
+        lecturerSkillGuid={editingSkillGuid}
+        updateSkill={updateSkill}
       />
       <Toast toast={toast} />
+
+      {deleteTarget && (
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
+            <div className="perm-delete-title">Delete &quot;{deleteTarget.skillName || 'this skill'}&quot;?</div>
+            <div className="perm-delete-sub">
+              This will permanently delete this skill entry. This can&apos;t be undone.
+            </div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" disabled={deleteSkill.isPending} onClick={confirmDeleteSkill}>
+                <i className="lni lni-trash-can"></i> {deleteSkill.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
