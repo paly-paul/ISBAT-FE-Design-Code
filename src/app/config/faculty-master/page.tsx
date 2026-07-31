@@ -13,11 +13,13 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { useFaculties, useCreateFaculty, useUpdateFaculty, useDeleteFaculty, Faculty } from '@/hooks/config/useFaculties'
 import { useEmployees } from '@/hooks/employee/useEmployees'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
@@ -103,7 +105,7 @@ export default function Page() {
       <div className="page active">
         <div className="pg-hdr">
           <div><div className="pg-title">Faculty Master</div><div className="pg-sub">Define university faculties · Associate programmes and course units</div></div>
-          <button className="btn btn-primary" onClick={() => openModal('new-faculty-modal')}><i className="lni lni-plus"></i> Add Faculty</button>
+          {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-faculty-modal')}><i className="lni lni-plus"></i> Add Faculty</button>}
         </div>
         <div className="card">
           <div className="card-hdr"><div className="card-title"><span className="ctitle-icon"><i className="lni lni-library"></i></span> Faculties</div></div>
@@ -133,10 +135,12 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.facultyGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}><i className="lni lni-pencil"></i> Edit</button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}><i className="lni lni-pencil"></i> Edit</button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono">{r.facultyCode}</td>
                     <td><strong>{r.facultyName}</strong></td>

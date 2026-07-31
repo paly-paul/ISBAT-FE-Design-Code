@@ -4,10 +4,10 @@ import { createPortal } from 'react-dom'
 
 type Opt = { value: string; label: string }
 
-interface SearchSelectProps {
+interface MultiSelectProps {
   options: (string | Opt)[]
-  value?: string
-  onChange?: (val: string) => void
+  value: string[]
+  onChange: (vals: string[]) => void
   placeholder?: string
   className?: string
   style?: React.CSSProperties
@@ -17,20 +17,14 @@ function normalise(raw: (string | Opt)[]): Opt[] {
   return raw.map(o => (typeof o === 'string' ? { value: o, label: o } : o))
 }
 
-export function SearchSelect({
-  options,
-  value,
-  onChange,
-  placeholder,
-  className,
-  style,
-}: SearchSelectProps) {
+// Checkbox-driven sibling of SearchSelect — same trigger/portal-dropdown
+// chrome (reuses .ss-trigger/.ss-drop/.ss-search/.ss-opts), but the option
+// list is the checkbox pattern already used by FilterTh's column filters
+// (.col-filter-select-all/.col-filter-opt-row), since that's the only
+// multi-pick UI this app already has a shared, correct behavior for.
+export function MultiSelect({ options, value, onChange, placeholder, className, style }: MultiSelectProps) {
   const normalised = normalise(options)
 
-  const controlled = value !== undefined
-  const [internal, setInternal] = useState<string>(() =>
-    placeholder !== undefined ? '' : (normalised[0]?.value ?? '')
-  )
   const [open, setOpen]     = useState(false)
   const [search, setSearch] = useState('')
   const [pos, setPos]       = useState({ top: 0, left: 0, width: 0 })
@@ -39,12 +33,13 @@ export function SearchSelect({
   const dropRef    = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLInputElement>(null)
 
-  const current  = controlled ? value! : internal
-  const selected = normalised.find(o => o.value === current)
+  const selected = normalised.filter(o => value.includes(o.value))
 
   const visible = search.trim()
     ? normalised.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
     : normalised
+
+  const allVisibleChecked = visible.length > 0 && visible.every(o => value.includes(o.value))
 
   function openDrop() {
     if (triggerRef.current) {
@@ -86,25 +81,21 @@ export function SearchSelect({
     }
   }, [open])
 
-  function select(val: string) {
-    if (controlled) onChange?.(val)
-    else setInternal(val)
-    setOpen(false)
+  function toggleOne(val: string) {
+    onChange(value.includes(val) ? value.filter(v => v !== val) : [...value, val])
   }
 
-  function clear() {
-    if (controlled) onChange?.('')
-    else setInternal('')
-    setOpen(false)
+  function toggleAll() {
+    if (allVisibleChecked) onChange(value.filter(v => !visible.some(o => o.value === v)))
+    else onChange([...new Set([...value, ...visible.map(o => o.value)])])
   }
 
-  const displayLabel = selected?.label ?? placeholder ?? (normalised[0]?.label ?? '')
-  const isEmpty      = !selected && placeholder !== undefined
-  // Only a field built with a placeholder has a real "unselected" state to
-  // clear back to — an uncontrolled select with no placeholder always
-  // defaults to its first option (see `internal`'s initial state above), so
-  // clearing it would have nowhere meaningful to land.
-  const clearable = !!selected && placeholder !== undefined
+  const isEmpty      = selected.length === 0
+  const displayLabel = isEmpty
+    ? (placeholder ?? '')
+    : selected.length === 1
+      ? selected[0].label
+      : `${selected.length} selected`
 
   return (
     <div style={{ position: 'relative', ...style }} className={className}>
@@ -115,16 +106,16 @@ export function SearchSelect({
         onClick={() => (open ? setOpen(false) : openDrop())}
       >
         <span className={`ss-label${isEmpty ? ' ss-placeholder' : ''}`}>{displayLabel}</span>
-        {clearable && (
+        {!isEmpty && (
           <span
             role="button"
             tabIndex={0}
             className="ss-clear"
-            title="Clear selection"
-            aria-label="Clear selection"
-            onClick={e => { e.stopPropagation(); clear() }}
+            title="Clear all"
+            aria-label="Clear all"
+            onClick={e => { e.stopPropagation(); onChange([]) }}
             onKeyDown={e => {
-              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); clear() }
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onChange([]) }
             }}
           >
             <i className="lni lni-close" />
@@ -154,17 +145,23 @@ export function SearchSelect({
               onClick={e => e.stopPropagation()}
             />
           </div>
+          {visible.length > 0 && (
+            <label className="col-filter-select-all">
+              <input type="checkbox" checked={allVisibleChecked} onChange={toggleAll} />
+              Select All
+            </label>
+          )}
           <div className="ss-opts">
             {visible.length === 0
               ? <div className="ss-no-match">No matches</div>
               : visible.map(o => (
-                  <div
+                  <label
                     key={o.value}
-                    className={`col-filter-opt${current === o.value ? ' fil-active' : ''}`}
-                    onClick={() => select(o.value)}
+                    className={`col-filter-opt-row${value.includes(o.value) ? ' fil-active' : ''}`}
                   >
+                    <input type="checkbox" checked={value.includes(o.value)} onChange={() => toggleOne(o.value)} />
                     {o.label}
-                  </div>
+                  </label>
                 ))
             }
           </div>

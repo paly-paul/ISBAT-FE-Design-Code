@@ -13,11 +13,13 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { useCreateProgramGroup, useDeleteProgramGroup, useProgramGroups, useUpdateProgramGroup, ProgramGroup } from '@/hooks/academic/useProgramGroups'
 import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
@@ -83,7 +85,7 @@ export default function Page() {
       <div className="page active">
         <div className="pg-hdr">
           <div><div className="pg-title">Programme Group Master</div><div className="pg-sub">Generic programme names for reporting · Groups all curriculum versions under one umbrella</div></div>
-          <button className="btn btn-primary" onClick={() => openModal('new-proggroup-modal')}><i className="lni lni-plus"></i> Add Programme Group</button>
+          {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-proggroup-modal')}><i className="lni lni-plus"></i> Add Programme Group</button>}
         </div>
 
         <div className="info-box mb-[18px]">
@@ -120,14 +122,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.programGroupGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.programGroupGuid)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                          <i className="lni lni-trash-can"></i> Delete
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.programGroupGuid)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                            <i className="lni lni-trash-can"></i> Delete
+                          </button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono text-b700">{r.groupCode}</td>
                     <td><strong>{r.groupName}</strong></td>

@@ -14,6 +14,7 @@ import { useBatches, useCreateBatch, useUpdateBatch, useDeleteBatch, Batch } fro
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useStreams } from '@/hooks/config/useStreams'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { getSemestersForProgram } from '@/lib/api/academic/semester'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -35,6 +36,7 @@ const PAGE_SIZE = 20
 const BATCHES_LOAD_SIZE = 1000
 
 export default function Page() {
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [search, setSearch] = useState('')
@@ -127,7 +129,7 @@ export default function Page() {
               <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm"></i>
               <input className="ctrl pl-8 w-56" placeholder="Search by batch code…" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <button className="btn btn-primary" onClick={() => openModal('new-batch-modal')}><i className="lni lni-plus"></i> Create Batch</button>
+            {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-batch-modal')}><i className="lni lni-plus"></i> Create Batch</button>}
           </div>
         </div>
 
@@ -151,7 +153,7 @@ export default function Page() {
                   <th>Batch Code</th>
                   <th>Programme</th>
                   <th>Semester</th>
-                  <th>Stream</th>
+                  <th>Specialization</th>
                   <th>Batch Time</th>
                   <th>Start Date</th>
                   <th>End Date</th>
@@ -167,10 +169,12 @@ export default function Page() {
                 {pageItems.map(r => (
                   <tr key={r.batchGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.batchGuid)}><i className="lni lni-pencil"></i> Edit</button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.batchGuid)}><i className="lni lni-pencil"></i> Edit</button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td><span className="font-bold font-mono text-blue">{r.batchCode}</span></td>
                     <td>{programName(r.programGuid)}</td>

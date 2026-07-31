@@ -13,11 +13,13 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { useCourseUnits, useCreateCourseUnit, useUpdateCourseUnit, useDeleteCourseUnit, CourseUnit } from '@/hooks/academic/useCourseUnits'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
@@ -142,7 +144,7 @@ export default function Page() {
               <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm"></i>
               <input className="ctrl pl-8 w-56" placeholder="Search by code or name…" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <button className="btn btn-primary" onClick={() => openModal('cu-new-modal')}><i className="lni lni-plus"></i> Add Course Unit</button>
+            {permissions.add && <button className="btn btn-primary" onClick={() => openModal('cu-new-modal')}><i className="lni lni-plus"></i> Add Course Unit</button>}
           </div>
         </div>
         <div className="g2 mb-[14px]">
@@ -204,10 +206,12 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.courseUnitGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.courseUnitGuid)}><i className="lni lni-pencil"></i> Edit</button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.courseUnitGuid)}><i className="lni lni-pencil"></i> Edit</button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
+                        </ActionMenu>
+                      )}
                       {/* Elective/syllabus-missing action variants — drove off mock-only
                           fields (variant, syllabusOk) with no real equivalent yet.
                       {r.variant === 'elective' && (

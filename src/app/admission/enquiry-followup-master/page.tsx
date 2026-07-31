@@ -12,6 +12,7 @@ import { useEnquiryFollowUps, useCreateEnquiryFollowUp } from '@/hooks/admission
 import { useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { usePagination } from '@/hooks/usePagination'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 // Fetched once at a size large enough to cover the whole list (917 rows in
@@ -27,6 +28,7 @@ function nameBadge(name: string | null, cls: string) {
 
 export default function EnquiryFollowupMasterPage() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
@@ -73,7 +75,7 @@ export default function EnquiryFollowupMasterPage() {
         </div>
         <div className="flex gap-2">
           <button className="btn btn-ghost" onClick={() => router.push('/admission/enquiry-list')}><i className="lni lni-arrow-left" /> Back</button>
-          <button className="btn btn-primary" onClick={() => openModal('new-followup-log-modal')}><i className="lni lni-plus" /> Add Follow-up</button>
+          {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-followup-log-modal')}><i className="lni lni-plus" /> Add Follow-up</button>}
         </div>
       </div>
 
@@ -110,7 +112,7 @@ export default function EnquiryFollowupMasterPage() {
                   <td>
                     <ActionMenu>
                       <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/payment')}><i className="lni lni-arrow-right" /> Convert</button>
-                      <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.enquiryGuid)}><i className="lni lni-eye" /> View</button>
+                      {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.enquiryGuid)}><i className="lni lni-eye" /> View</button>}
                     </ActionMenu>
                   </td>
                   <td className="font-mono text-sm">{r.enquiryCode}</td>

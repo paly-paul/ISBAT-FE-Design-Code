@@ -11,11 +11,13 @@ import { usePagination } from '@/hooks/usePagination'
 import { NewBatchTimeModal } from '@/components/modals/academic/NewBatchTimeModal'
 import { EditBatchTimeModal } from '@/components/modals/academic/EditBatchTimeModal'
 import { useBatchTimes, useCreateBatchTime, useUpdateBatchTime, useDeleteBatchTime, BatchTime } from '@/hooks/config/useBatchTimes'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingBatchTimeGuid, setEditingBatchTimeGuid] = useState<string | null>(null)
@@ -54,9 +56,11 @@ export default function Page() {
             <div className="pg-title">Batch Time Master</div>
             <div className="pg-sub">Manage the named study sessions/shifts used across scheduling and timetables</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-batch-time-modal')}>
-            <i className="lni lni-plus"></i> Add Batch Time
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-batch-time-modal')}>
+              <i className="lni lni-plus"></i> Add Batch Time
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -80,14 +84,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.batchTimeGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.batchTimeGuid)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                          <i className="lni lni-trash-can"></i> Delete
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.batchTimeGuid)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                            <i className="lni lni-trash-can"></i> Delete
+                          </button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono font-bold uppercase">{r.batchTimeCode}</td>
                     <td><strong>{r.batchTime}</strong></td>

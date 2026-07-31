@@ -11,11 +11,13 @@ import { usePagination } from '@/hooks/usePagination'
 import { NewSkillModal } from '@/components/modals/academic/NewSkillModal'
 import { EditSkillModal } from '@/components/modals/academic/EditSkillModal'
 import { useSkills, useCreateSkill, useUpdateSkill, Skill } from '@/hooks/config/useSkills'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingSkill, setEditingSkill] = useState<Skill | null>(null)
@@ -44,9 +46,11 @@ export default function Page() {
             <div className="pg-title">Skill Master</div>
             <div className="pg-sub">Define skills and subject areas for lecturer profiles</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-skill-modal')}>
-            <i className="lni lni-plus"></i> Add Skill
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-skill-modal')}>
+              <i className="lni lni-plus"></i> Add Skill
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -69,11 +73,13 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.id}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                      </ActionMenu>
+                      {permissions.edit && (
+                        <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>
+                        </ActionMenu>
+                      )}
                     </td>
                     <td><strong>{r.skillName}</strong></td>
                   </tr>

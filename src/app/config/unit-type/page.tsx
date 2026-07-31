@@ -10,10 +10,12 @@ import { usePagination } from '@/hooks/usePagination'
 import { NewUnitTypeModal } from '@/components/modals/academic/NewUnitTypeModal'
 import { EditUnitTypeModal } from '@/components/modals/academic/EditUnitTypeModal'
 import { useUnitTypes, useCreateUnitType, useUpdateUnitType, useDeleteUnitType, UnitType } from '@/hooks/config/useUnitTypes'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingUnitTypeGuid, setEditingUnitTypeGuid] = useState<string | null>(null)
@@ -51,9 +53,11 @@ export default function Page() {
             <div className="pg-title">Unit Type Master</div>
             <div className="pg-sub">Manage the unit types used when allocating course units to a programme</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-unit-type-modal')}>
-            <i className="lni lni-plus"></i> Add Unit Type
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-unit-type-modal')}>
+              <i className="lni lni-plus"></i> Add Unit Type
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -76,14 +80,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.unitTypeGuid}>
                     <td>
+                      {(permissions.edit || permissions.delete) && (
                       <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.unitTypeGuid)}>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.unitTypeGuid)}>
                           <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                        </button>}
+                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
                           <i className="lni lni-trash-can"></i> Delete
-                        </button>
+                        </button>}
                       </ActionMenu>
+                      )}
                     </td>
                     <td><strong>{r.unitTypeName}</strong></td>
                   </tr>

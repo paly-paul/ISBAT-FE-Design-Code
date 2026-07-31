@@ -90,13 +90,23 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
   const menu = data?.menu
   const isFallback = data?.isFallback ?? false
 
-  // Warm every permitted route once the menu loads, so navigation is instant
-  // regardless of which rail the user switches to first. Unlike the old
-  // hardcoded id lists, this only prefetches routes the user can actually see.
+  // Warm the active module's routes so switching pages within it is instant.
+  // Deliberately scoped to just activeRail, not the whole menu — prefetching
+  // every module on every login used to fire router.prefetch() for 60+ routes
+  // in one burst. That's a no-op in `next dev` (prefetch is suppressed there),
+  // which is why it looked fine locally, but a production build actually
+  // issues each prefetch as a real request, and that burst was enough to trip
+  // a rate/concurrency limit on Vercel. Re-runs (and re-warms) whenever the
+  // user switches rails, staggered slightly so even one module's routes don't
+  // all fire on the same tick.
   useEffect(() => {
     if (!menu) return
-    collectUrls(menu, RAIL_DEFS).forEach(url => router.prefetch(url))
-  }, [menu, router])
+    const activeModule = menu.find(m => RAIL_DEFS.find(d => d.id === activeRail)?.name === m.name)
+    if (!activeModule) return
+    const urls = collectUrls([activeModule], RAIL_DEFS)
+    const timers = urls.map((url, i) => setTimeout(() => router.prefetch(url), i * 40))
+    return () => timers.forEach(clearTimeout)
+  }, [menu, activeRail, router])
 
   const moduleByName = useMemo(() => {
     const map = new Map<string, MenuNode>()

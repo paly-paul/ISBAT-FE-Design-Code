@@ -11,11 +11,13 @@ import { usePagination } from '@/hooks/usePagination'
 import { NewStreamModal } from '@/components/modals/academic/NewStreamModal'
 import { EditStreamModal } from '@/components/modals/academic/EditStreamModal'
 import { useStreams, useCreateStream, useUpdateStream, useDeleteStream, Stream } from '@/hooks/config/useStreams'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingStreamGuid, setEditingStreamGuid] = useState<string | null>(null)
@@ -54,9 +56,11 @@ export default function Page() {
             <div className="pg-title">Specialization Master</div>
             <div className="pg-sub">Manage academic specialization streams</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-stream-modal')}>
-            <i className="lni lni-plus"></i> Add Stream
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-stream-modal')}>
+              <i className="lni lni-plus"></i> Add Stream
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -80,14 +84,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.streamGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.streamGuid)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                          <i className="lni lni-trash-can"></i> Delete
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.streamGuid)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                            <i className="lni lni-trash-can"></i> Delete
+                          </button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono font-bold">{r.streamCode}</td>
                     <td><strong>{r.streamName}</strong></td>

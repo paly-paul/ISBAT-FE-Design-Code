@@ -12,11 +12,13 @@ import { NewReceiptBookModal } from '@/components/modals/finance/NewReceiptBookM
 import { EditReceiptBookModal } from '@/components/modals/finance/EditReceiptBookModal'
 import { useReceiptBooks, useCreateReceiptBook, useUpdateReceiptBook, useDeleteReceiptBook, ReceiptBook } from '@/hooks/finance/useReceiptBooks'
 import { STATUS_LABELS, CATEGORY_LABELS, BOOK_CATEGORY_LABELS } from '@/lib/api/finance/receiptBook'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingBook, setEditingBook] = useState<ReceiptBook | null>(null)
@@ -55,9 +57,11 @@ export default function Page() {
             <div className="pg-title">Receipt Book Master</div>
             <div className="pg-sub">Manage numbered receipt books used for cash, bank, and online payments</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-receipt-book-modal')}>
-            <i className="lni lni-plus"></i> Add Receipt Book
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-receipt-book-modal')}>
+              <i className="lni lni-plus"></i> Add Receipt Book
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -88,14 +92,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.receiptBookGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                          <i className="lni lni-trash-can"></i> Delete
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                            <i className="lni lni-trash-can"></i> Delete
+                          </button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono font-bold uppercase">{r.bookCode}</td>
                     <td className="font-mono uppercase">{r.prefix || <span className="text-g400">—</span>}</td>

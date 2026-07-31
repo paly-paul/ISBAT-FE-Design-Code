@@ -11,11 +11,13 @@ import { usePagination } from '@/hooks/usePagination'
 import { NewInterestLevelModal } from '@/components/modals/academic/NewInterestLevelModal'
 import { EditInterestLevelModal } from '@/components/modals/academic/EditInterestLevelModal'
 import { useInterestLevels, useCreateInterestLevel, useUpdateInterestLevel, useDeleteInterestLevel, InterestLevel } from '@/hooks/admission/useInterestLevels'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingLevelGuid, setEditingLevelGuid] = useState<string | null>(null)
@@ -54,9 +56,11 @@ export default function Page() {
             <div className="pg-title">Interest Level Master</div>
             <div className="pg-sub">Manage the levels used to rate an applicant's interest during admissions</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-interest-level-modal')}>
-            <i className="lni lni-plus"></i> Add Interest Level
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-interest-level-modal')}>
+              <i className="lni lni-plus"></i> Add Interest Level
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -79,14 +83,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.interestLevelGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.interestLevelGuid)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                          <i className="lni lni-trash-can"></i> Delete
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.interestLevelGuid)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                            <i className="lni lni-trash-can"></i> Delete
+                          </button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td><strong>{r.interestLevelName}</strong></td>
                   </tr>

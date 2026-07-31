@@ -12,6 +12,7 @@ import { usePagination } from '@/hooks/usePagination'
 import { AddSkillModal } from '@/components/modals/academic/AddSkillModal'
 import { EditLecturerSkillModal } from '@/components/modals/academic/EditLecturerSkillModal'
 import { useLecturerSkills, useCreateLecturerSkill, useUpdateLecturerSkill, useDeleteLecturerSkill, LecturerSkill } from '@/hooks/academic/useLecturerSkills'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
@@ -70,6 +71,7 @@ const INITIAL_APPROVALS: Record<string, ApprovalStatus> = {
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]       = useState<{ msg: string; type: string } | null>(null)
   const [search, setSearch]     = useState('')
@@ -142,7 +144,7 @@ export default function Page() {
           </div>
           <div className="flex gap-2 flex-wrap">
             <button className="btn btn-neu btn-sm" onClick={() => nav('allocation')}>→ Proceed to Allocation</button>
-            <button className="btn btn-primary" onClick={() => openModal('add-skill-modal')}><i className="lni lni-plus"></i> Add Skill</button>
+            {permissions.add && <button className="btn btn-primary" onClick={() => openModal('add-skill-modal')}><i className="lni lni-plus"></i> Add Skill</button>}
           </div>
         </div>
 
@@ -188,14 +190,20 @@ export default function Page() {
                 {pageItems.map(s => (
                   <tr key={s.lecturerSkillGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(s.lecturerSkillGuid)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(s)}>
-                          <i className="lni lni-trash-can"></i> Delete
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && (
+                            <button className="btn btn-neu btn-sm" onClick={() => openEditModal(s.lecturerSkillGuid)}>
+                              <i className="lni lni-pencil"></i> Edit
+                            </button>
+                          )}
+                          {permissions.delete && (
+                            <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(s)}>
+                              <i className="lni lni-trash-can"></i> Delete
+                            </button>
+                          )}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono text-blue">Employee #{s.intEmployee}</td>
                     <td><strong>{s.skillName || <span className="text-muted">— Unnamed —</span>}</strong></td>

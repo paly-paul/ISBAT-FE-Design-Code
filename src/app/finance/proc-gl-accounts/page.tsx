@@ -12,11 +12,13 @@ import { NewProcGlAccountModal } from '@/components/modals/finance/NewProcGlAcco
 import { EditProcGlAccountModal } from '@/components/modals/finance/EditProcGlAccountModal'
 import { useProcGlAccounts, useCreateProcGlAccount, useUpdateProcGlAccount, useDeleteProcGlAccount, ProcGlAccount } from '@/hooks/finance/useProcGlAccounts'
 import { STATUS_LABELS, TYPE_LABELS } from '@/lib/api/finance/procGlAccount'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingAccountGuid, setEditingAccountGuid] = useState<string | null>(null)
@@ -55,9 +57,11 @@ export default function Page() {
             <div className="pg-title">Proc GL Account Master</div>
             <div className="pg-sub">Manage the general ledger accounts used for procurement postings</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-proc-gl-account-modal')}>
-            <i className="lni lni-plus"></i> Add GL Account
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-proc-gl-account-modal')}>
+              <i className="lni lni-plus"></i> Add GL Account
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -84,14 +88,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.procGlAccountGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.procGlAccountGuid)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                          <i className="lni lni-trash-can"></i> Delete
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.procGlAccountGuid)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                            <i className="lni lni-trash-can"></i> Delete
+                          </button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono font-bold">{r.shortCode}</td>
                     <td><strong>{r.accName}</strong></td>

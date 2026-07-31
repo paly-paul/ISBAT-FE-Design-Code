@@ -12,11 +12,13 @@ import { usePagination } from '@/hooks/usePagination'
 import { NewCountryModal } from '@/components/modals/academic/NewCountryModal'
 import { EditCountryModal } from '@/components/modals/academic/EditCountryModal'
 import { useCountries, useCreateCountry, useUpdateCountry, useDeleteCountry, Country } from '@/hooks/config/useCountries'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters]       = useState<Record<string, string[]>>({})
@@ -85,9 +87,11 @@ export default function Page() {
             <div className="pg-title">Country Master</div>
             <div className="pg-sub">Manage countries for student nationality and address records</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-country-modal')}>
-            <i className="lni lni-plus"></i> Add Country
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-country-modal')}>
+              <i className="lni lni-plus"></i> Add Country
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -151,14 +155,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.countryGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                          <i className="lni lni-trash-can"></i> Delete
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                            <i className="lni lni-trash-can"></i> Delete
+                          </button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono font-bold">{r.countryCode}</td>
                     <td><strong>{r.countryName}</strong></td>

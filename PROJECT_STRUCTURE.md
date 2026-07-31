@@ -306,7 +306,8 @@ src/
 │   └── users/
 │       ├── usePermissionCatalog.ts   # GET permission-groups/permissions (real)
 │       ├── usePermissionWizard.ts    # shared accordion/search/module-block state behind New/EditPermissionModal
-│       └── useMenu.ts                # useMenu() → GET /api/v1/users/me/menu (see Sidebar & Navigation below); exports MENU_KEY so useAssignEmployeePermissionGroups() can invalidate it after a permission change
+│       ├── useMenu.ts                # useMenu() → GET /api/v1/users/me/menu (see Sidebar & Navigation below); exports MENU_KEY so useAssignEmployeePermissionGroups() can invalidate it after a permission change
+│       └── usePagePermissions.ts     # usePagePermissions() — looks up the current route's MenuPermissions in the useMenu() tree (matched by resolved href, not id); rolled out across all ~44 real-hook-layer pages to gate Add/Edit/Delete — see Key Patterns below
 └── lib/
     ├── auth.ts                  # all auth API calls; mock when NEXT_PUBLIC_AUTH_MOCK=true, real .NET calls otherwise
     ├── session.ts                # sessionStorage: login flow state (isbat_login_flow) + session identity (isbat_session_identity)
@@ -353,7 +354,7 @@ src/
         └── users/
             ├── permissionCatalog.ts   # real; GET permission catalog for the wizard
             ├── skills.ts              # real; backs /academic/skill-master (LecturerSkill: lecturerSkillGuid/intEmployee/skillName/proficiency/approvalStatus/approvedByIntUser/approvedDate); full CRUD via /api/v1/users/skills (+ /:guid) — GetByGuid/list only ever return intEmployee, never employeeGuid, despite Create/Update requiring a real employeeGuid — see note above the directory tree
-            └── menu.ts                # getMenu() → GET /api/v1/users/me/menu; MenuNode/MenuPermissions types, mock full-nav tree, HARDCODED_EMPLOYEE_MODULE merge, MENU_API_DISABLED kill switch — see Sidebar & Navigation below
+            └── menu.ts                # getMenu() → GET /api/v1/users/me/menu (real again — MENU_API_DISABLED kill switch removed once the backend fixed the erp_access 401 issue); MenuNode/MenuPermissions types, mock full-nav tree, HARDCODED_EMPLOYEE_MODULE merge still active — see Sidebar & Navigation below
 ```
 
 ---
@@ -508,6 +509,29 @@ interface ModalProps {
 - **Fetch-by-guid convention** (most real-hook-layer domains: programLevel, stream, enquiryStatus, followUpStatus, weekday, enquirySource, followUpMode, interestLevel, ledger, currency master, bank, bankBranch, genSet, cooperate, discount, procGlAccount, procBank): rather than the page passing the already-loaded row into the Edit modal, the page passes only the **guid**; the modal itself calls a `useX(guid, isOpen)` query (`enabled: isOpen && !!guid`) that hits a `getXById` real GET-by-guid endpoint. This guarantees the edit form always reflects the latest server state rather than a possibly-stale row from the list cache. These modals add `isLoading`/`isError` branches (a "Loading X details…" placeholder and a `FailurePopup` "Couldn't Load X") before the main form render, and the corresponding hook's update mutation invalidates both the list query key and the `[...key, guid]` query key on success.
 - **Row-passed exception (receiptBook only):** no GetByGuid endpoint exists for receipt books, so `EditReceiptBookModal` takes the already-loaded row as a prop instead, same as the old pre-fetch-by-guid convention used elsewhere before it was introduced.
 
+### Permission-gated table actions (`usePagePermissions()`)
+Every real-hook-layer page now gates its own Add/Edit/Delete UI on the real `/me/menu` response instead of always rendering every action:
+```tsx
+const permissions = usePagePermissions()
+// ...
+{permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-x-modal')}>Add X</button>}
+// ...
+<td>
+  {(permissions.edit || permissions.delete) && (
+    <ActionMenu>
+      {permissions.edit   && <button onClick={() => openEditModal(r)}>Edit</button>}
+      {permissions.delete && <button onClick={() => setDeleteTarget(r)}>Delete</button>}
+    </ActionMenu>
+  )}
+</td>
+```
+- `usePagePermissions()` (`src/hooks/users/usePagePermissions.ts`) matches the current `usePathname()` against the `useMenu()` tree (walking every module, not just the active rail) and returns that leaf's `permissions` object.
+- **Fail-open, not fail-closed**: while the menu is loading, on a genuine query error, when `MenuResult.isFallback` is `true`, or when the current route simply isn't present in the tree, it returns `{ add: true, edit: true, delete: true, get: true }` rather than hiding everything — hiding a button is a UX nicety here, not the real authorization boundary (the backend still enforces per-request), so defaulting to "show" avoids a flash-of-missing-buttons on every page load and matches the sidebar's own existing fail-open behavior for `isFallback`.
+- **The `ActionMenu` wrapper itself is conditionally rendered** (`(permissions.edit || permissions.delete) &&`), not just its buttons — an empty "⋯" trigger with nothing inside it is worse UX than no trigger at all.
+- **Rolled out to all ~44 real-hook-layer pages** across Admission/Academic/Config/Finance/Employee — deliberately **not** applied to still-mock or sidebar-orphaned pages (e.g. `student/student-master`, the 5 unreachable `/academic/*` pages), since they have no real backend action to gate and aren't in the menu tree at all (the hook would just return `FULL_ACCESS` there anyway).
+- **`permissions` is a loose bag, not a fixed shape** (confirmed via a real response: most leaves carry `{add, edit, delete, get}`, but Permission Master's leaf also carries `assign: true`) — `employee-master/page.tsx`'s Assign/Edit Permissions actions read `permissions.assign ?? permissions.edit` since Employee Master's own leaf hasn't been confirmed to carry an `assign` key yet.
+- Pages built around a single Save/Submit action rather than a row-level table (`online-enquiry`, `ondesk-enquiry`, `payment`, the multi-step `filing`) gate that button directly instead of an Add-button-plus-ActionMenu pair; `filing`'s per-qualification-row Delete only checks `permissions.delete` once the row is actually persisted (`saved`) — removing an unsaved local row needs no permission at all.
+
 ### Number inputs — use `string` state, not `number`
 Controlled number inputs must use `string` state (e.g. `useState('25')`) so backspace works correctly. `+e.target.value` coerces `""` to `0` and prevents clearing the field. Parse with `+value || 0` only at computation time.
 
@@ -522,10 +546,10 @@ Controlled number inputs must use `string` state (e.g. `useState('25')`) so back
 - **`RAIL_DEFS`** maps each rail (`admission`/`academic`/`finance`/`student`/`employee`/`config`) to the top-level module `name` string the menu API returns, plus a fallback icon/footer label used only while loading or if the API's own icon is missing. The rail only renders slots for modules actually present in the fetched menu (`moduleByName.get(def.name)`) — a module the user has no access to simply doesn't render its rail icon at all, rather than showing a locked/greyed one.
 - **Cosmetic notification badges** (`BADGES`, keyed by leaf url slug — e.g. `enquiry-list: '8'`) are local-only decoration; the menu API carries no such concept. They never gate visibility, only decorate a link that's already permitted.
 - **Loading/error/fallback states**: a skeleton rail-item + skeleton panel lines render while `useMenu()` is loading; a "Couldn't load menu" panel with a Retry button renders on a genuine query error; and a **fallback banner** ("Menu permissions unavailable — showing full navigation") renders when `MenuResult.isFallback` is `true` — meaning the real call failed and the mock full-navigation tree is being served as a placeholder instead. `isFallback` must never be treated as verified permission data.
-- **`src/lib/api/users/menu.ts` currently has two temporary escape hatches, both flagged with `// TEMPORARY` comments and meant to be removed once the backend catches up:**
-  1. `MENU_API_DISABLED = true` — skips the real `/me/menu` call entirely and always serves the full mock menu, because the live endpoint was 401ing even with a valid session (root-caused to the `erp_access` cookie getting rejected as malformed/oversized after a permission-group change). Flip to `false` to re-enable the real call.
-  2. `HARDCODED_EMPLOYEE_MODULE` — merged into the fetched menu only if no `"Employee"` node is already present, because the real `/me/menu` response doesn't have an Employee module wired up on the backend's permission model yet. The merge is a no-op (skipped) the moment the backend starts returning a real one.
-- On mount, `Sidebar` calls `router.prefetch()` for every URL actually present in the fetched menu (`collectUrls()`), not a fixed list — a rail's `<Link>`s don't exist in the DOM (and so can't self-prefetch) until that rail is clicked once, and this only prefetches routes the current user can actually see.
+- **`src/lib/api/users/menu.ts` had two temporary escape hatches, flagged with `// TEMPORARY` comments; one is now resolved and removed:**
+  1. ~~`MENU_API_DISABLED = true`~~ — **removed**; the real `/me/menu` call is live again. It used to skip the call entirely and always serve the full mock menu because the endpoint was 401ing even with a valid session (root-caused to the `erp_access` cookie getting rejected as malformed/oversized after a permission-group change) — the backend team has since fixed this, so `getMenu()` now only falls back to mock when `MOCK_AUTH` is set.
+  2. `HARDCODED_EMPLOYEE_MODULE` — still active; merged into the fetched menu only if no `"Employee"` node is already present, because the real `/me/menu` response doesn't have an Employee module wired up on the backend's permission model yet. The merge is a no-op (skipped) the moment the backend starts returning a real one.
+- **`Sidebar` prefetches only the active rail's routes** (`collectUrls([activeModule], RAIL_DEFS)`, staggered ~40ms apart), re-running whenever `activeRail` changes — not a fixed list, and not the whole menu. **This used to prefetch every module's routes on every login** (60+ `router.prefetch()` calls in one burst); harmless in `next dev` (prefetch is a near no-op there), but a production build issues each as a real request, and that burst was enough to trip a rate/concurrency limit on Vercel while looking completely fine locally — a real incident, not a hypothetical. Scoping to `activeRail` keeps the "instant nav within the module you're in" benefit without warming modules the user hasn't opened yet.
 - **Assigning/editing an employee's Permission Groups invalidates `MENU_KEY`** (`useAssignEmployeePermissionGroups()` in `src/hooks/employee/useEmployees.ts`) so the sidebar picks up the change without a manual refresh — in practice this only visibly changes anything when the assigned employee is the logged-in user themselves, since `/me/menu` is scoped server-side to the caller.
 - **Sign-out clears the entire React Query cache** (`queryClient.clear()` in `Header.tsx`'s `handleSignOut`) before calling `onSignOut()`, so a different user logging in on the same tab never sees the previous session's cached menu, employee list, or any other query.
 - **Panel** nav items still render as `next/link` `<Link>` elements (not `<div onClick={router.push}>`), so browser-native ctrl/cmd-click "open in new tab" and right-click work, and Next can prefetch them. Sections with children render via `sbSection(...)` (collapsible, keyed by `sc-{module}-{section}` slug); a section with no children (a bare leaf directly under a module) renders via `sbItem(...)` instead.

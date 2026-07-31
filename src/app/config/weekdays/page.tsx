@@ -11,11 +11,13 @@ import { usePagination } from '@/hooks/usePagination'
 import { NewWeekdayModal } from '@/components/modals/academic/NewWeekdayModal'
 import { EditWeekdayModal } from '@/components/modals/academic/EditWeekdayModal'
 import { useWeekdays, useCreateWeekday, useUpdateWeekday, useDeleteWeekday, Weekday } from '@/hooks/config/useWeekdays'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingWeekdayGuid, setEditingWeekdayGuid] = useState<string | null>(null)
@@ -54,9 +56,11 @@ export default function Page() {
             <div className="pg-title">Weekday Master</div>
             <div className="pg-sub">Manage the days of the week used across scheduling and timetables</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-weekday-modal')}>
-            <i className="lni lni-plus"></i> Add Weekday
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-weekday-modal')}>
+              <i className="lni lni-plus"></i> Add Weekday
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -80,14 +84,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.weekDayGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.weekDayGuid)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                          <i className="lni lni-trash-can"></i> Delete
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.weekDayGuid)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                            <i className="lni lni-trash-can"></i> Delete
+                          </button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono font-bold uppercase">{r.dayCode}</td>
                     <td><strong className="capitalize">{r.dayName}</strong></td>

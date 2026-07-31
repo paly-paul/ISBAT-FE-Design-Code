@@ -1676,7 +1676,8 @@ body {
    FORM ELEMENTS
 ═══════════════════════════════════════ */
 .fg {
-  margin-bottom: 14px
+  margin-bottom: 14px;
+  min-width: 0
 }
 
 .lbl {
@@ -2506,7 +2507,7 @@ tr.flagged td {
   overflow: hidden;
 }
 
-.ss-trigger span {
+.ss-trigger .ss-label {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2522,6 +2523,27 @@ tr.flagged td {
   flex-shrink: 0;
   transition: transform .15s;
   color: var(--g400);
+}
+
+.ss-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 10px;
+  color: var(--g400);
+  cursor: pointer;
+  transition: var(--tr);
+}
+
+.ss-clear:hover,
+.ss-clear:focus-visible {
+  background: var(--g100);
+  color: var(--red);
+  outline: none;
 }
 
 .ss-drop {

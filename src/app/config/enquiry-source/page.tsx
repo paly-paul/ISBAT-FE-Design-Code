@@ -11,11 +11,13 @@ import { usePagination } from '@/hooks/usePagination'
 import { NewEnquirySourceModal } from '@/components/modals/academic/NewEnquirySourceModal'
 import { EditEnquirySourceModal } from '@/components/modals/academic/EditEnquirySourceModal'
 import { useEnquirySources, useCreateEnquirySource, useUpdateEnquirySource, useDeleteEnquirySource, EnquirySource } from '@/hooks/admission/useEnquirySources'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingSourceGuid, setEditingSourceGuid] = useState<string | null>(null)
@@ -54,9 +56,11 @@ export default function Page() {
             <div className="pg-title">Isbat Enquiry Source Master</div>
             <div className="pg-sub">Manage the channels through which admission enquiries originate</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-enquiry-source-modal')}>
-            <i className="lni lni-plus"></i> Add Isbat Enquiry Source
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-enquiry-source-modal')}>
+              <i className="lni lni-plus"></i> Add Isbat Enquiry Source
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -79,14 +83,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.isbatSourceGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.isbatSourceGuid)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                          <i className="lni lni-trash-can"></i> Delete
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.isbatSourceGuid)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                            <i className="lni lni-trash-can"></i> Delete
+                          </button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td><strong>{r.sourceName}</strong></td>
                   </tr>

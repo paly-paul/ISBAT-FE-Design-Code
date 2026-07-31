@@ -12,11 +12,13 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { useRepetitionTags, useCreateRepetitionTag, useUpdateRepetitionTag, useDeleteRepetitionTag, RepetitionTag } from '@/hooks/academic/useRepetitionTags'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
@@ -95,9 +97,11 @@ export default function Page() {
             <div className="pg-title">Course Units Repetition Tag</div>
             <div className="pg-sub">Define repetition tags for course units · Linked to programme levels</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-rep-tag-modal')}>
-            <i className="lni lni-plus"></i> Add Repetition Tag
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-rep-tag-modal')}>
+              <i className="lni lni-plus"></i> Add Repetition Tag
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -125,14 +129,20 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.courseUnitRepetitionGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.courseUnitRepetitionGuid)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                          <i className="lni lni-trash-can"></i> Delete
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && (
+                            <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.courseUnitRepetitionGuid)}>
+                              <i className="lni lni-pencil"></i> Edit
+                            </button>
+                          )}
+                          {permissions.delete && (
+                            <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                              <i className="lni lni-trash-can"></i> Delete
+                            </button>
+                          )}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono font-bold text-b700">{r.tagCode}</td>
                     <td>{r.tagName}</td>

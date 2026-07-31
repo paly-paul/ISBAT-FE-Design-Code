@@ -11,11 +11,13 @@ import { usePagination } from '@/hooks/usePagination'
 import { NewCooperateModal } from '@/components/modals/finance/NewCooperateModal'
 import { EditCooperateModal } from '@/components/modals/finance/EditCooperateModal'
 import { useCooperates, useCreateCooperate, useUpdateCooperate, useDeleteCooperate, Cooperate } from '@/hooks/finance/useCooperates'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingCooperateGuid, setEditingCooperateGuid] = useState<string | null>(null)
@@ -54,9 +56,11 @@ export default function Page() {
             <div className="pg-title">Cooperate Master</div>
             <div className="pg-sub">Manage corporate partners linked to student fee accounts</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-cooperate-modal')}>
-            <i className="lni lni-plus"></i> Add Cooperate
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-cooperate-modal')}>
+              <i className="lni lni-plus"></i> Add Cooperate
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -80,14 +84,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.cooperateGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.cooperateGuid)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                          <i className="lni lni-trash-can"></i> Delete
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.cooperateGuid)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                            <i className="lni lni-trash-can"></i> Delete
+                          </button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono font-bold uppercase">{r.cooperateCode}</td>
                     <td><strong>{r.cooperateName}</strong></td>

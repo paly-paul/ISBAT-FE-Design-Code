@@ -8,6 +8,7 @@ import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
 import { useCreateEnquiry } from '@/hooks/admission/useEnquiries'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Today's date at midnight, formatted the same way the confirmed payload
 // sample uses (no timezone offset) — matches enquiryDate/dob's "T00:00:00" shape.
@@ -21,6 +22,7 @@ function todayAtMidnight() {
 
 export default function OnlineEnquiryPage() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -167,9 +169,11 @@ export default function OnlineEnquiryPage() {
         <div className="sec-divider" />
         <div className="flex justify-end gap-2">
           <button className="btn btn-ghost" onClick={() => router.push('/admission/enquiry-list')}>Cancel</button>
-          <button className="btn btn-primary" disabled={createEnquiry.isPending} onClick={handleSave}>
-            {createEnquiry.isPending ? 'Saving…' : 'Save Enquiry'}
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" disabled={createEnquiry.isPending} onClick={handleSave}>
+              {createEnquiry.isPending ? 'Saving…' : 'Save Enquiry'}
+            </button>
+          )}
         </div>
       </div>
 

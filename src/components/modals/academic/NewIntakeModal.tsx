@@ -18,6 +18,11 @@ const MONTHS = [
   { value: '10', label: 'October' }, { value: '11', label: 'November' }, { value: '12', label: 'December' },
 ]
 
+const INTAKE_SEQUENCES = [
+  { value: '1', label: 'Spring' },
+  { value: '2', label: 'Fall' },
+]
+
 interface NewIntakeModalProps extends ModalProps {
   createIntake: {
     mutate: (input: CreateIntakeInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
@@ -529,15 +534,12 @@ export function NewIntakeModal({ isOpen, onClose, showToast, createIntake }: New
               </div>
               <div className="fg">
                 <div className="lbl">Intake Sequence <span className="req">*</span></div>
-                <input
-                  className="ctrl"
-                  style={errors.intakeSeq ? { borderColor: 'var(--red)' } : undefined}
-                  type="number"
-                  placeholder="e.g. 1"
+                <SearchSelect
+                  placeholder="Select intake sequence…"
                   value={intakeSeq}
-                  onChange={e => { setIntakeSeq(e.target.value); if (errors.intakeSeq) setErrors(p => ({ ...p, intakeSeq: '' })) }}
+                  onChange={v => { setIntakeSeq(v); if (errors.intakeSeq) setErrors(p => ({ ...p, intakeSeq: '' })) }}
+                  options={INTAKE_SEQUENCES}
                 />
-                <div style={{ fontSize: 11, color: 'var(--g400)', marginTop: 4 }}>Which intake this is within the financial year — e.g. 1 for the first, 2 for the second.</div>
                 {errors.intakeSeq && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeSeq}</p>}
               </div>
               {/* Intake Type (Spring/Fall) isn't part of the confirmed payload —
