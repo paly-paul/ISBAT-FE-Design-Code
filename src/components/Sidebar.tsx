@@ -73,16 +73,16 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
   const menu = data?.menu
   const isFallback = data?.isFallback ?? false
 
-  // Route warming is left to next/link's own built-in prefetch (every panel
-  // item below renders as a <Link>, which prefetches once it's actually in
-  // the viewport) rather than a manual router.prefetch() burst. A prior
-  // version fired router.prefetch() for every route in the active module in
-  // one tight loop — that's a no-op in `next dev` (prefetch is suppressed
-  // there, so it looked harmless locally), but a production build issues
-  // each as a real request, and even scoped to just one module (16+ routes
-  // under /academic alone) that was enough to flood the Network tab and trip
-  // a rate/concurrency limit on Vercel. <Link>'s viewport-gated prefetch
-  // achieves the same "instant nav" goal without the burst.
+  // No route-warming effect here on purpose. A prior version fired
+  // router.prefetch() for every route in the active module in one tight
+  // loop — that's a no-op in `next dev` (prefetch is suppressed there, so it
+  // looked harmless locally), but a production build issues each as a real
+  // request, and even scoped to just one module (16+ routes under /academic
+  // alone) that was enough to flood the Network tab and trip a
+  // rate/concurrency limit on Vercel. next/link's own default auto-prefetch
+  // turned out to cause the identical burst for the same reason (it fires
+  // per-<Link> on viewport entry, not on hover), so every panel item below
+  // is rendered with prefetch={false} instead — see sbItem().
 
   const moduleByName = useMemo(() => {
     const map = new Map<string, MenuNode>()
@@ -105,7 +105,13 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
     const href = resolveHref(item.url, railId)
     const badge = BADGES[id]
     return (
-      <Link key={href} href={href} className={`sb-item${currentPage === id ? ' active' : ''}`}>
+      // prefetch={false} — next/link's default auto-prefetch fires for every
+      // rendered <Link> as soon as it's in the viewport, not just on hover.
+      // With ~15-20 items visible in one module's panel at once, that's the
+      // same burst-of-requests problem the removed router.prefetch() loop
+      // caused, just coming from Link's own built-in behavior instead. Only
+      // the item the user actually points at needs warming.
+      <Link key={href} href={href} prefetch={false} className={`sb-item${currentPage === id ? ' active' : ''}`}>
         <span className="sb-icon"><i className={iconClass}></i></span>
         {item.name}
         {badge && <span className={`sb-badge${badge.variant ? ' ' + badge.variant : ''}`}>{badge.text}</span>}
