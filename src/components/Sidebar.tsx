@@ -1,6 +1,5 @@
 'use client'
-import { Dispatch, SetStateAction, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { Dispatch, SetStateAction, useMemo } from 'react'
 import Link from 'next/link'
 import { useMenu } from '@/hooks/users/useMenu'
 import { MenuNode } from '@/lib/api/users/menu'
@@ -69,44 +68,21 @@ function idFromUrl(url: string): string {
   return url.split('/').filter(Boolean).pop()!
 }
 
-function collectUrls(menu: MenuNode[], railDefs: RailDef[]): string[] {
-  const out: string[] = []
-  function walk(nodes: MenuNode[], railId: RailId) {
-    for (const n of nodes) {
-      if (n.url) out.push(resolveHref(n.url, railId))
-      if (n.children.length) walk(n.children, railId)
-    }
-  }
-  for (const moduleNode of menu) {
-    const def = railDefs.find(d => d.name === moduleNode.name)
-    if (def) walk(moduleNode.children, def.id)
-  }
-  return out
-}
-
 export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {
-  const router = useRouter()
   const { data, isLoading, isError, refetch } = useMenu()
   const menu = data?.menu
   const isFallback = data?.isFallback ?? false
 
-  // Warm the active module's routes so switching pages within it is instant.
-  // Deliberately scoped to just activeRail, not the whole menu — prefetching
-  // every module on every login used to fire router.prefetch() for 60+ routes
-  // in one burst. That's a no-op in `next dev` (prefetch is suppressed there),
-  // which is why it looked fine locally, but a production build actually
-  // issues each prefetch as a real request, and that burst was enough to trip
-  // a rate/concurrency limit on Vercel. Re-runs (and re-warms) whenever the
-  // user switches rails, staggered slightly so even one module's routes don't
-  // all fire on the same tick.
-  useEffect(() => {
-    if (!menu) return
-    const activeModule = menu.find(m => RAIL_DEFS.find(d => d.id === activeRail)?.name === m.name)
-    if (!activeModule) return
-    const urls = collectUrls([activeModule], RAIL_DEFS)
-    const timers = urls.map((url, i) => setTimeout(() => router.prefetch(url), i * 40))
-    return () => timers.forEach(clearTimeout)
-  }, [menu, activeRail, router])
+  // Route warming is left to next/link's own built-in prefetch (every panel
+  // item below renders as a <Link>, which prefetches once it's actually in
+  // the viewport) rather than a manual router.prefetch() burst. A prior
+  // version fired router.prefetch() for every route in the active module in
+  // one tight loop — that's a no-op in `next dev` (prefetch is suppressed
+  // there, so it looked harmless locally), but a production build issues
+  // each as a real request, and even scoped to just one module (16+ routes
+  // under /academic alone) that was enough to flood the Network tab and trip
+  // a rate/concurrency limit on Vercel. <Link>'s viewport-gated prefetch
+  // achieves the same "instant nav" goal without the burst.
 
   const moduleByName = useMemo(() => {
     const map = new Map<string, MenuNode>()
