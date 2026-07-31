@@ -92,7 +92,7 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
     if (!programGuid)   e.programGuid = 'Please select a Programme'
     if (!intakeGuid)    e.intakeGuid = 'Please select an Intake'
     if (!semesterGuid)  e.semesterGuid = 'Please select a Semester'
-    if (!streamGuid)    e.streamGuid = 'Please select a Stream'
+    if (!streamGuid)    e.streamGuid = 'Please select a Specialization'
     if (!batchTimeGuid) e.batchTimeGuid = 'Please select a Batch Time'
     if (!inChargeIdx)   e.inChargeIdx = 'Please select a Batch In-Charge'
     setErrors(e)
@@ -161,7 +161,7 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
   if (isLoading || !batch) {
     return (
       <div className="modal-overlay open" id="edit-batch-modal">
-        <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+        <div className="modal modal-xl" onClick={e => e.stopPropagation()}>
           <div className="modal-hdr">
             <div className="modal-title"><i className="lni lni-pencil"></i> Edit Batch</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
@@ -176,7 +176,7 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
 
   return (
     <div className="modal-overlay open" id="edit-batch-modal">
-      <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+      <div className="modal modal-xl" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Batch — {batch.batchCode}</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
@@ -211,8 +211,8 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
             {errors.semesterGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.semesterGuid}</p>}
           </div>
           <div className="fg">
-            <div className="lbl">Stream <span className="req">*</span></div>
-            <SearchSelect placeholder="— Select stream —" options={streamOptions} value={streamGuid} onChange={val => { setStreamGuid(val); if (errors.streamGuid) setErrors(p => ({ ...p, streamGuid: '' })) }} />
+            <div className="lbl">Specialization <span className="req">*</span></div>
+            <SearchSelect placeholder="— Select specialization —" options={streamOptions} value={streamGuid} onChange={val => { setStreamGuid(val); if (errors.streamGuid) setErrors(p => ({ ...p, streamGuid: '' })) }} />
             {errors.streamGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.streamGuid}</p>}
           </div>
           <div className="fg">

@@ -11,11 +11,13 @@ import { usePagination } from '@/hooks/usePagination'
 import { NewGenSetModal } from '@/components/modals/finance/NewGenSetModal'
 import { EditGenSetModal } from '@/components/modals/finance/EditGenSetModal'
 import { useGenSets, useCreateGenSet, useUpdateGenSet, useDeleteGenSet, GenSet } from '@/hooks/finance/useGenSets'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingGenSetGuid, setEditingGenSetGuid] = useState<string | null>(null)
@@ -54,9 +56,11 @@ export default function Page() {
             <div className="pg-title">General Settings (GenSets)</div>
             <div className="pg-sub">Configurable type/condition lookups used as reference data across Finance</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-genset-modal')}>
-            <i className="lni lni-plus"></i> Add General Setting
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-genset-modal')}>
+              <i className="lni lni-plus"></i> Add General Setting
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -80,14 +84,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.genSetGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.genSetGuid)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                          <i className="lni lni-trash-can"></i> Delete
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.genSetGuid)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                            <i className="lni lni-trash-can"></i> Delete
+                          </button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono font-bold uppercase">{r.type}</td>
                     <td>{r.condition}</td>

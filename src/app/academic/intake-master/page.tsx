@@ -12,6 +12,7 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { useIntakes, useCreateIntake, useUpdateIntake, useDeleteIntake, Intake } from '@/hooks/academic/useIntakes'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
@@ -38,6 +39,7 @@ function displayIntakeCode(intake: Intake): string {
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
@@ -140,7 +142,7 @@ export default function Page() {
       <div className="page active">
         <div className="pg-hdr">
           <div><div className="pg-title">Intake Master</div><div className="pg-sub">Configure academic sessions · Set all semester and term dates · Manage current intakes</div></div>
-          <button className="btn btn-primary" onClick={() => openModal('new-intake-modal')}><i className="lni lni-plus"></i> New Intake</button>
+          {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-intake-modal')}><i className="lni lni-plus"></i> New Intake</button>}
         </div>
         <div className="warn-box mb-5">
           <i className="lni lni-warning"></i> <span><strong>Rule:</strong> Only one <em>Current Academic Intake</em> and one <em>Current Admission Intake</em> can be active at a time. All dates are manually set to allow flexibility for government notices, student requests, and external factors.</span>
@@ -207,7 +209,7 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-calendar"></i></span> All Intakes</div>
-            <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
+            {/* <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button> */}
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
@@ -254,10 +256,12 @@ export default function Page() {
                   return (
                     <tr key={r.intakeGuid} className={r.currentIntake ? 'selected-row' : ''}>
                       <td>
-                        <ActionMenu>
-                          <button className="btn btn-neu btn-sm" onClick={() => { setEditingIntakeGuid(r.intakeGuid); openModal('intake-edit-modal') }}><i className="lni lni-pencil"></i> Edit</button>
-                          <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>
-                        </ActionMenu>
+                        {(permissions.edit || permissions.delete) && (
+                          <ActionMenu>
+                            {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => { setEditingIntakeGuid(r.intakeGuid); openModal('intake-edit-modal') }}><i className="lni lni-pencil"></i> Edit</button>}
+                            {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
+                          </ActionMenu>
+                        )}
                       </td>
                       <td><span className="font-bold text-blue font-mono">{displayIntakeCode(r)}</span></td>
                       <td><strong>{r.description}</strong></td>

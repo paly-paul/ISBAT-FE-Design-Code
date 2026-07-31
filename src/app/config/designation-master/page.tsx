@@ -13,11 +13,13 @@ import { NewDesignationModal } from '@/components/modals/academic/NewDesignation
 import { EditDesignationModal } from '@/components/modals/academic/EditDesignationModal'
 import { useDesignations, useCreateDesignation, useUpdateDesignation, useDeleteDesignation, Designation } from '@/hooks/config/useDesignations'
 import { useDepartments } from '@/hooks/config/useDepartments'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters]       = useState<Record<string, string[]>>({})
@@ -96,9 +98,11 @@ export default function Page() {
             <div className="pg-title">Designation Master</div>
             <div className="pg-sub">Manage staff designations and their department assignments</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-designation-modal')}>
-            <i className="lni lni-plus"></i> Add Designation
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-designation-modal')}>
+              <i className="lni lni-plus"></i> Add Designation
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -146,14 +150,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.intDesignation}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                          <i className="lni lni-trash-can"></i> Delete
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                            <i className="lni lni-trash-can"></i> Delete
+                          </button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td><strong>{r.designationName}</strong></td>
                     <td>{departmentNameByIntDept[r.intDept] ?? `Dept #${r.intDept}`}</td>

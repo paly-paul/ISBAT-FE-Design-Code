@@ -12,11 +12,13 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { useCreateProgramLevel, useDeleteProgramLevel, useProgramLevels, useUpdateProgramLevel, ProgramLevel } from '@/hooks/academic/useProgramLevels'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
@@ -81,7 +83,7 @@ export default function Page() {
       <div className="page active">
         <div className="pg-hdr">
           <div><div className="pg-title">Programme Level Master</div><div className="pg-sub">Define programme levels (Bachelor&apos;s, Master&apos;s, PhD etc.) · Set year count, semester count and minimum credit load</div></div>
-          <button className="btn btn-primary" onClick={() => openModal('new-alevel-modal')}><i className="lni lni-plus"></i> Add Level</button>
+          {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-alevel-modal')}><i className="lni lni-plus"></i> Add Level</button>}
         </div>
 
         <div className="info-box mb-[18px]">
@@ -118,14 +120,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.programLevelGuid}>
                     <td>
+                      {(permissions.edit || permissions.delete) && (
                       <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.programLevelGuid)}>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.programLevelGuid)}>
                           <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                        </button>}
+                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
                           <i className="lni lni-trash-can"></i> Delete
-                        </button>
+                        </button>}
                       </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono text-b700">{r.levelCode}</td>
                     <td><strong>{r.levelName}</strong></td>

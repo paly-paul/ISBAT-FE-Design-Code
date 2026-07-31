@@ -12,11 +12,13 @@ import { NewDiscountModal } from '@/components/modals/finance/NewDiscountModal'
 import { EditDiscountModal } from '@/components/modals/finance/EditDiscountModal'
 import { useDiscounts, useCreateDiscount, useUpdateDiscount, useDeleteDiscount, Discount } from '@/hooks/finance/useDiscounts'
 import { CALC_TYPE_LABELS, CALC_TYPE_VALUES } from '@/lib/api/finance/discount'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingDiscountGuid, setEditingDiscountGuid] = useState<string | null>(null)
@@ -55,9 +57,11 @@ export default function Page() {
             <div className="pg-title">Discount Master</div>
             <div className="pg-sub">Manage discounts applied to student fee structures</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-discount-modal')}>
-            <i className="lni lni-plus"></i> Add Discount
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-discount-modal')}>
+              <i className="lni lni-plus"></i> Add Discount
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -85,14 +89,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.discountGuid}>
                     <td>
+                      {(permissions.edit || permissions.delete) && (
                       <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.discountGuid)}>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.discountGuid)}>
                           <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                        </button>}
+                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
                           <i className="lni lni-trash-can"></i> Delete
-                        </button>
+                        </button>}
                       </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono font-bold uppercase">{r.discountCode}</td>
                     <td><strong>{r.discountName}</strong></td>

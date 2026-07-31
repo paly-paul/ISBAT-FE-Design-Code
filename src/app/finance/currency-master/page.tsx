@@ -11,11 +11,13 @@ import { usePagination } from '@/hooks/usePagination'
 import { NewCurrencyModal } from '@/components/modals/finance/NewCurrencyModal'
 import { EditCurrencyModal } from '@/components/modals/finance/EditCurrencyModal'
 import { useCurrencies, useCreateCurrency, useUpdateCurrency, Currency } from '@/hooks/finance/useCurrencies'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null)
@@ -44,9 +46,11 @@ export default function Page() {
             <div className="pg-title">Currency Master</div>
             <div className="pg-sub">Configure system currencies and set the default</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-currency-modal')}>
-            <i className="lni lni-plus"></i> Add Currency
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-currency-modal')}>
+              <i className="lni lni-plus"></i> Add Currency
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -71,11 +75,13 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.intCurrency}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                      </ActionMenu>
+                      {permissions.edit && (
+                        <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>
+                        </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono font-bold">{r.currencyCode}</td>
                     <td><strong>{r.currencyName}</strong></td>

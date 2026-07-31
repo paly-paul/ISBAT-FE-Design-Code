@@ -23,6 +23,7 @@ import {
   useApplicationPaymentTypes,
   useCreateApplicationPayment,
 } from '@/hooks/admission/useApplicationPayments'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PIPELINE = [
   { label: 'App. Payment',  desc: 'Current step', status: 'active' },
@@ -113,6 +114,7 @@ function PreviewRow({ label, value }: { label: string; value?: string }) {
 
 export default function PaymentPage() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [toast, setToast]       = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [showReceipt, setShowReceipt] = useState(false)
@@ -580,9 +582,11 @@ export default function PaymentPage() {
               <button className="btn btn-neu btn-sm" onClick={handleClear}>
                 <i className="lni lni-reload" /> Clear
               </button>
-              <button className="btn btn-primary ml-auto" disabled={createPayment.isPending} onClick={handleSubmit}>
-                <i className="lni lni-credit-cards" /> {createPayment.isPending ? 'Saving…' : 'Save Payment & Generate Receipt →'}
-              </button>
+              {permissions.add && (
+                <button className="btn btn-primary ml-auto" disabled={createPayment.isPending} onClick={handleSubmit}>
+                  <i className="lni lni-credit-cards" /> {createPayment.isPending ? 'Saving…' : 'Save Payment & Generate Receipt →'}
+                </button>
+              )}
             </div>
           </div>
 

@@ -4,6 +4,7 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import { MultiSelect } from '@/components/MultiSelect'
 import { ProgramMasterInput } from '@/lib/api/academic/programMaster'
 import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
 import { useProgramGroups } from '@/hooks/academic/useProgramGroups'
@@ -198,7 +199,19 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   }, [isOpen, mode, initialCurrencyGuid])
   const [unitCount, setUnitCount] = useState('')
   const [dateAcc, setDateAcc] = useState('')
-  const [streamGuid, setStreamGuid] = useState('')
+  // Multiple specializations can be offered by a programme (GetFullDetails
+  // confirms this — it returns streamGuids as an array), but Create/Update's
+  // top-level payload only accepts a single streamGuid (confirmed via the
+  // .bru spec — see the ProgramMasterInput/ProgramMasterUpdateInput comments
+  // in lib/api/academic/programMaster.ts). The per-course-unit streamGuid on
+  // ProgramUnitInput/ProgramUnitUpdateInput has no such limit, though, which
+  // is what the per-semester picker in Step 2 (semStreamGuid below) actually
+  // sends — so the multi-select here mainly exists to populate that picker's
+  // options; the single top-level field just takes the first pick.
+  const [streamGuids, setStreamGuids] = useState<string[]>([])
+  // One specialization per semester, chosen from streamGuids above — sent as
+  // every course unit row's streamGuid for that semester in handleFinalSubmit.
+  const [semStreamGuid, setSemStreamGuid] = useState<string[]>(() => Array(NUM_SEMS).fill(''))
   const [intakeGuid, setIntakeGuid] = useState('')
   const [pgmStatus, setPgmStatus] = useState(true)
   const [noIa, setNoIa] = useState(false)
@@ -230,6 +243,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
   const { data: streams = [] } = useStreams()
   const streamOptions = streams.map(s => ({ value: s.streamGuid, label: `${s.streamCode} — ${s.streamName}` }))
+  // Step 2's per-semester picker only offers what was picked in Step 1.
+  const semesterStreamOptions = streamOptions.filter(o => streamGuids.includes(o.value))
 
   const { data: courseUnits = [] } = useCourseUnits()
   const courseUnitOptions = courseUnits.map(u => ({
@@ -279,19 +294,23 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setLateFee(String(fullDetails.lateFee))
     setUnitCount(String(fullDetails.unitCount))
     setDateAcc(fullDetails.dateAcc ? fullDetails.dateAcc.slice(0, 10) : '')
-    // full-details returns streamGuids (plural) but update-complete only
-    // accepts one — same "create only accepts one streamGuid" limitation
-    // documented on ProgramMasterInput.
-    setStreamGuid(fullDetails.streamGuids[0] ?? '')
+    // full-details returns streamGuids (plural) — Create/Update's top-level
+    // field only accepts one (see the streamGuids state comment above), but
+    // that's just the top-level field's limit, not this multi-select's.
+    setStreamGuids(fullDetails.streamGuids ?? [])
     setIntakeGuid(fullDetails.intakeGuid ?? '')
     setPgmStatus(fullDetails.pgmStatus)
     setNoIa(fullDetails.noIa)
 
     const units: SemUnits = Array.from({ length: NUM_SEMS }, () => [])
+    const semStreams: string[] = Array(NUM_SEMS).fill('')
     fullDetails.programUnits.forEach(u => {
       const si = u.semCode - 1
       if (si < 0 || si >= NUM_SEMS) return
       const cu = courseUnits.find(c => c.courseUnitGuid === u.courseUnitGuid)
+      // Every ProgramUnitDetail carries its own streamGuid — take the first
+      // one seen per semester as that semester's specialization pick.
+      if (!semStreams[si] && u.streamGuid) semStreams[si] = u.streamGuid
       units[si].push({
         id: nextCUId++,
         guid: u.courseUnitGuid,
@@ -303,6 +322,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       })
     })
     setSemUnits(units)
+    setSemStreamGuid(semStreams)
 
     const structures: FeeStructure[] = fullDetails.feeStructures.length > 0
       ? fullDetails.feeStructures.map(s => {
@@ -365,7 +385,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     if (mode === 'edit' ? !currencyGuid : !currencyCode) e.currencyCode = 'Please select a Currency'
     if (!unitCount) e.unitCount = 'No. of Course Units is required'
     if (!dateAcc) e.dateAcc = 'Accreditation Date is required'
-    if (!streamGuid) e.streamGuid = 'Please select a Specialization'
+    if (!streamGuids.length) e.streamGuid = 'Please select at least one Specialization'
     if (!intakeGuid) e.intakeGuid = 'Please select an Intake'
     setStep1Errors(e)
     return Object.keys(e).length === 0
@@ -399,7 +419,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setPendingSel(Array(NUM_SEMS).fill(''))
     setProgramCode(''); setProgramName(''); setProgramGroupGuid(''); setProgramLevelGuid('')
     setFacultyGuid(''); setAppFee(''); setLateFee(''); setCurrencyCode(''); setCurrencyGuid(''); setUnitCount('')
-    setDateAcc(''); setStreamGuid(''); setIntakeGuid(''); setPgmStatus(true); setNoIa(false); setAccLetterFile(null); setStep1Errors({})
+    setDateAcc(''); setStreamGuids([]); setSemStreamGuid(Array(NUM_SEMS).fill(''))
+    setIntakeGuid(''); setPgmStatus(true); setNoIa(false); setAccLetterFile(null); setStep1Errors({})
     onClose()
   }
 
@@ -412,7 +433,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         units.map(u => ({
           semCode: si + 1,
           courseUnitGuid: u.guid,
-          streamGuid,
+          // Per-semester specialization picked in Step 2, falling back to the
+          // first Step 1 pick if that semester's own dropdown was left blank.
+          streamGuid: semStreamGuid[si] || streamGuids[0] || '',
           unitTypeGuid: u.unitType,
           unitCatGuid: u.unitCat,
           flag: 0,
@@ -450,7 +473,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       const updateInput: ProgramMasterUpdateInput = {
         programCode, programName, programLevelGuid, pgmStatus, noIa, programGroupGuid,
         unitCount: +unitCount || 0, appFee: +appFee || 0, lateFee: +lateFee || 0,
-        facultyGuid, currencyGuid, dateAcc: `${dateAcc}T00:00:00`, streamGuid, intakeGuid,
+        facultyGuid, currencyGuid, dateAcc: `${dateAcc}T00:00:00`,
+        // Top-level field only accepts one specialization — see the
+        // streamGuids state comment above.
+        streamGuid: streamGuids[0] || '',
+        intakeGuid,
         programUnits, feeStructures: feeStructuresPayload, accLetterFile,
       }
 
@@ -473,8 +500,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       units.map(u => ({
         semCode: si + 1,
         courseUnitGuid: u.guid,
-        // The sample payload uses the same specialization for the whole programme.
-        streamGuid,
+        // Per-semester specialization picked in Step 2, falling back to the
+        // first Step 1 pick if that semester's own dropdown was left blank.
+        streamGuid: semStreamGuid[si] || streamGuids[0] || '',
         unitType: u.unitType,
         unitCat: u.unitCat,
         flag: 0,
@@ -526,7 +554,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         facultyGuid,
         currencyCode: +currencyCode || 0,
         dateAcc: `${dateAcc}T00:00:00`,
-        streamGuid,
+        // Top-level field only accepts one specialization — see the
+        // streamGuids state comment above.
+        streamGuid: streamGuids[0] || '',
         intakeGuid,
         programUnits,
         feeStructures: feeStructuresPayload,
@@ -796,13 +826,19 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                 <div className="fg m-0"><div className="lbl">Accreditation Expiry Date</div><input className="ctrl" type="date" /></div>
                 */}
                 <div className="fg">
-                  <div className="lbl">Specialization <span className="req">*</span></div>
-                  <SearchSelect
-                    placeholder="— Select specialization —"
-                    value={streamGuid}
-                    onChange={v => { setStreamGuid(v); if (step1Errors.streamGuid) setStep1Errors(p => ({ ...p, streamGuid: '' })) }}
+                  <div className="lbl">Specialization(s) <span className="req">*</span></div>
+                  <MultiSelect
+                    placeholder="— Select specialization(s) —"
+                    value={streamGuids}
+                    onChange={vals => {
+                      setStreamGuids(vals)
+                      if (step1Errors.streamGuid) setStep1Errors(p => ({ ...p, streamGuid: '' }))
+                      // Drop any per-semester pick (Step 2) that's no longer part of this selection.
+                      setSemStreamGuid(prev => prev.map(g => (g && vals.includes(g)) ? g : ''))
+                    }}
                     options={streamOptions}
                   />
+                  <div style={{ fontSize: 11, color: 'var(--g400)', marginTop: 4 }}>Every specialization this programme offers — picked per semester in Course Unit Allocation.</div>
                   {step1Errors.streamGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.streamGuid}</p>}
                 </div>
                 <div className="fg">
@@ -920,8 +956,22 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                         </span>
                         <i className="lni lni-chevron-down" style={{ fontSize: 11, color: 'var(--g400)', flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.25s ease' }} />
                       </button>
-                      <div style={{ overflow: 'hidden', maxHeight: isOpen ? 600 : 0, transition: 'max-height 0.3s ease' }}>
+                      <div style={{ overflow: 'hidden', maxHeight: isOpen ? 680 : 0, transition: 'max-height 0.3s ease' }}>
                         <div style={{ padding: '10px 14px' }}>
+                          <div style={{ marginBottom: 10 }}>
+                            <div className="lbl">Specialization for this Semester</div>
+                            <SearchSelect
+                              placeholder={streamGuids.length ? '— Select specialization —' : 'Select specialization(s) in Programme Details first'}
+                              value={semStreamGuid[si]}
+                              onChange={val => setSemStreamGuid(prev => prev.map((s, i) => i === si ? val : s))}
+                              options={semesterStreamOptions}
+                            />
+                            {units.length > 0 && !semStreamGuid[si] && (
+                              <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>
+                                No specialization picked — course units in this semester will fall back to the first Programme Details pick.
+                              </p>
+                            )}
+                          </div>
                           {units.length === 0 && (
                             <div style={{ fontSize: 12.5, color: 'var(--g400)', fontStyle: 'italic', marginBottom: 8 }}>
                               No course units assigned yet

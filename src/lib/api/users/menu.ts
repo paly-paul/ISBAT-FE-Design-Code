@@ -186,15 +186,8 @@ export interface MenuResult {
   isFallback: boolean
 }
 
-// TEMPORARY: real /me/menu is currently broken server-side (erp_access
-// cookie gets rejected as malformed/oversized after a permission-group
-// change — see chat/backend ticket), which was blocking unrelated work.
-// Skips the real call entirely and always serves the full mock menu until
-// the backend fix lands. Flip back to false to re-enable the real call.
-const MENU_API_DISABLED = true
-
 export function getMenu(): Promise<MenuResult> {
-  if (MOCK_AUTH || MENU_API_DISABLED) return Promise.resolve({ menu: mockMenu, isFallback: false })
+  if (MOCK_AUTH) return Promise.resolve({ menu: mockMenu, isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
     .then(data => {
       const menu = data ?? []

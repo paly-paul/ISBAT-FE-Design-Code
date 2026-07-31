@@ -11,6 +11,7 @@ import { EnquiryFormModal } from '@/components/modals/admission/EnquiryFormModal
 import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignModal'
 import { useEnquiries, useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
@@ -33,6 +34,7 @@ function sourceBadge(source: number, sourceName: string | null) {
 
 export default function EnquiryListPage() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [page, setPage] = useState(1)
@@ -71,7 +73,7 @@ export default function EnquiryListPage() {
         </div>
         <div className="flex gap-2">
           <button className="btn btn-ghost" onClick={() => router.push('/admission/dashboard')}><i className="lni lni-arrow-left" /> Back</button>
-          <button className="btn btn-primary" onClick={() => openModal('enquiry-form-modal')}><i className="lni lni-plus" /> New Enquiry</button>
+          {permissions.add && <button className="btn btn-primary" onClick={() => openModal('enquiry-form-modal')}><i className="lni lni-plus" /> New Enquiry</button>}
         </div>
       </div>
 
@@ -120,7 +122,7 @@ export default function EnquiryListPage() {
                   <td>
                     <ActionMenu>
                       <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/payment')}><i className="lni lni-arrow-right" /> Convert</button>
-                      <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.enquiryGuid)}><i className="lni lni-eye" /> View</button>
+                      {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.enquiryGuid)}><i className="lni lni-eye" /> View</button>}
                     </ActionMenu>
                   </td>
                   <td className="font-mono text-sm">{r.enquiryCode}</td>

@@ -16,11 +16,13 @@ import { useProgramGroups } from '@/hooks/academic/useProgramGroups'
 import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
 import { useFaculties } from '@/hooks/config/useFaculties'
 import { useStreams } from '@/hooks/config/useStreams'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
@@ -125,7 +127,7 @@ export default function Page() {
       <div className="page active">
         <div className="pg-hdr">
           <div><div className="pg-title">Programme Master</div><div className="pg-sub">Define programme versions · Manage active/inactive status · Accreditation tracking · Specializations</div></div>
-          <button className="btn btn-primary" onClick={() => { setProgMode('add'); setEditingProgramGuid(null); openModal('new-prog-modal') }}><i className="lni lni-plus"></i> Add Programme Version</button>
+          {permissions.add && <button className="btn btn-primary" onClick={() => { setProgMode('add'); setEditingProgramGuid(null); openModal('new-prog-modal') }}><i className="lni lni-plus"></i> Add Programme Version</button>}
         </div>
 
         <div className="flex items-center gap-2 mb-[18px] flex-wrap">
@@ -195,10 +197,10 @@ export default function Page() {
                       )}
                       */}
                       <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => { setProgMode('edit'); setEditingProgramGuid(r.programGuid); openModal('new-prog-modal') }}><i className="lni lni-pencil"></i> Edit</button>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => { setProgMode('edit'); setEditingProgramGuid(r.programGuid); openModal('new-prog-modal') }}><i className="lni lni-pencil"></i> Edit</button>}
                         <button className="btn btn-neu btn-sm" onClick={() => nav('course-units')}><i className="lni lni-book"></i> Curriculum</button>
-                        <button className="btn btn-neu btn-sm" onClick={() => openModal('specialization-modal')}><i className="lni lni-target"></i> Specializations</button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget({ programGuid: r.programGuid, progName: r.progName })}><i className="lni lni-trash-can"></i> Delete</button>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openModal('specialization-modal')}><i className="lni lni-target"></i> Specializations</button>}
+                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget({ programGuid: r.programGuid, progName: r.progName })}><i className="lni lni-trash-can"></i> Delete</button>}
                       </ActionMenu>
                     </td>
                     <td className={`font-mono text-[var(--fs-xs)] ${r.admissionStatus === 'Inactive' ? 'text-g400' : 'text-b700'}`}>{r.progCode}</td>

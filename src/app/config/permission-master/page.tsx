@@ -11,11 +11,13 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { usePermissionGroups, useCreatePermissionGroup, useUpdatePermissionGroup, PermissionGroup } from '@/hooks/config/usePermissionGroups'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [editingGroup, setEditingGroup] = useState<PermissionGroup | null>(null)
@@ -45,9 +47,11 @@ export default function Page() {
             <div className="pg-title">Permission Master</div>
             <div className="pg-sub">Define permission groups and their access scope across the ERP</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-permission-modal')}>
-            <i className="lni lni-plus"></i> Add Group
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-permission-modal')}>
+              <i className="lni lni-plus"></i> Add Group
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -71,11 +75,13 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.id}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                      </ActionMenu>
+                      {permissions.edit && (
+                        <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>
+                        </ActionMenu>
+                      )}
                     </td>
                     <td><strong>{r.group}</strong></td>
                     <td className="text-g600">{r.description}</td>

@@ -13,6 +13,7 @@ import { useBatches } from '@/hooks/academic/useBatches'
 import { useCountries } from '@/hooks/config/useCountries'
 import { useEnquiries } from '@/hooks/admission/useEnquiries'
 import { useApplicationPaymentFees } from '@/hooks/admission/useApplicationPayments'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
   FilingApplicationSearchResult,
   useDeleteQualification,
@@ -116,6 +117,7 @@ const PIPELINE = [
 
 export default function FilingPage() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('personal')
 
@@ -372,10 +374,10 @@ export default function FilingPage() {
         <div className="flex justify-end items-center gap-2 mt-3">
           {saved
             ? <span className="badge badge-green"><i className="lni lni-checkmark-circle" /> Saved</span>
-            : <button className="btn text-xs" disabled={saveQualification.isPending} onClick={() => handleSaveQualRow(row)}>
+            : <button className="btn text-xs" disabled={saveQualification.isPending || !permissions.add} onClick={() => handleSaveQualRow(row)}>
                 {saveQualification.isPending ? 'Saving…' : 'Save Qualification'}
               </button>}
-          <button className="btn btn-neu text-xs" disabled={deleteQualification.isPending} onClick={() => handleDeleteQualRow(row)}>
+          <button className="btn btn-neu text-xs" disabled={deleteQualification.isPending || (saved && !permissions.delete)} onClick={() => handleDeleteQualRow(row)}>
             <i className="lni lni-trash-can" /> {saved ? 'Delete' : 'Remove'}
           </button>
         </div>
@@ -587,7 +589,7 @@ export default function FilingPage() {
                   </div>
 
                   <div className="flex justify-end mt-5">
-                    <button className="btn" disabled={saveGeneral.isPending} onClick={handleSaveGeneralAndAdvance}>
+                    <button className="btn" disabled={saveGeneral.isPending || !permissions.add} onClick={handleSaveGeneralAndAdvance}>
                       {saveGeneral.isPending ? 'Saving…' : <>Save &amp; Next: Qualifications <i className="lni lni-arrow-right" /></>}
                     </button>
                   </div>
@@ -645,7 +647,7 @@ export default function FilingPage() {
                   <div className="g2 mt-3">
                     <Field label="Photo" req><FileZone hint="Click to upload passport-style photo (JPG/JPEG/PNG/BMP)" file={photoFile} onChange={setPhotoFile} /></Field>
                     <div className="flex items-end">
-                      <button className="btn text-xs" disabled={!photoFile || uploadPhoto.isPending || photoSaved} onClick={handleSavePhoto}>
+                      <button className="btn text-xs" disabled={!photoFile || uploadPhoto.isPending || photoSaved || !permissions.add} onClick={handleSavePhoto}>
                         {photoSaved ? <><i className="lni lni-checkmark-circle" /> Uploaded</> : uploadPhoto.isPending ? 'Uploading…' : 'Upload Photo'}
                       </button>
                     </div>
@@ -677,7 +679,7 @@ export default function FilingPage() {
 
                   <div className="flex justify-between mt-5">
                     <button className="btn" onClick={() => setActiveTab('family')}><i className="lni lni-arrow-left" /> Family</button>
-                    <button className="btn bg-b500 text-white" disabled={!canSubmit || submitApplication.isPending} onClick={handleSubmitApplication}>
+                    <button className="btn bg-b500 text-white" disabled={!canSubmit || submitApplication.isPending || !permissions.add} onClick={handleSubmitApplication}>
                       <i className="lni lni-checkmark" /> {submitApplication.isPending ? 'Submitting…' : 'Submit Application for Vetting'}
                     </button>
                   </div>

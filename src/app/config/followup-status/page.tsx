@@ -11,11 +11,13 @@ import { usePagination } from '@/hooks/usePagination'
 import { NewFollowUpStatusModal } from '@/components/modals/academic/NewFollowUpStatusModal'
 import { EditFollowUpStatusModal } from '@/components/modals/academic/EditFollowUpStatusModal'
 import { useFollowUpStatuses, useCreateFollowUpStatus, useUpdateFollowUpStatus, useDeleteFollowUpStatus, FollowUpStatus } from '@/hooks/config/useFollowUpStatuses'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingFollowUpStatusGuid, setEditingFollowUpStatusGuid] = useState<string | null>(null)
@@ -54,9 +56,11 @@ export default function Page() {
             <div className="pg-title">Followup Status Master</div>
             <div className="pg-sub">Manage the statuses used to track admission enquiry followups</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-followup-status-modal')}>
-            <i className="lni lni-plus"></i> Add Followup Status
-          </button>
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={() => openModal('new-followup-status-modal')}>
+              <i className="lni lni-plus"></i> Add Followup Status
+            </button>
+          )}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -81,14 +85,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.followUpStatusGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.followUpStatusGuid)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                          <i className="lni lni-trash-can"></i> Delete
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.followUpStatusGuid)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                            <i className="lni lni-trash-can"></i> Delete
+                          </button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono font-bold">{r.followUpStatusCode}</td>
                     <td><strong>{r.followUpStatusName}</strong></td>

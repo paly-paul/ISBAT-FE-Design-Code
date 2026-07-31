@@ -15,11 +15,18 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { EmployeeListItem } from '@/lib/api/employee/employee'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
   const router = useRouter()
+  const permissions = usePagePermissions()
+  // Assigning/editing permission groups isn't one of the base four actions —
+  // fall back to the edit flag when the menu leaf doesn't carry its own
+  // "assign" key (confirmed present on Permission Master's leaf, not yet
+  // confirmed here), same "loose bag of booleans" caution as MenuPermissions.
+  const canAssignPermissions = permissions.assign ?? permissions.edit
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
@@ -114,7 +121,7 @@ export default function Page() {
               <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm"></i>
               <input className="ctrl pl-8 w-56" placeholder="Search by name or code…" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <button className="btn btn-primary" onClick={() => openModal('new-employee-modal')}><i className="lni lni-plus"></i> Add Employee</button>
+            {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-employee-modal')}><i className="lni lni-plus"></i> Add Employee</button>}
           </div>
         </div>
 
@@ -156,17 +163,19 @@ export default function Page() {
                 {pageItems.map(r => (
                   <tr key={r.employeeGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.employeeGuid)}>
-                          <i className="lni lni-pencil"></i> Edit
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => openAssignPermissionsModal(r)}>
-                          <i className="lni lni-lock"></i> Assign Permissions
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditPermissionsModal(r)}>
-                          <i className="lni lni-pencil-alt"></i> Edit Permissions
-                        </button>
-                      </ActionMenu>
+                      {(permissions.edit || canAssignPermissions) && (
+                        <ActionMenu>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.employeeGuid)}>
+                            <i className="lni lni-pencil"></i> Edit
+                          </button>}
+                          {canAssignPermissions && <button className="btn btn-neu btn-sm" onClick={() => openAssignPermissionsModal(r)}>
+                            <i className="lni lni-lock"></i> Assign Permissions
+                          </button>}
+                          {canAssignPermissions && <button className="btn btn-neu btn-sm" onClick={() => openEditPermissionsModal(r)}>
+                            <i className="lni lni-pencil-alt"></i> Edit Permissions
+                          </button>}
+                        </ActionMenu>
+                      )}
                     </td>
                     <td className="font-mono text-b700">{r.shortCode}</td>
                     <td><strong>{r.title} {r.firstName} {r.surname}</strong></td>
