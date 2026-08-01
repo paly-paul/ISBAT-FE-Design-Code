@@ -39,6 +39,25 @@ function module_(name: string, icon: string, children: MenuNode[]): MenuNode {
   return { name, icon: `lni lni-${icon}`, url: null, permissions: null, children }
 }
 
+// Shared between mockMenu below and the real-menu merge fallback in
+// getMenu() — the backend hasn't registered these two sections on its
+// permission model yet (see the TEMPORARY note by mergeFinanceSections),
+// so both mock mode and the temporary merge need the identical definitions.
+const FINANCE_PAYMENT_SECTIONS: MenuNode[] = [
+  section('Payment Collection', [
+    leaf('Dashboard', 'dashboard', 'dashboard'),
+    leaf('Payment Console', 'credit-cards', 'payment-console'),
+    leaf('Payment History', 'bar-chart', 'payment-history'),
+    leaf('Ledger Adjustments', 'lock', 'ledger-adjustments'),
+    leaf('Exchange Rates', 'world', 'exchange-rates'),
+    leaf('Advanced Payments', 'wallet', 'advanced-payments'),
+  ]),
+  section('Reports & Statements', [
+    leaf('Financial Reports', 'bar-chart', 'financial-reports'),
+    leaf('Student Statements', 'files', 'student-statements'),
+  ]),
+]
+
 // Mirrors docs/MENU_ROUTES_REFERENCE.md — full access to everything, matching
 // the app's pre-permission behavior, so mock mode still exercises every page.
 const mockMenu: MenuNode[] = [
@@ -97,18 +116,7 @@ const mockMenu: MenuNode[] = [
     ]),
   ]),
   module_('Finance', 'dollar', [
-    section('Payment Collection', [
-      leaf('Dashboard', 'dashboard', '/finance/dashboard'),
-      leaf('Payment Console', 'credit-cards', '/finance/payment-console'),
-      leaf('Payment History', 'bar-chart', '/finance/payment-history'),
-      leaf('Ledger Adjustments', 'lock', '/finance/ledger-adjustments'),
-      leaf('Exchange Rates', 'world', '/finance/exchange-rates'),
-      leaf('Advanced Payments', 'wallet', '/finance/advanced-payments'),
-    ]),
-    section('Reports & Statements', [
-      leaf('Financial Reports', 'bar-chart', '/finance/financial-reports'),
-      leaf('Student Statements', 'files', '/finance/student-statements'),
-    ]),
+    ...FINANCE_PAYMENT_SECTIONS,
     section('Finance Core', [
       leaf('Cooperates', 'handshake', '/finance/cooperates'),
       leaf('Discounts', 'tag', '/finance/discounts'),
@@ -175,6 +183,33 @@ const HARDCODED_EMPLOYEE_MODULE: MenuNode = module_('Employee', 'briefcase', [
   ]),
 ])
 
+// TEMPORARY: unlike Employee above, the real /me/menu response DOES have a
+// Finance module (it backs the already-real Cooperates/Discounts/Ledgers/
+// Banking masters) — but the "Payment Collection" and "Reports & Statements"
+// sections (8 pages built from a reference HTML mockup; all mock/static,
+// since no backend spec exists for this workflow yet) aren't registered on
+// its permission model, so they're silently missing from the real tree even
+// though the pages themselves exist and work. Force in whichever of the two
+// sections isn't already present, per-section rather than whole-module like
+// the Employee case; each stops applying the moment the backend starts
+// returning that specific section for real.
+function mergeFinanceSections(menu: MenuNode[]): MenuNode[] {
+  const financeIdx = menu.findIndex(n => n.name === 'Finance')
+  if (financeIdx === -1) return [...menu, module_('Finance', 'dollar', FINANCE_PAYMENT_SECTIONS)]
+
+  const financeModule   = menu[financeIdx]
+  const existingSections = new Set(financeModule.children.map(c => c.name))
+  const missingSections   = FINANCE_PAYMENT_SECTIONS.filter(s => !existingSections.has(s.name))
+  if (missingSections.length === 0) return menu
+
+  const merged = [...menu]
+  // Prepended, not appended — Payment Collection is meant to lead the
+  // Finance panel (see its position in mockMenu above), not trail behind
+  // whatever real sections the backend already returns.
+  merged[financeIdx] = { ...financeModule, children: [...missingSections, ...financeModule.children] }
+  return merged
+}
+
 export interface MenuResult {
   menu: MenuNode[]
   // true when the real /me/menu call failed and `menu` is placeholder,
@@ -192,7 +227,8 @@ export function getMenu(): Promise<MenuResult> {
     .then(data => {
       const menu = data ?? []
       const withEmployee = menu.some(n => n.name === 'Employee') ? menu : [...menu, HARDCODED_EMPLOYEE_MODULE]
-      return { menu: withEmployee, isFallback: false }
+      const withFinance  = mergeFinanceSections(withEmployee)
+      return { menu: withFinance, isFallback: false }
     })
     .catch(() => ({ menu: mockMenu, isFallback: true }))
 }
