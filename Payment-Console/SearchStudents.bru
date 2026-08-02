@@ -1,0 +1,26 @@
+meta {
+  name: Search Students
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/finance/payment-console/search?searchTerm=john&pageNumber=1&pageSize=20
+  body: none
+  auth: none
+}
+
+params:query {
+  searchTerm: john
+  pageNumber: 1
+  pageSize: 20
+}
+
+docs {
+  Searches applications/students by name, ref no, phone, or email for use in the
+  Payment Console student picker. `searchTerm` is optional (omit to browse all).
+
+  Success (200): data = PagedResult<ApplicationSummaryDto> (items, totalCount,
+  pageNumber, pageSize). Each item: applicationGuid, appRefNo, firstName,
+  lastName, phone, emailId, programGuid, action.
+}

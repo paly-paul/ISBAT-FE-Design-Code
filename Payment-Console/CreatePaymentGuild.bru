@@ -1,0 +1,34 @@
+meta {
+  name: Create Payment Guild
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}/api/v1/finance/payment-console/payment-guild
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "applicationGuid": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "studentGuid": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "amount": 25000,
+    "payDate": "2026-07-30",
+    "bankDeposit": "Guild association bank deposit slip #4521"
+  }
+}
+
+docs {
+  Records a guild association fee payment for the student. `studentGuid`,
+  `bankDeposit` are optional.
+
+  Success (201): data = PaymentGuildResultDto (paymentGuildGuid, amount,
+  remainingBalance).
+  Failure: 400 `validation_error` if required fields are missing/invalid.
+}

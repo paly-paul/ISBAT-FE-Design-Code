@@ -1,90 +1,45 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
-import { useBanks } from '@/hooks/finance/useBanks'
+import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
-
-interface DemoStudent { name: string; prog: string; cat: string; sem: string; initials: string }
-interface Ledger { priority: string; type: string; outstanding: number; paid: number; currency: string }
-
-const DEMO_STUDENTS: Record<string, DemoStudent> = {
-  'ISB/2026/0021': { name: 'Tumukunde Alice Grace', prog: 'Diploma in Nursing', cat: 'Local', sem: 'Semester 1', initials: 'TA' },
-  'ISB/2026/0022': { name: 'Okello James Patrick', prog: 'MBA Business Admin (ODL)', cat: 'Local ODL', sem: 'Semester 1', initials: 'OJ' },
-  'ISB/2026/0023': { name: 'Nakato Sarah Bridget', prog: 'BSc. Computer Science', cat: 'Local', sem: 'Semester 1', initials: 'NS' },
-  'ISB/2026/0019': { name: 'Nampijja Grace Miriam', prog: 'BCom. Accounting', cat: 'Local', sem: 'Semester 1', initials: 'NG' },
-  'ISB/2026/0020': { name: 'Mugisha David Kalisa', prog: 'BSc. Information Technology', cat: 'Local', sem: 'Semester 1', initials: 'MD' },
-}
-
-const DEMO_LEDGERS: Record<string, Ledger[]> = {
-  'ISB/2026/0021': [
-    { priority: 'P1', type: 'Admission Fee', outstanding: 0, paid: 50000, currency: 'UGX' },
-    { priority: 'P2', type: 'Registration Fee', outstanding: 0, paid: 937500, currency: 'UGX' },
-    { priority: 'P3', type: 'Tuition — S1', outstanding: 2812500, paid: 0, currency: 'UGX' },
-    { priority: 'P4', type: 'NCHE Fee', outstanding: 20000, paid: 0, currency: 'UGX' },
-    { priority: 'P5', type: 'Guild Fee', outstanding: 10000, paid: 0, currency: 'UGX' },
-  ],
-  'ISB/2026/0022': [
-    { priority: 'P1', type: 'Admission Fee', outstanding: 50000, paid: 0, currency: 'UGX' },
-    { priority: 'P2', type: 'Registration Fee', outstanding: 750000, paid: 0, currency: 'UGX' },
-    { priority: 'P3', type: 'Tuition — S1', outstanding: 2250000, paid: 0, currency: 'UGX' },
-    { priority: 'P4', type: 'NCHE Fee', outstanding: 20000, paid: 0, currency: 'UGX' },
-    { priority: 'P5', type: 'Guild Fee', outstanding: 10000, paid: 0, currency: 'UGX' },
-  ],
-}
-
-// Only two students have a bespoke ledger in this demo dataset — the rest
-// fall back to 0021's, same shortcut the reference design used.
-function ledgersFor(sno: string): Ledger[] {
-  return DEMO_LEDGERS[sno] ?? DEMO_LEDGERS['ISB/2026/0021']
-}
-
-const PAYMENT_HISTORY = [
-  { date: '09/05/2026', feeType: 'Admission Fee', amount: 'UGX 50,000', method: 'Cash', pill: 'pill-blue', receipt: 'RCP-2026-0051' },
-  { date: '10/05/2026', feeType: 'Registration Fee', amount: 'USD 250', method: 'Bank', pill: 'pill-cyan', receipt: 'RCP-2026-0063' },
-]
-
-interface AllocRow { priority: string; type: string; outstanding: number; allocated: number; remaining: number; status: 'cleared' | 'partial' | 'pending' }
+import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
+import { useCampuses } from '@/hooks/config/useCampuses'
+import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useBatches } from '@/hooks/academic/useBatches'
+import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
+import {
+  useSearchStudents,
+  useStudentProfile,
+  useOutstandingLedgers,
+  usePaymentHistory,
+  usePayableLedgers,
+  useCreatePayment,
+  PAYMENT_CATEGORY_LABELS,
+  PAY_TYPE_LABELS,
+} from '@/hooks/finance/usePaymentConsole'
 
 function fmtUGX(n: number) { return n > 0 ? `UGX ${Math.round(n).toLocaleString()}` : '—' }
 
-function buildAllocation(ledgers: Ledger[], amountUGX: number) {
-  let remaining = amountUGX
-  let discountMsg = ''
-  let roundingMsg = ''
-  let statusUpgrade = false
-  const rows: AllocRow[] = ledgers.map(l => {
-    const allocated = Math.min(remaining, l.outstanding)
-    remaining -= allocated
-    const after = l.outstanding - allocated
+function applicantName(a: { firstName: string | null; lastName: string | null }) {
+  return `${a.firstName ?? ''}${a.lastName ? ` ${a.lastName}` : ''}`.trim() || '—'
+}
 
-    // Discount: tuition (P3) fully cleared this pass → 5% final-installment discount
-    if (l.priority === 'P3' && l.outstanding > 0 && allocated >= l.outstanding) {
-      const discAmt = Math.round(l.outstanding * 0.05)
-      discountMsg = `Discount of UGX ${discAmt.toLocaleString()} applied to Tuition fee (5% — final installment policy)`
-    }
-    // Rounding: last ledger (P5), tiny remainder written off
-    if (l.priority === 'P5' && after > 0 && after <= 500) {
-      roundingMsg = `Rounding off of UGX ${Math.round(after)} applied to clear final semester ledger`
-    }
-    // Registration (P2) cleared this pass → student status upgrades to Registered
-    if (l.priority === 'P2' && l.outstanding > 0 && allocated >= l.outstanding) {
-      statusUpgrade = true
-    }
+function initialsFor(name: string) {
+  const parts = name.trim().split(/\s+/)
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '—'
+}
 
-    const status: AllocRow['status'] = l.outstanding === 0 || allocated >= l.outstanding
-      ? 'cleared'
-      : allocated > 0 ? 'partial' : 'pending'
-
-    return { priority: l.priority, type: l.type, outstanding: l.outstanding, allocated, remaining: after, status }
-  })
-  return { rows, discountMsg, roundingMsg, statusUpgrade }
+function todayYmd() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 
 interface ReceiptData {
-  ref: string; code: string; name: string; sno: string; prog: string; method: string
-  date: string; rateLabel: string; amount: string; ugx: string; balance: string
+  ref: string; code: string; name: string; refNo: string; prog: string; method: string
+  date: string; amount: string; balance: string; advanceMessage: string | null
 }
 
 export default function PaymentConsolePage() {
@@ -92,133 +47,165 @@ export default function PaymentConsolePage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  const { data: allBanks = [] } = useBanks()
-  const banks = allBanks.filter(b => b.status === 2)
+  const { data: allProcBanks = [] } = useProcBanks()
+  const banks = allProcBanks.filter(b => b.status === 2)
   const { data: allReceiptBooks = [] } = useReceiptBooks()
   const receiptBooks = allReceiptBooks.filter(r => r.status === 1)
+  const { data: currencies = [] } = useFinanceCurrencies()
 
+  // Purely informational reference rates — no longer feeds any computation
+  // (GetPayableLedgers/CreatePayment both operate in the payment's own real
+  // currency via currencyGuid/intCurrency, no client-side UGX conversion
+  // happens anywhere in the real flow).
   const [usdRate, setUsdRate] = useState('3750')
   const [kesRate, setKesRate] = useState('28.5')
 
   const [search, setSearch] = useState('')
-  const [selectedSno, setSelectedSno] = useState<string | null>(null)
+  const [committedSearch, setCommittedSearch] = useState('')
+  const [selectedApplicationGuid, setSelectedApplicationGuid] = useState<string | null>(null)
   const [showDetails, setShowDetails] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
 
   const [amount, setAmount] = useState('')
-  const [currency, setCurrency] = useState('')
-  const [method, setMethod] = useState<'cash' | 'bank'>('cash')
+  const [currencyGuid, setCurrencyGuid] = useState('')
+  const [payDate, setPayDate] = useState(todayYmd)
+  const [payType, setPayType] = useState('1')
   const [receiptBookGuid, setReceiptBookGuid] = useState('')
-  const [bankGuid, setBankGuid] = useState('')
+  const [procBankGuid, setProcBankGuid] = useState('')
   const [bankRef, setBankRef] = useState('')
   const [remarks, setRemarks] = useState('')
 
   const [receipt, setReceipt] = useState<ReceiptData | null>(null)
 
-  const matches = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return []
-    return Object.entries(DEMO_STUDENTS).filter(([sno, s]) =>
-      sno.toLowerCase().includes(q) || s.name.toLowerCase().includes(q),
-    )
-  }, [search])
+  // Debounced so GetPayableLedgers isn't hit on every keystroke.
+  const [debouncedAmount, setDebouncedAmount] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedAmount(amount), 400)
+    return () => clearTimeout(t)
+  }, [amount])
 
-  const student = selectedSno ? DEMO_STUDENTS[selectedSno] : null
-  const ledgers = selectedSno ? ledgersFor(selectedSno) : []
+  // Only fires on Search click / Enter (not on every keystroke) — same gate
+  // the old client-side filter had, just now driving a real network call.
+  const { data: searchResults, isFetching: isSearching } = useSearchStudents(committedSearch, 1, 20, !!committedSearch.trim())
+  const matches = searchResults?.items ?? []
+
+  const { data: profile, isLoading: isProfileLoading } = useStudentProfile(selectedApplicationGuid, !!selectedApplicationGuid)
+  const { data: ledgers = [], isLoading: isLedgersLoading } = useOutstandingLedgers(selectedApplicationGuid, !!selectedApplicationGuid)
+  // isError kept separate from the [] fallback on purpose — a failed fetch
+  // (confirmed live: this endpoint can 500 with server_error for some
+  // applications) must not render the same "No payment history" message as
+  // a genuinely empty result, since that would misreport a backend failure
+  // as "this student has no payment history."
+  const { data: paymentHistory = [], isLoading: isHistoryLoading, isError: isHistoryError } = usePaymentHistory(selectedApplicationGuid, !!selectedApplicationGuid && showHistory)
+
+  // Client-side name resolution for the profile's guid FKs — same fallback
+  // pattern used throughout the app (faculty.ts's deanName, enquiry-list's
+  // resolveProgramName) rather than trusting a resolved string on the DTO.
+  const { data: campuses = [] } = useCampuses()
+  const { data: programs = [] } = useProgramMasters()
+  const { data: allBatchesData } = useBatches(1, 1000)
+  const batches = allBatchesData?.items ?? []
+  const { data: semesters = [] } = useSemestersForProgram(profile?.programGuid ?? '', !!profile?.programGuid)
+
+  const campusName = campuses.find(c => c.campusGuid === profile?.campusGuid)?.campusName
+  const programName = programs.find(p => p.programGuid === profile?.programGuid)?.programName
+  const batchCode = batches.find(b => b.batchGuid === profile?.batchGuid)?.batchCode
+  const semName = semesters.find(s => s.semesterGuid === profile?.semesterGuid)?.semName
+
   const totalOutstanding = ledgers.reduce((sum, l) => sum + l.outstanding, 0)
+  const selectedCurrency = currencies.find(c => c.currencyGuid === currencyGuid)
 
-  function selectStudent(sno: string) {
-    const s = DEMO_STUDENTS[sno]
-    if (!s) return
-    setSelectedSno(sno)
-    setSearch(s.name)
-    setShowDetails(false)
-    setShowHistory(false)
+  const payableLedgersParams = useMemo(() => {
+    const amt = parseFloat(debouncedAmount) || 0
+    if (!selectedApplicationGuid || !selectedCurrency || amt <= 0 || !payDate) return null
+    return { applicationGuid: selectedApplicationGuid, amount: amt, intCurrency: selectedCurrency.intCurrency, payDate }
+  }, [selectedApplicationGuid, selectedCurrency, debouncedAmount, payDate])
+
+  const { data: payableLedgers, isFetching: isPreviewLoading } = usePayableLedgers(payableLedgersParams, !!payableLedgersParams)
+
+  const createPayment = useCreatePayment()
+
+  function handleSearchClick() {
+    const term = search.trim()
+    if (!term) { showToast('Please enter a student number or name.', 'warn'); return }
+    setCommittedSearch(term)
+  }
+
+  function resetPaymentForm() {
     setAmount('')
-    setCurrency('')
-    setMethod('cash')
+    setCurrencyGuid('')
+    setPayDate(todayYmd())
+    setPayType('1')
     setReceiptBookGuid('')
-    setBankGuid('')
+    setProcBankGuid('')
     setBankRef('')
     setRemarks('')
     setReceipt(null)
-    showToast(`Loaded: ${s.name} · ${sno}`, 'success')
   }
 
-  function handleSearchClick() {
-    if (!search.trim()) { showToast('Please enter a student number or name.', 'warn'); return }
-    if (matches.length === 0) showToast('No matching student found.', 'warn')
+  function selectStudent(applicationGuid: string, name: string) {
+    setSelectedApplicationGuid(applicationGuid)
+    setSearch(name)
+    setCommittedSearch('')
+    setShowDetails(false)
+    setShowHistory(false)
+    resetPaymentForm()
+    showToast(`Loaded: ${name}`, 'success')
   }
 
-  const ugxR = parseFloat(usdRate) || 3750
-  const kesR = parseFloat(kesRate) || 28.5
-
-  const conversion = useMemo(() => {
-    const amt = parseFloat(amount) || 0
-    if (!amt || !currency) return null
-    let amtUGX: number, origLabel: string, rateLabel: string
-    if (currency === 'USD') {
-      amtUGX = amt * ugxR
-      origLabel = `${amt.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD`
-      rateLabel = `1 USD = ${ugxR.toLocaleString()} UGX (today's rate)`
-    } else if (currency === 'KES') {
-      amtUGX = amt * kesR
-      origLabel = `${amt.toLocaleString()} KES`
-      rateLabel = `1 KES = ${kesR} UGX`
-    } else {
-      amtUGX = amt
-      origLabel = `UGX ${amt.toLocaleString()}`
-      rateLabel = 'No conversion (UGX base)'
-    }
-    return { amtUGX, origLabel, rateLabel }
-  }, [amount, currency, ugxR, kesR])
-
-  const allocation = useMemo(() => {
-    if (!conversion || !selectedSno) return null
-    return buildAllocation(ledgers, conversion.amtUGX)
-  }, [conversion, selectedSno, ledgers])
-
-  const showBankFields = method === 'bank'
+  const showBankFields = Number(payType) > 1
 
   function handleSave() {
-    if (!student || !selectedSno) { showToast('Please select a student first.', 'warn'); return }
+    if (!profile || !selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
     const amt = parseFloat(amount) || 0
     if (amt <= 0) { showToast('Amount must be greater than 0.', 'warn'); return }
-    if (!currency) { showToast('Please select a payment currency.', 'warn'); return }
+    if (!selectedCurrency) { showToast('Please select a payment currency.', 'warn'); return }
+    if (!receiptBookGuid) { showToast('Please select a receipt book.', 'warn'); return }
+    if (!payDate) { showToast('Please select a payment date.', 'warn'); return }
+    const payTypeNum = Number(payType)
+    if (showBankFields && !procBankGuid) { showToast('Please select a bank.', 'warn'); return }
 
-    const amtUGX = currency === 'USD' ? amt * ugxR : currency === 'KES' ? amt * kesR : amt
-    const now = new Date()
-    const ref = `RCP-2026-0${90 + Math.floor(Math.random() * 9)}`
-    const code = `PAY-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
-
-    setReceipt({
-      ref, code,
-      name: student.name,
-      sno: selectedSno,
-      prog: student.prog,
-      method: method.charAt(0).toUpperCase() + method.slice(1),
-      date: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + now.toLocaleTimeString(),
-      rateLabel: currency === 'USD' ? `1 USD = ${ugxR.toLocaleString()} UGX` : currency === 'KES' ? `1 KES = ${kesR} UGX` : 'UGX (no conversion)',
-      amount: `${amt.toLocaleString()} ${currency}`,
-      ugx: `UGX ${Math.round(amtUGX).toLocaleString()}`,
-      balance: `UGX ${Math.max(0, totalOutstanding - Math.round(amtUGX)).toLocaleString()}`,
-    })
-    showToast(`Payment saved! Receipt ${ref} generated.`, 'success')
+    createPayment.mutate(
+      {
+        applicationGuid: selectedApplicationGuid,
+        studentGuid: null,
+        amount: amt,
+        currencyGuid: selectedCurrency.currencyGuid,
+        receiptBookGuid,
+        payDate,
+        payType: payTypeNum,
+        procBankGuid: showBankFields ? procBankGuid : null,
+        remarks: remarks.trim() || null,
+      },
+      {
+        onSuccess: result => {
+          const now = new Date()
+          setReceipt({
+            ref: result.receipt,
+            code: result.paymentCode,
+            name: applicantName(profile),
+            refNo: profile.appRefNo,
+            prog: programName ?? '—',
+            method: PAY_TYPE_LABELS[payTypeNum] ?? `Type ${payTypeNum}`,
+            date: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + now.toLocaleTimeString(),
+            amount: `${amt.toLocaleString()} ${selectedCurrency.currencyCode}`,
+            balance: `${selectedCurrency.currencyCode} ${result.balance.toLocaleString()}`,
+            advanceMessage: result.advanceMessage,
+          })
+          showToast(`Payment saved! Receipt ${result.receipt} generated.`, 'success')
+        },
+        onError: (error: Error) => showToast(error.message || 'Failed to save payment. Please try again.', 'error'),
+      },
+    )
   }
 
   function handleClear() {
-    setSelectedSno(null)
+    setSelectedApplicationGuid(null)
     setSearch('')
-    setAmount('')
-    setCurrency('')
-    setMethod('cash')
-    setReceiptBookGuid('')
-    setBankGuid('')
-    setBankRef('')
-    setRemarks('')
+    setCommittedSearch('')
+    resetPaymentForm()
     setShowDetails(false)
     setShowHistory(false)
-    setReceipt(null)
     showToast('Form cleared.', 'warn')
   }
 
@@ -255,7 +242,7 @@ export default function PaymentConsolePage() {
         <div className="pg-hdr">
           <div>
             <div className="pg-title">Payment Collection Console</div>
-            <div className="pg-sub">Search student → view outstanding balance → record multi-currency payment → auto-allocation by priority</div>
+            <div className="pg-sub">Search student → view outstanding balance → record tuition payment → server-computed allocation</div>
           </div>
           <button className="btn btn-neu" onClick={() => router.push('/finance/dashboard')}><i className="lni lni-arrow-left"></i> Back</button>
         </div>
@@ -270,14 +257,14 @@ export default function PaymentConsolePage() {
                 <div className="card-title"><span className="ctitle-icon"><i className="lni lni-search-alt"></i></span> Step 1 · Student Lookup</div>
               </div>
               <div className="fg" style={{ marginBottom: 0 }}>
-                <div className="lbl">Search by Student Number, Name, or Application Ref <span className="req">*</span></div>
+                <div className="lbl">Search by Applicant Name, Ref No, Phone, or Email <span className="req">*</span></div>
                 <div className="flex gap-2 flex-wrap">
                   <div className="inp-wrap" style={{ flex: 1, minWidth: 180 }}>
                     <span className="inp-icon"><i className="lni lni-search-alt"></i></span>
                     <input
                       className="ctrl"
                       type="text"
-                      placeholder="e.g. ISB/2026/0021 or Tumukunde Alice"
+                      placeholder="e.g. APP20222/667 or Tumukunde Alice"
                       value={search}
                       onChange={e => setSearch(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') handleSearchClick() }}
@@ -287,40 +274,49 @@ export default function PaymentConsolePage() {
                 </div>
               </div>
 
+              {isSearching && <div className="mt-2 text-g400" style={{ fontSize: 12.5 }}>Searching…</div>}
+              {!isSearching && committedSearch && matches.length === 0 && (
+                <div className="mt-2 text-g400" style={{ fontSize: 12.5 }}>No matching applications found.</div>
+              )}
+
               {matches.length > 0 && (
                 <div className="mt-2" style={{ border: '1.5px solid var(--b200)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
-                  {matches.map(([sno, s]) => (
+                  {matches.map(a => (
                     <div
-                      key={sno}
+                      key={a.applicationGuid}
                       className="cursor-pointer px-3 py-2 hover:bg-b50 border-b border-g100 last:border-b-0"
-                      onClick={() => selectStudent(sno)}
+                      onClick={() => selectStudent(a.applicationGuid, applicantName(a))}
                     >
-                      <div className="font-bold">{s.name}</div>
-                      <div className="text-g500" style={{ fontSize: 11 }}>{sno} · {s.prog} · {s.sem} · {s.cat}</div>
+                      <div className="font-bold">{applicantName(a)}</div>
+                      <div className="text-g500" style={{ fontSize: 11 }}>{a.appRefNo} · {a.phone ?? '—'} · {a.emailId ?? '—'}</div>
                     </div>
                   ))}
                 </div>
               )}
 
-              {student && selectedSno && (
+              {isProfileLoading && selectedApplicationGuid && (
+                <div className="mt-4 text-g400" style={{ fontSize: 12.5 }}>Loading applicant profile…</div>
+              )}
+
+              {profile && selectedApplicationGuid && (
                 <div className="mt-4 p-4 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100">
                   <div className="flex items-center gap-4 mb-3">
                     <div className="w-11 h-11 rounded-full flex-shrink-0 grid place-items-center text-white font-extrabold" style={{ background: 'linear-gradient(135deg,var(--b700),var(--b500))', fontSize: 15 }}>
-                      {student.initials}
+                      {initialsFor(applicantName(profile))}
                     </div>
                     <div className="flex-1">
-                      <div className="font-extrabold text-g900" style={{ fontSize: 15 }}>{student.name}</div>
-                      <div className="text-g500 text-xs">{student.prog}</div>
+                      <div className="font-extrabold text-g900" style={{ fontSize: 15 }}>{applicantName(profile)}</div>
+                      <div className="text-g500 text-xs">{programName ?? '—'}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-g400" style={{ fontSize: 10.5 }}>Student No.</div>
-                      <div className="font-mono font-bold text-blue" style={{ fontSize: 13 }}>{selectedSno}</div>
+                      <div className="text-g400" style={{ fontSize: 10.5 }}>App. Ref</div>
+                      <div className="font-mono font-bold text-blue" style={{ fontSize: 13 }}>{profile.appRefNo}</div>
                     </div>
                   </div>
                   <div className="g3 text-xs">
-                    <div><span className="text-muted">Category: </span><span className="font-bold">{student.cat}</span></div>
-                    <div><span className="text-muted">Semester: </span><span className="font-bold">{student.sem}</span></div>
-                    <div><span className="text-muted">Status: </span><span className="badge badge-green">Active</span></div>
+                    <div><span className="text-muted">Campus: </span><span className="font-bold">{campusName ?? '—'}</span></div>
+                    <div><span className="text-muted">Semester: </span><span className="font-bold">{semName ?? '—'}</span></div>
+                    <div><span className="text-muted">Intake: </span><span className="font-bold">{profile.intakeCode ?? '—'}</span></div>
                   </div>
                   <div className="mt-[10px] pt-[10px]" style={{ borderTop: '1px solid var(--b100)' }}>
                     <button className="btn btn-neu btn-sm" onClick={() => setShowDetails(v => !v)}>
@@ -331,12 +327,10 @@ export default function PaymentConsolePage() {
                     <div className="mt-[10px]">
                       <div className="sec-divider" style={{ marginTop: 0 }}>Extended Profile</div>
                       <div className="g2 text-xs">
-                        <div><span className="text-muted">Email: </span><span className="font-bold">{student.name.split(' ')[0].toLowerCase()}.t@students.isbat.ac.ug</span></div>
-                        <div><span className="text-muted">Phone: </span><span className="font-bold">+256 700 123 456</span></div>
-                        <div><span className="text-muted">Batch: </span><span className="font-bold">DIPN-S26-DA</span></div>
-                        <div><span className="text-muted">Intake: </span><span className="font-bold">Spring 2026 (20261)</span></div>
-                        <div><span className="text-muted">Admission Type: </span><span className="font-bold">Regular</span></div>
-                        <div><span className="text-muted">Campus: </span><span className="font-bold">Kampala Main</span></div>
+                        <div><span className="text-muted">Email: </span><span className="font-bold">{profile.emailId ?? profile.universityEmail ?? '—'}</span></div>
+                        <div><span className="text-muted">Phone: </span><span className="font-bold">{profile.phone ?? '—'}</span></div>
+                        <div><span className="text-muted">Batch: </span><span className="font-bold">{batchCode ?? '—'}</span></div>
+                        <div><span className="text-muted">Year: </span><span className="font-bold">{profile.yearCode ?? '—'}</span></div>
                       </div>
                     </div>
                   )}
@@ -345,28 +339,33 @@ export default function PaymentConsolePage() {
             </div>
 
             {/* Step 2: Outstanding Balance */}
-            {selectedSno && (
+            {selectedApplicationGuid && (
               <div className="card">
                 <div className="card-hdr">
                   <div className="card-title"><span className="ctitle-icon"><i className="lni lni-dollar"></i></span> Step 2 · Outstanding Balance</div>
                   <span className="badge badge-amber">{fmtUGX(totalOutstanding)} outstanding</span>
                 </div>
-                <ScrollTable>
-                  <table>
-                    <thead><tr><th>Priority</th><th>Fee Type</th><th>Paid</th><th>Outstanding</th><th>Cur.</th></tr></thead>
-                    <tbody>
-                      {ledgers.map(l => (
-                        <tr key={l.priority}>
-                          <td><span className="badge badge-grey font-mono">{l.priority}</span></td>
-                          <td>{l.type}</td>
-                          <td className={l.paid > 0 ? 'text-green font-bold' : 'text-muted'}>{l.paid > 0 ? `UGX ${l.paid.toLocaleString()} ✓` : '—'}</td>
-                          <td className={l.outstanding === 0 ? 'text-green font-bold' : 'text-amber'}>{l.outstanding > 0 ? `UGX ${l.outstanding.toLocaleString()}` : '0 ✓'}</td>
-                          <td><span className="badge badge-gold">{l.currency}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </ScrollTable>
+                {isLedgersLoading ? (
+                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading ledgers…</div>
+                ) : ledgers.length === 0 ? (
+                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No outstanding tuition ledgers for this application.</div>
+                ) : (
+                  <ScrollTable>
+                    <table>
+                      <thead><tr><th>Ledger</th><th>Paid</th><th>Outstanding</th><th>Cur.</th></tr></thead>
+                      <tbody>
+                        {ledgers.map(l => (
+                          <tr key={l.intLedger}>
+                            <td>{l.ledgerName}{l.ledgerNum ? <span className="text-g400"> ({l.ledgerNum})</span> : null}</td>
+                            <td className={l.paidAmount > 0 ? 'text-green font-bold' : 'text-muted'}>{l.paidAmount > 0 ? `${l.currencyName} ${l.paidAmount.toLocaleString()} ✓` : '—'}</td>
+                            <td className={l.outstanding === 0 ? 'text-green font-bold' : 'text-amber'}>{l.outstanding > 0 ? `${l.currencyName} ${l.outstanding.toLocaleString()}` : '0 ✓'}</td>
+                            <td><span className="badge badge-gold">{l.currencyName}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </ScrollTable>
+                )}
                 <div className="mt-[10px]">
                   <button className="btn btn-neu btn-sm justify-between w-full" onClick={() => setShowHistory(v => !v)}>
                     <span><i className="lni lni-folder"></i> Payment History</span>
@@ -374,21 +373,32 @@ export default function PaymentConsolePage() {
                   </button>
                   {showHistory && (
                     <div className="mt-2">
-                      <ScrollTable>
-                        <table>
-                          <thead><tr><th>Date</th><th>Fee Type</th><th>Amount Paid</th><th>Method</th><th>Receipt #</th></tr></thead>
-                          <tbody>
-                            {PAYMENT_HISTORY.map(h => (
-                              <tr key={h.receipt}>
-                                <td>{h.date}</td><td>{h.feeType}</td>
-                                <td className="text-green font-bold">{h.amount}</td>
-                                <td><span className={`pill ${h.pill}`}>{h.method}</span></td>
-                                <td className="font-mono text-blue">{h.receipt}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </ScrollTable>
+                      {isHistoryLoading ? (
+                        <div className="text-g400 text-center" style={{ padding: 12, fontSize: 12.5 }}>Loading payment history…</div>
+                      ) : isHistoryError ? (
+                        <div className="text-clr-red text-center" style={{ padding: 12, fontSize: 12.5 }}>
+                          <i className="lni lni-warning"></i> Couldn&apos;t load payment history. Please try again.
+                        </div>
+                      ) : paymentHistory.length === 0 ? (
+                        <div className="text-g400 text-center" style={{ padding: 12, fontSize: 12.5 }}>No payment history for this application.</div>
+                      ) : (
+                        <ScrollTable>
+                          <table>
+                            <thead><tr><th>Date</th><th>Category</th><th>Amount Paid</th><th>Method</th><th>Receipt #</th></tr></thead>
+                            <tbody>
+                              {paymentHistory.map(h => (
+                                <tr key={h.paymentGuid}>
+                                  <td>{h.payDate.slice(0, 10)}</td>
+                                  <td>{PAYMENT_CATEGORY_LABELS[h.category] ?? `Category ${h.category}`}</td>
+                                  <td className="text-green font-bold">{h.currencyName} {h.amount.toLocaleString()}</td>
+                                  <td><span className="pill pill-blue">{PAY_TYPE_LABELS[h.payType] ?? `Type ${h.payType}`}</span></td>
+                                  <td className="font-mono text-blue">{h.receipt ?? h.paymentCode}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </ScrollTable>
+                      )}
                     </div>
                   )}
                 </div>
@@ -396,7 +406,7 @@ export default function PaymentConsolePage() {
             )}
 
             {/* Step 3: Record Payment */}
-            {selectedSno && !receipt && (
+            {selectedApplicationGuid && !receipt && (
               <div className="card">
                 <div className="card-hdr">
                   <div className="card-title"><span className="ctitle-icon"><i className="lni lni-credit-cards"></i></span> Step 3 · Record Payment</div>
@@ -411,58 +421,42 @@ export default function PaymentConsolePage() {
                   </div>
                   <div className="fg">
                     <div className="lbl">Currency Received <span className="req">*</span></div>
-                    <select className="ctrl" value={currency} onChange={e => setCurrency(e.target.value)}>
+                    <select className="ctrl" value={currencyGuid} onChange={e => setCurrencyGuid(e.target.value)}>
                       <option value="">— Select Currency —</option>
-                      <option value="USD">USD (US Dollar)</option>
-                      <option value="UGX">UGX (Uganda Shilling)</option>
-                      <option value="KES">KES (Kenya Shilling)</option>
+                      {currencies.map(c => <option key={c.currencyGuid} value={c.currencyGuid}>{c.currencyCode} — {c.currencyName}</option>)}
                     </select>
                   </div>
                 </div>
 
-                {conversion && (
-                  <div className="mb-[14px] p-4 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100">
-                    <div className="flex items-center gap-4 flex-wrap justify-center">
-                      <div className="text-center">
-                        <div className="font-bold text-g400 uppercase mb-1" style={{ fontSize: 10.5, letterSpacing: '.06em' }}>Amount Received</div>
-                        <div className="font-extrabold text-g900" style={{ fontSize: 18 }}>{conversion.origLabel}</div>
-                      </div>
-                      <div className="text-b300" style={{ fontSize: 22 }}>→</div>
-                      <div className="text-center">
-                        <div className="font-bold text-g400 uppercase mb-1" style={{ fontSize: 10.5, letterSpacing: '.06em' }}>Converted to UGX</div>
-                        <div className="font-extrabold text-blue" style={{ fontSize: 18 }}>UGX {Math.round(conversion.amtUGX).toLocaleString()}</div>
-                      </div>
-                    </div>
-                    <div className="text-center text-g400 mt-2" style={{ fontSize: 11 }}>{conversion.rateLabel}</div>
-                  </div>
-                )}
-
                 <div className="g2 mb-[14px]">
                   <div className="fg">
-                    <div className="lbl">Payment Method <span className="req">*</span></div>
-                    <select className="ctrl" value={method} onChange={e => setMethod(e.target.value as 'cash' | 'bank')}>
-                      <option value="cash">Cash</option>
-                      <option value="bank">Bank Transfer</option>
-                    </select>
+                    <div className="lbl">Payment Date <span className="req">*</span></div>
+                    <input className="ctrl" type="date" value={payDate} onChange={e => setPayDate(e.target.value)} />
                   </div>
                   <div className="fg">
-                    <div className="lbl">Receipt Book <span className="req">*</span></div>
-                    <select className="ctrl" value={receiptBookGuid} onChange={e => setReceiptBookGuid(e.target.value)}>
-                      <option value="">— Select Receipt Book —</option>
-                      {receiptBooks.map(r => <option key={r.receiptBookGuid} value={r.receiptBookGuid}>{r.bookCode}</option>)}
+                    <div className="lbl">Payment Method <span className="req">*</span></div>
+                    <select className="ctrl" value={payType} onChange={e => setPayType(e.target.value)}>
+                      {Object.entries(PAY_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </div>
+                </div>
+
+                <div className="fg mb-[14px]">
+                  <div className="lbl">Receipt Book <span className="req">*</span></div>
+                  <select className="ctrl" value={receiptBookGuid} onChange={e => setReceiptBookGuid(e.target.value)}>
+                    <option value="">— Select Receipt Book —</option>
+                    {receiptBooks.map(r => <option key={r.receiptBookGuid} value={r.receiptBookGuid}>{r.bookCode}</option>)}
+                  </select>
                 </div>
 
                 {showBankFields && (
                   <div className="mb-[14px]">
-                    <div className="info-box mb-[10px]"><i className="lni lni-apartment"></i> Bank Transfer accepted. Cheques and DDs are <strong>not</strong> accepted.</div>
                     <div className="g2">
                       <div className="fg">
-                        <div className="lbl">Bank Name</div>
-                        <select className="ctrl" value={bankGuid} onChange={e => setBankGuid(e.target.value)}>
+                        <div className="lbl">Bank Name <span className="req">*</span></div>
+                        <select className="ctrl" value={procBankGuid} onChange={e => setProcBankGuid(e.target.value)}>
                           <option value="">— Select Bank —</option>
-                          {banks.map(b => <option key={b.bankGuid} value={b.bankGuid}>{b.bankName}</option>)}
+                          {banks.map(b => <option key={b.procBankGuid} value={b.procBankGuid}>{b.bankName}</option>)}
                         </select>
                       </div>
                       <div className="fg">
@@ -480,8 +474,8 @@ export default function PaymentConsolePage() {
 
                 <div className="flex gap-[10px] justify-between items-center">
                   <button className="btn btn-neu" onClick={handleClear}><i className="lni lni-close"></i> Clear</button>
-                  <button className="btn btn-primary btn-lg" onClick={handleSave}>
-                    <i className="lni lni-save"></i> Save Payment &amp; Generate Receipt →
+                  <button className="btn btn-primary btn-lg" disabled={createPayment.isPending} onClick={handleSave}>
+                    <i className="lni lni-save"></i> {createPayment.isPending ? 'Saving…' : 'Save Payment & Generate Receipt →'}
                   </button>
                 </div>
               </div>
@@ -490,53 +484,45 @@ export default function PaymentConsolePage() {
 
           {/* RIGHT column: Allocation Preview + Receipt */}
           <div className="flex flex-col gap-5">
-            {selectedSno && (
+            {selectedApplicationGuid && (
               <div className="card" style={{ background: 'linear-gradient(135deg,var(--b50),var(--white))' }}>
                 <div className="card-hdr">
                   <div className="card-title"><span className="ctitle-icon"><i className="lni lni-layers"></i></span> Allocation Preview</div>
                   <span className="badge badge-blue">Auto-updated</span>
                 </div>
-                {!allocation ? (
+                {!payableLedgersParams ? (
                   <div className="text-center text-g400" style={{ padding: 32 }}>
                     <div className="mb-2" style={{ fontSize: 32 }}><i className="lni lni-layers"></i></div>
-                    <div style={{ fontSize: 13 }}>Enter a payment amount to see how funds will be allocated across priority ledgers.</div>
+                    <div style={{ fontSize: 13 }}>Enter a payment amount, currency, and date to see how funds will be allocated across outstanding ledgers.</div>
                   </div>
+                ) : isPreviewLoading ? (
+                  <div className="text-center text-g400" style={{ padding: 32, fontSize: 13 }}>Calculating allocation…</div>
+                ) : !payableLedgers || payableLedgers.lines.length === 0 ? (
+                  <div className="text-center text-g400" style={{ padding: 32, fontSize: 13 }}>No payable ledger lines for this amount.</div>
                 ) : (
                   <div>
                     <ScrollTable>
                       <table>
-                        <thead><tr><th>Priority</th><th>Fee Type</th><th>Outstanding</th><th>Allocated</th><th>Remaining</th><th>Status</th></tr></thead>
+                        <thead><tr><th>Ledger</th><th>Amount</th><th>Type</th></tr></thead>
                         <tbody>
-                          {allocation.rows.map(r => (
-                            <tr key={r.priority}>
-                              <td><span className="badge badge-grey font-mono">{r.priority}</span></td>
-                              <td>{r.type}</td>
-                              <td>{r.outstanding === 0 ? <span className="text-green">0 ✓</span> : `UGX ${r.outstanding.toLocaleString()}`}</td>
-                              <td className="text-green font-bold">{r.allocated > 0 ? fmtUGX(r.allocated) : '—'}</td>
-                              <td className={r.remaining > 0 ? 'text-amber' : 'text-green'}>{r.remaining > 0 ? `UGX ${Math.round(r.remaining).toLocaleString()}` : '0'}</td>
+                          {payableLedgers.lines.map((l, i) => (
+                            <tr key={`${l.intLedger}-${i}`}>
+                              <td>{l.ledgerName}</td>
+                              <td className="text-green font-bold">{l.currencyName} {l.amount.toLocaleString()}</td>
                               <td>
-                                {r.status === 'cleared' && <span className="badge badge-green">✓ Cleared</span>}
-                                {r.status === 'partial' && <span className="badge badge-amber">⬤ Partial</span>}
-                                {r.status === 'pending' && <span className="badge badge-grey">Pending</span>}
+                                {l.isDiscountLine && <span className="badge badge-green">Discount</span>}
+                                {l.isRoundingLine && <span className="badge badge-grey">Rounding</span>}
+                                {!l.isDiscountLine && !l.isRoundingLine && <span className="badge badge-blue">Ledger</span>}
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </ScrollTable>
-                    {allocation.discountMsg && (
-                      <div className="mt-[10px]"><div className="success-box"><i className="lni lni-dollar"></i> {allocation.discountMsg}</div></div>
-                    )}
-                    {allocation.roundingMsg && (
-                      <div className="mt-2"><div className="info-box"><i className="lni lni-information"></i> {allocation.roundingMsg}</div></div>
-                    )}
-                    {allocation.statusUpgrade && (
-                      <div className="mt-2">
-                        <div className="warn-box" style={{ background: 'var(--cyan-bg)', borderColor: 'var(--cyan)' }}>
-                          <i className="lni lni-rocket"></i> Student status will update to <strong>Registered</strong> upon clearing Registration Fee.
-                        </div>
-                      </div>
-                    )}
+                    <div className="mt-[10px] p-3 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100 flex justify-between items-center">
+                      <span className="text-muted" style={{ fontSize: 12 }}>Remaining Balance After Payment</span>
+                      <span className="font-bold text-blue">{selectedCurrency?.currencyCode ?? ''} {payableLedgers.balance.toLocaleString()}</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -553,17 +539,18 @@ export default function PaymentConsolePage() {
                     <div className="text-g400 uppercase font-bold mt-1" style={{ fontSize: 10, letterSpacing: '.06em' }}>Official Fee Payment Receipt</div>
                   </div>
                   <div className="receipt-row"><span className="text-muted">Student Name</span><span className="font-bold">{receipt.name}</span></div>
-                  <div className="receipt-row"><span className="text-muted">Student Number</span><span className="font-mono text-blue">{receipt.sno}</span></div>
+                  <div className="receipt-row"><span className="text-muted">App. Ref</span><span className="font-mono text-blue">{receipt.refNo}</span></div>
                   <div className="receipt-row"><span className="text-muted">Programme</span><span>{receipt.prog}</span></div>
                   <div className="receipt-row"><span className="text-muted">Payment Method</span><span>{receipt.method}</span></div>
                   <div className="receipt-row"><span className="text-muted">Date &amp; Time</span><span>{receipt.date}</span></div>
-                  <div className="receipt-row"><span className="text-muted">Exchange Rate</span><span>{receipt.rateLabel}</span></div>
                   <div className="receipt-row"><span className="text-muted">Amount Paid</span><span className="font-bold">{receipt.amount}</span></div>
-                  <div className="receipt-row"><span className="text-muted">Converted (UGX)</span><span className="font-bold">{receipt.ugx}</span></div>
                   <div className="receipt-row" style={{ background: 'var(--green-bg)', borderRadius: 'var(--rxs)', padding: '6px 2px' }}>
-                    <span className="text-muted">Allocated To</span><span className="font-bold text-green">Tuition S1 &amp; outstanding ledgers — see allocation above</span>
+                    <span className="text-muted">Allocated To</span><span className="font-bold text-green">Outstanding ledgers — see allocation above</span>
                   </div>
                   <div className="receipt-total"><span>New Outstanding</span><span>{receipt.balance}</span></div>
+                  {receipt.advanceMessage && (
+                    <div className="mt-2"><div className="info-box"><i className="lni lni-information"></i> {receipt.advanceMessage}</div></div>
+                  )}
                   <div className="text-center text-g400 mt-3 pt-3 border-t border-dashed border-g300" style={{ fontSize: 10 }}>
                     Received by: Finance Office · ISBAT University<br />
                     System-generated receipt. Unique code: <span className="font-mono">{receipt.code}</span>

@@ -1,0 +1,26 @@
+meta {
+  name: Get Student Profile
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/finance/payment-console/student-profile/:applicationGuid
+  body: none
+  auth: none
+}
+
+params:path {
+  applicationGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+}
+
+docs {
+  Returns the full student/application profile shown at the top of the
+  Payment Console, plus any active discount assignments.
+
+  Success (200): data = StudentProfileDto (applicationGuid, appRefNo, firstName,
+  lastName, phone, emailId, intakeCode, yearCode, intakeGuid, campusGuid,
+  programGuid, semesterGuid, feeHdGuid, batchGuid, refugee, refugeeId,
+  studCategory, gender, action, universityEmail).
+  Failure: 404 `not_found` if no application with that GUID exists.
+}

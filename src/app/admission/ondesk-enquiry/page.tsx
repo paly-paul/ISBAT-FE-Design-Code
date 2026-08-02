@@ -1,13 +1,16 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
+import { SuccessPopup } from '@/components/modals/academic/SuccessPopup'
+import { FailurePopup } from '@/components/modals/academic/FailurePopup'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
 import { useCreateEnquiry } from '@/hooks/admission/useEnquiries'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { AuthError } from '@/lib/api/client'
 
 // Today's date at midnight, formatted the same way the confirmed payload
 // sample uses (no timezone offset) — matches enquiryDate/dob's "T00:00:00" shape.
@@ -22,26 +25,30 @@ function todayAtMidnight() {
 export default function OnDeskEnquiryPage() {
   const router = useRouter()
   const permissions = usePagePermissions()
-  const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+  const [saved, setSaved] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
 
-  const { data: intakes = [] }  = useIntakes()
-  const { data: campuses = [] } = useCampuses()
-  const { data: programs = [] } = useProgramMasters()
+  const { data: intakes = [] }        = useIntakes()
+  const { data: campuses = [] }       = useCampuses()
+  const { data: programs = [] }       = useProgramMasters()
+  const { data: enquirySources = [] } = useEnquirySourceMasters()
   const createEnquiry = useCreateEnquiry()
 
   const intakeOptions  = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   const campusOptions  = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
+  const sourceOptions  = enquirySources.map(s => ({ value: s.enquirySourceGuid, label: s.enquirySourceName }))
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName]   = useState('')
   const [phone, setPhone]         = useState('')
   const [email, setEmail]         = useState('')
   const [dob, setDob]             = useState('')
+  const [enquiryDate, setEnquiryDate] = useState(() => todayAtMidnight().slice(0, 10))
   const [intakeGuid, setIntakeGuid]   = useState('')
   const [campusGuid, setCampusGuid]   = useState('')
   const [programGuid, setProgramGuid] = useState('')
+  const [sourceGuid, setSourceGuid]   = useState('')
   const [notes, setNotes]         = useState('')
   const [errors, setErrors]       = useState<Record<string, string>>({})
 
@@ -56,45 +63,56 @@ export default function OnDeskEnquiryPage() {
     if (!phone.trim())     e.phone     = 'Phone is required'
     if (!email.trim())     e.email     = 'Email is required'
     if (!dob)               e.dob       = 'Date of Birth is required'
+    if (!enquiryDate)       e.enquiryDate = 'Enquiry Date is required'
     if (!intakeGuid)        e.intakeGuid = 'Please select an Intake'
     if (!campusGuid)        e.campusGuid = 'Please select a Campus'
+    if (!sourceGuid)        e.sourceGuid = 'Please select an Enquiry Source'
     setErrors(e)
     return Object.keys(e).length === 0
   }
 
   function resetForm() {
     setFirstName(''); setLastName(''); setPhone(''); setEmail(''); setDob('')
-    setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setNotes('')
+    setEnquiryDate(todayAtMidnight().slice(0, 10))
+    setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setSourceGuid(''); setNotes('')
     setErrors({})
   }
 
   function handleSave() {
     if (!validate()) return
+    const selectedSource = enquirySources.find(s => s.enquirySourceGuid === sourceGuid)
     createEnquiry.mutate(
       {
         intakeGuid,
         campusGuid,
-        // On-Desk Enquiry — hardcoded per page, same convention as Online
-        // Enquiry's enquirySource: 1. Not confirmed against a spec; flagged
-        // for the backend team to verify the expected value.
-        enquirySource: 2,
+        enquirySourceGuid: sourceGuid,
         studentName: `${firstName.trim()} ${lastName.trim()}`.trim(),
-        enquiryDate: todayAtMidnight(),
+        enquiryDate: `${enquiryDate}T00:00:00`,
         mobile: phone.trim(),
         email: email.trim() || null,
         countryCode: 'UG',
         dob: `${dob}T00:00:00`,
         remarks: notes.trim() || null,
         programGuid: programGuid || null,
-        intIsbatSource: null,
-        sourceName: null,
+        // No Isbat Enquiry Source picker on this form yet — see the note in
+        // lib/api/admission/enquiry.ts.
+        isbatSourceGuid: null,
+        sourceName: selectedSource?.enquirySourceName ?? null,
         enquiryTag: null,
       },
       {
-        onSuccess: () => { showToast('Enquiry saved successfully.', 'success'); resetForm() },
-        onError: (error: Error) => showToast(error.message || 'Failed to save enquiry. Please try again.', 'error'),
+        onSuccess: () => setSaved(true),
+        onError: (error: Error) => {
+          const code = error instanceof AuthError ? error.code : undefined
+          setFailure(error.message || `Failed to save enquiry${code ? ` (${code})` : ''}. Please try again.`)
+        },
       },
     )
+  }
+
+  function handleSavedClose() {
+    setSaved(false)
+    resetForm()
   }
 
   return (
@@ -135,6 +153,11 @@ export default function OnDeskEnquiryPage() {
             {errors.dob && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.dob}</p>}
           </div>
           <div className="fg">
+            <label className="lbl">Enquiry Date <span className="text-clr-red">*</span></label>
+            <input className="ctrl" type="date" value={enquiryDate} onChange={e => { setEnquiryDate(e.target.value); clearError('enquiryDate') }} style={errors.enquiryDate ? { borderColor: 'var(--red)' } : undefined} />
+            {errors.enquiryDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryDate}</p>}
+          </div>
+          <div className="fg">
             <label className="lbl">Campus <span className="text-clr-red">*</span></label>
             <SearchSelect placeholder="— select —" options={campusOptions} value={campusGuid} onChange={val => { setCampusGuid(val); clearError('campusGuid') }} />
             {errors.campusGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campusGuid}</p>}
@@ -142,6 +165,11 @@ export default function OnDeskEnquiryPage() {
           <div className="fg">
             <label className="lbl">Enquiry Channel</label>
             <SearchSelect placeholder="— select —" options={['Walk-in', 'Phone', 'Online', 'Kiosk']} />
+          </div>
+          <div className="fg">
+            <label className="lbl">Enquiry Source <span className="text-clr-red">*</span></label>
+            <SearchSelect placeholder="— select —" options={sourceOptions} value={sourceGuid} onChange={val => { setSourceGuid(val); clearError('sourceGuid') }} />
+            {errors.sourceGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.sourceGuid}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Programme Interest</label>
@@ -172,7 +200,21 @@ export default function OnDeskEnquiryPage() {
         </div>
       </div>
 
-      <Toast toast={toast} />
+      {saved && (
+        <div className="modal-overlay open">
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <SuccessPopup title="Enquiry Saved!" subtitle="The enquiry has been recorded successfully." onClose={handleSavedClose} />
+          </div>
+        </div>
+      )}
+
+      {failure && (
+        <div className="modal-overlay open">
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <FailurePopup title="Couldn't Save Enquiry" subtitle={failure} onClose={() => setFailure(null)} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,0 +1,20 @@
+meta {
+  name: Get Ledger Others
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/finance/payment-console/ledger-others
+  body: none
+  auth: none
+}
+
+docs {
+  Returns the lookup list of "other" ledger types (non-tuition fee categories,
+  e.g. library fine, hostel fee) used to populate the ledger dropdown when
+  creating an "other" payment.
+
+  Success (200): data = array of LedgerOthersDto (ledgerOthersGuid, ledgerCode,
+  ledgerName).
+}

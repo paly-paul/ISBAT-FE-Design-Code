@@ -1,0 +1,25 @@
+meta {
+  name: Get Paid Ledgers By Payment
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/finance/payment-console/paid-ledgers/:paymentGuid
+  body: none
+  auth: none
+}
+
+params:path {
+  paymentGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+}
+
+docs {
+  Returns the individual ledger lines that a specific tuition payment was
+  allocated against (drill-down from Payment History).
+
+  Success (200): data = array of PaidLedgerDto (intLedger, ledgerName,
+  semesterGuid, semName, amount, intCurrency, currencyName, amtDef,
+  intDiscount).
+  Failure: 404 `not_found` if no payment with that GUID exists.
+}

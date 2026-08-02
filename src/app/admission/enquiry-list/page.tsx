@@ -11,25 +11,25 @@ import { EnquiryFormModal } from '@/components/modals/admission/EnquiryFormModal
 import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignModal'
 import { useEnquiries, useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
-// enquiryStatus/followUpStatus are int-encoded enums with no confirmed
-// label mapping anywhere yet — showing the raw number rather than guessing
-// a Pending/Converted-style label (see the note in lib/api/admission/enquiry.ts).
-function statusBadge(status: number | null) {
-  if (status === null) return <span className="badge badge-grey">—</span>
-  return <span className="badge badge-blue">Status {status}</span>
+// enquiryStatusGuid resolves against the real Enquiry Status master
+// (useEnquiryStatuses) — same client-side resolution pattern as
+// resolveProgramName below, since the enquiry row itself doesn't carry the
+// status name.
+function statusBadge(statusName: string | undefined) {
+  if (!statusName) return <span className="badge badge-grey">—</span>
+  return <span className="badge badge-blue">{statusName}</span>
 }
 
-// enquirySource's own int label set still isn't confirmed (samples show 2,
-// 5, 7, 9 with no key), but sourceName (from the Enquiry Source master, set
-// via the create form's "Enquiry Source" dropdown) is a real string and
-// reads far better in this column — fall back to the raw number only when
-// sourceName wasn't captured for that enquiry.
-function sourceBadge(source: number, sourceName: string | null) {
-  return <span className="badge badge-grey">{sourceName ?? `Source ${source}`}</span>
+// sourceName (from the Enquiry Source master, set via the create form's
+// "Enquiry Source" dropdown) is already a real resolved string — no need to
+// fall back to the raw enquirySourceGuid.
+function sourceBadge(sourceName: string | null) {
+  return <span className="badge badge-grey">{sourceName ?? '—'}</span>
 }
 
 export default function EnquiryListPage() {
@@ -53,6 +53,12 @@ export default function EnquiryListPage() {
     if (row.programName) return row.programName
     if (!row.programGuid) return '—'
     return programs.find(p => p.programGuid === row.programGuid)?.programName ?? '—'
+  }
+
+  const { data: enquiryStatuses = [] } = useEnquiryStatuses()
+  function resolveStatusName(enquiryStatusGuid: string | null) {
+    if (!enquiryStatusGuid) return undefined
+    return enquiryStatuses.find(s => s.enquiryStatusGuid === enquiryStatusGuid)?.enquiryStatusName
   }
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
@@ -130,9 +136,9 @@ export default function EnquiryListPage() {
                   <td className="text-sm text-g600">{r.mobile}</td>
                   <td className="text-sm text-g600">{r.email}</td>
                   <td>{resolveProgramName(r)}</td>
-                  <td>{sourceBadge(r.enquirySource, r.sourceName)}</td>
+                  <td>{sourceBadge(r.sourceName)}</td>
                   <td className="text-sm text-g600">{r.enquiryDate.slice(0, 10)}</td>
-                  <td>{statusBadge(r.enquiryStatus)}</td>
+                  <td>{statusBadge(resolveStatusName(r.enquiryStatusGuid))}</td>
                 </tr>
               ))}
             </tbody>

@@ -1,0 +1,23 @@
+meta {
+  name: Get Refunds By Payment
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/finance/payment-console/refunds/:paymentGuid
+  body: none
+  auth: none
+}
+
+params:path {
+  paymentGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+}
+
+docs {
+  Returns any refunds issued against a specific payment.
+
+  Success (200): data = array of RefundDto (refundGuid, refundDate, amount,
+  intCurrency, currencyName, intLedger, ledgerName, remarks).
+  Failure: 404 `not_found` if no payment with that GUID exists.
+}

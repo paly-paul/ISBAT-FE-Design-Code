@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteQualification,
+  getApplications,
   getFilingCountries,
   saveGeneral,
   saveQualification,
@@ -12,6 +13,15 @@ import {
 } from '@/lib/api/admission/applicationFiling'
 
 const FILING_KEY = ['application-filing']
+
+// Backs /admission/applicants. No staleTime override — same default-fresh
+// behavior as the rest of this hook file.
+export function useApplications(page: number, pageSize: number) {
+  return useQuery({
+    queryKey: [...FILING_KEY, 'list', page, pageSize],
+    queryFn: () => getApplications(page, pageSize),
+  })
+}
 
 export function useFilingCountries() {
   return useQuery({
@@ -63,6 +73,7 @@ export function useSubmitApplication() {
 }
 
 export type {
+  ApplicationListItem,
   CountryDropdownDto,
   FilingApplicationSearchResult,
   SaveGeneralInput,

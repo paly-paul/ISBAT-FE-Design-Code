@@ -1,0 +1,24 @@
+meta {
+  name: Get All Outstanding Ledgers
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/finance/payment-console/outstanding-all/:applicationGuid
+  body: none
+  auth: none
+}
+
+params:path {
+  applicationGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+}
+
+docs {
+  Returns outstanding balances across all payment categories (tuition, other,
+  NCHE, guild) for the student, not just tuition ledgers.
+
+  Success (200): data = array of AllOutstandingItemDto (category [1=Tuition,
+  2=Other, 3=Nche, 4=Guild], intLedger, semesterGuid, description, intCurrency,
+  currencyName, outstanding).
+}
