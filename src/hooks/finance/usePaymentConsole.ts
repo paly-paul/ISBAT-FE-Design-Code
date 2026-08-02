@@ -1,0 +1,72 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  createPayment,
+  getOutstandingLedgers,
+  getPayableLedgers,
+  getPaymentHistory,
+  getStudentProfile,
+  searchStudents,
+  PaymentInput,
+  PayableLedgersParams,
+} from '@/lib/api/finance/paymentConsole'
+
+const PAYMENT_CONSOLE_KEY = ['payment-console']
+
+export function useSearchStudents(searchTerm: string, pageNumber: number, pageSize: number, enabled: boolean) {
+  return useQuery({
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'search', searchTerm, pageNumber, pageSize],
+    queryFn: () => searchStudents(searchTerm, pageNumber, pageSize),
+    enabled,
+  })
+}
+
+export function useStudentProfile(applicationGuid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'profile', applicationGuid],
+    queryFn: () => getStudentProfile(applicationGuid as string),
+    enabled: enabled && !!applicationGuid,
+  })
+}
+
+export function useOutstandingLedgers(applicationGuid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-ledgers', applicationGuid],
+    queryFn: () => getOutstandingLedgers(applicationGuid as string),
+    enabled: enabled && !!applicationGuid,
+  })
+}
+
+export function usePaymentHistory(applicationGuid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'payment-history', applicationGuid],
+    queryFn: () => getPaymentHistory(applicationGuid as string),
+    enabled: enabled && !!applicationGuid,
+  })
+}
+
+// params is expected to already be debounced by the caller (Step 3's Amount/
+// Currency/Date fields change on every keystroke — this hook itself doesn't
+// debounce, it just fetches whatever params it's given).
+export function usePayableLedgers(params: PayableLedgersParams | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'payable-ledgers', params],
+    queryFn: () => getPayableLedgers(params as PayableLedgersParams),
+    enabled: enabled && !!params,
+  })
+}
+
+export function useCreatePayment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: PaymentInput) => createPayment(input),
+    // Step 2's outstanding-ledgers/payment-history for this application are
+    // now stale the moment the payment lands — refetch both.
+    onSuccess: (_result, input) => {
+      queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-ledgers', input.applicationGuid] })
+      queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'payment-history', input.applicationGuid] })
+    },
+  })
+}
+
+export type { ApplicationSummary, OutstandingLedger, PayableLedgerLine, PayableLedgersParams, PaymentHistoryEntry, PaymentInput, PaymentResult, StudentProfile } from '@/lib/api/finance/paymentConsole'
+export { PAYMENT_CATEGORY_LABELS, PAY_TYPE_LABELS } from '@/lib/api/finance/paymentConsole'

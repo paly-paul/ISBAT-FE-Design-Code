@@ -2,13 +2,17 @@ import { apiGet, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
+// Confirmed field-for-field against a real Create.bru sample payload —
+// note there's no top-level `enquirySource` int on create (that field only
+// appears on the read-side Enquiry DTO below); don't add it back in.
 export interface EnquiryInput {
   intakeGuid: string
   campusGuid: string
-  // Hardcoded per page — this form is the public "Online Enquiry" channel;
-  // on-desk/kiosk enquiry pages hardcode their own distinct value (2 for
-  // On-Desk, unconfirmed against a spec — see ondesk-enquiry/page.tsx).
-  enquirySource: number
+  // Required — confirmed via a real validation_error ("'Request Enquiry
+  // Source Guid' must not be empty.") when omitted. The guid of the
+  // selected Enquiry Source master record (enquirySourceMaster.ts /
+  // /config/enquiry-source-master), not the Isbat one below.
+  enquirySourceGuid: string
   studentName: string
   enquiryDate: string
   mobile: string
@@ -17,31 +21,34 @@ export interface EnquiryInput {
   dob: string
   remarks: string | null
   programGuid: string | null
-  // Isbat Enquiry Source (enquirySource.ts) only exposes isbatSourceGuid —
-  // no numeric field has been confirmed for it yet, so this is always sent
-  // null from the create forms until that's resolved. (Real records do
-  // carry this — see Enquiry.intIsbatSource below — just not sourced from
-  // the isbatSourceGuid-keyed master yet.)
-  intIsbatSource: number | null
+  // Isbat Enquiry Source guid (enquirySource.ts's isbatSourceGuid) — a
+  // genuinely different master from enquirySourceGuid above. Confirmed as
+  // a guid field (not the previously-assumed unconfirmed int), but the
+  // create forms don't have an Isbat Enquiry Source picker, so this is
+  // still always sent null.
+  isbatSourceGuid: string | null
   // enquirySourceName from the (separate) Enquiry Source master.
   sourceName: string | null
   enquiryTag: string | null
 }
 
-// Confirmed via a real GET /api/v1/admissions/enquiries response.
-// enquirySource/enquiryStatus/followUpStatus are int-encoded enums with no
-// label mapping confirmed anywhere yet — don't guess labels for these,
-// display the raw numbers until confirmed (same caution as discount.ts's
-// calcType). campusName/campusCode/programName/programCode come back null
-// on every row seen so far — the backend isn't resolving them — so callers
-// should resolve programGuid/campusGuid client-side instead of trusting
-// these fields.
+// Confirmed field-for-field against a real GET /api/v1/admissions/enquiries/:guid
+// response — supersedes the earlier guess that enquirySource/enquiryStatus/
+// followUpStatus/intIsbatSource were unconfirmed ints. They're all guids
+// (or absent entirely, in enquirySource's case — there's no int on read
+// either, only enquirySourceGuid). No label mapping exists client-side for
+// followUpStatusGuid/enquiryStatusGuid yet — resolve via the
+// FollowUpStatus/EnquiryStatus masters (useFollowUpStatuses/useEnquiryStatuses)
+// rather than displaying the raw guid. campusName/campusCode/programName/
+// programCode come back null on every row seen so far — the backend isn't
+// resolving them — so callers should resolve programGuid/campusGuid
+// client-side instead of trusting these fields.
 export interface Enquiry {
   enquiryGuid: string
   enquiryCode: string
   intakeGuid: string
   campusGuid: string
-  enquirySource: number
+  enquirySourceGuid: string | null
   studentName: string
   enquiryDate: string
   mobile: string
@@ -51,11 +58,11 @@ export interface Enquiry {
   remarks: string | null
   programGuid: string | null
   advisorGuid: string | null
-  followUpStatus: number | null
-  enquiryStatus: number | null
+  followUpStatusGuid: string | null
+  enquiryStatusGuid: string | null
   nextFollowDate: string | null
   enquiryTag: string | null
-  intIsbatSource: number | null
+  isbatSourceGuid: string | null
   sourceName: string | null
   campusName: string | null
   campusCode: string | null
@@ -92,11 +99,23 @@ export function createEnquiry(input: EnquiryInput): Promise<unknown> {
     const enquiry: Enquiry = {
       enquiryGuid: String(mockEnquirySeq),
       enquiryCode: `EQ-MOCK-${mockEnquirySeq++}`,
-      ...input,
+      intakeGuid: input.intakeGuid,
+      campusGuid: input.campusGuid,
+      enquirySourceGuid: input.enquirySourceGuid,
+      studentName: input.studentName,
+      enquiryDate: input.enquiryDate,
+      mobile: input.mobile,
       email: input.email ?? '',
+      countryCode: input.countryCode,
+      dob: input.dob,
+      remarks: input.remarks,
+      programGuid: input.programGuid,
+      enquiryTag: input.enquiryTag,
+      isbatSourceGuid: input.isbatSourceGuid,
+      sourceName: input.sourceName,
       advisorGuid: null,
-      followUpStatus: null,
-      enquiryStatus: null,
+      followUpStatusGuid: null,
+      enquiryStatusGuid: null,
       nextFollowDate: null,
       campusName: null,
       campusCode: null,

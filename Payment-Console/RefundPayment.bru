@@ -1,0 +1,36 @@
+meta {
+  name: Refund Payment
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{baseUrl}}/api/v1/finance/payment-console/payments/:paymentGuid/refund
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+params:path {
+  paymentGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+}
+
+body:json {
+  {
+    "amount": 50000,
+    "refundDate": "2026-07-30",
+    "remarks": "Refund for overpayment"
+  }
+}
+
+docs {
+  Issues a refund against an existing tuition payment. `remarks` is optional.
+
+  Success (201): data = RefundResultDto (refundGuid, paymentGuid, paymentCode,
+  receipt, remainingRefundableBalance).
+  Failure: 400 `validation_error` if the refund amount exceeds the refundable
+  balance; 404 `not_found` if no payment with that GUID exists.
+}

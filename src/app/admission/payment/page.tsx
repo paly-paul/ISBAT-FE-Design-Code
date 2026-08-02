@@ -16,7 +16,7 @@ import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useBanks } from '@/hooks/finance/useBanks'
 import { useCountries } from '@/hooks/config/useCountries'
-import { useEnquiries } from '@/hooks/admission/useEnquiries'
+import { useEnquiries, useEnquiry } from '@/hooks/admission/useEnquiries'
 import {
   useApplicationPaymentExemptionTypes,
   useApplicationPaymentFees,
@@ -212,6 +212,38 @@ export default function PaymentPage() {
   const { data: countries = [] }     = useCountries()
   const createPayment = useCreateApplicationPayment()
 
+  // Fetch full detail for the selected enquiry (fresh fields — intake/
+  // campus/programme/candidate info — that the dropdown's own label doesn't
+  // carry) and prefill the form from it, confirmed via a real GET
+  // /api/v1/admissions/enquiries/:guid response.
+  const { data: selectedEnquiry } = useEnquiry(form.enquiryGuid || null, !!form.enquiryGuid)
+  // Guards against re-applying the same enquiry's data over edits the user
+  // has since made — e.g. a background refetch on window focus returning a
+  // new object for the same guid shouldn't stomp on manual changes.
+  const appliedEnquiryGuidRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!selectedEnquiry || appliedEnquiryGuidRef.current === selectedEnquiry.enquiryGuid) return
+    appliedEnquiryGuidRef.current = selectedEnquiry.enquiryGuid
+    const [firstName, ...rest] = selectedEnquiry.studentName.trim().split(/\s+/)
+    const matchedCountry = countries.find(c => c.countryCode === selectedEnquiry.countryCode)
+    setForm(prev => ({
+      ...prev,
+      intakeGuid: selectedEnquiry.intakeGuid || prev.intakeGuid,
+      campusGuid: selectedEnquiry.campusGuid || prev.campusGuid,
+      programGuid: selectedEnquiry.programGuid ?? '',
+      semesterGuid: '',
+      batchGuid: '',
+      feeHdGuid: '',
+      firstName: firstName ?? '',
+      lastName: rest.join(' '),
+      phone: selectedEnquiry.mobile ?? prev.phone,
+      email: selectedEnquiry.email ?? prev.email,
+      countryGuid: matchedCountry?.countryGuid ?? prev.countryGuid,
+      phoneCode: matchedCountry?.countryPrefix ?? prev.phoneCode,
+    }))
+  }, [selectedEnquiry, countries])
+
   const enquiryOptions  = (enquiriesData?.items ?? []).map(e => ({ value: e.enquiryGuid, label: `${e.studentName} (${e.enquiryCode})` }))
   const intakeOptions   = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   const campusOptions   = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
@@ -312,6 +344,7 @@ export default function PaymentPage() {
 
   function handleClear() {
     setForm({ ...initialForm }); setShowReceipt(false); setPayProofFile(null)
+    appliedEnquiryGuidRef.current = null
   }
 
   return (

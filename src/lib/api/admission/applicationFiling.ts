@@ -57,6 +57,93 @@ interface FilingApplicationSearchResponse {
   pageSize: number
 }
 
+// Confirmed via a real GET /api/v1/admissions/application-filling/ list
+// response — the admin-facing "all applications" list (backs
+// /admission/applicants), a genuinely richer shape than
+// FilingApplicationSearchResult above: adds intApplication, enquiryGuid,
+// whatsApp, id/passport/visa file names, sponsor + two reference-contact
+// blocks, semesterGuid/batchTimeGuid/batchGuid, per-letter send flags/dates,
+// and modifiedDate. saveStatus/action/studCategory/intRegistrar/gender are
+// int-encoded with no confirmed label mapping anywhere — display raw,
+// don't guess, same caution as FilingApplicationSearchResult and Enquiry's
+// enquiryStatus.
+export interface ApplicationListItem {
+  intApplication: number
+  applicationGuid: string
+  appRefNo: string
+  enquiryGuid: string | null
+  intakeCode: string | null
+  yearCode: string | null
+  emailId: string | null
+  dob: string | null
+  firstName: string | null
+  lastName: string | null
+  gender: number | null
+  countryGuid: string | null
+  phone: string | null
+  whatsApp: string | null
+  nationalId: string | null
+  idUserFileName: string | null
+  passportNo: string | null
+  passUserFileName: string | null
+  visaUserFileName: string | null
+  vStartDate: string | null
+  vEndDate: string | null
+  spName: string | null
+  spEmail: string | null
+  spCountryGuid: string | null
+  spPhone: string | null
+  ref1Name: string | null
+  ref1Pos: string | null
+  ref1Org: string | null
+  ref1CountryCode: string | null
+  ref1Phone: string | null
+  ref1Add: string | null
+  ref2Name: string | null
+  ref2Pos: string | null
+  ref2Org: string | null
+  ref2CountryCode: string | null
+  ref2Phone: string | null
+  ref2Add: string | null
+  intakeGuid: string | null
+  campusGuid: string | null
+  programGuid: string | null
+  semesterGuid: string | null
+  feeHdGuid: string | null
+  batchTimeGuid: string | null
+  batchGuid: string | null
+  refugee: number | null
+  refugeeId: string | null
+  studUserFileName: string | null
+  saveStatus: number | null
+  action: number | null
+  justificationReg: string | null
+  approveDateReg: string | null
+  intRegistrar: number | null
+  docVerified: boolean | null
+  verifiedDate: string | null
+  docRemarks: string | null
+  admLetterSend: number | null
+  admLetterDate: string | null
+  provLetterSend: number | null
+  provLetterDate: string | null
+  accLetterSend: number | null
+  accLetterDate: string | null
+  studCategory: number | null
+  universityEmail: string | null
+  createdDate: string
+  modifiedDate: string | null
+}
+
+interface ApplicationListResponse {
+  items: ApplicationListItem[]
+  totalCount: number
+  pageNumber: number
+  pageSize: number
+}
+
+const mockApplications: ApplicationListItem[] = []
+
 // Confirmed via Application-Filling/SaveGeneral.bru — countryGuid/
 // spCountryGuid ARE real fields ("countryGuid replaces old intCountry +
 // countryCode fields", "spCountryGuid replaces old spCountryCode field").
@@ -164,6 +251,18 @@ const mockCountries: CountryDropdownDto[] = [
 export function getFilingCountries(): Promise<CountryDropdownDto[]> {
   if (MOCK_AUTH) return Promise.resolve(mockCountries)
   return apiGet<CountryDropdownDto[] | null>('/api/v1/admissions/application-filling/countries').then(data => data ?? [])
+}
+
+// Backs /admission/applicants — confirmed via a real GET response (see
+// ApplicationListItem above). Plain page/pageSize, no search param on this
+// endpoint (unlike payment-search above), so callers fetch a large page and
+// filter/paginate client-side, same pattern as batch-management.
+export function getApplications(page = 1, pageSize = 10): Promise<ApplicationListResponse> {
+  if (MOCK_AUTH) {
+    return Promise.resolve({ items: mockApplications, totalCount: mockApplications.length, pageNumber: page, pageSize })
+  }
+  return apiGet<ApplicationListResponse | null>(`/api/v1/admissions/application-filling/?page=${page}&pageSize=${pageSize}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
 export function searchApplicationsForFiling(searchTerm: string, pageNumber = 1, pageSize = 20): Promise<FilingApplicationSearchResponse> {

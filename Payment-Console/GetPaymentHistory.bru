@@ -1,0 +1,25 @@
+meta {
+  name: Get Payment History
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/finance/payment-console/payment-history/:applicationGuid
+  body: none
+  auth: none
+}
+
+params:path {
+  applicationGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+}
+
+docs {
+  Returns the full payment history for a student across all payment
+  categories (tuition, other, NCHE, guild, advance).
+
+  Success (200): data = array of PaymentHistoryDto (paymentGuid, category
+  [1=Tuition, 2=Other, 3=Nche, 4=Guild, 5=Advance], paymentCode, payDate,
+  amount, intCurrency, currencyName, receipt, intReceipt, bookCode, payType
+  [1=Cash, 2=Cheque, 3=Bank, 4=DemandDraft, 5=Online]).
+}

@@ -1,0 +1,40 @@
+meta {
+  name: Update Payment
+  type: http
+  seq: 18
+}
+
+put {
+  url: {{baseUrl}}/api/v1/finance/payment-console/payments/:paymentGuid
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+params:path {
+  paymentGuid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+}
+
+body:json {
+  {
+    "amount": 550000,
+    "payDate": "2026-07-30",
+    "bankGuid": null,
+    "remarks": "Corrected payment amount",
+    "cascadeToLaterPayments": false
+  }
+}
+
+docs {
+  Updates an existing tuition payment's amount/date/bank/remarks.
+  `cascadeToLaterPayments` (required) controls whether the resulting balance
+  change is re-applied to payments made after this one. `bankGuid`, `remarks`
+  are optional.
+
+  Success (200): data = updated PaymentResultDto.
+  Failure: 400 `validation_error`; 404 `not_found` if no payment with that
+  GUID exists.
+}
