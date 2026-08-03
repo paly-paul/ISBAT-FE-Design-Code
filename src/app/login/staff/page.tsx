@@ -27,8 +27,8 @@ export default function StaffLoginPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const idErr = validateStaffId(staffId)
-    if (idErr) { setIdError(idErr); return }
+    // const idErr = validateStaffId(staffId)
+    // if (idErr) { setIdError(idErr); return }
     const pwErr = validatePassword(password)
     if (pwErr) { setPasswordError(pwErr); return }
     setIdError(null)
@@ -102,10 +102,7 @@ export default function StaffLoginPage() {
             autoComplete="username"
             autoFocus
           />
-          {idError
-            ? <div className="err">{idError}</div>
-            : <div className="hint">Format: ROLE-YYYY-NNNN · Case-sensitive</div>
-          }
+          {idError && <div className="err">{idError}</div>}
         </div>
 
         <div className="isb-field">

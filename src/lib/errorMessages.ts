@@ -16,21 +16,19 @@ export function authErrorMessage(code: string): string {
   }
 }
 
-const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
-
 export function validateStaffId(id: string): string | null {
   if (!id.trim()) return 'Staff ID is required.'
-  if (MOCK_AUTH && !/^[A-Z]{2,4}-\d{4}-\d{4}$/.test(id)) {
-    return 'Format: ROLE-YYYY-NNNN · e.g. AR-2019-0042. Case-sensitive.'
-  }
+  // if (process.env.NEXT_PUBLIC_AUTH_MOCK === 'true' && !/^[A-Z]{2,4}-\d{4}-\d{4}$/.test(id)) {
+  //   return 'Format: ROLE-YYYY-NNNN · e.g. AR-2019-0042. Case-sensitive.'
+  // }
   return null
 }
 
 export function validateStudentId(id: string): string | null {
   if (!id.trim()) return 'Student ID is required.'
-  if (MOCK_AUTH && !/^ISB\/\d{4}\/[A-Z]{2,6}\/\d{4}$/.test(id)) {
-    return 'Format: ISB/YYYY/PROG/NNNN · e.g. ISB/2024/BSCS/0142'
-  }
+  // if (process.env.NEXT_PUBLIC_AUTH_MOCK === 'true' && !/^ISB\/\d{4}\/[A-Z]{2,6}\/\d{4}$/.test(id)) {
+  //   return 'Format: ISB/YYYY/PROG/NNNN · e.g. ISB/2024/BSCS/0142'
+  // }
   return null
 }
 

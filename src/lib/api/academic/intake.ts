@@ -88,6 +88,15 @@ interface IntakeListResponse {
   pageSize: number
 }
 
+// Optional server-side filters for GET /api/v1/academic/intakes. Both are
+// sent as explicit true/false (not omitted) when the caller wants the
+// backend to filter on that flag — e.g. currentAdmissionIntake=true&
+// currentIntake=false to fetch just the active admission intake.
+export interface GetIntakesFilters {
+  currentIntake?: boolean
+  currentAdmissionIntake?: boolean
+}
+
 // What the "Add Intake" form actually sends to POST /api/v1/academic/intakes.
 // intakeGuid/intakeCode aren't part of this — the backend generates both of
 // those itself and hands them back in the response, so they only belong on
@@ -208,9 +217,17 @@ const mockIntakes: Intake[] = [
 ]
 let mockIntakeSeq = mockIntakes.length + 1
 
-export function getIntakes(page = 1, pageSize = 10): Promise<Intake[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockIntakes)
-  return apiGet<IntakeListResponse | null>(`/api/v1/academic/intakes?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
+export function getIntakes(page = 1, pageSize = 10, filters?: GetIntakesFilters): Promise<Intake[]> {
+  if (MOCK_AUTH) {
+    let result = mockIntakes
+    if (filters?.currentIntake !== undefined) result = result.filter(i => i.currentIntake === filters.currentIntake)
+    if (filters?.currentAdmissionIntake !== undefined) result = result.filter(i => i.currentAdmissionIntake === filters.currentAdmissionIntake)
+    return Promise.resolve(result)
+  }
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (filters?.currentAdmissionIntake !== undefined) params.set('currentAdmissionIntake', String(filters.currentAdmissionIntake))
+  if (filters?.currentIntake !== undefined) params.set('currentIntake', String(filters.currentIntake))
+  return apiGet<IntakeListResponse | null>(`/api/v1/academic/intakes?${params.toString()}`).then(data => data?.items ?? [])
 }
 
 // Confirmed via GET /api/v1/academic/intakes/:intakeGuid — returns the same

@@ -1,4 +1,4 @@
-const API_GATEWAY_URL = process.env.API_GATEWAY_URL
+const API_GATEWAY_URL = process.env.API_GATEWAY_URL ?? process.env.NEXT_PUBLIC_API_GATEWAY_URL
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
