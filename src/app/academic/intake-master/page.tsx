@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { useIntakes, useCreateIntake, useUpdateIntake, useDeleteIntake, Intake } from '@/hooks/academic/useIntakes'
+import { useIntakes, useCreateIntake, useUpdateIntake, useDeleteIntake, useCurrentAcademicIntake, useCurrentAdmissionIntake, Intake } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -130,12 +130,15 @@ export default function Page() {
   }
 
   // Whichever intake the backend has flagged as the current one for teaching
-  // and for admissions — these back the two hero cards below. There isn't
-  // always a current admission intake (or even a current teaching intake),
-  // so both can come back undefined and the cards fall back to a neutral
-  // "not set" message instead of crashing.
-  const currentAcademicIntake = intakes.find(i => i.currentIntake)
-  const currentAdmissionIntake = intakes.find(i => i.currentAdmissionIntake)
+  // and for admissions — these back the two hero cards below. Fetched via
+  // their own GET /api/v1/academic/intakes?...&currentIntake=/&currentAdmissionIntake=
+  // filtered calls rather than scanned out of the full (pageSize=1000) table
+  // list, so the cards reflect the backend's own filter instead of a client
+  // guess. There isn't always a current admission intake (or even a current
+  // teaching intake), so both can come back undefined and the cards fall
+  // back to a neutral "not set" message instead of crashing.
+  const { data: currentAcademicIntake } = useCurrentAcademicIntake()
+  const { data: currentAdmissionIntake } = useCurrentAdmissionIntake()
 
   return (
     <>

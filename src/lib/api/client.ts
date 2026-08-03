@@ -1,7 +1,12 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? ''
+const API_BASE = (process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? '').trim()
 
 // Skip ngrok's browser warning page for local gateway requests.
 const NGROK_HEADERS = { 'ngrok-skip-browser-warning': 'true' }
+
+function buildUrl(path: string): string {
+  if (!API_BASE) return path
+  return `${API_BASE}${path}`
+}
 
 export class AuthError extends Error {
   constructor(
@@ -50,7 +55,7 @@ async function handleUnauthorized(): Promise<void> {
 
 // Some auth endpoints still use the older plain JSON format.
 export async function post<T>(path: string, body: unknown, retried = false): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(buildUrl(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...NGROK_HEADERS },
     credentials: 'include',
@@ -72,7 +77,7 @@ export async function post<T>(path: string, body: unknown, retried = false): Pro
 }
 
 export async function get<T>(path: string, retried = false): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(buildUrl(path), {
     method: 'GET',
     headers: NGROK_HEADERS,
     credentials: 'include',
@@ -102,7 +107,7 @@ interface ApiEnvelope<T> {
 }
 
 export async function apiPost<T>(path: string, body: unknown, retried = false): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(buildUrl(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...NGROK_HEADERS },
     credentials: 'include',
@@ -147,7 +152,7 @@ export async function apiPostForm<T>(path: string, formData: FormData, retried =
     }
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(buildUrl(path), {
     method: 'POST',
     headers: NGROK_HEADERS,
     credentials: 'include',
@@ -182,7 +187,7 @@ export async function apiPostForm<T>(path: string, formData: FormData, retried =
 // that accept an optional file on update too (e.g. course unit syllabus
 // replace).
 export async function apiPutForm<T>(path: string, formData: FormData, retried = false): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(buildUrl(path), {
     method: 'PUT',
     headers: NGROK_HEADERS,
     credentials: 'include',
@@ -209,7 +214,7 @@ export async function apiPutForm<T>(path: string, formData: FormData, retried = 
 }
 
 export async function apiPut<T>(path: string, body: unknown, retried = false): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(buildUrl(path), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...NGROK_HEADERS },
     credentials: 'include',
@@ -236,7 +241,7 @@ export async function apiPut<T>(path: string, body: unknown, retried = false): P
 }
 
 export async function apiDelete<T>(path: string, retried = false): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(buildUrl(path), {
     method: 'DELETE',
     headers: NGROK_HEADERS,
     credentials: 'include',
@@ -262,7 +267,7 @@ export async function apiDelete<T>(path: string, retried = false): Promise<T> {
 }
 
 export async function apiGet<T>(path: string, retried = false): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(buildUrl(path), {
     method: 'GET',
     headers: NGROK_HEADERS,
     credentials: 'include',
