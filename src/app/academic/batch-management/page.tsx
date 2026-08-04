@@ -3,6 +3,7 @@ import { useState, useMemo } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { NewBatchModal } from '@/components/modals/academic/NewBatchModal'
 import { EditBatchModal } from '@/components/modals/academic/EditBatchModal'
 import { Toast } from '@/components/Toast'
@@ -74,6 +75,13 @@ export default function Page() {
     return batchTimes.find(b => b.batchTimeGuid === batchTimeGuid)?.batchTime ?? '—'
   }
 
+  const searchMatches = useMemo(
+    () => search.trim()
+      ? sortedRows.filter(r => r.batchCode.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+      : [],
+    [sortedRows, search],
+  )
+
   // Semester is still scoped per-programme (no global semester list, only
   // GET .../semesters/dropdownforprogram?programGuid=), so resolving a name
   // means fetching each distinct programme's semester list and matching by
@@ -125,10 +133,13 @@ export default function Page() {
         <div className="pg-hdr">
           <div><div className="pg-title">Batch Management</div><div className="pg-sub">Create batches per intake · Assign Batch In-Charge</div></div>
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm"></i>
-              <input className="ctrl pl-8 w-56" placeholder="Search by batch code…" value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
+            <TableSearch
+              className="w-56"
+              placeholder="Search by batch code…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map(r => ({ id: r.batchGuid, primary: r.batchCode, secondary: programName(r.programGuid) }))}
+            />
             {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-batch-modal')}><i className="lni lni-plus"></i> Create Batch</button>}
           </div>
         </div>

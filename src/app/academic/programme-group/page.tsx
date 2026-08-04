@@ -6,6 +6,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { ProgrammeGroupModal } from '@/components/modals/academic/ProgrammeGroupModal'
 import { EditProgrammeGroupModal } from '@/components/modals/academic/EditProgrammeGroupModal'
 import { Toast } from '@/components/Toast'
+import { TableSearch } from '@/components/TableSearch'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
@@ -26,6 +27,7 @@ export default function Page() {
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingProgramGroupGuid, setEditingProgramGroupGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ProgramGroup | null>(null)
+  const [search, setSearch] = useState('')
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -46,9 +48,14 @@ export default function Page() {
   const createProgramGroup = useCreateProgramGroup()
   const updateProgramGroup = useUpdateProgramGroup()
   const deleteProgramGroup = useDeleteProgramGroup()
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
-  )
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.groupCode} ${r.groupName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredRows = rows.filter(r => {
+    if (search.trim() && !`${r.groupCode} ${r.groupName}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
+  })
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
@@ -95,7 +102,16 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-folder"></i></span> Programme Groups</div>
-            <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
+            <div className="flex gap-2">
+              <TableSearch
+                className="w-56"
+                placeholder="Search by group code or name…"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: r.programGroupGuid, primary: r.groupCode, secondary: r.groupName }))}
+              />
+              <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
+            </div>
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>

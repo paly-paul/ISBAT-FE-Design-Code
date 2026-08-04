@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
@@ -20,6 +21,7 @@ export default function Page() {
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingSourceGuid, setEditingSourceGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<EnquirySourceMaster | null>(null)
+  const [search, setSearch] = useState('')
 
   // No created-date field on this record (just guid + name) — approximate
   // "newest first" by reversing the list, assuming the backend returns rows
@@ -31,7 +33,17 @@ export default function Page() {
   const updateEnquirySourceMaster = useUpdateEnquirySourceMaster()
   const deleteEnquirySourceMaster = useDeleteEnquirySourceMaster()
 
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rowsNewestFirst, PAGE_SIZE)
+  // Live preview shown in the search dropdown as the user types — matches
+  // the same source-name test as the table's own search filter below.
+  const searchMatches = search.trim()
+    ? rowsNewestFirst.filter(r => r.enquirySourceName.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredRows = rowsNewestFirst.filter(r =>
+    !search.trim() || r.enquirySourceName.toLowerCase().includes(search.trim().toLowerCase())
+  )
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
@@ -67,6 +79,15 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-volume"></i></span> Enquiry Sources</div>
+            <div className="flex gap-2">
+              <TableSearch
+                className="w-56"
+                placeholder="Search by code or name…"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: r.enquirySourceGuid, primary: r.enquirySourceName }))}
+              />
+            </div>
           </div>
           <ScrollTable>
             <table>
@@ -79,7 +100,7 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : rowsNewestFirst.length === 0
+                  : filteredRows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
                 {pageItems.map((r) => (

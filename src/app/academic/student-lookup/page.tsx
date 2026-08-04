@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Pagination } from '@/components/Pagination'
@@ -22,13 +23,26 @@ export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [search, setSearch] = useState('')
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(STUDENT_ROWS, PAGE_SIZE)
+  const filteredRows = STUDENT_ROWS.filter(r => {
+    const q = search.trim().toLowerCase()
+    if (!q) return true
+    return `${r.studentNo} ${r.name} ${r.email}`.toLowerCase().includes(q)
+  })
+
+  // Live preview shown in the search dropdown as the user types — same
+  // studentNo/name/email test as filteredRows above, capped to a handful of rows.
+  const searchMatches = search.trim()
+    ? STUDENT_ROWS.filter(r => `${r.studentNo} ${r.name} ${r.email}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   return (
     <>
@@ -44,7 +58,13 @@ export default function Page() {
           <div className="card-hdr"><div className="card-title"><span className="ctitle-icon"><i className="lni lni-search-alt"></i></span> Search Student</div></div>
           <div className="g3">
             <div className="fg"><div className="lbl">Search by Name, Student No., or Email</div>
-              <div className="inp-wrap"><span className="inp-icon"><i className="lni lni-search-alt"></i></span><input className="ctrl" type="text" placeholder="e.g. ISB/2026/0142 or Nakato Sarah..." /></div>
+              <TableSearch
+                className="w-full"
+                placeholder="e.g. ISB/2026/0142 or Nakato Sarah..."
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: r.studentNo, primary: r.studentNo, secondary: r.name }))}
+              />
             </div>
             <div className="fg"><div className="lbl">Programme Filter</div>
               <SearchSelect

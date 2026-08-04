@@ -42,9 +42,12 @@ export function useIntake(intakeGuid: string | null, enabled: boolean) {
 // it), which left the Academic card's Sem Start/Term 1 End/Sem End chips
 // stuck on "—" even once the card itself resolved. Re-fetching by guid
 // gives the hero cards the fully populated record to read date fields off.
-async function fetchCurrentIntake(filters: GetIntakesFilters): Promise<Intake | undefined> {
+// react-query rejects a queryFn that resolves to `undefined` ("Query data
+// cannot be undefined") — null is the explicit "no current intake found"
+// value instead.
+async function fetchCurrentIntake(filters: GetIntakesFilters): Promise<Intake | null> {
   const [match] = await getIntakes(1, 10, filters)
-  if (!match) return undefined
+  if (!match) return null
   return getIntakeById(match.intakeGuid)
 }
 

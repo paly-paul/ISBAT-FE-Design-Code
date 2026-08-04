@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { NewFacultyModal } from '@/components/modals/academic/NewFacultyModal'
 import { EditFacultyModal } from '@/components/modals/academic/EditFacultyModal'
 import { Toast } from '@/components/Toast'
@@ -26,6 +27,7 @@ export default function Page() {
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingFaculty, setEditingFaculty] = useState<Faculty | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Faculty | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data: rows = [], isLoading } = useFaculties()
   const createFaculty = useCreateFaculty()
@@ -70,13 +72,21 @@ export default function Page() {
     return () => document.removeEventListener('click', closeFilter)
   }, [])
 
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => {
+  // Live preview shown in the search dropdown as the user types — matches
+  // the same code/name test as the table's own search filter below, capped
+  // to a handful of rows.
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.facultyCode} ${r.facultyName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredRows = rows.filter(r => {
+    if (search.trim() && !`${r.facultyCode} ${r.facultyName}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    return Object.entries(filters).every(([k, v]) => {
       if (!v.length) return true
       const cell = k === 'deanName' ? deanDisplayName(r) : String((r as unknown as Record<string, unknown>)[k])
       return v.includes(cell)
     })
-  )
+  })
 
   // No dedicated dean lookup endpoint yet — derive filter options from the
   // (resolved) deans present in the currently loaded page instead of a
@@ -108,7 +118,18 @@ export default function Page() {
           {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-faculty-modal')}><i className="lni lni-plus"></i> Add Faculty</button>}
         </div>
         <div className="card">
-          <div className="card-hdr"><div className="card-title"><span className="ctitle-icon"><i className="lni lni-library"></i></span> Faculties</div></div>
+          <div className="card-hdr">
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-library"></i></span> Faculties</div>
+            <div className="flex gap-2">
+              <TableSearch
+                className="w-56"
+                placeholder="Search by code or name…"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: r.facultyGuid, primary: r.facultyCode, secondary: r.facultyName }))}
+              />
+            </div>
+          </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead><tr><th style={{ width: 48 }}></th><th>Faculty Code</th><th>Faculty Name</th><th>Campus</th>{fth('Dean', 'deanName', deanOptions)}{/* <th>Programmes</th> — not returned by GET /api/v1/academic/faculties */}{/* <th>Course Units</th> */}</tr></thead>

@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
@@ -20,13 +21,22 @@ export default function Page() {
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingUnitCatGuid, setEditingUnitCatGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UnitCategory | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data: rows = [], isLoading } = useUnitCategories()
   const createUnitCategory = useCreateUnitCategory()
   const updateUnitCategory = useUpdateUnitCategory()
   const deleteUnitCategory = useDeleteUnitCategory()
 
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
+  const searchMatches = search.trim()
+    ? rows.filter(r => r.unitCatName.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredRows = rows.filter(r =>
+    !search.trim() || r.unitCatName.toLowerCase().includes(search.trim().toLowerCase())
+  )
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
@@ -62,6 +72,15 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-tag"></i></span> Unit Categories</div>
+            <div className="flex gap-2">
+              <TableSearch
+                className="w-56"
+                placeholder="Search by code or name…"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: r.unitCatGuid, primary: r.unitCatName }))}
+              />
+            </div>
           </div>
           <ScrollTable>
             <table>
@@ -74,7 +93,7 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : rows.length === 0
+                  : filteredRows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
                 {pageItems.map((r) => (

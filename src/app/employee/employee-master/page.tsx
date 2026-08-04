@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { NewEmployeeModal } from '@/components/modals/employee/NewEmployeeModal'
 import { EditEmployeeModal } from '@/components/modals/employee/EditEmployeeModal'
 import { AssignEmployeePermissionsModal } from '@/components/modals/employee/AssignEmployeePermissionsModal'
@@ -94,6 +95,10 @@ export default function Page() {
     return matchesFilters && matchesSearch
   })
 
+  const searchMatches = search.trim()
+    ? sortedRows.filter(r => r.empName.toLowerCase().includes(search.trim().toLowerCase()) || r.shortCode.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function fth(label: string, col: string, opts: string[]) {
@@ -117,10 +122,13 @@ export default function Page() {
         <div className="pg-hdr">
           <div><div className="pg-title">Employee Master</div><div className="pg-sub">All employees · Captures qualification details · Linked to Faculty &amp; Course Allocation</div></div>
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm"></i>
-              <input className="ctrl pl-8 w-56" placeholder="Search by name or code…" value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
+            <TableSearch
+              className="w-56"
+              placeholder="Search by name or code…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map(r => ({ id: r.employeeGuid, primary: r.shortCode, secondary: r.empName }))}
+            />
             {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-employee-modal')}><i className="lni lni-plus"></i> Add Employee</button>}
           </div>
         </div>

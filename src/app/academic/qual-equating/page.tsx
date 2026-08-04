@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -17,6 +18,7 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -37,9 +39,18 @@ export default function Page() {
     { name: 'Abubakar Faisal',    country: 'Kenya',    qualLevel: 'O-Level (KCSE)',        referredTo: 'UVTOP', referredBadge: 'badge-amber', submittedDate: '10 Apr 2026', status: 'Pending',   statusBadge: 'badge-amber',  statusIcon: '',              outcome: '—',                           outcomeBadge: '',             rowClass: 'flagged', variant: 'followup' },
     { name: 'Uwase Claudine',     country: 'Rwanda',   qualLevel: "Bachelor's Degree",     referredTo: 'NCHE',  referredBadge: 'badge-blue',  submittedDate: '15 Apr 2026', status: 'In Review', statusBadge: 'badge-purple', statusIcon: '',              outcome: '—',                           outcomeBadge: '',             rowClass: '',       variant: 'view' },
   ]
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
-  )
+  const filteredRows = rows.filter(r => {
+    const q = search.trim().toLowerCase()
+    if (q && !`${r.name} ${r.country}`.toLowerCase().includes(q)) return false
+    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
+  })
+
+  // Live preview shown in the search dropdown as the user types — same
+  // applicant name/country test as filteredRows above, capped to a handful of rows.
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.name} ${r.country}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function fth(label: string, col: string, opts: string[]) {
@@ -75,13 +86,20 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-world"></i></span> Equating Requests</div>
+            <TableSearch
+              className="w-56"
+              placeholder="Search by applicant or country…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map((r, i) => ({ id: `${r.name}-${i}`, primary: r.name, secondary: r.country }))}
+            />
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead><tr><th style={{ width: 48 }}></th><th>Applicant Name</th>{fth('Country of Qualification', 'country', ['DR Congo', 'Kenya', 'Rwanda'])}{fth('Qualification Level', 'qualLevel', ['A-Level Equivalent', 'O-Level (KCSE)', "Bachelor's Degree"])}<th>Referred To</th><th>Submitted Date</th>{fth('Status', 'status', ['Completed', 'Pending', 'In Review'])}{fth('Outcome', 'outcome', ['Equated — 2 Principal Passes', '—'])}</tr></thead>
               <tbody>
                 {filteredRows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  ? <EmptyState colSpan={999} hasFilters={!!search || Object.values(filters).some(v => v.length > 0)} onClearFilters={() => { setSearch(''); setFilters({}) }} />
                   : null}
                 {pageItems.map((r, i) => (
                   <tr key={i} className={r.rowClass}>

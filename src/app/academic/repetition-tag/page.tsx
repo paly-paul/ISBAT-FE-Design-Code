@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { NewRepTagModal } from '@/components/modals/academic/NewRepTagModal'
 import { EditRepTagModal } from '@/components/modals/academic/EditRepTagModal'
 import { Toast } from '@/components/Toast'
@@ -23,6 +24,7 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
   const [editingRepTagGuid, setEditingRepTagGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<RepetitionTag | null>(null)
 
@@ -68,9 +70,18 @@ export default function Page() {
   const createRepetitionTag = useCreateRepetitionTag()
   const updateRepetitionTag = useUpdateRepetitionTag()
   const deleteRepetitionTag = useDeleteRepetitionTag()
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
-  )
+  const filteredRows = rows.filter(r => {
+    const q = search.trim().toLowerCase()
+    if (q && !`${r.tagCode} ${r.tagName}`.toLowerCase().includes(q)) return false
+    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
+  })
+
+  // Live preview shown in the search dropdown as the user types — same
+  // code/name test as filteredRows above, ignoring the column filters and
+  // capped to a handful of rows.
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.tagCode} ${r.tagName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
@@ -109,6 +120,13 @@ export default function Page() {
               <span className="ctitle-icon"><i className="lni lni-reload"></i></span>
               Repetition Tags
             </div>
+            <TableSearch
+              className="w-56"
+              placeholder="Search by code or description…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map(r => ({ id: r.courseUnitRepetitionGuid, primary: r.tagCode, secondary: r.tagName }))}
+            />
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
@@ -124,7 +142,7 @@ export default function Page() {
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
                   : filteredRows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                    ? <EmptyState colSpan={999} hasFilters={!!search || Object.values(filters).some(v => v.length > 0)} onClearFilters={() => { setSearch(''); setFilters({}) }} />
                     : null}
                 {pageItems.map((r) => (
                   <tr key={r.courseUnitRepetitionGuid}>

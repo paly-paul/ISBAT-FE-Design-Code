@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { NewStudentModal } from '@/components/modals/student/NewStudentModal'
 import { EditStudentModal } from '@/components/modals/student/EditStudentModal'
 import { StudentProfileModal, StudentRecord } from '@/components/modals/student/StudentProfileModal'
@@ -26,6 +27,7 @@ export default function Page() {
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [selectedStudent, setSelectedStudent] = useState<StudentRecord | null>(null)
+  const [search, setSearch] = useState('')
 
   function nav(id: string) { router.push('/student/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -48,9 +50,15 @@ export default function Page() {
     { id: 'ISB/2023/BSIT/0201', name: 'Grace Nampijja',  programme: 'BSc. Information Technology', batch: 'BSIT-2023-SEP-B', status: 'Deferred' },
     { id: 'ISB/2021/NUR/0034',  name: 'Brian Ssemanda',  programme: 'Diploma in Nursing',          batch: 'NUR-2025-MAY-A', status: 'Graduated' },
   ]
+  function matchesSearch(r: typeof rows[number], term: string) {
+    return `${r.id} ${r.name}`.toLowerCase().includes(term)
+  }
+  const q = search.trim().toLowerCase()
   const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
+    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k]))) &&
+    (!q || matchesSearch(r, q))
   )
+  const searchMatches = q ? rows.filter(r => matchesSearch(r, q)).slice(0, 8) : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
@@ -77,7 +85,16 @@ export default function Page() {
           <button className="btn btn-primary" onClick={() => openModal('new-student-modal')}><i className="lni lni-plus"></i> Add Student</button>
         </div>
         <div className="card">
-          <div className="card-hdr"><div className="card-title"><span className="ctitle-icon"><i className="lni lni-graduation"></i></span> Students</div></div>
+          <div className="card-hdr">
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-graduation"></i></span> Students</div>
+            <TableSearch
+              className="w-56"
+              placeholder="Search by Student ID or name…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map(r => ({ id: r.id, primary: r.id, secondary: r.name }))}
+            />
+          </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead>
@@ -92,7 +109,7 @@ export default function Page() {
               </thead>
               <tbody>
                 {filteredRows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0) || !!search.trim()} onClearFilters={() => { setFilters({}); setSearch('') }} />
                   : null}
                 {pageItems.map((r, i) => (
                   <tr key={i}>

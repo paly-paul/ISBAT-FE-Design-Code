@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
@@ -24,6 +25,7 @@ export default function Page() {
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingBranchGuid, setEditingBranchGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<BankBranch | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data: rows = [], isLoading } = useBankBranches()
   const { data: banks = [] } = useBanks()
@@ -40,7 +42,15 @@ export default function Page() {
     return banks.find(b => b.bankGuid === guid)?.bankName ?? guid
   }
 
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
+  const filteredRows = rows.filter(r =>
+    !search.trim() || `${r.shortCode} ${r.branchName} ${bankName(r.bankGuid)}`.toLowerCase().includes(search.trim().toLowerCase())
+  )
+
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.shortCode} ${r.branchName} ${bankName(r.bankGuid)}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function openEditModal(guid: string) {
     setEditingBranchGuid(guid)
@@ -72,6 +82,13 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-map-marker"></i></span> Bank Branches</div>
+            <TableSearch
+              className="w-56"
+              placeholder="Search by code or name…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map(r => ({ id: r.bankBranchGuid, primary: r.shortCode, secondary: r.branchName }))}
+            />
           </div>
           <ScrollTable>
             <table>
@@ -88,8 +105,8 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : rows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
+                  : filteredRows.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={!!search} onClearFilters={() => setSearch('')} />
                     : null}
                 {pageItems.map((r) => (
                   <tr key={r.bankBranchGuid}>

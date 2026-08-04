@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { SearchSelect } from '@/components/SearchSelect'
+import { TableSearch } from '@/components/TableSearch'
 import { ProgrammeModal } from '@/components/modals/academic/ProgrammeModal'
 import { SpecializationModal } from '@/components/modals/academic/SpecializationModal'
 import { Toast } from '@/components/Toast'
@@ -27,6 +29,10 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  // '' means no filter — SearchSelect's placeholder state, not a literal "All ..." option.
+  const [levelFilter, setLevelFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [search, setSearch] = useState('')
   const [progMode, setProgMode] = useState<'add' | 'edit'>('add')
   const [editingProgramGuid, setEditingProgramGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ programGuid: string; progName: string } | null>(null)
@@ -101,9 +107,23 @@ export default function Page() {
   const groupFilterOpts = Array.from(new Set(rows.map(r => r.group)))
   const levelFilterOpts = Array.from(new Set(rows.map(r => r.level)))
 
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
-  )
+  // Live preview shown in the search dropdown as the user types — matches
+  // the same code/name test as the table's own search filter below, just
+  // capped to a handful of rows and ignoring the Level/Status dropdowns so
+  // it always reflects "what search alone would find".
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.progCode} ${r.progName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredRows = rows.filter(r => {
+    // The dropdown only offers the bare level name (Bachelor/Master/…), while
+    // r.level is that name plus the "· Nyr / Nsem" suffix — match on prefix
+    // rather than exact equality so this stays in sync with the column filter.
+    if (levelFilter && !r.level.startsWith(levelFilter)) return false
+    if (statusFilter && r.admissionStatus !== statusFilter) return false
+    if (search.trim() && !`${r.progCode} ${r.progName}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
+  })
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
@@ -148,8 +168,27 @@ export default function Page() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-graduation"></i></span> All Programme Versions</div>
             <div className="flex gap-2">
-              <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Levels</option><option>Bachelor&apos;s</option><option>Master&apos;s</option><option>PhD</option><option>Diploma</option></select>
-              <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Statuses</option><option>Active</option><option>Inactive</option></select>
+              <TableSearch
+                className="w-56"
+                placeholder="Search by code or name…"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: r.programGuid, primary: r.progCode, secondary: r.progName }))}
+              />
+              <SearchSelect
+                className="w-auto text-[var(--fs-sm)]"
+                placeholder="All Levels"
+                options={['Bachelor', 'Master', 'PhD', 'Diploma']}
+                value={levelFilter}
+                onChange={setLevelFilter}
+              />
+              <SearchSelect
+                className="w-auto text-[var(--fs-sm)]"
+                placeholder="All Statuses"
+                options={['Active', 'Inactive']}
+                value={statusFilter}
+                onChange={setStatusFilter}
+              />
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>
           </div>

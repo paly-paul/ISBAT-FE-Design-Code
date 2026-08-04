@@ -7,6 +7,7 @@ import { TtImportModal } from '@/components/modals/academic/TtImportModal'
 import { AddSlotModal } from '@/components/modals/academic/AddSlotModal'
 import { RoomMgmtModal } from '@/components/modals/academic/RoomMgmtModal'
 import { Toast } from '@/components/Toast'
+import { TableSearch } from '@/components/TableSearch'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -21,6 +22,7 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -44,9 +46,14 @@ export default function Page() {
     { day: 'Thursday',  time: '14:00–16:00', courseUnit: 'IT105 – Systems & Lab',          type: 'Practical', room: 'Lab-B',  capacity: 40, faculty: 'Dr. Ssekibuule Ronald', combined: 'BSC-IT-S26-DB' },
     { day: 'Friday',    time: '08:00–10:00', courseUnit: 'MBA101 – Managerial Economics',  type: 'Theory',    room: 'LR-02',  capacity: 60, faculty: 'Prof. Mukasa Charles',  combined: '—' },
   ]
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
-  )
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.courseUnit} ${r.faculty}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredRows = rows.filter(r => {
+    if (search.trim() && !`${r.courseUnit} ${r.faculty}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
+  })
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function fth(label: string, col: string, opts: string[]) {
@@ -163,7 +170,16 @@ export default function Page() {
         </div>
 
         <div className="card hidden" id="tt-list-view">
-          <div className="card-hdr"><div className="card-title"><span className="ctitle-icon"><i className="lni lni-clipboard"></i></span> List View — Schedule</div></div>
+          <div className="card-hdr">
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-clipboard"></i></span> List View — Schedule</div>
+            <TableSearch
+              className="w-56"
+              placeholder="Search by course unit or faculty…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map((r, i) => ({ id: `${r.day}-${r.time}-${i}`, primary: r.courseUnit, secondary: r.faculty }))}
+            />
+          </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table id="tt-list-table">
               <thead><tr><th style={{ width: 48 }}></th>{fth('Day', 'day', ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])}<th>Time</th><th>Course Unit</th>{fth('Type', 'type', ['Theory', 'Practical'])}{fth('Room', 'room', ['LR-01', 'LR-02', 'Lab-A', 'Lab-B'])}<th>Capacity</th>{fth('Faculty', 'faculty', ['Dr. Ssekibuule Ronald', 'Ms. Namutebi Joyce', 'Prof. Mukasa Charles'])}<th>Combined Batch?</th></tr></thead>

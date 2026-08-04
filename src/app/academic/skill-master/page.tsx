@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -110,6 +111,15 @@ export default function Page() {
       .filter(s => Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((s as unknown as Record<string, unknown>)[k]))))
   }, [skills, search, filters])
 
+  // Live preview shown in the search dropdown as the user types — same
+  // code/name test as filteredRows above, just ignoring the column filters
+  // and capped to a handful of rows.
+  const searchMatches = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return []
+    return skills.filter(s => s.skillName.toLowerCase().includes(q) || String(s.intEmployee).includes(q)).slice(0, 8)
+  }, [skills, search])
+
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   const stats = useMemo(() => ({
@@ -163,10 +173,13 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-bulb"></i></span> Lecturer Skills</div>
-            <div className="relative">
-              <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm"></i>
-              <input className="ctrl pl-8" style={{ width: 220 }} placeholder="Search skill or employee ID…" value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
+            <TableSearch
+              className="w-56"
+              placeholder="Search skill or employee ID…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map(s => ({ id: s.lecturerSkillGuid, primary: s.skillName || 'Unnamed skill', secondary: `Employee #${s.intEmployee}` }))}
+            />
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>

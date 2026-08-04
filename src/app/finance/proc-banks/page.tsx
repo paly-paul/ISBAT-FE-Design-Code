@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
@@ -23,6 +24,7 @@ export default function Page() {
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingBankGuid, setEditingBankGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ProcBank | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data: rows = [], isLoading } = useProcBanks()
   const createProcBank = useCreateProcBank()
@@ -39,7 +41,19 @@ export default function Page() {
     openModal('edit-proc-bank-modal')
   }
 
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
+  // Live preview shown in the search dropdown as the user types — matches
+  // the same code/name test as the table's own search filter below, capped
+  // to a handful of rows.
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.shortCode} ${r.bankName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredRows = rows.filter(r => {
+    if (search.trim() && !`${r.shortCode} ${r.bankName}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    return true
+  })
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function confirmDeleteProcBank() {
     if (!deleteTarget) return
@@ -66,6 +80,15 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-wallet"></i></span> Banks</div>
+            <div className="flex gap-2">
+              <TableSearch
+                className="w-56"
+                placeholder="Search by code or name…"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: r.procBankGuid, primary: r.shortCode, secondary: r.bankName }))}
+              />
+            </div>
           </div>
           <ScrollTable>
             <table>
@@ -84,8 +107,8 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : rows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
+                  : filteredRows.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
                     : null}
                 {pageItems.map((r) => (
                   <tr key={r.procBankGuid}>

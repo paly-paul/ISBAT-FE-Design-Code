@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ConfirmMovementModal } from '@/components/modals/academic/ConfirmMovementModal'
 import { Toast } from '@/components/Toast'
+import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
@@ -23,13 +24,22 @@ export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [search, setSearch] = useState('')
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(MOVEMENT_ROWS, PAGE_SIZE)
+  const searchMatches = search.trim()
+    ? MOVEMENT_ROWS.filter(r => `${r.studentNo} ${r.name} ${r.programme}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredMovementRows = MOVEMENT_ROWS.filter(r =>
+    !search.trim() || `${r.studentNo} ${r.name} ${r.programme}`.toLowerCase().includes(search.trim().toLowerCase())
+  )
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredMovementRows, PAGE_SIZE)
 
   return (
     <>
@@ -139,7 +149,16 @@ export default function Page() {
         <div className="card hidden" id="sm-preview">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-eye"></i></span> Movement Preview — Spring 2026 → Fall 2026</div>
-            <span className="badge badge-amber">Preview Only — Not Yet Executed</span>
+            <div className="flex gap-2 items-center">
+              <TableSearch
+                className="w-56"
+                placeholder="Search by student no., name or programme…"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: r.studentNo, primary: r.studentNo, secondary: r.name }))}
+              />
+              <span className="badge badge-amber">Preview Only — Not Yet Executed</span>
+            </div>
           </div>
           <ScrollTable className="mb-[14px]">
             <table>

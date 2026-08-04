@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { CourseUnitModal } from '@/components/modals/academic/CourseUnitModal'
 import { EditCourseUnitModal } from '@/components/modals/academic/EditCourseUnitModal'
 import { ElectiveSelectModal } from '@/components/modals/academic/ElectiveSelectModal'
@@ -78,6 +79,10 @@ export default function Page() {
     && (!search.trim() || `${r.courseUnitCode} ${r.courseUnitName}`.toLowerCase().includes(search.trim().toLowerCase()))
   )
 
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.courseUnitCode} ${r.courseUnitName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   // Column filter-popover helper — unused now that no column has a real
@@ -140,10 +145,13 @@ export default function Page() {
         <div className="pg-hdr">
           <div><div className="pg-title">Course Units Master (Curriculum)</div><div className="pg-sub">Define subjects per semester · Set Unit Type and Category · Attach approved syllabus · Configure assessment components</div></div>
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm"></i>
-              <input className="ctrl pl-8 w-56" placeholder="Search by code or name…" value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
+            <TableSearch
+              className="w-56"
+              placeholder="Search by code or name…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map(r => ({ id: r.courseUnitGuid, primary: r.courseUnitCode, secondary: r.courseUnitName }))}
+            />
             {permissions.add && <button className="btn btn-primary" onClick={() => openModal('cu-new-modal')}><i className="lni lni-plus"></i> Add Course Unit</button>}
           </div>
         </div>

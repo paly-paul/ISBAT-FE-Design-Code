@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignModal'
@@ -48,13 +49,16 @@ export default function EnquiryFollowupMasterPage() {
     return programs.find(p => p.programGuid === row.programGuid)?.programName ?? '—'
   }
 
-  const filteredRows = allRows.filter(r => {
-    if (!search.trim()) return true
-    const term = search.trim().toLowerCase()
+  function matchesSearch(r: typeof allRows[number], term: string) {
     return `${r.enquiryCode} ${r.studentName} ${resolveProgramName(r)} ${r.enquiryStatusName ?? ''} ${r.followUpStatusName ?? ''} ${r.enquirySourceName ?? ''}`
       .toLowerCase()
       .includes(term)
-  })
+  }
+
+  const filteredRows = allRows.filter(r => !search.trim() || matchesSearch(r, search.trim().toLowerCase()))
+  const searchMatches = search.trim()
+    ? allRows.filter(r => matchesSearch(r, search.trim().toLowerCase())).slice(0, 8)
+    : []
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
@@ -93,10 +97,13 @@ export default function EnquiryFollowupMasterPage() {
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-g800">Follow-up Register</h2>
-          <div className="relative">
-            <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm"></i>
-            <input className="ctrl pl-8 w-56" placeholder="Search by name, ref, status…" value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
+          <TableSearch
+            className="w-56"
+            placeholder="Search by name, ref, status…"
+            value={search}
+            onChange={setSearch}
+            results={searchMatches.map(r => ({ id: r.enquiryGuid, primary: r.enquiryCode, secondary: r.studentName }))}
+          />
         </div>
         <ScrollTable>
           <table>

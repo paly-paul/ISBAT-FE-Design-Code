@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { EmptyState } from '@/components/EmptyState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
@@ -47,6 +48,16 @@ export default function Page() {
     })
   }, [search, feeType])
 
+  // Live preview shown in the search dropdown as the user types — same
+  // match test as filteredRows' matchesSearch above, capped to 8 and
+  // ignoring the Fee Type filter so it always reflects "what search alone
+  // would find".
+  const searchMatches = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return []
+    return TRANSACTIONS.filter(t => t.name.toLowerCase().includes(q) || t.receipt.toLowerCase().includes(q) || t.sno.toLowerCase().includes(q)).slice(0, 8)
+  }, [search])
+
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function clearFilters() { setSearch(''); setFeeType('') }
@@ -60,11 +71,13 @@ export default function Page() {
             <div className="pg-sub">Complete transaction ledger · Spring 2026 · Search · Filter · Export</div>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <div className="relative">
-              <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm"></i>
-              <input className="ctrl pl-8" style={{ width: 220 }} type="search" placeholder="Name, receipt#, student no…"
-                value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
+            <TableSearch
+              className="w-56"
+              placeholder="Name, receipt#, student no…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map(t => ({ id: t.receipt, primary: t.name, secondary: `${t.receipt} · ${t.sno}` }))}
+            />
             <select className="ctrl w-auto" value={feeType} onChange={e => setFeeType(e.target.value)}>
               <option value="">All Fee Types</option>
               {FEE_TYPES.map(f => <option key={f} value={f}>{f}</option>)}

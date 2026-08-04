@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { FeeStructureModal } from '@/components/modals/academic/FeeStructureModal'
 import { Toast } from '@/components/Toast'
+import { TableSearch } from '@/components/TableSearch'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Pagination } from '@/components/Pagination'
@@ -37,6 +38,7 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [records, setRecords] = useState<FeeRecord[]>(MOCK_FEES)
   const [editRecord, setEditRecord] = useState<FeeRecord | null>(null)
+  const [search, setSearch] = useState('')
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -48,7 +50,15 @@ export default function Page() {
     showToast('Fee structure removed.', '')
   }
 
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(records, PAGE_SIZE)
+  const searchMatches = search.trim()
+    ? records.filter(r => `${r.feeCode} ${r.description}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredRecords = records.filter(r =>
+    !search.trim() || `${r.feeCode} ${r.description}`.toLowerCase().includes(search.trim().toLowerCase())
+  )
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRecords, PAGE_SIZE)
 
   return (
     <>
@@ -68,6 +78,16 @@ export default function Page() {
               </button>
             )}
           </div>
+        </div>
+
+        <div className="flex justify-end mb-3">
+          <TableSearch
+            className="w-56"
+            placeholder="Search by fee code or description…"
+            value={search}
+            onChange={setSearch}
+            results={searchMatches.map(r => ({ id: String(r.id), primary: r.feeCode, secondary: r.description }))}
+          />
         </div>
 
         <ScrollTable>

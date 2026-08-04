@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
 import { RejectModal } from '@/components/modals/admission/RejectModal'
 import { VettingReviewModal, VettingApplicant } from '@/components/modals/admission/VettingReviewModal'
@@ -38,6 +39,9 @@ export default function VettingPage() {
 
   const q = search.trim().toLowerCase()
   const filteredQueue = QUEUE.filter(row => !q || row.ref.toLowerCase().includes(q) || row.name.toLowerCase().includes(q))
+  const searchMatches = q
+    ? QUEUE.filter(row => row.ref.toLowerCase().includes(q) || row.name.toLowerCase().includes(q)).slice(0, 8)
+    : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredQueue, PAGE_SIZE)
 
@@ -54,10 +58,13 @@ export default function VettingPage() {
           <p className="text-sm text-g500 mt-1">Assistant Registrar reviews documents &amp; minimum standards</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative">
-            <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm" />
-            <input className="ctrl pl-8 w-56" placeholder="Search Application Ref No. / Student…" value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
+          <TableSearch
+            className="w-56"
+            placeholder="Search Application Ref No. / Student…"
+            value={search}
+            onChange={setSearch}
+            results={searchMatches.map(row => ({ id: row.ref, primary: row.ref, secondary: row.name }))}
+          />
           <SearchSelect
             options={[
               { value: 'all', label: 'All Programmes' },

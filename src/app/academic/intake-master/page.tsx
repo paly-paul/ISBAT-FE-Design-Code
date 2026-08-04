@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { NewIntakeModal } from '@/components/modals/academic/NewIntakeModal'
 import { EditIntakeModal } from '@/components/modals/academic/EditIntakeModal'
 import { Toast } from '@/components/Toast'
@@ -44,6 +45,7 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
   const [editingIntakeGuid, setEditingIntakeGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Intake | null>(null)
 
@@ -97,15 +99,24 @@ export default function Page() {
     return intake.academicCalendar?.[0]
   }
 
-  const filteredRows = intakes.filter(r =>
-    Object.entries(filters).every(([k, v]) => {
+  const filteredRows = intakes.filter(r => {
+    const q = search.trim().toLowerCase()
+    if (q && !`${displayIntakeCode(r)} ${r.description}`.toLowerCase().includes(q)) return false
+    return Object.entries(filters).every(([k, v]) => {
       if (!v.length) return true
       if (k === 'finYear') return v.includes(formatFinancialYear(r.financialYear))
       if (k === 'academic') return v.includes(r.currentIntake ? 'Current' : '—')
       if (k === 'admission') return v.includes(r.currentAdmissionIntake ? 'Current' : '—')
       return true
     })
-  )
+  })
+
+  // Live preview shown in the search dropdown as the user types — same
+  // code/description test as filteredRows above, ignoring the column
+  // filters and capped to a handful of rows.
+  const searchMatches = search.trim()
+    ? intakes.filter(r => `${displayIntakeCode(r)} ${r.description}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
@@ -212,6 +223,13 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-calendar"></i></span> All Intakes</div>
+            <TableSearch
+              className="w-56"
+              placeholder="Search by code or description…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map(r => ({ id: r.intakeGuid, primary: displayIntakeCode(r), secondary: r.description }))}
+            />
             {/* <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button> */}
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
@@ -221,7 +239,7 @@ export default function Page() {
                 {isLoading
                   ? <TableLoadingState colSpan={8} />
                   : filteredRows.length === 0
-                    ? <EmptyState colSpan={8} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                    ? <EmptyState colSpan={8} hasFilters={!!search || Object.values(filters).some(v => v.length > 0)} onClearFilters={() => { setSearch(''); setFilters({}) }} />
                     : null}
                 {/* Previous row markup (before GET /api/v1/academic/intakes was
                     wired up) — kept for reference; it read from the old `rows`

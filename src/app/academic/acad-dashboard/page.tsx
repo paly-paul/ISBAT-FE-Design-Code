@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
+import { TableSearch } from '@/components/TableSearch'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { Pagination } from '@/components/Pagination'
@@ -17,6 +18,7 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -38,9 +40,14 @@ export default function Page() {
     { batchCode: 'MBA-S1-E',      programme: 'MBA Business Admin',          semester: 'Semester 1', students: 24, allocation: 'Done',      allocationBadge: 'badge-green', allocationIcon: true,  timetable: 'Live',      timetableBadge: 'badge-green', timetableIcon: true,  cwStatus: 'Active',       cwBadge: 'badge-green', actionBtn: 'btn-neu',   actionLabel: 'View →',     actionNav: 'coursework' },
     { batchCode: 'BENG-CIV-S2-D', programme: 'BEng. Civil Engineering',     semester: 'Semester 2', students: 31, allocation: 'Done',      allocationBadge: 'badge-green', allocationIcon: true,  timetable: 'Pending',   timetableBadge: 'badge-blue',  timetableIcon: false, cwStatus: 'Not Started',  cwBadge: 'badge-grey',  actionBtn: 'btn-neu',   actionLabel: 'Schedule →', actionNav: 'timetable' },
   ]
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
-  )
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.batchCode} ${r.programme}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredRows = rows.filter(r => {
+    if (search.trim() && !`${r.batchCode} ${r.programme}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
+  })
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function fth(label: string, col: string, opts: string[]) {
@@ -188,6 +195,13 @@ export default function Page() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-folder"></i></span> Active Batches — Spring 2026</div>
             <div className="flex gap-2">
+              <TableSearch
+                className="w-56"
+                placeholder="Search by batch code or programme…"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: r.batchCode, primary: r.batchCode, secondary: r.programme }))}
+              />
               <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>BEng. Civil</option><option>MBA</option></select>
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>

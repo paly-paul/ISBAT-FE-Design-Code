@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
+import { TableSearch } from '@/components/TableSearch'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { Pagination } from '@/components/Pagination'
@@ -17,6 +18,7 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -37,9 +39,14 @@ export default function Page() {
     { unit: 'IT102 – Computer Org.',         batch: 'BSC-IT-S1-D', date: '22 Mar 2026', time: '02:00 PM', duration: '60 min', outOf: 50, attempted: '—',      attemptedClass: '',           cleared: 38, status: 'Upcoming',      statusBadge: 'badge-blue',  statusIcon: '',              rowClass: '', variant: 'manage' },
     { unit: 'MBA101 – Managerial Econ.',     batch: 'MBA-S1-E',    date: '—',           time: '—',         duration: '60 min', outOf: 50, attempted: '—',      attemptedClass: '',           cleared: 24, status: 'Not Scheduled', statusBadge: 'badge-grey',  statusIcon: '',              rowClass: '', variant: 'schedule' },
   ]
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes((r as unknown as Record<string, string>)[k]))
-  )
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.unit} ${r.batch}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredRows = rows.filter(r => {
+    if (search.trim() && !`${r.unit} ${r.batch}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    return Object.entries(filters).every(([k, v]) => !v.length || v.includes((r as unknown as Record<string, string>)[k]))
+  })
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function fth(label: string, col: string, opts: string[]) {
@@ -73,7 +80,16 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-display"></i></span> Scheduled Class Tests — Term 1</div>
-            <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Batches</option><option>BSC-IT-S1-D</option><option>MBA-S1-E</option></select>
+            <div className="flex gap-2">
+              <TableSearch
+                className="w-56"
+                placeholder="Search by course unit or batch…"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: r.unit, primary: r.unit, secondary: r.batch }))}
+              />
+              <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Batches</option><option>BSC-IT-S1-D</option><option>MBA-S1-E</option></select>
+            </div>
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>

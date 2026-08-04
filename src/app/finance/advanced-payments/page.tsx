@@ -4,6 +4,7 @@ import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
+import { TableSearch } from '@/components/TableSearch'
 
 const PAGE_SIZE = 5
 
@@ -26,9 +27,18 @@ const DEPOSITS: Deposit[] = [
 
 export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [search, setSearch] = useState('')
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(DEPOSITS, PAGE_SIZE)
+  const filteredDeposits = DEPOSITS.filter(d =>
+    !search.trim() || `${d.name} ${d.sno}`.toLowerCase().includes(search.trim().toLowerCase())
+  )
+
+  const searchMatches = search.trim()
+    ? DEPOSITS.filter(d => `${d.name} ${d.sno}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredDeposits, PAGE_SIZE)
 
   return (
     <>
@@ -50,6 +60,13 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-arrow-up-circle"></i></span> Active Deposit Accounts</div>
+            <TableSearch
+              className="w-56"
+              placeholder="Search by name or student no…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map(d => ({ id: d.sno, primary: d.name, secondary: d.sno }))}
+            />
           </div>
           <ScrollTable>
             <table>
