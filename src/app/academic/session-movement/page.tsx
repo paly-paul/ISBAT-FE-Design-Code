@@ -54,17 +54,7 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="g2 mb-[18px]">
-          <div className="warn-box flex-col gap-[6px] items-start">
-            <span className="font-bold"><i className="lni lni-warning"></i> Execution Rules</span>
-            <ul className="ml-4 text-[var(--fs-sm)] flex flex-col gap-1">
-              <li>Must be run <strong>3–4 weeks before</strong> the session start date to prevent congestion</li>
-              <li>Executed <strong>batch-by-batch</strong> — never all at once — to avoid system overload</li>
-              <li>The <strong>original batch code stays fixed</strong>; only the semester number increments (e.g. Sem 2 → Sem 3)</li>
-              <li>Movement is <strong>blocked if student count = 0</strong> for that programme</li>
-              <li>This is <strong>irreversible</strong> — Dropout records are locked once executed</li>
-            </ul>
-          </div>
+        <div className="mb-[18px]">
           <div className="info-box flex-col gap-[6px] items-start">
             <span className="font-bold"><i className="lni lni-clipboard"></i> Tables Initialised on Movement</span>
             <div className="flex flex-col gap-[6px] text-[var(--fs-sm)]">

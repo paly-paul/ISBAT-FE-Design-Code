@@ -58,11 +58,6 @@ export function LogFollowupModal({ isOpen, onClose, record, onLog }: Props) {
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
-        <div className="info-box mb-3">
-          <i className="lni lni-information"></i>
-          <span><strong>{record.name}</strong> &mdash; assigned to {record.assignedTo}, due {record.followupDate}.</span>
-        </div>
-
         <div className="fg mb-3">
           <label className="lbl">Outcome <span className="req">*</span></label>
           <SearchSelect

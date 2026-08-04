@@ -10,7 +10,6 @@ export function ElectiveSelectModal({ isOpen, onClose, showToast }: ModalProps) 
           <div className="modal-title"><i className="lni lni-bar-chart"></i> Select Elective Paper — Batch BSC-IT-S26-DA · Sem 5</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
-        <div className="info-box mb-[14px]"><i className="lni lni-information"></i> Elective selection is a <strong>batch-level decision</strong> — once selected, <strong>all students</strong> in this batch must study the chosen paper for this academic session. The selection can only be made once per session.</div>
         <div className="flex flex-col gap-2 mb-[14px]">
           <label className="flex items-start gap-3 p-3 border-[1.5px] border-g200 rounded-[var(--rsm)] cursor-pointer transition-[var(--tr)]">
             <input type="radio" name="elective" className="mt-[2px] shrink-0" />
@@ -25,7 +24,6 @@ export function ElectiveSelectModal({ isOpen, onClose, showToast }: ModalProps) 
             <div><div className="font-bold">Remote Sensing &amp; GIS</div><div className="text-[var(--fs-sm)] text-g500">3 Credits · Theory · CW + CBT + UE</div></div>
           </label>
         </div>
-        <div className="warn-box"><i className="lni lni-warning"></i> This selection is final for this session. All 80 students in BSC-IT-S26-DA will be enrolled in the selected paper.</div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" onClick={() => { onClose(); showToast('Elective paper selected for batch. Curriculum updated.', 'success') }}><i className="lni lni-checkmark"></i> Confirm Elective Selection</button>

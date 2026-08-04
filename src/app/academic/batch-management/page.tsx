@@ -144,10 +144,6 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="warn-box mb-[14px]">
-          <i className="lni lni-warning"></i> <span>Admissions occur <strong>every semester (twice a year)</strong>. A new batch must be created for each intake. <strong>Specialization</strong> is assigned to the individual student — not the batch. <strong>Batch In-Charges</strong> can view batch reports but have no direct relation to programme courses.</span>
-        </div>
-
         <div className="g4 mb-[18px]">
           <div className="stat-card"><div className="stat-lbl">Total Batches</div><div className="stat-num">{serverTotalCount.toLocaleString()}</div></div>
         </div>

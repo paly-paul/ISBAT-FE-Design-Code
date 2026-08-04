@@ -158,9 +158,6 @@ export default function Page() {
           <div><div className="pg-title">Intake Master</div><div className="pg-sub">Configure academic sessions · Set all semester and term dates · Manage current intakes</div></div>
           {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-intake-modal')}><i className="lni lni-plus"></i> New Intake</button>}
         </div>
-        <div className="warn-box mb-5">
-          <i className="lni lni-warning"></i> <span><strong>Rule:</strong> Only one <em>Current Academic Intake</em> and one <em>Current Admission Intake</em> can be active at a time. All dates are manually set to allow flexibility for government notices, student requests, and external factors.</span>
-        </div>
         <div className="g2 mb-[18px]">
           {/* Previous hard-coded hero cards (before GET /api/v1/academic/intakes
               was wired up) — kept for reference. The cards below now pull from

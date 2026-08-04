@@ -332,15 +332,6 @@ export function AssignEmployeePermissionsModal({ isOpen, onClose, showToast, emp
                 <div style={{ fontSize: 12.5, color: 'var(--g500)', marginTop: 4 }}>Review the access scope before assigning it to this employee</div>
               </div>
 
-              <div className="info-box mb-3">
-                <i className="lni lni-user"></i>
-                <span>Assigning to: <strong>{employeeName}</strong> <span className="font-mono">({employee.shortCode})</span></span>
-              </div>
-              <div className="info-box mb-3">
-                <i className="lni lni-lock"></i>
-                <span>Permission group{loadedGroups.length > 1 ? 's' : ''}: <strong>{loadedGroups.map(g => g.group).join(', ')}</strong></span>
-              </div>
-
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {combinedBreakdown.filter(b => b.grantedCount > 0).map(b => (
                   <div key={b.module} style={{

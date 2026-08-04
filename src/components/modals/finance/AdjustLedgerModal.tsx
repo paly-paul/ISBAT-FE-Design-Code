@@ -58,9 +58,6 @@ export function AdjustLedgerModal({ isOpen, onClose, showToast, target }: Adjust
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
         <div>
-          <div className="danger-box mb-[14px]">
-            <i className="lni lni-warning"></i> This action creates a permanent audit trail entry. Proceed only with authorised adjustments.
-          </div>
           <div className="g2">
             <div className="fg">
               <div className="lbl">Fee Type</div>

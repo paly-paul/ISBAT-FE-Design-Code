@@ -3354,6 +3354,28 @@ body:has(.modal-overlay.open) {
   color: var(--g700)
 }
 
+/* Accent header variant — opt-in via an extra class on .modal-hdr, e.g.
+   <div className="modal-hdr modal-hdr-blue">, for modals that want a
+   colored header banner instead of the default plain white one. */
+.modal-hdr-blue {
+  background: linear-gradient(135deg, var(--b500), var(--b700));
+  border-bottom: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.modal-hdr-blue .modal-title {
+  color: #fff;
+}
+
+.modal-hdr-blue .modal-close {
+  color: rgba(255, 255, 255, .85);
+}
+
+.modal-hdr-blue .modal-close:hover {
+  background: rgba(255, 255, 255, .18);
+  color: #fff;
+}
+
 .modal>div:not(.modal-hdr):not(.modal-footer) {
   padding: 18px 22px
 }

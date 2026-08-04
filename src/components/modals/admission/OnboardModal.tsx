@@ -19,11 +19,6 @@ export function OnboardModal({ isOpen, onClose, showToast, nav }: ModalProps) {
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
 
-        <div className="success-box mb-4">
-          <i className="lni lni-checkmark-circle"></i>
-          <span>A new <strong>T_Student</strong> record has been created. All onboarding workflows have been triggered automatically.</span>
-        </div>
-
         <div className="g2 mb-4">
           {CARDS.map(c => (
             <div key={c.title} className="flex items-start gap-3 p-3 rounded-lg" style={{ background: 'var(--green-bg)', border: '1px solid var(--green-bd)' }}>

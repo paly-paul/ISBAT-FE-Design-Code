@@ -204,7 +204,6 @@ export function ProgrammeLevelModal({ isOpen, onClose, showToast, createProgramL
           </div>
           */}
         </div>
-        <div className="info-box mt-3"><i className="lni lni-information"></i> These values auto-populate the Programme Master when this level is selected.</div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
           <button

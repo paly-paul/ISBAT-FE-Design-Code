@@ -11,7 +11,6 @@ export function AllocImportModal({ isOpen, onClose, showToast }: ModalProps) {
           <div className="modal-title"><i className="lni lni-download"></i> Import Allocation from Excel</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
-        <div className="info-box mb-[14px]"><i className="lni lni-information"></i> Upload the HOD/Dean&apos;s Excel allocation sheet. Required columns: <span className="font-mono bg-[var(--b100)] py-[2px] px-[5px] rounded-[3px] text-[var(--fs-xs)]">course_code, faculty_name, batch_code, semester</span>. Preview will show before saving.</div>
         <div className="file-zone mb-[14px]" id="alloc-upload-zone">
           <input type="file" accept=".xlsx,.xls,.csv" />
           <div className="file-zone-icon"><i className="lni lni-bar-chart"></i></div>

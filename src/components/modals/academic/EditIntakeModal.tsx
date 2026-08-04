@@ -23,6 +23,49 @@ const INTAKE_SEQUENCES = [
   { value: '2', label: 'Fall' },
 ]
 
+// One accordion section's worth of semester-calendar fields. Keyed by a
+// stable UI-only `id` (not sent to the backend — semCode is derived from
+// the entry's position in the array on submit), same "array of records +
+// stable local id" convention FeeStructureModal uses for its `structures`.
+interface CalendarEntryForm {
+  id: number
+  admissionStartDate: string
+  admissionLateFeeDate: string
+  admissionEndDate: string
+  reentryStartDate: string
+  reentryLateFeeDate: string
+  reentryEndDate: string
+  semStart: string
+  lumpsumDate: string
+  term1EndDate: string
+  term2StartDate: string
+  term2End: string
+  resitStartDate: string
+  resitEndDate: string
+  finalExamStartDate: string
+  finalExamEndDate: string
+  clearanceDate: string
+}
+
+let nextCalendarEntryId = 1
+
+function blankCalendarEntry(id: number): CalendarEntryForm {
+  return {
+    id,
+    admissionStartDate: '', admissionLateFeeDate: '', admissionEndDate: '',
+    reentryStartDate: '', reentryLateFeeDate: '', reentryEndDate: '',
+    semStart: '', lumpsumDate: '', term1EndDate: '', term2StartDate: '', term2End: '',
+    resitStartDate: '', resitEndDate: '', finalExamStartDate: '', finalExamEndDate: '', clearanceDate: '',
+  }
+}
+
+// Per-entry error keys are namespaced by the entry's local id so two
+// different semester sections can carry independent errors on the same
+// field name (e.g. both section 1 and section 2 missing "Term 1 End Date").
+function errKey(id: number, field: string) {
+  return `${id}:${field}`
+}
+
 interface EditIntakeModalProps extends ModalProps {
   intakeGuid: string | null
   updateIntake: {
@@ -51,41 +94,14 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
   const [grievanceEndDate, setGrievanceEndDate]     = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Second step: the semester calendar details.
-  const [admissionStartDate, setAdmissionStartDate]     = useState('')
-  const [admissionLateFeeDate, setAdmissionLateFeeDate] = useState('')
-  const [admissionEndDate, setAdmissionEndDate]         = useState('')
-  const [reentryStartDate, setReentryStartDate]         = useState('')
-  const [reentryLateFeeDate, setReentryLateFeeDate]     = useState('')
-  const [reentryEndDate, setReentryEndDate]             = useState('')
-  const [semStart, setSemStart]     = useState('')
-  const [lumpsumDate, setLumpsumDate] = useState('')
-  const [term1EndDate, setTerm1EndDate]   = useState('')
-  const [term2StartDate, setTerm2StartDate] = useState('')
-  const [term2End, setTerm2End]     = useState('')
-  const [resitStartDate, setResitStartDate]         = useState('')
-  const [resitEndDate, setResitEndDate]             = useState('')
-  const [finalExamStartDate, setFinalExamStartDate] = useState('')
-  const [finalExamEndDate, setFinalExamEndDate]     = useState('')
-  const [clearanceDate, setClearanceDate]           = useState('')
-
-  const [secondSemesterEnabled, setSecondSemesterEnabled] = useState(false)
-  const [secondAdmissionStartDate, setSecondAdmissionStartDate] = useState('')
-  const [secondAdmissionLateFeeDate, setSecondAdmissionLateFeeDate] = useState('')
-  const [secondAdmissionEndDate, setSecondAdmissionEndDate] = useState('')
-  const [secondReentryStartDate, setSecondReentryStartDate] = useState('')
-  const [secondReentryLateFeeDate, setSecondReentryLateFeeDate] = useState('')
-  const [secondReentryEndDate, setSecondReentryEndDate] = useState('')
-  const [secondSemStart, setSecondSemStart] = useState('')
-  const [secondLumpsumDate, setSecondLumpsumDate] = useState('')
-  const [secondTerm1EndDate, setSecondTerm1EndDate] = useState('')
-  const [secondTerm2StartDate, setSecondTerm2StartDate] = useState('')
-  const [secondTerm2End, setSecondTerm2End] = useState('')
-  const [secondResitStartDate, setSecondResitStartDate] = useState('')
-  const [secondResitEndDate, setSecondResitEndDate] = useState('')
-  const [secondFinalExamStartDate, setSecondFinalExamStartDate] = useState('')
-  const [secondFinalExamEndDate, setSecondFinalExamEndDate] = useState('')
-  const [secondClearanceDate, setSecondClearanceDate] = useState('')
+  // Second step: a left sidebar listing one entry per semester calendar
+  // (same "sidebar list + active-record form" layout as FeeStructureModal's
+  // Fee Structures panel) — starts with whatever the intake already has (at
+  // least one, even if blank), and grows/shrinks via
+  // addSemester()/removeSemester() instead of the old fixed "1st Semester" +
+  // toggle-gated "2nd Semester" layout.
+  const [calendarEntries, setCalendarEntries] = useState<CalendarEntryForm[]>([])
+  const [activeIdx, setActiveIdx] = useState(0)
 
   // The API returns full datetime values, so the form strips the time portion for date fields.
   function toDateInputValue(value: string | null | undefined): string {
@@ -108,53 +124,39 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
     setGrievanceStartDate(toDateInputValue(intake.grievanceStartDate))
     setGrievanceEndDate(toDateInputValue(intake.grievanceEndDate))
 
-    const entries = intake.academicCalendar ?? []
-    const first  = entries.find(e => e.semCode === 1) ?? entries[0]
-    const second = entries.find(e => e.semCode === 2)
-
-    setAdmissionStartDate(toDateInputValue(first?.admissionStartDate))
-    setAdmissionLateFeeDate(toDateInputValue(first?.admissionLateFeeDate))
-    setAdmissionEndDate(toDateInputValue(first?.admissionEndDate))
-    setReentryStartDate(toDateInputValue(first?.reentryStartDate))
-    setReentryLateFeeDate(toDateInputValue(first?.reentryLateFeeDate))
-    setReentryEndDate(toDateInputValue(first?.reentryEndDate))
-    setSemStart(toDateInputValue(first?.semesterStartDate ?? first?.term1StartDate))
-    setLumpsumDate(toDateInputValue(first?.lumpsumDate))
-    setTerm1EndDate(toDateInputValue(first?.term1EndDate))
-    setTerm2StartDate(toDateInputValue(first?.term2StartDate))
-    setTerm2End(toDateInputValue(first?.semesterEndDate ?? first?.term2EndDate))
-    setResitStartDate(toDateInputValue(first?.resitStartDate))
-    setResitEndDate(toDateInputValue(first?.resitEndDate))
-    setFinalExamStartDate(toDateInputValue(first?.finalExamStartDate))
-    setFinalExamEndDate(toDateInputValue(first?.finalExamEndDate))
-    setClearanceDate(toDateInputValue(first?.clearanceDate))
-
-    setSecondSemesterEnabled(!!second)
-    setSecondAdmissionStartDate(toDateInputValue(second?.admissionStartDate))
-    setSecondAdmissionLateFeeDate(toDateInputValue(second?.admissionLateFeeDate))
-    setSecondAdmissionEndDate(toDateInputValue(second?.admissionEndDate))
-    setSecondReentryStartDate(toDateInputValue(second?.reentryStartDate))
-    setSecondReentryLateFeeDate(toDateInputValue(second?.reentryLateFeeDate))
-    setSecondReentryEndDate(toDateInputValue(second?.reentryEndDate))
-    setSecondSemStart(toDateInputValue(second?.semesterStartDate ?? second?.term1StartDate))
-    setSecondLumpsumDate(toDateInputValue(second?.lumpsumDate))
-    setSecondTerm1EndDate(toDateInputValue(second?.term1EndDate))
-    setSecondTerm2StartDate(toDateInputValue(second?.term2StartDate))
-    setSecondTerm2End(toDateInputValue(second?.semesterEndDate ?? second?.term2EndDate))
-    setSecondResitStartDate(toDateInputValue(second?.resitStartDate))
-    setSecondResitEndDate(toDateInputValue(second?.resitEndDate))
-    setSecondFinalExamStartDate(toDateInputValue(second?.finalExamStartDate))
-    setSecondFinalExamEndDate(toDateInputValue(second?.finalExamEndDate))
-    setSecondClearanceDate(toDateInputValue(second?.clearanceDate))
+    const sortedEntries = [...(intake.academicCalendar ?? [])].sort((a, b) => a.semCode - b.semCode)
+    const source = sortedEntries.length > 0 ? sortedEntries : [null]
+    setCalendarEntries(source.map(entry => ({
+      id: nextCalendarEntryId++,
+      admissionStartDate: toDateInputValue(entry?.admissionStartDate),
+      admissionLateFeeDate: toDateInputValue(entry?.admissionLateFeeDate),
+      admissionEndDate: toDateInputValue(entry?.admissionEndDate),
+      reentryStartDate: toDateInputValue(entry?.reentryStartDate),
+      reentryLateFeeDate: toDateInputValue(entry?.reentryLateFeeDate),
+      reentryEndDate: toDateInputValue(entry?.reentryEndDate),
+      semStart: toDateInputValue(entry?.semesterStartDate ?? entry?.term1StartDate),
+      lumpsumDate: toDateInputValue(entry?.lumpsumDate),
+      term1EndDate: toDateInputValue(entry?.term1EndDate),
+      term2StartDate: toDateInputValue(entry?.term2StartDate),
+      term2End: toDateInputValue(entry?.semesterEndDate ?? entry?.term2EndDate),
+      resitStartDate: toDateInputValue(entry?.resitStartDate),
+      resitEndDate: toDateInputValue(entry?.resitEndDate),
+      finalExamStartDate: toDateInputValue(entry?.finalExamStartDate),
+      finalExamEndDate: toDateInputValue(entry?.finalExamEndDate),
+      clearanceDate: toDateInputValue(entry?.clearanceDate),
+    })))
+    setActiveIdx(0)
 
     setErrors({})
     setStep(1)
   }, [isOpen, intake])
 
-  // Estimate the visible duration in weeks from the semester dates.
+  // Estimate the visible duration in weeks from the first semester's dates —
+  // durationInWeeks is a single intake-level field, not per-semester.
   function calcDurationWeeks(): number | null {
-    if (!semStart || !term2End) return null
-    const ms = new Date(term2End).getTime() - new Date(semStart).getTime()
+    const first = calendarEntries[0]
+    if (!first?.semStart || !first?.term2End) return null
+    const ms = new Date(first.term2End).getTime() - new Date(first.semStart).getTime()
     // Round up, not to nearest — the backend re-validates semesterEndDate
     // against semStart + (durationInWeeks - 2) weeks, so rounding down here
     // (Math.round can round down) computes a shorter span than what the user
@@ -176,10 +178,6 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
     return new Date(Date.UTC(year, month - 1, day))
   }
 
-  function hasAnyCalendarValue(values: Array<string | null | undefined>) {
-    return values.some(value => typeof value === 'string' && value.trim() !== '')
-  }
-
   // Empty date inputs are sent as null so the API accepts them.
   function toApiDate(value: string): string | null {
     const trimmed = value.trim()
@@ -188,75 +186,48 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
     return `${datePart}T00:00:00`
   }
 
-  function buildAcademicCalendarEntries() {
-    const entries: CreateIntakeInput['academicCalendar'] = [
-      {
-        academicCalendarGuid: null,
-        semCode: 1,
-        admissionStartDate: toApiDate(admissionStartDate),
-        admissionLateFeeDate: toApiDate(admissionLateFeeDate),
-        admissionEndDate: toApiDate(admissionEndDate),
-        reentryStartDate: toApiDate(reentryStartDate),
-        reentryLateFeeDate: toApiDate(reentryLateFeeDate),
-        reentryEndDate: toApiDate(reentryEndDate),
-        semesterStartDate: toApiDate(semStart),
-        semesterEndDate: toApiDate(term2End),
-        lumpsumDate: toApiDate(lumpsumDate),
-        term1StartDate: toApiDate(semStart),
-        term1EndDate: toApiDate(term1EndDate),
-        term2StartDate: toApiDate(term2StartDate),
-        term2EndDate: toApiDate(term2End),
-        resitStartDate: toApiDate(resitStartDate),
-        resitEndDate: toApiDate(resitEndDate),
-        finalExamStartDate: toApiDate(finalExamStartDate),
-        finalExamEndDate: toApiDate(finalExamEndDate),
-        clearanceDate: toApiDate(clearanceDate),
-      },
-    ]
+  function buildAcademicCalendarEntries(): CreateIntakeInput['academicCalendar'] {
+    return calendarEntries.map((entry, idx) => ({
+      academicCalendarGuid: null,
+      semCode: idx + 1,
+      admissionStartDate: toApiDate(entry.admissionStartDate),
+      admissionLateFeeDate: toApiDate(entry.admissionLateFeeDate),
+      admissionEndDate: toApiDate(entry.admissionEndDate),
+      reentryStartDate: toApiDate(entry.reentryStartDate),
+      reentryLateFeeDate: toApiDate(entry.reentryLateFeeDate),
+      reentryEndDate: toApiDate(entry.reentryEndDate),
+      semesterStartDate: toApiDate(entry.semStart),
+      semesterEndDate: toApiDate(entry.term2End),
+      lumpsumDate: toApiDate(entry.lumpsumDate),
+      term1StartDate: toApiDate(entry.semStart),
+      term1EndDate: toApiDate(entry.term1EndDate),
+      term2StartDate: toApiDate(entry.term2StartDate),
+      term2EndDate: toApiDate(entry.term2End),
+      resitStartDate: toApiDate(entry.resitStartDate),
+      resitEndDate: toApiDate(entry.resitEndDate),
+      finalExamStartDate: toApiDate(entry.finalExamStartDate),
+      finalExamEndDate: toApiDate(entry.finalExamEndDate),
+      clearanceDate: toApiDate(entry.clearanceDate),
+    }))
+  }
 
-    if (secondSemesterEnabled && hasAnyCalendarValue([
-      secondAdmissionStartDate,
-      secondAdmissionLateFeeDate,
-      secondAdmissionEndDate,
-      secondReentryStartDate,
-      secondReentryLateFeeDate,
-      secondReentryEndDate,
-      secondSemStart,
-      secondLumpsumDate,
-      secondTerm1EndDate,
-      secondTerm2StartDate,
-      secondTerm2End,
-      secondResitStartDate,
-      secondResitEndDate,
-      secondFinalExamStartDate,
-      secondFinalExamEndDate,
-      secondClearanceDate,
-    ])) {
-      entries.push({
-        academicCalendarGuid: null,
-        semCode: 2,
-        admissionStartDate: toApiDate(secondAdmissionStartDate),
-        admissionLateFeeDate: toApiDate(secondAdmissionLateFeeDate),
-        admissionEndDate: toApiDate(secondAdmissionEndDate),
-        reentryStartDate: toApiDate(secondReentryStartDate),
-        reentryLateFeeDate: toApiDate(secondReentryLateFeeDate),
-        reentryEndDate: toApiDate(secondReentryEndDate),
-        semesterStartDate: toApiDate(secondSemStart),
-        semesterEndDate: toApiDate(secondTerm2End),
-        lumpsumDate: toApiDate(secondLumpsumDate),
-        term1StartDate: toApiDate(secondSemStart),
-        term1EndDate: toApiDate(secondTerm1EndDate),
-        term2StartDate: toApiDate(secondTerm2StartDate),
-        term2EndDate: toApiDate(secondTerm2End),
-        resitStartDate: toApiDate(secondResitStartDate),
-        resitEndDate: toApiDate(secondResitEndDate),
-        finalExamStartDate: toApiDate(secondFinalExamStartDate),
-        finalExamEndDate: toApiDate(secondFinalExamEndDate),
-        clearanceDate: toApiDate(secondClearanceDate),
-      })
-    }
+  function addSemester() {
+    const id = nextCalendarEntryId++
+    setCalendarEntries(prev => [...prev, blankCalendarEntry(id)])
+    setActiveIdx(calendarEntries.length)
+  }
 
-    return entries
+  function removeSemester(id: number) {
+    if (calendarEntries.length <= 1) return
+    const idx = calendarEntries.findIndex(en => en.id === id)
+    setCalendarEntries(prev => prev.filter(en => en.id !== id))
+    setActiveIdx(prev => (prev >= idx && prev > 0 ? prev - 1 : prev))
+  }
+
+  function updateEntry(id: number, field: keyof Omit<CalendarEntryForm, 'id'>, value: string) {
+    setCalendarEntries(prev => prev.map(en => en.id === id ? { ...en, [field]: value } : en))
+    const key = errKey(id, field)
+    if (errors[key]) setErrors(p => { const next = { ...p }; delete next[key]; return next })
   }
 
   function validate(stepNumber = step) {
@@ -276,90 +247,58 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
     }
 
     if (stepNumber === 2) {
-      const semStartDate = parseDate(semStart)
-      const semEndDate = parseDate(term2End)
+      calendarEntries.forEach((entry, idx) => {
+        const startDate = parseDate(entry.semStart)
+        const endDate   = parseDate(entry.term2End)
 
-      if (!semStart) e.semStart = 'Semester start date is required'
-      if (!term1EndDate) e.term1EndDate = 'Term 1 end date is required'
-      if (!term2StartDate) e.term2StartDate = 'Term 2 start date is required'
-      if (!term2End) e.term2End = 'Semester end date is required'
+        if (!entry.semStart)      e[errKey(entry.id, 'semStart')]      = `Semester ${idx + 1} start date is required`
+        if (!entry.term1EndDate)  e[errKey(entry.id, 'term1EndDate')]  = `Semester ${idx + 1} term 1 end date is required`
+        if (!entry.term2StartDate) e[errKey(entry.id, 'term2StartDate')] = `Semester ${idx + 1} term 2 start date is required`
+        if (!entry.term2End)      e[errKey(entry.id, 'term2End')]      = `Semester ${idx + 1} end date is required`
 
-      // No client-side cap on how far term2End can be from semStart — the
-      // backend enforces its own max-end-date rule (semesterStartDate +
-      // (durationInWeeks - 2) weeks), but durationInWeeks itself is now
-      // derived from these same two dates (see calcDurationWeeks() /
-      // handleUpdate), so that check is satisfied by construction. A
-      // validation_error would still surface via the failure screen if the
-      // backend ever disagrees.
-      if (semStartDate && semEndDate && semEndDate < semStartDate) {
-        e.term2End = 'Semester end date must be on or after the semester start date'
-      }
-
-      const admissionStart = parseDate(admissionStartDate)
-      const admissionLateFee = parseDate(admissionLateFeeDate)
-      const admissionEnd = parseDate(admissionEndDate)
-      if (admissionStart && admissionLateFee && admissionLateFee < admissionStart) {
-        e.admissionLateFeeDate = 'Admission late fee date must be on or after the admission start date'
-      }
-      if (admissionLateFee && admissionEnd && admissionEnd < admissionLateFee) {
-        e.admissionEndDate = 'Admission end date must be on or after the admission late fee date'
-      }
-
-      const reentryStart = parseDate(reentryStartDate)
-      const reentryLateFee = parseDate(reentryLateFeeDate)
-      const reentryEnd = parseDate(reentryEndDate)
-      if (reentryStart && reentryLateFee && reentryLateFee < reentryStart) {
-        e.reentryLateFeeDate = 'Re-entry late fee date must be on or after the re-entry start date'
-      }
-      if (reentryStart && reentryEnd && reentryEnd < reentryStart) {
-        e.reentryEndDate = 'Re-entry end date must be on or after the re-entry start date'
-      }
-
-      const resitStart = parseDate(resitStartDate)
-      const resitEnd = parseDate(resitEndDate)
-      if (resitStart && resitEnd && resitEnd < resitStart) {
-        e.resitEndDate = 'Resit end date must be on or after the resit start date'
-      }
-
-      const finalExamStart = parseDate(finalExamStartDate)
-      const finalExamEnd = parseDate(finalExamEndDate)
-      if (finalExamStart && finalExamEnd && finalExamEnd < finalExamStart) {
-        e.finalExamEndDate = 'Final exam end date must be on or after the final exam start date'
-      }
-
-      if (secondSemesterEnabled) {
-        const secondHasAnyValue = hasAnyCalendarValue([
-          secondAdmissionStartDate,
-          secondAdmissionLateFeeDate,
-          secondAdmissionEndDate,
-          secondReentryStartDate,
-          secondReentryLateFeeDate,
-          secondReentryEndDate,
-          secondSemStart,
-          secondLumpsumDate,
-          secondTerm1EndDate,
-          secondTerm2StartDate,
-          secondTerm2End,
-          secondResitStartDate,
-          secondResitEndDate,
-          secondFinalExamStartDate,
-          secondFinalExamEndDate,
-          secondClearanceDate,
-        ])
-
-        if (secondHasAnyValue) {
-          if (!secondSemStart) e.secondSemStart = 'Second semester start date is required'
-          if (!secondTerm1EndDate) e.secondTerm1EndDate = 'Second semester term 1 end date is required'
-          if (!secondTerm2StartDate) e.secondTerm2StartDate = 'Second semester term 2 start date is required'
-          if (!secondTerm2End) e.secondTerm2End = 'Second semester end date is required'
-
-          const secondSemStartDate = parseDate(secondSemStart)
-          const secondSemEndDate = parseDate(secondTerm2End)
-          if (secondSemStartDate && secondSemEndDate && secondSemEndDate < secondSemStartDate) {
-            e.secondTerm2End = 'Second semester end date must be on or after the second semester start date'
-          }
+        // No client-side cap on how far term2End can be from semStart — the
+        // backend enforces its own max-end-date rule (semesterStartDate +
+        // (durationInWeeks - 2) weeks), but durationInWeeks itself is now
+        // derived from the first entry's own dates (see calcDurationWeeks()
+        // / handleUpdate), so that check is satisfied by construction. A
+        // validation_error would still surface via the failure screen if the
+        // backend ever disagrees.
+        if (startDate && endDate && endDate < startDate) {
+          e[errKey(entry.id, 'term2End')] = `Semester ${idx + 1} end date must be on or after its start date`
         }
-      }
+
+        const admissionStart   = parseDate(entry.admissionStartDate)
+        const admissionLateFee = parseDate(entry.admissionLateFeeDate)
+        const admissionEnd     = parseDate(entry.admissionEndDate)
+        if (admissionStart && admissionLateFee && admissionLateFee < admissionStart) {
+          e[errKey(entry.id, 'admissionLateFeeDate')] = 'Admission late fee date must be on or after the admission start date'
+        }
+        if (admissionLateFee && admissionEnd && admissionEnd < admissionLateFee) {
+          e[errKey(entry.id, 'admissionEndDate')] = 'Admission end date must be on or after the admission late fee date'
+        }
+
+        const reentryStart   = parseDate(entry.reentryStartDate)
+        const reentryLateFee = parseDate(entry.reentryLateFeeDate)
+        const reentryEnd     = parseDate(entry.reentryEndDate)
+        if (reentryStart && reentryLateFee && reentryLateFee < reentryStart) {
+          e[errKey(entry.id, 'reentryLateFeeDate')] = 'Re-entry late fee date must be on or after the re-entry start date'
+        }
+        if (reentryStart && reentryEnd && reentryEnd < reentryStart) {
+          e[errKey(entry.id, 'reentryEndDate')] = 'Re-entry end date must be on or after the re-entry start date'
+        }
+
+        const resitStart = parseDate(entry.resitStartDate)
+        const resitEnd   = parseDate(entry.resitEndDate)
+        if (resitStart && resitEnd && resitEnd < resitStart) {
+          e[errKey(entry.id, 'resitEndDate')] = 'Resit end date must be on or after the resit start date'
+        }
+
+        const finalExamStart = parseDate(entry.finalExamStartDate)
+        const finalExamEnd   = parseDate(entry.finalExamEndDate)
+        if (finalExamStart && finalExamEnd && finalExamEnd < finalExamStart) {
+          e[errKey(entry.id, 'finalExamEndDate')] = 'Final exam end date must be on or after the final exam start date'
+        }
+      })
     }
 
     setErrors(e)
@@ -486,8 +425,8 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
           </div>
         </div>
 
-        <div className="modal-scroll">
-          {step === 1 && (
+        {step === 1 && (
+          <div className="modal-scroll">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
               <div className="fg">
                 <div className="lbl">Description <span className="req">*</span></div>
@@ -584,82 +523,111 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
                 {errors.grievanceEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.grievanceEndDate}</p>}
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {step === 2 && (
-            <div>
-              <div className="sec-divider">
-                1st Semester Planning Calendar
-                <span className="font-medium text-g400 normal-case tracking-normal ml-2" style={{ fontSize: 'var(--fs-2xs)' }}>
-                  Optional · Fill in the key dates for the first semester
-                </span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
-                <div className="fg"><div className="lbl">Admission Start Date</div><input className="ctrl" type="date" value={admissionStartDate} onChange={e => setAdmissionStartDate(e.target.value)} /></div>
-                <div className="fg"><div className="lbl">Admission Late Fee Date</div><input className="ctrl" style={errors.admissionLateFeeDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={admissionLateFeeDate} onChange={e => setAdmissionLateFeeDate(e.target.value)} />{errors.admissionLateFeeDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.admissionLateFeeDate}</p>}</div>
-                <div className="fg"><div className="lbl">Admission End Date</div><input className="ctrl" style={errors.admissionEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={admissionEndDate} onChange={e => setAdmissionEndDate(e.target.value)} />{errors.admissionEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.admissionEndDate}</p>}</div>
-                <div className="fg"><div className="lbl">Re-entry Start Date</div><input className="ctrl" type="date" value={reentryStartDate} onChange={e => setReentryStartDate(e.target.value)} /></div>
-                <div className="fg"><div className="lbl">Re-entry Late Fee Date</div><input className="ctrl" style={errors.reentryLateFeeDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={reentryLateFeeDate} onChange={e => setReentryLateFeeDate(e.target.value)} />{errors.reentryLateFeeDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.reentryLateFeeDate}</p>}</div>
-                <div className="fg"><div className="lbl">Re-entry End Date</div><input className="ctrl" style={errors.reentryEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={reentryEndDate} onChange={e => setReentryEndDate(e.target.value)} />{errors.reentryEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.reentryEndDate}</p>}</div>
-                <div className="fg"><div className="lbl">Semester/Term 1 Start Date</div><input className="ctrl" style={errors.semStart ? { borderColor: 'var(--red)' } : undefined} type="date" value={semStart} onChange={e => setSemStart(e.target.value)} />{errors.semStart && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.semStart}</p>}</div>
-                <div className="fg"><div className="lbl">Lump Sum Date</div><input className="ctrl" type="date" value={lumpsumDate} onChange={e => setLumpsumDate(e.target.value)} /></div>
-                <div className="fg"><div className="lbl">Term 1 End Date</div><input className="ctrl" style={errors.term1EndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={term1EndDate} onChange={e => setTerm1EndDate(e.target.value)} />{errors.term1EndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.term1EndDate}</p>}</div>
-                <div className="fg"><div className="lbl">Term 2 Start Date</div><input className="ctrl" style={errors.term2StartDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={term2StartDate} onChange={e => setTerm2StartDate(e.target.value)} />{errors.term2StartDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.term2StartDate}</p>}</div>
-                <div className="fg"><div className="lbl">Semester/Term 2 End Date</div><input className="ctrl" style={errors.term2End ? { borderColor: 'var(--red)' } : undefined} type="date" value={term2End} onChange={e => setTerm2End(e.target.value)} />{errors.term2End && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.term2End}</p>}</div>
-                <div className="fg">
-                  <div className="lbl">Duration (weeks)</div>
-                  <input
-                    className="ctrl"
-                    style={{ background: 'var(--g100)', color: calcDuration() ? 'var(--g700)' : 'var(--g400)', cursor: 'not-allowed' }}
-                    type="text"
-                    value={calcDuration()}
-                    readOnly
-                    placeholder="Set semester dates below"
-                  />
+        {step === 2 && (() => {
+          const active = calendarEntries[activeIdx]
+          return (
+            <div className="fsm-layout">
+              {/* Left sidebar — one entry per semester */}
+              <div className="fsm-sidebar">
+                <div style={{ padding: '14px 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
+                  Semesters <span style={{ color: 'var(--b500)' }}>({calendarEntries.length})</span>
                 </div>
-                <div className="fg"><div className="lbl">Resit Start Date</div><input className="ctrl" type="date" value={resitStartDate} onChange={e => setResitStartDate(e.target.value)} /></div>
-                <div className="fg"><div className="lbl">Resit End Date</div><input className="ctrl" style={errors.resitEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={resitEndDate} onChange={e => setResitEndDate(e.target.value)} />{errors.resitEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.resitEndDate}</p>}</div>
-                <div className="fg"><div className="lbl">Final Exam Start Date</div><input className="ctrl" type="date" value={finalExamStartDate} onChange={e => setFinalExamStartDate(e.target.value)} /></div>
-                <div className="fg"><div className="lbl">Final Exam End Date</div><input className="ctrl" style={errors.finalExamEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={finalExamEndDate} onChange={e => setFinalExamEndDate(e.target.value)} />{errors.finalExamEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.finalExamEndDate}</p>}</div>
-                <div className="fg"><div className="lbl">Clearance Date (80%)</div><input className="ctrl" type="date" value={clearanceDate} onChange={e => setClearanceDate(e.target.value)} /></div>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
+                  {calendarEntries.map((entry, i) => (
+                    <div
+                      key={entry.id}
+                      onClick={() => setActiveIdx(i)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '9px 10px', borderRadius: 'var(--rsm)', marginBottom: 2,
+                        background: activeIdx === i ? 'var(--b500)' : 'transparent',
+                        color: activeIdx === i ? '#fff' : 'var(--g700)',
+                        cursor: 'pointer', transition: 'background .15s',
+                      }}
+                    >
+                      <div style={{ width: 30, height: 30, borderRadius: '50%', background: activeIdx === i ? 'rgba(255,255,255,.2)' : 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <i className="lni lni-calendar" style={{ fontSize: 13, color: activeIdx === i ? '#fff' : 'var(--b600)' }}></i>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>Semester {i + 1}</div>
+                        <div style={{ fontSize: 11, opacity: .65, lineHeight: 1.3 }}>{entry.semStart ? `Starts ${entry.semStart}` : 'No dates set'}</div>
+                      </div>
+                      {calendarEntries.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); removeSemester(entry.id) }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: activeIdx === i ? 'rgba(255,255,255,.65)' : 'var(--g300)', display: 'flex', alignItems: 'center', borderRadius: 'var(--rxs)', flexShrink: 0 }}
+                          title="Remove semester"
+                        ><i className="lni lni-trash-can" style={{ fontSize: 12 }}></i></button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ borderTop: '1.5px solid var(--g200)', padding: '6px 8px 10px' }}>
+                  <button type="button" className="btn btn-neu btn-sm" style={{ width: '100%' }} onClick={addSemester}>
+                    <i className="lni lni-plus"></i> Add Semester
+                  </button>
+                </div>
               </div>
 
-              {/* <div className="sec-divider" style={{ marginTop: '2rem' }}>
-                2nd Semester Planning Calendar
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--g700)', marginLeft: 16 }}>
-                  <input
-                    type="checkbox"
-                    checked={secondSemesterEnabled}
-                    onChange={e => setSecondSemesterEnabled(e.target.checked)}
-                    style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }}
-                  />
-                  Include a second semester calendar entry
-                </label>
-              </div> */}
+              {/* Right panel — active semester's calendar fields */}
+              <div className="fsm-main">
+                {active && (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, padding: '12px 16px', background: 'var(--b50)', borderRadius: 'var(--rsm)', border: '1.5px solid var(--b100)' }}>
+                      <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <i className="lni lni-calendar" style={{ color: 'var(--b600)', fontSize: 17 }}></i>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--b800)' }}>
+                          {activeIdx === 0 ? '1st Semester Planning Calendar' : `Semester ${activeIdx + 1} Planning Calendar`}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: 'var(--g400)' }}>
+                          Semester {activeIdx + 1} of {calendarEntries.length}
+                        </div>
+                      </div>
+                    </div>
 
-              {secondSemesterEnabled && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem', marginTop: '1rem' }}>
-                  <div className="fg"><div className="lbl">Admission Start Date</div><input className="ctrl" type="date" value={secondAdmissionStartDate} onChange={e => setSecondAdmissionStartDate(e.target.value)} /></div>
-                  <div className="fg"><div className="lbl">Admission Late Fee Date</div><input className="ctrl" style={errors.secondAdmissionLateFeeDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondAdmissionLateFeeDate} onChange={e => setSecondAdmissionLateFeeDate(e.target.value)} />{errors.secondAdmissionLateFeeDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondAdmissionLateFeeDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Admission End Date</div><input className="ctrl" style={errors.secondAdmissionEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondAdmissionEndDate} onChange={e => setSecondAdmissionEndDate(e.target.value)} />{errors.secondAdmissionEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondAdmissionEndDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Re-entry Start Date</div><input className="ctrl" type="date" value={secondReentryStartDate} onChange={e => setSecondReentryStartDate(e.target.value)} /></div>
-                  <div className="fg"><div className="lbl">Re-entry Late Fee Date</div><input className="ctrl" style={errors.secondReentryLateFeeDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondReentryLateFeeDate} onChange={e => setSecondReentryLateFeeDate(e.target.value)} />{errors.secondReentryLateFeeDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondReentryLateFeeDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Re-entry End Date</div><input className="ctrl" style={errors.secondReentryEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondReentryEndDate} onChange={e => setSecondReentryEndDate(e.target.value)} />{errors.secondReentryEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondReentryEndDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Semester/Term 1 Start Date</div><input className="ctrl" style={errors.secondSemStart ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondSemStart} onChange={e => setSecondSemStart(e.target.value)} />{errors.secondSemStart && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondSemStart}</p>}</div>
-                  <div className="fg"><div className="lbl">Lump Sum Date</div><input className="ctrl" type="date" value={secondLumpsumDate} onChange={e => setSecondLumpsumDate(e.target.value)} /></div>
-                  <div className="fg"><div className="lbl">Term 1 End Date</div><input className="ctrl" style={errors.secondTerm1EndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondTerm1EndDate} onChange={e => setSecondTerm1EndDate(e.target.value)} />{errors.secondTerm1EndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondTerm1EndDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Term 2 Start Date</div><input className="ctrl" style={errors.secondTerm2StartDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondTerm2StartDate} onChange={e => setSecondTerm2StartDate(e.target.value)} />{errors.secondTerm2StartDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondTerm2StartDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Semester/Term 2 End Date</div><input className="ctrl" style={errors.secondTerm2End ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondTerm2End} onChange={e => setSecondTerm2End(e.target.value)} />{errors.secondTerm2End && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondTerm2End}</p>}</div>
-                  <div className="fg"><div className="lbl">Resit Start Date</div><input className="ctrl" type="date" value={secondResitStartDate} onChange={e => setSecondResitStartDate(e.target.value)} /></div>
-                  <div className="fg"><div className="lbl">Resit End Date</div><input className="ctrl" style={errors.secondResitEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondResitEndDate} onChange={e => setSecondResitEndDate(e.target.value)} />{errors.secondResitEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondResitEndDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Final Exam Start Date</div><input className="ctrl" type="date" value={secondFinalExamStartDate} onChange={e => setSecondFinalExamStartDate(e.target.value)} /></div>
-                  <div className="fg"><div className="lbl">Final Exam End Date</div><input className="ctrl" style={errors.secondFinalExamEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondFinalExamEndDate} onChange={e => setSecondFinalExamEndDate(e.target.value)} />{errors.secondFinalExamEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondFinalExamEndDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Clearance Date (80%)</div><input className="ctrl" type="date" value={secondClearanceDate} onChange={e => setSecondClearanceDate(e.target.value)} /></div>
-                </div>
-              )}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
+                      <div className="fg"><div className="lbl">Admission Start Date</div><input className="ctrl" type="date" value={active.admissionStartDate} onChange={e => updateEntry(active.id, 'admissionStartDate', e.target.value)} /></div>
+                      <div className="fg"><div className="lbl">Admission Late Fee Date</div><input className="ctrl" style={errors[errKey(active.id, 'admissionLateFeeDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.admissionLateFeeDate} onChange={e => updateEntry(active.id, 'admissionLateFeeDate', e.target.value)} />{errors[errKey(active.id, 'admissionLateFeeDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'admissionLateFeeDate')]}</p>}</div>
+                      <div className="fg"><div className="lbl">Admission End Date</div><input className="ctrl" style={errors[errKey(active.id, 'admissionEndDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.admissionEndDate} onChange={e => updateEntry(active.id, 'admissionEndDate', e.target.value)} />{errors[errKey(active.id, 'admissionEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'admissionEndDate')]}</p>}</div>
+                      <div className="fg"><div className="lbl">Re-entry Start Date</div><input className="ctrl" type="date" value={active.reentryStartDate} onChange={e => updateEntry(active.id, 'reentryStartDate', e.target.value)} /></div>
+                      <div className="fg"><div className="lbl">Re-entry Late Fee Date</div><input className="ctrl" style={errors[errKey(active.id, 'reentryLateFeeDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.reentryLateFeeDate} onChange={e => updateEntry(active.id, 'reentryLateFeeDate', e.target.value)} />{errors[errKey(active.id, 'reentryLateFeeDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'reentryLateFeeDate')]}</p>}</div>
+                      <div className="fg"><div className="lbl">Re-entry End Date</div><input className="ctrl" style={errors[errKey(active.id, 'reentryEndDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.reentryEndDate} onChange={e => updateEntry(active.id, 'reentryEndDate', e.target.value)} />{errors[errKey(active.id, 'reentryEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'reentryEndDate')]}</p>}</div>
+                      <div className="fg"><div className="lbl">Semester/Term 1 Start Date</div><input className="ctrl" style={errors[errKey(active.id, 'semStart')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.semStart} onChange={e => updateEntry(active.id, 'semStart', e.target.value)} />{errors[errKey(active.id, 'semStart')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'semStart')]}</p>}</div>
+                      <div className="fg"><div className="lbl">Lump Sum Date</div><input className="ctrl" type="date" value={active.lumpsumDate} onChange={e => updateEntry(active.id, 'lumpsumDate', e.target.value)} /></div>
+                      <div className="fg"><div className="lbl">Term 1 End Date</div><input className="ctrl" style={errors[errKey(active.id, 'term1EndDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.term1EndDate} onChange={e => updateEntry(active.id, 'term1EndDate', e.target.value)} />{errors[errKey(active.id, 'term1EndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'term1EndDate')]}</p>}</div>
+                      <div className="fg"><div className="lbl">Term 2 Start Date</div><input className="ctrl" style={errors[errKey(active.id, 'term2StartDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.term2StartDate} onChange={e => updateEntry(active.id, 'term2StartDate', e.target.value)} />{errors[errKey(active.id, 'term2StartDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'term2StartDate')]}</p>}</div>
+                      <div className="fg"><div className="lbl">Semester/Term 2 End Date</div><input className="ctrl" style={errors[errKey(active.id, 'term2End')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.term2End} onChange={e => updateEntry(active.id, 'term2End', e.target.value)} />{errors[errKey(active.id, 'term2End')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'term2End')]}</p>}</div>
+                      {activeIdx === 0 && (
+                        <div className="fg">
+                          <div className="lbl">Duration (weeks)</div>
+                          <input
+                            className="ctrl"
+                            style={{ background: 'var(--g100)', color: calcDuration() ? 'var(--g700)' : 'var(--g400)', cursor: 'not-allowed' }}
+                            type="text"
+                            value={calcDuration()}
+                            readOnly
+                            placeholder="Set semester dates below"
+                          />
+                        </div>
+                      )}
+                      <div className="fg"><div className="lbl">Resit Start Date</div><input className="ctrl" type="date" value={active.resitStartDate} onChange={e => updateEntry(active.id, 'resitStartDate', e.target.value)} /></div>
+                      <div className="fg"><div className="lbl">Resit End Date</div><input className="ctrl" style={errors[errKey(active.id, 'resitEndDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.resitEndDate} onChange={e => updateEntry(active.id, 'resitEndDate', e.target.value)} />{errors[errKey(active.id, 'resitEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'resitEndDate')]}</p>}</div>
+                      <div className="fg"><div className="lbl">Final Exam Start Date</div><input className="ctrl" type="date" value={active.finalExamStartDate} onChange={e => updateEntry(active.id, 'finalExamStartDate', e.target.value)} /></div>
+                      <div className="fg"><div className="lbl">Final Exam End Date</div><input className="ctrl" style={errors[errKey(active.id, 'finalExamEndDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.finalExamEndDate} onChange={e => updateEntry(active.id, 'finalExamEndDate', e.target.value)} />{errors[errKey(active.id, 'finalExamEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'finalExamEndDate')]}</p>}</div>
+                      <div className="fg"><div className="lbl">Clearance Date (80%)</div><input className="ctrl" type="date" value={active.clearanceDate} onChange={e => updateEntry(active.id, 'clearanceDate', e.target.value)} /></div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          )}
-        </div>
+          )
+        })()}
 
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>

@@ -24,10 +24,6 @@ export default function Page() {
           <button className="btn btn-neu" onClick={() => nav('odl-applications')}>← ODL Applications</button>
         </div>
 
-        <div className="warn-box mb-[18px]">
-          <i className="lni lni-warning"></i> <span>Reconciliation is a <strong>manual accounts process</strong>. The system does NOT automatically move an applicant after DPO payment — accounts must verify and confirm. Once reconciled, the system sends a <strong>&quot;Payment is reconciled&quot;</strong> email to the candidate and their status changes from <em>Lead → Candidate</em>.</span>
-        </div>
-
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-credit-cards"></i></span> Pending Reconciliation (4)</div>

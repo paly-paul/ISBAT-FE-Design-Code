@@ -212,6 +212,15 @@ export function getPaymentHistory(applicationGuid: string): Promise<PaymentHisto
   if (MOCK_AUTH) return Promise.resolve(mockPaymentHistory[applicationGuid] ?? [])
   return apiGet<PaymentHistoryEntry[] | null>(`/api/v1/finance/payment-console/payment-history/${applicationGuid}`)
     .then(data => data ?? [])
+    // Same "genuinely-empty-result-as-404" behavior confirmed live on
+    // GetOutstandingLedgers above — an application with no payments yet
+    // returns a 404 `not_found` instead of a 200 with an empty array.
+    // Without this, react-query treats a brand-new application (no payment
+    // history at all) as a query error instead of just "no history".
+    .catch(err => {
+      if (err instanceof AuthError && err.code === 'not_found') return []
+      throw err
+    })
 }
 
 export function getPayableLedgers(params: PayableLedgersParams): Promise<PayableLedgersResult> {

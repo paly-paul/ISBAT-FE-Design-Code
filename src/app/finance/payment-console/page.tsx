@@ -21,6 +21,20 @@ import {
   PAY_TYPE_LABELS,
 } from '@/hooks/finance/usePaymentConsole'
 
+// Maps payType (1=Cash/2=Cheque/3=Bank/4=DemandDraft/5=Online, per
+// CreatePayment.bru) onto ReceiptBook.category (0=Cash/1=Bank/2=Online, per
+// receiptBook.ts's CATEGORY_VALUES) so the Receipt Book dropdown only offers
+// books CreatePayment will actually accept for the chosen payment method —
+// picking a mismatched pair was previously only caught after Save, via a
+// real backend validation_error ("Receipt book category does not match the
+// selected payment type."). Neither .bru spec documents this pairing
+// explicitly, so Cheque/Bank/DemandDraft are grouped under the Bank receipt
+// category as the closest reasonable read of "non-cash, non-online paper/
+// bank instrument" — flagged here as unconfirmed, not verified against a
+// spec, and worth re-checking if the backend ever rejects a book this
+// mapping considers valid.
+const PAY_TYPE_TO_RECEIPT_CATEGORY: Record<number, number> = { 1: 0, 2: 1, 3: 1, 4: 1, 5: 2 }
+
 function fmtUGX(n: number) { return n > 0 ? `UGX ${Math.round(n).toLocaleString()}` : '—' }
 
 function applicantName(a: { firstName: string | null; lastName: string | null }) {
@@ -50,7 +64,7 @@ export default function PaymentConsolePage() {
   const { data: allProcBanks = [] } = useProcBanks()
   const banks = allProcBanks.filter(b => b.status === 2)
   const { data: allReceiptBooks = [] } = useReceiptBooks()
-  const receiptBooks = allReceiptBooks.filter(r => r.status === 1)
+  const activeReceiptBooks = allReceiptBooks.filter(r => r.status === 1)
   const { data: currencies = [] } = useFinanceCurrencies()
 
   // Purely informational reference rates — no longer feeds any computation
@@ -70,6 +84,9 @@ export default function PaymentConsolePage() {
   const [currencyGuid, setCurrencyGuid] = useState('')
   const [payDate, setPayDate] = useState(todayYmd)
   const [payType, setPayType] = useState('1')
+  // Narrowed to only the category CreatePayment will accept for the
+  // currently-selected Payment Method — see PAY_TYPE_TO_RECEIPT_CATEGORY above.
+  const receiptBooks = activeReceiptBooks.filter(r => r.category === PAY_TYPE_TO_RECEIPT_CATEGORY[Number(payType)])
   const [receiptBookGuid, setReceiptBookGuid] = useState('')
   const [procBankGuid, setProcBankGuid] = useState('')
   const [bankRef, setBankRef] = useState('')
@@ -84,8 +101,15 @@ export default function PaymentConsolePage() {
     return () => clearTimeout(t)
   }, [amount])
 
-  // Only fires on Search click / Enter (not on every keystroke) — same gate
-  // the old client-side filter had, just now driving a real network call.
+  // Debounced so the dropdown updates live as the user types (like every
+  // other search box in the app), without hitting GetStudentSearch on every
+  // keystroke. Search click / Enter still commit immediately for anyone who
+  // types fast and hits Enter before the debounce would've fired.
+  useEffect(() => {
+    const t = setTimeout(() => setCommittedSearch(search.trim()), 400)
+    return () => clearTimeout(t)
+  }, [search])
+
   const { data: searchResults, isFetching: isSearching } = useSearchStudents(committedSearch, 1, 20, !!committedSearch.trim())
   const matches = searchResults?.items ?? []
 
@@ -354,8 +378,8 @@ export default function PaymentConsolePage() {
                     <table>
                       <thead><tr><th>Ledger</th><th>Paid</th><th>Outstanding</th><th>Cur.</th></tr></thead>
                       <tbody>
-                        {ledgers.map(l => (
-                          <tr key={l.intLedger}>
+                        {ledgers.map((l, i) => (
+                          <tr key={`${l.intLedger}-${l.semesterGuid ?? 'none'}-${i}`}>
                             <td>{l.ledgerName}{l.ledgerNum ? <span className="text-g400"> ({l.ledgerNum})</span> : null}</td>
                             <td className={l.paidAmount > 0 ? 'text-green font-bold' : 'text-muted'}>{l.paidAmount > 0 ? `${l.currencyName} ${l.paidAmount.toLocaleString()} ✓` : '—'}</td>
                             <td className={l.outstanding === 0 ? 'text-green font-bold' : 'text-amber'}>{l.outstanding > 0 ? `${l.currencyName} ${l.outstanding.toLocaleString()}` : '0 ✓'}</td>
@@ -435,7 +459,7 @@ export default function PaymentConsolePage() {
                   </div>
                   <div className="fg">
                     <div className="lbl">Payment Method <span className="req">*</span></div>
-                    <select className="ctrl" value={payType} onChange={e => setPayType(e.target.value)}>
+                    <select className="ctrl" value={payType} onChange={e => { setPayType(e.target.value); setReceiptBookGuid('') }}>
                       {Object.entries(PAY_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </div>

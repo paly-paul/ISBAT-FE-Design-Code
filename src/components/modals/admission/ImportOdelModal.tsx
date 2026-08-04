@@ -51,11 +51,6 @@ export function ImportOdelModal({ isOpen, onClose }: ModalProps) {
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
-        <div className="info-box mb-3">
-          <i className="lni lni-information"></i>
-          <span>ODel is the online application portal for distance learners. Pre-filled records below are awaiting verification &amp; payment.</span>
-        </div>
-
         <div className="mb-3" style={{
           display: 'flex', alignItems: 'center', gap: 8,
           border: '1.5px solid var(--g300)', borderRadius: 'var(--rxs)',
