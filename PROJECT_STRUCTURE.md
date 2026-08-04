@@ -102,7 +102,7 @@ No test framework.
 /finance                           → redirects to /finance/dashboard (was /finance/cooperates)
 
 /finance/dashboard                 → finance overview                   — mock/static, built from a reference HTML mockup — see note below
-/finance/payment-console           → payment collection console         — mock/static (see note below); Bank Name/Receipt Book dropdowns are the exception — real, via useBanks()/useReceiptBooks()
+/finance/payment-console           → payment collection console         ← real hook layer (search/profile/outstanding-ledgers/payment-history/payable-ledgers-preview/create-payment all hit `/api/v1/finance/payment-console/*`; Bank Name/Receipt Book dropdowns additionally use the generic useBanks()/useReceiptBooks() — see note below)
 /finance/payment-history           → payment transaction ledger         — mock/static; search + fee-type filter + paginated table over hardcoded rows
 /finance/ledger-adjustments        → historical ledger overrides        — mock/static; AdjustLedgerModal logs a toast only, no backing endpoint
 /finance/exchange-rates            → daily USD/UGX/KES rate management  — mock/static; rate history updates client-side only, nothing persisted
@@ -206,11 +206,17 @@ src/
 │   └── finance/
 │       ├── layout.tsx           # own panelOpen/collapsedSections/activeRail state, no auth gate
 │       ├── page.tsx             # redirect → /finance/dashboard (was /finance/cooperates)
-│       ├── dashboard/, payment-console/, payment-history/, ledger-adjustments/,
+│       ├── dashboard/, payment-history/, ledger-adjustments/,
 │       │   exchange-rates/, advanced-payments/, financial-reports/, student-statements/
 │       │   # all mock/static, built from ISBAT_ERP_Finance (1).html — see note above the directory tree.
-│       │   # payment-console/page.tsx is the one exception: its Bank Name/Receipt Book dropdowns use
-│       │   # the real useBanks()/useReceiptBooks(); AdjustLedgerModal (modals/finance/) is toast-only, no endpoint
+│       │   # AdjustLedgerModal (modals/finance/) is toast-only, no endpoint
+│       ├── payment-console/page.tsx ← real hook layer, genuinely distinct from the rest of this group (see
+│       │   # usePaymentConsole.ts below) — search is debounced (400ms) to update the results list live as
+│       │   # the user types rather than only on Search-click/Enter; the Outstanding Ledgers table keys each
+│       │   # row on `${intLedger}-${semesterGuid}-${index}` since the same ledger can legitimately repeat
+│       │   # across semesters; Receipt Book is filtered to the category matching the selected Payment
+│       │   # Method (PAY_TYPE_TO_RECEIPT_CATEGORY in page.tsx — an unconfirmed best-guess mapping, flagged
+│       │   # in code, since CreatePayment's own category↔payType pairing isn't documented in any .bru spec)
 │       ├── cooperates/page.tsx       ← useCooperates/useCreateCooperate/useUpdateCooperate/useDeleteCooperate
 │       ├── discounts/page.tsx        ← useDiscounts/useCreateDiscount/useUpdateDiscount/useDeleteDiscount (calcType/status int enums — see note below)
 │       ├── ledgers/page.tsx          ← useLedgers/useCreateLedger/useUpdateLedger/useDeleteLedger
@@ -248,8 +254,20 @@ src/
 │       │   ├── NewBatchModal.tsx / EditBatchModal.tsx     # real; programGuid/semesterGuid/streamGuid/batchTimeGuid are real guid dropdowns (see batch.ts note below) — bInCharge is the one field still sent as list position (unconfirmed id); Edit can't prefill Batch In-Charge (not returned by GetByGuid at all) or Intake (no intake field on read at all), both must be re-picked every edit. Both modals' header now uses the `.modal-hdr-blue` gradient variant (globals.css) instead of the plain default, and dropped the amber warning box / info box that used to sit above/below the field grid — the caveats they described are still in code comments, just not surfaced in the UI
 │       │   ├── NewBatchTimeModal.tsx / EditBatchTimeModal.tsx    # real, fetch-by-guid Edit convention; fully confirmed 2-field CRUD (batchTime/batchTimeCode), no gotchas
 │       │   ├── CourseUnitModal.tsx / EditCourseUnitModal.tsx / ElectiveSelectModal.tsx
+│       │   │   # Both's Step 2 "Course Outline" now uses the `.fsm-layout` two-panel pattern — chapters listed
+│       │   │   # in a left sidebar (click to switch, trash icon hidden when it's the only chapter, "Add
+│       │   │   # Chapter" pinned at the bottom), active chapter's title + topics editor on the right —
+│       │   │   # replacing the old vertically-stacked "every chapter expanded at once" list. Purely a
+│       │   │   # rendering change: the same addChapter/removeChapter/setChapterTitle/addTopic/removeTopic/
+│       │   │   # setTopic helpers and the outlines[] payload build are untouched, still indexed by chapter
+│       │   │   # position — only a new activeChapterIdx state (reset on close, clamped on remove) was added
 │       │   ├── ProgrammeModal.tsx (multi-step) / ProgrammeLevelModal.tsx / ProgrammeGroupModal.tsx / SpecializationModal.tsx
 │       │   │   # ProgrammeModal's fee-line Ledger dropdown is wired to the real Finance Ledger master (useLedgers) — previously hardcoded to one fake ledger regardless of selection
+│       │   │   # Step 2 "Course Unit Allocation" also now uses `.fsm-layout` — all 6 semesters listed in the
+│       │   │   # left sidebar (fixed count, no add/remove), active semester's Specialization picker + course
+│       │   │   # unit list on the right, replacing the old per-semester accordion. `activeAcc` (previously an
+│       │   │   # accordion open/-1-closed index) now just tracks the selected semester, reset to 0 alongside
+│       │   │   # activeFeeIdx/feeAccordion on close and on Edit-mode prefill
 │       │   │   # ProgrammeModal Edit mode now real: useProgramMasterFullDetails(programGuid) prefills all 3 steps (scalars, per-semester course units, fee structures), Currency prefilled from the list row's currencyGuid; submit calls useUpdateProgramMasterComplete() (apiPutForm .../update-complete); page.tsx's Delete action calls useDeleteProgramMasterComplete() (.../delete-complete)
 │       │   │   # ProgrammeLevelModal/EditProgrammeLevelModal source Currency from useFinanceCurrencies (currencyGuid), not useCurrencies (intCurrency) — see note below
 │       │   ├── FeeStructureModal.tsx / FeeItemModal.tsx    # standalone /academic/fee-structure page — real: per-semester accordion driven by useSemestersForProgram (real semesterGuid, not a fixed Sem 1-6 range), fee-item Currency/Ledger sourced from useFinanceCurrencies/useLedgers; bottom-right Save loops useSaveProgramFeeStructureComplete() once per structure (combined header+lines POST) — payload confirmed correct against SaveCompleteHeader.bru, but the dev backend currently 405s the route (Allow: GET) — see Data & API Architecture. Responsive layout (sidebar/grids/fee-item-row) uses dedicated `.fsm-*` classes in globals.css instead of inline pixel styles, so breakpoints can reach them
@@ -296,7 +314,7 @@ src/
 │   │   ├── useApplicationFiling.ts     # real; useSearchApplicationsForFiling/useSaveGeneral/useSaveQualification/useDeleteQualification/useUploadPhoto/useSubmitApplication — backs /admission/filing
 │   │   └── useVetting.ts               # real; useVettingQueue(page, pageSize, filters) (server-side studentName/appRefNo filter), useVettingApplicationDetail(guid, enabled) (fetch-by-guid, Review modal), useWaitApplication(), useVetApplication() (shared by Approve and Reject) — backs /admission/vetting; every mutation invalidates both the queue and per-application detail cache since Wait/Approve/Reject all change the persisted `action` byte, dropping the row out of the Submitted-only queue
 │   ├── academic/
-│   │   ├── useIntakes.ts        # kept "academic" naming (backs /academic/intake-master)
+│   │   ├── useIntakes.ts        # kept "academic" naming (backs /academic/intake-master); useCurrentAcademicIntake()/useCurrentAdmissionIntake() (the two hero cards) no longer hit GET .../intakes with currentIntake=/currentAdmissionIntake= query params — both flags are already present on every row of the plain list response, so the current academic/admission intake is now found via `intakes.find(i => i.currentIntake)` / `.find(i => i.currentAdmissionIntake)` over the same unfiltered pageSize=1000 list `useIntakes()` already fetches, then re-fetched by guid (`getIntakeById`) for the fully-populated `academicCalendar` the cards need
 │   │   ├── useProgramLevels.ts / useProgramGroups.ts   # real; back /academic/programme-level and /academic/programme-group
 │   │   ├── useRepetitionTags.ts / useCourseUnits.ts / useProgramMaster.ts   # real; back /academic/repetition-tag, /course-units, /programme-master (useProgramMaster.ts also exports useProgramMasters() the list query, useProgramMasterFullDetails(guid, enabled) for Edit prefill, useUpdateProgramMasterComplete(), useDeleteProgramMasterComplete())
 │   │   ├── useProgramFeeStructure.ts   # real; useSaveProgramFeeStructureComplete() — combined header+lines POST, backs /academic/fee-structure's Save button (see Data & API Architecture for the live 405 gotcha)
@@ -307,7 +325,8 @@ src/
 │   │   ├── useCooperates.ts / useDiscounts.ts / useLedgers.ts / useReceiptBooks.ts / useGenSets.ts / useBanks.ts /
 │   │   │   useBankBranches.ts / useProcGlAccounts.ts / useProcBanks.ts   (all real; useX(guid, enabled) convention for Edit modals except useReceiptBooks — no GetByGuid endpoint)
 │   │   ├── useCurrencies.ts     # backs /finance/currency-master — GET/create real, hits /api/v1/finance/currencies; update still mock. Moved here from hooks/config/.
-│   │   └── useFinanceCurrencies.ts   # GET-only lookup for the Currency dropdown in ProcBank/Programme Level modals — distinct from useCurrencies(), carries a confirmed real currencyGuid
+│   │   ├── useFinanceCurrencies.ts   # GET-only lookup for the Currency dropdown in ProcBank/Programme Level modals — distinct from useCurrencies(), carries a confirmed real currencyGuid
+│   │   └── usePaymentConsole.ts # real; backs /finance/payment-console — useSearchStudents(term, page, pageSize, enabled) (debounced from the page, live results), useStudentProfile/useOutstandingLedgers/usePaymentHistory(applicationGuid, enabled) (fetch-by-guid queries), usePayableLedgers(params, enabled) (allocation preview, params pre-debounced by the caller), useCreatePayment(); getOutstandingLedgers/getPaymentHistory both normalize a live 404 `not_found` ("no ledgers/history yet") to `[]` rather than letting react-query treat a genuinely-empty result as a query error
 │   ├── employee/
 │   │   └── useEmployees.ts    # useEmployees/useEmployee/useCreateEmployee/useUpdateEmployee, plus useEmployeePermissionGroups(guid, enabled) and useAssignEmployeePermissionGroups() for the per-employee Permission Group assign/edit flow
 │   └── users/
@@ -356,7 +375,8 @@ src/
         │   ├── procGlAccount.ts   # /api/v1/finance/proc-gl-accounts; status/type int enums
         │   ├── procBank.ts        # /api/v1/finance/proc-banks; currencyGuid references currency.ts above, not currencyMaster.ts
         │   ├── bank.ts            # /api/v1/finance/banks
-        │   └── bankBranch.ts      # /api/v1/finance/bank-branches; bankGuid FK, resolved client-side via useBanks()
+        │   ├── bankBranch.ts      # /api/v1/finance/bank-branches; bankGuid FK, resolved client-side via useBanks()
+        │   └── paymentConsole.ts  # /api/v1/finance/payment-console/*; backs /finance/payment-console — searchStudents/getStudentProfile/getOutstandingLedgers/getPaymentHistory/getPayableLedgers/createPayment — see the Finance table below for the per-endpoint gotchas
         ├── employee/
         │   └── employee.ts        # real; EmployeeListItem uses isApproved: boolean (not a status string). Also assignEmployeePermissionGroups/getEmployeePermissionGroups (PUT/GET /api/v1/users/admin/users/{employeeGuid}/permission-groups) — GET's real shape is an array of {permissionGroupGuid, groupName, description} objects (not bare guid strings as first assumed), mapped down to just the guids since names/descriptions are already available from Permission Master's own list
         └── users/
@@ -389,7 +409,7 @@ src/app/<module>/<domain>/page.tsx → thin: reads the hook, tracks which row is
 | `designation.ts` | Real | |
 | `department.ts` | Real | |
 | `permissionGroup.ts` | Real | Backs the wizard in `usePermissionWizard.ts` |
-| `intake.ts` | Real | Create/Update require `lastDateForReRegistration`/`grievanceStartDate`/`grievanceEndDate` non-empty — confirmed by a real `validation_error` ("must not be empty") despite `CreateIntakeInput` typing them nullable; both New/EditIntakeModal now mark them required. `durationInWeeks` must be computed with `Math.ceil`, not `Math.round` — rounding down a fractional week count caused the backend's own `semesterEndDate ≤ semStart + (durationInWeeks-2) weeks` re-validation to reject a date the user actually entered |
+| `intake.ts` | Real | Create/Update require `lastDateForReRegistration`/`grievanceStartDate`/`grievanceEndDate` non-empty — confirmed by a real `validation_error` ("must not be empty") despite `CreateIntakeInput` typing them nullable; both New/EditIntakeModal now mark them required. `durationInWeeks` must be computed with `Math.ceil`, not `Math.round` — rounding down a fractional week count caused the backend's own `semesterEndDate ≤ semStart + (durationInWeeks-2) weeks` re-validation to reject a date the user actually entered. `getIntakes()` no longer accepts `currentIntake`/`currentAdmissionIntake` filter params — both are plain fields on every list row, so filtering by them is now a client-side `.find()` over the already-fetched list rather than a second/third GET with different query params (see `useIntakes.ts` above) |
 | `programLevel.ts` | Real | Backs `/academic/programme-level`; create/update payload omits `semCount`/`currencyCode`/`currencyName` (server-derived) even though the GET response returns them. **Currency field is `currencyGuid: string`, not `intCurrency: number`** — sending `intCurrency` (Currency Master's key) fails with `"Currency is required."` The correct source is `useFinanceCurrencies()` (real `currencyGuid`), not `useCurrencies()` (Currency Master, no reliable guid) |
 | `programGroup.ts` | Real | Backs `/academic/programme-group` |
 | `stream.ts` | Real | Backs `/config/specialization` (route renamed from `/config/stream-master` — type/hook/file still say "Stream" since the backend fields do too); full CRUD incl. delete |
@@ -448,6 +468,7 @@ To migrate another page to this pattern: copy the shape of `faculty.ts` + `useFa
 | `procBank.ts` | Real | Backs `/finance/proc-banks`; reuses the same `status` 1/2 convention; `currencyGuid` references `currency.ts` above — **not** `currencyMaster.ts`, which has no reliable guid |
 | `bank.ts` | Real | Backs `/finance/banks`; full CRUD, fetch-by-guid Edit convention |
 | `bankBranch.ts` | Real | Backs `/finance/bank-branches`; `bankGuid` FK resolved client-side via `useBanks()`, same fallback-resolution pattern as `faculty.ts`'s dean name |
+| `paymentConsole.ts` | Real | Backs `/finance/payment-console`; `searchStudents`/`getStudentProfile`/`getOutstandingLedgers`/`getPaymentHistory`/`getPayableLedgers`/`createPayment` all hit `/api/v1/finance/payment-console/*`. `getOutstandingLedgers` and `getPaymentHistory` both normalize a live 404 `not_found` ("no ledgers/history for this application yet") to `[]` — a genuinely-empty result, not a real error, same convention as elsewhere in this app; without it react-query surfaces a brand-new application's empty history as a query error instead of just "no history". The page's Receipt Book dropdown filters by category to match the selected Payment Method via a client-side `PAY_TYPE_TO_RECEIPT_CATEGORY` map (Cash→Cash, Cheque/Bank/DemandDraft→Bank, Online→Online) — this pairing isn't documented in `CreatePayment.bru` or anywhere else, so it's a flagged best-guess, not a confirmed contract; picking a mismatched pair previously only surfaced after Save, via a real backend `validation_error` ("Receipt book category does not match the selected payment type") |
 
 **Gotcha — int-encoded enum fields:** when a new domain's sample payload has a field typed as a bare number with no accompanying enum reference (e.g. `calcType`, `status`, `type`, `category`, `bookCategory`), don't assume it's freeform or send a string label — confirm the int↔label mapping against the corresponding `Finance/Enums/*.bru` doc (or ask) first. Guessing wrong doesn't fail type-checking (the field is typed `number` either way) — it only surfaces as a real `validation_error` from the live backend, same as the `discount.ts` `calcType` incident.
 
@@ -624,9 +645,11 @@ Prefer custom CSS classes over Tailwind utilities.
 | Sidebar dims | `--rail-w` (66px), `--panel-w` (228px) |
 | Font sizes | `--fs-2xs`, `--fs-xs`, `--fs-sm`, `--fs-base`, `--fs-lg`, `--fs-xl`, `--fs-2xl` |
 
-Key utility classes: `.btn`, `.btn-primary`, `.btn-neu`, `.btn-danger`, `.btn-amber`, `.btn-sm`, `.card`, `.pg-hdr`, `.sb-item`, `.sb-toggle`, `.modal`, `.modal-overlay`, `.modal-hdr`, `.modal-hdr-blue` (opt-in gradient header variant — blue background, white title/icon/close, rounded top corners; add alongside `.modal-hdr`, doesn't touch the shared class so other modals are unaffected — see `NewBatchModal`/`EditBatchModal`), `.modal-footer`, `.modal-scroll`, `.modal-80`, `.modal-flex`, `.mdl-section`, `.mdl-section--blue/amber/green`, `.mdl-section-hdr`, `.badge-*`, `.ctrl`, `.lbl`, `.fg`, `.g3`, `.req`, `.prog-step`, `.prog-steps`, `.file-zone`, `.wt-input`, `.perm-delete-*`, `.inp-wrap`/`.inp-icon` (icon-in-input search boxes — see `TableSearch` in Key Patterns), `.fsm-layout`/`.fsm-sidebar`/`.fsm-main` (left-sidebar + right-form two-panel layout, originally `FeeStructureModal`-only, now reused by `EditIntakeModal`'s semester calendar step)
+Key utility classes: `.btn`, `.btn-primary`, `.btn-neu`, `.btn-danger`, `.btn-amber`, `.btn-sm`, `.card`, `.pg-hdr`, `.sb-item`, `.sb-toggle`, `.modal`, `.modal-overlay`, `.modal-hdr`, `.modal-hdr-blue` (opt-in gradient header variant — blue background, white title/icon/close, rounded top corners; add alongside `.modal-hdr`, doesn't touch the shared class so other modals are unaffected — see `NewBatchModal`/`EditBatchModal`), `.modal-footer`, `.modal-scroll`, `.modal-80`, `.modal-flex`, `.mdl-section`, `.mdl-section--blue/amber/green`, `.mdl-section-hdr`, `.badge-*`, `.ctrl`, `.lbl`, `.fg`, `.g3`, `.req`, `.prog-step`, `.prog-steps`, `.file-zone`, `.wt-input`, `.perm-delete-*`, `.inp-wrap`/`.inp-icon` (icon-in-input search boxes — see `TableSearch` in Key Patterns), `.fsm-layout`/`.fsm-sidebar`/`.fsm-main` (left-sidebar + right-form two-panel layout, originally `FeeStructureModal`-only, now reused by `EditIntakeModal`'s semester calendar step, `CourseUnitModal`/`EditCourseUnitModal`'s Step 2 — chapters left, active chapter's topics right — and `ProgrammeModal`'s Step 2 "Course Unit Allocation" — semesters left, active semester's specialization + course units right, replacing the old per-semester accordion list)
 
 Tailwind config maps all CSS variables to Tailwind names (`bg-b500`, `text-g400`, `bg-clr-green-bg`, etc.). There is no global `a { }` reset — anchor-based components (like `.sb-item`, now a `<Link>`) must set their own `text-decoration`.
+
+**`.warn-box` static disclaimer banners were removed from 11 pages** this round — the fixed "Rule:"/explanatory-text boxes that sat above a page's main content (`intake-master`'s "only one Current Academic/Admission Intake" rule, `programme-master`'s Versioning Rule, `batch-management`, `session-movement`'s Execution Rules, `allocation`'s skill-prerequisite note, `grievance`, `coursework`, `class-test`, `odl-applications`, `odl-reconciliation`, `financial-reports`'s "12 students blocked" stat). Where a `warn-box` sat next to an `info-box` in a two-column `.g2` grid, the grid wrapper was also dropped down to a single block so the remaining `info-box` doesn't sit in a half-empty row. **Not** touched, since they're functional/data-driven rather than static boilerplate: `VettingReviewModal.tsx`'s missing-docs alert (only renders when `missingDocs.length > 0`), `CompleteRegistrationModal.tsx`'s pending-checklist-item styling, and `ledger-adjustments`' own `warn-box` (the collapsed-state placeholder shown while "Expand Historical Semesters" is off — removing it would leave nothing rendered in that state, not just less text).
 
 **Scoped-breakpoint convention:** page/modal-specific responsive fixes are scoped by `id` selector (`#page-payment`, `#page-filing`, `#new-fee-structure-modal`) rather than editing the shared `.g2`/`.g3`/`.g4`/`900px` global rules, so a fix requested for one page never silently changes another. Inline `style={{...}}` layouts can't be reached by media queries at all — when a layout needs to become responsive, it first has to move from an inline `style` prop to a dedicated CSS class (see `.fsm-*` in `FeeStructureModal.tsx` for the reference example: fixed-pixel sidebar/grid columns extracted into `.fsm-layout`/`.fsm-sidebar`/`.fsm-main`/`.fsm-item-row` so breakpoints could actually override them).
 
