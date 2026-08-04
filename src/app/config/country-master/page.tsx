@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -25,6 +26,7 @@ export default function Page() {
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingCountry, setEditingCountry] = useState<Country | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Country | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data: rows = [], isLoading } = useCountries()
   const createCountry = useCreateCountry()
@@ -58,9 +60,18 @@ export default function Page() {
     return () => document.removeEventListener('click', closeFilter)
   }, [])
 
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
-  )
+  // Live preview shown in the search dropdown as the user types — matches
+  // the same code/name test as the table's own search filter below, just
+  // capped to a handful of rows and ignoring the column filters so it always
+  // reflects "what search alone would find".
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.countryCode} ${r.countryName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredRows = rows.filter(r => {
+    if (search.trim() && !`${r.countryCode} ${r.countryName}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
+  })
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
@@ -96,6 +107,15 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-world"></i></span> Countries</div>
+            <div className="flex gap-2">
+              <TableSearch
+                className="w-56"
+                placeholder="Search by code or name…"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: r.countryGuid, primary: r.countryCode, secondary: r.countryName }))}
+              />
+            </div>
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>

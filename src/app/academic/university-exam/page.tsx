@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -17,6 +18,7 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -37,9 +39,18 @@ export default function Page() {
     { unit: 'IT102 – Computer Org.',         programme: 'BSc. IT', examDate: '17 May 2026', uploadedBy: 'Ms. Namutebi',   uploadDate: '02 Apr 2026', vettingStatus: 'Approved',      vettingBadge: 'badge-green', vettingIcon: 'lni-checkmark', examStatus: 'Pending', examBadge: 'badge-grey',  examIcon: '',            rowClass: '',       variant: 'view' },
     { unit: 'BBA301 – Strategic Mgmt',       programme: 'BBA',     examDate: '16 May 2026', uploadedBy: '—',              uploadDate: '—',           vettingStatus: 'Not Uploaded',  vettingBadge: 'badge-red',   vettingIcon: '',              examStatus: 'Blocked', examBadge: 'badge-red',   examIcon: '',            rowClass: 'flagged', variant: 'upload' },
   ]
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
-  )
+  const filteredRows = rows.filter(r => {
+    const q = search.trim().toLowerCase()
+    if (q && !`${r.unit} ${r.programme}`.toLowerCase().includes(q)) return false
+    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
+  })
+
+  // Live preview shown in the search dropdown as the user types — same
+  // course unit/programme test as filteredRows above, capped to a handful of rows.
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.unit} ${r.programme}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function fth(label: string, col: string, opts: string[]) {
@@ -87,13 +98,20 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-clipboard"></i></span> Question Papers — Spring 2026</div>
+            <TableSearch
+              className="w-56"
+              placeholder="Search by course unit or programme…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map(r => ({ id: r.unit, primary: r.unit, secondary: r.programme }))}
+            />
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
               <thead><tr><th style={{ width: 48 }}></th><th>Course Unit</th>{fth('Programme', 'programme', ['BSc. IT', 'BBA'])}<th>Exam Date</th><th>Uploaded By</th><th>Upload Date</th>{fth('Vetting Status', 'vettingStatus', ['Under Vetting', 'Approved', 'Not Uploaded'])}{fth('Exam Status', 'examStatus', ['Pending', 'Blocked'])}</tr></thead>
               <tbody>
                 {filteredRows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  ? <EmptyState colSpan={999} hasFilters={!!search || Object.values(filters).some(v => v.length > 0)} onClearFilters={() => { setSearch(''); setFilters({}) }} />
                   : null}
                 {pageItems.map((r, i) => (
                   <tr key={i} className={r.rowClass}>

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
+import { TableSearch } from '@/components/TableSearch'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -19,6 +20,7 @@ export default function Page() {
   const [showPreview, setShowPreview] = useState(false)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -40,9 +42,14 @@ export default function Page() {
     { ref: 'ODL-2026-003', name: 'Mutabazi Eric',      email: 'e.mutabazi@gmail.com',  programme: 'MBA ODL',          appliedDate: '12 Apr 2026', payment: 'Not Paid',     paymentBadge: 'badge-amber', paymentIcon: '',              dpoToken: '—',        status: 'Awaiting Payment', statusBadge: 'badge-amber',  rowClass: 'flagged', strong: true,  variant: 'view-app' },
     { ref: 'ODL-2026-004', name: 'Acayo Lydia',        email: 'l.acayo@email.com',     programme: 'Diploma Bus. ODL', appliedDate: '05 Apr 2026', payment: 'Paid',         paymentBadge: 'badge-green', paymentIcon: 'lni-checkmark', dpoToken: 'TKN-4791', status: 'Reconciled',     statusBadge: 'badge-green',  rowClass: '',       strong: false, variant: 'view' },
   ]
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
-  )
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.ref} ${r.name} ${r.email}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredRows = rows.filter(r => {
+    if (search.trim() && !`${r.ref} ${r.name} ${r.email}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
+  })
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function fth(label: string, col: string, opts: string[]) {
@@ -103,6 +110,13 @@ export default function Page() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-world"></i></span> ODL Applicants — Temporary Table</div>
             <div className="flex gap-2">
+              <TableSearch
+                className="w-56"
+                placeholder="Search by ref no., name or email…"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: r.ref, primary: r.ref, secondary: r.name }))}
+              />
               <SearchSelect className="w-auto text-[var(--fs-sm)]" options={['All Statuses', 'Awaiting Payment', 'Paid — Pending Recon.', 'Reconciled']} />
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>

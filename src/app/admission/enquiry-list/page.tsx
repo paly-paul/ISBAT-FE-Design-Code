@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
@@ -39,6 +40,7 @@ export default function EnquiryListPage() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [page, setPage] = useState(1)
   const [viewingGuid, setViewingGuid] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data, isLoading } = useEnquiries(page, PAGE_SIZE)
   const updateEnquiry = useUpdateEnquiry()
@@ -60,6 +62,18 @@ export default function EnquiryListPage() {
     if (!enquiryStatusGuid) return undefined
     return enquiryStatuses.find(s => s.enquiryStatusGuid === enquiryStatusGuid)?.enquiryStatusName
   }
+
+  // useEnquiries is deliberately NOT fetched at a FETCH_ALL_PAGE_SIZE like
+  // enquiry-followup-master does — this endpoint has 11k+ rows (see the
+  // comment on useEnquiries), so pulling the whole list client-side isn't
+  // viable. Search here only narrows the currently-loaded server page.
+  function matchesSearch(r: typeof rows[number], term: string) {
+    return `${r.enquiryCode} ${r.studentName} ${r.mobile} ${r.email} ${resolveProgramName(r)} ${r.sourceName ?? ''} ${resolveStatusName(r.enquiryStatusGuid) ?? ''}`
+      .toLowerCase()
+      .includes(term)
+  }
+  const filteredRows = search.trim() ? rows.filter(r => matchesSearch(r, search.trim().toLowerCase())) : rows
+  const searchMatches = search.trim() ? filteredRows.slice(0, 8) : []
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -109,7 +123,13 @@ export default function EnquiryListPage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-g800">Enquiry Register</h2>
           <div className="flex gap-2">
-            <input className="ctrl w-52" placeholder="Search enquiries..." />
+            <TableSearch
+              className="w-56"
+              placeholder="Search enquiries (this page)…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map(r => ({ id: r.enquiryGuid, primary: r.enquiryCode, secondary: r.studentName }))}
+            />
             <SearchSelect className="w-36" options={['All Channels', 'Walk-in', 'Phone', 'Online', 'Kiosk']} />
             <button className="btn btn-ghost"><i className="lni lni-download" /> Export</button>
           </div>
@@ -120,10 +140,10 @@ export default function EnquiryListPage() {
             <tbody>
               {isLoading
                 ? <TableLoadingState colSpan={999} />
-                : rows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
+                : filteredRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
                   : null}
-              {rows.map(r => (
+              {filteredRows.map(r => (
                 <tr key={r.enquiryGuid}>
                   <td>
                     <ActionMenu>

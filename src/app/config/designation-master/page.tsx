@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -26,6 +27,7 @@ export default function Page() {
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingDesignation, setEditingDesignation] = useState<Designation | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Designation | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data: rows = [], isLoading } = useDesignations()
   const { data: departments = [] } = useDepartments()
@@ -65,13 +67,22 @@ export default function Page() {
     return () => document.removeEventListener('click', closeFilter)
   }, [])
 
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => {
+  // Live preview shown in the search dropdown as the user types — matches
+  // the same designation-name/department test as the table's own search
+  // filter below, just capped to a handful of rows and ignoring the column
+  // filters so it always reflects "what search alone would find".
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.designationName} ${departmentNameByIntDept[r.intDept] ?? ''}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredRows = rows.filter(r => {
+    if (search.trim() && !`${r.designationName} ${departmentNameByIntDept[r.intDept] ?? ''}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    return Object.entries(filters).every(([k, v]) => {
       if (!v.length) return true
       const cell = k === 'department' ? (departmentNameByIntDept[r.intDept] ?? '') : String((r as unknown as Record<string, unknown>)[k])
       return v.includes(cell)
     })
-  )
+  })
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
@@ -107,6 +118,15 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-tag"></i></span> Designations</div>
+            <div className="flex gap-2">
+              <TableSearch
+                className="w-56"
+                placeholder="Search by code or name…"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: String(r.intDesignation), primary: r.designationName, secondary: departmentNameByIntDept[r.intDept] }))}
+              />
+            </div>
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>

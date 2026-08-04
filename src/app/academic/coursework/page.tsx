@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
+import { TableSearch } from '@/components/TableSearch'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { Pagination } from '@/components/Pagination'
@@ -17,6 +18,7 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -37,9 +39,14 @@ export default function Page() {
     { unit: 'IT102 – Computer Org.',          batch: 'BSC-IT-S1-D', faculty: 'Ms. Namutebi',   openDate: '03 Mar 2026', dueDate: '17 Mar 2026', outOf: 25, submitted: '28/42', submittedClass: 'text-amber', cleared: 38, clearedClass: 'text-green', status: 'Open',          statusBadge: 'badge-amber', statusIcon: '',              rowClass: '', variant: 'manage' },
     { unit: 'MBA101 – Managerial Econ.',      batch: 'MBA-S1-E',    faculty: 'Prof. Mukasa',    openDate: '—',          dueDate: '—',           outOf: 25, submitted: '0/24',  submittedClass: '',           cleared: 24, clearedClass: 'text-green', status: 'Not Scheduled', statusBadge: 'badge-grey',  statusIcon: '',              rowClass: 'flagged', variant: 'schedule' },
   ]
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes((r as unknown as Record<string, string>)[k]))
-  )
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.unit} ${r.batch}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredRows = rows.filter(r => {
+    if (search.trim() && !`${r.unit} ${r.batch}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    return Object.entries(filters).every(([k, v]) => !v.length || v.includes((r as unknown as Record<string, string>)[k]))
+  })
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function fth(label: string, col: string, opts: string[]) {
@@ -86,6 +93,13 @@ export default function Page() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-pencil-alt"></i></span> Active Coursework — Term 1 · Spring 2026</div>
             <div className="flex gap-2">
+              <TableSearch
+                className="w-56"
+                placeholder="Search by course unit or batch…"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: r.unit, primary: r.unit, secondary: r.batch }))}
+              />
               <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Batches</option><option>BSC-IT-S1-D</option><option>BBA-S3-D</option><option>MBA-S1-E</option></select>
             </div>
           </div>

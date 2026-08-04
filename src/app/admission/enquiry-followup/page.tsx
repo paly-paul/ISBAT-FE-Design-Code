@@ -4,15 +4,21 @@ import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignModal'
 import { useEnquiryFollowUpsByAdvisor } from '@/hooks/admission/useEnquiryFollowUps'
 import { useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { usePagination } from '@/hooks/usePagination'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Fetched once at a size large enough to cover the whole advisor-scoped
+// list client-side, same pattern as enquiry-followup-master/page.tsx (this
+// endpoint is the advisor-filtered slice of the same data, so it's smaller).
+const FETCH_ALL_PAGE_SIZE = 1000
 
 function nameBadge(name: string | null, cls: string) {
   if (!name) return <span className="badge badge-grey">—</span>
@@ -24,13 +30,11 @@ export default function EnquiryFollowupPage() {
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
-  const [page, setPage] = useState(1)
   const [viewingGuid, setViewingGuid] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
-  const { data, isLoading } = useEnquiryFollowUpsByAdvisor(page, PAGE_SIZE)
-  const rows = data?.items ?? []
-  const totalCount = data?.totalCount ?? 0
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const { data, isLoading } = useEnquiryFollowUpsByAdvisor(1, FETCH_ALL_PAGE_SIZE)
+  const allRows = data?.items ?? []
   const updateEnquiry = useUpdateEnquiry()
 
   // programName comes back null on every row from the real API — resolve it
@@ -41,6 +45,18 @@ export default function EnquiryFollowupPage() {
     if (!row.programGuid) return '—'
     return programs.find(p => p.programGuid === row.programGuid)?.programName ?? '—'
   }
+
+  function matchesSearch(r: typeof allRows[number], term: string) {
+    return `${r.enquiryCode} ${r.studentName} ${resolveProgramName(r)} ${r.enquiryStatusName ?? ''} ${r.followUpStatusName ?? ''} ${r.enquirySourceName ?? ''}`
+      .toLowerCase()
+      .includes(term)
+  }
+
+  const filteredRows = allRows.filter(r => !search.trim() || matchesSearch(r, search.trim().toLowerCase()))
+  const searchMatches = search.trim()
+    ? allRows.filter(r => matchesSearch(r, search.trim().toLowerCase())).slice(0, 8)
+    : []
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -70,13 +86,20 @@ export default function EnquiryFollowupPage() {
       <div className="stats-row">
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1"><i className="lni lni-users text-b500" /><span className="text-sm text-g500">Total Follow-ups</span></div>
-          <p className="text-2xl font-semibold text-g900">{totalCount.toLocaleString()}</p>
+          <p className="text-2xl font-semibold text-g900">{allRows.length.toLocaleString()}</p>
         </div>
       </div>
 
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-g800">Allocated Follow-ups</h2>
+          <TableSearch
+            className="w-56"
+            placeholder="Search by name, ref, status…"
+            value={search}
+            onChange={setSearch}
+            results={searchMatches.map(r => ({ id: r.enquiryGuid, primary: r.enquiryCode, secondary: r.studentName }))}
+          />
         </div>
         <ScrollTable>
           <table>
@@ -84,10 +107,10 @@ export default function EnquiryFollowupPage() {
             <tbody>
               {isLoading
                 ? <TableLoadingState colSpan={999} />
-                : rows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
+                : filteredRows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
                   : null}
-              {rows.map(r => (
+              {pageItems.map(r => (
                 <tr key={r.enquiryGuid}>
                   <td>
                     <ActionMenu>

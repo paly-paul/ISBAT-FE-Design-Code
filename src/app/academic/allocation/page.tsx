@@ -5,6 +5,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { AllocImportModal } from '@/components/modals/academic/AllocImportModal'
 import { Toast } from '@/components/Toast'
+import { TableSearch } from '@/components/TableSearch'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { Pagination } from '@/components/Pagination'
@@ -18,6 +19,7 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -41,9 +43,14 @@ export default function Page() {
     { code: 'BBA303', name: 'Financial Accounting III',    programme: 'BBA',     semester: 'Sem 3', batch: 'BBA-S3-D',    allocatedTo: '',                       status: 'Missing',   rowClass: 'flagged', toastMsg: 'Assigning BBA303' },
     { code: 'MBA101', name: 'Managerial Economics',        programme: 'MBA',     semester: 'Sem 1', batch: 'MBA-S1-E',    allocatedTo: 'Prof. Mukasa Charles',   status: 'Allocated', rowClass: '',       toastMsg: 'Editing MBA101' },
   ]
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
-  )
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.code} ${r.name}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
+  const filteredRows = rows.filter(r => {
+    if (search.trim() && !`${r.code} ${r.name}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
+  })
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function fth(label: string, col: string, opts: string[]) {
@@ -92,6 +99,13 @@ export default function Page() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-graduation"></i></span> Current Allocations — Spring 2026</div>
             <div className="flex gap-2">
+              <TableSearch
+                className="w-56"
+                placeholder="Search by course code or unit name…"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: r.code, primary: r.code, secondary: r.name }))}
+              />
               <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>BEng. Civil</option></select>
               <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Statuses</option><option>Allocated</option><option>Unallocated</option></select>
             </div>

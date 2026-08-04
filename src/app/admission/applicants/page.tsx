@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { Pagination } from '@/components/Pagination'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
@@ -49,13 +50,16 @@ export default function ApplicantsPage() {
     return programs.find(p => p.programGuid === programGuid)?.programName ?? '—'
   }
 
-  const filtered = allRows.filter(a => {
-    if (!search.trim()) return true
-    const term = search.trim().toLowerCase()
+  function matchesSearch(a: ApplicationListItem, term: string) {
     return `${a.appRefNo} ${applicantName(a)} ${a.emailId ?? ''} ${a.phone ?? ''} ${a.intakeCode ?? ''} ${resolveProgramName(a.programGuid)}`
       .toLowerCase()
       .includes(term)
-  })
+  }
+
+  const filtered = allRows.filter(a => !search.trim() || matchesSearch(a, search.trim().toLowerCase()))
+  const searchMatches = search.trim()
+    ? allRows.filter(a => matchesSearch(a, search.trim().toLowerCase())).slice(0, 8)
+    : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filtered, PAGE_SIZE)
 
@@ -67,10 +71,13 @@ export default function ApplicantsPage() {
           <p className="text-sm text-g500 mt-0.5">Complete list of all applications on file</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm" />
-            <input className="ctrl pl-8 w-56" placeholder="Search applicants…" value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
+          <TableSearch
+            className="w-56"
+            placeholder="Search applicants…"
+            value={search}
+            onChange={setSearch}
+            results={searchMatches.map(a => ({ id: a.applicationGuid, primary: a.appRefNo, secondary: applicantName(a) }))}
+          />
           <button className="btn btn-outline" onClick={() => showToast('CSV exported successfully', 'success')}>
             <i className="lni lni-download mr-1" /> Export CSV
           </button>

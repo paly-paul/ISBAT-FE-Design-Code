@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
 import { OnboardModal } from '@/components/modals/admission/OnboardModal'
 import { CompleteRegistrationModal } from '@/components/modals/admission/CompleteRegistrationModal'
@@ -49,6 +50,9 @@ export default function RegistrationPage() {
     (filterIntake === 'all' || r.intake === filterIntake) &&
     (!q || r.ref.toLowerCase().includes(q) || r.name.toLowerCase().includes(q))
   )
+  const searchMatches = q
+    ? REG_ROWS.filter(r => r.ref.toLowerCase().includes(q) || r.name.toLowerCase().includes(q)).slice(0, 8)
+    : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
@@ -103,10 +107,13 @@ export default function RegistrationPage() {
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <h2 className="text-base font-semibold text-g800">Provisionally Admitted &mdash; Awaiting Final Registration</h2>
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative">
-              <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-g400 text-sm" />
-              <input className="ctrl pl-8 w-56" placeholder="Search App. Ref No. / Student…" value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
+            <TableSearch
+              className="w-56"
+              placeholder="Search App. Ref No. / Student…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map(r => ({ id: r.ref, primary: r.ref, secondary: r.name }))}
+            />
             <SearchSelect options={INTAKE_OPTIONS} value={filterIntake} onChange={setFilterIntake} />
           </div>
         </div>

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { NewRoomModal } from '@/components/modals/academic/NewRoomModal'
 import { EditRoomModal } from '@/components/modals/academic/EditRoomModal'
 import { Toast } from '@/components/Toast'
@@ -18,6 +19,7 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -43,9 +45,18 @@ export default function Page() {
     { code: 'RM-FEN-001', description: 'Engineering Workshop',         campus: 'Main Campus — Kampala',  building: 'Block D', capacity: '50', status: 'Inactive'            },
   ]
 
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
-  )
+  const filteredRows = rows.filter(r => {
+    const q = search.trim().toLowerCase()
+    if (q && !`${r.code} ${r.description}`.toLowerCase().includes(q)) return false
+    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
+  })
+
+  // Live preview shown in the search dropdown as the user types — same
+  // code/description test as filteredRows above, capped to a handful of rows.
+  const searchMatches = search.trim()
+    ? rows.filter(r => `${r.code} ${r.description}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
+
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function statusBadge(status: string) {
@@ -91,6 +102,13 @@ export default function Page() {
               <span className="ctitle-icon"><i className="lni lni-home"></i></span>
               Rooms &amp; Venues
             </div>
+            <TableSearch
+              className="w-56"
+              placeholder="Search by room code or description…"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map(r => ({ id: r.code, primary: r.code, secondary: r.description }))}
+            />
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
@@ -107,7 +125,7 @@ export default function Page() {
               </thead>
               <tbody>
                 {filteredRows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  ? <EmptyState colSpan={999} hasFilters={!!search || Object.values(filters).some(v => v.length > 0)} onClearFilters={() => { setSearch(''); setFilters({}) }} />
                   : null}
                 {pageItems.map((r, i) => (
                   <tr key={i}>

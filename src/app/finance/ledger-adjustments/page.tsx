@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableSearch } from '@/components/TableSearch'
 import { AdjustLedgerModal, AdjustLedgerTarget } from '@/components/modals/finance/AdjustLedgerModal'
 
 interface DemoStudent { name: string; sno: string }
@@ -29,15 +30,28 @@ export default function Page() {
   const [expanded, setExpanded] = useState(false)
   const [adjustTarget, setAdjustTarget] = useState<AdjustLedgerTarget | null>(null)
 
+  // Shared "a student was picked" behavior — used both by the Load Ledger
+  // button (typed sno/name, resolved on click) and by TableSearch's onSelect
+  // (a specific candidate clicked from the live dropdown).
+  function selectStudent(found: DemoStudent) {
+    setStudent(found)
+    setExpanded(false)
+    showToast('Student ledger loaded.', 'success')
+  }
+
   function loadLedger() {
     const q = search.trim().toLowerCase()
     if (!q) { showToast('Enter a student number or name.', 'warn'); return }
     const found = DEMO_STUDENTS.find(s => s.sno.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
     if (!found) { showToast('Student not found.', 'warn'); return }
-    setStudent(found)
-    setExpanded(false)
-    showToast('Student ledger loaded.', 'success')
+    selectStudent(found)
   }
+
+  // Live preview shown in the search dropdown as the user types — same
+  // sno/name match test as loadLedger's lookup above, capped to 8.
+  const searchMatches = search.trim()
+    ? DEMO_STUDENTS.filter(s => s.sno.toLowerCase().includes(search.trim().toLowerCase()) || s.name.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : []
 
   return (
     <>
@@ -66,14 +80,18 @@ export default function Page() {
           <div className="g2">
             <div className="fg">
               <div className="lbl">Student Number or Name <span className="req">*</span></div>
-              <div className="inp-wrap">
-                <span className="inp-icon"><i className="lni lni-search-alt"></i></span>
-                <input
-                  className="ctrl" type="text" placeholder="e.g. ISB/2026/0021 or Alice"
-                  value={search} onChange={e => setSearch(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') loadLedger() }}
-                />
-              </div>
+              <TableSearch
+                placeholder="e.g. ISB/2026/0021 or Alice"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(s => ({ id: s.sno, primary: s.sno, secondary: s.name }))}
+                onSelect={(r) => {
+                  const found = DEMO_STUDENTS.find(s => s.sno === r.id)
+                  if (!found) return
+                  setSearch(r.primary)
+                  selectStudent(found)
+                }}
+              />
             </div>
             <div className="fg flex items-end">
               <button className="btn btn-primary w-full" onClick={loadLedger}>
