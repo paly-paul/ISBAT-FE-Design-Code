@@ -236,18 +236,6 @@ export function CompleteRegistrationModal({ isOpen, onClose, student, onOnboard 
                 })}
               </div>
 
-              <div className="info-box bg-b50 border border-b200 rounded-lg p-3">
-                <p className="text-sm font-medium text-b700 mb-1"><i className="lni lni-information mr-1" /> On <strong>Complete Registration</strong>, the system will automatically:</p>
-                <ul className="text-xs text-g600 list-disc ml-4 space-y-1">
-                  <li>Create student record in <span className="font-mono text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--b100)', color: 'var(--b700)' }}>T_Student</span></li>
-                  <li>Set student status = <strong>Active</strong></li>
-                  <li>Send welcome email with login credentials</li>
-                  <li>Initiate ISLANDA access ID card</li>
-                  <li>Queue biometric access setup</li>
-                  <li>Issue Final Admission Letter</li>
-                </ul>
-              </div>
-
               <button className="btn btn-success w-full mt-4" onClick={onOnboard}>
                 <i className="lni lni-checkmark-circle mr-1" /> Complete Registration &amp; Onboard Student
               </button>

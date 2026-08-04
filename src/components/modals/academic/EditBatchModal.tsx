@@ -162,7 +162,7 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
     return (
       <div className="modal-overlay open" id="edit-batch-modal">
         <div className="modal modal-xl" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+          <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-pencil"></i> Edit Batch</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
@@ -177,16 +177,9 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
   return (
     <div className="modal-overlay open" id="edit-batch-modal">
       <div className="modal modal-xl" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Batch — {batch.batchCode}</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', background: 'var(--amber-bg)', border: '1px solid var(--amber-bd)', borderRadius: 'var(--rxs)', marginBottom: 14 }}>
-          <i className="lni lni-warning" style={{ color: 'var(--amber)', marginTop: 2 }}></i>
-          <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>
-            Update now replaces the full batch record. Intake and Batch In-Charge can&apos;t be prefilled from the current record — please re-select both. Batch In-Charge is also still sent as list position, not a confirmed backend id.
-          </span>
         </div>
 
         <div className="g3">
@@ -229,10 +222,6 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
           <div className="fg"><div className="lbl">End Date</div><input className="ctrl" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
         </div>
 
-        <div className="info-box mt-3">
-          <i className="lni lni-information"></i>
-          Batch In-Charge can view batch-level reports but has no direct relation to programme course content.
-        </div>
 
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>

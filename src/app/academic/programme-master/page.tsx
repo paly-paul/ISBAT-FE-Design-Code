@@ -160,10 +160,6 @@ export default function Page() {
           <button className="btn btn-neu btn-sm text-[var(--fs-xs)]" onClick={() => nav('course-units')}><i className="lni lni-book"></i> Course Units</button>
         </div>
 
-        <div className="warn-box mb-[18px]">
-          <i className="lni lni-warning"></i> <span><strong>Versioning Rule:</strong> NCHE mandates a minimum 30–50% curriculum change every 5 years for reaccreditation. Old versions (e.g. BCA 2026) must remain <em>Inactive</em> so existing students continue on their curriculum. New versions (e.g. BCA 2031) are set <em>Active</em> for new admissions only.</span>
-        </div>
-
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-graduation"></i></span> All Programme Versions</div>

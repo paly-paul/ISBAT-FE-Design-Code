@@ -1,4 +1,4 @@
-import { AuthError, post, apiPost } from './api/client'
+import { AuthError, post, apiPost, refreshAccessToken } from './api/client'
 
 export { AuthError }
 
@@ -69,8 +69,12 @@ export function refreshSession(): Promise<RefreshResult> {
   if (MOCK_AUTH) {
     return Promise.resolve({ displayName: 'Mock User' })
   }
-  // A cookie-only success is still a valid refresh.
-  return apiPost<RefreshResult | null>('/api/v1/users/auth/refresh', {}).then(data => data ?? {})
+  // Routed through the same refreshAccessToken() the reactive 401 handler
+  // uses (not a direct apiPost call) so this mount-time refresh shares its
+  // in-flight dedup — calling /auth/refresh from two places independently
+  // risks racing the backend's single-use rotating refresh token, which a
+  // live test confirmed hard-fails whichever call loses the race.
+  return refreshAccessToken()
 }
 
 // Logout — invalidates the httpOnly session cookie; no body needed.

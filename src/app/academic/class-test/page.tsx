@@ -72,9 +72,8 @@ export default function Page() {
           <button className="btn btn-primary" onClick={() => openModal('new-cbt-modal')}><i className="lni lni-plus"></i> Schedule Class Test</button>
         </div>
 
-        <div className="g2 mb-[18px]">
+        <div className="mb-[18px]">
           <div className="info-box"><i className="lni lni-ruler-alt"></i> <span><strong>Proration:</strong> CBT is marked out of <strong>50</strong> and prorated to <strong>15</strong> marks. Each test runs for <strong>60 minutes</strong> with server-side timing — students cannot extend or pause.</span></div>
-          <div className="warn-box"><i className="lni lni-warning"></i> <span>Minimum <strong>50% fee clearance</strong> required for submission (calculated on <strong>original tuition fee</strong>, not discounted amount). View access permitted without clearance.</span></div>
         </div>
 
         <div className="card">

@@ -70,7 +70,7 @@ export function EditEmployeeModal({ isOpen, onClose, showToast, employeeGuid }: 
   const [maritalStatus, setMaritalStatus] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const { data: employee, isLoading } = useEmployee(employeeGuid)
+  const { data: employee } = useEmployee(employeeGuid)
   const updateEmployee = useUpdateEmployee()
   const { data: departments = [] } = useDepartments()
   const { data: designations = [] } = useDesignations()
@@ -215,12 +215,6 @@ export function EditEmployeeModal({ isOpen, onClose, showToast, employeeGuid }: 
         </div>
 
         <div className="modal-scroll">
-
-          {isLoading && (
-            <div className="info-box mb-3">
-              <i className="lni lni-spinner-arrow"></i> Loading employee details…
-            </div>
-          )}
 
           {/* ── Personal Details (matches POST /api/v1/users/employees) ── */}
           <div className="sec-divider">Personal Details</div>

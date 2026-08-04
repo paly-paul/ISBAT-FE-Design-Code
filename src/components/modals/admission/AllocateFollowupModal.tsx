@@ -62,11 +62,6 @@ export function AllocateFollowupModal({ isOpen, onClose, enquiry, onAllocate }: 
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
-        <div className="info-box mb-3">
-          <i className="lni lni-information"></i>
-          <span>Assign <strong>{enquiry.name}</strong> ({enquiry.programme}) to a staff member for follow-up.</span>
-        </div>
-
         <div className="g2">
           <div className="fg">
             <label className="lbl">Assign To <span className="req">*</span></label>

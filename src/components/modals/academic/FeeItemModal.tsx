@@ -11,9 +11,6 @@ export function FeeItemModal({ isOpen, onClose, showToast }: ModalProps) {
           <div className="modal-title"><i className="lni lni-dollar"></i> Add / Edit Fee Item</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
-        <div className="info-box mb-[14px]">
-          <i className="lni lni-bulb"></i> <span>Give the fee item a clear, user-friendly title (e.g. <em>Tuition Fee</em>, <em>Semester Entry Fee</em>, <em>Lab Fee</em>). Priority controls auto-settlement order within the semester.</span>
-        </div>
         <div className="g2">
           <div className="fg">
             <div className="lbl">Semester <span className="req">*</span></div>

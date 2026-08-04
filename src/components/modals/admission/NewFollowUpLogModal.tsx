@@ -135,13 +135,6 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, enquiries, cre
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', background: 'var(--amber-bg)', border: '1px solid var(--amber-bd)', borderRadius: 'var(--rxs)', marginBottom: 14 }}>
-          <i className="lni lni-warning" style={{ color: 'var(--amber)', marginTop: 2 }}></i>
-          <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>
-            Enquiry/Status/Mode/Interest Level are sent as list position, not a confirmed backend id — this may save against the wrong record until the real mapping is confirmed.
-          </span>
-        </div>
-
         <div className="g2">
           <div className="fg" style={{ gridColumn: 'span 2' }}>
             <div className="lbl">Enquiry <span className="req">*</span></div>

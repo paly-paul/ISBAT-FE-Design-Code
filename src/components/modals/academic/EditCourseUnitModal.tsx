@@ -31,6 +31,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
   const [failure, setFailure]           = useState<string | null>(null)
   const [step, setStep]                 = useState(1)
   const [chapters, setChapters]         = useState<Chapter[]>([blankChapter(1)])
+  const [activeChapterIdx, setActiveChapterIdx] = useState(0)
   const [unitCode, setUnitCode]         = useState('')
   const [unitName, setUnitName]         = useState('')
   const [numChapters, setNumChapters]   = useState('')
@@ -88,6 +89,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
     )
     setSyllabusFile(null)
     setStep(1)
+    setActiveChapterIdx(0)
     setErrors({})
     setChapterErrors([])
   }, [isOpen, courseUnit])
@@ -112,7 +114,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
   if (!isOpen) return null
 
   function handleClose() {
-    setSaved(false); setFailure(null); setStep(1); setErrors({}); setChapterErrors([])
+    setSaved(false); setFailure(null); setStep(1); setActiveChapterIdx(0); setErrors({}); setChapterErrors([])
     onClose()
   }
 
@@ -163,10 +165,17 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
   function addChapter() {
     setChapters(p => [...p, blankChapter(p.length + 1)])
     setChapterErrors(p => [...p, ''])
+    setActiveChapterIdx(chapters.length)
   }
   function removeChapter(ci: number) {
     setChapters(p => p.filter((_, i) => i !== ci))
     setChapterErrors(p => p.filter((_, i) => i !== ci))
+    setActiveChapterIdx(current => {
+      const newLength = chapters.length - 1
+      if (ci < current) return current - 1
+      if (ci === current) return Math.min(current, newLength - 1)
+      return current
+    })
   }
   function setChapterTitle(ci: number, v: string) {
     setChapters(p => p.map((c, i) => i === ci ? { ...c, title: v } : c))
@@ -257,10 +266,9 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
           </div>
         </div>
 
+        {/* ── Step 1: Basic Info ─────────────────────────────── */}
+        {step === 1 && (
         <div className="modal-scroll">
-
-          {/* ── Step 1: Basic Info ─────────────────────────────── */}
-          {step === 1 && <>
 
           {/* ── Basic Info ─────────────────────────────────────── */}
           <div className="g3">
@@ -518,88 +526,109 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
             </div>
           </div>
 
-          </>}
+        </div>
+        )}
 
-          {/* ── Step 2: Course Outline ────────────────────────── */}
-          {step === 2 && <>
+        {/* ── Step 2: Course Outline — two-panel layout (chapters left, active chapter's topics right) ────────────────────────── */}
+        {step === 2 && (() => {
+          const activeChapter = chapters[activeChapterIdx]
+          return (
+            <div className="fsm-layout">
 
-          <div className="mdl-section mdl-section--blue">
-            <div className="mdl-section-hdr">
-              <span className="mdl-section-icon"><i className="lni lni-list"></i></span>
-              <div className="flex-1 min-w-0">
-                <div className="mdl-section-title">Course Outline — Chapters &amp; Topics</div>
-                <div className="mdl-section-sub">Add chapters and nest topics with study sequence and class count.</div>
+              {/* Left sidebar — one entry per chapter */}
+              <div className="fsm-sidebar">
+                <div style={{ padding: '14px 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
+                  Chapters <span style={{ color: 'var(--b500)' }}>({chapters.length})</span>
+                </div>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
+                  {chapters.map((ch, ci) => (
+                    <div
+                      key={ci}
+                      onClick={() => setActiveChapterIdx(ci)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '9px 10px', borderRadius: 'var(--rsm)', marginBottom: 2,
+                        background: activeChapterIdx === ci ? 'var(--b500)' : 'transparent',
+                        color: activeChapterIdx === ci ? '#fff' : 'var(--g700)',
+                        cursor: 'pointer', transition: 'background .15s',
+                      }}
+                    >
+                      <div style={{ width: 30, height: 30, borderRadius: '50%', background: activeChapterIdx === ci ? 'rgba(255,255,255,.2)' : 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <i className="lni lni-bookmark" style={{ fontSize: 13, color: activeChapterIdx === ci ? '#fff' : 'var(--b600)' }}></i>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch.title || `Chapter ${ci + 1}`}</div>
+                        <div style={{ fontSize: 11, opacity: .65, lineHeight: 1.3 }}>{ch.topics.length} topic{ch.topics.length !== 1 ? 's' : ''}</div>
+                      </div>
+                      {chapters.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); removeChapter(ci) }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: activeChapterIdx === ci ? 'rgba(255,255,255,.65)' : 'var(--g300)', display: 'flex', alignItems: 'center', borderRadius: 'var(--rxs)', flexShrink: 0 }}
+                          title="Remove chapter"
+                        ><i className="lni lni-trash-can" style={{ fontSize: 12 }}></i></button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ borderTop: '1.5px solid var(--g200)', padding: '6px 8px 10px' }}>
+                  <button type="button" className="btn btn-neu btn-sm" style={{ width: '100%' }} onClick={addChapter}>
+                    <i className="lni lni-plus"></i> Add Chapter
+                  </button>
+                </div>
               </div>
-              <button className="btn btn-neu btn-sm" type="button" onClick={addChapter}>
-                <i className="lni lni-plus"></i> Add Chapter
-              </button>
-            </div>
 
-            <div className="flex flex-col gap-4 mt-2">
-              {chapters.map((ch, ci) => (
-                <div key={ci} style={{ border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
-
-                  {/* Chapter header */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', background: 'var(--b50)', borderBottom: '1px solid var(--b100)' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--b600)', whiteSpace: 'nowrap', paddingTop: 6 }}>
-                      Ch. {ci + 1}
-                    </span>
-                    <div style={{ flex: 1 }}>
+              {/* Right panel — active chapter's title + topics */}
+              <div className="fsm-main">
+                {activeChapter && (
+                  <>
+                    <div className="fg" style={{ marginBottom: 18 }}>
+                      <div className="lbl">Chapter Title <span className="req">*</span></div>
                       <input
                         className="ctrl"
-                        style={{ width: '100%', fontWeight: 600, ...(chapterErrors[ci] ? { borderColor: 'var(--red)' } : {}) }}
-                        value={ch.title}
-                        onChange={e => setChapterTitle(ci, e.target.value)}
-                        placeholder={`Chapter ${ci + 1} title`}
+                        style={{ fontWeight: 600, ...(chapterErrors[activeChapterIdx] ? { borderColor: 'var(--red)' } : {}) }}
+                        value={activeChapter.title}
+                        onChange={e => setChapterTitle(activeChapterIdx, e.target.value)}
+                        placeholder={`Chapter ${activeChapterIdx + 1} title`}
                       />
-                      {chapterErrors[ci] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{chapterErrors[ci]}</p>}
+                      {chapterErrors[activeChapterIdx] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{chapterErrors[activeChapterIdx]}</p>}
                     </div>
-                    {chapters.length > 1 && (
-                      <button className="btn btn-danger btn-sm" style={{ flexShrink: 0, width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => removeChapter(ci)}>
-                        <i className="lni lni-trash-can"></i>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr 150px 130px 30px', gap: 6, padding: '0 0 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <span></span>
+                      <span>Topic</span>
+                      <span>Study Sequence</span>
+                      <span>Taught By</span>
+                      <span></span>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      {activeChapter.topics.map((t, ti) => (
+                        <div key={ti} style={{ display: 'grid', gridTemplateColumns: '20px 1fr 150px 130px 30px', gap: 6, alignItems: 'center' }}>
+                          <span style={{ fontSize: 11, color: 'var(--g400)', textAlign: 'center' }}>{ti + 1}.</span>
+                          <input className="ctrl" value={t.name} onChange={e => setTopic(activeChapterIdx, ti, 'name', e.target.value)} placeholder="e.g. Introduction to Arrays" />
+                          <input className="ctrl" type="number" min={1} value={t.studySeq} onChange={e => setTopic(activeChapterIdx, ti, 'studySeq', e.target.value)} placeholder="e.g. 3" />
+                          <SearchSelect placeholder="— Select —" value={t.taughtBy} onChange={v => setTopic(activeChapterIdx, ti, 'taughtBy', v)} options={employeeOptions} />
+                          <button
+                            className="btn btn-danger btn-sm"
+                            style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                            onClick={() => removeTopic(activeChapterIdx, ti)}
+                            disabled={activeChapter.topics.length === 1}
+                          >
+                            <i className="lni lni-trash-can"></i>
+                          </button>
+                        </div>
+                      ))}
+                      <button className="btn btn-neu btn-sm mt-1" style={{ alignSelf: 'flex-start', fontSize: 11 }} onClick={() => addTopic(activeChapterIdx)}>
+                        <i className="lni lni-plus"></i> Add Topic
                       </button>
-                    )}
-                  </div>
-
-                  {/* Topic column headers */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr 150px 130px 30px', gap: 6, padding: '6px 12px 2px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    <span></span>
-                    <span>Topic</span>
-                    <span>Study Sequence</span>
-                    <span>Taught By</span>
-                    <span></span>
-                  </div>
-
-                  {/* Topics */}
-                  <div className="flex flex-col gap-1" style={{ padding: '4px 12px 10px' }}>
-                    {ch.topics.map((t, ti) => (
-                      <div key={ti} style={{ display: 'grid', gridTemplateColumns: '20px 1fr 150px 130px 30px', gap: 6, alignItems: 'center' }}>
-                        <span style={{ fontSize: 11, color: 'var(--g400)', textAlign: 'center' }}>{ti + 1}.</span>
-                        <input className="ctrl" value={t.name} onChange={e => setTopic(ci, ti, 'name', e.target.value)} placeholder="e.g. Introduction to Arrays" />
-                        <input className="ctrl" type="number" min={1} value={t.studySeq} onChange={e => setTopic(ci, ti, 'studySeq', e.target.value)} placeholder="e.g. 3" />
-                        <SearchSelect placeholder="— Select —" value={t.taughtBy} onChange={v => setTopic(ci, ti, 'taughtBy', v)} options={employeeOptions} />
-                        <button
-                          className="btn btn-danger btn-sm"
-                          style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                          onClick={() => removeTopic(ci, ti)}
-                          disabled={ch.topics.length === 1}
-                        >
-                          <i className="lni lni-trash-can"></i>
-                        </button>
-                      </div>
-                    ))}
-                    <button className="btn btn-neu btn-sm mt-1" style={{ alignSelf: 'flex-start', fontSize: 11 }} onClick={() => addTopic(ci)}>
-                      <i className="lni lni-plus"></i> Add Topic
-                    </button>
-                  </div>
-                </div>
-              ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-
-          </>}
-
-        </div>
+          )
+        })()}
 
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>

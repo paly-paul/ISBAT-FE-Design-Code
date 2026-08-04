@@ -22,9 +22,6 @@ export default function Page() {
             <div className="pg-sub">Post-result student appeals · Grievance window from Intake Master</div>
           </div>
         </div>
-        <div className="warn-box mb-[18px]">
-          <i className="lni lni-warning"></i> Grievance window is defined in the <strong>Intake Master</strong>. Current grievance end date: <strong>10 Jun 2026</strong>.
-        </div>
         <div className="undefined-box">
           <div className="text-[var(--fs-stat)] mb-3"><i className="lni lni-volume-high"></i></div>
           <div className="font-extrabold text-[var(--fs-2xl)] text-g900 mb-2">Grievance Module</div>

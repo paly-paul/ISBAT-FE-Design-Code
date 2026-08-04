@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createIntake, CreateIntakeInput, deleteIntake, getIntakeById, getIntakes, GetIntakesFilters, Intake, updateIntake } from '@/lib/api/academic/intake'
+import { createIntake, CreateIntakeInput, deleteIntake, getIntakeById, getIntakes, Intake, updateIntake } from '@/lib/api/academic/intake'
 
 const INTAKES_KEY = ['intakes']
 
@@ -32,21 +32,24 @@ export function useIntake(intakeGuid: string | null, enabled: boolean) {
   })
 }
 
-// Two hero-card queries for the top of Intake Master, backed by the
-// backend's own currentIntake/currentAdmissionIntake filters rather than
-// derived by scanning the full (paginated, page-size-1000) list client-side.
-// Only one intake can ever be flagged current for each, so the first item
-// back is the one to show — but that filtered list response only carries
-// the same abbreviated academicCalendar as every other list row (see the
-// note on getIntakeById above: only the by-guid endpoint fully populates
-// it), which left the Academic card's Sem Start/Term 1 End/Sem End chips
-// stuck on "—" even once the card itself resolved. Re-fetching by guid
-// gives the hero cards the fully populated record to read date fields off.
+// Two hero-card queries for the top of Intake Master. These used to ask the
+// backend to filter via currentIntake=/currentAdmissionIntake= query params,
+// but both flags are already present on every row of the plain (unfiltered)
+// list response, so the current academic/admission intake is now found by
+// scanning that same list client-side instead of sending extra params. Only
+// one intake can ever be flagged current for each, so the first match is the
+// one to show — but the list response only carries the same abbreviated
+// academicCalendar as every other list row (see the note on getIntakeById
+// above: only the by-guid endpoint fully populates it), which left the
+// Academic card's Sem Start/Term 1 End/Sem End chips stuck on "—" even once
+// the card itself resolved. Re-fetching the match by guid gives the hero
+// cards the fully populated record to read date fields off.
 // react-query rejects a queryFn that resolves to `undefined` ("Query data
 // cannot be undefined") — null is the explicit "no current intake found"
 // value instead.
-async function fetchCurrentIntake(filters: GetIntakesFilters): Promise<Intake | null> {
-  const [match] = await getIntakes(1, 10, filters)
+async function fetchCurrentIntake(predicate: (intake: Intake) => boolean): Promise<Intake | null> {
+  const intakes = await getIntakes(1, INTAKES_PAGE_SIZE)
+  const match = intakes.find(predicate)
   if (!match) return null
   return getIntakeById(match.intakeGuid)
 }
@@ -54,7 +57,7 @@ async function fetchCurrentIntake(filters: GetIntakesFilters): Promise<Intake | 
 export function useCurrentAcademicIntake() {
   return useQuery({
     queryKey: [...INTAKES_KEY, 'current-academic'],
-    queryFn: () => fetchCurrentIntake({ currentIntake: true, currentAdmissionIntake: false }),
+    queryFn: () => fetchCurrentIntake(i => i.currentIntake),
     staleTime: Infinity,
     gcTime: Infinity,
   })
@@ -63,7 +66,7 @@ export function useCurrentAcademicIntake() {
 export function useCurrentAdmissionIntake() {
   return useQuery({
     queryKey: [...INTAKES_KEY, 'current-admission'],
-    queryFn: () => fetchCurrentIntake({ currentIntake: false, currentAdmissionIntake: true }),
+    queryFn: () => fetchCurrentIntake(i => i.currentAdmissionIntake),
     staleTime: Infinity,
     gcTime: Infinity,
   })

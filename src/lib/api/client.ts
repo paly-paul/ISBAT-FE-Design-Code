@@ -25,13 +25,22 @@ function isAuthEndpoint(path: string): boolean {
   return AUTH_ENDPOINTS.some(endpoint => path.includes(endpoint))
 }
 
-// Prevent duplicate refresh calls when several requests fail at once.
-let refreshInFlight: Promise<void> | null = null
+interface RefreshData {
+  displayName?: string
+}
 
-function refreshAccessToken(): Promise<void> {
+// Prevent duplicate refresh calls when several requests fail at once.
+// This only dedupes calls made *within this tab* — every caller that needs
+// a fresh access token (both the reactive 401 handler below and
+// src/lib/auth.ts's refreshSession(), used on layout mount) must go through
+// this same function rather than posting to /auth/refresh directly, or the
+// dedup silently stops covering them.
+let refreshInFlight: Promise<RefreshData> | null = null
+
+export function refreshAccessToken(): Promise<RefreshData> {
   if (!refreshInFlight) {
-    refreshInFlight = apiPost<unknown>('/api/v1/users/auth/refresh', {})
-      .then(() => undefined)
+    refreshInFlight = apiPost<RefreshData | null>('/api/v1/users/auth/refresh', {})
+      .then(data => data ?? {})
       .finally(() => {
         refreshInFlight = null
       })
@@ -43,13 +52,29 @@ function redirectToLogin() {
   if (typeof window !== 'undefined') window.location.href = '/login'
 }
 
-// Only a real refresh failure should log the user out.
+// Only a real refresh failure should log the user out. The backend's
+// erp_refresh cookie is single-use (rotates on every call, confirmed via a
+// real concurrent-request test: two /auth/refresh calls with the same
+// still-valid token raced 200/401) — so a 401 here doesn't necessarily mean
+// the session is actually gone. If the user has a second tab open (or an
+// unrelated refresh from elsewhere in this same tab slipped past the dedup
+// above, e.g. via a call site that doesn't route through
+// refreshAccessToken()), it may have already rotated the cookie a moment
+// before this attempt reached the server. Give that a brief window to land
+// in the browser's cookie store and try once more before concluding the
+// session is genuinely gone — only redirect if the retry also fails.
 async function handleUnauthorized(): Promise<void> {
   try {
     await refreshAccessToken()
   } catch (err) {
-    if (err instanceof AuthError) redirectToLogin()
-    throw err
+    if (!(err instanceof AuthError)) throw err
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      await refreshAccessToken()
+    } catch (retryErr) {
+      if (retryErr instanceof AuthError) redirectToLogin()
+      throw retryErr
+    }
   }
 }
 

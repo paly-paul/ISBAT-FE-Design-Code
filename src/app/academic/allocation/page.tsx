@@ -79,10 +79,7 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="g2 mb-[18px]">
-          <div className="warn-box">
-            <i className="lni lni-warning"></i> <span><strong>Prerequisite:</strong> Faculty must have populated their skills in the <button className="btn btn-amber btn-sm p-[3px_10px] text-[var(--fs-xs)]" onClick={() => nav('skill-master')}><i className="lni lni-bulb"></i> Skill Management Master</button> before allocation. <strong>4 faculty members</strong> currently have incomplete skill profiles — allocation for those faculty is blocked.</span>
-          </div>
+        <div className="mb-[18px]">
           <div className="info-box">
             <i className="lni lni-information"></i> <span>Allocation data is manually entered by <strong>Support Staff</strong> from the Dean&apos;s pre-approved Excel file. <strong>No system restriction</strong> on subject count per faculty — typical load is <strong>5–6 subjects</strong>. <strong>Project subjects</strong> only require weekly check-ins, not traditional lectures — allocate accordingly.</span>
           </div>

@@ -90,9 +90,6 @@ export function EditReceiptBookModal({ isOpen, onClose, showToast, receiptBook, 
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Receipt Book — <span className="font-mono">{receiptBook.bookCode}</span></div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
-        <div className="info-box mb-3">
-          <i className="lni lni-information"></i> Book Code, Start No., Prefix, and Count can&apos;t be changed after creation — only Status, Category, Copy, and Book Category are editable.
-        </div>
         <div className="g2">
           <div className="fg">
             <div className="lbl">Book Code</div>

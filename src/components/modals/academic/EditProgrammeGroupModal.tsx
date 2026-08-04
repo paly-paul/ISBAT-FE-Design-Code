@@ -177,7 +177,6 @@ export function EditProgrammeGroupModal({ isOpen, onClose, showToast, programGro
             {errors.programLevel && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programLevel}</p>}
           </div>
         </div>
-        <div className="info-box mt-3"><i className="lni lni-information"></i> The Programme Group is used for aggregate reporting across all curriculum versions. E.g. searching &quot;BCA&quot; returns students from BCA 2026 and BCA 2031.</div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
           <button className="btn btn-primary" disabled={updateProgramGroup.isPending} onClick={handleUpdate}>

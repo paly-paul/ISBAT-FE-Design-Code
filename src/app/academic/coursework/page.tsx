@@ -72,9 +72,8 @@ export default function Page() {
           <button className="btn btn-primary" onClick={() => openModal('new-cw-modal')}><i className="lni lni-plus"></i> Schedule Coursework</button>
         </div>
 
-        <div className="g2 mb-[18px]">
+        <div className="mb-[18px]">
           <div className="info-box"><i className="lni lni-ruler-alt"></i> <span><strong>Proration:</strong> Coursework is marked out of <strong>25</strong> and prorated to <strong>15</strong> marks in final result. Students must have minimum <strong>50% fee clearance</strong> (on original tuition fee before discounts) to submit.</span></div>
-          <div className="warn-box"><i className="lni lni-warning"></i> <span>Students can <strong>view</strong> coursework questions without fee clearance. Fee clearance only blocks <strong>submission</strong>.</span></div>
         </div>
 
         <div className="pipeline">

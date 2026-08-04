@@ -224,11 +224,6 @@ export function EditPermissionModal({ isOpen, onClose, showToast, permissionGrou
                 <div style={{ fontSize: 12.5, color: 'var(--g500)', marginTop: 4 }}>Review the access scope before saving this group</div>
               </div>
 
-              <div className="info-box mb-3">
-                <i className="lni lni-user"></i>
-                <span>Group name: <strong>{groupName}</strong></span>
-              </div>
-
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
                 {activeBlocks.map(b => (
                   <div key={b.module} style={{

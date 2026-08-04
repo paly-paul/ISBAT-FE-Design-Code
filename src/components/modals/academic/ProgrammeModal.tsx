@@ -360,6 +360,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       : makeDefaultFeeStructures()
     setFeeStructures(structures)
     setActiveFeeIdx(0)
+    setActiveAcc(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullDetails, mode])
 
@@ -414,7 +415,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   function handleClose() {
     setStep(1); setSaved(false); setFailure(null)
     setFeeStructures(makeDefaultFeeStructures())
-    setActiveFeeIdx(0); setFeeAccordion(0)
+    setActiveFeeIdx(0); setFeeAccordion(0); setActiveAcc(0)
     setSemUnits(Array.from({ length: NUM_SEMS }, () => []))
     setPendingSel(Array(NUM_SEMS).fill(''))
     setProgramCode(''); setProgramName(''); setProgramGroupGuid(''); setProgramLevelGuid('')
@@ -690,6 +691,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           <div className={`prog-step${step === 3 ? ' active' : ''}`}><span className="prog-step-num">3</span><span>Semester-wise Fee Structure</span></div>
         </div>
 
+        {step !== 2 && (
         <div className="modal-scroll">
 
           {/* ── Step 1: Programme Details ──────────────────────── */}
@@ -917,100 +919,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   </div>
                 </div>
               </div>
-              <div className="warn-box mt-3">
-                <i className="lni lni-warning"></i> Setting this version to <em>Active</em> will make it available for new admissions. Ensure the old version (if any) is set to <em>Inactive</em> first.
-              </div>
-            </div>
-          )}
-
-          {/* ── Step 2: Course Unit Allocation ─────────────────── */}
-          {step === 2 && (
-            <div>
-              <div className="mdl-section mdl-section--blue" style={{ marginBottom: 14 }}>
-                <div className="mdl-section-hdr">
-                  <span className="mdl-section-icon"><i className="lni lni-book"></i></span>
-                  <div className="flex-1 min-w-0">
-                    <div className="mdl-section-title font-bold">Allocate Course Units by Semester</div>
-                    <div className="mdl-section-sub">Assign course units to each semester. Pick from the curriculum master or add a quick placeholder.</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                {semUnits.map((units, si) => {
-                  const isOpen        = activeAcc === si
-                  const assignedCodes = units.map(u => u.code)
-                  const availableOpts = courseUnitOptions.filter(o => !assignedCodes.includes(o.code))
-                  const totalCredits  = units.reduce((s, u) => s + u.credits, 0)
-                  return (
-                    <div key={si} style={{ border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
-                      <button
-                        type="button"
-                        onClick={() => setActiveAcc(isOpen ? -1 : si)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', width: '100%', background: isOpen ? 'var(--b50)' : 'var(--white)', border: 'none', borderBottom: isOpen ? '1px solid var(--b100)' : 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.2s' }}
-                      >
-                        <span className="badge badge-blue" style={{ flexShrink: 0 }}>Sem {si + 1}</span>
-                        <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--b700)' }}>Semester {si + 1}</span>
-                        <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--g400)', marginRight: 8 }}>
-                          {units.length} unit{units.length !== 1 ? 's' : ''} · {totalCredits} credit{totalCredits !== 1 ? 's' : ''}
-                        </span>
-                        <i className="lni lni-chevron-down" style={{ fontSize: 11, color: 'var(--g400)', flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.25s ease' }} />
-                      </button>
-                      <div style={{ overflow: 'hidden', maxHeight: isOpen ? 680 : 0, transition: 'max-height 0.3s ease' }}>
-                        <div style={{ padding: '10px 14px' }}>
-                          <div style={{ marginBottom: 10 }}>
-                            <div className="lbl">Specialization for this Semester</div>
-                            <SearchSelect
-                              placeholder={streamGuids.length ? '— Select specialization —' : 'Select specialization(s) in Programme Details first'}
-                              value={semStreamGuid[si]}
-                              onChange={val => setSemStreamGuid(prev => prev.map((s, i) => i === si ? val : s))}
-                              options={semesterStreamOptions}
-                            />
-                            {units.length > 0 && !semStreamGuid[si] && (
-                              <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>
-                                No specialization picked — course units in this semester will fall back to the first Programme Details pick.
-                              </p>
-                            )}
-                          </div>
-                          {units.length === 0 && (
-                            <div style={{ fontSize: 12.5, color: 'var(--g400)', fontStyle: 'italic', marginBottom: 8 }}>
-                              No course units assigned yet
-                            </div>
-                          )}
-                          {units.length > 0 && (
-                            <div className="flex flex-col" style={{ marginBottom: 10, border: '1px solid var(--g100)', borderRadius: 'var(--rxs)', overflow: 'hidden' }}>
-                              {units.map((u, ui) => (
-                                <div key={u.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 10px', borderBottom: ui < units.length - 1 ? '1px solid var(--g100)' : 'none', background: 'var(--white)' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <span className="font-mono font-bold text-b700" style={{ fontSize: 12, minWidth: 50 }}>{u.code}</span>
-                                    <span style={{ flex: 1, fontSize: 13, color: 'var(--g700)' }}>{u.name}</span>
-                                    <span className="badge badge-blue">{u.credits} cr</span>
-                                    <button
-                                      className="btn btn-danger btn-sm"
-                                      style={{ width: 26, height: 26, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                                      onClick={() => removeUnit(si, u.id)}
-                                    ><i className="lni lni-close" style={{ fontSize: 11 }}></i></button>
-                                  </div>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                                    <SearchSelect placeholder="— Unit Type —" value={u.unitType} onChange={val => setUnitField(si, u.id, 'unitType', val)} options={unitTypeOptions} />
-                                    <SearchSelect placeholder="— Unit Category —" value={u.unitCat} onChange={val => setUnitField(si, u.id, 'unitCat', val)} options={unitCategoryOptions} />
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          <SearchSelect
-                            placeholder="— Select course unit —"
-                            value={pendingSel[si]}
-                            onChange={val => addUnit(si, val)}
-                            options={availableOpts}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
             </div>
           )}
 
@@ -1219,6 +1127,103 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             </div>
           )}
         </div>
+        )}
+
+        {/* ── Step 2: Course Unit Allocation — two-panel layout (semesters left, active semester's allocation right) ────────────────────────── */}
+        {step === 2 && (() => {
+          const si            = activeAcc
+          const units         = semUnits[si]
+          const assignedCodes = units.map(u => u.code)
+          const availableOpts = courseUnitOptions.filter(o => !assignedCodes.includes(o.code))
+          return (
+            <div className="fsm-layout">
+
+              {/* Left sidebar — one entry per semester */}
+              <div className="fsm-sidebar">
+                <div style={{ padding: '14px 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
+                  Semesters <span style={{ color: 'var(--b500)' }}>({NUM_SEMS})</span>
+                </div>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
+                  {semUnits.map((semUnitsForSem, i) => {
+                    const totalCredits = semUnitsForSem.reduce((s, u) => s + u.credits, 0)
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => setActiveAcc(i)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '9px 10px', borderRadius: 'var(--rsm)', marginBottom: 2,
+                          background: activeAcc === i ? 'var(--b500)' : 'transparent',
+                          color: activeAcc === i ? '#fff' : 'var(--g700)',
+                          cursor: 'pointer', transition: 'background .15s',
+                        }}
+                      >
+                        <div style={{ width: 30, height: 30, borderRadius: '50%', background: activeAcc === i ? 'rgba(255,255,255,.2)' : 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <i className="lni lni-book" style={{ fontSize: 13, color: activeAcc === i ? '#fff' : 'var(--b600)' }}></i>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>Semester {i + 1}</div>
+                          <div style={{ fontSize: 11, opacity: .65, lineHeight: 1.3 }}>{semUnitsForSem.length} unit{semUnitsForSem.length !== 1 ? 's' : ''} · {totalCredits} credit{totalCredits !== 1 ? 's' : ''}</div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Right panel — active semester's specialization + course units */}
+              <div className="fsm-main">
+                <div style={{ marginBottom: 10 }}>
+                  <div className="lbl">Specialization for this Semester</div>
+                  <SearchSelect
+                    placeholder={streamGuids.length ? '— Select specialization —' : 'Select specialization(s) in Programme Details first'}
+                    value={semStreamGuid[si]}
+                    onChange={val => setSemStreamGuid(prev => prev.map((s, i) => i === si ? val : s))}
+                    options={semesterStreamOptions}
+                  />
+                  {units.length > 0 && !semStreamGuid[si] && (
+                    <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>
+                      No specialization picked — course units in this semester will fall back to the first Programme Details pick.
+                    </p>
+                  )}
+                </div>
+                {units.length === 0 && (
+                  <div style={{ fontSize: 12.5, color: 'var(--g400)', fontStyle: 'italic', marginBottom: 8 }}>
+                    No course units assigned yet
+                  </div>
+                )}
+                {units.length > 0 && (
+                  <div className="flex flex-col" style={{ marginBottom: 10, border: '1px solid var(--g100)', borderRadius: 'var(--rxs)', overflow: 'hidden' }}>
+                    {units.map((u, ui) => (
+                      <div key={u.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 10px', borderBottom: ui < units.length - 1 ? '1px solid var(--g100)' : 'none', background: 'var(--white)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span className="font-mono font-bold text-b700" style={{ fontSize: 12, minWidth: 50 }}>{u.code}</span>
+                          <span style={{ flex: 1, fontSize: 13, color: 'var(--g700)' }}>{u.name}</span>
+                          <span className="badge badge-blue">{u.credits} cr</span>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            style={{ width: 26, height: 26, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                            onClick={() => removeUnit(si, u.id)}
+                          ><i className="lni lni-close" style={{ fontSize: 11 }}></i></button>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          <SearchSelect placeholder="— Unit Type —" value={u.unitType} onChange={val => setUnitField(si, u.id, 'unitType', val)} options={unitTypeOptions} />
+                          <SearchSelect placeholder="— Unit Category —" value={u.unitCat} onChange={val => setUnitField(si, u.id, 'unitCat', val)} options={unitCategoryOptions} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <SearchSelect
+                  placeholder="— Select course unit —"
+                  value={pendingSel[si]}
+                  onChange={val => addUnit(si, val)}
+                  options={availableOpts}
+                />
+              </div>
+            </div>
+          )
+        })()}
 
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>

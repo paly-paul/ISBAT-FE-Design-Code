@@ -54,11 +54,6 @@ export function ImportSourceModal({ isOpen, onClose }: ModalProps) {
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
-        <div className="info-box mb-3">
-          <i className="lni lni-information"></i>
-          <span>Enquiries captured at the Information Desk. Select a record to copy student details into the Application Payment form.</span>
-        </div>
-
         <div className="mb-3" style={{
           display: 'flex', alignItems: 'center', gap: 8,
           border: '1.5px solid var(--g300)', borderRadius: 'var(--rxs)',

@@ -138,11 +138,6 @@ export function EditLecturerSkillModal({ isOpen, onClose, showToast, lecturerSki
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
-        <div className="warn-box mb-3">
-          <i className="lni lni-warning"></i>
-          <span>This record was logged for <strong>Employee #{skill.intEmployee}</strong>, but the API has no way to resolve that back to a selectable employee — please reselect the faculty member below before saving.</span>
-        </div>
-
         <div className="fg mb-3">
           <div className="lbl">Faculty Member <span className="req">*</span></div>
           <SearchSelect

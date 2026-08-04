@@ -97,9 +97,6 @@ export default function Page() {
                 </div>
               ))}
             </div>
-            <div className="warn-box mt-[14px]">
-              <i className="lni lni-warning"></i> 12 students blocked from LMS &amp; class access — 0% fee clearance. Notify Finance Officer to follow up.
-            </div>
           </div>
         </div>
       </div>

@@ -160,16 +160,6 @@ export function EditLedgerModal({ isOpen, onClose, showToast, ledgerGuid, update
               placeholder="Optional — link to a GL account"
             />
           </div>
-          {ledger.intGlAccount != null && ledger.procGlAccountGuid == null && (
-            <div className="fg span2">
-              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', background: 'var(--amber-bg)', border: '1px solid var(--amber-bd)', borderRadius: 'var(--rxs)' }}>
-                <i className="lni lni-warning" style={{ color: 'var(--amber)', marginTop: 2 }}></i>
-                <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>
-                  This ledger has an existing GL account link that couldn&apos;t be resolved to show here. Saving without picking one will detach it.
-                </span>
-              </div>
-            </div>
-          )}
         </div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>

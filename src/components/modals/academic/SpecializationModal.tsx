@@ -48,7 +48,6 @@ export function SpecializationModal({ isOpen, onClose, showToast }: ModalProps) 
           <div className="modal-title"><i className="lni lni-target"></i> Manage Specializations — MBA 2024</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
-        <div className="info-box mb-[14px]"><i className="lni lni-information"></i> Specializations are chosen by <strong>individual students</strong> (not the batch). A student can only select one specialization, which dictates which Specialization course units they must study (e.g. from Sem 3 for MBA).</div>
         <ScrollTable className="mb-[14px]">
           <table>
             <thead><tr><th style={{ width: 48 }}></th><th>#</th><th>Specialization Name</th>{fth('Start Semester', 'startSem', ['Sem 3', 'Sem 4', 'Sem 5'])}<th>Students Enrolled</th></tr></thead>

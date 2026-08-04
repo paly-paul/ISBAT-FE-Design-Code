@@ -80,9 +80,8 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="g2 mb-[18px]">
+        <div className="mb-[18px]">
           <div className="info-box"><i className="lni lni-world"></i> <span>ODL applications start online at <span className="font-mono bg-[var(--b100)] py-0.5 px-[6px] rounded text-[var(--fs-xs)]">ERP.../online.ASP</span>. Unlike regular applications, <strong>payment is not required to start</strong>. No fee exemptions apply to ODL applicants.</span></div>
-          <div className="warn-box"><i className="lni lni-warning"></i> <span>Applications remain in the <strong>Temporary ODL Table</strong> until payment is reconciled by accounts. Only after reconciliation does the application move to the regular application form.</span></div>
         </div>
 
         <div className="pipeline">
