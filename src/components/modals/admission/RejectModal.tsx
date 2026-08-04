@@ -2,8 +2,17 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SearchSelect } from '@/components/SearchSelect'
+import { VetApplicationInput } from '@/lib/api/admission/vetting'
 
-export function RejectModal({ isOpen, onClose, showToast }: ModalProps) {
+interface Props extends ModalProps {
+  applicationGuid: string | null
+  vetApplication: {
+    mutate: (variables: { applicationGuid: string; input: VetApplicationInput }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
+    isPending: boolean
+  }
+}
+
+export function RejectModal({ isOpen, onClose, showToast, applicationGuid, vetApplication }: Props) {
   const [reason, setReason]   = useState('')
   const [remarks, setRemarks] = useState('')
   const [errors, setErrors]   = useState<Record<string, string>>({})
@@ -18,6 +27,20 @@ export function RejectModal({ isOpen, onClose, showToast }: ModalProps) {
     if (!remarks.trim())  e.remarks = 'Detailed Remarks are required'
     setErrors(e)
     return Object.keys(e).length === 0
+  }
+
+  function handleConfirm() {
+    if (!applicationGuid || !validate()) return
+    // The API only has one free-text justificationReg field (required on
+    // reject) — no separate structured "reason" column, so the canned
+    // reason and the free-text remarks are combined into it.
+    vetApplication.mutate(
+      { applicationGuid, input: { action: 2, justificationReg: `${reason} — ${remarks.trim()}` } },
+      {
+        onSuccess: () => { showToast('Application rejected successfully.', 'warning'); handleClose() },
+        onError: (err: Error) => showToast(err.message || 'Failed to reject application.', 'error'),
+      },
+    )
   }
 
   return (
@@ -54,8 +77,8 @@ export function RejectModal({ isOpen, onClose, showToast }: ModalProps) {
 
         <div className="modal-footer">
           <button className="btn" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-danger" onClick={() => { if (validate()) { showToast('Application rejected successfully.', 'warning'); handleClose() } }}>
-            <i className="lni lni-trash-can"></i> Confirm Rejection
+          <button className="btn btn-danger" disabled={vetApplication.isPending} onClick={handleConfirm}>
+            <i className="lni lni-trash-can"></i> {vetApplication.isPending ? 'Rejecting…' : 'Confirm Rejection'}
           </button>
         </div>
       </div>

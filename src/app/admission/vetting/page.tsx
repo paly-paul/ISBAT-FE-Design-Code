@@ -5,49 +5,93 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
-import { RejectModal } from '@/components/modals/admission/RejectModal'
-import { VettingReviewModal, VettingApplicant } from '@/components/modals/admission/VettingReviewModal'
+import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
+import { RejectModal } from '@/components/modals/admission/RejectModal'
+import { VettingReviewModal } from '@/components/modals/admission/VettingReviewModal'
+import { useVettingQueue, useVetApplication } from '@/hooks/admission/useVetting'
+import { VettingQueueItem } from '@/lib/api/admission/vetting'
 
 const PAGE_SIZE = 10
-
-const QUEUE = [
-  { ref: 'APP-2025-0041', name: 'Nakato Sarah',       programme: 'BSc Computer Science',       type: 'Direct',   docs: '3/4', submitted: '6h ago',  status: 'Pending' },
-  { ref: 'APP-2025-0042', name: 'Ouma Brian',          programme: 'BBA Accounting',              type: 'ODL',      docs: '4/4', submitted: '5h ago',  status: 'Pending' },
-  { ref: 'APP-2025-0043', name: 'Ainembabazi Grace',   programme: 'BSc Information Technology', type: 'Direct',   docs: '4/4', submitted: '4h ago',  status: 'Pending' },
-  { ref: 'APP-2025-0044', name: 'Mugisha David',       programme: 'Diploma in Business Admin',  type: 'Transfer', docs: '2/4', submitted: '3h ago',  status: 'Pending' },
-  { ref: 'APP-2025-0045', name: 'Kyomuhendo Faith',    programme: 'BSc Computer Science',       type: 'Direct',   docs: '4/4', submitted: '1h ago',  status: 'Pending' },
-]
 
 const PIPELINE_STEPS = [
   { num: 1, label: 'Enquiry' }, { num: 2, label: 'Filing' }, { num: 3, label: 'Vetting' },
   { num: 4, label: 'Approval' }, { num: 5, label: 'Registration' },
 ]
 
+// action is a byte? assembled from three different enums depending on who
+// wrote it (see VettingApiDocs.md "Status values") — the queue endpoint
+// currently only ever returns action==1 rows, but this covers the full
+// range in case that ever changes.
+function actionLabel(action: number | null): string {
+  switch (action) {
+    case 0: return 'Waiting'
+    case 1: return 'Pending'
+    case 2: return 'Approved'
+    case 3: return 'Rejected'
+    case 4: return 'Registered'
+    default: return '—'
+  }
+}
+
+function timeAgo(iso: string | null): string {
+  if (!iso) return '—'
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return '—'
+  const mins = Math.floor((Date.now() - then) / 60_000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
+}
+
 export default function VettingPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [filterProg, setFilterProg] = useState('all')
-  const [filterStatus, setFilterStatus] = useState('all')
+  const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
-  const [selectedApplicant, setSelectedApplicant] = useState<VettingApplicant | null>(null)
+  const [selectedApplicationGuid, setSelectedApplicationGuid] = useState<string | null>(null)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
 
-  const q = search.trim().toLowerCase()
-  const filteredQueue = QUEUE.filter(row => !q || row.ref.toLowerCase().includes(q) || row.name.toLowerCase().includes(q))
-  const searchMatches = q
-    ? QUEUE.filter(row => row.ref.toLowerCase().includes(q) || row.name.toLowerCase().includes(q)).slice(0, 8)
-    : []
+  function updateSearch(value: string) { setSearch(value); setPage(1) }
 
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredQueue, PAGE_SIZE)
+  // studentName is a real server-side partial-match filter (see
+  // VettingApiDocs.md) — search narrows the actual queue, not just the
+  // currently-loaded page.
+  const { data, isLoading } = useVettingQueue(page, PAGE_SIZE, { studentName: search.trim() || undefined })
+  const vetApplicationMutation = useVetApplication()
 
-  function handleReview(row: typeof QUEUE[number]) {
-    setSelectedApplicant({ ref: row.ref, name: row.name, programme: row.programme, type: row.type, docs: row.docs, submitted: row.submitted })
+  const items = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const summary = data?.summary
+
+  // The API has no programme filter param — built dynamically from whatever
+  // programme names are present on the currently-loaded (already
+  // search-filtered) page, same pattern as programme-master's level/group
+  // filter options.
+  const progOptions = [
+    { value: 'all', label: 'All Programmes' },
+    ...Array.from(new Set(items.map(i => i.programName))).map(name => ({ value: name, label: name })),
+  ]
+  const visibleRows = filterProg === 'all' ? items : items.filter(r => r.programName === filterProg)
+
+  const searchMatches = search.trim() ? items.slice(0, 8) : []
+
+  function handleReview(row: VettingQueueItem) {
+    setSelectedApplicationGuid(row.applicationGuid)
     openModal('vetting-review-modal')
+  }
+
+  function handleReject() {
+    closeModal('vetting-review-modal')
+    openModal('reject-modal')
   }
 
   return (
@@ -62,30 +106,10 @@ export default function VettingPage() {
             className="w-56"
             placeholder="Search Application Ref No. / Student…"
             value={search}
-            onChange={setSearch}
-            results={searchMatches.map(row => ({ id: row.ref, primary: row.ref, secondary: row.name }))}
+            onChange={updateSearch}
+            results={searchMatches.map(row => ({ id: row.applicationGuid, primary: row.appRefNo, secondary: row.studentName }))}
           />
-          <SearchSelect
-            options={[
-              { value: 'all', label: 'All Programmes' },
-              { value: 'bscs', label: 'BSc Computer Science' },
-              { value: 'bba', label: 'BBA Accounting' },
-              { value: 'bsit', label: 'BSc Information Technology' },
-              { value: 'dba', label: 'Diploma in Business Admin' },
-            ]}
-            value={filterProg}
-            onChange={setFilterProg}
-          />
-          <SearchSelect
-            options={[
-              { value: 'all', label: 'All Statuses' },
-              { value: 'pending', label: 'Pending' },
-              { value: 'approved', label: 'Approved' },
-              { value: 'rejected', label: 'Rejected' },
-            ]}
-            value={filterStatus}
-            onChange={setFilterStatus}
-          />
+          <SearchSelect options={progOptions} value={filterProg} onChange={setFilterProg} />
         </div>
       </div>
 
@@ -103,26 +127,28 @@ export default function VettingPage() {
 
       <div className="card">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
-          <h2 className="text-base font-semibold text-g800">Vetting Queue (5 Pending)</h2>
-          <span className="badge badge-amber">Oldest: 6h ago</span>
+          <h2 className="text-base font-semibold text-g800">Vetting Queue ({summary?.pendingCount ?? 0} Pending)</h2>
+          <span className="badge badge-amber">Oldest: {timeAgo(summary?.oldestSubmittedDate ?? null)}</span>
         </div>
         <ScrollTable>
           <table>
             <thead><tr><th style={{ width: 48 }}></th><th>App. Ref</th><th>Applicant Name</th><th>Programme</th><th>Type</th><th>Documents</th><th>Submitted</th><th>Status</th></tr></thead>
             <tbody>
-              {filteredQueue.length === 0 && (
-                <tr><td colSpan={8} className="py-8 text-center text-g400">No applicants match &quot;{search}&quot;.</td></tr>
-              )}
-              {pageItems.map(row => (
-                <tr key={row.ref}>
+              {isLoading
+                ? <TableLoadingState colSpan={8} />
+                : visibleRows.length === 0
+                  ? <EmptyState colSpan={8} hasFilters={!!search.trim() || filterProg !== 'all'} onClearFilters={() => { setSearch(''); setFilterProg('all') }} />
+                  : null}
+              {visibleRows.map(row => (
+                <tr key={row.applicationGuid}>
                   <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => handleReview(row)}><i className="lni lni-eye" /> Review</button></ActionMenu></td>
-                  <td className="font-mono text-sm">{row.ref}</td>
-                  <td>{row.name}</td>
-                  <td>{row.programme}</td>
-                  <td><span className={`badge badge-${row.type === 'ODL' ? 'cyan' : row.type === 'Transfer' ? 'purple' : 'blue'}`}>{row.type}</span></td>
-                  <td>{row.docs}</td>
-                  <td className="text-sm text-g500">{row.submitted}</td>
-                  <td><span className="badge badge-amber">{row.status}</span></td>
+                  <td className="font-mono text-sm">{row.appRefNo}</td>
+                  <td>{row.studentName}</td>
+                  <td>{row.programName}</td>
+                  <td><span className={`badge badge-${row.type === 'ODL' ? 'cyan' : 'blue'}`}>{row.type}</span></td>
+                  <td>{row.documentsUploaded}/{row.documentsTotal}</td>
+                  <td className="text-sm text-g500">{timeAgo(row.submittedDate)}</td>
+                  <td><span className="badge badge-amber">{actionLabel(row.action)}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -135,10 +161,17 @@ export default function VettingPage() {
         isOpen={openModals.has('vetting-review-modal')}
         onClose={() => closeModal('vetting-review-modal')}
         showToast={showToast}
-        applicant={selectedApplicant}
-        onReject={() => { closeModal('vetting-review-modal'); openModal('reject-modal') }}
+        applicationGuid={selectedApplicationGuid}
+        vetApplication={vetApplicationMutation}
+        onReject={handleReject}
       />
-      <RejectModal isOpen={openModals.has('reject-modal')} onClose={() => closeModal('reject-modal')} showToast={showToast} />
+      <RejectModal
+        isOpen={openModals.has('reject-modal')}
+        onClose={() => closeModal('reject-modal')}
+        showToast={showToast}
+        applicationGuid={selectedApplicationGuid}
+        vetApplication={vetApplicationMutation}
+      />
       <Toast toast={toast} />
     </div>
   )
