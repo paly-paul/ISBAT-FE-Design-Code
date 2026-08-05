@@ -48,8 +48,17 @@ export function refreshAccessToken(): Promise<RefreshData> {
   return refreshInFlight
 }
 
-function redirectToLogin() {
-  if (typeof window !== 'undefined') window.location.href = '/login'
+function redirectToLogin(triggeredBy: string, cause: unknown) {
+  // Logged before navigating away — once the redirect fires, the tab reloads
+  // and this context would otherwise be lost, making a "why did I get logged
+  // out on this page" report impossible to root-cause after the fact.
+  if (typeof window !== 'undefined') {
+    console.warn(
+      `[auth] Redirecting to /login — refresh failed after a 401 from "${triggeredBy}".`,
+      cause,
+    )
+    window.location.href = '/login'
+  }
 }
 
 // Only a real refresh failure should log the user out. The backend's
@@ -63,7 +72,9 @@ function redirectToLogin() {
 // before this attempt reached the server. Give that a brief window to land
 // in the browser's cookie store and try once more before concluding the
 // session is genuinely gone — only redirect if the retry also fails.
-async function handleUnauthorized(): Promise<void> {
+// `triggeredBy` is the path of the original request whose 401 kicked this
+// off — purely for diagnostics, see redirectToLogin() above.
+async function handleUnauthorized(triggeredBy: string): Promise<void> {
   try {
     await refreshAccessToken()
   } catch (err) {
@@ -72,7 +83,7 @@ async function handleUnauthorized(): Promise<void> {
       await new Promise(resolve => setTimeout(resolve, 500))
       await refreshAccessToken()
     } catch (retryErr) {
-      if (retryErr instanceof AuthError) redirectToLogin()
+      if (retryErr instanceof AuthError) redirectToLogin(triggeredBy, retryErr)
       throw retryErr
     }
   }
@@ -88,7 +99,7 @@ export async function post<T>(path: string, body: unknown, retried = false): Pro
   })
 
   if (res.status === 401 && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return post<T>(path, body, true)
   }
 
@@ -109,7 +120,7 @@ export async function get<T>(path: string, retried = false): Promise<T> {
   })
 
   if (res.status === 401 && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return get<T>(path, true)
   }
 
@@ -143,7 +154,7 @@ export async function apiPost<T>(path: string, body: unknown, retried = false): 
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return apiPost<T>(path, body, true)
   }
 
@@ -193,7 +204,7 @@ export async function apiPostForm<T>(path: string, formData: FormData, retried =
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return apiPostForm<T>(path, formData, true)
   }
 
@@ -223,7 +234,7 @@ export async function apiPutForm<T>(path: string, formData: FormData, retried = 
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return apiPutForm<T>(path, formData, true)
   }
 
@@ -250,7 +261,7 @@ export async function apiPut<T>(path: string, body: unknown, retried = false): P
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return apiPut<T>(path, body, true)
   }
 
@@ -276,7 +287,7 @@ export async function apiDelete<T>(path: string, retried = false): Promise<T> {
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return apiDelete<T>(path, true)
   }
 
@@ -302,7 +313,7 @@ export async function apiGet<T>(path: string, retried = false): Promise<T> {
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return apiGet<T>(path, true)
   }
 

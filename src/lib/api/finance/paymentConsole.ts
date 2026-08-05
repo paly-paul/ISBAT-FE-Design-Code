@@ -223,6 +223,55 @@ export function getPaymentHistory(applicationGuid: string): Promise<PaymentHisto
     })
 }
 
+// Confirmed via a real GetPaymentHistoryList sample response. **A genuinely
+// different resource from `getPaymentHistory`/`PaymentHistoryEntry` above**
+// despite sharing the same "payment-history" URL segment — that one is
+// scoped to one application (`.../payment-history/{applicationGuid}`, a flat
+// per-payment-line list with no student/programme info since it's already
+// known from context); this one is the full cross-application ledger
+// (`.../payment-history`, no guid), paginated, and each row carries its own
+// studentNo/studentName/programName/feeType — same "route look-alike, don't
+// conflate" pattern as enquirySource.ts/enquirySourceMaster.ts elsewhere in
+// this app. Backs /finance/payment-history (the standalone page, not Payment
+// Console's own Step 3 history tab). studentNo/studentName/programName are
+// nullable on every row seen so far (real sample data), same "server always
+// sends null for this field" shape as enquiry.ts's campusName/programName —
+// display a "—" fallback, don't assume it'll ever populate. `rate` is null
+// whenever `currencyCode` is already `"UGX"` (no conversion applied — pesky
+// only for foreign-currency rows). `payType` is an object with its label
+// already resolved server-side (`{value, name}`) — unlike the scoped
+// endpoint's bare `payType: number`, there's no need to cross-reference
+// PAY_TYPE_LABELS for this one.
+export interface PaymentHistoryListEntry {
+  paymentGuid: string
+  category: number
+  receiptNo: string
+  payDate: string
+  studentNo: string | null
+  studentName: string | null
+  programName: string | null
+  feeType: string
+  amount: number
+  currencyCode: string
+  ugxValue: number
+  rate: number | null
+  payType: { value: number; name: string }
+}
+
+export interface PaymentHistoryListResponse {
+  items: PaymentHistoryListEntry[]
+  totalCount: number
+  pageNumber: number
+  pageSize: number
+}
+
+export function getPaymentHistoryList(pageNumber = 1, pageSize = 20): Promise<PaymentHistoryListResponse> {
+  if (MOCK_AUTH) return Promise.resolve({ items: [], totalCount: 0, pageNumber, pageSize })
+  return apiGet<PaymentHistoryListResponse | null>(
+    `/api/v1/finance/payment-console/payment-history?pageNumber=${pageNumber}&pageSize=${pageSize}`,
+  ).then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
+}
+
 export function getPayableLedgers(params: PayableLedgersParams): Promise<PayableLedgersResult> {
   if (MOCK_AUTH) return Promise.resolve({ lines: [], balance: 0 })
   const qs = new URLSearchParams({
