@@ -25,7 +25,7 @@ export function EditPermissionModal({ isOpen, onClose, showToast, permissionGrou
     activeBlocks, canSubmit,
     handleAddModule, handleGlobalSelect, toggleBlockOpen, updateBlockSearch,
     toggleAll, togglePermission, confirmDelete, seedFromGroupPermissions, resetWizard,
-  } = usePermissionWizard()
+  } = usePermissionWizard(isOpen)
 
   useEffect(() => {
     if (isOpen && permissionGroup) {

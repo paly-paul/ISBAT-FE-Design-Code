@@ -108,7 +108,15 @@ function appendProgramUnits(formData: FormData, units: ProgramUnitInput[]) {
   units.forEach((u, i) => {
     formData.append(`ProgramUnits[${i}].SemCode`, String(u.semCode))
     formData.append(`ProgramUnits[${i}].CourseUnitGuid`, u.courseUnitGuid)
-    formData.append(`ProgramUnits[${i}].StreamGuid`, u.streamGuid)
+    // Specialization is optional now (Program_Master_Change_Requests_Final.md),
+    // so streamGuid can legitimately be empty for a non-Specialization unit
+    // with no top-level pick to fall back to either. Confirmed with the
+    // backend team: the form binder tries to parse whatever's in this key as
+    // a Guid, so both an empty string AND the literal string "null" fail to
+    // bind — omitting the key entirely is the only way a Guid? property ends
+    // up bound to null the way it's meant to. The .bru example showing a
+    // blank-but-present key was misleading here, not a confirmed contract.
+    if (u.streamGuid) formData.append(`ProgramUnits[${i}].StreamGuid`, u.streamGuid)
     formData.append(`ProgramUnits[${i}].UnitType`, u.unitType)
     formData.append(`ProgramUnits[${i}].UnitCat`, u.unitCat)
     formData.append(`ProgramUnits[${i}].Flag`, String(u.flag))
@@ -188,8 +196,15 @@ export function createProgramMaster(input: ProgramMasterInput): Promise<ProgramM
   formData.append('facultyGuid', input.facultyGuid)
   formData.append('currencyCode', String(input.currencyCode))
   formData.append('dateAcc', input.dateAcc)
-  formData.append('streamGuid', input.streamGuid)
-  formData.append('intakeGuid', input.intakeGuid)
+  // Specialization is optional now — this can legitimately be empty. Omit
+  // the key rather than send an empty string (see the note on
+  // ProgramUnits[].StreamGuid above — confirmed with the backend team).
+  if (input.streamGuid) formData.append('streamGuid', input.streamGuid)
+  // intakeGuid is meant to always be auto-filled from the Current Academic
+  // Intake before this ever fires, but guard the same way in case that
+  // hasn't resolved yet — an omitted key fails as a clear "required field
+  // missing" rather than a Guid-parse exception on an empty string.
+  if (input.intakeGuid) formData.append('intakeGuid', input.intakeGuid)
   appendProgramUnits(formData, input.programUnits)
   appendFeeStructures(formData, input.feeStructures)
   if (input.accLetterFile) formData.append('accLetterFile', input.accLetterFile)
@@ -369,7 +384,12 @@ function appendProgramUnitsForUpdate(formData: FormData, units: ProgramUnitUpdat
   units.forEach((u, i) => {
     formData.append(`ProgramUnits[${i}][SemCode]`, String(u.semCode))
     formData.append(`ProgramUnits[${i}][CourseUnitGuid]`, u.courseUnitGuid)
-    formData.append(`ProgramUnits[${i}][StreamGuid]`, u.streamGuid)
+    // Same reasoning as Create's appendProgramUnits above — Specialization is
+    // optional now, so this can legitimately be empty. Confirmed with the
+    // backend team: the form binder tries to parse whatever's in this key as
+    // a Guid, so both an empty string and the literal string "null" fail to
+    // bind — omit the key entirely so the Guid? property binds to null.
+    if (u.streamGuid) formData.append(`ProgramUnits[${i}][StreamGuid]`, u.streamGuid)
     formData.append(`ProgramUnits[${i}][UnitTypeGuid]`, u.unitTypeGuid)
     formData.append(`ProgramUnits[${i}][UnitCatGuid]`, u.unitCatGuid)
     formData.append(`ProgramUnits[${i}][Flag]`, String(u.flag))
@@ -437,8 +457,13 @@ export function updateProgramMasterComplete(programGuid: string, input: ProgramM
   formData.append('facultyGuid', input.facultyGuid)
   formData.append('currencyGuid', input.currencyGuid)
   formData.append('dateAcc', input.dateAcc)
-  formData.append('streamGuid', input.streamGuid)
-  formData.append('intakeGuid', input.intakeGuid)
+  // Specialization is optional now — this can legitimately be empty. Omit
+  // the key rather than send an empty string (see the note on
+  // ProgramUnits[].StreamGuid above — confirmed with the backend team).
+  if (input.streamGuid) formData.append('streamGuid', input.streamGuid)
+  // Same guard as Create — intakeGuid should always be auto-filled by this
+  // point, but omit rather than send empty if it somehow isn't.
+  if (input.intakeGuid) formData.append('intakeGuid', input.intakeGuid)
   appendProgramUnitsForUpdate(formData, input.programUnits)
   appendFeeStructuresForUpdate(formData, input.feeStructures)
   if (input.accLetterFile) formData.append('accLetterFile', input.accLetterFile)

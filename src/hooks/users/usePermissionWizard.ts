@@ -20,8 +20,17 @@ function blocksFromPermissionIds(permissionIds: number[], moduleByPermissionId: 
 }
 
 // Shared state and logic for the permission-group wizard used in create and edit flows.
-export function usePermissionWizard() {
-  const { data: catalog = [] } = usePermissionCatalog()
+// `enabled` (defaults to true) is threaded through to the catalog fetch so
+// callers embedded in a modal — NewPermissionModal / EditPermissionModal are
+// always mounted so their hooks can run, but only actually visible once
+// `isOpen` — can pass `isOpen` here. Without it, both modals were firing the
+// permission-catalog request the instant Permission Master's page mounted,
+// even with the modal closed: two extra authenticated requests racing
+// alongside the page's own permission-groups fetch, which made it more
+// likely to trip the refresh/401 race documented in src/lib/api/client.ts
+// and log the user out. See PROJECT_STRUCTURE.md's client.ts notes.
+export function usePermissionWizard(enabled = true) {
+  const { data: catalog = [] } = usePermissionCatalog(enabled)
 
   // Merge permissions from catalog entries that share the same module.
   const permissionsByModule = useMemo(() => {

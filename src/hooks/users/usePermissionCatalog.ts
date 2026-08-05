@@ -1,10 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { getPermissionCatalog, CatalogModule, CatalogPage, CatalogPermission } from '@/lib/api/users/permissionCatalog'
 
-export function usePermissionCatalog() {
+// `enabled` defaults to true so existing callers keep fetching eagerly;
+// callers that only need this once a modal opens (e.g. the permission
+// wizard) should pass `isOpen` through so the request doesn't fire while
+// the modal is closed.
+export function usePermissionCatalog(enabled = true) {
   return useQuery({
     queryKey: ['permissionCatalog'],
     queryFn: getPermissionCatalog,
+    enabled,
     // Static reference data with no signal for when it changes — fetch once
     // per session and never treat it as stale, instead of silently
     // refetching on every remount/window-focus.
