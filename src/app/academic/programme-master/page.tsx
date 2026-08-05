@@ -7,6 +7,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { TableSearch } from '@/components/TableSearch'
 import { ProgrammeModal } from '@/components/modals/academic/ProgrammeModal'
 import { SpecializationModal } from '@/components/modals/academic/SpecializationModal'
+import { CurriculumModal } from '@/components/modals/academic/CurriculumModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -36,6 +37,9 @@ export default function Page() {
   const [progMode, setProgMode] = useState<'add' | 'edit'>('add')
   const [editingProgramGuid, setEditingProgramGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ programGuid: string; progName: string } | null>(null)
+  // Which programme the Home Page "Specialization"/"Curriculum" three-dot
+  // actions are scoped to — see Program_Master_Change_Requests_Final.md.
+  const [selectedProgram, setSelectedProgram] = useState<{ programGuid: string; progName: string } | null>(null)
   const createProgramMaster = useCreateProgramMaster()
   const updateProgramMasterComplete = useUpdateProgramMasterComplete()
   const deleteProgramMasterComplete = useDeleteProgramMasterComplete()
@@ -97,12 +101,16 @@ export default function Page() {
       group: group?.groupCode ?? '—',
       level: level ? `${level.levelName} · ${p.yearCount}yr / ${p.semCount}sem` : `${p.yearCount}yr / ${p.semCount}sem`,
       faculty: faculty ? `${faculty.facultyCode} → ${faculty.campusName}` : '—',
+      // Kept alongside the display string below — dateAcc is the only real
+      // date field the list endpoint returns (no created/updated timestamp),
+      // so it's what "newest to oldest" sorts on.
+      dateAccRaw: p.dateAcc,
       accredDate: new Date(p.dateAcc).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
       noIA: p.noIa ? 'Yes' : 'No',
       specializations: specializationNames.length > 0 ? specializationNames.join(', ') : '—',
       admissionStatus: p.pgmStatus ? 'Active' : 'Inactive',
     }
-  })
+  }).sort((a, b) => new Date(b.dateAccRaw).getTime() - new Date(a.dateAccRaw).getTime())
 
   const groupFilterOpts = Array.from(new Set(rows.map(r => r.group)))
   const levelFilterOpts = Array.from(new Set(rows.map(r => r.level)))
@@ -233,8 +241,8 @@ export default function Page() {
                       */}
                       <ActionMenu>
                         {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => { setProgMode('edit'); setEditingProgramGuid(r.programGuid); openModal('new-prog-modal') }}><i className="lni lni-pencil"></i> Edit</button>}
-                        <button className="btn btn-neu btn-sm" onClick={() => nav('course-units')}><i className="lni lni-book"></i> Curriculum</button>
-                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openModal('specialization-modal')}><i className="lni lni-target"></i> Specializations</button>}
+                        <button className="btn btn-neu btn-sm" onClick={() => { setSelectedProgram({ programGuid: r.programGuid, progName: r.progName }); openModal('curriculum-modal') }}><i className="lni lni-book"></i> Curriculum</button>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => { setSelectedProgram({ programGuid: r.programGuid, progName: r.progName }); openModal('specialization-modal') }}><i className="lni lni-target"></i> Specializations</button>}
                         {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget({ programGuid: r.programGuid, progName: r.progName })}><i className="lni lni-trash-can"></i> Delete</button>}
                       </ActionMenu>
                     </td>
@@ -285,7 +293,20 @@ export default function Page() {
         createProgramMaster={createProgramMaster}
         updateProgramMasterComplete={updateProgramMasterComplete}
       />
-      <SpecializationModal isOpen={openModals.has('specialization-modal')} onClose={() => closeModal('specialization-modal')} showToast={showToast} />
+      <SpecializationModal
+        isOpen={openModals.has('specialization-modal')}
+        onClose={() => closeModal('specialization-modal')}
+        showToast={showToast}
+        programGuid={selectedProgram?.programGuid ?? null}
+        programName={selectedProgram?.progName}
+      />
+      <CurriculumModal
+        isOpen={openModals.has('curriculum-modal')}
+        onClose={() => closeModal('curriculum-modal')}
+        showToast={showToast}
+        programGuid={selectedProgram?.programGuid ?? null}
+        programName={selectedProgram?.progName}
+      />
       <Toast toast={toast} />
 
       {deleteTarget && (

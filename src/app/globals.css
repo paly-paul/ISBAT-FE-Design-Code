@@ -1710,6 +1710,12 @@ body {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, .12)
 }
 
+.ctrl:disabled {
+  background: var(--g100);
+  color: var(--g400);
+  cursor: not-allowed;
+}
+
 select.ctrl {
   cursor: pointer
 }
@@ -2505,6 +2511,10 @@ tr.flagged td {
   cursor: pointer !important;
   text-align: left;
   overflow: hidden;
+}
+
+.ss-trigger:disabled {
+  cursor: not-allowed !important;
 }
 
 .ss-trigger .ss-label {
@@ -3448,7 +3458,8 @@ body:has(.modal-overlay.open) {
 .fsm-item-hdr,
 .fsm-item-row {
   display: grid;
-  grid-template-columns: 28px minmax(120px, 1fr) minmax(90px, 110px) minmax(130px, 150px) minmax(140px, 1fr) 32px;
+  /* Pri. | Ledger | Ledger Priority | Amount | Currency | remove */
+  grid-template-columns: 28px minmax(140px, 1fr) 90px minmax(90px, 110px) minmax(130px, 150px) 32px;
   gap: 6px;
 }
 
@@ -3500,7 +3511,7 @@ body:has(.modal-overlay.open) {
 
   .fsm-item-hdr,
   .fsm-item-row {
-    grid-template-columns: 24px minmax(90px, 1fr) 80px 100px minmax(110px, 1fr) 28px;
+    grid-template-columns: 24px minmax(110px, 1fr) 70px 80px minmax(100px, 1fr) 28px;
     gap: 4px;
   }
 }

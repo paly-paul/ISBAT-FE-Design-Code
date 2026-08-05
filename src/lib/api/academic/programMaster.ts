@@ -17,6 +17,15 @@ export interface FeeLineInput {
   intLedger: number
   ledgerGuid: string
   intCurrency: number
+  // Added after a live validation_error ("Currency is required for each fee
+  // line.") on a real payload that already had a valid non-zero intCurrency
+  // — the same "Currency is required" symptom already confirmed on
+  // programLevel.ts's own Currency field meant the backend actually wants
+  // currencyGuid, not intCurrency. Update's FeeLineUpdateInput already sends
+  // CurrencyGuid (see below); Create never sent an equivalent guid at all.
+  // Sent alongside intCurrency (a harmless extra field) since it's
+  // unconfirmed whether the backend still reads intCurrency for this DTO.
+  currencyGuid: string
   semCode: number
   ledgerNum: number
   amount: number
@@ -125,6 +134,7 @@ function appendFeeStructures(formData: FormData, structures: FeeStructureInput[]
       formData.append(`FeeStructures[${i}].FeeLines[${j}].IntLedger`, String(l.intLedger))
       formData.append(`FeeStructures[${i}].FeeLines[${j}].LedgerGuid`, l.ledgerGuid)
       formData.append(`FeeStructures[${i}].FeeLines[${j}].IntCurrency`, String(l.intCurrency))
+      formData.append(`FeeStructures[${i}].FeeLines[${j}].CurrencyGuid`, l.currencyGuid)
       formData.append(`FeeStructures[${i}].FeeLines[${j}].SemCode`, String(l.semCode))
       formData.append(`FeeStructures[${i}].FeeLines[${j}].LedgerNum`, String(l.ledgerNum))
       formData.append(`FeeStructures[${i}].FeeLines[${j}].Amount`, String(l.amount))
@@ -205,11 +215,26 @@ export interface ProgramUnitDetail {
   courseUnitName: string
   streamGuid: string | null
   streamName: string | null
-  unitTypeGuid: string
-  unitTypeName: string
-  unitCatGuid: string
-  unitCatName: string
+  // Confirmed nullable via a real response — a course unit that hasn't had
+  // its Unit Type/Category picked yet (still possible post-save, since
+  // Step 2's per-unit pickers aren't required) comes back with both null.
+  unitTypeGuid: string | null
+  unitTypeName: string | null
+  unitCatGuid: string | null
+  unitCatName: string | null
   flag: number
+}
+
+// One semester on the programme, confirmed via a real full-details response
+// — covers EVERY semester the programme has (semCount total), including
+// ones with zero course units assigned yet. This is what actually tells you
+// how many semesters a programme has and what each is called; programUnits[]
+// only ever lists semesters that already have at least one unit on them, so
+// deriving the count from programUnits alone silently undercounts empty
+// semesters (see the note on ProgrammeModal's fullDetails effect).
+export interface ProgramSemesterDetail {
+  semCode: number
+  semName: string
 }
 
 export interface FeeLineDetail {
@@ -256,7 +281,7 @@ export interface ProgramMasterFullDetails {
   lateFee: number
   intakeGuid: string | null
   streamGuids: string[]
-  semesters: unknown[]
+  semesters: ProgramSemesterDetail[]
   programUnits: ProgramUnitDetail[]
   feeStructures: FeeStructureDetail[]
 }

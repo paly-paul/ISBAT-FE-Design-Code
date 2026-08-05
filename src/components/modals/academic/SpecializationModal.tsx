@@ -1,76 +1,58 @@
 'use client'
-import { useState, useEffect } from 'react'
 import { ModalProps } from '../types'
 import { ScrollTable } from '@/components/ScrollTable'
-import { FilterTh } from '@/components/FilterTh'
-import { SearchSelect } from '@/components/SearchSelect'
+import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { useProgramSpecializations } from '@/hooks/academic/useProgramSpecializations'
 
-export function SpecializationModal({ isOpen, onClose, showToast }: ModalProps) {
-  const [filters, setFilters] = useState<Record<string, string[]>>({})
-  const [openFilter, setOpenFilter] = useState<string | null>(null)
+// Previous mock content (hardcoded rows, a fake "Add Specialization" create
+// form) — replaced per Program_Master_Change_Requests_Final.md's Home Page
+// "Specialization" action: this now just displays the real specializations
+// already assigned to the selected programme (GET
+// /api/v1/academic/specializations?programGuid=), read-only. Managing the
+// programme's specializations themselves still happens on the Programme
+// Details step (Step 1's Specialization(s) multi-select).
+// const rows = [
+//   { num: 1, name: 'Finance Management',       startSem: 'Sem 3', students: 42 },
+//   { num: 2, name: 'Operations Management',     startSem: 'Sem 3', students: 38 },
+//   { num: 3, name: 'Human Resource Management', startSem: 'Sem 3', students: 27 },
+// ]
 
-  useEffect(() => {
-    if (!isOpen) return
-    function closeFilter() { setOpenFilter(null) }
-    document.addEventListener('click', closeFilter)
-    return () => document.removeEventListener('click', closeFilter)
-  }, [isOpen])
+interface SpecializationModalProps extends ModalProps {
+  programGuid: string | null
+  programName?: string
+}
 
-  const rows = [
-    { num: 1, name: 'Finance Management',       startSem: 'Sem 3', students: 42 },
-    { num: 2, name: 'Operations Management',     startSem: 'Sem 3', students: 38 },
-    { num: 3, name: 'Human Resource Management', startSem: 'Sem 3', students: 27 },
-  ]
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes((r as unknown as Record<string, string>)[k]))
-  )
-
-  function fth(label: string, col: string, opts: string[]) {
-    return (
-      <FilterTh
-        label={label}
-        opts={opts}
-        isOpen={openFilter === col}
-        activeFilter={filters[col] ?? []}
-        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
-        onClose={() => setOpenFilter(null)}
-      />
-    )
-  }
+export function SpecializationModal({ isOpen, onClose, programGuid, programName }: SpecializationModalProps) {
+  const { data: specializations = [], isLoading } = useProgramSpecializations(programGuid, isOpen && !!programGuid)
 
   if (!isOpen) return null
   return (
     <div className="modal-overlay open" id="specialization-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr">
-          <div className="modal-title"><i className="lni lni-target"></i> Manage Specializations — MBA 2024</div>
+          <div className="modal-title"><i className="lni lni-target"></i> Specializations{programName ? ` — ${programName}` : ''}</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
-        <ScrollTable className="mb-[14px]">
+        <ScrollTable>
           <table>
-            <thead><tr><th style={{ width: 48 }}></th><th>#</th><th>Specialization Name</th>{fth('Start Semester', 'startSem', ['Sem 3', 'Sem 4', 'Sem 5'])}<th>Students Enrolled</th></tr></thead>
+            <thead><tr><th>Code</th><th>Specialization Name</th></tr></thead>
             <tbody>
-              {filteredRows.map((r, i) => (
-                <tr key={i}>
-                  <td><button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button></td>
-                  <td>{r.num}</td>
-                  <td><strong>{r.name}</strong></td>
-                  <td>{r.startSem}</td>
-                  <td>{r.students}</td>
-                </tr>
-              ))}
+              {isLoading
+                ? <TableLoadingState colSpan={2} />
+                : specializations.length === 0
+                  ? <EmptyState colSpan={2} title="No specializations" subtitle="This programme has no specializations assigned yet." />
+                  : specializations.map(s => (
+                      <tr key={s.streamGuid}>
+                        <td className="font-mono text-[var(--fs-xs)] text-b700">{s.streamCode}</td>
+                        <td><strong>{s.streamName}</strong></td>
+                      </tr>
+                    ))}
             </tbody>
           </table>
         </ScrollTable>
-        <div className="g2">
-          <div className="fg"><div className="lbl">New Specialization Name</div><input className="ctrl" placeholder="e.g. Digital Marketing" /></div>
-          <div className="fg"><div className="lbl">Starts from Semester</div><SearchSelect options={['Sem 3', 'Sem 4', 'Sem 5']} /></div>
-        </div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={onClose}>Close</button>
-          <button className="btn btn-primary" onClick={() => showToast('Specialization added.', 'success')}><i className="lni lni-plus"></i> Add Specialization</button>
         </div>
       </div>
     </div>

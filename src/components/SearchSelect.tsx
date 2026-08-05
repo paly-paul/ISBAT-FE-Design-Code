@@ -11,6 +11,7 @@ interface SearchSelectProps {
   placeholder?: string
   className?: string
   style?: React.CSSProperties
+  disabled?: boolean
 }
 
 function normalise(raw: (string | Opt)[]): Opt[] {
@@ -24,6 +25,7 @@ export function SearchSelect({
   placeholder,
   className,
   style,
+  disabled,
 }: SearchSelectProps) {
   const normalised = normalise(options)
 
@@ -112,6 +114,7 @@ export function SearchSelect({
         ref={triggerRef}
         type="button"
         className="ctrl ss-trigger"
+        disabled={disabled}
         onClick={() => (open ? setOpen(false) : openDrop())}
       >
         <span className={`ss-label${isEmpty ? ' ss-placeholder' : ''}`}>{displayLabel}</span>
