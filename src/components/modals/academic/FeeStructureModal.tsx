@@ -4,14 +4,20 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { useCurrencies } from '@/hooks/finance/useCurrencies'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useLedgers } from '@/hooks/finance/useLedgers'
 import { useSaveProgramFeeStructureComplete, ProgramFeeLineSaveInput } from '@/hooks/academic/useProgramFeeStructure'
 
-type FeeItem = { id: number; title: string; amount: string; currencyGuid: string; ledgerGuid: string }
+// title dropped per Fee_Structure_Change_Requests.md #1 — it was never part
+// of the confirmed save-complete payload anyway (ProgramFeeLineSaveInput has
+// no title field), just decorative UI. ledgerPriority is new per #2 — kept
+// local-only for now since ProgramFeeLineSaveInput has no matching field yet
+// (feeLines' actual send order is still the array order, same as before);
+// wire it into the payload once the backend confirms a field for it.
+type FeeItem = { id: number; amount: string; currencyGuid: string; ledgerGuid: string; ledgerPriority: string }
 // Keyed by real semesterGuid — save-complete's feeLines each carry a real
 // semesterGuid, unlike Program Master's own embedded fee structure (which
 // uses semCode, a 1-based int position — see the note on
@@ -42,7 +48,7 @@ type Structure = {
 }
 
 function blankItem(id: number): FeeItem {
-  return { id, title: '', amount: '', currencyGuid: '', ledgerGuid: '' }
+  return { id, amount: '', currencyGuid: '', ledgerGuid: '', ledgerPriority: '' }
 }
 
 function makeDefaultStructures(): Structure[] {
@@ -62,9 +68,16 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   const { data: intakes = [] }    = useIntakes()
   const { data: currencies = [] } = useCurrencies()
   const saveFeeStructureComplete  = useSaveProgramFeeStructureComplete()
+  // Per Fee_Structure_Change_Requests.md #4 — Create no longer offers an
+  // Intake dropdown at all, it's forced to whatever intake is currently
+  // flagged current (the same "Current Academic Intake" hero-card filter
+  // already used on /academic/intake-master), shown read-only.
+  const { data: currentAcademicIntake } = useCurrentAcademicIntake()
 
   const programOptions = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
-  // Same real intakeGuid convention as ProgrammeModal's Intake step.
+  // Same real intakeGuid convention as ProgrammeModal's Intake step. Still
+  // needed even though the field is now always read-only — SearchSelect
+  // resolves the display label for the selected guid from this list.
   const intakeOptions  = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   // Currency.intCurrency (a number) is what the header payload's Lec/Cec/Acec
   // fields need — unconfirmed for save-complete specifically (the sample
@@ -88,6 +101,16 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
       setActiveIdx(0)
     }
   }, [isOpen, editData])
+
+  // Create mode has no Intake picker any more (#4) — every structure is
+  // forced onto whatever intake is currently flagged current. Applies to
+  // every structure, not just the active one, since Create no longer offers
+  // a way to pick a different intake per structure at all.
+  useEffect(() => {
+    if (isOpen && mode !== 'edit' && currentAcademicIntake) {
+      setStructures(prev => prev.map(s => s.intake === currentAcademicIntake.intakeGuid ? s : { ...s, intake: currentAcademicIntake.intakeGuid }))
+    }
+  }, [isOpen, mode, currentAcademicIntake])
 
   const active = structures[activeIdx]
 
@@ -124,7 +147,9 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   // ── Structure management ─────────────────────────────────
   function addStructure() {
     const newStruct: Structure = {
-      id: nextStructId++, programme: '', feeCode: '', description: '', currency: 'UGX', intake: '', discountType: 'Amount', createdVia: 'new', semFees: {},
+      id: nextStructId++, programme: '', feeCode: '', description: '', currency: 'UGX',
+      intake: mode !== 'edit' ? (currentAcademicIntake?.intakeGuid ?? '') : '',
+      discountType: 'Amount', createdVia: 'new', semFees: {},
       localOrForeign: false, amtPer: '', lef: '', lefCurrency: '', cef: '', cefCurrency: '', ace: '', aceCurrency: '',
     }
     setStructures(prev => [...prev, newStruct])
@@ -300,19 +325,18 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
           {/* Right panel — active structure configuration */}
           <div className="fsm-main">
 
-            {/* Programme selector */}
+            {/* Programme selector — read-only once editing an existing
+                structure (Fee_Structure_Change_Requests.md #3): the
+                associated Programme is shown but can't be changed. */}
             <div className="fg m-0 mb-[18px]">
               <div className="lbl">Programme {mode !== 'edit' && <span className="req">*</span>}</div>
-              <div style={mode === 'edit' ? { cursor: 'not-allowed', opacity: 0.6 } : undefined}>
-                <div style={mode === 'edit' ? { pointerEvents: 'none' } : undefined}>
-                  <SearchSelect
-                    placeholder="— Select a programme to begin —"
-                    value={active.programme}
-                    onChange={val => updateStructureMeta('programme', val)}
-                    options={programOptions}
-                  />
-                </div>
-              </div>
+              <SearchSelect
+                placeholder="— Select a programme to begin —"
+                value={active.programme}
+                onChange={val => updateStructureMeta('programme', val)}
+                options={programOptions}
+                disabled={mode === 'edit'}
+              />
             </div>
 
             {/* Locked until a programme is chosen */}
@@ -364,18 +388,19 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                   options={structures.map((s, i) => ({ s, i })).filter(({ i }) => i !== activeIdx).map(({ s, i }) => ({ value: String(s.id), label: s.feeCode || `Structure ${i + 1}` }))}
                 />
               </div>
+              {/* Intake is always read-only now (Fee_Structure_Change_Requests.md
+                  #3 and #4): in Edit mode it shows the structure's existing
+                  intake, unchangeable; in Create mode there's no picker at
+                  all — it's forced onto the Current Academic Intake (see the
+                  effect above and addStructure). */}
               <div className="fg m-0">
                 <div className="lbl">Intake</div>
-                <div style={mode === 'edit' ? { cursor: 'not-allowed', opacity: 0.6 } : undefined}>
-                  <div style={mode === 'edit' ? { pointerEvents: 'none' } : undefined}>
-                  <SearchSelect
-                    placeholder="— Select intake —"
-                    value={active.intake}
-                    onChange={val => updateStructureMeta('intake', val)}
-                    options={intakeOptions}
-                  />
-                  </div>
-                </div>
+                <SearchSelect
+                  placeholder={mode === 'edit' ? '— Select intake —' : (currentAcademicIntake ? undefined : 'No current intake set')}
+                  value={active.intake}
+                  options={intakeOptions}
+                  disabled
+                />
               </div>
               <div className="fg m-0">
                 <div className="lbl">Student Type</div>
@@ -447,7 +472,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                       <div style={{ padding: '10px 14px' }}>
                         {items.length > 0 && (
                           <div className="fsm-item-hdr">
-                            <span style={{ textAlign: 'center' }}>Pri.</span><span>Fee Title</span><span>Amount</span><span>Currency</span><span>Ledger</span><span></span>
+                            <span style={{ textAlign: 'center' }}>Pri.</span><span>Ledger</span><span>Ledger Priority</span><span>Amount</span><span>Currency</span><span></span>
                           </div>
                         )}
                         <div className="flex flex-col gap-1">
@@ -460,10 +485,10 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                                 <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(sem.semesterGuid, idx, -1)} disabled={idx === 0}><i className="lni lni-chevron-up"></i></button>
                                 <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(sem.semesterGuid, idx, 1)} disabled={idx === items.length - 1}><i className="lni lni-chevron-down"></i></button>
                               </div>
-                              <input className="ctrl" value={f.title}  onChange={e => updateItem(sem.semesterGuid, f.id, 'title',  e.target.value)} placeholder="e.g. Tuition Fee" />
+                              <SearchSelect placeholder="— Select Ledger —" options={ledgerOptions} value={f.ledgerGuid} onChange={val => updateItem(sem.semesterGuid, f.id, 'ledgerGuid', val)} />
+                              <input className="ctrl" value={f.ledgerPriority} onChange={e => updateItem(sem.semesterGuid, f.id, 'ledgerPriority', e.target.value)} type="number" min={0} placeholder="e.g. 1" />
                               <input className="ctrl" value={f.amount} onChange={e => updateItem(sem.semesterGuid, f.id, 'amount', e.target.value)} type="number" min={0} placeholder="0" />
                               <SearchSelect placeholder="— Currency —" options={financeCurrencyOptions} value={f.currencyGuid} onChange={val => updateItem(sem.semesterGuid, f.id, 'currencyGuid', val)} />
-                              <SearchSelect placeholder="— Select Ledger —" options={ledgerOptions} value={f.ledgerGuid} onChange={val => updateItem(sem.semesterGuid, f.id, 'ledgerGuid', val)} />
                               <button className="btn btn-danger btn-sm" style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => removeItem(sem.semesterGuid, f.id)}><i className="lni lni-trash-can"></i></button>
                             </div>
                           ))}

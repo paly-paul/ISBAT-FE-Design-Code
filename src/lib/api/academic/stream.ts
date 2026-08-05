@@ -45,6 +45,20 @@ export function createStream(input: StreamInput): Promise<Stream> {
   return apiPost<Stream>('/api/v1/academic/specializations', input)
 }
 
+// Confirmed via Program_Master_Change_Requests_Final.md /
+// Academic/Program-Structure/Specializations/List.bru — same /specializations
+// resource as getStreams() above, filtered to one programme's own
+// specializations via a programGuid query param. Backs Programme Master's
+// Home Page "Specialization" three-dot action. Response envelope assumed to
+// match the plain list (same endpoint, same controller action) since no
+// distinct sample was given for the filtered variant — flag and re-check if
+// it turns out to differ.
+export function getSpecializationsForProgram(programGuid: string): Promise<Stream[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockStreams)
+  return apiGet<StreamListResponse | null>(`/api/v1/academic/specializations?programGuid=${encodeURIComponent(programGuid)}`)
+    .then(data => data?.items ?? [])
+}
+
 // Fetch one stream by its GUID.
 export function getStreamById(guid: string): Promise<Stream> {
   if (MOCK_AUTH) {

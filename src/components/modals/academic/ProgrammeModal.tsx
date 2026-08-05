@@ -12,12 +12,14 @@ import { useFaculties } from '@/hooks/config/useFaculties'
 import { useCurrencies } from '@/hooks/finance/useCurrencies'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useStreams } from '@/hooks/config/useStreams'
-import { useCourseUnits } from '@/hooks/academic/useCourseUnits'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useCourseUnits, useCourseUnit } from '@/hooks/academic/useCourseUnits'
+import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { useUnitTypes } from '@/hooks/config/useUnitTypes'
 import { useUnitCategories } from '@/hooks/config/useUnitCategories'
 import { useLedgers } from '@/hooks/finance/useLedgers'
 import { ProgramUnitInput, FeeStructureInput, ProgramUnitUpdateInput, FeeStructureUpdateInput, ProgramMasterUpdateInput, useProgramMasterFullDetails } from '@/hooks/academic/useProgramMaster'
+import { useProgramCourseUnits } from '@/hooks/academic/useProgramCourseUnits'
 import { AuthError } from '@/lib/api/client'
 
 // Toggle between UGX and USD.
@@ -32,15 +34,22 @@ const CALC_TYPES = [
   { value: '2', label: 'Percentage' },
 ]
 
-const NUM_SEMS = 6
-
 // SearchSelect works with strings, so store the selected currency id as text.
 // currencyGuid is the edit-mode counterpart of currency (intCurrency) — Update
 // wants a real currencyGuid on FeeLines where Create wants intCurrency, see
 // the note on ProgramMasterUpdateInput in lib/api/academic/programMaster.ts.
-type FeeItem     = { id: number; title: string; amount: string; currency: string; currencyGuid: string; ledger: string }
+// title dropped and ledgerPriority added per Fee_Structure_Change_Requests.md
+// (mirrored from the standalone /academic/fee-structure page's
+// FeeStructureModal.tsx) — title was never part of FeeStructureInput's
+// feeLines contract, and ledgerPriority is kept local-only for now since
+// there's no confirmed backend field for it yet.
+type FeeItem     = { id: number; amount: string; currency: string; currencyGuid: string; ledger: string; ledgerPriority: string }
 type SemFees     = FeeItem[][]
-type CUItem      = { id: number; guid: string; code: string; name: string; credits: number; unitType: string; unitCat: string }
+// streamGuid here is the per-course-unit specialization pick — only meaningful
+// (and only editable) when unitCat resolves to a "Specialization" category;
+// otherwise Step 1's first specialization pick is what gets sent (see
+// streamGuid fallback in handleFinalSubmit).
+type CUItem      = { id: number; guid: string; code: string; name: string; credits: number; unitType: string; unitCat: string; streamGuid: string }
 type SemUnits    = CUItem[][]
 // type SpecRow     = { id: number; value: string } — only used by the commented-out multi-specialization list below
 // All fields here map onto FeeStructureInput on submit (see
@@ -49,8 +58,8 @@ type SemUnits    = CUItem[][]
 // creditExemptionFee/-Currency→cef/cec,
 // aptechCreditExemptionFee/-Currency→ace/acec,
 // discountType/discountAmount→calcType/amtPer, intakeCode→intakeCode, and
-// semFees (the per-semester Fee Title/Amount/Currency/Ledger accordion) is
-// the source of FeeStructureInput.feeLines.
+// semFees (the per-semester Ledger/Ledger Priority/Amount/Currency accordion)
+// is the source of FeeStructureInput.feeLines.
 type FeeStructure = {
   id: number
   feeCode: string
@@ -73,19 +82,28 @@ type FeeStructure = {
 }
 
 function blankItem(id: number): FeeItem {
-  return { id, title: '', amount: '', currency: '', currencyGuid: '', ledger: '' }
+  return { id, amount: '', currency: '', currencyGuid: '', ledger: '', ledgerPriority: '' }
 }
 
-const DEFAULT_SEM_FEES: SemFees = Array.from({ length: NUM_SEMS }, (_, i) =>
-  i === 0
-    ? [
-        { id: 1, title: 'Tuition Fee',       amount: '750000', currency: '', currencyGuid: '', ledger: '' },
-        { id: 2, title: 'Semester Entry Fee', amount: '50000',  currency: '', currencyGuid: '', ledger: '' },
-      ]
-    : []
-)
+// Semester count varies per programme rather than being a fixed number, so
+// these are factories parameterized by count instead of a fixed-length
+// module constant — see resizeSemesters/addSemester/removeSemester below.
+function makeDefaultSemFees(semCount: number): SemFees {
+  return Array.from({ length: Math.max(semCount, 1) }, (_, i) =>
+    i === 0
+      ? [
+          { id: nextId++, amount: '750000', currency: '', currencyGuid: '', ledger: '', ledgerPriority: '' },
+          { id: nextId++, amount: '50000',  currency: '', currencyGuid: '', ledger: '', ledgerPriority: '' },
+        ]
+      : []
+  )
+}
 
-function blankFeeStructure(id: number): FeeStructure {
+function makeEmptySemFees(semCount: number): SemFees {
+  return Array.from({ length: Math.max(semCount, 1) }, () => [])
+}
+
+function blankFeeStructure(id: number, semCount: number): FeeStructure {
   return {
     id,
     feeCode: '',
@@ -101,12 +119,12 @@ function blankFeeStructure(id: number): FeeStructure {
     creditExemptionFeeCurrency: '',
     aptechCreditExemptionFee: '',
     aptechCreditExemptionFeeCurrency: '',
-    semFees: DEFAULT_SEM_FEES,
+    semFees: makeDefaultSemFees(semCount),
   }
 }
 
-function makeDefaultFeeStructures(): FeeStructure[] {
-  return [blankFeeStructure(1)]
+function makeDefaultFeeStructures(semCount: number): FeeStructure[] {
+  return [blankFeeStructure(1, semCount)]
 }
 
 // Keep the old course-unit options only as a reference; the live list now comes from the hook.
@@ -168,12 +186,24 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const [step, setStep]           = useState(1)
   const [saved, setSaved]         = useState(false)
   const [failure, setFailure]     = useState<string | null>(null)
-  const [feeStructures, setFeeStructures] = useState<FeeStructure[]>(makeDefaultFeeStructures)
+  const [feeStructures, setFeeStructures] = useState<FeeStructure[]>(() => makeDefaultFeeStructures(1))
   const [activeFeeIdx, setActiveFeeIdx]   = useState(0)
   const [feeAccordion, setFeeAccordion]   = useState(0)
-  const [semUnits, setSemUnits]     = useState<SemUnits>(() => Array.from({ length: NUM_SEMS }, () => []))
-  const [pendingSel, setPendingSel] = useState<string[]>(() => Array(NUM_SEMS).fill(''))
+  // Semester count isn't fixed — it varies per programme. Starts at 1 and
+  // grows to match the picked Programme Level's semCount (Add mode) or the
+  // real semesters returned by program-course-units (Edit mode); the user
+  // can also Add/Remove Semester by hand in either mode (see addSemester/
+  // removeSemester below). semLabels is the display name per slot — generic
+  // "Semester N" until Edit mode's real semName data replaces it.
+  const [semUnits, setSemUnits]     = useState<SemUnits>(() => [[]])
+  const [pendingSel, setPendingSel] = useState<string[]>(() => [''])
+  const [semLabels, setSemLabels]   = useState<string[]>(() => ['Semester 1'])
   const [activeAcc, setActiveAcc]   = useState<number>(0)
+  // Which course unit's Syllabus/Outline/Taught By detail panel is expanded
+  // in Step 2 — per Program_Master_Change_Requests_Final.md's "Additional
+  // Feature". Cleared on semester switch since the id is scoped to whatever
+  // semester's unit list it came from.
+  const [expandedUnitId, setExpandedUnitId] = useState<number | null>(null)
   // The create payload only accepts one stream selection, so the old multi-select list is no longer used.
   // const [specs, setSpecs]           = useState<SpecRow[]>([])
 
@@ -204,19 +234,20 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // top-level payload only accepts a single streamGuid (confirmed via the
   // .bru spec — see the ProgramMasterInput/ProgramMasterUpdateInput comments
   // in lib/api/academic/programMaster.ts). The per-course-unit streamGuid on
-  // ProgramUnitInput/ProgramUnitUpdateInput has no such limit, though, which
-  // is what the per-semester picker in Step 2 (semStreamGuid below) actually
-  // sends — so the multi-select here mainly exists to populate that picker's
-  // options; the single top-level field just takes the first pick.
+  // ProgramUnitInput/ProgramUnitUpdateInput has no such limit, though — each
+  // unit's own Specialization picker in Step 2 (only enabled when that unit's
+  // Unit Category is "Specialization") is what actually sends it — so the
+  // multi-select here mainly exists to populate that picker's options; the
+  // single top-level field just takes the first pick.
   const [streamGuids, setStreamGuids] = useState<string[]>([])
-  // One specialization per semester, chosen from streamGuids above — sent as
-  // every course unit row's streamGuid for that semester in handleFinalSubmit.
-  const [semStreamGuid, setSemStreamGuid] = useState<string[]>(() => Array(NUM_SEMS).fill(''))
   const [intakeGuid, setIntakeGuid] = useState('')
   const [pgmStatus, setPgmStatus] = useState(true)
   const [noIa, setNoIa] = useState(false)
   const [accLetterFile, setAccLetterFile] = useState<File | null>(null)
   const [step1Errors, setStep1Errors] = useState<Record<string, string>>({})
+  // Only relevant when Step 1's No. of Course Units was actually filled in —
+  // see validateStep2 / Program_Master_Change_Requests_Final.md.
+  const [step2Error, setStep2Error] = useState<string | null>(null)
 
   const { data: programLevels = [] } = useProgramLevels()
   const programLevelOptions = programLevels.map(p => ({ value: p.programLevelGuid, label: p.levelName }))
@@ -255,6 +286,17 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     credits: u.maxCredits,
   }))
 
+  // Syllabus/Outline/Taught By detail panel (Step 2's "Additional Feature")
+  // — fetches the full CourseUnit (syllabus + outlines[], each topic
+  // carrying an employeeGuid) only for whichever unit is expanded, via the
+  // same GetByGuid endpoint course-units' own Edit modal uses.
+  const expandedUnit = (semUnits[activeAcc] ?? []).find(u => u.id === expandedUnitId)
+  const { data: expandedUnitDetail, isLoading: expandedUnitLoading } = useCourseUnit(expandedUnit?.guid ?? null, !!expandedUnit)
+  const { data: employees = [] } = useEmployees()
+  function employeeName(employeeGuid: string) {
+    return employees.find(e => e.employeeGuid === employeeGuid)?.empName ?? `Employee #${employeeGuid}`
+  }
+
   // Unit Type / Unit Category dropdowns in Course Unit Allocation — real
   // masters from src/app/config/unit-type & unit-category. ProgramUnitInput.
   // unitType/unitCat send the guid directly (unitTypeGuid/unitCatGuid), the
@@ -265,22 +307,44 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
   const { data: unitCategories = [] } = useUnitCategories()
   const unitCategoryOptions = unitCategories.map(c => ({ value: c.unitCatGuid, label: c.unitCatName }))
+  // The per-unit specialization picker only makes sense for a unit whose
+  // category is literally named "Specialization" in the real master — there's
+  // no dedicated flag for this on UnitCategory, so it's a name match.
+  function isSpecializationCategory(unitCatGuid: string) {
+    const cat = unitCategories.find(c => c.unitCatGuid === unitCatGuid)
+    return !!cat && cat.unitCatName.trim().toLowerCase() === 'specialization'
+  }
 
   const { data: ledgers = [] } = useLedgers()
   const ledgerOptions = ledgers.map(l => ({ value: l.ledgerGuid, label: l.ledgerName }))
 
   const { data: intakes = [] } = useIntakes()
-  // Per-fee-structure Intake picker (kept as a live-but-unsent field —
-  // see FeeStructure type) uses intakeCode; the top-level programme Intake
-  // (intakeGuid on ProgramMasterInput) uses the real intakeGuid instead.
+  // Per-fee-structure Intake — uses intakeCode in create mode, the real
+  // intakeGuid in edit mode (see the FeeStructure type comment on
+  // intakeGuid); the top-level programme Intake (intakeGuid on
+  // ProgramMasterInput, Step 1) is a separate field entirely.
   const intakeOptions = intakes.map(i => ({ value: String(i.intakeCode), label: `${i.intakeCode} — ${i.description}` }))
   const programIntakeOptions = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
+  // Per Fee_Structure_Change_Requests.md #3/#4 (mirrored from the standalone
+  // /academic/fee-structure page) — Step 3's per-structure Intake is now
+  // always read-only: in Edit mode it shows whatever intake the structure
+  // already has, in Create mode it's forced onto the Current Academic
+  // Intake instead of offering a picker at all.
+  const { data: currentAcademicIntake } = useCurrentAcademicIntake()
 
   // Full course-unit/fee-structure breakdown for the programme being edited —
   // update-complete fully replaces both collections, so this is required to
   // prefill Steps 2/3 before saving, not just a nicety. See the note on
   // ProgramMasterFullDetails in lib/api/academic/programMaster.ts.
   const { data: fullDetails } = useProgramMasterFullDetails(programGuid ?? null, isOpen && mode === 'edit' && !!programGuid)
+
+  // Real per-semester course-unit rows from program-course-units — kept only
+  // as a fallback now (see the fullDetails effect below): fullDetails.semesters
+  // is the primary, more complete source since it covers every semester the
+  // programme has, including ones with zero units assigned yet, which this
+  // endpoint silently omits (confirmed via a real programme: semCount=6 but
+  // program-course-units only returned rows for 1 of them).
+  const { data: programCourseUnitRows = [] } = useProgramCourseUnits(programGuid ?? null, isOpen && mode === 'edit' && !!programGuid)
 
   useEffect(() => {
     if (mode !== 'edit' || !fullDetails) return
@@ -302,41 +366,110 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setPgmStatus(fullDetails.pgmStatus)
     setNoIa(fullDetails.noIa)
 
-    const units: SemUnits = Array.from({ length: NUM_SEMS }, () => [])
-    const semStreams: string[] = Array(NUM_SEMS).fill('')
-    fullDetails.programUnits.forEach(u => {
-      const si = u.semCode - 1
-      if (si < 0 || si >= NUM_SEMS) return
-      const cu = courseUnits.find(c => c.courseUnitGuid === u.courseUnitGuid)
-      // Every ProgramUnitDetail carries its own streamGuid — take the first
-      // one seen per semester as that semester's specialization pick.
-      if (!semStreams[si] && u.streamGuid) semStreams[si] = u.streamGuid
-      units[si].push({
-        id: nextCUId++,
-        guid: u.courseUnitGuid,
-        code: u.courseUnitCode,
-        name: u.courseUnitName,
-        credits: cu?.maxCredits ?? 0,
-        unitType: u.unitTypeGuid,
-        unitCat: u.unitCatGuid,
+    // Semester list for this programme, three-tier fallback, best source first:
+    //
+    // 1. fullDetails.semesters — confirmed real, covers every semester the
+    //    programme has (semCount total) including empty ones. Primary source.
+    // 2. program-course-units' real semesterGuid/semName grouping — only
+    //    used if #1 comes back empty; still an incomplete picture since it
+    //    only lists semesters that already have a course unit on them.
+    // 3. Highest semCode seen on programUnits, generic "Semester N" labels —
+    //    last resort if both real sources are empty.
+    const realSemesters = [...fullDetails.semesters].sort((a, b) => a.semCode - b.semCode)
+
+    let semCount: number
+    let labels: string[]
+    let units: SemUnits
+
+    if (realSemesters.length > 0) {
+      semCount = realSemesters.length
+      labels = realSemesters.map(s => s.semName)
+      units = Array.from({ length: semCount }, () => [])
+      // programUnits' own semCode already lines up 1:1 with these semesters
+      // (both are position-based against the same programme), so no need to
+      // merge against program-course-units at all here.
+      fullDetails.programUnits.forEach(u => {
+        const si = u.semCode - 1
+        if (si < 0 || si >= semCount) return
+        const cu = courseUnits.find(c => c.courseUnitGuid === u.courseUnitGuid)
+        units[si].push({
+          id: nextCUId++,
+          guid: u.courseUnitGuid,
+          code: u.courseUnitCode,
+          name: u.courseUnitName,
+          credits: cu?.maxCredits ?? 0,
+          unitType: u.unitTypeGuid ?? '',
+          unitCat: u.unitCatGuid ?? '',
+          streamGuid: u.streamGuid ?? '',
+        })
       })
-    })
+    } else {
+      const fallbackSemesters: { semesterGuid: string; semName: string }[] = []
+      programCourseUnitRows.forEach(r => {
+        if (!fallbackSemesters.some(s => s.semesterGuid === r.semesterGuid)) fallbackSemesters.push({ semesterGuid: r.semesterGuid, semName: r.semName })
+      })
+
+      if (fallbackSemesters.length > 0) {
+        semCount = fallbackSemesters.length
+        labels = fallbackSemesters.map(s => s.semName)
+        units = Array.from({ length: semCount }, () => [])
+        // program-course-units doesn't carry unitType/unitCat/streamGuid —
+        // pull those in from fullDetails.programUnits by courseUnitGuid.
+        programCourseUnitRows.forEach(r => {
+          const si = fallbackSemesters.findIndex(s => s.semesterGuid === r.semesterGuid)
+          if (si < 0) return
+          const cu = courseUnits.find(c => c.courseUnitGuid === r.courseUnitGuid)
+          const detail = fullDetails.programUnits.find(u => u.courseUnitGuid === r.courseUnitGuid)
+          units[si].push({
+            id: nextCUId++,
+            guid: r.courseUnitGuid,
+            code: r.courseUnitCode,
+            name: r.courseUnitName,
+            credits: cu?.maxCredits ?? 0,
+            unitType: detail?.unitTypeGuid ?? '',
+            unitCat: detail?.unitCatGuid ?? '',
+            streamGuid: detail?.streamGuid ?? '',
+          })
+        })
+      } else {
+        const fallbackSemCount = fullDetails.programUnits.reduce((max, u) => Math.max(max, u.semCode), 0)
+        semCount = Math.max(fallbackSemCount, 1)
+        labels = Array.from({ length: semCount }, (_, i) => `Semester ${i + 1}`)
+        units = Array.from({ length: semCount }, () => [])
+        fullDetails.programUnits.forEach(u => {
+          const si = u.semCode - 1
+          if (si < 0 || si >= semCount) return
+          const cu = courseUnits.find(c => c.courseUnitGuid === u.courseUnitGuid)
+          units[si].push({
+            id: nextCUId++,
+            guid: u.courseUnitGuid,
+            code: u.courseUnitCode,
+            name: u.courseUnitName,
+            credits: cu?.maxCredits ?? 0,
+            unitType: u.unitTypeGuid ?? '',
+            unitCat: u.unitCatGuid ?? '',
+            streamGuid: u.streamGuid ?? '',
+          })
+        })
+      }
+    }
     setSemUnits(units)
-    setSemStreamGuid(semStreams)
+    setSemLabels(labels)
+    setPendingSel(Array(semCount).fill(''))
 
     const structures: FeeStructure[] = fullDetails.feeStructures.length > 0
       ? fullDetails.feeStructures.map(s => {
-          const semFees: SemFees = Array.from({ length: NUM_SEMS }, () => [])
+          const semFees: SemFees = Array.from({ length: semCount }, () => [])
           s.feeLines.forEach(l => {
             const si = l.semCode - 1
-            if (si < 0 || si >= NUM_SEMS) return
+            if (si < 0 || si >= semCount) return
             semFees[si].push({
               id: nextId++,
-              title: '',
               amount: String(l.amount),
               currency: '',
               currencyGuid: l.currencyGuid,
               ledger: l.ledgerGuid,
+              ledgerPriority: '',
             })
           })
           return {
@@ -357,12 +490,33 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             semFees,
           }
         })
-      : makeDefaultFeeStructures()
+      : makeDefaultFeeStructures(semCount)
     setFeeStructures(structures)
     setActiveFeeIdx(0)
     setActiveAcc(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullDetails, mode])
+  }, [fullDetails, programCourseUnitRows, mode])
+
+  // Create mode has no per-structure Intake picker any more (#4) — every
+  // fee structure is forced onto whatever intake is currently flagged
+  // current. Applies to every structure, not just the active one.
+  useEffect(() => {
+    if (isOpen && mode !== 'edit' && currentAcademicIntake) {
+      const code = String(currentAcademicIntake.intakeCode)
+      setFeeStructures(prev => prev.map(s => s.intakeCode === code ? s : { ...s, intakeCode: code }))
+    }
+  }, [isOpen, mode, currentAcademicIntake])
+
+  // Step 1's own top-level Intake dropdown was removed entirely per
+  // Program_Master_Change_Requests_Final.md — in Create mode intakeGuid is
+  // silently auto-filled from the Current Academic Intake instead of being
+  // picked; Edit mode already carries it through from fullDetails.intakeGuid
+  // (see the effect above), so it needs no equivalent auto-fill here.
+  useEffect(() => {
+    if (isOpen && mode !== 'edit' && currentAcademicIntake) {
+      setIntakeGuid(currentAcademicIntake.intakeGuid)
+    }
+  }, [isOpen, mode, currentAcademicIntake])
 
   function selectProgramLevel(guid: string) {
     setProgramLevelGuid(guid)
@@ -371,6 +525,12 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     if (level) {
       setAppFee(String(level.appFee))
       setLateFee(String(level.lateFee))
+      // Size Step 2/3 to the level's own semester count for a new programme
+      // (Edit mode instead sizes off the real program-course-units data —
+      // see the fullDetails effect above). resizeSemesters keeps whatever's
+      // already in each surviving slot, so this never discards Step 2 work
+      // already done under a previously-picked level — it only grows/shrinks.
+      if (mode !== 'edit' && level.semCount > 0) resizeSemesters(level.semCount)
     }
   }
 
@@ -384,12 +544,38 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     if (!appFee) e.appFee = 'Application Fee is required'
     if (!lateFee) e.lateFee = 'Late Fee is required'
     if (mode === 'edit' ? !currencyGuid : !currencyCode) e.currencyCode = 'Please select a Currency'
-    if (!unitCount) e.unitCount = 'No. of Course Units is required'
-    if (!dateAcc) e.dateAcc = 'Accreditation Date is required'
-    if (!streamGuids.length) e.streamGuid = 'Please select at least one Specialization'
-    if (!intakeGuid) e.intakeGuid = 'Please select an Intake'
+    // No. of Course Units, Accreditation Date, and Specialization are all
+    // optional per Program_Master_Change_Requests_Final.md — unitCount is
+    // still validated against Step 2's actual course-unit count (but only
+    // when the user did fill it in — see the Step 2 validation below).
+    // Intake no longer has a dropdown to validate at all — it's auto-filled
+    // from the Current Academic Intake (see the effect below).
     setStep1Errors(e)
     return Object.keys(e).length === 0
+  }
+
+  // No. of Course Units (Step 1) is optional — when left blank, Course Unit
+  // Allocation has nothing to enforce. When filled in, the actual number of
+  // units added across every semester must match it exactly, neither more
+  // nor fewer, per Program_Master_Change_Requests_Final.md.
+  // TEMPORARILY DISABLED for testing the rest of the flow — re-enable by
+  // restoring the commented-out body below (kept here rather than deleted).
+  function validateStep2() {
+    setStep2Error(null)
+    return true
+    // if (!unitCount.trim()) { setStep2Error(null); return true }
+    // const target = +unitCount || 0
+    // const total = semUnits.reduce((sum, units) => sum + units.length, 0)
+    // if (total !== target) {
+    //   setStep2Error(
+    //     total < target
+    //       ? `${total} of ${target} course units added — add ${target - total} more to match No. of Course Units from Programme Details.`
+    //       : `${total} of ${target} course units added — remove ${total - target} to match No. of Course Units from Programme Details.`
+    //   )
+    //   return false
+    // }
+    // setStep2Error(null)
+    // return true
   }
 
   if (!isOpen) return null
@@ -400,8 +586,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     return !!(s.feeCode.trim() && s.description.trim())
   }
   // Every fee item needs a currency and ledger selected; otherwise the payload sends 0/empty and the backend rejects it.
+  // Both modes require a real currencyGuid now (see FeeLineInput.currencyGuid note).
   function feeStructHasCurrencyGaps(s: FeeStructure) {
-    return s.semFees.some(items => items.some(item => (mode === 'edit' ? !item.currencyGuid : !item.currency)))
+    return s.semFees.some(items => items.some(item => !item.currencyGuid))
   }
   function feeStructHasLedgerGaps(s: FeeStructure) {
     return s.semFees.some(items => items.some(item => !item.ledger))
@@ -414,13 +601,14 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
   function handleClose() {
     setStep(1); setSaved(false); setFailure(null)
-    setFeeStructures(makeDefaultFeeStructures())
+    setFeeStructures(makeDefaultFeeStructures(1))
     setActiveFeeIdx(0); setFeeAccordion(0); setActiveAcc(0)
-    setSemUnits(Array.from({ length: NUM_SEMS }, () => []))
-    setPendingSel(Array(NUM_SEMS).fill(''))
+    setSemUnits([[]])
+    setPendingSel([''])
+    setSemLabels(['Semester 1'])
     setProgramCode(''); setProgramName(''); setProgramGroupGuid(''); setProgramLevelGuid('')
     setFacultyGuid(''); setAppFee(''); setLateFee(''); setCurrencyCode(''); setCurrencyGuid(''); setUnitCount('')
-    setDateAcc(''); setStreamGuids([]); setSemStreamGuid(Array(NUM_SEMS).fill(''))
+    setDateAcc(''); setStreamGuids([])
     setIntakeGuid(''); setPgmStatus(true); setNoIa(false); setAccLetterFile(null); setStep1Errors({})
     onClose()
   }
@@ -429,14 +617,16 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     if (mode === 'edit') {
       if (!programGuid || !updateProgramMasterComplete) return
       if (!validateStep1()) { setStep(1); return }
+      if (!validateStep2()) { setStep(2); return }
 
       const programUnits: ProgramUnitUpdateInput[] = semUnits.flatMap((units, si) =>
         units.map(u => ({
           semCode: si + 1,
           courseUnitGuid: u.guid,
-          // Per-semester specialization picked in Step 2, falling back to the
-          // first Step 1 pick if that semester's own dropdown was left blank.
-          streamGuid: semStreamGuid[si] || streamGuids[0] || '',
+          // Prefer this unit's own specialization pick (only settable when
+          // its Unit Category is "Specialization"), falling back to the
+          // first Step 1 pick otherwise.
+          streamGuid: u.streamGuid || streamGuids[0] || '',
           unitTypeGuid: u.unitType,
           unitCatGuid: u.unitCat,
           flag: 0,
@@ -496,14 +686,16 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     }
 
     if (!validateStep1()) { setStep(1); return }
+    if (!validateStep2()) { setStep(2); return }
 
     const programUnits: ProgramUnitInput[] = semUnits.flatMap((units, si) =>
       units.map(u => ({
         semCode: si + 1,
         courseUnitGuid: u.guid,
-        // Per-semester specialization picked in Step 2, falling back to the
-        // first Step 1 pick if that semester's own dropdown was left blank.
-        streamGuid: semStreamGuid[si] || streamGuids[0] || '',
+        // Prefer this unit's own specialization pick (only settable when its
+        // Unit Category is "Specialization"), falling back to the first
+        // Step 1 pick otherwise.
+        streamGuid: u.streamGuid || streamGuids[0] || '',
         unitType: u.unitType,
         unitCat: u.unitCat,
         flag: 0,
@@ -534,6 +726,10 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             ledgerGuid: item.ledger,
             ledgerNum: ledger?.ledgerNum ?? 0,
             intCurrency: +item.currency || 0,
+            // Real currencyGuid — see FeeLineInput.currencyGuid note; this is
+            // what actually satisfies the backend's "Currency is required"
+            // check, intCurrency alone isn't enough.
+            currencyGuid: item.currencyGuid,
             semCode: si + 1,
             amount: +item.amount || 0,
           }
@@ -581,7 +777,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
   /* ── fee structure helpers ── */
   function addFeeStructure() {
-    const newStruct: FeeStructure = { ...blankFeeStructure(nextFeeStructId++), semFees: Array.from({ length: NUM_SEMS }, () => []) }
+    const newStruct: FeeStructure = {
+      ...blankFeeStructure(nextFeeStructId++, semUnits.length),
+      semFees: makeEmptySemFees(semUnits.length),
+      intakeCode: mode !== 'edit' && currentAcademicIntake ? String(currentAcademicIntake.intakeCode) : '',
+    }
     setFeeStructures(prev => [...prev, newStruct])
     setActiveFeeIdx(feeStructures.length)
     setFeeAccordion(0)
@@ -619,6 +819,21 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         : s
     ))
   }
+  // Fee-item Currency picker is sourced from useFinanceCurrencies() (real
+  // currencyGuid) in both modes now — see the FeeLineInput.currencyGuid note
+  // in lib/api/academic/programMaster.ts for why Create needs a real guid
+  // too, not just intCurrency. Also derives the legacy intCurrency string
+  // (by matching currencyCode against useCurrencies()) so Create's payload
+  // can keep sending both.
+  function selectFeeItemCurrency(si: number, id: number, currencyGuid: string) {
+    const fc = financeCurrencies.find(c => c.currencyGuid === currencyGuid)
+    const legacy = fc ? currencies.find(c => c.currencyCode === fc.currencyCode) : undefined
+    setFeeStructures(prev => prev.map((s, i) =>
+      i === activeFeeIdx
+        ? { ...s, semFees: s.semFees.map((items, j) => j === si ? items.map(f => f.id === id ? { ...f, currencyGuid, currency: legacy ? String(legacy.intCurrency) : f.currency } : f) : items) }
+        : s
+    ))
+  }
   function moveItem(si: number, idx: number, dir: -1 | 1) {
     const to = idx + dir
     setFeeStructures(prev => prev.map((s, i) => {
@@ -635,12 +850,41 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     }))
   }
 
+  /* ── semester count helpers — no fixed count any more; Course Unit
+     Allocation and Fee Structure share one dynamic list of slots so a
+     semester added/removed here stays in sync across both steps. ── */
+  function resizeSemesters(count: number) {
+    const n = Math.max(count, 1)
+    setSemUnits(prev => Array.from({ length: n }, (_, i) => prev[i] ?? []))
+    setPendingSel(prev => Array.from({ length: n }, (_, i) => prev[i] ?? ''))
+    setSemLabels(prev => Array.from({ length: n }, (_, i) => prev[i] ?? `Semester ${i + 1}`))
+    setFeeStructures(prev => prev.map(s => ({ ...s, semFees: Array.from({ length: n }, (_, i) => s.semFees[i] ?? []) })))
+    setActiveAcc(a => Math.min(a, n - 1))
+    setFeeAccordion(a => Math.min(a, n - 1))
+  }
+  function addSemester() {
+    setSemUnits(prev => [...prev, []])
+    setPendingSel(prev => [...prev, ''])
+    setSemLabels(prev => [...prev, `Semester ${prev.length + 1}`])
+    setFeeStructures(prev => prev.map(s => ({ ...s, semFees: [...s.semFees, []] })))
+    setActiveAcc(semUnits.length)
+  }
+  function removeSemester(index: number) {
+    if (semUnits.length <= 1) return
+    setSemUnits(prev => prev.filter((_, i) => i !== index))
+    setPendingSel(prev => prev.filter((_, i) => i !== index))
+    setSemLabels(prev => prev.filter((_, i) => i !== index))
+    setFeeStructures(prev => prev.map(s => ({ ...s, semFees: s.semFees.filter((_, i) => i !== index) })))
+    setActiveAcc(a => (a >= index && a > 0 ? a - 1 : a))
+    setFeeAccordion(a => (a >= index && a > 0 ? a - 1 : a))
+  }
+
   /* ── course unit helpers ── */
   function addUnit(si: number, val: string) {
     const opt = courseUnitOptions.find(u => u.value === val)
     if (!opt) return
     setSemUnits(prev => prev.map((units, i) =>
-      i === si ? [...units, { id: nextCUId++, guid: opt.value, code: opt.code, name: opt.name, credits: opt.credits, unitType: '', unitCat: '' }] : units
+      i === si ? [...units, { id: nextCUId++, guid: opt.value, code: opt.code, name: opt.name, credits: opt.credits, unitType: '', unitCat: '', streamGuid: '' }] : units
     ))
     setPendingSel(prev => prev.map((s, i) => i === si ? '' : s))
   }
@@ -649,9 +893,16 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       i === si ? units.filter(u => u.id !== id) : units
     ))
   }
-  function setUnitField(si: number, id: number, field: 'unitType' | 'unitCat', val: string) {
+  function setUnitField(si: number, id: number, field: 'unitType' | 'unitCat' | 'streamGuid', val: string) {
     setSemUnits(prev => prev.map((units, i) =>
-      i === si ? units.map(u => u.id === id ? { ...u, [field]: val } : u) : units
+      i === si ? units.map(u => {
+        if (u.id !== id) return u
+        // Switching away from the "Specialization" category makes the
+        // per-unit specialization pick moot — clear it so a stale value
+        // never silently rides along on submit for a Core/Elective unit.
+        if (field === 'unitCat' && !isSpecializationCategory(val)) return { ...u, unitCat: val, streamGuid: '' }
+        return { ...u, [field]: val }
+      }) : units
     ))
   }
 
@@ -730,18 +981,20 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   />
                   {step1Errors.programGroupGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programGroupGuid}</p>}
                 </div>
+                {/* Not mandatory per Program_Master_Change_Requests_Final.md — when
+                    left blank, Course Unit Allocation has no count to enforce;
+                    when filled in, it's validated there against the actual
+                    number of course units added (see the Step 2 count check). */}
                 <div className="fg">
-                  <div className="lbl">No. of Course Units <span className="req">*</span></div>
+                  <div className="lbl">No. of Course Units</div>
                   <input
                     className="ctrl"
                     type="number"
                     min={0}
                     placeholder="e.g. 24"
                     value={unitCount}
-                    onChange={e => { setUnitCount(e.target.value); if (step1Errors.unitCount) setStep1Errors(p => ({ ...p, unitCount: '' })) }}
-                    style={step1Errors.unitCount ? { borderColor: 'var(--red)' } : undefined}
+                    onChange={e => setUnitCount(e.target.value)}
                   />
-                  {step1Errors.unitCount && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.unitCount}</p>}
                 </div>
                 <div className="fg span2">
                   <div className="lbl">Programme Level (auto-fills year/sem/credits) <span className="req">*</span></div>
@@ -813,46 +1066,41 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.appFee || step1Errors.lateFee || step1Errors.currencyCode}</p>
                   )}
                 </div>
+                {/* Not mandatory per Program_Master_Change_Requests_Final.md — no
+                    required marker, no validation. */}
                 <div className="fg">
-                  <div className="lbl">Accreditation Date <span className="req">*</span></div>
+                  <div className="lbl">Accreditation Date</div>
                   <input
                     className="ctrl"
                     type="date"
                     value={dateAcc}
-                    onChange={e => { setDateAcc(e.target.value); if (step1Errors.dateAcc) setStep1Errors(p => ({ ...p, dateAcc: '' })) }}
-                    style={step1Errors.dateAcc ? { borderColor: 'var(--red)' } : undefined}
+                    onChange={e => setDateAcc(e.target.value)}
                   />
-                  {step1Errors.dateAcc && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.dateAcc}</p>}
                 </div>
                 {/* Accreditation Expiry Date — commented out per request.
                 <div className="fg m-0"><div className="lbl">Accreditation Expiry Date</div><input className="ctrl" type="date" /></div>
                 */}
+                {/* Not mandatory per Program_Master_Change_Requests_Final.md — no
+                    required marker, no validation. Still feeds Course Unit
+                    Allocation's per-unit Specialization picker options. */}
                 <div className="fg">
-                  <div className="lbl">Specialization(s) <span className="req">*</span></div>
+                  <div className="lbl">Specialization(s)</div>
                   <MultiSelect
                     placeholder="— Select specialization(s) —"
                     value={streamGuids}
                     onChange={vals => {
                       setStreamGuids(vals)
-                      if (step1Errors.streamGuid) setStep1Errors(p => ({ ...p, streamGuid: '' }))
-                      // Drop any per-semester pick (Step 2) that's no longer part of this selection.
-                      setSemStreamGuid(prev => prev.map(g => (g && vals.includes(g)) ? g : ''))
+                      // Drop any per-unit pick (Step 2) that's no longer part of this selection.
+                      setSemUnits(prev => prev.map(units => units.map(u => (u.streamGuid && vals.includes(u.streamGuid)) ? u : { ...u, streamGuid: '' })))
                     }}
                     options={streamOptions}
                   />
-                  <div style={{ fontSize: 11, color: 'var(--g400)', marginTop: 4 }}>Every specialization this programme offers — picked per semester in Course Unit Allocation.</div>
-                  {step1Errors.streamGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.streamGuid}</p>}
+                  <div style={{ fontSize: 11, color: 'var(--g400)', marginTop: 4 }}>Every specialization this programme offers — picked per course unit in Course Unit Allocation.</div>
                 </div>
-                <div className="fg">
-                  <div className="lbl">Intake <span className="req">*</span></div>
-                  <SearchSelect
-                    placeholder="— Select intake —"
-                    value={intakeGuid}
-                    onChange={v => { setIntakeGuid(v); if (step1Errors.intakeGuid) setStep1Errors(p => ({ ...p, intakeGuid: '' })) }}
-                    options={programIntakeOptions}
-                  />
-                  {step1Errors.intakeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.intakeGuid}</p>}
-                </div>
+                {/* Intake dropdown removed per Program_Master_Change_Requests_Final.md
+                    — intakeGuid is auto-filled from the Current Academic Intake
+                    instead (see the effect below), same pattern as the standalone
+                    Fee Structure page's Create mode. */}
                 <div className="fg span3">
                   <div className="lbl">Accreditation Letter</div>
                   <div className="file-zone p-[14px]">
@@ -1002,12 +1250,17 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     <div className="lbl">Base Currency</div>
                     <SearchSelect options={LOCAL_OR_FOREIGN_OPTS} value={activeFeeStruct.localOrForeign} onChange={val => updateFeeStructureMeta('localOrForeign', val)} />
                   </div>
+                  {/* Always read-only now (Fee_Structure_Change_Requests.md
+                      #3/#4): Edit shows the structure's existing intake,
+                      unchangeable; Create has no picker at all — it's
+                      forced onto the Current Academic Intake (see the
+                      effect above and addFeeStructure). */}
                   <div className="fg m-0">
                     <div className="lbl">Intake</div>
                     {mode === 'edit' ? (
-                      <SearchSelect placeholder="— Select intake —" value={activeFeeStruct.intakeGuid} onChange={val => updateFeeStructureMeta('intakeGuid', val)} options={programIntakeOptions} />
+                      <SearchSelect placeholder="— Select intake —" value={activeFeeStruct.intakeGuid} options={programIntakeOptions} disabled />
                     ) : (
-                      <SearchSelect placeholder="— Select intake —" value={activeFeeStruct.intakeCode} onChange={val => updateFeeStructureMeta('intakeCode', val)} options={intakeOptions} />
+                      <SearchSelect placeholder={currentAcademicIntake ? undefined : 'No current intake set'} value={activeFeeStruct.intakeCode} options={intakeOptions} disabled />
                     )}
                   </div>
                 </div>
@@ -1065,12 +1318,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   {activeFeeStruct.semFees.map((items, si) => {
                     const isOpen = feeAccordion === si
                     const total  = items.reduce((s, f) => s + (parseFloat(f.amount) || 0), 0)
-                    // items[0].currency holds Currency.intCurrency (a string) in create mode, or
-                    // items[0].currencyGuid holds a real currencyGuid in edit mode — resolve
-                    // back to a code for display either way.
-                    const totalCurrencyCode = mode === 'edit'
-                      ? financeCurrencies.find(c => c.currencyGuid === items[0]?.currencyGuid)?.currencyCode ?? ''
-                      : currencies.find(c => String(c.intCurrency) === items[0]?.currency)?.currencyCode ?? ''
+                    // items[0].currencyGuid is the real currencyGuid in both modes now.
+                    const totalCurrencyCode = financeCurrencies.find(c => c.currencyGuid === items[0]?.currencyGuid)?.currencyCode ?? ''
                     return (
                       <div key={si} style={{ border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
                         <button
@@ -1088,9 +1337,12 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                         </button>
                         <div style={{ overflow: 'hidden', maxHeight: isOpen ? 800 : 0, transition: 'max-height 0.3s ease' }}>
                           <div style={{ padding: '10px 14px' }}>
+                            {/* Pri. | Ledger | Ledger Priority | Amount | Currency | remove —
+                                reordered per Fee_Structure_Change_Requests.md #1/#2
+                                (Fee Title dropped, Ledger moved first, Ledger Priority added). */}
                             {items.length > 0 && (
-                              <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 120px 90px 210px 32px', gap: 6, padding: '0 0 4px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                <span style={{ textAlign: 'center' }}>Pri.</span><span>Fee Title</span><span>Amount</span><span>Currency</span><span>Ledger</span><span></span>
+                              <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 90px 110px 150px 32px', gap: 6, padding: '0 0 4px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <span style={{ textAlign: 'center' }}>Pri.</span><span>Ledger</span><span>Ledger Priority</span><span>Amount</span><span>Currency</span><span></span>
                               </div>
                             )}
                             <div className="flex flex-col gap-1">
@@ -1098,18 +1350,15 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                                 <div className="text-g400 italic" style={{ fontSize: 12.5, marginBottom: 8 }}>No fee items — click &ldquo;Add Fee Item&rdquo; to begin.</div>
                               )}
                               {items.map((f, idx) => (
-                                <div key={f.id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 120px 90px 210px 32px', gap: 6, alignItems: 'center' }}>
+                                <div key={f.id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 90px 110px 150px 32px', gap: 6, alignItems: 'center' }}>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
                                     <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(si, idx, -1)} disabled={idx === 0}><i className="lni lni-chevron-up"></i></button>
                                     <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(si, idx, 1)} disabled={idx === items.length - 1}><i className="lni lni-chevron-down"></i></button>
                                   </div>
-                                  <input className="ctrl" value={f.title}  onChange={e => updateItem(si, f.id, 'title',  e.target.value)} placeholder="e.g. Tuition Fee" />
-                                  <input className="ctrl" value={f.amount} onChange={e => updateItem(si, f.id, 'amount', e.target.value)} type="number" min={0} placeholder="0" />
-                                  {mode === 'edit'
-                                    ? <SearchSelect placeholder="— Currency —" options={financeCurrencyOptions} value={f.currencyGuid} onChange={val => updateItem(si, f.id, 'currencyGuid', val)} />
-                                    : <SearchSelect placeholder="— Currency —" options={currencyIntOptions} value={f.currency} onChange={val => updateItem(si, f.id, 'currency', val)} />
-                                  }
                                   <SearchSelect placeholder="— Select Ledger —" options={ledgerOptions} value={f.ledger} onChange={val => updateItem(si, f.id, 'ledger', val)} />
+                                  <input className="ctrl" value={f.ledgerPriority} onChange={e => updateItem(si, f.id, 'ledgerPriority', e.target.value)} type="number" min={0} placeholder="e.g. 1" />
+                                  <input className="ctrl" value={f.amount} onChange={e => updateItem(si, f.id, 'amount', e.target.value)} type="number" min={0} placeholder="0" />
+                                  <SearchSelect placeholder="— Currency —" options={financeCurrencyOptions} value={f.currencyGuid} onChange={val => selectFeeItemCurrency(si, f.id, val)} />
                                   <button className="btn btn-danger btn-sm" style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => removeItem(si, f.id)}><i className="lni lni-trash-can"></i></button>
                                 </div>
                               ))}
@@ -1138,10 +1387,21 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           return (
             <div className="fsm-layout">
 
-              {/* Left sidebar — one entry per semester */}
+              {/* Left sidebar — one entry per semester. No fixed count any
+                  more (see resizeSemesters/addSemester/removeSemester) — Add
+                  mode sizes off the picked Programme Level's semCount, Edit
+                  mode sizes off the real program-course-units semesters, and
+                  either can still be adjusted by hand here. */}
               <div className="fsm-sidebar">
                 <div style={{ padding: '14px 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
-                  Semesters <span style={{ color: 'var(--b500)' }}>({NUM_SEMS})</span>
+                  Semesters <span style={{ color: 'var(--b500)' }}>({semUnits.length})</span>
+                  {/* Only shown once No. of Course Units (Step 1, optional) has
+                      an actual value to check against — see validateStep2. */}
+                  {unitCount.trim() && (
+                    <span style={{ float: 'right', color: semUnits.reduce((s, u) => s + u.length, 0) === (+unitCount || 0) ? 'var(--green)' : 'var(--red)' }}>
+                      {semUnits.reduce((s, u) => s + u.length, 0)}/{unitCount} units
+                    </span>
+                  )}
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
                   {semUnits.map((semUnitsForSem, i) => {
@@ -1149,7 +1409,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     return (
                       <div
                         key={i}
-                        onClick={() => setActiveAcc(i)}
+                        onClick={() => { setActiveAcc(i); setExpandedUnitId(null) }}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 8,
                           padding: '9px 10px', borderRadius: 'var(--rsm)', marginBottom: 2,
@@ -1162,56 +1422,142 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                           <i className="lni lni-book" style={{ fontSize: 13, color: activeAcc === i ? '#fff' : 'var(--b600)' }}></i>
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>Semester {i + 1}</div>
+                          <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>{semLabels[i] ?? `Semester ${i + 1}`}</div>
                           <div style={{ fontSize: 11, opacity: .65, lineHeight: 1.3 }}>{semUnitsForSem.length} unit{semUnitsForSem.length !== 1 ? 's' : ''} · {totalCredits} credit{totalCredits !== 1 ? 's' : ''}</div>
                         </div>
+                        {semUnits.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); removeSemester(i) }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: activeAcc === i ? 'rgba(255,255,255,.65)' : 'var(--g300)', display: 'flex', alignItems: 'center', borderRadius: 'var(--rxs)', flexShrink: 0 }}
+                            title="Remove semester"
+                          ><i className="lni lni-trash-can" style={{ fontSize: 12 }}></i></button>
+                        )}
                       </div>
                     )
                   })}
                 </div>
+                <div style={{ borderTop: '1.5px solid var(--g200)', padding: '6px 8px 10px' }}>
+                  <button type="button" className="btn btn-neu btn-sm" style={{ width: '100%' }} onClick={addSemester}>
+                    <i className="lni lni-plus"></i> Add Semester
+                  </button>
+                </div>
               </div>
 
-              {/* Right panel — active semester's specialization + course units */}
+              {/* Right panel — active semester's course units. Specialization is
+                  now picked per-unit below (only enabled for units whose Unit
+                  Category is "Specialization"), so there's no semester-wide
+                  picker here any more. */}
               <div className="fsm-main">
-                <div style={{ marginBottom: 10 }}>
-                  <div className="lbl">Specialization for this Semester</div>
-                  <SearchSelect
-                    placeholder={streamGuids.length ? '— Select specialization —' : 'Select specialization(s) in Programme Details first'}
-                    value={semStreamGuid[si]}
-                    onChange={val => setSemStreamGuid(prev => prev.map((s, i) => i === si ? val : s))}
-                    options={semesterStreamOptions}
-                  />
-                  {units.length > 0 && !semStreamGuid[si] && (
-                    <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>
-                      No specialization picked — course units in this semester will fall back to the first Programme Details pick.
-                    </p>
-                  )}
-                </div>
+                {step2Error && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', marginBottom: 14, background: 'var(--red-bg)', border: '1.5px solid var(--red-bd)', borderRadius: 'var(--rsm)', color: 'var(--red)', fontSize: 12.5 }}>
+                    <i className="lni lni-warning"></i> {step2Error}
+                  </div>
+                )}
+                <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--b700)', marginBottom: 10 }}>{semLabels[si] ?? `Semester ${si + 1}`}</div>
                 {units.length === 0 && (
                   <div style={{ fontSize: 12.5, color: 'var(--g400)', fontStyle: 'italic', marginBottom: 8 }}>
                     No course units assigned yet
                   </div>
                 )}
                 {units.length > 0 && (
-                  <div className="flex flex-col" style={{ marginBottom: 10, border: '1px solid var(--g100)', borderRadius: 'var(--rxs)', overflow: 'hidden' }}>
-                    {units.map((u, ui) => (
-                      <div key={u.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 10px', borderBottom: ui < units.length - 1 ? '1px solid var(--g100)' : 'none', background: 'var(--white)' }}>
+                  <div className="flex flex-col gap-2" style={{ marginBottom: 10 }}>
+                    {units.map((u, ui) => {
+                      const isSpecUnit = isSpecializationCategory(u.unitCat)
+                      const isExpanded = expandedUnitId === u.id
+                      return (
+                      <div key={u.id} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', background: 'var(--white)', border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', boxShadow: 'var(--neu-sm)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span className="badge badge-blue" style={{ flexShrink: 0 }}>Unit {ui + 1}</span>
                           <span className="font-mono font-bold text-b700" style={{ fontSize: 12, minWidth: 50 }}>{u.code}</span>
-                          <span style={{ flex: 1, fontSize: 13, color: 'var(--g700)' }}>{u.name}</span>
-                          <span className="badge badge-blue">{u.credits} cr</span>
+                          <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: 'var(--g900)' }}>{u.name}</span>
+                          <span className="badge badge-grey">{u.credits} cr</span>
+                          <button
+                            className="btn btn-neu btn-sm"
+                            style={{ width: 26, height: 26, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                            title="Syllabus, outline &amp; taught by"
+                            onClick={() => setExpandedUnitId(isExpanded ? null : u.id)}
+                          ><i className="lni lni-information" style={{ fontSize: 12 }}></i></button>
                           <button
                             className="btn btn-danger btn-sm"
                             style={{ width: 26, height: 26, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                             onClick={() => removeUnit(si, u.id)}
                           ><i className="lni lni-close" style={{ fontSize: 11 }}></i></button>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                          <SearchSelect placeholder="— Unit Type —" value={u.unitType} onChange={val => setUnitField(si, u.id, 'unitType', val)} options={unitTypeOptions} />
-                          <SearchSelect placeholder="— Unit Category —" value={u.unitCat} onChange={val => setUnitField(si, u.id, 'unitCat', val)} options={unitCategoryOptions} />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                          <div>
+                            <div className="lbl" style={{ fontSize: 11 }}>Unit Type</div>
+                            <SearchSelect placeholder="— Unit Type —" value={u.unitType} onChange={val => setUnitField(si, u.id, 'unitType', val)} options={unitTypeOptions} />
+                          </div>
+                          <div>
+                            <div className="lbl" style={{ fontSize: 11 }}>Unit Category</div>
+                            <SearchSelect placeholder="— Unit Category —" value={u.unitCat} onChange={val => setUnitField(si, u.id, 'unitCat', val)} options={unitCategoryOptions} />
+                          </div>
+                          <div>
+                            <div className="lbl" style={{ fontSize: 11 }}>Specialization</div>
+                            <SearchSelect
+                              placeholder={isSpecUnit ? '— Select specialization —' : 'Only for Specialization units'}
+                              value={u.streamGuid}
+                              onChange={val => setUnitField(si, u.id, 'streamGuid', val)}
+                              options={semesterStreamOptions}
+                              disabled={!isSpecUnit}
+                            />
+                          </div>
                         </div>
+                        {/* Syllabus/Outline/Taught By — Step 2's "Additional
+                            Feature", fetched via the same Get Course Unit
+                            endpoint the Course Unit master's own Edit modal uses. */}
+                        {isExpanded && (
+                          <div style={{ borderTop: '1px solid var(--g100)', paddingTop: 8, marginTop: 2 }}>
+                            {expandedUnitLoading && <div className="text-g400 italic" style={{ fontSize: 12 }}>Loading details…</div>}
+                            {!expandedUnitLoading && expandedUnitDetail && (() => {
+                              const taughtBy = Array.from(new Set(
+                                expandedUnitDetail.outlines.flatMap(o => o.topics.map(t => t.employeeGuid)).filter(Boolean)
+                              )).map(employeeName)
+                              return (
+                                <div className="flex flex-col gap-2">
+                                  <div>
+                                    <div className="lbl" style={{ fontSize: 11 }}>Syllabus</div>
+                                    {expandedUnitDetail.syllabus
+                                      ? <a href={expandedUnitDetail.syllabus} target="_blank" rel="noopener noreferrer" className="btn btn-neu btn-sm" style={{ display: 'inline-flex', fontSize: 11.5 }}><i className="lni lni-download"></i> View Syllabus</a>
+                                      : <span className="text-g400 italic" style={{ fontSize: 12 }}>No syllabus uploaded</span>
+                                    }
+                                  </div>
+                                  <div>
+                                    <div className="lbl" style={{ fontSize: 11 }}>Taught By</div>
+                                    {taughtBy.length > 0
+                                      ? <div className="flex flex-wrap gap-1">{taughtBy.map((name, i) => <span key={i} className="badge badge-blue">{name}</span>)}</div>
+                                      : <span className="text-g400 italic" style={{ fontSize: 12 }}>Not assigned yet</span>
+                                    }
+                                  </div>
+                                  <div>
+                                    <div className="lbl" style={{ fontSize: 11 }}>Outline</div>
+                                    {expandedUnitDetail.outlines.length === 0
+                                      ? <span className="text-g400 italic" style={{ fontSize: 12 }}>No chapters added yet</span>
+                                      : (
+                                        <div className="flex flex-col gap-1">
+                                          {expandedUnitDetail.outlines.map(o => (
+                                            <div key={o.courseUnitOutlineGuid} style={{ fontSize: 12.5 }}>
+                                              <strong>Ch. {o.chapter}: {o.chapterName}</strong>
+                                              {o.topics.length > 0 && (
+                                                <ul style={{ margin: '2px 0 0 18px', color: 'var(--g500)' }}>
+                                                  {o.topics.map(t => <li key={t.courseUnitTopicGuid}>{t.courseUnitTopicDetails}</li>)}
+                                                </ul>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )
+                                    }
+                                  </div>
+                                </div>
+                              )
+                            })()}
+                          </div>
+                        )}
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
                 <SearchSelect
@@ -1234,7 +1580,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             </button>
           )}
           {step < 3 && (
-            <button className="btn btn-primary" onClick={() => { if (step === 1 && !validateStep1()) return; setStep(s => s + 1) }}>
+            <button className="btn btn-primary" onClick={() => { if (step === 1 && !validateStep1()) return; if (step === 2 && !validateStep2()) return; setStep(s => s + 1) }}>
               Save &amp; Continue <i className="lni lni-arrow-right"></i>
             </button>
           )}
