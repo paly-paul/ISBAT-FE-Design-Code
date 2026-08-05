@@ -4,6 +4,7 @@ import {
   getOutstandingLedgers,
   getPayableLedgers,
   getPaymentHistory,
+  getPaymentHistoryList,
   getStudentProfile,
   searchStudents,
   PaymentInput,
@@ -44,6 +45,19 @@ export function usePaymentHistory(applicationGuid: string | null, enabled: boole
   })
 }
 
+// Cross-application ledger (GET .../payment-history, no guid) — genuinely
+// distinct from usePaymentHistory(applicationGuid, enabled) above, see the
+// getPaymentHistoryList() comment in lib/api/finance/paymentConsole.ts.
+// Backs the standalone /finance/payment-history page's server-side pagination
+// (the real totalCount runs into six figures — fetch-all-client-side, the old
+// mock page's approach, isn't viable here).
+export function usePaymentHistoryList(pageNumber: number, pageSize: number) {
+  return useQuery({
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'payment-history-list', pageNumber, pageSize],
+    queryFn: () => getPaymentHistoryList(pageNumber, pageSize),
+  })
+}
+
 // params is expected to already be debounced by the caller (Step 3's Amount/
 // Currency/Date fields change on every keystroke — this hook itself doesn't
 // debounce, it just fetches whatever params it's given).
@@ -68,5 +82,5 @@ export function useCreatePayment() {
   })
 }
 
-export type { ApplicationSummary, OutstandingLedger, PayableLedgerLine, PayableLedgersParams, PaymentHistoryEntry, PaymentInput, PaymentResult, StudentProfile } from '@/lib/api/finance/paymentConsole'
+export type { ApplicationSummary, OutstandingLedger, PayableLedgerLine, PayableLedgersParams, PaymentHistoryEntry, PaymentHistoryListEntry, PaymentInput, PaymentResult, StudentProfile } from '@/lib/api/finance/paymentConsole'
 export { PAYMENT_CATEGORY_LABELS, PAY_TYPE_LABELS } from '@/lib/api/finance/paymentConsole'

@@ -1492,7 +1492,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   <div className="flex flex-col gap-2" style={{ marginBottom: 10 }}>
                     {units.map((u, ui) => {
                       const isSpecUnit = isSpecializationCategory(u.unitCat)
-                      const isExpanded = expandedUnitId === u.id
                       return (
                       <div key={u.id} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', background: 'var(--white)', border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', boxShadow: 'var(--neu-sm)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1500,11 +1499,15 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                           <span className="font-mono font-bold text-b700" style={{ fontSize: 12, minWidth: 50 }}>{u.code}</span>
                           <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: 'var(--g900)' }}>{u.name}</span>
                           <span className="badge badge-grey">{u.credits} cr</span>
+                          {/* Syllabus/Outline/Taught By — Step 2's "Additional Feature", opened
+                              in a popup (see the fixed overlay near the end of this component)
+                              rather than expanded inline, so browsing several units' details in a
+                              row doesn't keep growing this semester's scroll height. */}
                           <button
                             className="btn btn-neu btn-sm"
                             style={{ width: 26, height: 26, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                             title="Syllabus, outline &amp; taught by"
-                            onClick={() => setExpandedUnitId(isExpanded ? null : u.id)}
+                            onClick={() => setExpandedUnitId(u.id)}
                           ><i className="lni lni-information" style={{ fontSize: 12 }}></i></button>
                           <button
                             className="btn btn-danger btn-sm"
@@ -1532,57 +1535,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                             />
                           </div>
                         </div>
-                        {/* Syllabus/Outline/Taught By — Step 2's "Additional
-                            Feature", fetched via the same Get Course Unit
-                            endpoint the Course Unit master's own Edit modal uses. */}
-                        {isExpanded && (
-                          <div style={{ borderTop: '1px solid var(--g100)', paddingTop: 8, marginTop: 2 }}>
-                            {expandedUnitLoading && <div className="text-g400 italic" style={{ fontSize: 12 }}>Loading details…</div>}
-                            {!expandedUnitLoading && expandedUnitDetail && (() => {
-                              const taughtBy = Array.from(new Set(
-                                expandedUnitDetail.outlines.flatMap(o => o.topics.map(t => t.employeeGuid)).filter(Boolean)
-                              )).map(employeeName)
-                              return (
-                                <div className="flex flex-col gap-2">
-                                  <div>
-                                    <div className="lbl" style={{ fontSize: 11 }}>Syllabus</div>
-                                    {expandedUnitDetail.syllabus
-                                      ? <a href={expandedUnitDetail.syllabus} target="_blank" rel="noopener noreferrer" className="btn btn-neu btn-sm" style={{ display: 'inline-flex', fontSize: 11.5 }}><i className="lni lni-download"></i> View Syllabus</a>
-                                      : <span className="text-g400 italic" style={{ fontSize: 12 }}>No syllabus uploaded</span>
-                                    }
-                                  </div>
-                                  <div>
-                                    <div className="lbl" style={{ fontSize: 11 }}>Taught By</div>
-                                    {taughtBy.length > 0
-                                      ? <div className="flex flex-wrap gap-1">{taughtBy.map((name, i) => <span key={i} className="badge badge-blue">{name}</span>)}</div>
-                                      : <span className="text-g400 italic" style={{ fontSize: 12 }}>Not assigned yet</span>
-                                    }
-                                  </div>
-                                  <div>
-                                    <div className="lbl" style={{ fontSize: 11 }}>Outline</div>
-                                    {expandedUnitDetail.outlines.length === 0
-                                      ? <span className="text-g400 italic" style={{ fontSize: 12 }}>No chapters added yet</span>
-                                      : (
-                                        <div className="flex flex-col gap-1">
-                                          {expandedUnitDetail.outlines.map(o => (
-                                            <div key={o.courseUnitOutlineGuid} style={{ fontSize: 12.5 }}>
-                                              <strong>Ch. {o.chapter}: {o.chapterName}</strong>
-                                              {o.topics.length > 0 && (
-                                                <ul style={{ margin: '2px 0 0 18px', color: 'var(--g500)' }}>
-                                                  {o.topics.map(t => <li key={t.courseUnitTopicGuid}>{t.courseUnitTopicDetails}</li>)}
-                                                </ul>
-                                              )}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )
-                                    }
-                                  </div>
-                                </div>
-                              )
-                            })()}
-                          </div>
-                        )}
                       </div>
                       )
                     })}
@@ -1622,6 +1574,82 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           )}
         </div>
       </div>
+
+      {/* Syllabus/Outline/Taught By popup — a separate overlay (not an inline
+          expand inside the unit card) so paging through several units'
+          details in a row doesn't keep growing Step 2's scroll height. Sits
+          above .modal-overlay's own z-index (500). */}
+      {expandedUnit && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 700, padding: 20 }}
+          onClick={() => setExpandedUnitId(null)}
+        >
+          <div
+            style={{ background: 'var(--white)', borderRadius: 'var(--radius)', boxShadow: '0 20px 60px rgba(15, 30, 61, .25)', width: '100%', maxWidth: 520, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: '1.5px solid var(--g200)', flexShrink: 0 }}>
+              <span className="font-mono font-bold text-b700" style={{ fontSize: 12.5 }}>{expandedUnit.code}</span>
+              <span style={{ flex: 1, fontSize: 15, fontWeight: 700, color: 'var(--g900)' }}>{expandedUnit.name}</span>
+              <button className="modal-close" onClick={() => setExpandedUnitId(null)}><i className="lni lni-close"></i></button>
+            </div>
+            <div style={{ padding: '16px 18px', overflowY: 'auto' }}>
+              {expandedUnitLoading && <div className="text-g400 italic" style={{ fontSize: 12 }}>Loading details…</div>}
+              {!expandedUnitLoading && expandedUnitDetail && (() => {
+                const taughtBy = Array.from(new Set(
+                  expandedUnitDetail.outlines.flatMap(o => o.topics.map(t => t.employeeGuid)).filter(Boolean)
+                )).map(employeeName)
+                return (
+                  <div className="flex flex-col gap-3">
+                    <div>
+                      <div className="lbl" style={{ fontSize: 11 }}>Syllabus</div>
+                      {expandedUnitDetail.syllabus
+                        ? <a href={expandedUnitDetail.syllabus} target="_blank" rel="noopener noreferrer" className="btn btn-neu btn-sm" style={{ display: 'inline-flex', fontSize: 11.5 }}><i className="lni lni-download"></i> View Syllabus</a>
+                        : <span className="text-g400 italic" style={{ fontSize: 12 }}>No syllabus uploaded</span>
+                      }
+                    </div>
+                    <div>
+                      <div className="lbl" style={{ fontSize: 11 }}>Taught By</div>
+                      {taughtBy.length > 0
+                        ? <div className="flex flex-wrap gap-1">{taughtBy.map((name, i) => <span key={i} className="badge badge-blue">{name}</span>)}</div>
+                        : <span className="text-g400 italic" style={{ fontSize: 12 }}>Not assigned yet</span>
+                      }
+                    </div>
+                    <div>
+                      <div className="lbl" style={{ fontSize: 11 }}>Outline</div>
+                      {expandedUnitDetail.outlines.length === 0
+                        ? <span className="text-g400 italic" style={{ fontSize: 12 }}>No chapters added yet</span>
+                        : (
+                          <div className="flex flex-col gap-2" style={{ marginTop: 4 }}>
+                            {expandedUnitDetail.outlines.map(o => (
+                              <div key={o.courseUnitOutlineGuid} style={{ background: 'var(--g100)', border: '1px solid var(--g200)', borderRadius: 'var(--rxs)', padding: '8px 10px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span className="badge badge-grey" style={{ fontSize: 10.5, padding: '1px 7px', flexShrink: 0 }}>Ch. {o.chapter}</span>
+                                  <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--g900)' }}>{o.chapterName}</span>
+                                </div>
+                                {o.topics.length > 0 && (
+                                  <ul style={{ margin: '6px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    {o.topics.map(t => (
+                                      <li key={t.courseUnitTopicGuid} style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 12, color: 'var(--g500)', lineHeight: 1.4 }}>
+                                        <span style={{ color: 'var(--g300)', flexShrink: 0 }}>•</span>
+                                        <span>{t.courseUnitTopicDetails}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      }
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

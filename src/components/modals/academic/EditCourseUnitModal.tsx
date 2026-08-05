@@ -10,11 +10,15 @@ import { useRepetitionTags } from '@/hooks/academic/useRepetitionTags'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
 
-type Topic   = { name: string; studySeq: string; taughtBy: string }
+type Topic   = { name: string; taughtBy: string }
 type Chapter = { title: string; topics: Topic[] }
 
-function blankTopic(): Topic   { return { name: '', studySeq: '', taughtBy: '' } }
-function blankChapter(n: number): Chapter { return { title: `Chapter ${n}`, topics: [blankTopic()] } }
+// Study Sequence is not user-editable — it's always the topic's 1-based
+// position within its chapter (see the read-only "Study Sequence" column
+// in Step 2), so the payload derives it from array index rather than
+// carrying it as separate per-topic state.
+function blankTopic(): Topic   { return { name: '', taughtBy: '' } }
+function blankChapter(): Chapter { return { title: '', topics: [blankTopic()] } }
 
 interface EditCourseUnitModalProps extends ModalProps {
   courseUnitGuid: string | null
@@ -30,7 +34,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
   const [saved, setSaved]               = useState(false)
   const [failure, setFailure]           = useState<string | null>(null)
   const [step, setStep]                 = useState(1)
-  const [chapters, setChapters]         = useState<Chapter[]>([blankChapter(1)])
+  const [chapters, setChapters]         = useState<Chapter[]>([blankChapter()])
   const [activeChapterIdx, setActiveChapterIdx] = useState(0)
   const [unitCode, setUnitCode]         = useState('')
   const [unitName, setUnitName]         = useState('')
@@ -83,9 +87,15 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
       courseUnit.outlines.length
         ? courseUnit.outlines.map(o => ({
             title: o.chapterName,
-            topics: o.topics.map(t => ({ name: t.courseUnitTopicDetails, studySeq: String(t.studySequence), taughtBy: t.employeeGuid })),
+            // Study Sequence is derived from position now (see the type/blankTopic
+            // note above) — sort by the server's studySequence on load so a topic's
+            // on-screen position (and the auto-numbered display) still matches what
+            // the backend had recorded, rather than trusting array order as-is.
+            topics: [...o.topics]
+              .sort((a, b) => a.studySequence - b.studySequence)
+              .map(t => ({ name: t.courseUnitTopicDetails, taughtBy: t.employeeGuid })),
           }))
-        : [blankChapter(1)]
+        : [blankChapter()]
     )
     setSyllabusFile(null)
     setStep(1)
@@ -123,9 +133,9 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
     const outlines = chapters.map((ch, ci) => ({
       chapter: ci + 1,
       chapterName: ch.title,
-      topics: ch.topics.map(t => ({
+      topics: ch.topics.map((t, ti) => ({
         courseUnitTopicDetails: t.name,
-        studySequence: +t.studySeq || 0,
+        studySequence: ti + 1,
         taughtBy: t.taughtBy,
       })),
     }))
@@ -161,9 +171,25 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
     )
   }
 
+  // chapter cap — Step 2 can never hold more chapters than Step 1's "No. of Chapters" (when set)
+  const chapterCap = +numChapters || 0
+  const atChapterCap = chapterCap > 0 && chapters.length >= chapterCap
+
+  function goToStep2() {
+    if (!validateStep1()) return
+    // If the user lowered No. of Chapters after already building some out, trim the excess from the end.
+    if (chapterCap > 0 && chapters.length > chapterCap) {
+      setChapters(p => p.slice(0, chapterCap))
+      setChapterErrors(p => p.slice(0, chapterCap))
+      setActiveChapterIdx(i => Math.min(i, chapterCap - 1))
+    }
+    setStep(2)
+  }
+
   // chapter helpers
   function addChapter() {
-    setChapters(p => [...p, blankChapter(p.length + 1)])
+    if (atChapterCap) { showToast(`No. of Chapters is set to ${chapterCap} — remove a chapter or increase that value first`, 'error'); return }
+    setChapters(p => [...p, blankChapter()])
     setChapterErrors(p => [...p, ''])
     setActiveChapterIdx(chapters.length)
   }
@@ -538,7 +564,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
               {/* Left sidebar — one entry per chapter */}
               <div className="fsm-sidebar">
                 <div style={{ padding: '14px 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
-                  Chapters <span style={{ color: 'var(--b500)' }}>({chapters.length})</span>
+                  Chapters <span style={{ color: 'var(--b500)' }}>({chapterCap > 0 ? `${chapters.length}/${chapterCap}` : chapters.length})</span>
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
                   {chapters.map((ch, ci) => (
@@ -572,9 +598,10 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
                   ))}
                 </div>
                 <div style={{ borderTop: '1.5px solid var(--g200)', padding: '6px 8px 10px' }}>
-                  <button type="button" className="btn btn-neu btn-sm" style={{ width: '100%' }} onClick={addChapter}>
+                  <button type="button" className="btn btn-neu btn-sm" style={{ width: '100%' }} onClick={addChapter} disabled={atChapterCap} title={atChapterCap ? `No. of Chapters is set to ${chapterCap}` : undefined}>
                     <i className="lni lni-plus"></i> Add Chapter
                   </button>
+                  {atChapterCap && <div style={{ fontSize: 10.5, color: 'var(--g400)', textAlign: 'center', marginTop: 6 }}>Chapter limit reached ({chapterCap})</div>}
                 </div>
               </div>
 
@@ -607,7 +634,8 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
                         <div key={ti} style={{ display: 'grid', gridTemplateColumns: '20px 1fr 150px 130px 30px', gap: 6, alignItems: 'center' }}>
                           <span style={{ fontSize: 11, color: 'var(--g400)', textAlign: 'center' }}>{ti + 1}.</span>
                           <input className="ctrl" value={t.name} onChange={e => setTopic(activeChapterIdx, ti, 'name', e.target.value)} placeholder="e.g. Introduction to Arrays" />
-                          <input className="ctrl" type="number" min={1} value={t.studySeq} onChange={e => setTopic(activeChapterIdx, ti, 'studySeq', e.target.value)} placeholder="e.g. 3" />
+                          {/* Auto-incrementing, not user-editable — always the topic's 1-based position in this chapter */}
+                          <div className="ctrl" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--g500)', background: 'var(--g100)', cursor: 'default' }}>{ti + 1}</div>
                           <SearchSelect placeholder="— Select —" value={t.taughtBy} onChange={v => setTopic(activeChapterIdx, ti, 'taughtBy', v)} options={employeeOptions} />
                           <button
                             className="btn btn-danger btn-sm"
@@ -639,7 +667,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
             </button>
           )}
           {step === 1 && (
-            <button className="btn btn-primary" onClick={() => { if (validateStep1()) setStep(2) }}>
+            <button className="btn btn-primary" onClick={goToStep2}>
               Save &amp; Continue <i className="lni lni-arrow-right"></i>
             </button>
           )}
