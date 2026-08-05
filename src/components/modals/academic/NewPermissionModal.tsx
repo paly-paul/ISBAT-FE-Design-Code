@@ -23,7 +23,7 @@ export function NewPermissionModal({ isOpen, onClose, showToast, createPermissio
     activeBlocks, canSubmit,
     handleAddModule, handleGlobalSelect, toggleBlockOpen, updateBlockSearch,
     toggleAll, togglePermission, confirmDelete, resetWizard,
-  } = usePermissionWizard()
+  } = usePermissionWizard(isOpen)
 
   if (!isOpen) return null
 

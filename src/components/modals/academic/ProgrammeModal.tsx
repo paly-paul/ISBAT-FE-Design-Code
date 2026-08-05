@@ -88,17 +88,10 @@ function blankItem(id: number): FeeItem {
 // Semester count varies per programme rather than being a fixed number, so
 // these are factories parameterized by count instead of a fixed-length
 // module constant — see resizeSemesters/addSemester/removeSemester below.
-function makeDefaultSemFees(semCount: number): SemFees {
-  return Array.from({ length: Math.max(semCount, 1) }, (_, i) =>
-    i === 0
-      ? [
-          { id: nextId++, amount: '750000', currency: '', currencyGuid: '', ledger: '', ledgerPriority: '' },
-          { id: nextId++, amount: '50000',  currency: '', currencyGuid: '', ledger: '', ledgerPriority: '' },
-        ]
-      : []
-  )
-}
-
+// Semester-wise Fee Structure is optional (Program_Master_Change_Requests_Final.md),
+// so a fresh structure starts with zero fee items in every semester — no
+// pre-filled "Tuition Fee"/"Semester Entry Fee" stubs to either complete or
+// clear before Save works.
 function makeEmptySemFees(semCount: number): SemFees {
   return Array.from({ length: Math.max(semCount, 1) }, () => [])
 }
@@ -119,7 +112,7 @@ function blankFeeStructure(id: number, semCount: number): FeeStructure {
     creditExemptionFeeCurrency: '',
     aptechCreditExemptionFee: '',
     aptechCreditExemptionFeeCurrency: '',
-    semFees: makeDefaultSemFees(semCount),
+    semFees: makeEmptySemFees(semCount),
   }
 }
 
@@ -347,7 +340,18 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const { data: programCourseUnitRows = [] } = useProgramCourseUnits(programGuid ?? null, isOpen && mode === 'edit' && !!programGuid)
 
   useEffect(() => {
-    if (mode !== 'edit' || !fullDetails) return
+    // isOpen has to gate this (not just be an input to it) — react-query
+    // keeps the same `fullDetails`/`programCourseUnitRows` object references
+    // across a close+reopen of the SAME programme when the cached data is
+    // still around (structural sharing means even a background refetch
+    // returning identical data won't produce a new reference). Without
+    // isOpen in the guard+deps, that meant this effect simply never re-ran
+    // on a second open — but handleClose() unconditionally wipes every
+    // field back to blank on close, so the form was left permanently empty
+    // until the query happened to return a genuinely different object
+    // (e.g. editing a different programme first). This is the "sometimes
+    // fields aren't populated after closing and reopening Edit" bug.
+    if (!isOpen || mode !== 'edit' || !fullDetails) return
 
     setProgramCode(fullDetails.programCode)
     setProgramName(fullDetails.programName)
@@ -495,7 +499,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setActiveFeeIdx(0)
     setActiveAcc(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullDetails, programCourseUnitRows, mode])
+  }, [isOpen, fullDetails, programCourseUnitRows, mode])
 
   // Create mode has no per-structure Intake picker any more (#4) — every
   // fee structure is forced onto whatever intake is currently flagged
@@ -582,15 +586,26 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
   const activeFeeStruct = feeStructures[activeFeeIdx]
 
+  // Semester-wise Fee Structure is optional — a structure nobody has touched
+  // (no code, no description, no fee items in any semester) shouldn't block
+  // Save, and shouldn't be sent at all (see the filter in handleFinalSubmit
+  // below). Only a structure the user actually started filling in has to be
+  // completed properly.
+  function feeStructureIsBlank(s: FeeStructure) {
+    return !s.feeCode.trim() && !s.description.trim() && s.semFees.every(items => items.length === 0)
+  }
   function feeStructComplete(s: FeeStructure) {
+    if (feeStructureIsBlank(s)) return true
     return !!(s.feeCode.trim() && s.description.trim())
   }
   // Every fee item needs a currency and ledger selected; otherwise the payload sends 0/empty and the backend rejects it.
   // Both modes require a real currencyGuid now (see FeeLineInput.currencyGuid note).
   function feeStructHasCurrencyGaps(s: FeeStructure) {
+    if (feeStructureIsBlank(s)) return false
     return s.semFees.some(items => items.some(item => !item.currencyGuid))
   }
   function feeStructHasLedgerGaps(s: FeeStructure) {
+    if (feeStructureIsBlank(s)) return false
     return s.semFees.some(items => items.some(item => !item.ledger))
   }
   const activeFeeComplete = feeStructComplete(activeFeeStruct)
@@ -629,11 +644,19 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           streamGuid: u.streamGuid || streamGuids[0] || '',
           unitTypeGuid: u.unitType,
           unitCatGuid: u.unitCat,
-          flag: 0,
+          // Confirmed via UpdateComplete.bru's real example payload — was
+          // hardcoded 0 with no documented rationale before (an unconfirmed
+          // guess); the spec's own sample sends 1. Plausible root cause for
+          // programUnits coming back empty on GetFullDetails after a save if
+          // the backend uses this to decide whether to actually persist/
+          // include the row.
+          flag: 1,
         }))
       )
 
-      const feeStructuresPayload: FeeStructureUpdateInput[] = feeStructures.map(s => ({
+      // Fee Structure is optional — an untouched structure is never sent,
+      // not even as an empty shell (see feeStructureIsBlank above).
+      const feeStructuresPayload: FeeStructureUpdateInput[] = feeStructures.filter(s => !feeStructureIsBlank(s)).map(s => ({
         feeCode: s.feeCode,
         feeDesc: s.description,
         status: true,
@@ -698,11 +721,15 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         streamGuid: u.streamGuid || streamGuids[0] || '',
         unitType: u.unitType,
         unitCat: u.unitCat,
-        flag: 0,
+        // See the note on the Update branch above — confirmed via
+        // UpdateComplete.bru's example, was an unconfirmed 0 guess before.
+        flag: 1,
       }))
     )
 
-    const feeStructuresPayload: FeeStructureInput[] = feeStructures.map(s => ({
+    // Fee Structure is optional — an untouched structure is never sent, not
+    // even as an empty shell (see feeStructureIsBlank above).
+    const feeStructuresPayload: FeeStructureInput[] = feeStructures.filter(s => !feeStructureIsBlank(s)).map(s => ({
       feeCode: s.feeCode,
       feeDesc: s.description,
       // No UI toggle for this yet — every structure created here defaults
@@ -1178,6 +1205,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
               <div style={{ width: 210, flexShrink: 0, background: 'var(--surface)', border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', overflow: 'hidden', position: 'sticky', top: 0, display: 'flex', flexDirection: 'column', maxHeight: 480 }}>
                 <div style={{ padding: '14px 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
                   Fee Structures <span style={{ color: 'var(--b500)' }}>({feeStructures.length})</span>
+                  <span style={{ float: 'right', fontWeight: 500, textTransform: 'none', letterSpacing: 0, color: 'var(--g400)' }}>optional</span>
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
                   {feeStructures.map((s, i) => (
