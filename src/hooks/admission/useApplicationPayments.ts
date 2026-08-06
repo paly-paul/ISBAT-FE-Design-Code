@@ -7,6 +7,7 @@ import {
   getApplicationPaymentExemptionTypes,
   getApplicationPaymentFees,
   getApplicationPaymentTypes,
+  getUnconvertedEnquiries,
 } from '@/lib/api/admission/applicationPayment'
 
 const APPLICATION_PAYMENTS_KEY = ['application-payments']
@@ -45,6 +46,17 @@ export function useApplicationPaymentFees(programGuid: string, enabled: boolean)
     queryKey: [...APPLICATION_PAYMENTS_KEY, 'fees', programGuid],
     queryFn: () => getApplicationPaymentFees(programGuid),
     enabled: enabled && !!programGuid,
+  })
+}
+
+// Per Application_Payment_Change_Requests_Final_Updated.md #1/#2 — only
+// enabled once an Intake has actually been picked, same "gate the dependent
+// dropdown" convention as useApplicationPaymentFees/useSemestersForProgram.
+export function useUnconvertedEnquiries(intakeGuid: string, page: number, pageSize: number, enabled: boolean) {
+  return useQuery({
+    queryKey: [...APPLICATION_PAYMENTS_KEY, 'unconverted-enquiries', intakeGuid, page, pageSize],
+    queryFn: () => getUnconvertedEnquiries(intakeGuid, page, pageSize),
+    enabled: enabled && !!intakeGuid,
   })
 }
 

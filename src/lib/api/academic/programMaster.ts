@@ -243,6 +243,20 @@ export function getProgramMasters(search = ''): Promise<ProgramMaster[]> {
     .then(data => data ?? [])
 }
 
+// GET /api/v1/academic/program-master/by-campus/:campusGuid — per
+// Application_Payment_Change_Requests_Final_Updated.md #7, backs the
+// Application Payment page's Interested Programme dropdown, scoped to the
+// selected Campus instead of the full unfiltered programme list. Response
+// shape assumed identical to the plain list (same ProgramMaster type, same
+// controller family) — unconfirmed against a real sample, same "reasonable
+// best-effort until seen live" convention as the rest of this app's
+// not-yet-verified endpoints.
+export function getProgramMastersByCampus(campusGuid: string): Promise<ProgramMaster[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockProgramMasters)
+  return apiGet<ProgramMaster[] | null>(`/api/v1/academic/program-master/by-campus/${campusGuid}`)
+    .then(data => data ?? [])
+}
+
 // --- Full details / Update / Delete ---------------------------------------
 // Confirmed via Program-Master/GetFullDetails.bru — full course-unit and
 // fee-structure breakdown for one programme, used to prefill the Edit

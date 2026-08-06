@@ -4,6 +4,7 @@ import {
   deleteProgramMasterComplete,
   getProgramMasterFullDetails,
   getProgramMasters,
+  getProgramMastersByCampus,
   updateProgramMasterComplete,
   ProgramMaster,
   ProgramMasterInput,
@@ -31,6 +32,18 @@ export function useProgramMasters() {
     // every remount/window focus.
     staleTime: Infinity,
     gcTime: Infinity,
+  })
+}
+
+// Per Application_Payment_Change_Requests_Final_Updated.md #7 — backs the
+// Application Payment page's Interested Programme dropdown, scoped to
+// whichever Campus is currently selected. Only enabled once a campus is
+// picked, same convention as other cascading dropdowns in this app.
+export function useProgramMastersByCampus(campusGuid: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...PROGRAM_MASTERS_KEY, 'byCampus', campusGuid],
+    queryFn: () => getProgramMastersByCampus(campusGuid),
+    enabled: enabled && !!campusGuid,
   })
 }
 

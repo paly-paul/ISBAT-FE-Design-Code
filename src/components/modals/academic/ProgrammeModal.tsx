@@ -1349,10 +1349,13 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   <div className="fg m-0">
                     <div className="lbl">Copy Fee Code</div>
                     <SearchSelect
-                      placeholder={feeStructures.length > 1 ? '— Select source structure —' : 'Add another structure first'}
+                      placeholder="— Select source structure —"
                       value={copySourceId}
                       onChange={copyFeeStructure}
-                      options={feeStructures.map((s, i) => ({ s, i })).filter(({ i }) => i !== activeFeeIdx).map(({ s, i }) => ({ value: String(s.id), label: s.feeCode || `Structure ${i + 1}` }))}
+                      options={feeStructures.map((s, i) => ({
+                        value: String(s.id),
+                        label: (s.feeCode || `Structure ${i + 1}`) + (i === activeFeeIdx ? ' (Current)' : ''),
+                      }))}
                     />
                   </div>
                   <div className="fg m-0">

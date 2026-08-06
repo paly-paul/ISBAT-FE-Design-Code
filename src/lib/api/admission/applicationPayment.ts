@@ -1,4 +1,5 @@
 import { apiGet, apiPostForm } from '../client'
+import { Enquiry } from './enquiry'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -109,8 +110,19 @@ export interface PaymentTypeDto {
 }
 
 // Success (201) per Create.bru docs: "data = CreateApplicationPaymentResponse."
-// Exact fields aren't shown in the .bru sample — left unknown until seen.
-export type CreateApplicationPaymentResponse = unknown
+// appRefNo is confirmed (a real successful payment returned it). receiptNo/
+// receiptType are NOT confirmed — added per
+// Application_Payment_Change_Requests_Final_Updated.md #6 ("do not provide
+// dropdowns for Receipt Type / Receipt Reference No., return these values
+// in the successful save response instead"), field names guessed by analogy
+// with this DTO's own receiptBookGuid/receiptNo-shaped fields elsewhere in
+// the app — verify against a real response and correct if these differ.
+export interface CreateApplicationPaymentResponse {
+  appRefNo?: string
+  receiptNo?: string
+  receiptType?: string
+  [key: string]: unknown
+}
 
 const mockBanks: BankAccountInfoDto[] = [{ bankGuid: 'mock-bank-1', bankName: 'Stanbic Bank' }]
 const mockBatches: BatchInfoDto[] = [{ batchGuid: 'mock-batch-1', batchCode: 'BSCVFXS27DA' }]
@@ -130,6 +142,30 @@ const mockPaymentTypes: PaymentTypeDto[] = [
 export function getApplicationPaymentBanks(): Promise<BankAccountInfoDto[]> {
   if (MOCK_AUTH) return Promise.resolve(mockBanks)
   return apiGet<BankAccountInfoDto[] | null>('/api/v1/admissions/application-payments/dropdowns/banks').then(data => data ?? [])
+}
+
+interface UnconvertedEnquiriesResult {
+  items: Enquiry[]
+  totalCount: number
+  pageNumber: number
+  pageSize: number
+}
+
+// GET /api/v1/admissions/application-payments/unconverted-enquiries?intakeGuid=...
+// Per Application_Payment_Change_Requests_Final_Updated.md #2 — backs the
+// Application Payment page's Enquiry dropdown, scoped to a selected Intake
+// and restricted to enquiries not yet converted into students. Response
+// shape is NOT confirmed against a real sample — inferred by reusing the
+// already-confirmed Enquiry DTO (enquiry.ts) and its list envelope
+// (items/totalCount/pageNumber/pageSize), since this is presumably the same
+// underlying Enquiry record set, just pre-filtered server-side. Verify
+// against a real response and correct the item shape if it differs (e.g. if
+// this endpoint returns a narrower projection rather than the full DTO).
+export function getUnconvertedEnquiries(intakeGuid: string, page = 1, pageSize = 10): Promise<UnconvertedEnquiriesResult> {
+  if (MOCK_AUTH) return Promise.resolve({ items: [], totalCount: 0, pageNumber: page, pageSize })
+  return apiGet<UnconvertedEnquiriesResult | null>(
+    `/api/v1/admissions/application-payments/unconverted-enquiries?intakeGuid=${intakeGuid}&page=${page}&pageSize=${pageSize}`,
+  ).then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
 export function getApplicationPaymentBatches(programGuid: string, semesterGuid: string, batchTimeGuid: string): Promise<BatchInfoDto[]> {

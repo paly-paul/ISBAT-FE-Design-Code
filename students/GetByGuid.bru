@@ -1,0 +1,22 @@
+meta {
+  name: Get Student By Guid
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/students/:guid
+  body: none
+  auth: none
+}
+
+params:path {
+  guid: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+}
+
+docs {
+  Returns full detail for a single student.
+
+  Success (200): data = StudentDto.
+  Failure: 404 `not_found`.
+}
