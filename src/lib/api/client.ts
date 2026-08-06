@@ -142,6 +142,27 @@ interface ApiEnvelope<T> {
   errors: string[] | null
 }
 
+// A raw ASP.NET model-binding failure (e.g. a Guid?-typed field getting an
+// empty string, caught by the framework before the controller — and one's
+// own custom validation — ever runs) returns its built-in
+// ValidationProblemDetails shape instead: { title, errors: { field: [msg] } }.
+// `errors` there is a DICTIONARY keyed by field name, not the app's own
+// `string[]`, and there's no `code` at all. Without this fallback, every
+// such failure surfaced as a bare `AuthError('unknown')` with no usable
+// message — confirmed on a real 400 from program-master's update-complete
+// where an empty-string UnitTypeGuid/UnitCatGuid hit exactly this shape.
+function extractErrorInfo(envelope: unknown): { code: string; message?: string } {
+  const e = envelope as (Partial<ApiEnvelope<unknown>> & { title?: string; errors?: unknown }) | null
+  if (!e) return { code: 'unknown' }
+  if (e.code) return { code: e.code, message: (Array.isArray(e.errors) ? e.errors[0] : undefined) ?? e.message ?? undefined }
+  if (e.errors && !Array.isArray(e.errors) && typeof e.errors === 'object') {
+    const fieldErrors = e.errors as Record<string, string[]>
+    const firstField = Object.keys(fieldErrors)[0]
+    return { code: 'validation_error', message: (firstField ? fieldErrors[firstField]?.[0] : undefined) ?? e.title ?? undefined }
+  }
+  return { code: 'unknown', message: e.title ?? undefined }
+}
+
 export async function apiPost<T>(path: string, body: unknown, retried = false): Promise<T> {
   const res = await fetch(buildUrl(path), {
     method: 'POST',
@@ -169,7 +190,8 @@ export async function apiPost<T>(path: string, body: unknown, retried = false): 
     return envelope.data as T
   }
 
-  throw new AuthError(envelope?.code ?? 'unknown', envelope?.errors?.[0] ?? envelope?.message ?? undefined)
+  const { code, message } = extractErrorInfo(envelope)
+  throw new AuthError(code, message)
 }
 
 // multipart/form-data variant of apiPost — for endpoints that accept a file
@@ -216,7 +238,8 @@ export async function apiPostForm<T>(path: string, formData: FormData, retried =
     return envelope.data as T
   }
 
-  throw new AuthError(envelope?.code ?? 'unknown', envelope?.errors?.[0] ?? envelope?.message ?? undefined)
+  const { code, message } = extractErrorInfo(envelope)
+  throw new AuthError(code, message)
 }
 
 // multipart/form-data variant of apiPut — mirrors apiPostForm for endpoints
@@ -246,7 +269,8 @@ export async function apiPutForm<T>(path: string, formData: FormData, retried = 
     return envelope.data as T
   }
 
-  throw new AuthError(envelope?.code ?? 'unknown', envelope?.errors?.[0] ?? envelope?.message ?? undefined)
+  const { code, message } = extractErrorInfo(envelope)
+  throw new AuthError(code, message)
 }
 
 export async function apiPut<T>(path: string, body: unknown, retried = false): Promise<T> {
@@ -273,7 +297,8 @@ export async function apiPut<T>(path: string, body: unknown, retried = false): P
     return envelope.data as T
   }
 
-  throw new AuthError(envelope?.code ?? 'unknown', envelope?.errors?.[0] ?? envelope?.message ?? undefined)
+  const { code, message } = extractErrorInfo(envelope)
+  throw new AuthError(code, message)
 }
 
 export async function apiDelete<T>(path: string, retried = false): Promise<T> {
@@ -299,7 +324,8 @@ export async function apiDelete<T>(path: string, retried = false): Promise<T> {
     return envelope.data as T
   }
 
-  throw new AuthError(envelope?.code ?? 'unknown', envelope?.errors?.[0] ?? envelope?.message ?? undefined)
+  const { code, message } = extractErrorInfo(envelope)
+  throw new AuthError(code, message)
 }
 
 export async function apiGet<T>(path: string, retried = false): Promise<T> {
@@ -325,5 +351,6 @@ export async function apiGet<T>(path: string, retried = false): Promise<T> {
     return envelope.data as T
   }
 
-  throw new AuthError(envelope?.code ?? 'unknown', envelope?.errors?.[0] ?? envelope?.message ?? undefined)
+  const { code, message } = extractErrorInfo(envelope)
+  throw new AuthError(code, message)
 }

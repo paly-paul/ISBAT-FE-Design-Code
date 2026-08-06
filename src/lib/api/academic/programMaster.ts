@@ -45,7 +45,12 @@ export interface FeeStructureInput {
   acec: number | null
   calcType: number
   amtPer: number | null
-  intakeCode: number | null
+  // Confirmed per program_master_frontend_fixes.md: the create payload was
+  // sending an integer IntakeCode (e.g. 20261) — the backend wants the real
+  // IntakeGuid instead, same as Update's FeeStructureUpdateInput.intakeGuid
+  // already does. Omit the key when there's nothing to send (see the
+  // Guid?-must-be-omitted-not-blank convention used elsewhere on this DTO).
+  intakeGuid: string | null
   feeLines: FeeLineInput[]
 }
 
@@ -61,12 +66,17 @@ export interface ProgramMasterInput {
   appFee: number
   lateFee: number
   facultyGuid: string
-  // Despite the field name, this takes Currency.intCurrency (a number), not
-  // the currency code string — every other currency field on this payload
-  // (Lec/Cec/Acec/FeeLines[].IntCurrency) already used intCurrency, and
-  // "Currency not found" persisted until this one was switched too.
-  currencyCode: number
-  dateAcc: string
+  // Was `currencyCode: number` (Currency.intCurrency) — confirmed per
+  // program_master_frontend_fixes.md the backend actually wants the real
+  // currencyGuid here too, same "wants the guid, not the int" symptom
+  // already confirmed on programLevel.ts's Currency field and Update's own
+  // currencyGuid. FeeLines[].IntCurrency is unaffected — that one's a
+  // different, still-int-keyed field per FeeLineInput's own comment.
+  currencyGuid: string
+  // Optional — Accreditation Date has no required marker in Step 1. Omit
+  // the key entirely when unset rather than sending "T00:00:00" with no
+  // actual date, which the backend was silently accepting as a bogus date.
+  dateAcc: string | null
   streamGuid: string
   intakeGuid: string
   programUnits: ProgramUnitInput[]
@@ -117,8 +127,17 @@ function appendProgramUnits(formData: FormData, units: ProgramUnitInput[]) {
     // up bound to null the way it's meant to. The .bru example showing a
     // blank-but-present key was misleading here, not a confirmed contract.
     if (u.streamGuid) formData.append(`ProgramUnits[${i}].StreamGuid`, u.streamGuid)
-    formData.append(`ProgramUnits[${i}].UnitType`, u.unitType)
-    formData.append(`ProgramUnits[${i}].UnitCat`, u.unitCat)
+    // Unit Type/Category are optional in Step 2's UI (no required marker) and
+    // GetFullDetails confirms a real unit can come back with both null, so
+    // the write side has to tolerate the same — same "empty string AND the
+    // literal 'null' both fail the Guid? binder, omit the key entirely"
+    // finding as StreamGuid just above. Sending an empty string here was
+    // producing a raw ASP.NET model-binding 400 (no `code` field on that
+    // response shape at all — client.ts's envelope parsing then has nothing
+    // to surface but "unknown"), not one of the documented custom error
+    // codes in UpdateComplete.bru.
+    if (u.unitType) formData.append(`ProgramUnits[${i}].UnitType`, u.unitType)
+    if (u.unitCat) formData.append(`ProgramUnits[${i}].UnitCat`, u.unitCat)
     formData.append(`ProgramUnits[${i}].Flag`, String(u.flag))
   })
 }
@@ -137,7 +156,7 @@ function appendFeeStructures(formData: FormData, structures: FeeStructureInput[]
     if (s.acec !== null) formData.append(`FeeStructures[${i}].Acec`, String(s.acec))
     formData.append(`FeeStructures[${i}].CalcType`, String(s.calcType))
     if (s.amtPer !== null) formData.append(`FeeStructures[${i}].AmtPer`, String(s.amtPer))
-    if (s.intakeCode !== null) formData.append(`FeeStructures[${i}].IntakeCode`, String(s.intakeCode))
+    if (s.intakeGuid) formData.append(`FeeStructures[${i}].IntakeGuid`, s.intakeGuid)
     s.feeLines.forEach((l, j) => {
       formData.append(`FeeStructures[${i}].FeeLines[${j}].IntLedger`, String(l.intLedger))
       formData.append(`FeeStructures[${i}].FeeLines[${j}].LedgerGuid`, l.ledgerGuid)
@@ -170,11 +189,11 @@ export function createProgramMaster(input: ProgramMasterInput): Promise<ProgramM
       yearCount: 0,
       semCount: 0,
       facultyGuid: input.facultyGuid,
-      dateAcc: input.dateAcc,
+      dateAcc: input.dateAcc ?? '',
       accLetter: null,
       appFee: input.appFee,
       lateFee: input.lateFee,
-      currencyGuid: null,
+      currencyGuid: input.currencyGuid || null,
       intakeGuid: input.intakeGuid,
       streamGuids: [input.streamGuid],
       semesters: [],
@@ -194,8 +213,14 @@ export function createProgramMaster(input: ProgramMasterInput): Promise<ProgramM
   formData.append('appFee', String(input.appFee))
   formData.append('lateFee', String(input.lateFee))
   formData.append('facultyGuid', input.facultyGuid)
-  formData.append('currencyCode', String(input.currencyCode))
-  formData.append('dateAcc', input.dateAcc)
+  formData.append('currencyGuid', input.currencyGuid)
+  // Accreditation Date is optional (no required marker in Step 1) —
+  // confirmed per program_master_frontend_fixes.md that sending "T00:00:00"
+  // with no actual date picked was a real bug, not a harmless placeholder.
+  // DateAcc is nullable on the backend, so omitting the key entirely when
+  // unset is safe — same "omit rather than send a bogus value" convention
+  // as streamGuid/intakeGuid below.
+  if (input.dateAcc) formData.append('dateAcc', input.dateAcc)
   // Specialization is optional now — this can legitimately be empty. Omit
   // the key rather than send an empty string (see the note on
   // ProgramUnits[].StreamGuid above — confirmed with the backend team).
@@ -370,7 +395,8 @@ export interface ProgramMasterUpdateInput {
   lateFee: number
   facultyGuid: string
   currencyGuid: string
-  dateAcc: string
+  // Optional, same as Create's — see the note on ProgramMasterInput.dateAcc.
+  dateAcc: string | null
   streamGuid: string
   intakeGuid: string
   programUnits: ProgramUnitUpdateInput[]
@@ -390,8 +416,16 @@ function appendProgramUnitsForUpdate(formData: FormData, units: ProgramUnitUpdat
     // a Guid, so both an empty string and the literal string "null" fail to
     // bind — omit the key entirely so the Guid? property binds to null.
     if (u.streamGuid) formData.append(`ProgramUnits[${i}][StreamGuid]`, u.streamGuid)
-    formData.append(`ProgramUnits[${i}][UnitTypeGuid]`, u.unitTypeGuid)
-    formData.append(`ProgramUnits[${i}][UnitCatGuid]`, u.unitCatGuid)
+    // Same fix as Create's appendProgramUnits above, and the actual root
+    // cause of a real "400 with no usable error code" report: Unit Type/
+    // Category have no required marker in Step 2's UI, so these can
+    // legitimately be empty — sending them as "" hit the same Guid?-binder
+    // failure StreamGuid was already fixed for, except this one produces a
+    // raw framework validation response with no `code` field for
+    // client.ts's envelope parsing to surface, so it fell back to "unknown"
+    // instead of a real error.
+    if (u.unitTypeGuid) formData.append(`ProgramUnits[${i}][UnitTypeGuid]`, u.unitTypeGuid)
+    if (u.unitCatGuid) formData.append(`ProgramUnits[${i}][UnitCatGuid]`, u.unitCatGuid)
     formData.append(`ProgramUnits[${i}][Flag]`, String(u.flag))
   })
 }
@@ -437,7 +471,7 @@ export function updateProgramMasterComplete(programGuid: string, input: ProgramM
       programLevelGuid: input.programLevelGuid,
       facultyGuid: input.facultyGuid,
       currencyGuid: input.currencyGuid,
-      dateAcc: input.dateAcc,
+      dateAcc: input.dateAcc ?? existing.dateAcc,
       streamGuids: [input.streamGuid],
       intakeGuid: input.intakeGuid,
     })
@@ -456,7 +490,9 @@ export function updateProgramMasterComplete(programGuid: string, input: ProgramM
   formData.append('programLevelGuid', input.programLevelGuid)
   formData.append('facultyGuid', input.facultyGuid)
   formData.append('currencyGuid', input.currencyGuid)
-  formData.append('dateAcc', input.dateAcc)
+  // Same "omit rather than send a bogus date" fix as Create — see the note
+  // on ProgramMasterInput.dateAcc.
+  if (input.dateAcc) formData.append('dateAcc', input.dateAcc)
   // Specialization is optional now — this can legitimately be empty. Omit
   // the key rather than send an empty string (see the note on
   // ProgramUnits[].StreamGuid above — confirmed with the backend team).

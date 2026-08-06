@@ -1,12 +1,65 @@
-import { useMutation } from '@tanstack/react-query'
-import { saveProgramFeeStructureComplete, ProgramFeeStructureHeader, ProgramFeeStructureHeaderInput, ProgramFeeLineSaveInput, ProgramFeeStructureSaveCompleteInput } from '@/lib/api/academic/programFeeStructure'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  getProgramFeeStructures,
+  getProgramFeeLines,
+  saveProgramFeeStructureComplete,
+  updateProgramFeeStructureComplete,
+  ProgramFeeStructureHeader,
+  ProgramFeeStructureHeaderInput,
+  ProgramFeeLineSaveInput,
+  ProgramFeeLineDetail,
+  ProgramFeeStructureSaveCompleteInput,
+  ProgramFeeStructureUpdateInput,
+} from '@/lib/api/academic/programFeeStructure'
 
-// No list query backs this yet — the fee-structure page still renders its
-// own local MOCK_FEES, so there's nothing to invalidate on success.
-export function useSaveProgramFeeStructureComplete() {
-  return useMutation({
-    mutationFn: (input: ProgramFeeStructureSaveCompleteInput) => saveProgramFeeStructureComplete(input),
+const PROGRAM_FEE_STRUCTURES_KEY = ['programFeeStructures']
+
+// Backs the standalone /academic/fee-structure page's main table — real now
+// (see the note on getProgramFeeStructures). Loaded at a large pageSize and
+// paginated/searched client-side, same "load it all once" convention as
+// batch-management/employee-master, rather than a second server round-trip
+// per page click.
+export function useProgramFeeStructures(pageNumber = 1, pageSize = 1000, programGuid?: string) {
+  return useQuery({
+    queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, pageNumber, pageSize, programGuid ?? null],
+    queryFn: () => getProgramFeeStructures(pageNumber, pageSize, programGuid),
   })
 }
 
-export type { ProgramFeeStructureHeader, ProgramFeeStructureHeaderInput, ProgramFeeLineSaveInput, ProgramFeeStructureSaveCompleteInput }
+// Fetch-by-guid convention, same as the rest of the app's real Edit modals —
+// backs FeeStructureModal's Edit mode prefill. The header fields (feeCode,
+// calcType, lef/cef/ace, intakeGuid, etc.) come from the list row the page
+// already has, not from this endpoint — GET fee-lines only ever returns the
+// line items themselves.
+export function useProgramFeeLines(feeHdGuid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, 'feeLines', feeHdGuid],
+    queryFn: () => getProgramFeeLines(feeHdGuid as string),
+    enabled: enabled && !!feeHdGuid,
+  })
+}
+
+export function useSaveProgramFeeStructureComplete() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: ProgramFeeStructureSaveCompleteInput) => saveProgramFeeStructureComplete(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRAM_FEE_STRUCTURES_KEY }),
+  })
+}
+
+export function useUpdateProgramFeeStructureComplete() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ feeHdGuid, input }: { feeHdGuid: string; input: ProgramFeeStructureUpdateInput }) => updateProgramFeeStructureComplete(feeHdGuid, input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRAM_FEE_STRUCTURES_KEY }),
+  })
+}
+
+export type {
+  ProgramFeeStructureHeader,
+  ProgramFeeStructureHeaderInput,
+  ProgramFeeLineSaveInput,
+  ProgramFeeLineDetail,
+  ProgramFeeStructureSaveCompleteInput,
+  ProgramFeeStructureUpdateInput,
+}

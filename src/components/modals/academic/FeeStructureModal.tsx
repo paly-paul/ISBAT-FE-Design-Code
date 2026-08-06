@@ -1,7 +1,8 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
+import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
@@ -9,14 +10,22 @@ import { useCurrencies } from '@/hooks/finance/useCurrencies'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useLedgers } from '@/hooks/finance/useLedgers'
-import { useSaveProgramFeeStructureComplete, ProgramFeeLineSaveInput } from '@/hooks/academic/useProgramFeeStructure'
+import {
+  useSaveProgramFeeStructureComplete,
+  useUpdateProgramFeeStructureComplete,
+  useProgramFeeLines,
+  ProgramFeeLineSaveInput,
+  ProgramFeeStructureHeader,
+} from '@/hooks/academic/useProgramFeeStructure'
 
 // title dropped per Fee_Structure_Change_Requests.md #1 — it was never part
 // of the confirmed save-complete payload anyway (ProgramFeeLineSaveInput has
-// no title field), just decorative UI. ledgerPriority is new per #2 — kept
-// local-only for now since ProgramFeeLineSaveInput has no matching field yet
-// (feeLines' actual send order is still the array order, same as before);
-// wire it into the payload once the backend confirms a field for it.
+// no title field), just decorative UI. ledgerPriority is real now — GET
+// fee-lines/:feeHdGuid confirms LedgerNum is an independent, user-set
+// priority (a real sample has three lines for one semester listed as
+// ledgerNum 1/3/2, not matching array order at all), so this is sent as
+// ledgerNum on save instead of the "local-only, no confirmed field" state it
+// used to be in.
 type FeeItem = { id: number; amount: string; currencyGuid: string; ledgerGuid: string; ledgerPriority: string }
 // Keyed by real semesterGuid — save-complete's feeLines each carry a real
 // semesterGuid, unlike Program Master's own embedded fee structure (which
@@ -36,8 +45,13 @@ type Structure = {
   discountType: string
   createdVia: 'new' | 'copy'
   semFees: SemFeesMap
-  // Header-level fields for the save-complete POST.
+  // Header-level fields for the save-complete/update-complete POST/PUT.
   localOrForeign: boolean
+  // Real field now (previously hardcoded true on every save) — Edit needs
+  // to carry through whatever the existing record's status actually is
+  // rather than silently reactivating an inactive structure on every save.
+  // No UI toggle exists for it yet, so it's otherwise untouched.
+  status: boolean
   amtPer: string
   lef: string
   lefCurrency: string
@@ -54,20 +68,25 @@ function blankItem(id: number): FeeItem {
 function makeDefaultStructures(): Structure[] {
   return [{
     id: 1, programme: '', feeCode: '', description: '', currency: 'UGX', intake: '', discountType: 'Amount', createdVia: 'new', semFees: {},
-    localOrForeign: false, amtPer: '', lef: '', lefCurrency: '', cef: '', cefCurrency: '', ace: '', aceCurrency: '',
+    localOrForeign: false, status: true, amtPer: '', lef: '', lefCurrency: '', cef: '', cefCurrency: '', ace: '', aceCurrency: '',
   }]
 }
 
 let nextId = 200
 let nextStructId = 100
 
-type EditData = { programmeCode: string; intake: string; feeCode: string; description: string; currency: string }
-
-export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }: ModalProps & { mode?: 'edit'; editData?: EditData }) {
+export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }: ModalProps & { mode?: 'edit'; editData?: ProgramFeeStructureHeader }) {
   const { data: programs = [] }   = useProgramMasters()
   const { data: intakes = [] }    = useIntakes()
   const { data: currencies = [] } = useCurrencies()
-  const saveFeeStructureComplete  = useSaveProgramFeeStructureComplete()
+  const saveFeeStructureComplete   = useSaveProgramFeeStructureComplete()
+  const updateFeeStructureComplete = useUpdateProgramFeeStructureComplete()
+  // Real fetch-by-guid now — GET fee-lines/:feeHdGuid, same convention as
+  // the rest of the app's real Edit modals. Header fields (feeCode,
+  // calcType, lef/cef/ace, intakeGuid, etc.) come from editData itself (the
+  // list row the page already fetched), not from this endpoint — it only
+  // ever returns the line items.
+  const { data: feeLines, isLoading: feeLinesLoading, isError: feeLinesError } = useProgramFeeLines(editData?.feeHdGuid ?? null, isOpen && mode === 'edit' && !!editData)
   // Per Fee_Structure_Change_Requests.md #4 — Create no longer offers an
   // Intake dropdown at all, it's forced to whatever intake is currently
   // flagged current (the same "Current Academic Intake" hero-card filter
@@ -86,21 +105,57 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   const currencyIntOptions = currencies.map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` }))
 
   const [saved, setSaved]           = useState(false)
+  const [failure, setFailure]       = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [structures, setStructures] = useState<Structure[]>(() =>
-    mode === 'edit' && editData
-      ? [{ ...makeDefaultStructures()[0], programme: editData.programmeCode, feeCode: editData.feeCode, description: editData.description ?? '', currency: editData.currency, intake: editData.intake ?? '' }]
-      : makeDefaultStructures()
-  )
+  const [structures, setStructures] = useState<Structure[]>(() => makeDefaultStructures())
   const [activeIdx, setActiveIdx]   = useState(0)
   const [activeAcc, setActiveAcc]   = useState(0)
 
+  // Guards this prefill against running more than once per open-session —
+  // same fix as ProgrammeModal's own fullDetails effect: neither
+  // useProgramFeeLines nor useProgramFeeStructures overrides the global
+  // QueryClient's defaults (staleTime: 0, refetchOnWindowFocus: true), so a
+  // background refetch while the user is mid-edit could otherwise silently
+  // reset their in-progress fee items back to the server's original data.
+  const prefilledForRef = useRef<string | null>(null)
+
   useEffect(() => {
-    if (isOpen && mode === 'edit' && editData) {
-      setStructures([{ ...makeDefaultStructures()[0], programme: editData.programmeCode, feeCode: editData.feeCode, description: editData.description ?? '', currency: editData.currency, intake: editData.intake ?? '' }])
-      setActiveIdx(0)
-    }
-  }, [isOpen, editData])
+    if (!isOpen) { prefilledForRef.current = null; return }
+    if (mode !== 'edit' || !editData || !feeLines) return
+    if (prefilledForRef.current === editData.feeHdGuid) return
+    prefilledForRef.current = editData.feeHdGuid
+
+    const semFees: SemFeesMap = {}
+    feeLines.forEach(l => {
+      const list = semFees[l.semesterGuid] ?? (semFees[l.semesterGuid] = [])
+      list.push({ id: nextId++, amount: String(l.amount), currencyGuid: l.currencyGuid, ledgerGuid: l.ledgerGuid, ledgerPriority: String(l.ledgerNum) })
+    })
+
+    setStructures([{
+      id: nextStructId++,
+      programme: editData.programGuid,
+      feeCode: editData.feeCode,
+      description: editData.feeDesc,
+      // No currency field exists at the header level (only per-fee-line) —
+      // Local/Foreign is the only currency-ish signal actually present,
+      // same convention used on the main page's table.
+      currency: editData.localOrForeign ? 'USD' : 'UGX',
+      intake: editData.intakeGuid ?? '',
+      discountType: editData.calcType === 2 ? 'Percentage' : 'Amount',
+      createdVia: 'new',
+      semFees,
+      localOrForeign: editData.localOrForeign,
+      status: editData.status,
+      amtPer: editData.amtPer != null ? String(editData.amtPer) : '',
+      lef: editData.lef != null ? String(editData.lef) : '',
+      lefCurrency: editData.lec != null ? String(editData.lec) : '',
+      cef: editData.cef != null ? String(editData.cef) : '',
+      cefCurrency: editData.cec != null ? String(editData.cec) : '',
+      ace: editData.ace != null ? String(editData.ace) : '',
+      aceCurrency: editData.acec != null ? String(editData.acec) : '',
+    }])
+    setActiveIdx(0)
+  }, [isOpen, mode, editData, feeLines])
 
   // Create mode has no Intake picker any more (#4) — every structure is
   // forced onto whatever intake is currently flagged current. Applies to
@@ -127,8 +182,44 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
 
   if (!isOpen) return null
 
+  if (mode === 'edit' && editData && feeLinesError) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup title="Couldn't Load Fee Structure" subtitle="Failed to load fee line details." onClose={onClose} />
+        </div>
+      </div>
+    )
+  }
+
+  if (mode === 'edit' && editData && (feeLinesLoading || prefilledForRef.current !== editData.feeHdGuid)) {
+    return (
+      <div className="modal-overlay open" id="edit-fee-structure-modal">
+        <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
+          <div className="modal-hdr modal-hdr-blue">
+            <div className="modal-title"><i className="lni lni-dollar"></i> Edit Fee Structure</div>
+            <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 240 }}>
+            <span style={{ color: 'var(--g400)' }}>Loading fee structure details…</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Intake was wrongly required here — ProgramFeeStructureHeaderInput types
+  // intakeGuid as `string | null` (genuinely optional on the wire, confirmed
+  // by GET /Programfee-structure returning intakeGuid: null on most rows in
+  // a real sample), and the field is always read-only in this modal (no
+  // picker in either Create or Edit). Requiring it truthy meant Save was
+  // permanently stuck disabled the moment you edited any structure that
+  // didn't already have an intake — there was no way to satisfy the check.
+  // currency is a purely decorative display string (never sent to the
+  // backend at all — see handleSubmitAll), so it doesn't belong in a
+  // "ready to submit" check either.
   function structureComplete(s: Structure) {
-    return !!(s.feeCode.trim() && s.description.trim() && s.currency && s.intake)
+    return !!(s.feeCode.trim() && s.description.trim())
   }
   // Every fee item needs a currency and ledger selected; otherwise the payload sends empty and the backend rejects it.
   function structHasCurrencyGaps(s: Structure) {
@@ -142,7 +233,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   const anyLedgerGaps    = structures.some(structHasLedgerGaps)
   const allComplete      = structures.every(structureComplete) && !anyCurrencyGaps && !anyLedgerGaps
 
-  function handleClose() { setSaved(false); setStructures(makeDefaultStructures()); setActiveIdx(0); setActiveAcc(0); onClose() }
+  function handleClose() { setSaved(false); setFailure(null); setStructures(makeDefaultStructures()); setActiveIdx(0); setActiveAcc(0); prefilledForRef.current = null; onClose() }
 
   // ── Structure management ─────────────────────────────────
   function addStructure() {
@@ -150,7 +241,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
       id: nextStructId++, programme: '', feeCode: '', description: '', currency: 'UGX',
       intake: mode !== 'edit' ? (currentAcademicIntake?.intakeGuid ?? '') : '',
       discountType: 'Amount', createdVia: 'new', semFees: {},
-      localOrForeign: false, amtPer: '', lef: '', lefCurrency: '', cef: '', cefCurrency: '', ace: '', aceCurrency: '',
+      localOrForeign: false, status: true, amtPer: '', lef: '', lefCurrency: '', cef: '', cefCurrency: '', ace: '', aceCurrency: '',
     }
     setStructures(prev => [...prev, newStruct])
     setActiveIdx(structures.length)
@@ -207,48 +298,81 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
     }))
   }
 
-  // Saves every structure in the sidebar as its own header+lines
-  // save-complete call. Each call is independently a complete record on the
-  // backend, so a failure partway through leaves the earlier ones saved —
-  // surfaced via toast rather than attempted rollback.
+  // LedgerNum is a real, independently-set per-line priority (confirmed via
+  // GET fee-lines/:feeHdGuid — see the note on ProgramFeeLineDetail in
+  // programFeeStructure.ts), not derived from the Ledger master's own
+  // ledgerNum field the way it was read from before (which always produced
+  // 0, since that field is a per-ledger id unrelated to this ordering) —
+  // sourced from the item's own real, user-editable ledgerPriority input.
+  function buildFeeLines(s: Structure): ProgramFeeLineSaveInput[] {
+    return Object.entries(s.semFees).flatMap(([semesterGuid, items]) =>
+      items.map(item => ({
+        semesterGuid,
+        ledgerGuid: item.ledgerGuid,
+        currencyGuid: item.currencyGuid,
+        ledgerNum: +item.ledgerPriority || 0,
+        amount: +item.amount || 0,
+      }))
+    )
+  }
+
+  // Edit mode PUTs the one existing structure via update-complete (real now
+  // — see updateProgramFeeStructureComplete). Create mode saves every
+  // structure in the sidebar as its own header+lines save-complete call;
+  // each call is independently a complete record on the backend, so a
+  // failure partway through leaves the earlier ones saved — surfaced via
+  // FailurePopup rather than attempted rollback.
   async function handleSubmitAll() {
     if (!allComplete) return
     setSubmitting(true)
     try {
-      for (const s of structures) {
-        const feeLines: ProgramFeeLineSaveInput[] = Object.entries(s.semFees).flatMap(([semesterGuid, items]) =>
-          items.map(item => {
-            const ledger = ledgers.find(l => l.ledgerGuid === item.ledgerGuid)
-            return {
-              semesterGuid,
-              ledgerGuid: item.ledgerGuid,
-              currencyGuid: item.currencyGuid,
-              ledgerNum: ledger?.ledgerNum ?? 0,
-              amount: +item.amount || 0,
-            }
-          })
-        )
-        await saveFeeStructureComplete.mutateAsync({
-          feeCode: s.feeCode,
-          feeDesc: s.description,
-          status: true,
-          localOrForeign: s.localOrForeign,
-          programGuid: s.programme,
-          lef: s.lef ? +s.lef : null,
-          cef: s.cef ? +s.cef : null,
-          ace: s.ace ? +s.ace : null,
-          lec: s.lefCurrency ? +s.lefCurrency : null,
-          cec: s.cefCurrency ? +s.cefCurrency : null,
-          acec: s.aceCurrency ? +s.aceCurrency : null,
-          calcType: s.discountType === 'Percentage' ? 2 : 1,
-          amtPer: s.amtPer ? +s.amtPer : null,
-          intakeGuid: s.intake || null,
-          feeLines,
+      if (mode === 'edit' && editData) {
+        const s = structures[0]
+        await updateFeeStructureComplete.mutateAsync({
+          feeHdGuid: editData.feeHdGuid,
+          input: {
+            feeHdGuid: editData.feeHdGuid,
+            feeCode: s.feeCode,
+            feeDesc: s.description,
+            status: s.status,
+            localOrForeign: s.localOrForeign,
+            programGuid: s.programme,
+            lef: s.lef ? +s.lef : null,
+            cef: s.cef ? +s.cef : null,
+            ace: s.ace ? +s.ace : null,
+            lec: s.lefCurrency ? +s.lefCurrency : null,
+            cec: s.cefCurrency ? +s.cefCurrency : null,
+            acec: s.aceCurrency ? +s.aceCurrency : null,
+            calcType: s.discountType === 'Percentage' ? 2 : 1,
+            amtPer: s.amtPer ? +s.amtPer : null,
+            intakeGuid: s.intake || null,
+            feeLines: buildFeeLines(s),
+          },
         })
+      } else {
+        for (const s of structures) {
+          await saveFeeStructureComplete.mutateAsync({
+            feeCode: s.feeCode,
+            feeDesc: s.description,
+            status: s.status,
+            localOrForeign: s.localOrForeign,
+            programGuid: s.programme,
+            lef: s.lef ? +s.lef : null,
+            cef: s.cef ? +s.cef : null,
+            ace: s.ace ? +s.ace : null,
+            lec: s.lefCurrency ? +s.lefCurrency : null,
+            cec: s.cefCurrency ? +s.cefCurrency : null,
+            acec: s.aceCurrency ? +s.aceCurrency : null,
+            calcType: s.discountType === 'Percentage' ? 2 : 1,
+            amtPer: s.amtPer ? +s.amtPer : null,
+            intakeGuid: s.intake || null,
+            feeLines: buildFeeLines(s),
+          })
+        }
       }
       setSaved(true)
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Failed to save fee structure(s). Please try again.', 'error')
+      setFailure(error instanceof Error ? error.message : 'Failed to save fee structure(s). Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -259,10 +383,20 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
           <SuccessPopup
-            title="Fee Structure Saved!"
-            subtitle={`${structures.length} fee structure${structures.length > 1 ? 's' : ''} saved successfully.`}
+            title={mode === 'edit' ? 'Fee Structure Updated!' : 'Fee Structure Saved!'}
+            subtitle={mode === 'edit' ? 'Your changes have been saved successfully.' : `${structures.length} fee structure${structures.length > 1 ? 's' : ''} saved successfully.`}
             onClose={handleClose}
           />
+        </div>
+      </div>
+    )
+  }
+
+  if (failure) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup title="Couldn't Save Fee Structure" subtitle={failure} onClose={() => setFailure(null)} />
         </div>
       </div>
     )
@@ -349,7 +483,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--b800)' }}>
-                  {active.feeCode || `Structure ${activeIdx + 1}`} — {active.currency}{editData?.description ? ` · ${editData.description}` : ''}
+                  {active.feeCode || `Structure ${activeIdx + 1}`} — {active.currency}{active.description ? ` · ${active.description}` : ''}
                 </div>
                 <div style={{ fontSize: 11.5, color: 'var(--g400)' }}>
                   Structure {activeIdx + 1} of {structures.length}
