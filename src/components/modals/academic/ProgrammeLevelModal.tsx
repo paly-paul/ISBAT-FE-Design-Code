@@ -95,7 +95,7 @@ export function ProgrammeLevelModal({ isOpen, onClose, showToast, createProgramL
   return (
     <div className="modal-overlay open" id="new-alevel-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-graduation"></i> Add Programme Level</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

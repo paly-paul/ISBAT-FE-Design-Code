@@ -53,7 +53,7 @@ export function LogFollowupModal({ isOpen, onClose, record, onLog }: Props) {
   return (
     <div className="modal-overlay open">
       <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title flex items-center gap-2"><i className="lni lni-phone"></i> Log Follow-up &mdash; {record.ref}</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

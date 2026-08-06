@@ -74,7 +74,7 @@ export function AddSkillModal({ isOpen, onClose, showToast, createSkill }: AddSk
   return (
     <div className="modal-overlay open" id="add-skill-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-bulb"></i> Add Skill</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

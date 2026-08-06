@@ -63,7 +63,7 @@ export function NewRepTagModal({ isOpen, onClose, showToast, createRepetitionTag
   return (
     <div className="modal-overlay open" id="new-rep-tag-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-reload"></i> Add Repetition Tag</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

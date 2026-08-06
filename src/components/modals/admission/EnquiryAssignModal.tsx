@@ -112,7 +112,7 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
     return (
       <div className="modal-overlay open" id="enquiry-assign-modal">
         <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+          <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-eye"></i> Enquiry Details</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
@@ -127,7 +127,7 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
   return (
     <div className="modal-overlay open" id="enquiry-assign-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-eye"></i> Enquiry Details — {enquiry.enquiryCode}</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

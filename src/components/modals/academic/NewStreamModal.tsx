@@ -45,7 +45,7 @@ export function NewStreamModal({ isOpen, onClose, showToast, createStream }: New
   return (
     <div className="modal-overlay open" id="new-stream-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-certificate"></i> Add Stream</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

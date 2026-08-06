@@ -66,7 +66,7 @@ export function NewProcGlAccountModal({ isOpen, onClose, showToast, createProcGl
   return (
     <div className="modal-overlay open" id="new-proc-gl-account-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-calculator"></i> Add GL Account</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

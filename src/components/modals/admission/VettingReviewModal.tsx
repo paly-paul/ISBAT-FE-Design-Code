@@ -98,7 +98,7 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
     return (
       <div className="modal-overlay open">
         <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+          <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-eye"></i> Reviewing Application</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
@@ -115,7 +115,7 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
   return (
     <div className="modal-overlay open">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title flex items-center gap-2">
             <i className="lni lni-eye"></i> Reviewing: {detail.firstName} {detail.lastName} &middot; {detail.programName}
             <span className="badge badge-blue">{detail.admissionType}</span>

@@ -151,7 +151,7 @@ export function EditProgrammeLevelModal({ isOpen, onClose, showToast, programLev
     return (
       <div className="modal-overlay open" id="edit-alevel-modal">
         <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+          <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-pencil"></i> Edit Programme Level</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
@@ -166,7 +166,7 @@ export function EditProgrammeLevelModal({ isOpen, onClose, showToast, programLev
   return (
     <div className="modal-overlay open" id="edit-alevel-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Programme Level — <span className="font-mono">{programLevel.levelCode}</span></div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

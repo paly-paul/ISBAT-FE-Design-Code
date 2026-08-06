@@ -6,7 +6,7 @@ export function ElectiveSelectModal({ isOpen, onClose, showToast }: ModalProps) 
   return (
     <div className="modal-overlay open" id="elective-select-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-bar-chart"></i> Select Elective Paper — Batch BSC-IT-S26-DA · Sem 5</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>

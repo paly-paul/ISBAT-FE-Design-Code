@@ -81,7 +81,7 @@ export function StudentProfileModal({ isOpen, onClose, student }: Props) {
   return (
     <div className="modal-overlay open">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title flex items-center gap-2">
             <i className="lni lni-user"></i> Student Profile: <span className="text-b600">{student.name}</span>
           </div>

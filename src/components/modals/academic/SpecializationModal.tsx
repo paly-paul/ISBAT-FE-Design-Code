@@ -30,7 +30,7 @@ export function SpecializationModal({ isOpen, onClose, programGuid, programName 
   return (
     <div className="modal-overlay open" id="specialization-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-target"></i> Specializations{programName ? ` — ${programName}` : ''}</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>

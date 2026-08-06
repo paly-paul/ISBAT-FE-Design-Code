@@ -97,7 +97,7 @@ export function EditWeekdayModal({ isOpen, onClose, showToast, weekDayGuid, upda
     return (
       <div className="modal-overlay open" id="edit-weekday-modal">
         <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+          <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-pencil"></i> Edit Weekday</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
@@ -112,7 +112,7 @@ export function EditWeekdayModal({ isOpen, onClose, showToast, weekDayGuid, upda
   return (
     <div className="modal-overlay open" id="edit-weekday-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Weekday</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

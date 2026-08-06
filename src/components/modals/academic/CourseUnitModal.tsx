@@ -210,7 +210,7 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
   return (
     <div className="modal-overlay open" id="cu-new-modal">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-book"></i> Add Course Unit</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

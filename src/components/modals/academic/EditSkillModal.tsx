@@ -56,7 +56,7 @@ export function EditSkillModal({ isOpen, onClose, showToast, skill, updateSkill 
   return (
     <div className="modal-overlay open" id="edit-skill-modal" onClick={handleClose}>
       <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Skill</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

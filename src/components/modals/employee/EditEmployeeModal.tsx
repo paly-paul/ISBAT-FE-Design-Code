@@ -79,7 +79,9 @@ export function EditEmployeeModal({ isOpen, onClose, showToast, employeeGuid }: 
   // was a fabrication that never existed on the real response (see
   // lib/api/academic/country.ts) — Employee's own intCountryCode has no
   // confirmed mapping to a real country, so it's treated as the option's
-  // 1-based list position, same workaround convention as Batch's bInCharge.
+  // 1-based list position. (Batch's own bInCharge used to be the reference
+  // example for this workaround; it's since been confirmed as a real
+  // employeeGuid and no longer needs it — see lib/api/academic/batch.ts.)
   const defaultCountryIndex = countries.findIndex(c => c.defaultCountry === 1)
   const defaultCountryCode = defaultCountryIndex >= 0 ? defaultCountryIndex + 1 : 1
   const departmentOptions = departments.map(d => d.deptName)
@@ -209,7 +211,7 @@ export function EditEmployeeModal({ isOpen, onClose, showToast, employeeGuid }: 
   return (
     <div className="modal-overlay open" id="edit-employee-modal">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Employee</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>

@@ -431,7 +431,7 @@ export function NewIntakeModal({ isOpen, onClose, showToast, createIntake }: New
   return (
     <div className="modal-overlay open" id="new-intake-modal">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-calendar"></i> Create New Intake</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

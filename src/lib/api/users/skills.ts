@@ -12,7 +12,9 @@ export interface LecturerSkill {
   // employeeGuid here, and Employee (lib/api/employee/employee.ts) exposes no
   // matching int field to reverse-map it against, so it can only be
   // displayed raw ("Employee #<n>"), never resolved to a name. Same
-  // "int FK with no confirmed guid source" gotcha as batch.ts's bInCharge.
+  // "int FK with no confirmed guid source" gotcha batch.ts's bInCharge used
+  // to have — that one's since been confirmed as a real employeeGuid (see
+  // batch.ts), but no equivalent confirmation exists here yet.
   intEmployee: number
   skillName: string
   // Confirmed on the wire as a bare int (1/2/3 seen in sample data) with no

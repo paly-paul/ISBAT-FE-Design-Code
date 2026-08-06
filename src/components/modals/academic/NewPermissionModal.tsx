@@ -53,7 +53,7 @@ export function NewPermissionModal({ isOpen, onClose, showToast, createPermissio
   return (
     <div className="modal-overlay open" id="new-permission-modal">
       <div className="modal modal-xl modal-flex" style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-lock"></i> Add Permission Group</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>

@@ -260,7 +260,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
     return (
       <div className="modal-overlay open" id="cu-edit-modal">
         <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+          <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-pencil"></i> Edit Course Unit</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
@@ -275,7 +275,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
   return (
     <div className="modal-overlay open" id="cu-edit-modal">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Course Unit</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

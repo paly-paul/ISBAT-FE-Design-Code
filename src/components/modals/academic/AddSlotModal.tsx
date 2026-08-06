@@ -7,7 +7,7 @@ export function AddSlotModal({ isOpen, onClose, showToast }: ModalProps) {
   return (
     <div className="modal-overlay open" id="add-slot-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-calendar"></i> Add Timetable Slot</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>

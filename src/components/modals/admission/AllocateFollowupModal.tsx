@@ -57,7 +57,7 @@ export function AllocateFollowupModal({ isOpen, onClose, enquiry, onAllocate }: 
   return (
     <div className="modal-overlay open">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title flex items-center gap-2"><i className="lni lni-calendar"></i> Allocate Follow-up &mdash; {enquiry.ref}</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
