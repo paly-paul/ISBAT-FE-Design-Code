@@ -126,7 +126,7 @@ export function EditBankBranchModal({ isOpen, onClose, showToast, bankBranchGuid
     return (
       <div className="modal-overlay open" id="edit-bank-branch-modal">
         <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+          <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-pencil"></i> Edit Bank Branch</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
@@ -141,7 +141,7 @@ export function EditBankBranchModal({ isOpen, onClose, showToast, bankBranchGuid
   return (
     <div className="modal-overlay open" id="edit-bank-branch-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Bank Branch</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

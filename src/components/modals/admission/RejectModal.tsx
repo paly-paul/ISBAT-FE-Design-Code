@@ -46,7 +46,7 @@ export function RejectModal({ isOpen, onClose, showToast, applicationGuid, vetAp
   return (
     <div className="modal-overlay open">
       <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-ban"></i> Reject Application</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

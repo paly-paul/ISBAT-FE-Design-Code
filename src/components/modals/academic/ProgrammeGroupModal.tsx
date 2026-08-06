@@ -82,7 +82,7 @@ export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramG
   return (
     <div className="modal-overlay open" id="new-proggroup-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-folder"></i> Add Programme Group</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

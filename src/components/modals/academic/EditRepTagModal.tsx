@@ -108,7 +108,7 @@ export function EditRepTagModal({ isOpen, onClose, showToast, courseUnitRepetiti
     return (
       <div className="modal-overlay open" id="edit-rep-tag-modal">
         <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+          <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-pencil"></i> Edit Repetition Tag</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
@@ -123,7 +123,7 @@ export function EditRepTagModal({ isOpen, onClose, showToast, courseUnitRepetiti
   return (
     <div className="modal-overlay open" id="edit-rep-tag-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Repetition Tag</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

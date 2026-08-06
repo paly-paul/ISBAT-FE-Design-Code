@@ -55,7 +55,7 @@ export function NewEnquirySourceModal({ isOpen, onClose, showToast, createEnquir
   return (
     <div className="modal-overlay open" id="new-enquiry-source-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-compass"></i> Add Isbat Enquiry Source</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

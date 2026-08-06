@@ -79,7 +79,7 @@ export function NewCountryModal({ isOpen, onClose, showToast, createCountry }: N
   return (
     <div className="modal-overlay open" id="new-country-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-world"></i> Add Country</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

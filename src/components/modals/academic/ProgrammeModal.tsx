@@ -956,7 +956,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   return (
     <div className="modal-overlay open" id="new-prog-modal">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-graduation"></i> {mode === 'edit' ? 'Edit' : 'Add'} Programme Version</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

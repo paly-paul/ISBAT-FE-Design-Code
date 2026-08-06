@@ -40,7 +40,7 @@ export function NewSkillModal({ isOpen, onClose, showToast, createSkill }: NewSk
   return (
     <div className="modal-overlay open" id="new-skill-modal" onClick={handleClose}>
       <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-bulb"></i> Add Skill</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

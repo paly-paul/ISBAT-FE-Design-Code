@@ -19,7 +19,17 @@ export function SuccessPopup({ title, subtitle, onClose }: Props) {
   }, [onClose])
 
   return (
-    <div style={{ textAlign: 'center', padding: '36px 28px 30px' }}>
+    <div style={{ textAlign: 'center', padding: '36px 28px 30px', position: 'relative' }}>
+
+      {/* Close (×) */}
+      <button
+        className="modal-close"
+        onClick={onClose}
+        aria-label="Close"
+        style={{ position: 'absolute', top: 10, right: 10 }}
+      >
+        <i className="lni lni-close"></i>
+      </button>
 
       {/* Animated illustration */}
       <div style={{

@@ -47,7 +47,7 @@ export function ImportCrmModal({ isOpen, onClose }: ModalProps) {
   return (
     <div className="modal-overlay open">
       <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title flex items-center gap-2"><i className="lni lni-cloud-download"></i> Import Lead from Merito CRM</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

@@ -100,7 +100,7 @@ export function EditEnquiryStatusModal({ isOpen, onClose, showToast, enquiryStat
     return (
       <div className="modal-overlay open" id="edit-enquiry-status-modal">
         <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+          <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-pencil"></i> Edit Enquiry Status</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
@@ -115,7 +115,7 @@ export function EditEnquiryStatusModal({ isOpen, onClose, showToast, enquiryStat
   return (
     <div className="modal-overlay open" id="edit-enquiry-status-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Enquiry Status</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

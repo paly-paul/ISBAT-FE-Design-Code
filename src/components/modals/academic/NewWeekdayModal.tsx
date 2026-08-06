@@ -57,7 +57,7 @@ export function NewWeekdayModal({ isOpen, onClose, showToast, createWeekday }: N
   return (
     <div className="modal-overlay open" id="new-weekday-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-calendar"></i> Add Weekday</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

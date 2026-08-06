@@ -22,15 +22,16 @@ interface EditBatchModalProps extends ModalProps {
   }
 }
 
-// Update now takes the same full-replace shape as Create (confirmed) —
-// programGuid/semesterGuid/streamGuid/batchTimeGuid/intakeCode are all
-// applied, not just Stream/dates/In-Charge like before. GET /batches/:guid
-// hasn't been confirmed to return matching guid fields yet (still only
-// intProgram/intSem/intStream/batchTime as ints — see the note on Batch in
-// lib/api/academic/batch.ts), so none of these can be prefilled from the
-// current record; every field must be re-selected on every edit, same as
-// Stream/In-Charge already were before this change. Batch In-Charge is
-// still sent as list position — see the note in NewBatchModal.
+// Update takes the same full-replace shape as Create (confirmed) —
+// programGuid/semesterGuid/streamGuid/batchTimeGuid/bInCharge/intakeGuid are
+// all applied. GET /batches/:guid returns real guids for Programme/Semester/
+// Stream/Batch Time (see Batch in lib/api/academic/batch.ts), so those four
+// prefill from the fetched record. Intake and Batch In-Charge still can't be
+// prefilled — Batch's GET shape has no intake field at all, and GetByGuid
+// doesn't return bInCharge either — both must be re-picked on every edit.
+// Batch In-Charge is now sent as the employee's real employeeGuid (a live
+// sample payload confirmed this, replacing the old list-position workaround
+// — see the note in NewBatchModal).
 export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBatch }: EditBatchModalProps) {
   const { data: batch, isLoading, isError, error } = useBatch(batchGuid, isOpen)
   const { data: programs = [] }   = useProgramMasters()
@@ -47,7 +48,7 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
   const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
   const streamOptions    = streams.map(s => ({ value: s.streamGuid, label: s.streamName }))
   const batchTimeOptions = batchTimes.map(b => ({ value: b.batchTimeGuid, label: b.batchTime }))
-  const advisorOptions   = employees.map((e, i) => ({ value: String(i), label: e.empName }))
+  const advisorOptions   = employees.map(e => ({ value: e.employeeGuid, label: e.empName }))
 
   const [saved, setSaved]     = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
@@ -55,7 +56,7 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
   const [semesterGuid, setSemesterGuid]   = useState('')
   const [streamGuid, setStreamGuid]       = useState('')
   const [batchTimeGuid, setBatchTimeGuid] = useState('')
-  const [inChargeIdx, setInChargeIdx]     = useState('')
+  const [inChargeGuid, setInChargeGuid]   = useState('')
   const [startDate, setStartDate]         = useState('')
   const [endDate, setEndDate]             = useState('')
   const [errors, setErrors]               = useState<Record<string, string>>({})
@@ -72,7 +73,7 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
     setSemesterGuid(batch.semesterGuid)
     setStreamGuid(batch.streamGuid)
     setBatchTimeGuid(batch.batchTimeGuid)
-    setInChargeIdx('')
+    setInChargeGuid('')
     setStartDate(batch.bStartDate ? batch.bStartDate.slice(0, 10) : '')
     setEndDate(batch.bEndDate ? batch.bEndDate.slice(0, 10) : '')
     setErrors({})
@@ -82,7 +83,7 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
 
   function handleClose() {
     setSaved(false); setFailure(null)
-    setProgramGuid(''); setIntakeGuid(''); setSemesterGuid(''); setStreamGuid(''); setBatchTimeGuid(''); setInChargeIdx('')
+    setProgramGuid(''); setIntakeGuid(''); setSemesterGuid(''); setStreamGuid(''); setBatchTimeGuid(''); setInChargeGuid('')
     setErrors({})
     onClose()
   }
@@ -94,15 +95,13 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
     if (!semesterGuid)  e.semesterGuid = 'Please select a Semester'
     if (!streamGuid)    e.streamGuid = 'Please select a Specialization'
     if (!batchTimeGuid) e.batchTimeGuid = 'Please select a Batch Time'
-    if (!inChargeIdx)   e.inChargeIdx = 'Please select a Batch In-Charge'
+    if (!inChargeGuid)  e.inChargeGuid = 'Please select a Batch In-Charge'
     setErrors(e)
     return Object.keys(e).length === 0
   }
 
   function handleSubmit() {
     if (!batchGuid || !validate()) return
-    const intake = intakes.find(i => i.intakeGuid === intakeGuid)
-    if (!intake) return
     updateBatch.mutate(
       {
         guid: batchGuid,
@@ -113,8 +112,9 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
           batchTimeGuid,
           bStartDate: startDate ? `${startDate}T00:00:00` : null,
           bEndDate: endDate ? `${endDate}T00:00:00` : null,
-          bInCharge: Number(inChargeIdx) + 1,
-          intakeCode: intake.intakeCode,
+          bInCharge: inChargeGuid,
+          intakeGuid,
+          pHead: null,
         },
       },
       {
@@ -215,8 +215,8 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
           </div>
           <div className="fg">
             <div className="lbl">Batch In-Charge <span className="req">*</span></div>
-            <SearchSelect placeholder="— Select faculty member —" options={advisorOptions} value={inChargeIdx} onChange={val => { setInChargeIdx(val); if (errors.inChargeIdx) setErrors(p => ({ ...p, inChargeIdx: '' })) }} />
-            {errors.inChargeIdx && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.inChargeIdx}</p>}
+            <SearchSelect placeholder="— Select faculty member —" options={advisorOptions} value={inChargeGuid} onChange={val => { setInChargeGuid(val); if (errors.inChargeGuid) setErrors(p => ({ ...p, inChargeGuid: '' })) }} />
+            {errors.inChargeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.inChargeGuid}</p>}
           </div>
           <div className="fg"><div className="lbl">Start Date</div><input className="ctrl" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
           <div className="fg"><div className="lbl">End Date</div><input className="ctrl" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>

@@ -29,12 +29,14 @@ interface BatchListResult {
 }
 
 // Confirmed via the updated Create/Update schema — programGuid/semesterGuid/
-// streamGuid/batchTimeGuid are now real guids, resolving the old int-FK-
-// with-no-guid-source gap for four of the five previously unconfirmed
-// fields. bInCharge is still a plain number with no confirmed guid or real
-// int source anywhere (Employee only ever exposes employeeGuid) — kept as
-// the option's 1-based list position, same workaround as before, flagged
-// in-UI. intakeCode is Intake.intakeCode, unchanged.
+// streamGuid/batchTimeGuid are real guids, and bInCharge is now CONFIRMED to
+// be a real employeeGuid too (a live sample payload showed a genuine guid,
+// not a list-position int) — this resolves the last "int FK with no guid
+// source" gap noted for this domain; the 1-based-list-position workaround is
+// gone, both here and in NewBatchModal/EditBatchModal. intakeGuid replaces
+// the old intakeCode int field (no more Intake lookup-by-code needed to
+// submit). pHead is a new field of unconfirmed purpose (possibly "Programme
+// Head") — no UI control exists for it yet, always sent null.
 export interface BatchCreateInput {
   programGuid: string
   semesterGuid: string
@@ -42,19 +44,19 @@ export interface BatchCreateInput {
   batchTimeGuid: string
   bStartDate: string | null
   bEndDate: string | null
-  bInCharge: number
-  intakeCode: number
+  bInCharge: string
+  intakeGuid: string
+  pHead: string | null
 }
 
-// Confirmed: Update now takes the identical shape as Create — a full
-// replace, not the old narrower intStream/dates/bInCharge-only body where
-// batchCode/batchTime were required but silently ignored. GET
-// /batches/:guid now returns matching guid fields too (confirmed via a real
-// list response — see Batch above), so EditBatchModal prefills Programme/
-// Semester/Stream/Batch Time from the fetched record. Intake and Batch
-// In-Charge still can't be prefilled — Batch's GET shape has no intake
-// field at all, and no confirmed guid/int source for the employee either
-// (see the note in NewBatchModal) — both must be re-picked on every edit.
+// Confirmed: Update takes the identical shape as Create — a full replace,
+// not a narrower partial body. GET /batches/:guid now returns matching guid
+// fields too (confirmed via a real list response — see Batch above), so
+// EditBatchModal prefills Programme/Semester/Stream/Batch Time from the
+// fetched record. Intake and Batch In-Charge still can't be prefilled —
+// Batch's GET shape has no intake field at all, and GetByGuid doesn't return
+// bInCharge either — both must be re-picked on every edit, even though both
+// are now real-guid fields on write.
 export type BatchUpdateInput = BatchCreateInput
 
 let mockBatchSeq = 1
