@@ -1,61 +1,79 @@
 'use client'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { FeeStructureModal } from '@/components/modals/academic/FeeStructureModal'
 import { Toast } from '@/components/Toast'
 import { TableSearch } from '@/components/TableSearch'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
+import { useProgramFeeStructures, ProgramFeeStructureHeader } from '@/hooks/academic/useProgramFeeStructure'
+import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useIntakes } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
-
-type FeeRecord = {
-  id: number
-  feeCode: string
-  description: string
-  programme: string
-  programmeCode: string
-  intake: string
-  currency: string
-}
-
-const MOCK_FEES: FeeRecord[] = [
-  { id: 1, feeCode: 'FS-LOCAL-001', description: 'BSc. IT Local Students Fee Structure 2026',          programme: 'BSc. Information Technology',     programmeCode: 'BSIT-2025', intake: '20261', currency: 'UGX' },
-  { id: 2, feeCode: 'FS-INTL-001',  description: 'BSc. IT International Students Fee Structure 2026', programme: 'BSc. Information Technology',     programmeCode: 'BSIT-2025', intake: '20261', currency: 'USD' },
-  { id: 3, feeCode: 'FS-MBA-001',   description: 'MBA Full-Time Fee Structure 2024',                   programme: 'Master of Business Administration', programmeCode: 'MBA-2024',  intake: '20241', currency: 'UGX' },
-  { id: 4, feeCode: 'FS-LOCAL-002', description: 'BSc. CS Local Students Fee Structure 2026',          programme: 'BSc. Computer Science',            programmeCode: 'BSCS-2026', intake: '20261', currency: 'UGX' },
-  { id: 5, feeCode: 'FS-INTL-002',  description: 'BSc. CS International Students Fee Structure 2026', programme: 'BSc. Computer Science',            programmeCode: 'BSCS-2026', intake: '20261', currency: 'USD' },
-  { id: 6, feeCode: 'FS-ODL-001',   description: 'ODL Programme Fee Structure 2026',                   programme: 'ODL — Bachelor of Commerce',       programmeCode: 'BCOM-2025', intake: '20262', currency: 'UGX' },
-]
+// Load enough rows to cover the full list (348+ seen in practice) in one
+// request, same "load it all, search/paginate client-side" convention as
+// batch-management/employee-master — a search box only makes sense against
+// the whole dataset, not whatever 20-row server page happens to be loaded.
+const FEE_STRUCTURES_LOAD_SIZE = 1000
 
 export default function Page() {
   const router = useRouter()
   const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [records, setRecords] = useState<FeeRecord[]>(MOCK_FEES)
-  const [editRecord, setEditRecord] = useState<FeeRecord | null>(null)
+  // Passed straight into FeeStructureModal as editData — the modal now
+  // fetches its own real fee lines by feeHdGuid (GET fee-lines/:feeHdGuid),
+  // this row supplies the header fields (feeCode, calcType, lef/cef/ace,
+  // intakeGuid, etc.) that endpoint doesn't return.
+  const [editRecord, setEditRecord] = useState<ProgramFeeStructureHeader | null>(null)
   const [search, setSearch] = useState('')
+
+  const { data, isLoading } = useProgramFeeStructures(1, FEE_STRUCTURES_LOAD_SIZE)
+  const { data: programs = [] } = useProgramMasters()
+  const { data: intakes = [] } = useIntakes()
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  function deleteRecord(id: number) {
-    setRecords(prev => prev.filter(r => r.id !== id))
-    showToast('Fee structure removed.', '')
+  function programmeFor(programGuid: string) {
+    return programs.find(p => p.programGuid === programGuid)
+  }
+  function intakeCodeFor(intakeGuid: string | null) {
+    if (!intakeGuid) return '—'
+    const intake = intakes.find(i => i.intakeGuid === intakeGuid)
+    return intake ? String(intake.intakeCode) : '—'
   }
 
-  const searchMatches = search.trim()
-    ? records.filter(r => `${r.feeCode} ${r.description}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
-    : []
+  // No delete endpoint is confirmed for this resource yet (only
+  // hd/save-complete has been seen) — flagged rather than faked, same
+  // convention as AdjustLedgerModal/the Finance "New Deposit" stub. Removing
+  // the row from local state here would look like a real delete but
+  // silently reappear on the next refetch, which is worse than doing
+  // nothing.
+  function deleteRecord() {
+    showToast("Delete isn't wired to a real endpoint yet.", 'error')
+  }
 
-  const filteredRecords = records.filter(r =>
-    !search.trim() || `${r.feeCode} ${r.description}`.toLowerCase().includes(search.trim().toLowerCase())
+  const records = data?.items ?? []
+
+  const searchMatches = useMemo(
+    () => search.trim()
+      ? records.filter(r => `${r.feeCode} ${r.feeDesc}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+      : [],
+    [records, search],
+  )
+
+  const filteredRecords = useMemo(
+    () => records.filter(r => !search.trim() || `${r.feeCode} ${r.feeDesc}`.toLowerCase().includes(search.trim().toLowerCase())),
+    [records, search],
   )
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRecords, PAGE_SIZE)
@@ -86,7 +104,7 @@ export default function Page() {
             placeholder="Search by fee code or description…"
             value={search}
             onChange={setSearch}
-            results={searchMatches.map(r => ({ id: String(r.id), primary: r.feeCode, secondary: r.description }))}
+            results={searchMatches.map(r => ({ id: r.feeHdGuid, primary: r.feeCode, secondary: r.feeDesc }))}
           />
         </div>
 
@@ -98,28 +116,47 @@ export default function Page() {
                 <th>Fee Code</th>
                 <th>Description</th>
                 <th>Programme</th>
+                <th>Intake</th>
+                <th>Local / Foreign</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {pageItems.map(r => (
-                <tr key={r.id}>
-                  <td>
-                    {(permissions.edit || permissions.delete) && (
-                      <ActionMenu>
-                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => { setEditRecord(r); openModal('edit-fee-structure-modal') }}><i className="lni lni-pencil"></i> Edit</button>}
-                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => deleteRecord(r.id)}><i className="lni lni-trash-can"></i> Delete</button>}
-                      </ActionMenu>
-                    )}
-                  </td>
-                  <td><span className="font-mono text-[var(--b700)] font-semibold">{r.feeCode}</span></td>
-                  <td>{r.description}</td>
-                  <td>{r.programme}</td>
-                </tr>
-              ))}
+              {isLoading
+                ? <TableLoadingState colSpan={999} />
+                : filteredRecords.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={!!search} onClearFilters={() => setSearch('')} />
+                  : null}
+              {pageItems.map(r => {
+                const programme = programmeFor(r.programGuid)
+                return (
+                  <tr key={r.feeHdGuid}>
+                    <td>
+                      {(permissions.edit || permissions.delete) && (
+                        <ActionMenu>
+                          {permissions.edit && (
+                            <button
+                              className="btn btn-neu btn-sm"
+                              onClick={() => { setEditRecord(r); openModal('edit-fee-structure-modal') }}
+                            ><i className="lni lni-pencil"></i> Edit</button>
+                          )}
+                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={deleteRecord}><i className="lni lni-trash-can"></i> Delete</button>}
+                        </ActionMenu>
+                      )}
+                    </td>
+                    <td><span className="font-mono text-[var(--b700)] font-semibold">{r.feeCode}</span></td>
+                    <td>{r.feeDesc}</td>
+                    <td>{programme ? `${programme.programName} (${programme.programCode})` : '—'}</td>
+                    <td>{intakeCodeFor(r.intakeGuid)}</td>
+                    <td><span className={`badge ${r.localOrForeign ? 'badge-blue' : 'badge-grey'}`}>{r.localOrForeign ? 'Foreign' : 'Local'}</span></td>
+                    <td><span className={`badge ${r.status ? 'badge-green' : 'badge-grey'}`}>{r.status ? 'Active' : 'Inactive'}</span></td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </ScrollTable>
-        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="fee items" onPageChange={setPage} />
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="fee structures" onPageChange={setPage} />
       </div>
 
       <FeeStructureModal isOpen={openModals.has('new-fee-structure-modal')} onClose={() => closeModal('new-fee-structure-modal')} showToast={showToast} nav={nav} />

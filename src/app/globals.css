@@ -3411,8 +3411,21 @@ body:has(.modal-overlay.open) {
 .modal.modal-flex>.prog-steps,
 .modal.modal-flex>.modal-footer {
   flex-shrink: 0;
-  background: var(--white);
   z-index: 3
+}
+
+/* .modal.modal-flex>.modal-hdr above has higher specificity (3 classes) than
+   .modal-hdr-blue (1 class), so a plain shared `background: var(--white)`
+   on that combined rule was silently overriding the blue gradient on every
+   modal-flex modal that also opts into modal-hdr-blue (ProgrammeModal,
+   VettingReviewModal, EditIntakeModal, etc.) — the header rendered plain
+   white instead of blue regardless of the modal-hdr-blue class being
+   present. Scoped to :not(.modal-hdr-blue) so the accent variant's own
+   gradient wins again; .modal-footer is never a colored variant, so it
+   keeps the unconditional white background. */
+.modal.modal-flex>.modal-hdr:not(.modal-hdr-blue),
+.modal.modal-flex>.modal-footer {
+  background: var(--white)
 }
 
 .modal.modal-flex>.prog-steps {
