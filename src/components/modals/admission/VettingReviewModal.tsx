@@ -32,18 +32,19 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
 
   const [remarks, setRemarks] = useState('')
   const [approved, setApproved] = useState(false)
+  const [waited, setWaited] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
 
   if (!isOpen || !applicationGuid) return null
 
-  function handleClose() { setApproved(false); setFailure(null); setRemarks(''); onClose() }
+  function handleClose() { setApproved(false); setWaited(false); setFailure(null); setRemarks(''); onClose() }
 
   function handleWait() {
     if (!applicationGuid) return
     waitApplication.mutate(
       { applicationGuid, remarks: remarks.trim() || null },
       {
-        onSuccess: () => showToast('Applicant placed on hold — waiting for original documents', 'amber'),
+        onSuccess: () => { setWaited(true); showToast('Applicant placed on hold — waiting for original documents', 'amber') },
         onError: (err: Error) => setFailure(err.message || 'Failed to place application on hold.'),
       },
     )
@@ -65,6 +66,16 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
           <SuccessPopup title="Application Approved!" subtitle={`${detail.firstName} ${detail.lastName}'s provisional admission letter has been issued.`} onClose={handleClose} />
+        </div>
+      </div>
+    )
+  }
+
+  if (waited && detail) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <SuccessPopup title="Application On Hold" subtitle={`${detail.firstName} ${detail.lastName} is now waiting on original documents.`} onClose={handleClose} />
         </div>
       </div>
     )
