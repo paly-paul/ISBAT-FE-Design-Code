@@ -14,6 +14,7 @@ import {
   useSaveProgramFeeStructureComplete,
   useUpdateProgramFeeStructureComplete,
   useProgramFeeLines,
+  useProgramFeeStructures,
   ProgramFeeLineSaveInput,
   ProgramFeeStructureHeader,
 } from '@/hooks/academic/useProgramFeeStructure'
@@ -87,6 +88,19 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   // list row the page already fetched), not from this endpoint — it only
   // ever returns the line items.
   const { data: feeLines, isLoading: feeLinesLoading, isError: feeLinesError } = useProgramFeeLines(editData?.feeHdGuid ?? null, isOpen && mode === 'edit' && !!editData)
+  // Copy Fee Code — real now: sourced from every existing fee structure via
+  // the same GET-all endpoint the main page's table uses, not the old
+  // session-only "other structures added in this modal" list. Fetched
+  // unconditionally (matches the rest of this modal's non-guid-scoped
+  // lookups, e.g. useProgramMasters/useIntakes above), not gated on isOpen.
+  const { data: allFeeStructuresData } = useProgramFeeStructures(1, 1000)
+  const allFeeStructures = allFeeStructuresData?.items ?? []
+  // Per-source-guid on-demand fetch of the picked structure's real fee
+  // lines — the GET-all list only ever returns header fields, never the
+  // lines themselves (see programFeeStructure.ts's ProgramFeeStructureHeader
+  // note). Only enabled once something's actually been picked.
+  const [copySourceId, setCopySourceId] = useState('')
+  const { data: copySourceLines } = useProgramFeeLines(copySourceId || null, !!copySourceId)
   // Per Fee_Structure_Change_Requests.md #4 — Create no longer offers an
   // Intake dropdown at all, it's forced to whatever intake is currently
   // flagged current (the same "Current Academic Intake" hero-card filter
@@ -167,7 +181,58 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
     }
   }, [isOpen, mode, currentAcademicIntake])
 
+  // Applies the picked Copy Fee Code source once its real fee lines have
+  // loaded. feeCode/description are deliberately left untouched so the copy
+  // never collides with the source's own code — same convention as
+  // ProgrammeModal's own Copy Fee Code. copySourceId is intentionally left
+  // set afterwards (not reset to '') so the dropdown keeps showing what was
+  // copied from, instead of snapping back to the placeholder right after a
+  // successful copy — appliedCopyRef guards against re-applying every time
+  // this effect happens to re-run for an unrelated reason.
+  const appliedCopyRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!copySourceId || !copySourceLines) return
+    if (appliedCopyRef.current === copySourceId) return
+    appliedCopyRef.current = copySourceId
+    const source = allFeeStructures.find(item => item.feeHdGuid === copySourceId)
+    if (!source) return
+    const semFees: SemFeesMap = {}
+    copySourceLines.forEach(l => {
+      const list = semFees[l.semesterGuid] ?? (semFees[l.semesterGuid] = [])
+      list.push({ id: nextId++, amount: String(l.amount), currencyGuid: l.currencyGuid, ledgerGuid: l.ledgerGuid, ledgerPriority: String(l.ledgerNum) })
+    })
+    setStructures(prev => prev.map((s, i) => i !== activeIdx ? s : {
+      ...s,
+      localOrForeign: source.localOrForeign,
+      discountType: source.calcType === 2 ? 'Percentage' : 'Amount',
+      amtPer: source.amtPer != null ? String(source.amtPer) : '',
+      lef: source.lef != null ? String(source.lef) : '',
+      lefCurrency: source.lec != null ? String(source.lec) : '',
+      cef: source.cef != null ? String(source.cef) : '',
+      cefCurrency: source.cec != null ? String(source.cec) : '',
+      ace: source.ace != null ? String(source.ace) : '',
+      aceCurrency: source.acec != null ? String(source.acec) : '',
+      semFees,
+    }))
+    showToast(`Copied fees from ${source.feeCode.trim()}`)
+  }, [copySourceId, copySourceLines, allFeeStructures, activeIdx, showToast])
+
   const active = structures[activeIdx]
+
+  // Real Copy Fee Code source list now — every existing fee structure for
+  // this SAME programme (a fee line's semesterGuid only means anything
+  // within its own programme's semester space, so a cross-programme copy
+  // would silently attach fee lines to semesters that don't belong here).
+  // The record currently being edited is included and selectable like any
+  // other — still labeled "(Current)" for reference, just no longer
+  // click-disabled.
+  const copySourceOptions = allFeeStructures
+    .filter(item => item.programGuid === active.programme)
+    .map(item => {
+      const isCurrent = mode === 'edit' && editData?.feeHdGuid === item.feeHdGuid
+      return { value: item.feeHdGuid, label: isCurrent ? `${item.feeCode.trim()} (Current)` : item.feeCode.trim() }
+    })
 
   // Real semesters for the currently selected programme — drives the
   // per-semester accordion below instead of a fixed Sem 1-6 range. These
@@ -233,7 +298,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   const anyLedgerGaps    = structures.some(structHasLedgerGaps)
   const allComplete      = structures.every(structureComplete) && !anyCurrencyGaps && !anyLedgerGaps
 
-  function handleClose() { setSaved(false); setFailure(null); setStructures(makeDefaultStructures()); setActiveIdx(0); setActiveAcc(0); prefilledForRef.current = null; onClose() }
+  function handleClose() { setSaved(false); setFailure(null); setStructures(makeDefaultStructures()); setActiveIdx(0); setActiveAcc(0); setCopySourceId(''); appliedCopyRef.current = null; prefilledForRef.current = null; onClose() }
 
   // ── Structure management ─────────────────────────────────
   function addStructure() {
@@ -422,7 +487,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
               {structures.map((s, i) => (
                 <div
                   key={s.id}
-                  onClick={() => { setActiveIdx(i); setActiveAcc(0) }}
+                  onClick={() => { setActiveIdx(i); setActiveAcc(0); setCopySourceId(''); appliedCopyRef.current = null }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8,
                     padding: '9px 10px', borderRadius: 'var(--rsm)', marginBottom: 2,
@@ -467,7 +532,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
               <SearchSelect
                 placeholder="— Select a programme to begin —"
                 value={active.programme}
-                onChange={val => updateStructureMeta('programme', val)}
+                onChange={val => { updateStructureMeta('programme', val); setCopySourceId(''); appliedCopyRef.current = null }}
                 options={programOptions}
                 disabled={mode === 'edit'}
               />
@@ -518,8 +583,10 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
               <div className="fg m-0">
                 <div className="lbl">Copy Fee Code</div>
                 <SearchSelect
-                  placeholder="— Select source structure —"
-                  options={structures.map((s, i) => ({ s, i })).filter(({ i }) => i !== activeIdx).map(({ s, i }) => ({ value: String(s.id), label: s.feeCode || `Structure ${i + 1}` }))}
+                  placeholder={active.programme ? '— Select source structure —' : 'Select a programme first'}
+                  value={copySourceId}
+                  onChange={setCopySourceId}
+                  options={copySourceOptions}
                 />
               </div>
               {/* Intake is always read-only now (Fee_Structure_Change_Requests.md

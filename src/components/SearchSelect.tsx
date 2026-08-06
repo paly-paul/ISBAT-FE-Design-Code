@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 
-type Opt = { value: string; label: string }
+type Opt = { value: string; label: string; disabled?: boolean }
 
 interface SearchSelectProps {
   options: (string | Opt)[]
@@ -163,8 +163,9 @@ export function SearchSelect({
               : visible.map(o => (
                   <div
                     key={o.value}
-                    className={`col-filter-opt${current === o.value ? ' fil-active' : ''}`}
-                    onClick={() => select(o.value)}
+                    className={`col-filter-opt${current === o.value ? ' fil-active' : ''}${o.disabled ? ' fil-disabled' : ''}`}
+                    onClick={() => { if (!o.disabled) select(o.value) }}
+                    aria-disabled={o.disabled}
                   >
                     {o.label}
                   </div>

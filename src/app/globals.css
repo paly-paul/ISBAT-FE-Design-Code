@@ -2695,6 +2695,19 @@ th:hover .th-fi {
   font-weight: 600
 }
 
+/* Per-option disabled state (SearchSelect's Opt.disabled) — visible but not
+   selectable, e.g. Copy Fee Code's "this is the record you're already
+   editing" entry. */
+.col-filter-opt.fil-disabled {
+  cursor: not-allowed;
+  color: var(--g400);
+  font-style: italic;
+}
+
+.col-filter-opt.fil-disabled:hover {
+  background: transparent
+}
+
 /* FilterTh — checkbox multi-select additions */
 .col-filter-search {
   padding: 8px 10px 6px

@@ -1,6 +1,6 @@
 'use client'
-import React, { useState, useRef, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { Suspense, useState, useRef, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ImportSourceModal } from '@/components/modals/admission/ImportSourceModal'
 import { ImportCrmModal } from '@/components/modals/admission/ImportCrmModal'
@@ -8,20 +8,21 @@ import { ImportOdelModal } from '@/components/modals/admission/ImportOdelModal'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useCampuses } from '@/hooks/config/useCampuses'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useProgramMastersByCampus } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
-import { useBanks } from '@/hooks/finance/useBanks'
+import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { useCountries } from '@/hooks/config/useCountries'
-import { useEnquiries, useEnquiry } from '@/hooks/admission/useEnquiries'
+import { useEnquiry } from '@/hooks/admission/useEnquiries'
 import {
   useApplicationPaymentExemptionTypes,
   useApplicationPaymentFees,
   useApplicationPaymentTypes,
   useCreateApplicationPayment,
+  useUnconvertedEnquiries,
 } from '@/hooks/admission/useApplicationPayments'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -33,11 +34,11 @@ const PIPELINE = [
   { label: 'Registration',  desc: '',              status: '' },
 ]
 
-// Application Source and Receipt Type have no counterpart on
-// POST /api/v1/admissions/application-payments — kept as decorative/local
-// fields (not sent) rather than dropped, since removing UI wasn't asked for.
-const SOURCES       = ['Walk-in (Direct)', 'From Enquiry', 'ODel Online App.', 'CRM (Merito)', 'Staff Referral', 'Online Enquiry']
-const RECEIPT_TYPES = ['Official Receipt', 'Duplicate', 'Triplicate']
+// Application Source and Receipt Type/No. dropdowns removed per
+// Application_Payment_Change_Requests_Final_Updated.md #3/#6 — Application
+// Source had no counterpart on POST /api/v1/admissions/application-payments
+// anyway; Receipt Type/No. are no longer user-entered at all, they come back
+// on the create response instead (see savedReceipt below).
 
 // UI-only — the confirmed payload's `mobile` field is raw digits with no
 // country prefix (see Create.bru's "700000000" example), so this dropdown
@@ -72,24 +73,24 @@ function labelFor(options: Option[], value: string): string {
 }
 
 interface FormData {
-  intakeGuid: string; enquiryGuid: string; source: string; firstName: string; lastName: string
+  intakeGuid: string; enquiryGuid: string; firstName: string; lastName: string
   phoneCode: string; phone: string; email: string; countryGuid: string
   campusGuid: string; programGuid: string; semesterGuid: string; batchTimeGuid: string; batchGuid: string
   feeHdGuid: string
   exemptionTypeGuid: string; payType: string
-  receiptBookGuid: string; receiptType: string; feeAmount: string; currencyGuid: string
-  receiptNo: string; paymentDate: string
+  receiptBookGuid: string; feeAmount: string; currencyGuid: string
+  paymentDate: string
   bankGuid: string; remarks: string
 }
 
 const initialForm: FormData = {
-  intakeGuid: '', enquiryGuid: '', source: 'Walk-in (Direct)',
+  intakeGuid: '', enquiryGuid: '',
   firstName: '', lastName: '', phoneCode: '+256', phone: '', email: '', countryGuid: '',
   campusGuid: '', programGuid: '', semesterGuid: '', batchTimeGuid: '', batchGuid: '',
   feeHdGuid: '',
   exemptionTypeGuid: '', payType: '',
-  receiptBookGuid: '', receiptType: 'Official Receipt', feeAmount: '', currencyGuid: '',
-  receiptNo: '', paymentDate: '',
+  receiptBookGuid: '', feeAmount: '', currencyGuid: '',
+  paymentDate: '',
   bankGuid: '', remarks: '',
 }
 
@@ -112,14 +113,23 @@ function PreviewRow({ label, value }: { label: string; value?: string }) {
   )
 }
 
-export default function PaymentPage() {
+// Split out from the default export so useSearchParams() (below) can sit
+// behind a Suspense boundary, per Next.js App Router's requirement for any
+// client component that reads the URL's query string.
+function PaymentPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const permissions = usePagePermissions()
   const [toast, setToast]       = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [showReceipt, setShowReceipt] = useState(false)
   const [form, setForm]         = useState<FormData>({ ...initialForm })
   const [payProofFile, setPayProofFile] = useState<File | null>(null)
+  // Per Application_Payment_Change_Requests_Final_Updated.md #6 — Receipt
+  // Type/No. are no longer user-entered; populated from the create
+  // response's own fields once a payment actually saves (see
+  // CreateApplicationPaymentResponse's note on these being unconfirmed).
+  const [savedReceipt, setSavedReceipt] = useState<{ appRefNo?: string; receiptNo?: string; receiptType?: string }>({})
 
   // Displayed exchange rates — kept as controlled state (not just readOnly
   // display) so the submitted exRate actually matches what's shown here.
@@ -158,7 +168,13 @@ export default function PaymentPage() {
 
   // Cascading resets: changing an upstream selection invalidates whatever
   // was scoped to it downstream (Batch depends on Programme+Semester+Batch
-  // Time; Semester and Fee Structure depend on Programme).
+  // Time; Semester and Fee Structure depend on Programme; Programme depends
+  // on Campus per #7; Enquiry depends on Intake per #1/#2).
+  function setIntake(v: string) {
+    setForm(prev => ({ ...prev, intakeGuid: v, enquiryGuid: '' }))
+    appliedEnquiryGuidRef.current = null
+  }
+  function setCampus(v: string) { setForm(prev => ({ ...prev, campusGuid: v, programGuid: '', semesterGuid: '', batchGuid: '', feeHdGuid: '' })) }
   function setProgram(v: string) { setForm(prev => ({ ...prev, programGuid: v, semesterGuid: '', batchGuid: '', feeHdGuid: '' })) }
   function setSemester(v: string) { setForm(prev => ({ ...prev, semesterGuid: v, batchGuid: '' })) }
   function setBatchTime(v: string) { setForm(prev => ({ ...prev, batchTimeGuid: v, batchGuid: '' })) }
@@ -167,12 +183,17 @@ export default function PaymentPage() {
   // enquiryGuid is CONFIRMED required on Create (the .bru docs mark it
   // "optional" but a real 400 reproduced by removing only this field from
   // an otherwise-working payload proves otherwise) — every payment must
-  // link to a real enquiry. Loads the first 100 (of 11k+ — see
-  // useEnquiries' own note) for this dropdown rather than the full list.
-  const { data: enquiriesData }      = useEnquiries(1, 100)
+  // link to a real enquiry. Per Application_Payment_Change_Requests_Final_
+  // Updated.md #1/#2, the Enquiry dropdown is now scoped to the selected
+  // Intake and restricted to not-yet-converted enquiries (GET
+  // .../unconverted-enquiries?intakeGuid=...&page=1&pageSize=10), replacing
+  // the old generic "first 100 of 11k+" useEnquiries() list — only enabled
+  // once an Intake is actually picked.
+  const { data: unconvertedEnquiriesData } = useUnconvertedEnquiries(form.intakeGuid, 1, 10, !!form.intakeGuid)
   const { data: intakes = [] }       = useIntakes()
   const { data: campuses = [] }      = useCampuses()
-  const { data: programs = [] }      = useProgramMasters()
+  // Per #7 — scoped to the selected Campus instead of every programme.
+  const { data: programsByCampus = [] } = useProgramMastersByCampus(form.campusGuid, !!form.campusGuid)
   const { data: semesters = [] }     = useSemestersForProgram(form.programGuid, !!form.programGuid)
   const { data: batchTimes = [] }    = useBatchTimes()
   // The payment-scoped Dropdowns/Batches.bru endpoint returns a real 200
@@ -191,13 +212,12 @@ export default function PaymentPage() {
   const { data: exemptionTypes = [] } = useApplicationPaymentExemptionTypes()
   const { data: paymentTypes = [] }  = useApplicationPaymentTypes()
   const { data: currencies = [] }    = useFinanceCurrencies()
-  // The payment-scoped Dropdowns/Banks.bru endpoint has the same "unconfirmed
-  // shape" risk as the other payment-scoped dropdowns — uses the generic,
-  // already-real Finance Banks endpoint instead (confirmed identical
-  // bankGuid/bankName shape via a live response). Status enum is 1 =
-  // Inactive, 2 = Active (see lib/api/finance/bank.ts) — only offer Active.
-  const { data: allBanks = [] }      = useBanks()
-  const banks = allBanks.filter(b => b.status === 2)
+  // Per Application_Payment_Change_Requests_Final_Updated.md #4 — sourced
+  // from the Proc Bank Master API (m_proc_bank) instead of the generic
+  // Finance Banks endpoint. Same status enum convention as procBank.ts's
+  // STATUS_VALUES (1 = Inactive, 2 = Active) — only offer Active.
+  const { data: allProcBanks = [] }  = useProcBanks()
+  const banks = allProcBanks.filter(b => b.status === 2)
   // The payment-scoped Dropdowns/ReceiptBooks.bru endpoint 500s server-side
   // (undocumented required "category" int query param) — fall back to the
   // already-working generic Finance Receipt Books endpoint instead. Same
@@ -222,11 +242,42 @@ export default function PaymentPage() {
   // new object for the same guid shouldn't stomp on manual changes.
   const appliedEnquiryGuidRef = useRef<string | null>(null)
 
+  // "Convert" on enquiry-followup(-master) links here with
+  // ?enquiryGuid=... — picked up via an effect (not a useState lazy
+  // initializer) because Next's client-side router cache can reuse this
+  // same PaymentPageContent instance across repeated visits to this route,
+  // so a one-time initializer only ever captured the *first* visit's query
+  // string and silently went stale on every Convert after that (the
+  // reported bug: no request ever fired because form.enquiryGuid stayed
+  // frozen at ''). Re-running on every searchParams change makes each
+  // Convert click work independently of whether the page happens to remount.
+  useEffect(() => {
+    const guid = searchParams.get('enquiryGuid')
+    if (guid && guid !== form.enquiryGuid) {
+      appliedEnquiryGuidRef.current = null
+      setForm(prev => ({ ...prev, enquiryGuid: guid }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
   useEffect(() => {
     if (!selectedEnquiry || appliedEnquiryGuidRef.current === selectedEnquiry.enquiryGuid) return
     appliedEnquiryGuidRef.current = selectedEnquiry.enquiryGuid
     const [firstName, ...rest] = selectedEnquiry.studentName.trim().split(/\s+/)
-    const matchedCountry = countries.find(c => c.countryCode === selectedEnquiry.countryCode)
+    // Case/whitespace-tolerant match — Enquiry.countryCode is confirmed
+    // 2-letter ISO alpha-2 (see online-enquiry/ondesk-enquiry's hardcoded
+    // 'UG'), but the Country Master's own countryCode VALUES have never
+    // been confirmed against a real response (the mock stand-ins use
+    // 3-letter alpha-3 codes like 'UGA') — if the real master turns out to
+    // also be alpha-3, this exact-ish match still won't find anything and
+    // Country/Phone Code will silently stay unmapped, same as before. Not
+    // guessing an alpha2→alpha3 conversion table here since a wrong guess
+    // would produce a silently WRONG country rather than just an empty
+    // field — verify the real /api/v1/users/countries countryCode format
+    // and fix this properly once confirmed.
+    const matchedCountry = countries.find(
+      c => c.countryCode.trim().toLowerCase() === selectedEnquiry.countryCode.trim().toLowerCase(),
+    )
     setForm(prev => ({
       ...prev,
       intakeGuid: selectedEnquiry.intakeGuid || prev.intakeGuid,
@@ -241,13 +292,14 @@ export default function PaymentPage() {
       email: selectedEnquiry.email ?? prev.email,
       countryGuid: matchedCountry?.countryGuid ?? prev.countryGuid,
       phoneCode: matchedCountry?.countryPrefix ?? prev.phoneCode,
+      remarks: selectedEnquiry.remarks ?? prev.remarks,
     }))
   }, [selectedEnquiry, countries])
 
-  const enquiryOptions  = (enquiriesData?.items ?? []).map(e => ({ value: e.enquiryGuid, label: `${e.studentName} (${e.enquiryCode})` }))
+  const enquiryOptions  = (unconvertedEnquiriesData?.items ?? []).map(e => ({ value: e.enquiryGuid, label: `${e.studentName} (${e.enquiryCode})` }))
   const intakeOptions   = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   const campusOptions   = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
-  const programOptions  = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
+  const programOptions  = programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   const countryOptions  = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
   const semesterOptions = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
   const batchTimeOptions = batchTimes.map(bt => ({ value: bt.batchTimeGuid, label: bt.batchTime }))
@@ -256,7 +308,7 @@ export default function PaymentPage() {
   const exemptionOptions: Option[] = [{ value: '', label: '-- None (Pay Full Fee) --' }, ...exemptionTypes.map(e => ({ value: e.exemptionTypeGuid, label: e.label }))]
   const payTypeOptions  = paymentTypes.map(t => ({ value: String(t.intPaymentType), label: t.paymentTypeName }))
   const currencyOptions = currencies.map(c => ({ value: c.currencyGuid, label: c.currencyCode }))
-  const bankOptions     = banks.map(b => ({ value: b.bankGuid, label: b.bankName }))
+  const bankOptions     = banks.map(b => ({ value: b.procBankGuid, label: b.bankName }))
   const receiptBookOptions = receiptBooks.map(r => ({ value: r.receiptBookGuid, label: r.bookCode }))
 
   const isWaived = !!form.exemptionTypeGuid
@@ -336,14 +388,18 @@ export default function PaymentPage() {
         payProofFile,
       },
       {
-        onSuccess: () => { setShowReceipt(true); showToast('Payment saved & receipt generated', 'success') },
+        onSuccess: (response) => {
+          setSavedReceipt({ appRefNo: response?.appRefNo, receiptNo: response?.receiptNo, receiptType: response?.receiptType })
+          setShowReceipt(true)
+          showToast('Payment saved & receipt generated', 'success')
+        },
         onError: (error: Error) => showToast(error.message || 'Failed to save payment. Please try again.', 'error'),
       },
     )
   }
 
   function handleClear() {
-    setForm({ ...initialForm }); setShowReceipt(false); setPayProofFile(null)
+    setForm({ ...initialForm }); setShowReceipt(false); setPayProofFile(null); setSavedReceipt({})
     appliedEnquiryGuidRef.current = null
   }
 
@@ -439,32 +495,21 @@ export default function PaymentPage() {
             </div>
 
             <div className="g2 mb-4">
-              <Field label="Enquiry" req>
-                <SearchSelect options={enquiryOptions} value={form.enquiryGuid} placeholder="-- Select Enquiry --" onChange={v => set('enquiryGuid', v)} />
-              </Field>
               <Field label="Intake" req>
-                <SearchSelect options={intakeOptions} value={form.intakeGuid} placeholder="-- Select Intake --" onChange={v => set('intakeGuid', v)} />
+                <SearchSelect options={intakeOptions} value={form.intakeGuid} placeholder="-- Select Intake --" onChange={setIntake} />
               </Field>
-              <Field label="Application Source" req>
-                <SearchSelect options={SOURCES} value={form.source} onChange={v => set('source', v)} />
+              <Field label="Enquiry" req>
+                <SearchSelect
+                  options={enquiryOptions}
+                  value={form.enquiryGuid}
+                  placeholder={form.intakeGuid ? '-- Select Enquiry --' : '-- Select Intake First --'}
+                  onChange={v => set('enquiryGuid', v)}
+                  disabled={!form.intakeGuid}
+                />
               </Field>
             </div>
 
             <p className="text-[10px] font-bold tracking-widest uppercase text-b500 mb-3">Candidate Details</p>
-
-            <div className="prof-photo-row">
-              <div className="prof-photo-zone">
-                <div className="prof-photo-icon">
-                  <i className="lni lni-camera" />
-                  <small>PHOTO</small>
-                </div>
-                <input type="file" accept="image/jpeg,image/png" tabIndex={-1} />
-              </div>
-              <div>
-                <p className="font-semibold text-g700" style={{ fontSize: 'var(--fs-sm)' }}>Profile Photo</p>
-                <p className="text-g400 mt-0.5" style={{ fontSize: 'var(--fs-xs)' }}>Click the circle or drop a passport-style photo · JPG / PNG · max 2 MB</p>
-              </div>
-            </div>
 
             <div className="g2">
               <Field label="First Name" req>
@@ -489,10 +534,16 @@ export default function PaymentPage() {
                 <SearchSelect options={countryOptions} value={form.countryGuid} placeholder="-- Select Country --" onChange={v => set('countryGuid', v)} />
               </Field>
               <Field label="Campus" req>
-                <SearchSelect options={campusOptions} value={form.campusGuid} placeholder="-- Select Campus --" onChange={v => set('campusGuid', v)} />
+                <SearchSelect options={campusOptions} value={form.campusGuid} placeholder="-- Select Campus --" onChange={setCampus} />
               </Field>
               <Field label="Interested Programme" req>
-                <SearchSelect options={programOptions} value={form.programGuid} placeholder="-- Select Programme --" onChange={setProgram} />
+                <SearchSelect
+                  options={programOptions}
+                  value={form.programGuid}
+                  placeholder={form.campusGuid ? '-- Select Programme --' : '-- Select Campus First --'}
+                  onChange={setProgram}
+                  disabled={!form.campusGuid}
+                />
               </Field>
               <Field label="Fee Structure" req>
                 <SearchSelect options={feeOptions} value={form.feeHdGuid} placeholder={form.programGuid ? '-- Select Fee Structure --' : '-- Select Programme First --'} onChange={v => set('feeHdGuid', v)} />
@@ -531,14 +582,15 @@ export default function PaymentPage() {
               <Field label="Exemption Type">
                 <SearchSelect options={exemptionOptions} value={form.exemptionTypeGuid} onChange={v => set('exemptionTypeGuid', v)} />
               </Field>
+              {/* Payment Method/Receipt Book/Amount/Currency/Bank Account are
+                  disabled (not just optional) once an Exemption Type is
+                  picked, per Application_Payment_Change_Requests_Final_
+                  Updated.md #5. */}
               <Field label="Payment Method" req={!isWaived}>
-                <SearchSelect options={payTypeOptions} value={form.payType} placeholder="-- Select Payment Method --" onChange={v => set('payType', v)} />
+                <SearchSelect options={payTypeOptions} value={form.payType} placeholder="-- Select Payment Method --" onChange={v => set('payType', v)} disabled={isWaived} />
               </Field>
               <Field label="Receipt Book" req={!isWaived}>
-                <SearchSelect options={receiptBookOptions} value={form.receiptBookGuid} placeholder="-- Select Receipt Book --" onChange={v => set('receiptBookGuid', v)} />
-              </Field>
-              <Field label="Receipt Type" req>
-                <SearchSelect options={RECEIPT_TYPES} value={form.receiptType} onChange={v => set('receiptType', v)} />
+                <SearchSelect options={receiptBookOptions} value={form.receiptBookGuid} placeholder="-- Select Receipt Book --" onChange={v => set('receiptBookGuid', v)} disabled={isWaived} />
               </Field>
             </div>
 
@@ -555,9 +607,10 @@ export default function PaymentPage() {
                       className="amt-val-input"
                       value={form.feeAmount}
                       onChange={e => set('feeAmount', e.target.value)}
+                      disabled={isWaived}
                     />
                     <SearchSelect options={currencyOptions} value={form.currencyGuid} onChange={v => set('currencyGuid', v)}
-                      style={{ width: 84, flexShrink: 0 }} />
+                      style={{ width: 84, flexShrink: 0 }} disabled={isWaived} />
                   </div>
                   <p className="amt-val-hint">
                     {isWaived ? 'Fee waived — exemption applied.' : 'Enter the application fee amount.'}
@@ -569,9 +622,6 @@ export default function PaymentPage() {
             </div>
 
             <div className="g2 mt-4">
-              <Field label="Receipt / Reference No.">
-                <input className="ctrl" placeholder="e.g. REC-2026-001142" value={form.receiptNo} onChange={e => set('receiptNo', e.target.value)} />
-              </Field>
               <Field label="Payment Date" req>
                 <input className="ctrl" type="date" value={form.paymentDate} onChange={e => set('paymentDate', e.target.value)} />
               </Field>
@@ -591,7 +641,7 @@ export default function PaymentPage() {
               <div className="mt-4 p-4 rounded-xl bg-g50 border border-g200">
                 <h3 className="font-semibold text-g700 mb-3" style={{ fontSize: 'var(--fs-sm)' }}>Bank Transfer Details</h3>
                 <Field label="Bank Name" req>
-                  <select className="ctrl" value={form.bankGuid} onChange={e => set('bankGuid', e.target.value)}>
+                  <select className="ctrl" value={form.bankGuid} onChange={e => set('bankGuid', e.target.value)} disabled={isWaived}>
                     <option value="">Select bank</option>
                     {bankOptions.map(option => (
                       <option key={option.value} value={option.value}>{option.label}</option>
@@ -637,7 +687,8 @@ export default function PaymentPage() {
                 </div>
                 <div className="flex flex-col gap-1" style={{ fontSize: 'var(--fs-sm)' }}>
                   {[
-                    ['Receipt No.', form.receiptNo || 'RCT-AUTO'],
+                    ['Receipt No.', savedReceipt.receiptNo || 'RCT-AUTO'],
+                    ['Receipt Type', savedReceipt.receiptType || '—'],
                     ['Date', form.paymentDate || new Date().toLocaleDateString()],
                     ['Candidate', `${form.firstName} ${form.lastName}`.trim()],
                     ['Programme', labelFor(programOptions, form.programGuid)],
@@ -679,7 +730,6 @@ export default function PaymentPage() {
 
             <div className="flex flex-col gap-2">
               <PreviewRow label="Intake"            value={labelFor(intakeOptions, form.intakeGuid)} />
-              <PreviewRow label="Application Source" value={form.source} />
               <PreviewRow label="First Name"         value={form.firstName} />
               <PreviewRow label="Last Name"          value={form.lastName} />
               <PreviewRow label="Phone"              value={form.phone ? `${form.phoneCode} ${form.phone}` : ''} />
@@ -705,7 +755,7 @@ export default function PaymentPage() {
               <div className="prev-row">
                 <span className="prev-lbl">Receipt No.</span>
                 <span className="prev-sep">:</span>
-                <span className="prev-val">{form.receiptNo || '—'}</span>
+                <span className="prev-val">{savedReceipt.receiptNo || '—'}</span>
               </div>
             </div>
           </div>
@@ -717,5 +767,13 @@ export default function PaymentPage() {
       <ImportOdelModal isOpen={openModals.has('import-odel')} onClose={() => closeModal('import-odel')} showToast={showToast} />
       <Toast toast={toast} />
     </div>
+  )
+}
+
+export default function PaymentPage() {
+  return (
+    <Suspense>
+      <PaymentPageContent />
+    </Suspense>
   )
 }
