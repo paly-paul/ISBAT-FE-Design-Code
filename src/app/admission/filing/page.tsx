@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 import { SuccessPopup } from '@/components/modals/academic/SuccessPopup'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useCampuses } from '@/hooks/config/useCampuses'
@@ -12,7 +13,7 @@ import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useCountries } from '@/hooks/config/useCountries'
 import { useEnquiries } from '@/hooks/admission/useEnquiries'
-import { useApplicationPaymentFees } from '@/hooks/admission/useApplicationPayments'
+import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput } from '@/lib/errorMessages'
 import {
@@ -87,6 +88,9 @@ function Field({ label, req, children, span }: { label: string; req?: boolean; s
   )
 }
 function Input({ placeholder, type = 'text', readOnly, value, onChange }: { placeholder?: string; type?: string; readOnly?: boolean; value?: string; onChange?: (v: string) => void }) {
+  if (type === 'date' && !readOnly) {
+    return <DatePicker value={value} onChange={v => onChange?.(v)} placeholder={placeholder} />
+  }
   if (value !== undefined) {
     return <input className="ctrl" type={type} placeholder={placeholder} readOnly={readOnly} value={value} onChange={e => onChange?.(e.target.value)} />
   }
@@ -239,7 +243,13 @@ export default function FilingPage() {
   const batches = (allBatchesData?.items ?? []).filter(b =>
     b.programGuid === programGuid && b.semesterGuid === semesterGuid && b.batchTimeGuid === batchTimeGuid,
   )
-  const { data: fees = [] }       = useApplicationPaymentFees(programGuid, !!programGuid)
+  // Same payment-scoped Dropdowns/Fees.bru endpoint that turned out
+  // unreliable on the Payment page (blank for a Programme that does have
+  // real fee structures) — use the generic, already-confirmed-correct
+  // Programme Fee Structure list filtered client-side instead, same fix as
+  // applied there.
+  const { data: allFeeStructuresData } = useProgramFeeStructures(1, 1000)
+  const fees = (allFeeStructuresData?.items ?? []).filter(f => f.programGuid === programGuid && f.status)
   const { data: countries = [] }  = useCountries()
 
   const enquiryOptions   = (enquiriesData?.items ?? []).map(e => ({ value: e.enquiryGuid, label: `${e.studentName} (${e.enquiryCode})` }))

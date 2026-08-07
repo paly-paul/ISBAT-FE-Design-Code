@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../academic/SuccessPopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 import { CreateEmployeeInput } from '@/lib/api/employee/employee'
 import { useEmployee, useUpdateEmployee } from '@/hooks/employee/useEmployees'
 import { useDepartments } from '@/hooks/config/useDepartments'
@@ -254,14 +255,11 @@ export function EditEmployeeModal({ isOpen, onClose, showToast, employeeGuid }: 
             </div>
             <div className="fg">
               <div className="lbl">Date of Birth <span className="req">*</span></div>
-              <input
-                className="ctrl"
-                type="date"
+              <DatePicker
                 value={birthDate}
-                max={getMaxBirthDate()}
-                title="Must be 18 years or older"
-                onChange={e => { setBirthDate(e.target.value); clearError('birthDate') }}
-                style={errors.birthDate ? { borderColor: 'var(--red)' } : undefined}
+                maxYmd={getMaxBirthDate()}
+                onChange={v => { setBirthDate(v); clearError('birthDate') }}
+                hasError={!!errors.birthDate}
               />
               {errors.birthDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.birthDate}</p>}
             </div>

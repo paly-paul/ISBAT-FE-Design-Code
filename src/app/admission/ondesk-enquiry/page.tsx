@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 import { SuccessPopup } from '@/components/modals/academic/SuccessPopup'
 import { FailurePopup } from '@/components/modals/academic/FailurePopup'
 import { useIntakes } from '@/hooks/academic/useIntakes'
@@ -160,12 +161,12 @@ export default function OnDeskEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Date of Birth <span className="text-clr-red">*</span></label>
-            <input className="ctrl" type="date" value={dob} onChange={e => { setDob(e.target.value); clearError('dob') }} style={errors.dob ? { borderColor: 'var(--red)' } : undefined} />
+            <DatePicker value={dob} onChange={v => { setDob(v); clearError('dob') }} hasError={!!errors.dob} />
             {errors.dob && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.dob}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Enquiry Date <span className="text-clr-red">*</span></label>
-            <input className="ctrl" type="date" value={enquiryDate} onChange={e => { setEnquiryDate(e.target.value); clearError('enquiryDate') }} style={errors.enquiryDate ? { borderColor: 'var(--red)' } : undefined} />
+            <DatePicker value={enquiryDate} onChange={v => { setEnquiryDate(v); clearError('enquiryDate') }} hasError={!!errors.enquiryDate} />
             {errors.enquiryDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryDate}</p>}
           </div>
           <div className="fg">

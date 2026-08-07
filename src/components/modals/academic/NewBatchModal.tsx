@@ -4,6 +4,7 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 import { BatchCreateInput } from '@/lib/api/academic/batch'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useIntakes } from '@/hooks/academic/useIntakes'
@@ -168,8 +169,8 @@ export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBa
             <div className="lbl">Programme Head</div>
             <SearchSelect placeholder="— Select faculty member —" options={advisorOptions} value={pHeadGuid} onChange={setPHeadGuid} />
           </div>
-          <div className="fg"><div className="lbl">Start Date</div><input className="ctrl" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
-          <div className="fg"><div className="lbl">End Date</div><input className="ctrl" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
+          <div className="fg"><div className="lbl">Start Date</div><DatePicker value={startDate} onChange={setStartDate} /></div>
+          <div className="fg"><div className="lbl">End Date</div><DatePicker value={endDate} onChange={setEndDate} /></div>
         </div>
 
 

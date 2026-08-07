@@ -9,6 +9,7 @@ import { Pagination } from '@/components/Pagination'
 import { Toast } from '@/components/Toast'
 import { usePaymentHistoryList } from '@/hooks/finance/usePaymentConsole'
 import type { PaymentHistoryListEntry } from '@/hooks/finance/usePaymentConsole'
+import { formatDate } from '@/lib/date'
 
 const PAGE_SIZE = 20
 
@@ -39,12 +40,6 @@ function payTypePill(value: number) { return PAY_TYPE_PILLS[value] ?? 'pill-blue
 
 function fmtAmount(n: number) {
   return n.toLocaleString('en-US', { maximumFractionDigits: 2 })
-}
-
-function fmtDate(iso: string) {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 export default function Page() {
@@ -163,7 +158,7 @@ export default function Page() {
                 {!isLoading && filteredRows.map((r, i) => (
                   <tr key={`${r.paymentGuid}-${r.feeType}-${i}`}>
                     <td className="text-blue font-bold font-mono">{r.receiptNo}</td>
-                    <td className="text-muted">{fmtDate(r.payDate)}</td>
+                    <td className="text-muted">{formatDate(r.payDate)}</td>
                     <td className="font-mono text-blue">{r.studentNo ?? '—'}</td>
                     <td><strong>{r.studentName ?? '—'}</strong></td>
                     <td>{r.programName ?? '—'}</td>

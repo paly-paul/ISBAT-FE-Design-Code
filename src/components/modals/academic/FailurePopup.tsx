@@ -11,7 +11,18 @@ interface Props {
 // since the user needs to actually read the error before retrying.
 export function FailurePopup({ title, subtitle, onClose }: Props) {
   return (
-    <div style={{ textAlign: 'center', padding: '36px 28px 30px' }}>
+    <div style={{ textAlign: 'center', padding: '36px 28px 30px', position: 'relative' }}>
+
+      {/* Close (×) — same convention as SuccessPopup, so the user can
+          dismiss without needing to click "Try Again". */}
+      <button
+        className="modal-close"
+        onClick={onClose}
+        aria-label="Close"
+        style={{ position: 'absolute', top: 10, right: 10 }}
+      >
+        <i className="lni lni-close"></i>
+      </button>
 
       {/* Animated illustration */}
       <div style={{

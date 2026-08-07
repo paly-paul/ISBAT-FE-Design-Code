@@ -109,18 +109,44 @@ export interface PaymentTypeDto {
   paymentTypeName: string
 }
 
-// Success (201) per Create.bru docs: "data = CreateApplicationPaymentResponse."
-// appRefNo is confirmed (a real successful payment returned it). receiptNo/
-// receiptType are NOT confirmed — added per
-// Application_Payment_Change_Requests_Final_Updated.md #6 ("do not provide
-// dropdowns for Receipt Type / Receipt Reference No., return these values
-// in the successful save response instead"), field names guessed by analogy
-// with this DTO's own receiptBookGuid/receiptNo-shaped fields elsewhere in
-// the app — verify against a real response and correct if these differ.
+// Success (201) — CONFIRMED via a real Create.bru response sample. There is
+// no receiptType field at all on the wire (an earlier guess assumed one per
+// Application_Payment_Change_Requests_Final_Updated.md #6's "return these
+// values in the successful save response" wording, but the real response
+// only ever carries receiptNo — paymentCode is the closer match for a
+// human-readable receipt reference). receiptNo is a plain number (e.g.
+// 1024), not a string as first guessed, and comes back null for exemption
+// payments (see the note below). intakeGuid/exemptionTypeGuid are echoed
+// back exactly as submitted, not derived server-side.
 export interface CreateApplicationPaymentResponse {
+  paymentGuid?: string
   appRefNo?: string
-  receiptNo?: string
-  receiptType?: string
+  paymentCode?: string
+  intApplication?: number
+  studentName?: string
+  intakeGuid?: string
+  campusGuid?: string
+  programGuid?: string
+  semesterGuid?: string
+  batchGuid?: string
+  batchTimeGuid?: string
+  feeHdGuid?: string
+  countryGuid?: string
+  mobile?: number
+  email?: string
+  // For an exemption payment (exemptionTypeGuid provided as a real guid):
+  // payType/exRate/currencyGuid come back null, amount/amountUsh come back
+  // 0, and receiptNo comes back null — no receipt/bank is resolved for
+  // exemptions.
+  amount?: number
+  amountUsh?: number
+  currencyGuid?: string | null
+  exRate?: number | null
+  payDate?: string
+  payType?: number | null
+  exemptionTypeGuid?: string | null
+  receiptNo?: number | null
+  remarks?: string | null
   [key: string]: unknown
 }
 
@@ -203,6 +229,11 @@ export function createApplicationPayment(input: ApplicationPaymentInput): Promis
     return Promise.resolve({ intApplication: Math.floor(Math.random() * 100000), studentName: input.studentName })
   }
 
+  console.log('[application payment API] createApplicationPayment input', {
+    ...input,
+    payProofFile: input.payProofFile ? { name: input.payProofFile.name, size: input.payProofFile.size, type: input.payProofFile.type } : null,
+  })
+
   const formData = new FormData()
   formData.append('enquiryGuid', input.enquiryGuid)
   formData.append('oDelIntApplication', String(input.oDelIntApplication ?? 0))
@@ -216,18 +247,26 @@ export function createApplicationPayment(input: ApplicationPaymentInput): Promis
   formData.append('feeHdGuid', input.feeHdGuid)
   formData.append('countryGuid', input.countryGuid)
   formData.append('mobile', input.mobile)
-  formData.append('email', input.email ?? '')
-  formData.append('exemptionTypeGuid', input.exemptionTypeGuid ?? '')
+  if (input.email) formData.append('email', input.email)
+  // currencyGuid/bankGuid/receiptBookGuid/exemptionTypeGuid are all
+  // nullable Guid?-typed fields on the backend. CONFIRMED via a real 400
+  // with a completely empty response body (no JSON at all — not even the
+  // usual validation_error envelope) when a genuinely-waived payment sent
+  // these as empty strings: ASP.NET's multipart model binder throws an
+  // unhandled, unformatted parse failure on Guid.Parse("") before the
+  // request even reaches the controller or any JSON-error middleware. Omit
+  // the form field entirely instead of sending "" — that's the only way a
+  // multipart Guid?-typed field can come through as genuinely null.
+  if (input.exemptionTypeGuid) formData.append('exemptionTypeGuid', input.exemptionTypeGuid)
   formData.append('payDate', input.payDate)
-  formData.append('payType', String(input.payType ?? 1))
-  formData.append('amount', String(input.amount ?? 0))
-  formData.append('currencyGuid', input.currencyGuid ?? '')
-  formData.append('exRate', String(input.exRate ?? 1))
-  formData.append('bankGuid', input.bankGuid ?? '')
-  formData.append('receiptBookGuid', input.receiptBookGuid ?? '')
-  formData.append('remarks', input.remarks ?? '')
+  if (input.payType !== null && input.payType !== undefined) formData.append('payType', String(input.payType))
+  if (input.amount !== null && input.amount !== undefined) formData.append('amount', String(input.amount))
+  if (input.currencyGuid) formData.append('currencyGuid', input.currencyGuid)
+  if (input.exRate !== null && input.exRate !== undefined) formData.append('exRate', String(input.exRate))
+  if (input.bankGuid) formData.append('bankGuid', input.bankGuid)
+  if (input.receiptBookGuid) formData.append('receiptBookGuid', input.receiptBookGuid)
+  if (input.remarks) formData.append('remarks', input.remarks)
   if (input.payProofFile) formData.append('payProofFile', input.payProofFile)
-  else formData.append('payProofFile', '')
 
   return apiPostForm<CreateApplicationPaymentResponse>('/api/v1/admissions/application-payments', formData)
 }

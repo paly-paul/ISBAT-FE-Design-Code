@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 
 export default function Page() {
   const router = useRouter()
@@ -60,7 +61,7 @@ export default function Page() {
               <div className="g3">
                 <div className="fg"><div className="lbl">First Name <span className="req">*</span></div><input className="ctrl" type="text" placeholder="First name" /></div>
                 <div className="fg"><div className="lbl">Last Name <span className="req">*</span></div><input className="ctrl" type="text" placeholder="Last name" /></div>
-                <div className="fg"><div className="lbl">Date of Birth <span className="req">*</span></div><input className="ctrl" type="date" /></div>
+                <div className="fg"><div className="lbl">Date of Birth <span className="req">*</span></div><DatePicker onChange={() => {}} /></div>
                 <div className="fg"><div className="lbl">Gender <span className="req">*</span></div>
                   <SearchSelect placeholder="-- Select --" options={['Female', 'Male', 'Other']} />
                 </div>

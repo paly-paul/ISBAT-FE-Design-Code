@@ -67,9 +67,18 @@ const mockReceiptBooks: ReceiptBook[] = [
   { receiptBookGuid: '3efea79b-60a6-4b02-9826-679340ef5e67', bookCode: 'CASH01', startNo: 1, endNo: null, prefix: 'CR', receipt: 1, status: 1, category: 0, copy: null, count: null, bookCategory: null },
 ]
 
+// pageSize was previously hardcoded to 10 — harmless-looking, but a real
+// response confirmed totalCount can be 230+, so that silently hid all but
+// the first page everywhere this is used (the /finance/receipt-books master
+// table itself, and the Payment/Payment Console dropdowns, which lost most
+// of their Active options as a result). Same "load it all in one request,
+// filter/paginate client-side" convention as Intakes/Program Fee Structures/
+// Batches elsewhere in this app.
+const RECEIPT_BOOKS_LOAD_SIZE = 1000
+
 export function getReceiptBooks(): Promise<ReceiptBook[]> {
   if (MOCK_AUTH) return Promise.resolve(mockReceiptBooks)
-  return apiGet<ReceiptBookListResponse | null>('/api/v1/finance/receipt-books?page=1&pageSize=10').then(data => data?.items ?? [])
+  return apiGet<ReceiptBookListResponse | null>(`/api/v1/finance/receipt-books?page=1&pageSize=${RECEIPT_BOOKS_LOAD_SIZE}`).then(data => data?.items ?? [])
 }
 
 export function createReceiptBook(input: CreateReceiptBookInput): Promise<ReceiptBook> {
