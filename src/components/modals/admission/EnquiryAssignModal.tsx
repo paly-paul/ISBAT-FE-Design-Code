@@ -9,6 +9,7 @@ import { useEnquiry } from '@/hooks/admission/useEnquiries'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useCampuses } from '@/hooks/config/useCampuses'
+import { useIntakes } from '@/hooks/academic/useIntakes'
 import { AuthError } from '@/lib/api/client'
 
 interface EnquiryAssignModalProps extends ModalProps {
@@ -29,6 +30,15 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
   const { data: employees = [] } = useEmployees()
   const { data: programs = [] }  = useProgramMasters()
   const { data: campuses = [] }  = useCampuses()
+  // No intakeName/intakeCode field exists on the enquiry response itself —
+  // resolve intakeGuid against the real Intake master, same client-side
+  // resolution pattern as the enquiry-list page's own resolveProgramName.
+  const { data: intakes = [] }   = useIntakes()
+  function resolveIntakeLabel(guid: string | null) {
+    if (!guid) return '—'
+    const intake = intakes.find(i => i.intakeGuid === guid)
+    return intake ? `${intake.intakeCode} — ${intake.description}` : '—'
+  }
 
   const [saved, setSaved]     = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
@@ -139,6 +149,9 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
           <div className="fg m-0"><div className="lbl">Email</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.email || '—'}</div></div>
           <div className="fg m-0"><div className="lbl">Enquiry Date</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.enquiryDate.slice(0, 10)}</div></div>
           <div className="fg m-0"><div className="lbl">Source</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.sourceName || '—'}</div></div>
+          <div className="fg m-0"><div className="lbl">Intake</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{resolveIntakeLabel(enquiry.intakeGuid)}</div></div>
+          <div className="fg m-0"><div className="lbl">Campus</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.campusName || '—'}</div></div>
+          <div className="fg m-0"><div className="lbl">Status</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.enquiryStatusName || '—'}</div></div>
           <div className="fg m-0"><div className="lbl">Remarks</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.remarks || '—'}</div></div>
         </div>
 
