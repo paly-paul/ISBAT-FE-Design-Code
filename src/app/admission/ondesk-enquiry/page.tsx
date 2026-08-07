@@ -6,7 +6,7 @@ import { SuccessPopup } from '@/components/modals/academic/SuccessPopup'
 import { FailurePopup } from '@/components/modals/academic/FailurePopup'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useCampuses } from '@/hooks/config/useCampuses'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useProgramMastersByCampus } from '@/hooks/academic/useProgramMaster'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
 import { useCreateEnquiry } from '@/hooks/admission/useEnquiries'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -31,14 +31,8 @@ export default function OnDeskEnquiryPage() {
 
   const { data: intakes = [] }        = useIntakes()
   const { data: campuses = [] }       = useCampuses()
-  const { data: programs = [] }       = useProgramMasters()
   const { data: enquirySources = [] } = useEnquirySourceMasters()
   const createEnquiry = useCreateEnquiry()
-
-  const intakeOptions  = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
-  const campusOptions  = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
-  const programOptions = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
-  const sourceOptions  = enquirySources.map(s => ({ value: s.enquirySourceGuid, label: s.enquirySourceName }))
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName]   = useState('')
@@ -52,6 +46,18 @@ export default function OnDeskEnquiryPage() {
   const [sourceGuid, setSourceGuid]   = useState('')
   const [notes, setNotes]         = useState('')
   const [errors, setErrors]       = useState<Record<string, string>>({})
+
+  // Same "programmes scoped to the selected campus" convention as the
+  // Payment and Filing pages — a programme belongs to one campus, so the
+  // list is empty/disabled until a Campus is chosen.
+  const { data: programsByCampus = [] } = useProgramMastersByCampus(campusGuid, !!campusGuid)
+
+  const intakeOptions  = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
+  const campusOptions  = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
+  const programOptions = programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
+  const sourceOptions  = enquirySources.map(s => ({ value: s.enquirySourceGuid, label: s.enquirySourceName }))
+
+  function setCampus(v: string) { setCampusGuid(v); setProgramGuid(''); clearError('campusGuid') }
 
   function clearError(field: string) {
     setErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
@@ -160,7 +166,7 @@ export default function OnDeskEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Campus <span className="text-clr-red">*</span></label>
-            <SearchSelect placeholder="— select —" options={campusOptions} value={campusGuid} onChange={val => { setCampusGuid(val); clearError('campusGuid') }} />
+            <SearchSelect placeholder="— select —" options={campusOptions} value={campusGuid} onChange={setCampus} />
             {errors.campusGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campusGuid}</p>}
           </div>
           <div className="fg">
@@ -174,7 +180,13 @@ export default function OnDeskEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Programme Interest</label>
-            <SearchSelect placeholder="— select —" options={programOptions} value={programGuid} onChange={setProgramGuid} />
+            <SearchSelect
+              placeholder={campusGuid ? '— select —' : 'Select a campus first'}
+              options={programOptions}
+              value={programGuid}
+              onChange={setProgramGuid}
+              disabled={!campusGuid}
+            />
           </div>
           <div className="fg">
             <label className="lbl">Preferred Intake <span className="text-clr-red">*</span></label>

@@ -10,8 +10,9 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { EnquiryFormModal } from '@/components/modals/admission/EnquiryFormModal'
 import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignModal'
-import { useEnquiries, useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
+import { useEnquiries, useEnquiryCounts, useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -42,12 +43,19 @@ export default function EnquiryListPage() {
   const [viewingGuid, setViewingGuid] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [channel, setChannel] = useState('')
+  const [intakeGuid, setIntakeGuid] = useState('')
 
   const { data, isLoading } = useEnquiries(page, PAGE_SIZE)
   const updateEnquiry = useUpdateEnquiry()
   const rows = data?.items ?? []
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+
+  // Stats-row summary — GET /api/v1/admissions/enquiries/counts, a separate
+  // endpoint from the paginated list above (its own totalCount only ever
+  // matches this one's totalCount by coincidence, not by being the same
+  // field — both are wired independently).
+  const { data: counts } = useEnquiryCounts()
 
   // programName comes back null on every row from the real API — resolve it
   // client-side the same way faculty.ts's deanName fallback does.
@@ -57,6 +65,17 @@ export default function EnquiryListPage() {
     if (!row.programGuid) return '—'
     return programs.find(p => p.programGuid === row.programGuid)?.programName ?? '—'
   }
+
+  // intakeGuid is a real field directly on the enquiry row (unlike
+  // programName/campusName), so this filters against the actual guid rather
+  // than a resolved display string — full Intake master list, not just
+  // what's on the current page, same "real master, not page-derived"
+  // treatment as resolveProgramName's own source list.
+  const { data: intakes = [] } = useIntakes()
+  const intakeOptions = [
+    { value: '', label: 'All Intakes' },
+    ...intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })),
+  ]
 
   const { data: enquiryStatuses = [] } = useEnquiryStatuses()
   function resolveStatusName(enquiryStatusGuid: string | null) {
@@ -86,11 +105,12 @@ export default function EnquiryListPage() {
   ]
   const filteredRows = rows.filter(r =>
     (!search.trim() || matchesSearch(r, search.trim().toLowerCase())) &&
-    (!channel || r.sourceName === channel)
+    (!channel || r.sourceName === channel) &&
+    (!intakeGuid || r.intakeGuid === intakeGuid)
   )
   const searchMatches = search.trim() ? filteredRows.slice(0, 8) : []
-  const hasActiveFilters = !!search.trim() || !!channel
-  function clearFilters() { setSearch(''); setChannel('') }
+  const hasActiveFilters = !!search.trim() || !!channel || !!intakeGuid
+  function clearFilters() { setSearch(''); setChannel(''); setIntakeGuid('') }
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -114,25 +134,24 @@ export default function EnquiryListPage() {
         </div>
       </div>
 
-      {/* Only Total Enquiries is wired to real data (totalCount) — the other
-          three depend on enquiryStatus's unconfirmed enum values, so they
-          stay as placeholder figures until that mapping is confirmed. */}
+      {/* Backed by GET /api/v1/admissions/enquiries/counts — a dedicated
+          summary endpoint, independent of the paginated list query. */}
       <div className="stats-row">
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1"><i className="lni lni-users text-b500" /><span className="text-sm text-g500">Total Enquiries</span></div>
-          <p className="text-2xl font-semibold text-g900">{totalCount.toLocaleString()}</p>
+          <p className="text-2xl font-semibold text-g900">{(counts?.totalCount ?? totalCount).toLocaleString()}</p>
         </div>
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1"><i className="lni lni-checkmark text-clr-green" /><span className="text-sm text-g500">Converted</span></div>
-          <p className="text-2xl font-semibold text-g900">—</p>
+          <p className="text-2xl font-semibold text-g900">{counts ? counts.convertedCount.toLocaleString() : '—'}</p>
         </div>
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1"><i className="lni lni-timer text-clr-amber" /><span className="text-sm text-g500">Pending Follow-up</span></div>
-          <p className="text-2xl font-semibold text-g900">—</p>
+          <p className="text-2xl font-semibold text-g900">{counts ? counts.pendingFollowUpCount.toLocaleString() : '—'}</p>
         </div>
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1"><i className="lni lni-world text-clr-purple" /><span className="text-sm text-g500">ODL Specific</span></div>
-          <p className="text-2xl font-semibold text-g900">—</p>
+          <p className="text-2xl font-semibold text-g900">{counts ? counts.odelSourceCount.toLocaleString() : '—'}</p>
         </div>
       </div>
 
@@ -151,7 +170,7 @@ export default function EnquiryListPage() {
               results={searchMatches.map(r => ({ id: r.enquiryGuid, primary: r.enquiryCode, secondary: r.studentName }))}
             />
             <SearchSelect className="w-36" options={channelOptions} value={channel} onChange={setChannel} />
-            <button className="btn btn-ghost"><i className="lni lni-download" /> Export</button>
+            <SearchSelect className="w-40" options={intakeOptions} value={intakeGuid} onChange={setIntakeGuid} />
           </div>
         </div>
         <ScrollTable>

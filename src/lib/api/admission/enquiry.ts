@@ -36,13 +36,16 @@ export interface EnquiryInput {
 // response — supersedes the earlier guess that enquirySource/enquiryStatus/
 // followUpStatus/intIsbatSource were unconfirmed ints. They're all guids
 // (or absent entirely, in enquirySource's case — there's no int on read
-// either, only enquirySourceGuid). No label mapping exists client-side for
-// followUpStatusGuid/enquiryStatusGuid yet — resolve via the
-// FollowUpStatus/EnquiryStatus masters (useFollowUpStatuses/useEnquiryStatuses)
-// rather than displaying the raw guid. campusName/campusCode/programName/
-// programCode come back null on every row seen so far — the backend isn't
-// resolving them — so callers should resolve programGuid/campusGuid
-// client-side instead of trusting these fields.
+// either, only enquirySourceGuid). campusName/campusCode/programName/
+// programCode come back null on every row on the LIST endpoint (GET
+// /enquiries, paginated) — the backend isn't resolving them there — but a
+// later real single-record sample (GET /enquiries/:guid) shows them
+// genuinely populated on that endpoint, along with enquiryStatusName/
+// enquiryStatusCode/followUpStatusName/followUpStatusCode (all absent from
+// the earlier sample). No intakeName/intakeCode field exists on either
+// endpoint though — resolve intakeGuid via the Intake master
+// (useIntakes()) client-side, same pattern already used for
+// programGuid/campusGuid on the list page.
 export interface Enquiry {
   enquiryGuid: string
   enquiryCode: string
@@ -68,6 +71,10 @@ export interface Enquiry {
   campusCode: string | null
   programName: string | null
   programCode: string | null
+  enquiryStatusName: string | null
+  enquiryStatusCode: string | null
+  followUpStatusName: string | null
+  followUpStatusCode: string | null
 }
 
 interface EnquiryListResult {
@@ -75,6 +82,18 @@ interface EnquiryListResult {
   totalCount: number
   pageNumber: number
   pageSize: number
+}
+
+// Confirmed via a real GET /api/v1/admissions/enquiries/counts response —
+// backs the enquiry-list page's stats row. A dedicated summary endpoint, not
+// derived from the paginated list's own totalCount (which only ever covers
+// "all enquiries", not the converted/closed/pending/ODL breakdowns).
+export interface EnquiryCounts {
+  totalCount: number
+  convertedCount: number
+  closedCount: number
+  pendingFollowUpCount: number
+  odelSourceCount: number
 }
 
 // Confirmed via Update.bru — a materially different, narrower shape than
@@ -121,6 +140,10 @@ export function createEnquiry(input: EnquiryInput): Promise<unknown> {
       campusCode: null,
       programName: null,
       programCode: null,
+      enquiryStatusName: null,
+      enquiryStatusCode: null,
+      followUpStatusName: null,
+      followUpStatusCode: null,
     }
     mockEnquiries.unshift(enquiry)
     return Promise.resolve(enquiry)
@@ -136,6 +159,18 @@ export function getEnquiries(page = 1, pageSize = 10): Promise<EnquiryListResult
   }
   return apiGet<EnquiryListResult | null>(`/api/v1/admissions/enquiries?page=${page}&pageSize=${pageSize}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+}
+
+const EMPTY_COUNTS: EnquiryCounts = { totalCount: 0, convertedCount: 0, closedCount: 0, pendingFollowUpCount: 0, odelSourceCount: 0 }
+
+// Backs the enquiry-list page's stats row (Total/Converted/Pending Follow-up/
+// ODL Specific) — independent of the paginated list query above.
+export function getEnquiryCounts(): Promise<EnquiryCounts> {
+  if (MOCK_AUTH) {
+    return Promise.resolve({ ...EMPTY_COUNTS, totalCount: mockEnquiries.length })
+  }
+  return apiGet<EnquiryCounts | null>('/api/v1/admissions/enquiries/counts')
+    .then(data => data ?? EMPTY_COUNTS)
 }
 
 // Fetch one enquiry by its GUID — same EnquiryDto shape as the list items.

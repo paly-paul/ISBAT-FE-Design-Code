@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createEnquiry, Enquiry, EnquiryInput, EnquiryUpdateInput, getEnquiries, getEnquiryById, updateEnquiry } from '@/lib/api/admission/enquiry'
+import { createEnquiry, Enquiry, EnquiryCounts, EnquiryInput, EnquiryUpdateInput, getEnquiries, getEnquiryById, getEnquiryCounts, updateEnquiry } from '@/lib/api/admission/enquiry'
 
 const ENQUIRIES_KEY = ['enquiries']
+const ENQUIRY_COUNTS_KEY = ['enquiry-counts']
 
 // Real (paginated) — 11k+ rows in the sample data, so unlike the small
 // master-data lists elsewhere in this app, this can't just fetch everything
@@ -16,12 +17,26 @@ export function useEnquiries(page: number, pageSize: number) {
   })
 }
 
+// Stats-row summary (Total/Converted/Pending Follow-up/ODL Specific) — a
+// separate endpoint from the paginated list above, not derived from it.
+export function useEnquiryCounts() {
+  return useQuery({
+    queryKey: ENQUIRY_COUNTS_KEY,
+    queryFn: () => getEnquiryCounts(),
+  })
+}
+
 export function useCreateEnquiry() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: EnquiryInput) => createEnquiry(input),
-    // Invalidates every cached page (partial key match), not just page 1.
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ENQUIRIES_KEY }),
+    // Invalidates every cached page (partial key match), not just page 1,
+    // plus the counts tile — a new enquiry moves totalCount (and possibly
+    // odelSourceCount) too.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ENQUIRIES_KEY })
+      queryClient.invalidateQueries({ queryKey: ENQUIRY_COUNTS_KEY })
+    },
   })
 }
 
@@ -47,4 +62,4 @@ export function useUpdateEnquiry() {
   })
 }
 
-export type { Enquiry, EnquiryInput, EnquiryUpdateInput }
+export type { Enquiry, EnquiryCounts, EnquiryInput, EnquiryUpdateInput }
