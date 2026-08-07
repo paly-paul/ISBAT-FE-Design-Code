@@ -1,4 +1,4 @@
-import { AuthError, post, apiPost, refreshAccessToken } from './api/client'
+import { AuthError, post, apiPost, refreshAccessTokenWithRetry } from './api/client'
 
 export { AuthError }
 
@@ -69,12 +69,17 @@ export function refreshSession(): Promise<RefreshResult> {
   if (MOCK_AUTH) {
     return Promise.resolve({ displayName: 'Mock User' })
   }
-  // Routed through the same refreshAccessToken() the reactive 401 handler
-  // uses (not a direct apiPost call) so this mount-time refresh shares its
-  // in-flight dedup — calling /auth/refresh from two places independently
-  // risks racing the backend's single-use rotating refresh token, which a
-  // live test confirmed hard-fails whichever call loses the race.
-  return refreshAccessToken()
+  // Routed through refreshAccessTokenWithRetry() (not a direct apiPost call)
+  // so every caller — the mount-time check AND the proactive keep-alive
+  // interval in every module layout — shares both the in-flight dedup and
+  // the retry-once-after-500ms tolerance for a racy rotation collision
+  // (confirmed live: two /auth/refresh calls with the same still-valid
+  // token race 200/401 against each other). Without the retry, a call here
+  // that lost that race would be treated as a genuinely dead session and
+  // log the user out — which is exactly what happened before this used the
+  // retrying variant; see the note on refreshAccessTokenWithRetry in
+  // client.ts.
+  return refreshAccessTokenWithRetry()
 }
 
 // Logout — invalidates the httpOnly session cookie; no body needed.

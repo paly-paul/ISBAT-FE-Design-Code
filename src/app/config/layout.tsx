@@ -3,6 +3,12 @@ import { useState, useRef, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Header } from '@/components/Header'
 import { Sidebar, RailId } from '@/components/Sidebar'
+import { AuthError, refreshSession } from '@/lib/auth'
+import { clearSessionIdentity } from '@/lib/session'
+
+// Background access-token renewal while the app is open — see the identical
+// note in src/app/academic/layout.tsx for the full rationale.
+const SESSION_REFRESH_INTERVAL_MS = 10 * 60 * 1000
 
 export default function ConfigLayout({ children }: { children: React.ReactNode }) {
   const [panelOpen, setPanelOpen] = useState(true)
@@ -14,6 +20,18 @@ export default function ConfigLayout({ children }: { children: React.ReactNode }
   const router = useRouter()
 
   const currentPage = pathname.split('/').pop() ?? 'department-master'
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshSession().catch(err => {
+        if (err instanceof AuthError) {
+          clearSessionIdentity()
+          router.replace('/login/staff')
+        }
+      })
+    }, SESSION_REFRESH_INTERVAL_MS)
+    return () => clearInterval(interval)
+  }, [router])
 
   // Scroll to top on navigation — the sidebar panel is left as the user set
   // it (open/closed, collapsed sections) rather than being force-closed here.

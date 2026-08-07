@@ -4,7 +4,7 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
-import { BatchUpdateInput } from '@/lib/api/academic/batch'
+import { BatchUpdateInput, EMPTY_GUID } from '@/lib/api/academic/batch'
 import { useBatch } from '@/hooks/academic/useBatches'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useIntakes } from '@/hooks/academic/useIntakes'
@@ -24,14 +24,14 @@ interface EditBatchModalProps extends ModalProps {
 
 // Update takes the same full-replace shape as Create (confirmed) —
 // programGuid/semesterGuid/streamGuid/batchTimeGuid/bInCharge/intakeGuid are
-// all applied. GET /batches/:guid returns real guids for Programme/Semester/
-// Stream/Batch Time (see Batch in lib/api/academic/batch.ts), so those four
-// prefill from the fetched record. Intake and Batch In-Charge still can't be
-// prefilled — Batch's GET shape has no intake field at all, and GetByGuid
-// doesn't return bInCharge either — both must be re-picked on every edit.
-// Batch In-Charge is now sent as the employee's real employeeGuid (a live
-// sample payload confirmed this, replacing the old list-position workaround
-// — see the note in NewBatchModal).
+// all applied. GET /batches/:guid returns real guids for all six fields (see
+// BatchDetail in lib/api/academic/batch.ts) — corrected from the earlier
+// belief that Intake/Batch In-Charge couldn't be prefilled; a real sample
+// response confirmed both are present. bInCharge comes back as the all-zero
+// sentinel guid when no one's assigned — treated as unset/empty, not matched
+// against the Employee master. Batch In-Charge is sent as the employee's
+// real employeeGuid (a live sample payload confirmed this, replacing the old
+// list-position workaround — see the note in NewBatchModal).
 export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBatch }: EditBatchModalProps) {
   const { data: batch, isLoading, isError, error } = useBatch(batchGuid, isOpen)
   const { data: programs = [] }   = useProgramMasters()
@@ -57,23 +57,27 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
   const [streamGuid, setStreamGuid]       = useState('')
   const [batchTimeGuid, setBatchTimeGuid] = useState('')
   const [inChargeGuid, setInChargeGuid]   = useState('')
+  const [pHeadGuid, setPHeadGuid]         = useState('')
   const [startDate, setStartDate]         = useState('')
   const [endDate, setEndDate]             = useState('')
   const [errors, setErrors]               = useState<Record<string, string>>({})
 
-  // Programme/Semester/Stream/Batch Time/dates all prefill from the fetched
-  // record now that GET returns real guids for them. Intake and Batch
-  // In-Charge still can't — Batch's GET shape has no intake field at all,
-  // and there's no confirmed guid/int source for the employee either (see
-  // the note in NewBatchModal) — both must be re-picked every time.
+  // Every field now prefills from the fetched record — GET returns real
+  // guids for all of Programme/Semester/Stream/Batch Time/Intake/In-Charge.
+  // bInCharge's all-zero sentinel guid means "nobody assigned yet", so that
+  // maps to the empty selection rather than an unmatched employee.
   useEffect(() => {
     if (!isOpen || !batch) return
     setProgramGuid(batch.programGuid)
-    setIntakeGuid('')
+    setIntakeGuid(batch.intakeGuid)
     setSemesterGuid(batch.semesterGuid)
     setStreamGuid(batch.streamGuid)
     setBatchTimeGuid(batch.batchTimeGuid)
-    setInChargeGuid('')
+    setInChargeGuid(batch.bInCharge && batch.bInCharge !== EMPTY_GUID ? batch.bInCharge : '')
+    // pHead ("Programme Head") — same optional-employeeGuid shape as
+    // bInCharge, so guarding against the same all-zero sentinel by analogy
+    // (not independently confirmed for this field specifically).
+    setPHeadGuid(batch.pHead && batch.pHead !== EMPTY_GUID ? batch.pHead : '')
     setStartDate(batch.bStartDate ? batch.bStartDate.slice(0, 10) : '')
     setEndDate(batch.bEndDate ? batch.bEndDate.slice(0, 10) : '')
     setErrors({})
@@ -84,6 +88,7 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
   function handleClose() {
     setSaved(false); setFailure(null)
     setProgramGuid(''); setIntakeGuid(''); setSemesterGuid(''); setStreamGuid(''); setBatchTimeGuid(''); setInChargeGuid('')
+    setPHeadGuid('')
     setErrors({})
     onClose()
   }
@@ -114,7 +119,7 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
           bEndDate: endDate ? `${endDate}T00:00:00` : null,
           bInCharge: inChargeGuid,
           intakeGuid,
-          pHead: null,
+          pHead: pHeadGuid || null,
         },
       },
       {
@@ -183,24 +188,25 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
         </div>
 
         <div className="g3">
-          <div className="fg">
-            <div className="lbl">Programme <span className="req">*</span></div>
-            <SearchSelect
-              placeholder="— Select programme —"
-              options={programOptions}
-              value={programGuid}
-              onChange={val => { setProgramGuid(val); setSemesterGuid(''); if (errors.programGuid) setErrors(p => ({ ...p, programGuid: '' })) }}
-            />
-            {errors.programGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programGuid}</p>}
-          </div>
+          {/* Intake/Programme/Semester/Batch Time are locked on Edit — the
+              batch's students are already enrolled against this exact
+              combination, so changing any of them here would silently
+              re-scope an existing cohort rather than create a new one.
+              Still prefilled and still sent in the update payload as-is,
+              just not user-editable. */}
           <div className="fg">
             <div className="lbl">Intake <span className="req">*</span></div>
-            <SearchSelect placeholder="— Select intake —" options={intakeOptions} value={intakeGuid} onChange={val => { setIntakeGuid(val); if (errors.intakeGuid) setErrors(p => ({ ...p, intakeGuid: '' })) }} />
+            <SearchSelect placeholder="— Select intake —" options={intakeOptions} value={intakeGuid} disabled />
             {errors.intakeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
           </div>
           <div className="fg">
+            <div className="lbl">Programme <span className="req">*</span></div>
+            <SearchSelect placeholder="— Select programme —" options={programOptions} value={programGuid} disabled />
+            {errors.programGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programGuid}</p>}
+          </div>
+          <div className="fg">
             <div className="lbl">Semester <span className="req">*</span></div>
-            <SearchSelect placeholder={programGuid ? '— Select semester —' : 'Select a programme first'} options={semesterOptions} value={semesterGuid} onChange={val => { setSemesterGuid(val); if (errors.semesterGuid) setErrors(p => ({ ...p, semesterGuid: '' })) }} />
+            <SearchSelect placeholder={programGuid ? '— Select semester —' : 'Select a programme first'} options={semesterOptions} value={semesterGuid} disabled />
             {errors.semesterGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.semesterGuid}</p>}
           </div>
           <div className="fg">
@@ -210,13 +216,17 @@ export function EditBatchModal({ isOpen, onClose, showToast, batchGuid, updateBa
           </div>
           <div className="fg">
             <div className="lbl">Batch Time <span className="req">*</span></div>
-            <SearchSelect placeholder="— Select batch time —" options={batchTimeOptions} value={batchTimeGuid} onChange={val => { setBatchTimeGuid(val); if (errors.batchTimeGuid) setErrors(p => ({ ...p, batchTimeGuid: '' })) }} />
+            <SearchSelect placeholder="— Select batch time —" options={batchTimeOptions} value={batchTimeGuid} disabled />
             {errors.batchTimeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.batchTimeGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Batch In-Charge <span className="req">*</span></div>
             <SearchSelect placeholder="— Select faculty member —" options={advisorOptions} value={inChargeGuid} onChange={val => { setInChargeGuid(val); if (errors.inChargeGuid) setErrors(p => ({ ...p, inChargeGuid: '' })) }} />
             {errors.inChargeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.inChargeGuid}</p>}
+          </div>
+          <div className="fg">
+            <div className="lbl">Programme Head</div>
+            <SearchSelect placeholder="— Select faculty member —" options={advisorOptions} value={pHeadGuid} onChange={setPHeadGuid} />
           </div>
           <div className="fg"><div className="lbl">Start Date</div><input className="ctrl" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
           <div className="fg"><div className="lbl">End Date</div><input className="ctrl" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>

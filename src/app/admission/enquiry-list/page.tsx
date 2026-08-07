@@ -54,8 +54,11 @@ export default function EnquiryListPage() {
   // Stats-row summary — GET /api/v1/admissions/enquiries/counts, a separate
   // endpoint from the paginated list above (its own totalCount only ever
   // matches this one's totalCount by coincidence, not by being the same
-  // field — both are wired independently).
-  const { data: counts } = useEnquiryCounts()
+  // field — both are wired independently). Confirmed to accept
+  // intakeGuid/sourceGuid filters, so the cards track whatever's selected in
+  // the Intake/Channel dropdowns below instead of always showing unfiltered
+  // global totals.
+  const { data: counts } = useEnquiryCounts({ intakeGuid: intakeGuid || undefined, sourceGuid: channel || undefined })
 
   // programName comes back null on every row from the real API — resolve it
   // client-side the same way faculty.ts's deanName fallback does.
@@ -92,20 +95,23 @@ export default function EnquiryListPage() {
       .toLowerCase()
       .includes(term)
   }
-  // The enquiry list endpoint only takes page/pageSize — no confirmed
-  // channel/source filter query param exists, so (same as Search above)
-  // this only narrows the currently-loaded server page rather than
-  // querying the full 11k+-row table. Options are built dynamically from
-  // whatever sourceName values are actually present on the loaded page,
-  // same "no fixed list, derive from real data" pattern as vetting's own
-  // programme filter.
+  // The enquiry LIST endpoint only takes page/pageSize — no server-side
+  // channel/source filter param exists there, so (same as Search above)
+  // this still only narrows the currently-loaded server page rather than
+  // querying the full 11k+-row table. `channel` stores the real
+  // enquirySourceGuid (not sourceName) so it can double as the counts
+  // endpoint's `sourceGuid` filter above — options are built dynamically
+  // from whatever (guid, name) pairs are actually present on the loaded
+  // page, same "no fixed list, derive from real data" pattern as vetting's
+  // own programme filter.
   const channelOptions = [
     { value: '', label: 'All Channels' },
-    ...Array.from(new Set(rows.map(r => r.sourceName).filter((s): s is string => !!s))).map(name => ({ value: name, label: name })),
+    ...Array.from(new Map(rows.filter(r => r.enquirySourceGuid && r.sourceName).map(r => [r.enquirySourceGuid as string, r.sourceName as string])).entries())
+      .map(([guid, name]) => ({ value: guid, label: name })),
   ]
   const filteredRows = rows.filter(r =>
     (!search.trim() || matchesSearch(r, search.trim().toLowerCase())) &&
-    (!channel || r.sourceName === channel) &&
+    (!channel || r.enquirySourceGuid === channel) &&
     (!intakeGuid || r.intakeGuid === intakeGuid)
   )
   const searchMatches = search.trim() ? filteredRows.slice(0, 8) : []
@@ -135,8 +141,13 @@ export default function EnquiryListPage() {
       </div>
 
       {/* Backed by GET /api/v1/admissions/enquiries/counts — a dedicated
-          summary endpoint, independent of the paginated list query. */}
-      <div className="stats-row">
+          summary endpoint, independent of the paginated list query, and
+          scoped live to the Intake/Channel filters below via
+          intakeGuid/sourceGuid. 5 cards now (Closed added) — overrides the
+          shared .stats-row's fixed 4-column grid just for this page rather
+          than touching the class every other stats-row page relies on
+          staying at 4. */}
+      <div className="stats-row" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1"><i className="lni lni-users text-b500" /><span className="text-sm text-g500">Total Enquiries</span></div>
           <p className="text-2xl font-semibold text-g900">{(counts?.totalCount ?? totalCount).toLocaleString()}</p>
@@ -152,6 +163,10 @@ export default function EnquiryListPage() {
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1"><i className="lni lni-world text-clr-purple" /><span className="text-sm text-g500">ODL Specific</span></div>
           <p className="text-2xl font-semibold text-g900">{counts ? counts.odelSourceCount.toLocaleString() : '—'}</p>
+        </div>
+        <div className="stat-card">
+          <div className="flex items-center gap-2 mb-1"><i className="lni lni-close text-clr-red" /><span className="text-sm text-g500">Closed</span></div>
+          <p className="text-2xl font-semibold text-g900">{counts ? counts.closedCount.toLocaleString() : '—'}</p>
         </div>
       </div>
 
