@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createBatch, deleteBatch, getBatchById, getBatches, updateBatch, Batch, BatchCreateInput, BatchUpdateInput } from '@/lib/api/academic/batch'
+import { createBatch, deleteBatch, getBatchById, getBatches, updateBatch, Batch, BatchCreateInput, BatchDetail, BatchUpdateInput } from '@/lib/api/academic/batch'
 
 const BATCHES_KEY = ['batches']
 
@@ -49,4 +49,4 @@ export function useDeleteBatch() {
   })
 }
 
-export type { Batch, BatchCreateInput, BatchUpdateInput }
+export type { Batch, BatchCreateInput, BatchDetail, BatchUpdateInput }

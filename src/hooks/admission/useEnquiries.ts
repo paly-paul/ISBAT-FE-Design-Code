@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createEnquiry, Enquiry, EnquiryCounts, EnquiryInput, EnquiryUpdateInput, getEnquiries, getEnquiryById, getEnquiryCounts, updateEnquiry } from '@/lib/api/admission/enquiry'
+import { createEnquiry, Enquiry, EnquiryCounts, EnquiryCountsFilters, EnquiryInput, EnquiryUpdateInput, getEnquiries, getEnquiryById, getEnquiryCounts, updateEnquiry } from '@/lib/api/admission/enquiry'
 
 const ENQUIRIES_KEY = ['enquiries']
 const ENQUIRY_COUNTS_KEY = ['enquiry-counts']
@@ -17,12 +17,15 @@ export function useEnquiries(page: number, pageSize: number) {
   })
 }
 
-// Stats-row summary (Total/Converted/Pending Follow-up/ODL Specific) — a
-// separate endpoint from the paginated list above, not derived from it.
-export function useEnquiryCounts() {
+// Stats-row summary (Total/Converted/Pending Follow-up/ODL Specific/Closed) —
+// a separate endpoint from the paginated list above, not derived from it.
+// Accepts the same intakeGuid/sourceGuid filters the page's Intake/Channel
+// dropdowns already narrow the table by, so the cards track the active
+// filters instead of always showing unfiltered global totals.
+export function useEnquiryCounts(filters?: EnquiryCountsFilters) {
   return useQuery({
-    queryKey: ENQUIRY_COUNTS_KEY,
-    queryFn: () => getEnquiryCounts(),
+    queryKey: [...ENQUIRY_COUNTS_KEY, filters?.intakeGuid ?? '', filters?.sourceGuid ?? ''],
+    queryFn: () => getEnquiryCounts(filters),
   })
 }
 
@@ -62,4 +65,4 @@ export function useUpdateEnquiry() {
   })
 }
 
-export type { Enquiry, EnquiryCounts, EnquiryInput, EnquiryUpdateInput }
+export type { Enquiry, EnquiryCounts, EnquiryCountsFilters, EnquiryInput, EnquiryUpdateInput }

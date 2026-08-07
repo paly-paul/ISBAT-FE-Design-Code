@@ -65,27 +65,37 @@ function redirectToLogin(triggeredBy: string, cause: unknown) {
 // erp_refresh cookie is single-use (rotates on every call, confirmed via a
 // real concurrent-request test: two /auth/refresh calls with the same
 // still-valid token raced 200/401) — so a 401 here doesn't necessarily mean
-// the session is actually gone. If the user has a second tab open (or an
-// unrelated refresh from elsewhere in this same tab slipped past the dedup
-// above, e.g. via a call site that doesn't route through
-// refreshAccessToken()), it may have already rotated the cookie a moment
-// before this attempt reached the server. Give that a brief window to land
-// in the browser's cookie store and try once more before concluding the
-// session is genuinely gone — only redirect if the retry also fails.
+// the session is actually gone. If the user has a second tab open (each tab
+// runs its own independent proactive refresh timer — see the module
+// layouts' SESSION_REFRESH_INTERVAL_MS — so this isn't a rare edge case),
+// or an unrelated refresh from elsewhere in this same tab slipped past the
+// dedup above, it may have already rotated the cookie a moment before this
+// attempt reached the server. Give that a brief window to land in the
+// browser's cookie store and try once more before concluding the session is
+// genuinely gone. Shared by both the reactive 401 handler below AND the
+// proactive keep-alive (via refreshSession() in auth.ts) — every caller
+// needs this same tolerance, not just the reactive path; a previous version
+// of the proactive timer skipped it and logged users out on the very first
+// racy collision instead of retrying, which is exactly the failure this was
+// built to prevent.
+export async function refreshAccessTokenWithRetry(): Promise<RefreshData> {
+  try {
+    return await refreshAccessToken()
+  } catch (err) {
+    if (!(err instanceof AuthError)) throw err
+    await new Promise(resolve => setTimeout(resolve, 500))
+    return await refreshAccessToken()
+  }
+}
+
 // `triggeredBy` is the path of the original request whose 401 kicked this
 // off — purely for diagnostics, see redirectToLogin() above.
 async function handleUnauthorized(triggeredBy: string): Promise<void> {
   try {
-    await refreshAccessToken()
+    await refreshAccessTokenWithRetry()
   } catch (err) {
-    if (!(err instanceof AuthError)) throw err
-    try {
-      await new Promise(resolve => setTimeout(resolve, 500))
-      await refreshAccessToken()
-    } catch (retryErr) {
-      if (retryErr instanceof AuthError) redirectToLogin(triggeredBy, retryErr)
-      throw retryErr
-    }
+    if (err instanceof AuthError) redirectToLogin(triggeredBy, err)
+    throw err
   }
 }
 

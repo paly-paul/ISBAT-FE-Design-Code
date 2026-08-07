@@ -163,13 +163,26 @@ export function getEnquiries(page = 1, pageSize = 10): Promise<EnquiryListResult
 
 const EMPTY_COUNTS: EnquiryCounts = { totalCount: 0, convertedCount: 0, closedCount: 0, pendingFollowUpCount: 0, odelSourceCount: 0 }
 
+export interface EnquiryCountsFilters {
+  intakeGuid?: string
+  sourceGuid?: string
+}
+
 // Backs the enquiry-list page's stats row (Total/Converted/Pending Follow-up/
-// ODL Specific) — independent of the paginated list query above.
-export function getEnquiryCounts(): Promise<EnquiryCounts> {
+// ODL Specific/Closed) — independent of the paginated list query above.
+// Confirmed to accept intakeGuid/sourceGuid query params — same guid fields
+// as the enquiry row's own intakeGuid/enquirySourceGuid, so the stats row
+// can be scoped to whatever the page's Intake/Channel filters currently
+// have selected instead of always showing the unfiltered global totals.
+export function getEnquiryCounts(filters?: EnquiryCountsFilters): Promise<EnquiryCounts> {
   if (MOCK_AUTH) {
     return Promise.resolve({ ...EMPTY_COUNTS, totalCount: mockEnquiries.length })
   }
-  return apiGet<EnquiryCounts | null>('/api/v1/admissions/enquiries/counts')
+  const params = new URLSearchParams()
+  if (filters?.intakeGuid) params.set('intakeGuid', filters.intakeGuid)
+  if (filters?.sourceGuid) params.set('sourceGuid', filters.sourceGuid)
+  const qs = params.toString()
+  return apiGet<EnquiryCounts | null>(`/api/v1/admissions/enquiries/counts${qs ? `?${qs}` : ''}`)
     .then(data => data ?? EMPTY_COUNTS)
 }
 

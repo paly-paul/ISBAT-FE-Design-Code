@@ -387,6 +387,9 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
                   <input type="checkbox" checked={includeCBT} onChange={e => setIncludeCBT(e.target.checked)} style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }} />
                   Class Test
                 </label>
+                {/* Mid checkbox removed from the UI, same as the Add modal —
+                    includeMid stays internal state, auto-set true whenever
+                    Course Work is checked below.
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--g700)' }}>
                   <input
                     type="checkbox"
@@ -395,7 +398,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
                     style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }}
                   />
                   Mid
-                </label>
+                </label> */}
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--g700)' }}>
                   <input
                     type="checkbox"
