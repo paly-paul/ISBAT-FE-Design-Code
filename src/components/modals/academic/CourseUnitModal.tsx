@@ -9,15 +9,16 @@ import { useRepetitionTags } from '@/hooks/academic/useRepetitionTags'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
 
-type Topic   = { name: string; taughtBy: string }
+type Topic   = { name: string; taughtBy: string; studySequence: string }
 type Chapter = { title: string; topics: Topic[] }
 
-// Study Sequence is not user-editable — it's always the topic's 1-based
-// position within its chapter (see the read-only "Study Sequence" column
-// in Step 2), so the payload derives it from array index rather than
-// carrying it as separate per-topic state.
-function blankTopic(): Topic   { return { name: '', taughtBy: '' } }
-function blankChapter(): Chapter { return { title: '', topics: [blankTopic()] } }
+// Study Sequence defaults to the topic's 1-based position within its
+// chapter when added, but is now a real editable field — the user can
+// override it to any value (e.g. to reorder without dragging, or to leave
+// gaps) rather than it always being silently forced back to array position
+// on submit.
+function blankTopic(order: number): Topic { return { name: '', taughtBy: '', studySequence: String(order) } }
+function blankChapter(): Chapter { return { title: '', topics: [blankTopic(1)] } }
 
 interface CourseUnitModalProps extends ModalProps {
   createCourseUnit: {
@@ -43,6 +44,11 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
   const [syllabusFile, setSyllabusFile] = useState<File | null>(null)
   const [errors, setErrors]               = useState<Record<string, string>>({})
   const [chapterErrors, setChapterErrors] = useState<string[]>([])
+  // Keyed by "chapterIdx-topicIdx" — taughtBy (employeeGuid) is required by
+  // the backend; omitting it on any topic 400s the whole outline save, not
+  // just that one topic, so this has to be caught client-side before submit
+  // rather than left to surface as an opaque failure popup.
+  const [topicTaughtByErrors, setTopicTaughtByErrors] = useState<Set<string>>(new Set())
   const [includeCW, setIncludeCW]       = useState(true)
   const [includeCBT, setIncludeCBT]     = useState(true)
   const [includeMid, setIncludeMid]     = useState(true)
@@ -82,13 +88,34 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
   function validateStep2() {
     const chapErrs = chapters.map(ch => ch.title.trim() ? '' : 'Chapter title is required')
     setChapterErrors(chapErrs)
-    return chapErrs.every(err => !err)
+
+    const missingTaughtBy = new Set<string>()
+    chapters.forEach((ch, ci) => {
+      ch.topics.forEach((t, ti) => {
+        if (!t.taughtBy) missingTaughtBy.add(`${ci}-${ti}`)
+      })
+    })
+    setTopicTaughtByErrors(missingTaughtBy)
+
+    if (missingTaughtBy.size > 0) {
+      // Jump to the first chapter with a missing Taught By so the error is
+      // actually visible — it could otherwise be sitting in a chapter the
+      // user isn't currently looking at.
+      const firstBadChapter = chapters.findIndex((_, ci) =>
+        Array.from(missingTaughtBy).some(key => key.startsWith(`${ci}-`))
+      )
+      if (firstBadChapter !== -1) setActiveChapterIdx(firstBadChapter)
+      showToast('Select Taught By for every topic before saving', 'error')
+    }
+
+    return chapErrs.every(err => !err) && missingTaughtBy.size === 0
   }
 
   if (!isOpen) return null
 
   function handleClose() {
     setSaved(false); setFailure(null); setStep(1); setChapters([blankChapter()]); setActiveChapterIdx(0); setErrors({}); setChapterErrors([])
+    setTopicTaughtByErrors(new Set())
     setUnitCode(''); setUnitName(''); setNumChapters(''); setCredits(''); setRepetitionTagGuid('')
     setSyllabusFile(null)
     setIncludeCW(true); setIncludeCBT(true); setIncludeMid(true)
@@ -104,7 +131,7 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
       chapterName: ch.title,
       topics: ch.topics.map((t, ti) => ({
         courseUnitTopicDetails: t.name,
-        studySequence: ti + 1,
+        studySequence: +t.studySequence || ti + 1,
         taughtBy: t.taughtBy,
       })),
     }))
@@ -161,6 +188,10 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
   function removeChapter(ci: number) {
     setChapters(p => p.filter((_, i) => i !== ci))
     setChapterErrors(p => p.filter((_, i) => i !== ci))
+    // Every chapter after the removed one shifts down an index — rather
+    // than remap keys, just clear pending topic errors; they'll be
+    // recomputed correctly on the next submit attempt.
+    setTopicTaughtByErrors(new Set())
     setActiveChapterIdx(current => {
       const newLength = chapters.length - 1
       if (ci < current) return current - 1
@@ -175,16 +206,30 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
 
   // topic helpers
   function addTopic(ci: number) {
-    setChapters(p => p.map((c, i) => i === ci ? { ...c, topics: [...c.topics, blankTopic()] } : c))
+    setChapters(p => p.map((c, i) => i === ci ? { ...c, topics: [...c.topics, blankTopic(c.topics.length + 1)] } : c))
+    // Topic indices within this chapter shift for everything after the
+    // insertion point — simplest to just drop all pending errors for this
+    // chapter rather than try to remap keys; they'll be recomputed on the
+    // next submit attempt anyway.
+    setTopicTaughtByErrors(prev => new Set(Array.from(prev).filter(key => !key.startsWith(`${ci}-`))))
   }
   function removeTopic(ci: number, ti: number) {
     setChapters(p => p.map((c, i) => i === ci ? { ...c, topics: c.topics.filter((_, j) => j !== ti) } : c))
+    setTopicTaughtByErrors(prev => new Set(Array.from(prev).filter(key => !key.startsWith(`${ci}-`))))
   }
   function setTopic(ci: number, ti: number, field: keyof Topic, v: string) {
     setChapters(p => p.map((c, i) => i === ci
       ? { ...c, topics: c.topics.map((t, j) => j === ti ? { ...t, [field]: v } : t) }
       : c
     ))
+    if (field === 'taughtBy' && v) {
+      setTopicTaughtByErrors(prev => {
+        if (!prev.has(`${ci}-${ti}`)) return prev
+        const next = new Set(prev)
+        next.delete(`${ci}-${ti}`)
+        return next
+      })
+    }
   }
 
   if (saved) {
@@ -563,13 +608,28 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      {activeChapter.topics.map((t, ti) => (
+                      {activeChapter.topics.map((t, ti) => {
+                        const taughtByMissing = topicTaughtByErrors.has(`${activeChapterIdx}-${ti}`)
+                        return (
                         <div key={ti} style={{ display: 'grid', gridTemplateColumns: '20px 1fr 150px 130px 30px', gap: 6, alignItems: 'center' }}>
                           <span style={{ fontSize: 11, color: 'var(--g400)', textAlign: 'center' }}>{ti + 1}.</span>
                           <input className="ctrl" value={t.name} onChange={e => setTopic(activeChapterIdx, ti, 'name', e.target.value)} placeholder="e.g. Introduction to Arrays" />
-                          {/* Auto-incrementing, not user-editable — always the topic's 1-based position in this chapter */}
-                          <div className="ctrl" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--g500)', background: 'var(--g100)', cursor: 'default' }}>{ti + 1}</div>
-                          <SearchSelect placeholder="— Select —" value={t.taughtBy} onChange={v => setTopic(activeChapterIdx, ti, 'taughtBy', v)} options={employeeOptions} />
+                          {/* Auto-fills to the topic's 1-based position when added, but editable — the user can reorder/renumber without dragging. */}
+                          <input
+                            className="ctrl"
+                            type="number"
+                            min={1}
+                            style={{ textAlign: 'center' }}
+                            value={t.studySequence}
+                            onChange={e => setTopic(activeChapterIdx, ti, 'studySequence', e.target.value)}
+                          />
+                          <SearchSelect
+                            placeholder="— Select —"
+                            value={t.taughtBy}
+                            onChange={v => setTopic(activeChapterIdx, ti, 'taughtBy', v)}
+                            options={employeeOptions}
+                            style={taughtByMissing ? { boxShadow: '0 0 0 1.5px var(--red)', borderRadius: 'var(--rsm)' } : undefined}
+                          />
                           <button
                             className="btn btn-danger btn-sm"
                             style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
@@ -579,7 +639,11 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
                             <i className="lni lni-trash-can"></i>
                           </button>
                         </div>
-                      ))}
+                        )
+                      })}
+                      {activeChapter.topics.some((_, ti) => topicTaughtByErrors.has(`${activeChapterIdx}-${ti}`)) && (
+                        <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 2 }}>Taught By is required for every topic</p>
+                      )}
                       <button className="btn btn-neu btn-sm mt-1" style={{ alignSelf: 'flex-start', fontSize: 11 }} onClick={() => addTopic(activeChapterIdx)}>
                         <i className="lni lni-plus"></i> Add Topic
                       </button>

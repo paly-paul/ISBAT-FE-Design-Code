@@ -14,6 +14,8 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { useCourseUnits, useCreateCourseUnit, useUpdateCourseUnit, useDeleteCourseUnit, CourseUnit } from '@/hooks/academic/useCourseUnits'
+import { getCourseUnitById } from '@/lib/api/academic/courseUnit'
+import { openDocumentForViewing, downloadDocument } from '@/lib/documentViewer'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -37,6 +39,29 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingCourseUnitGuid(guid)
     openModal('cu-edit-modal')
+  }
+
+  const [syllabusLoadingGuid, setSyllabusLoadingGuid] = useState<string | null>(null)
+
+  // `syllabus` is a presigned S3 URL good for only 5 minutes (X-Amz-Expires=300
+  // on a real response) — the table row's own copy comes from useCourseUnits,
+  // which is cached with staleTime: Infinity for the rest of the session, so
+  // it goes stale (S3 "Request has expired") within minutes of the page
+  // loading. Fetch a genuinely fresh copy of just this one record — bypassing
+  // the cached hook entirely — right at click time instead of trusting
+  // whatever's already loaded, so the URL used is always brand new.
+  async function handleSyllabus(guid: string, mode: 'view' | 'download') {
+    setSyllabusLoadingGuid(guid)
+    try {
+      const fresh = await getCourseUnitById(guid)
+      if (!fresh.syllabus) { showToast('Syllabus is no longer attached to this unit', 'error'); return }
+      if (mode === 'view') await openDocumentForViewing(fresh.syllabus)
+      else downloadDocument(fresh.syllabus)
+    } catch {
+      showToast('Failed to load the syllabus document. Please try again.', 'error')
+    } finally {
+      setSyllabusLoadingGuid(null)
+    }
   }
 
   function confirmDeleteCourseUnit() {
@@ -245,7 +270,30 @@ export default function Page() {
                     <td>{r.ca}</td>
                     <td>
                       {r.syllabus
-                        ? <span className="badge badge-green">Attached</span>
+                        ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleSyllabus(r.courseUnitGuid, 'view')}
+                              disabled={syllabusLoadingGuid === r.courseUnitGuid}
+                              className="badge badge-green"
+                              style={{ border: 'none', cursor: 'pointer' }}
+                              title="View uploaded syllabus document"
+                            >
+                              <i className="lni lni-eye"></i> {syllabusLoadingGuid === r.courseUnitGuid ? 'Loading…' : 'Attached'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSyllabus(r.courseUnitGuid, 'download')}
+                              disabled={syllabusLoadingGuid === r.courseUnitGuid}
+                              className="btn btn-neu"
+                              style={{ width: 26, height: 26, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                              title="Download syllabus document"
+                            >
+                              <i className="lni lni-download" style={{ fontSize: 12 }}></i>
+                            </button>
+                          </div>
+                        )
                         : <span className="badge badge-red"><i className="lni lni-warning"></i> Missing</span>}
                     </td>
                   </tr>

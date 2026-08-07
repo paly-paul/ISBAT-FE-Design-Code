@@ -1,9 +1,16 @@
-const API_BASE = (process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? '').trim()
+const NEXT_PUBLIC_API_BASE = (process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? '').trim()
+const SERVER_API_GATEWAY_URL = (process.env.API_GATEWAY_URL ?? '').trim()
+const API_BASE = SERVER_API_GATEWAY_URL || NEXT_PUBLIC_API_BASE
+const USE_API_PROXY = Boolean(API_BASE)
 
 // Skip ngrok's browser warning page for local gateway requests.
 const NGROK_HEADERS = { 'ngrok-skip-browser-warning': 'true' }
 
 function buildUrl(path: string): string {
+  // When the gateway URL is configured in Next.js, `/api/*` is rewritten by
+  // next.config.mjs through the dev server to the real backend. Keep browser
+  // requests same-origin so httpOnly cookies like erp_refresh can be sent.
+  if (USE_API_PROXY && path.startsWith('/api/')) return path
   if (!API_BASE) return path
   return `${API_BASE}${path}`
 }
@@ -212,7 +219,8 @@ export async function apiPostForm<T>(path: string, formData: FormData, retried =
   // Debug: log FormData keys before sending
   console.log(`📡 apiPostForm to ${path}`)
   console.log('📦 FormData entries:')
-  for (const [key, value] of formData.entries()) {
+  for (const key of (formData as any).keys()) {
+    const value = formData.get(key)
     if (value instanceof File) {
       console.log(`   ${key}: [File] ${value.name} (${value.size} bytes, ${value.type})`)
     } else {
