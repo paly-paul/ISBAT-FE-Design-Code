@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
+import DatePicker from '@/components/DatePicker'
 
 interface RateEntry { date: string; ugx: number; kes: number; setBy: string }
 
@@ -92,7 +93,7 @@ export default function Page() {
 
             <div className="fg mb-[14px]">
               <div className="lbl">Rate Date <span className="req">*</span></div>
-              <input className="ctrl" type="date" value={rateDate} onChange={e => setRateDate(e.target.value)} />
+              <DatePicker value={rateDate} onChange={setRateDate} />
             </div>
 
             <div className="sec-divider">Currency Rates (Base: USD)</div>

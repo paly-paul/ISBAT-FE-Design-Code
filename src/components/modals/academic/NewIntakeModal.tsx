@@ -4,6 +4,7 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 import { CreateIntakeInput } from '@/lib/api/academic/intake'
 import { AuthError } from '@/lib/api/client'
 
@@ -604,29 +605,29 @@ export function NewIntakeModal({ isOpen, onClose, showToast, createIntake }: New
                   from the "Exam …" labels) and commenting out the duplicate
                   plain "Grievance End Date" so there's no confusion about
                   which one actually gets sent.
-              <div className="fg"><div className="lbl">Grievance End Date</div><input className="ctrl" type="date" /></div>
+              <div className="fg"><div className="lbl">Grievance End Date</div><DatePicker onChange={() => {}} /></div>
               */}
               {/* "Re-entry Date" and "Late Fee Start Date" used to live here as
                   single top-level fields. The confirmed payload doesn't have
                   top-level equivalents — re-entry and late-fee dates instead
                   live per-semester inside academicCalendar (see Step 2 below:
                   Re-entry Start/Late Fee/End Date, Admission Late Fee Date).
-              <div className="fg"><div className="lbl">Re-entry Date</div><input className="ctrl" type="date" /></div>
-              <div className="fg"><div className="lbl">Late Fee Start Date</div><input className="ctrl" type="date" /></div>
+              <div className="fg"><div className="lbl">Re-entry Date</div><DatePicker onChange={() => {}} /></div>
+              <div className="fg"><div className="lbl">Late Fee Start Date</div><DatePicker onChange={() => {}} /></div>
               */}
               <div className="fg">
                 <div className="lbl">Last Date for Re-registration <span className="req">*</span></div>
-                <input className="ctrl" style={errors.lastDateForReRegistration ? { borderColor: 'var(--red)' } : undefined} type="date" value={lastDateForReRegistration} onChange={e => { setLastDateForReRegistration(e.target.value); if (errors.lastDateForReRegistration) setErrors(p => ({ ...p, lastDateForReRegistration: '' })) }} />
+                <DatePicker value={lastDateForReRegistration} onChange={v => { setLastDateForReRegistration(v); if (errors.lastDateForReRegistration) setErrors(p => ({ ...p, lastDateForReRegistration: '' })) }} hasError={!!errors.lastDateForReRegistration} />
                 {errors.lastDateForReRegistration && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lastDateForReRegistration}</p>}
               </div>
               <div className="fg">
                 <div className="lbl">Grievance Start Date <span className="req">*</span></div>
-                <input className="ctrl" style={errors.grievanceStartDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={grievanceStartDate} onChange={e => { setGrievanceStartDate(e.target.value); if (errors.grievanceStartDate) setErrors(p => ({ ...p, grievanceStartDate: '' })) }} />
+                <DatePicker value={grievanceStartDate} onChange={v => { setGrievanceStartDate(v); if (errors.grievanceStartDate) setErrors(p => ({ ...p, grievanceStartDate: '' })) }} hasError={!!errors.grievanceStartDate} />
                 {errors.grievanceStartDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.grievanceStartDate}</p>}
               </div>
               <div className="fg">
                 <div className="lbl">Grievance End Date <span className="req">*</span></div>
-                <input className="ctrl" style={errors.grievanceEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={grievanceEndDate} onChange={e => { setGrievanceEndDate(e.target.value); if (errors.grievanceEndDate) setErrors(p => ({ ...p, grievanceEndDate: '' })) }} />
+                <DatePicker value={grievanceEndDate} onChange={v => { setGrievanceEndDate(v); if (errors.grievanceEndDate) setErrors(p => ({ ...p, grievanceEndDate: '' })) }} hasError={!!errors.grievanceEndDate} />
                 {errors.grievanceEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.grievanceEndDate}</p>}
               </div>
             </div>
@@ -640,18 +641,27 @@ export function NewIntakeModal({ isOpen, onClose, showToast, createIntake }: New
                   Optional · Fill in the key dates for the first semester
                 </span>
               </div>
+              <p className="text-[10px] font-bold tracking-widest uppercase text-b500 mb-3">Admission Dates</p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
-                <div className="fg"><div className="lbl">Admission Start Date</div><input className="ctrl" type="date" value={admissionStartDate} onChange={e => setAdmissionStartDate(e.target.value)} /></div>
-                <div className="fg"><div className="lbl">Admission Late Fee Date</div><input className="ctrl" style={errors.admissionLateFeeDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={admissionLateFeeDate} onChange={e => setAdmissionLateFeeDate(e.target.value)} />{errors.admissionLateFeeDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.admissionLateFeeDate}</p>}</div>
-                <div className="fg"><div className="lbl">Admission End Date</div><input className="ctrl" style={errors.admissionEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={admissionEndDate} onChange={e => setAdmissionEndDate(e.target.value)} />{errors.admissionEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.admissionEndDate}</p>}</div>
-                <div className="fg"><div className="lbl">Re-entry Start Date</div><input className="ctrl" type="date" value={reentryStartDate} onChange={e => setReentryStartDate(e.target.value)} /></div>
-                <div className="fg"><div className="lbl">Re-entry Late Fee Date</div><input className="ctrl" style={errors.reentryLateFeeDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={reentryLateFeeDate} onChange={e => setReentryLateFeeDate(e.target.value)} />{errors.reentryLateFeeDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.reentryLateFeeDate}</p>}</div>
-                <div className="fg"><div className="lbl">Re-entry End Date</div><input className="ctrl" style={errors.reentryEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={reentryEndDate} onChange={e => setReentryEndDate(e.target.value)} />{errors.reentryEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.reentryEndDate}</p>}</div>
-                <div className="fg"><div className="lbl">Semester/Term 1 Start Date</div><input className="ctrl" style={errors.semStart ? { borderColor: 'var(--red)' } : undefined} type="date" value={semStart} onChange={e => setSemStart(e.target.value)} />{errors.semStart && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.semStart}</p>}</div>
-                <div className="fg"><div className="lbl">Lump Sum Date</div><input className="ctrl" type="date" value={lumpsumDate} onChange={e => setLumpsumDate(e.target.value)} /></div>
-                <div className="fg"><div className="lbl">Term 1 End Date</div><input className="ctrl" style={errors.term1EndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={term1EndDate} onChange={e => setTerm1EndDate(e.target.value)} />{errors.term1EndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.term1EndDate}</p>}</div>
-                <div className="fg"><div className="lbl">Term 2 Start Date</div><input className="ctrl" style={errors.term2StartDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={term2StartDate} onChange={e => setTerm2StartDate(e.target.value)} />{errors.term2StartDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.term2StartDate}</p>}</div>
-                <div className="fg"><div className="lbl">Semester/Term 2 End Date</div><input className="ctrl" style={errors.term2End ? { borderColor: 'var(--red)' } : undefined} type="date" value={term2End} onChange={e => setTerm2End(e.target.value)} />{errors.term2End && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.term2End}</p>}</div>
+                <div className="fg"><div className="lbl">Admission Start Date</div><DatePicker value={admissionStartDate} onChange={setAdmissionStartDate} /></div>
+                <div className="fg"><div className="lbl">Admission Late Fee Date</div><DatePicker value={admissionLateFeeDate} onChange={setAdmissionLateFeeDate} hasError={!!errors.admissionLateFeeDate} />{errors.admissionLateFeeDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.admissionLateFeeDate}</p>}</div>
+                <div className="fg"><div className="lbl">Admission End Date</div><DatePicker value={admissionEndDate} onChange={setAdmissionEndDate} hasError={!!errors.admissionEndDate} />{errors.admissionEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.admissionEndDate}</p>}</div>
+              </div>
+
+              <p className="text-[10px] font-bold tracking-widest uppercase text-b500 mb-3" style={{ marginTop: '1.25rem' }}>Re-entry Dates</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
+                <div className="fg"><div className="lbl">Re-entry Start Date</div><DatePicker value={reentryStartDate} onChange={setReentryStartDate} /></div>
+                <div className="fg"><div className="lbl">Re-entry Late Fee Date</div><DatePicker value={reentryLateFeeDate} onChange={setReentryLateFeeDate} hasError={!!errors.reentryLateFeeDate} />{errors.reentryLateFeeDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.reentryLateFeeDate}</p>}</div>
+                <div className="fg"><div className="lbl">Re-entry End Date</div><DatePicker value={reentryEndDate} onChange={setReentryEndDate} hasError={!!errors.reentryEndDate} />{errors.reentryEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.reentryEndDate}</p>}</div>
+              </div>
+
+              <p className="text-[10px] font-bold tracking-widest uppercase text-b500 mb-3" style={{ marginTop: '1.25rem' }}>Semester &amp; Exam Dates</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
+                <div className="fg"><div className="lbl">Semester/Term 1 Start Date</div><DatePicker value={semStart} onChange={setSemStart} hasError={!!errors.semStart} />{errors.semStart && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.semStart}</p>}</div>
+                <div className="fg"><div className="lbl">Lump Sum Date</div><DatePicker value={lumpsumDate} onChange={setLumpsumDate} /></div>
+                <div className="fg"><div className="lbl">Term 1 End Date</div><DatePicker value={term1EndDate} onChange={setTerm1EndDate} hasError={!!errors.term1EndDate} />{errors.term1EndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.term1EndDate}</p>}</div>
+                <div className="fg"><div className="lbl">Term 2 Start Date</div><DatePicker value={term2StartDate} onChange={setTerm2StartDate} hasError={!!errors.term2StartDate} />{errors.term2StartDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.term2StartDate}</p>}</div>
+                <div className="fg"><div className="lbl">Semester/Term 2 End Date</div><DatePicker value={term2End} onChange={setTerm2End} hasError={!!errors.term2End} />{errors.term2End && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.term2End}</p>}</div>
                 <div className="fg">
                   <div className="lbl">Duration (weeks)</div>
                   <input
@@ -663,11 +673,15 @@ export function NewIntakeModal({ isOpen, onClose, showToast, createIntake }: New
                     placeholder="Set semester dates below"
                   />
                 </div>
-                <div className="fg"><div className="lbl">Resit Start Date</div><input className="ctrl" type="date" value={resitStartDate} onChange={e => setResitStartDate(e.target.value)} /></div>
-                <div className="fg"><div className="lbl">Resit End Date</div><input className="ctrl" style={errors.resitEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={resitEndDate} onChange={e => setResitEndDate(e.target.value)} />{errors.resitEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.resitEndDate}</p>}</div>
-                <div className="fg"><div className="lbl">Final Exam Start Date</div><input className="ctrl" type="date" value={finalExamStartDate} onChange={e => setFinalExamStartDate(e.target.value)} /></div>
-                <div className="fg"><div className="lbl">Final Exam End Date</div><input className="ctrl" style={errors.finalExamEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={finalExamEndDate} onChange={e => setFinalExamEndDate(e.target.value)} />{errors.finalExamEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.finalExamEndDate}</p>}</div>
-                <div className="fg"><div className="lbl">Clearance Date (80%)</div><input className="ctrl" type="date" value={clearanceDate} onChange={e => setClearanceDate(e.target.value)} /></div>
+              </div>
+
+              <p className="text-[10px] font-bold tracking-widest uppercase text-b500 mb-3" style={{ marginTop: '1.25rem' }}>Resit &amp; Exam Dates</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
+                <div className="fg"><div className="lbl">Resit Start Date</div><DatePicker value={resitStartDate} onChange={setResitStartDate} /></div>
+                <div className="fg"><div className="lbl">Resit End Date</div><DatePicker value={resitEndDate} onChange={setResitEndDate} hasError={!!errors.resitEndDate} />{errors.resitEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.resitEndDate}</p>}</div>
+                <div className="fg"><div className="lbl">Final Exam Start Date</div><DatePicker value={finalExamStartDate} onChange={setFinalExamStartDate} /></div>
+                <div className="fg"><div className="lbl">Final Exam End Date</div><DatePicker value={finalExamEndDate} onChange={setFinalExamEndDate} hasError={!!errors.finalExamEndDate} />{errors.finalExamEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.finalExamEndDate}</p>}</div>
+                <div className="fg"><div className="lbl">Clearance Date (80%)</div><DatePicker value={clearanceDate} onChange={setClearanceDate} /></div>
               </div>
 
               {/* <div className="sec-divider" style={{ marginTop: '2rem' }}>
@@ -684,23 +698,38 @@ export function NewIntakeModal({ isOpen, onClose, showToast, createIntake }: New
               </div> */}
 
               {secondSemesterEnabled && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem', marginTop: '1rem' }}>
-                  <div className="fg"><div className="lbl">Admission Start Date</div><input className="ctrl" type="date" value={secondAdmissionStartDate} onChange={e => setSecondAdmissionStartDate(e.target.value)} /></div>
-                  <div className="fg"><div className="lbl">Admission Late Fee Date</div><input className="ctrl" style={errors.secondAdmissionLateFeeDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondAdmissionLateFeeDate} onChange={e => setSecondAdmissionLateFeeDate(e.target.value)} />{errors.secondAdmissionLateFeeDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondAdmissionLateFeeDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Admission End Date</div><input className="ctrl" style={errors.secondAdmissionEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondAdmissionEndDate} onChange={e => setSecondAdmissionEndDate(e.target.value)} />{errors.secondAdmissionEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondAdmissionEndDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Re-entry Start Date</div><input className="ctrl" type="date" value={secondReentryStartDate} onChange={e => setSecondReentryStartDate(e.target.value)} /></div>
-                  <div className="fg"><div className="lbl">Re-entry Late Fee Date</div><input className="ctrl" style={errors.secondReentryLateFeeDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondReentryLateFeeDate} onChange={e => setSecondReentryLateFeeDate(e.target.value)} />{errors.secondReentryLateFeeDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondReentryLateFeeDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Re-entry End Date</div><input className="ctrl" style={errors.secondReentryEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondReentryEndDate} onChange={e => setSecondReentryEndDate(e.target.value)} />{errors.secondReentryEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondReentryEndDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Semester/Term 1 Start Date</div><input className="ctrl" style={errors.secondSemStart ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondSemStart} onChange={e => setSecondSemStart(e.target.value)} />{errors.secondSemStart && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondSemStart}</p>}</div>
-                  <div className="fg"><div className="lbl">Lump Sum Date</div><input className="ctrl" type="date" value={secondLumpsumDate} onChange={e => setSecondLumpsumDate(e.target.value)} /></div>
-                  <div className="fg"><div className="lbl">Term 1 End Date</div><input className="ctrl" style={errors.secondTerm1EndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondTerm1EndDate} onChange={e => setSecondTerm1EndDate(e.target.value)} />{errors.secondTerm1EndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondTerm1EndDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Term 2 Start Date</div><input className="ctrl" style={errors.secondTerm2StartDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondTerm2StartDate} onChange={e => setSecondTerm2StartDate(e.target.value)} />{errors.secondTerm2StartDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondTerm2StartDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Semester/Term 2 End Date</div><input className="ctrl" style={errors.secondTerm2End ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondTerm2End} onChange={e => setSecondTerm2End(e.target.value)} />{errors.secondTerm2End && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondTerm2End}</p>}</div>
-                  <div className="fg"><div className="lbl">Resit Start Date</div><input className="ctrl" type="date" value={secondResitStartDate} onChange={e => setSecondResitStartDate(e.target.value)} /></div>
-                  <div className="fg"><div className="lbl">Resit End Date</div><input className="ctrl" style={errors.secondResitEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondResitEndDate} onChange={e => setSecondResitEndDate(e.target.value)} />{errors.secondResitEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondResitEndDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Final Exam Start Date</div><input className="ctrl" type="date" value={secondFinalExamStartDate} onChange={e => setSecondFinalExamStartDate(e.target.value)} /></div>
-                  <div className="fg"><div className="lbl">Final Exam End Date</div><input className="ctrl" style={errors.secondFinalExamEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={secondFinalExamEndDate} onChange={e => setSecondFinalExamEndDate(e.target.value)} />{errors.secondFinalExamEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondFinalExamEndDate}</p>}</div>
-                  <div className="fg"><div className="lbl">Clearance Date (80%)</div><input className="ctrl" type="date" value={secondClearanceDate} onChange={e => setSecondClearanceDate(e.target.value)} /></div>
+                <div style={{ marginTop: '1rem' }}>
+                  <p className="text-[10px] font-bold tracking-widest uppercase text-b500 mb-3">Admission Dates</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
+                    <div className="fg"><div className="lbl">Admission Start Date</div><DatePicker value={secondAdmissionStartDate} onChange={setSecondAdmissionStartDate} /></div>
+                    <div className="fg"><div className="lbl">Admission Late Fee Date</div><DatePicker value={secondAdmissionLateFeeDate} onChange={setSecondAdmissionLateFeeDate} hasError={!!errors.secondAdmissionLateFeeDate} />{errors.secondAdmissionLateFeeDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondAdmissionLateFeeDate}</p>}</div>
+                    <div className="fg"><div className="lbl">Admission End Date</div><DatePicker value={secondAdmissionEndDate} onChange={setSecondAdmissionEndDate} hasError={!!errors.secondAdmissionEndDate} />{errors.secondAdmissionEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondAdmissionEndDate}</p>}</div>
+                  </div>
+
+                  <p className="text-[10px] font-bold tracking-widest uppercase text-b500 mb-3" style={{ marginTop: '1.25rem' }}>Re-entry Dates</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
+                    <div className="fg"><div className="lbl">Re-entry Start Date</div><DatePicker value={secondReentryStartDate} onChange={setSecondReentryStartDate} /></div>
+                    <div className="fg"><div className="lbl">Re-entry Late Fee Date</div><DatePicker value={secondReentryLateFeeDate} onChange={setSecondReentryLateFeeDate} hasError={!!errors.secondReentryLateFeeDate} />{errors.secondReentryLateFeeDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondReentryLateFeeDate}</p>}</div>
+                    <div className="fg"><div className="lbl">Re-entry End Date</div><DatePicker value={secondReentryEndDate} onChange={setSecondReentryEndDate} hasError={!!errors.secondReentryEndDate} />{errors.secondReentryEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondReentryEndDate}</p>}</div>
+                  </div>
+
+                  <p className="text-[10px] font-bold tracking-widest uppercase text-b500 mb-3" style={{ marginTop: '1.25rem' }}>Semester &amp; Exam Dates</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
+                    <div className="fg"><div className="lbl">Semester/Term 1 Start Date</div><DatePicker value={secondSemStart} onChange={setSecondSemStart} hasError={!!errors.secondSemStart} />{errors.secondSemStart && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondSemStart}</p>}</div>
+                    <div className="fg"><div className="lbl">Lump Sum Date</div><DatePicker value={secondLumpsumDate} onChange={setSecondLumpsumDate} /></div>
+                    <div className="fg"><div className="lbl">Term 1 End Date</div><DatePicker value={secondTerm1EndDate} onChange={setSecondTerm1EndDate} hasError={!!errors.secondTerm1EndDate} />{errors.secondTerm1EndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondTerm1EndDate}</p>}</div>
+                    <div className="fg"><div className="lbl">Term 2 Start Date</div><DatePicker value={secondTerm2StartDate} onChange={setSecondTerm2StartDate} hasError={!!errors.secondTerm2StartDate} />{errors.secondTerm2StartDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondTerm2StartDate}</p>}</div>
+                    <div className="fg"><div className="lbl">Semester/Term 2 End Date</div><DatePicker value={secondTerm2End} onChange={setSecondTerm2End} hasError={!!errors.secondTerm2End} />{errors.secondTerm2End && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondTerm2End}</p>}</div>
+                  </div>
+
+                  <p className="text-[10px] font-bold tracking-widest uppercase text-b500 mb-3" style={{ marginTop: '1.25rem' }}>Resit &amp; Exam Dates</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
+                    <div className="fg"><div className="lbl">Resit Start Date</div><DatePicker value={secondResitStartDate} onChange={setSecondResitStartDate} /></div>
+                    <div className="fg"><div className="lbl">Resit End Date</div><DatePicker value={secondResitEndDate} onChange={setSecondResitEndDate} hasError={!!errors.secondResitEndDate} />{errors.secondResitEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondResitEndDate}</p>}</div>
+                    <div className="fg"><div className="lbl">Final Exam Start Date</div><DatePicker value={secondFinalExamStartDate} onChange={setSecondFinalExamStartDate} /></div>
+                    <div className="fg"><div className="lbl">Final Exam End Date</div><DatePicker value={secondFinalExamEndDate} onChange={setSecondFinalExamEndDate} hasError={!!errors.secondFinalExamEndDate} />{errors.secondFinalExamEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.secondFinalExamEndDate}</p>}</div>
+                    <div className="fg"><div className="lbl">Clearance Date (80%)</div><DatePicker value={secondClearanceDate} onChange={setSecondClearanceDate} /></div>
+                  </div>
                 </div>
               )}
             </div>

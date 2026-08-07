@@ -20,6 +20,7 @@ import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
 import { useFaculties } from '@/hooks/config/useFaculties'
 import { useStreams } from '@/hooks/config/useStreams'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { formatDate } from '@/lib/date'
 
 const PAGE_SIZE = 10
 
@@ -105,7 +106,7 @@ export default function Page() {
       // date field the list endpoint returns (no created/updated timestamp),
       // so it's what "newest to oldest" sorts on.
       dateAccRaw: p.dateAcc,
-      accredDate: new Date(p.dateAcc).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      accredDate: formatDate(p.dateAcc),
       noIA: p.noIa ? 'Yes' : 'No',
       specializations: specializationNames.length > 0 ? specializationNames.join(', ') : '—',
       admissionStatus: p.pgmStatus ? 'Active' : 'Inactive',
@@ -163,7 +164,7 @@ export default function Page() {
           <span className="text-g300 text-[var(--fs-2xl)]">→</span>
           <button className="btn btn-neu btn-sm text-[var(--fs-xs)]" onClick={() => nav('programme-group')}><i className="lni lni-folder"></i> Programme Group</button>
           <span className="text-g300 text-[var(--fs-2xl)]">→</span>
-          <span className="bg-b50 border-[1.5px] border-[var(--b200)] rounded-[var(--rxs)] py-[5px] px-3 text-[var(--fs-xs)] font-bold text-b700"><i className="lni lni-graduation"></i> Programme Master ← You are here</span>
+          <span className="bg-b50 border-[1.5px] border-[var(--b200)] rounded-[var(--rxs)] py-[5px] px-3 text-[var(--fs-xs)] font-bold text-b700"><i className="lni lni-graduation"></i> Programme Master</span>
           <span className="text-g300 text-[var(--fs-2xl)]">→</span>
           <button className="btn btn-neu btn-sm text-[var(--fs-xs)]" onClick={() => nav('course-units')}><i className="lni lni-book"></i> Course Units</button>
         </div>

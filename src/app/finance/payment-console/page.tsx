@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
+import DatePicker from '@/components/DatePicker'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
@@ -20,6 +21,7 @@ import {
   PAYMENT_CATEGORY_LABELS,
   PAY_TYPE_LABELS,
 } from '@/hooks/finance/usePaymentConsole'
+import { formatDateTime } from '@/lib/date'
 
 // Maps payType (1=Cash/2=Cheque/3=Bank/4=DemandDraft/5=Online, per
 // CreatePayment.bru) onto ReceiptBook.category (0=Cash/1=Bank/2=Online, per
@@ -211,7 +213,7 @@ export default function PaymentConsolePage() {
             refNo: profile.appRefNo,
             prog: programName ?? '—',
             method: PAY_TYPE_LABELS[payTypeNum] ?? `Type ${payTypeNum}`,
-            date: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + now.toLocaleTimeString(),
+            date: formatDateTime(now),
             amount: `${amt.toLocaleString()} ${selectedCurrency.currencyCode}`,
             balance: `${selectedCurrency.currencyCode} ${result.balance.toLocaleString()}`,
             advanceMessage: result.advanceMessage,
@@ -455,7 +457,7 @@ export default function PaymentConsolePage() {
                 <div className="g2 mb-[14px]">
                   <div className="fg">
                     <div className="lbl">Payment Date <span className="req">*</span></div>
-                    <input className="ctrl" type="date" value={payDate} onChange={e => setPayDate(e.target.value)} />
+                    <DatePicker value={payDate} onChange={setPayDate} />
                   </div>
                   <div className="fg">
                     <div className="lbl">Payment Method <span className="req">*</span></div>

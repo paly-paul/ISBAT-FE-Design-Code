@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
@@ -66,6 +66,10 @@ export default function VettingPage() {
   // currently-loaded page.
   const { data, isLoading } = useVettingQueue(page, PAGE_SIZE, { studentName: search.trim() || undefined })
   const vetApplicationMutation = useVetApplication()
+
+  useEffect(() => {
+    console.log('[vetting page] render', { page, search, isLoading, itemCount: data?.items?.length ?? 0 })
+  }, [page, search, isLoading, data?.items?.length])
 
   const items = data?.items ?? []
   const totalCount = data?.totalCount ?? 0

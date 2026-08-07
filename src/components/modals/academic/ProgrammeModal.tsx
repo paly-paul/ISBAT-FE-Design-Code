@@ -4,6 +4,7 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 import { MultiSelect } from '@/components/MultiSelect'
 import { ProgramMasterInput } from '@/lib/api/academic/programMaster'
 import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
@@ -1176,11 +1177,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     required marker, no validation. */}
                 <div className="fg">
                   <div className="lbl">Accreditation Date</div>
-                  <input
-                    className="ctrl"
-                    type="date"
+                  <DatePicker
                     value={dateAcc}
-                    onChange={e => setDateAcc(e.target.value)}
+                    onChange={setDateAcc}
                   />
                 </div>
                 {/* Accreditation Expiry Date — commented out per request.

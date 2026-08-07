@@ -6,10 +6,12 @@ import { ImportSourceModal } from '@/components/modals/admission/ImportSourceMod
 import { ImportCrmModal } from '@/components/modals/admission/ImportCrmModal'
 import { ImportOdelModal } from '@/components/modals/admission/ImportOdelModal'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMastersByCampus } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
+import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
@@ -19,13 +21,13 @@ import { useCountries } from '@/hooks/config/useCountries'
 import { useEnquiry } from '@/hooks/admission/useEnquiries'
 import {
   useApplicationPaymentExemptionTypes,
-  useApplicationPaymentFees,
   useApplicationPaymentTypes,
   useCreateApplicationPayment,
   useUnconvertedEnquiries,
 } from '@/hooks/admission/useApplicationPayments'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput } from '@/lib/errorMessages'
+import { formatDate } from '@/lib/date'
 
 const PIPELINE = [
   { label: 'App. Payment',  desc: 'Current step', status: 'active' },
@@ -57,14 +59,14 @@ const COUNTRY_CODES = [
   { value: '+1',   label: '+1 · USA/Canada' },
 ]
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-// Create.bru requires payDate as dd/MMM/yyyy (e.g. "28/Jul/2026") — the
-// <input type="date"> gives us yyyy-mm-dd, so convert before submitting.
-function formatBruDate(yyyyMmDd: string): string {
+// The backend expects a date/time string for payDate. The actual successful
+// response payload returns it as an ISO-style midnight timestamp, so keep the
+// client-side submission in the same shape rather than the older dd/MMM/yyyy
+// contract that may be stale.
+function formatPaymentDate(yyyyMmDd: string): string {
   const [y, m, d] = yyyyMmDd.split('-').map(Number)
   if (!y || !m || !d) return ''
-  return `${String(d).padStart(2, '0')}/${MONTHS[m - 1]}/${y}`
+  return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T00:00:00`
 }
 
 interface Option { value: string; label: string }
@@ -128,9 +130,11 @@ function PaymentPageContent() {
   const [payProofFile, setPayProofFile] = useState<File | null>(null)
   // Per Application_Payment_Change_Requests_Final_Updated.md #6 — Receipt
   // Type/No. are no longer user-entered; populated from the create
-  // response's own fields once a payment actually saves (see
-  // CreateApplicationPaymentResponse's note on these being unconfirmed).
-  const [savedReceipt, setSavedReceipt] = useState<{ appRefNo?: string; receiptNo?: string; receiptType?: string }>({})
+  // response's own fields once a payment actually saves. CONFIRMED via a
+  // real response: there's no receiptType on the wire at all — paymentCode
+  // (e.g. "APP20261") is the real human-readable reference, receiptNo is a
+  // plain number (e.g. 1024, null for exemption payments).
+  const [savedReceipt, setSavedReceipt] = useState<{ appRefNo?: string; paymentCode?: string; receiptNo?: number | null }>({})
 
   // Displayed exchange rates — kept as controlled state (not just readOnly
   // display) so the submitted exRate actually matches what's shown here.
@@ -209,7 +213,17 @@ function PaymentPageContent() {
   const batches = (allBatchesData?.items ?? []).filter(b =>
     b.programGuid === form.programGuid && b.semesterGuid === form.semesterGuid && b.batchTimeGuid === form.batchTimeGuid,
   )
-  const { data: fees = [] }          = useApplicationPaymentFees(form.programGuid, !!form.programGuid)
+  // The payment-scoped Dropdowns/Fees.bru endpoint (getApplicationPaymentFees
+  // in lib/api/admission/applicationPayment.ts) is what this dropdown used to
+  // run on — reported blank for a selected Programme that does have real fee
+  // structures under it. Same
+  // "payment-scoped endpoint is unreliable for this page, use the generic
+  // master instead" pattern already applied to Batches and Receipt Books
+  // above: fall back to the already-confirmed-real Programme Fee Structure
+  // list (same one /academic/fee-structure's own table uses), filtered
+  // client-side by the selected Programme and Active status instead.
+  const { data: allFeeStructuresData } = useProgramFeeStructures(1, 1000)
+  const fees = (allFeeStructuresData?.items ?? []).filter(f => f.programGuid === form.programGuid && f.status)
   const { data: exemptionTypes = [] } = useApplicationPaymentExemptionTypes()
   const { data: paymentTypes = [] }  = useApplicationPaymentTypes()
   const { data: currencies = [] }    = useFinanceCurrencies()
@@ -226,6 +240,19 @@ function PaymentPageContent() {
   // payment-filtered one, so only offer Active (status === 1) ones here.
   const { data: allReceiptBooks = [] } = useReceiptBooks()
   const receiptBooks = allReceiptBooks.filter(r => r.status === 1)
+
+  const PAY_TYPE_TO_RECEIPT_CATEGORY: Record<number, number> = {
+    1: 0, // Cash
+    2: 1, // Cheque
+    3: 1, // Bank
+    4: 1, // DD
+    5: 2, // Online
+  }
+  const selectedPayType = Number(form.payType || 0)
+  const matchingReceiptBooks = selectedPayType
+    ? receiptBooks.filter(r => r.category === PAY_TYPE_TO_RECEIPT_CATEGORY[selectedPayType])
+    : receiptBooks
+  const receiptBookOptions = matchingReceiptBooks.map(r => ({ value: r.receiptBookGuid, label: r.bookCode }))
   // No dedicated Countries dropdown under Application-Payments — reuses the
   // same real, guid-bearing Country source as Country Master and Filing
   // (GET /api/v1/users/countries), confirmed end-to-end via a real
@@ -298,6 +325,13 @@ function PaymentPageContent() {
   }, [selectedEnquiry, countries])
 
   const enquiryOptions  = (unconvertedEnquiriesData?.items ?? []).map(e => ({ value: e.enquiryGuid, label: `${e.studentName} (${e.enquiryCode})` }))
+  const enquiryOptionsWithSelected = selectedEnquiry
+    ? [
+        { value: selectedEnquiry.enquiryGuid, label: `${selectedEnquiry.studentName} (${selectedEnquiry.enquiryCode})` },
+        ...enquiryOptions.filter(o => o.value !== selectedEnquiry.enquiryGuid),
+      ]
+    : enquiryOptions
+
   const intakeOptions   = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   const campusOptions   = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions  = programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
@@ -310,7 +344,7 @@ function PaymentPageContent() {
   const payTypeOptions  = paymentTypes.map(t => ({ value: String(t.intPaymentType), label: t.paymentTypeName }))
   const currencyOptions = currencies.map(c => ({ value: c.currencyGuid, label: c.currencyCode }))
   const bankOptions     = banks.map(b => ({ value: b.procBankGuid, label: b.bankName }))
-  const receiptBookOptions = receiptBooks.map(r => ({ value: r.receiptBookGuid, label: r.bookCode }))
+
 
   const isWaived = !!form.exemptionTypeGuid
   // Per Create.bru docs, bankGuid's requirement is tied only to payType > 1
@@ -324,6 +358,8 @@ function PaymentPageContent() {
   const selectedBankGuid = isBank ? (form.bankGuid || null) : null
   const showBankDetails = isBank
 
+  
+
   // Fee Amount is manual-entry only — a first attempt tried to auto-fill it
   // from the selected Fee Structure's dropdown entry, but the real DTO
   // (confirmed via a live response) has no flat currency amount field, only
@@ -334,6 +370,12 @@ function PaymentPageContent() {
   const exRate = selectedCurrency?.currencyCode === 'USD' ? Number(usdRate) || 1
     : selectedCurrency?.currencyCode === 'KES' ? Number(kesRate) || 1
     : 1
+
+  useEffect(() => {
+    if (form.receiptBookGuid && !matchingReceiptBooks.some(r => r.receiptBookGuid === form.receiptBookGuid)) {
+      set('receiptBookGuid', '')
+    }
+  }, [form.receiptBookGuid, matchingReceiptBooks])
 
   function handleSubmit() {
     const missing: string[] = []
@@ -362,35 +404,41 @@ function PaymentPageContent() {
       return
     }
 
-    createPayment.mutate(
-      {
-        enquiryGuid: form.enquiryGuid,
-        oDelIntApplication: 0,
-        studentName: `${form.firstName} ${form.lastName}`.trim(),
-        intakeGuid: form.intakeGuid,
-        campusGuid: form.campusGuid,
-        programGuid: form.programGuid,
-        semesterGuid: form.semesterGuid,
-        batchGuid: form.batchGuid,
-        batchTimeGuid: form.batchTimeGuid,
-        feeHdGuid: form.feeHdGuid,
-        countryGuid: form.countryGuid,
-        mobile: form.phone.trim(),
-        email: form.email.trim() || null,
-        exemptionTypeGuid: form.exemptionTypeGuid || null,
-        payDate: formatBruDate(form.paymentDate),
-        payType: Number(form.payType || 1),
-        amount: Number(form.feeAmount || 0),
-        currencyGuid: form.currencyGuid || null,
-        exRate: exRate || 1,
-        bankGuid: selectedBankGuid,
-        receiptBookGuid: form.receiptBookGuid || null,
-        remarks: form.remarks.trim() || null,
-        payProofFile,
-      },
+    const payload = {
+      enquiryGuid: form.enquiryGuid,
+      oDelIntApplication: 0,
+      studentName: `${form.firstName} ${form.lastName}`.trim(),
+      intakeGuid: form.intakeGuid,
+      campusGuid: form.campusGuid,
+      programGuid: form.programGuid,
+      semesterGuid: form.semesterGuid,
+      batchGuid: form.batchGuid,
+      batchTimeGuid: form.batchTimeGuid,
+      feeHdGuid: form.feeHdGuid,
+      countryGuid: form.countryGuid,
+      mobile: form.phone.trim(),
+      email: form.email.trim() || null,
+      exemptionTypeGuid: form.exemptionTypeGuid || null,
+      payDate: formatPaymentDate(form.paymentDate),
+      payType: form.exemptionTypeGuid ? null : Number(form.payType || 1),
+      amount: form.exemptionTypeGuid ? null : Number(form.feeAmount || 0),
+      currencyGuid: form.exemptionTypeGuid ? null : form.currencyGuid || null,
+      exRate: form.exemptionTypeGuid ? null : exRate || 1,
+      bankGuid: selectedBankGuid,
+      receiptBookGuid: form.exemptionTypeGuid ? null : form.receiptBookGuid || null,
+      remarks: form.remarks.trim() || null,
+      payProofFile,
+    }
+
+    console.log('[application payment] submitting payload', {
+      ...payload,
+      payProofFile: payProofFile ? { name: payProofFile.name, size: payProofFile.size, type: payProofFile.type } : null,
+    })
+
+    createPayment.mutate(payload,
       {
         onSuccess: (response) => {
-          setSavedReceipt({ appRefNo: response?.appRefNo, receiptNo: response?.receiptNo, receiptType: response?.receiptType })
+          setSavedReceipt({ appRefNo: response?.appRefNo, paymentCode: response?.paymentCode, receiptNo: response?.receiptNo })
           setShowReceipt(true)
           showToast('Payment saved & receipt generated', 'success')
         },
@@ -501,7 +549,7 @@ function PaymentPageContent() {
               </Field>
               <Field label="Enquiry" req>
                 <SearchSelect
-                  options={enquiryOptions}
+                  options={enquiryOptionsWithSelected}
                   value={form.enquiryGuid}
                   placeholder={form.intakeGuid ? '-- Select Enquiry --' : '-- Select Intake First --'}
                   onChange={v => set('enquiryGuid', v)}
@@ -624,7 +672,7 @@ function PaymentPageContent() {
 
             <div className="g2 mt-4">
               <Field label="Payment Date" req>
-                <input className="ctrl" type="date" value={form.paymentDate} onChange={e => set('paymentDate', e.target.value)} />
+                <DatePicker value={form.paymentDate} onChange={v => set('paymentDate', v)} maxYmd={new Date().toISOString().slice(0, 10)} />
               </Field>
             </div>
 
@@ -688,9 +736,9 @@ function PaymentPageContent() {
                 </div>
                 <div className="flex flex-col gap-1" style={{ fontSize: 'var(--fs-sm)' }}>
                   {[
-                    ['Receipt No.', savedReceipt.receiptNo || 'RCT-AUTO'],
-                    ['Receipt Type', savedReceipt.receiptType || '—'],
-                    ['Date', form.paymentDate || new Date().toLocaleDateString()],
+                    ['Receipt No.', savedReceipt.receiptNo != null ? String(savedReceipt.receiptNo) : 'RCT-AUTO'],
+                    ['Payment Code', savedReceipt.paymentCode || '—'],
+                    ['Date', formatDate(form.paymentDate || new Date())],
                     ['Candidate', `${form.firstName} ${form.lastName}`.trim()],
                     ['Programme', labelFor(programOptions, form.programGuid)],
                     ['Campus', labelFor(campusOptions, form.campusGuid)],
