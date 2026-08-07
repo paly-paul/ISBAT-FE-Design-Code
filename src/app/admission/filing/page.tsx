@@ -14,6 +14,7 @@ import { useCountries } from '@/hooks/config/useCountries'
 import { useEnquiries } from '@/hooks/admission/useEnquiries'
 import { useApplicationPaymentFees } from '@/hooks/admission/useApplicationPayments'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { sanitizePhoneInput } from '@/lib/errorMessages'
 import {
   FilingApplicationSearchResult,
   useDeleteQualification,
@@ -505,7 +506,7 @@ export default function FilingPage() {
                     <Field label="Phone" req>
                       <div className="flex gap-2">
                         <SearchSelect options={COUNTRY_CODES} value={phoneCode} onChange={setPhoneCode} style={{ width: 108, flexShrink: 0 }} />
-                        <input className="ctrl flex-1" placeholder="7XX XXX XXX" value={phone} onChange={e => setPhone(e.target.value)} />
+                        <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="7XX XXX XXX" value={phone} onChange={e => setPhone(sanitizePhoneInput(e.target.value, false))} />
                       </div>
                     </Field>
                   </div>
@@ -579,7 +580,7 @@ export default function FilingPage() {
                   <div className="sec-divider mt-5">Sponsorship Details</div>
                   <div className="g3 mt-3">
                     <Field label="Sponsor Name"><Input placeholder="Sponsor name" value={spName} onChange={setSpName} /></Field>
-                    <Field label="Sponsor Phone"><Input placeholder="+256 7XX XXX XXX" value={spPhone} onChange={setSpPhone} /></Field>
+                    <Field label="Sponsor Phone"><Input type="tel" placeholder="+256 7XX XXX XXX" value={spPhone} onChange={v => setSpPhone(sanitizePhoneInput(v))} /></Field>
                     <Field label="Sponsor Email"><Input type="email" placeholder="sponsor@email.com" value={spEmail} onChange={setSpEmail} /></Field>
                   </div>
                   <div className="g3 mt-3">

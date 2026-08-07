@@ -3,10 +3,12 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
+import { sanitizePhoneInput } from '@/lib/errorMessages'
 
 export default function KioskEnquiryPage() {
   const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [phone, setPhone] = useState('')
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
   return (
@@ -23,7 +25,7 @@ export default function KioskEnquiryPage() {
         <div className="g2">
           <div className="fg"><label className="lbl">First Name <span className="text-clr-red">*</span></label><input className="ctrl" placeholder="e.g. Brian" /></div>
           <div className="fg"><label className="lbl">Last Name <span className="text-clr-red">*</span></label><input className="ctrl" placeholder="e.g. Kamya" /></div>
-          <div className="fg"><label className="lbl">Phone <span className="text-clr-red">*</span></label><input className="ctrl" placeholder="+256 7XX XXX XXX" /></div>
+          <div className="fg"><label className="lbl">Phone <span className="text-clr-red">*</span></label><input className="ctrl" type="tel" inputMode="numeric" placeholder="+256 7XX XXX XXX" value={phone} onChange={e => setPhone(sanitizePhoneInput(e.target.value))} /></div>
           <div className="fg"><label className="lbl">Email</label><input className="ctrl" type="email" placeholder="candidate@example.com" /></div>
           <div className="fg">
             <label className="lbl">Enquiry Channel</label>
