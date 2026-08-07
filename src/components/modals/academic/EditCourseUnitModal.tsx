@@ -4,21 +4,23 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
-import { CourseUnitInput } from '@/lib/api/academic/courseUnit'
+import { CourseUnitInput, getCourseUnitById } from '@/lib/api/academic/courseUnit'
+import { openDocumentForViewing, downloadDocument } from '@/lib/documentViewer'
 import { useCourseUnit } from '@/hooks/academic/useCourseUnits'
 import { useRepetitionTags } from '@/hooks/academic/useRepetitionTags'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
 
-type Topic   = { name: string; taughtBy: string }
+type Topic   = { name: string; taughtBy: string; studySequence: string }
 type Chapter = { title: string; topics: Topic[] }
 
-// Study Sequence is not user-editable — it's always the topic's 1-based
-// position within its chapter (see the read-only "Study Sequence" column
-// in Step 2), so the payload derives it from array index rather than
-// carrying it as separate per-topic state.
-function blankTopic(): Topic   { return { name: '', taughtBy: '' } }
-function blankChapter(): Chapter { return { title: '', topics: [blankTopic()] } }
+// Study Sequence defaults to the topic's 1-based position within its
+// chapter when added, but is now a real editable field — the user can
+// override it to any value (e.g. to reorder without dragging, or to leave
+// gaps) rather than it always being silently forced back to array position
+// on submit.
+function blankTopic(order: number): Topic { return { name: '', taughtBy: '', studySequence: String(order) } }
+function blankChapter(): Chapter { return { title: '', topics: [blankTopic(1)] } }
 
 interface EditCourseUnitModalProps extends ModalProps {
   courseUnitGuid: string | null
@@ -45,8 +47,14 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
   // const [unitCategory, setUnitCategory] = useState('')
   const [repetitionTagGuid, setRepetitionTagGuid] = useState('')
   const [syllabusFile, setSyllabusFile] = useState<File | null>(null)
+  const [syllabusLinkLoading, setSyllabusLinkLoading] = useState(false)
   const [errors, setErrors]               = useState<Record<string, string>>({})
   const [chapterErrors, setChapterErrors] = useState<string[]>([])
+  // Keyed by "chapterIdx-topicIdx" — taughtBy (employeeGuid) is required by
+  // the backend; omitting it on any topic 400s the whole outline save, not
+  // just that one topic, so this has to be caught client-side before submit
+  // rather than left to surface as an opaque failure popup.
+  const [topicTaughtByErrors, setTopicTaughtByErrors] = useState<Set<string>>(new Set())
   const [includeCW, setIncludeCW]       = useState(true)
   const [includeCBT, setIncludeCBT]     = useState(true)
   const [includeMid, setIncludeMid]     = useState(true)
@@ -87,13 +95,14 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
       courseUnit.outlines.length
         ? courseUnit.outlines.map(o => ({
             title: o.chapterName,
-            // Study Sequence is derived from position now (see the type/blankTopic
-            // note above) — sort by the server's studySequence on load so a topic's
-            // on-screen position (and the auto-numbered display) still matches what
-            // the backend had recorded, rather than trusting array order as-is.
+            // Sort by the server's real studySequence on load so on-screen
+            // order matches what's actually stored, and prefill the field
+            // itself from that same real value (not array position) — it's
+            // user-editable now, so the true stored number matters, not
+            // just a recomputed 1-based position.
             topics: [...o.topics]
               .sort((a, b) => a.studySequence - b.studySequence)
-              .map(t => ({ name: t.courseUnitTopicDetails, taughtBy: t.employeeGuid })),
+              .map(t => ({ name: t.courseUnitTopicDetails, taughtBy: t.employeeGuid, studySequence: String(t.studySequence) })),
           }))
         : [blankChapter()]
     )
@@ -102,6 +111,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
     setActiveChapterIdx(0)
     setErrors({})
     setChapterErrors([])
+    setTopicTaughtByErrors(new Set())
   }, [isOpen, courseUnit])
 
   function validateStep1() {
@@ -118,13 +128,55 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
   function validateStep2() {
     const chapErrs = chapters.map(ch => ch.title.trim() ? '' : 'Chapter title is required')
     setChapterErrors(chapErrs)
-    return chapErrs.every(err => !err)
+
+    const missingTaughtBy = new Set<string>()
+    chapters.forEach((ch, ci) => {
+      ch.topics.forEach((t, ti) => {
+        if (!t.taughtBy) missingTaughtBy.add(`${ci}-${ti}`)
+      })
+    })
+    setTopicTaughtByErrors(missingTaughtBy)
+
+    if (missingTaughtBy.size > 0) {
+      // Jump to the first chapter with a missing Taught By so the error is
+      // actually visible — it could otherwise be sitting in a chapter the
+      // user isn't currently looking at.
+      const firstBadChapter = chapters.findIndex((_, ci) =>
+        Array.from(missingTaughtBy).some(key => key.startsWith(`${ci}-`))
+      )
+      if (firstBadChapter !== -1) setActiveChapterIdx(firstBadChapter)
+      showToast('Select Taught By for every topic before saving', 'error')
+    }
+
+    return chapErrs.every(err => !err) && missingTaughtBy.size === 0
+  }
+
+  // `syllabus` is a presigned S3 URL good for only 5 minutes (X-Amz-Expires=300
+  // on a real response). courseUnit.syllabus comes from useCourseUnit, which
+  // (unlike the list) does refetch on a fresh mount, but not while the modal
+  // just sits open — if the user takes more than 5 minutes to get here, that
+  // URL is already dead. Fetch a genuinely fresh copy right at click time
+  // instead of trusting whatever's already loaded.
+  async function handleSyllabus(mode: 'view' | 'download') {
+    if (!courseUnitGuid) return
+    setSyllabusLinkLoading(true)
+    try {
+      const fresh = await getCourseUnitById(courseUnitGuid)
+      if (!fresh.syllabus) { showToast('Syllabus is no longer attached to this unit', 'error'); return }
+      if (mode === 'view') await openDocumentForViewing(fresh.syllabus)
+      else downloadDocument(fresh.syllabus)
+    } catch {
+      showToast('Failed to load the syllabus document. Please try again.', 'error')
+    } finally {
+      setSyllabusLinkLoading(false)
+    }
   }
 
   if (!isOpen) return null
 
   function handleClose() {
     setSaved(false); setFailure(null); setStep(1); setActiveChapterIdx(0); setErrors({}); setChapterErrors([])
+    setTopicTaughtByErrors(new Set())
     onClose()
   }
 
@@ -135,7 +187,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
       chapterName: ch.title,
       topics: ch.topics.map((t, ti) => ({
         courseUnitTopicDetails: t.name,
-        studySequence: ti + 1,
+        studySequence: +t.studySequence || ti + 1,
         taughtBy: t.taughtBy,
       })),
     }))
@@ -196,6 +248,10 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
   function removeChapter(ci: number) {
     setChapters(p => p.filter((_, i) => i !== ci))
     setChapterErrors(p => p.filter((_, i) => i !== ci))
+    // Every chapter after the removed one shifts down an index — rather
+    // than remap keys, just clear pending topic errors; they'll be
+    // recomputed correctly on the next submit attempt.
+    setTopicTaughtByErrors(new Set())
     setActiveChapterIdx(current => {
       const newLength = chapters.length - 1
       if (ci < current) return current - 1
@@ -210,16 +266,26 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
 
   // topic helpers
   function addTopic(ci: number) {
-    setChapters(p => p.map((c, i) => i === ci ? { ...c, topics: [...c.topics, blankTopic()] } : c))
+    setChapters(p => p.map((c, i) => i === ci ? { ...c, topics: [...c.topics, blankTopic(c.topics.length + 1)] } : c))
+    setTopicTaughtByErrors(prev => new Set(Array.from(prev).filter(key => !key.startsWith(`${ci}-`))))
   }
   function removeTopic(ci: number, ti: number) {
     setChapters(p => p.map((c, i) => i === ci ? { ...c, topics: c.topics.filter((_, j) => j !== ti) } : c))
+    setTopicTaughtByErrors(prev => new Set(Array.from(prev).filter(key => !key.startsWith(`${ci}-`))))
   }
   function setTopic(ci: number, ti: number, field: keyof Topic, v: string) {
     setChapters(p => p.map((c, i) => i === ci
       ? { ...c, topics: c.topics.map((t, j) => j === ti ? { ...t, [field]: v } : t) }
       : c
     ))
+    if (field === 'taughtBy' && v) {
+      setTopicTaughtByErrors(prev => {
+        if (!prev.has(`${ci}-${ti}`)) return prev
+        const next = new Set(prev)
+        next.delete(`${ci}-${ti}`)
+        return next
+      })
+    }
   }
 
   if (saved) {
@@ -532,6 +598,39 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
                 <div className="mdl-section-sub">Attach the NCHE / UVTOP-approved syllabus document for this unit</div>
               </div>
             </div>
+            {/* The upload dropzone below has an invisible <input type="file">
+                absolutely covering the entire box (see .file-zone in
+                globals.css) so the whole area is clickable to pick a file —
+                a link nested inside it was being swallowed by that same
+                overlay, opening the file picker instead of the document.
+                Kept as its own line above the dropzone instead, outside the
+                overlay's reach. Uses handleSyllabus (a fresh fetch at click
+                time) rather than courseUnit.syllabus directly — that field
+                is a presigned S3 URL good for only 5 minutes, so the
+                already-loaded copy can easily be dead by the time the user
+                actually clicks. */}
+            {!syllabusFile && courseUnit.syllabus && (
+              <p className="text-g400" style={{ fontSize: 'var(--fs-xs)', marginBottom: 8 }}>
+                Current syllabus:{' '}
+                <button
+                  type="button"
+                  onClick={() => handleSyllabus('view')}
+                  disabled={syllabusLinkLoading}
+                  style={{ color: 'var(--b600)', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
+                >
+                  {syllabusLinkLoading ? 'Loading…' : 'view'}
+                </button>
+                {' · '}
+                <button
+                  type="button"
+                  onClick={() => handleSyllabus('download')}
+                  disabled={syllabusLinkLoading}
+                  style={{ color: 'var(--b600)', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
+                >
+                  download
+                </button>
+              </p>
+            )}
             <div className="file-zone">
               <input
                 type="file"
@@ -547,9 +646,6 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
                     : 'Upload approved syllabus document (PDF / Word)'}
               </p>
               <p className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>
-                {!syllabusFile && courseUnit.syllabus && (
-                  <>Current: <a href={courseUnit.syllabus} target="_blank" rel="noreferrer">view attached file</a> · </>
-                )}
                 Must conform to NCHE or UVTOP accreditation
               </p>
             </div>
@@ -633,13 +729,28 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      {activeChapter.topics.map((t, ti) => (
+                      {activeChapter.topics.map((t, ti) => {
+                        const taughtByMissing = topicTaughtByErrors.has(`${activeChapterIdx}-${ti}`)
+                        return (
                         <div key={ti} style={{ display: 'grid', gridTemplateColumns: '20px 1fr 150px 130px 30px', gap: 6, alignItems: 'center' }}>
                           <span style={{ fontSize: 11, color: 'var(--g400)', textAlign: 'center' }}>{ti + 1}.</span>
                           <input className="ctrl" value={t.name} onChange={e => setTopic(activeChapterIdx, ti, 'name', e.target.value)} placeholder="e.g. Introduction to Arrays" />
-                          {/* Auto-incrementing, not user-editable — always the topic's 1-based position in this chapter */}
-                          <div className="ctrl" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--g500)', background: 'var(--g100)', cursor: 'default' }}>{ti + 1}</div>
-                          <SearchSelect placeholder="— Select —" value={t.taughtBy} onChange={v => setTopic(activeChapterIdx, ti, 'taughtBy', v)} options={employeeOptions} />
+                          {/* Auto-fills to the topic's 1-based position when added, but editable — the user can reorder/renumber without dragging. */}
+                          <input
+                            className="ctrl"
+                            type="number"
+                            min={1}
+                            style={{ textAlign: 'center' }}
+                            value={t.studySequence}
+                            onChange={e => setTopic(activeChapterIdx, ti, 'studySequence', e.target.value)}
+                          />
+                          <SearchSelect
+                            placeholder="— Select —"
+                            value={t.taughtBy}
+                            onChange={v => setTopic(activeChapterIdx, ti, 'taughtBy', v)}
+                            options={employeeOptions}
+                            style={taughtByMissing ? { boxShadow: '0 0 0 1.5px var(--red)', borderRadius: 'var(--rsm)' } : undefined}
+                          />
                           <button
                             className="btn btn-danger btn-sm"
                             style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
@@ -649,7 +760,11 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
                             <i className="lni lni-trash-can"></i>
                           </button>
                         </div>
-                      ))}
+                        )
+                      })}
+                      {activeChapter.topics.some((_, ti) => topicTaughtByErrors.has(`${activeChapterIdx}-${ti}`)) && (
+                        <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 2 }}>Taught By is required for every topic</p>
+                      )}
                       <button className="btn btn-neu btn-sm mt-1" style={{ alignSelf: 'flex-start', fontSize: 11 }} onClick={() => addTopic(activeChapterIdx)}>
                         <i className="lni lni-plus"></i> Add Topic
                       </button>

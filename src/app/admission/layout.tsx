@@ -3,14 +3,13 @@ import { useState, useRef, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Header } from '@/components/Header'
 import { Sidebar, RailId } from '@/components/Sidebar'
-import { AuthError, refreshSession } from '@/lib/auth'
-import { clearSessionIdentity } from '@/lib/session'
+import { getSessionIdentity } from '@/lib/session'
 
-// Background access-token renewal while the app is open — see the identical
-// note in src/app/academic/layout.tsx for the full rationale (this module
-// has no mount-time session check at all, unlike Academic, so it was even
-// more exposed to a silent expiry with nothing to catch it).
-const SESSION_REFRESH_INTERVAL_MS = 10 * 60 * 1000
+// The proactive keep-alive refresh timer lives in src/app/providers.tsx now
+// — a single app-wide interval, not one per module layout. See the note
+// there for why: a per-layout interval is destroyed and restarted from zero
+// on every cross-module navigation, which could mean it never survives long
+// enough to fire at all for a user who switches modules frequently.
 
 export default function AdmissionLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -20,20 +19,19 @@ export default function AdmissionLayout({ children }: { children: React.ReactNod
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const profileRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  // This module never had a mount-time session check (unlike Academic), so
+  // displayName was never read at all — Header.tsx defaults to the
+  // hardcoded "Administrator" string whenever no displayName prop is
+  // passed, which is what every page here was silently showing regardless
+  // of who was actually logged in.
+  const [displayName, setDisplayName] = useState<string | null>(null)
 
   const currentPage = pathname.split('/').pop() ?? 'dashboard'
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      refreshSession().catch(err => {
-        if (err instanceof AuthError) {
-          clearSessionIdentity()
-          router.replace('/login/staff')
-        }
-      })
-    }, SESSION_REFRESH_INTERVAL_MS)
-    return () => clearInterval(interval)
-  }, [router])
+    const identity = getSessionIdentity()
+    if (identity) setDisplayName(identity.displayName)
+  }, [])
 
   // Scroll to top on navigation — the sidebar panel is left as the user set
   // it (open/closed, collapsed sections) rather than being force-closed here.
@@ -68,6 +66,7 @@ export default function AdmissionLayout({ children }: { children: React.ReactNod
         setProfileOpen={setProfileOpen}
         profileRef={profileRef}
         onSignOut={() => router.push('/')}
+        displayName={displayName ?? undefined}
       />
       <div className="layout">
         <Sidebar
