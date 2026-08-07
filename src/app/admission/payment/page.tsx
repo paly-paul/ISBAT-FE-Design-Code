@@ -25,6 +25,7 @@ import {
   useUnconvertedEnquiries,
 } from '@/hooks/admission/useApplicationPayments'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { sanitizePhoneInput } from '@/lib/errorMessages'
 
 const PIPELINE = [
   { label: 'App. Payment',  desc: 'Current step', status: 'active' },
@@ -521,7 +522,7 @@ function PaymentPageContent() {
               <Field label="Phone" req>
                 <div className="flex gap-2">
                   <SearchSelect options={COUNTRY_CODES} value={form.phoneCode} onChange={v => set('phoneCode', v)} style={{ width: 108, flexShrink: 0 }} />
-                  <input className="ctrl flex-1" placeholder="700 000 000" value={form.phone} onChange={e => set('phone', e.target.value)} />
+                  <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="700 000 000" value={form.phone} onChange={e => set('phone', sanitizePhoneInput(e.target.value, false))} />
                 </div>
               </Field>
               <Field label="Email">

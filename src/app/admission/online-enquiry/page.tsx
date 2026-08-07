@@ -11,6 +11,7 @@ import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMaste
 import { useCreateEnquiry } from '@/hooks/admission/useEnquiries'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
+import { sanitizePhoneInput } from '@/lib/errorMessages'
 
 // Today's date at midnight, formatted the same way the confirmed payload
 // sample uses (no timezone offset) — matches enquiryDate/dob's "T00:00:00" shape.
@@ -139,7 +140,7 @@ export default function OnlineEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Phone <span className="text-clr-red">*</span></label>
-            <input className="ctrl" placeholder="+256 7XX XXX XXX" value={phone} onChange={e => { setPhone(e.target.value); clearError('phone') }} style={errors.phone ? { borderColor: 'var(--red)' } : undefined} />
+            <input className="ctrl" type="tel" inputMode="numeric" placeholder="+256 7XX XXX XXX" value={phone} onChange={e => { setPhone(sanitizePhoneInput(e.target.value)); clearError('phone') }} style={errors.phone ? { borderColor: 'var(--red)' } : undefined} />
             {errors.phone && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.phone}</p>}
           </div>
           <div className="fg">

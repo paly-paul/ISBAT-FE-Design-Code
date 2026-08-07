@@ -41,6 +41,7 @@ export default function EnquiryListPage() {
   const [page, setPage] = useState(1)
   const [viewingGuid, setViewingGuid] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [channel, setChannel] = useState('')
 
   const { data, isLoading } = useEnquiries(page, PAGE_SIZE)
   const updateEnquiry = useUpdateEnquiry()
@@ -72,8 +73,24 @@ export default function EnquiryListPage() {
       .toLowerCase()
       .includes(term)
   }
-  const filteredRows = search.trim() ? rows.filter(r => matchesSearch(r, search.trim().toLowerCase())) : rows
+  // The enquiry list endpoint only takes page/pageSize — no confirmed
+  // channel/source filter query param exists, so (same as Search above)
+  // this only narrows the currently-loaded server page rather than
+  // querying the full 11k+-row table. Options are built dynamically from
+  // whatever sourceName values are actually present on the loaded page,
+  // same "no fixed list, derive from real data" pattern as vetting's own
+  // programme filter.
+  const channelOptions = [
+    { value: '', label: 'All Channels' },
+    ...Array.from(new Set(rows.map(r => r.sourceName).filter((s): s is string => !!s))).map(name => ({ value: name, label: name })),
+  ]
+  const filteredRows = rows.filter(r =>
+    (!search.trim() || matchesSearch(r, search.trim().toLowerCase())) &&
+    (!channel || r.sourceName === channel)
+  )
   const searchMatches = search.trim() ? filteredRows.slice(0, 8) : []
+  const hasActiveFilters = !!search.trim() || !!channel
+  function clearFilters() { setSearch(''); setChannel('') }
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -121,7 +138,10 @@ export default function EnquiryListPage() {
 
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-g800">Enquiry Register</h2>
+          <div>
+            <h2 className="text-base font-semibold text-g800">Enquiry Register</h2>
+            <p className="text-xs text-g400 mt-0.5">{totalCount.toLocaleString()} total</p>
+          </div>
           <div className="flex gap-2">
             <TableSearch
               className="w-56"
@@ -130,7 +150,7 @@ export default function EnquiryListPage() {
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: r.enquiryGuid, primary: r.enquiryCode, secondary: r.studentName }))}
             />
-            <SearchSelect className="w-36" options={['All Channels', 'Walk-in', 'Phone', 'Online', 'Kiosk']} />
+            <SearchSelect className="w-36" options={channelOptions} value={channel} onChange={setChannel} />
             <button className="btn btn-ghost"><i className="lni lni-download" /> Export</button>
           </div>
         </div>
@@ -141,7 +161,7 @@ export default function EnquiryListPage() {
               {isLoading
                 ? <TableLoadingState colSpan={999} />
                 : filteredRows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
+                  ? <EmptyState colSpan={999} hasFilters={hasActiveFilters} onClearFilters={clearFilters} />
                   : null}
               {filteredRows.map(r => (
                 <tr key={r.enquiryGuid}>
@@ -167,7 +187,10 @@ export default function EnquiryListPage() {
 
         {totalCount > 0 && (
           <div className="flex items-center justify-between mt-3" style={{ fontSize: 12.5, color: 'var(--g500)' }}>
-            <span>Page {page} of {totalPages} · {totalCount.toLocaleString()} enquiries</span>
+            <span>
+              Page {page} of {totalPages} · {totalCount.toLocaleString()} enquiries
+              {hasActiveFilters && filteredRows.length !== rows.length && ` · ${filteredRows.length} match on this page`}
+            </span>
             <div className="flex gap-2">
               <button className="btn btn-neu btn-sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
                 <i className="lni lni-chevron-left" /> Previous
