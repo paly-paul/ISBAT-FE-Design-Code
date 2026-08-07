@@ -69,9 +69,9 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="info-box mb-[18px]">
+        {/* <div className="info-box mb-[18px]">
           <i className="lni lni-information"></i> All adjustments are logged permanently: user, timestamp, old value → new value. Use only for authorised corrections.
-        </div>
+        </div> */}
 
         <div className="card" style={{ maxWidth: 680 }}>
           <div className="card-hdr">

@@ -610,26 +610,33 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
                 already-loaded copy can easily be dead by the time the user
                 actually clicks. */}
             {!syllabusFile && courseUnit.syllabus && (
-              <p className="text-g400" style={{ fontSize: 'var(--fs-xs)', marginBottom: 8 }}>
-                Current syllabus:{' '}
-                <button
-                  type="button"
-                  onClick={() => handleSyllabus('view')}
-                  disabled={syllabusLinkLoading}
-                  style={{ color: 'var(--b600)', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
-                >
-                  {syllabusLinkLoading ? 'Loading…' : 'view'}
-                </button>
-                {' · '}
-                <button
-                  type="button"
-                  onClick={() => handleSyllabus('download')}
-                  disabled={syllabusLinkLoading}
-                  style={{ color: 'var(--b600)', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
-                >
-                  download
-                </button>
-              </p>
+              <div
+                className="flex items-center justify-between gap-3"
+                style={{ background: 'var(--white)', border: '1.5px solid var(--green-bd)', borderRadius: 'var(--rsm)', padding: '10px 14px', marginBottom: 10 }}
+              >
+                <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+                  <i className="lni lni-files" style={{ color: 'var(--green)', fontSize: 18, flexShrink: 0 }}></i>
+                  <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 600, color: 'var(--g700)' }}>Currently attached syllabus</span>
+                </div>
+                <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    className="btn btn-neu btn-sm"
+                    onClick={() => handleSyllabus('view')}
+                    disabled={syllabusLinkLoading}
+                  >
+                    <i className="lni lni-eye"></i> {syllabusLinkLoading ? 'Loading…' : 'View'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-neu btn-sm"
+                    onClick={() => handleSyllabus('download')}
+                    disabled={syllabusLinkLoading}
+                  >
+                    <i className="lni lni-download"></i> Download
+                  </button>
+                </div>
+              </div>
             )}
             <div className="file-zone">
               <input

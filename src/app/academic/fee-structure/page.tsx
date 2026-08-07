@@ -87,9 +87,13 @@ export default function Page() {
             <div className="pg-sub">Define and manage fee structures per programme · Set fee items, priorities and base currency</div>
           </div>
           <div className="flex gap-2">
+            {/* Commented out per request — never wired to a real endpoint,
+                only fired a fake success toast. Kept here in case cloning
+                gets a real backend implementation later.
             <button className="btn btn-neu" onClick={() => showToast('Fee structure duplicated for next intake.', 'success')}>
               <i className="lni lni-files"></i> Clone Last Year
             </button>
+            */}
             {permissions.add && (
               <button className="btn btn-primary" onClick={() => openModal('new-fee-structure-modal')}>
                 <i className="lni lni-plus"></i> New Fee Structure

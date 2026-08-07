@@ -80,9 +80,9 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="mb-[18px]">
+        {/* <div className="mb-[18px]">
           <div className="info-box"><i className="lni lni-world"></i> <span>ODL applications start online at <span className="font-mono bg-[var(--b100)] py-0.5 px-[6px] rounded text-[var(--fs-xs)]">ERP.../online.ASP</span>. Unlike regular applications, <strong>payment is not required to start</strong>. No fee exemptions apply to ODL applicants.</span></div>
-        </div>
+        </div> */}
 
         <div className="pipeline">
           <div className="pip-step done"><div className="pip-circle"><i className="lni lni-checkmark"></i></div><div className="pip-info"><div className="pip-label">Online Apply</div><div className="pip-desc">Candidate fills form</div></div></div>

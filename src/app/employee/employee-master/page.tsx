@@ -133,9 +133,9 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="info-box mb-[14px]">
+        {/* <div className="info-box mb-[14px]">
           <i className="lni lni-information"></i> Add the basic identity + qualifications here. Subject expertise (per-unit skills) is captured in <strong>Skill Management</strong> and feeds into Course Allocation.
-        </div>
+        </div> */}
 
         <div className="card">
           <div className="card-hdr">

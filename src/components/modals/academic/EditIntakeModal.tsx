@@ -23,6 +23,25 @@ const INTAKE_SEQUENCES = [
   { value: '2', label: 'Fall' },
 ]
 
+// Financial Year / Exam Year are both restricted to a 3-year window relative
+// to today's real calendar year — Previous/Current/Next — rather than a free
+// number input. `existing` (the loaded intake's own current value) is added
+// as an extra option when it falls outside that window, so editing an older
+// record never silently blanks the field just because its year isn't one of
+// the three "current" choices.
+function relativeYearOptions(existing?: string): { value: string; label: string }[] {
+  const current = new Date().getFullYear()
+  const options = [
+    { value: String(current - 1), label: `Previous Year (${current - 1})` },
+    { value: String(current), label: `Current Year (${current})` },
+    { value: String(current + 1), label: `Next Year (${current + 1})` },
+  ]
+  if (existing && !options.some(o => o.value === existing)) {
+    options.unshift({ value: existing, label: existing })
+  }
+  return options
+}
+
 // One accordion section's worth of semester-calendar fields. Keyed by a
 // stable UI-only `id` (not sent to the backend — semCode is derived from
 // the entry's position in the array on submit), same "array of records +
@@ -151,6 +170,17 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
     setStep(1)
   }, [isOpen, intake])
 
+  // Intake Code is now derived, not typed — (Financial Year * 10) + Intake
+  // sequence number, e.g. Financial Year 2025, Spring (sequence 1) ->
+  // 2025*10 + 1 = 20251; the same year's Fall (sequence 2) -> 20252.
+  // Recomputed live on Edit too, overriding whatever the record originally
+  // had — this is now the single source of truth for the value, not just a
+  // default at creation time.
+  function computeIntakeCode(): number | null {
+    if (!financialYear || !intakeSeq) return null
+    return Number(financialYear) * 10 + Number(intakeSeq)
+  }
+
   // Estimate the visible duration in weeks from the first semester's dates —
   // durationInWeeks is a single intake-level field, not per-semester.
   function calcDurationWeeks(): number | null {
@@ -238,7 +268,7 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
       if (!financialYear.trim())  e.financialYear  = 'Financial Year is required'
       if (!examYear.trim())       e.examYear       = 'Exam Year is required'
       if (!examMonth)             e.examMonth      = 'Please select an Exam Month'
-      if (!intakeSeq.trim())      e.intakeSeq      = 'Intake Sequence is required'
+      if (!intakeSeq.trim())      e.intakeSeq      = 'Intakes is required'
       // Confirmed required by the backend (validation_error: "must not be
       // empty") despite CreateIntakeInput typing these as nullable.
       if (!lastDateForReRegistration) e.lastDateForReRegistration = 'Last Date for Re-registration is required'
@@ -383,6 +413,8 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
     if (!intakeGuid) return
 
     const input: CreateIntakeInput = {
+      // Derived, not typed — see computeIntakeCode() above.
+      intakeCode: computeIntakeCode() ?? 0,
       description,
       financialYear: Number(financialYear),
       examYear: Number(examYear),
@@ -428,6 +460,32 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
         {step === 1 && (
           <div className="modal-scroll">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
+              {/* Field order: Financial Year -> Intakes -> Description ->
+                  Intake Code -> Exam Year -> Exam Month. Financial Year /
+                  Exam Year are Previous/Current/Next Year dropdowns (plus
+                  the record's own existing value if it falls outside that
+                  window); Intake Code is derived (read-only), not typed —
+                  see computeIntakeCode() above. */}
+              <div className="fg">
+                <div className="lbl">Financial Year <span className="req">*</span></div>
+                <SearchSelect
+                  placeholder="Select financial year…"
+                  value={financialYear}
+                  onChange={v => { setFinancialYear(v); if (errors.financialYear) setErrors(p => ({ ...p, financialYear: '' })) }}
+                  options={relativeYearOptions(financialYear)}
+                />
+                {errors.financialYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.financialYear}</p>}
+              </div>
+              <div className="fg">
+                <div className="lbl">Intakes <span className="req">*</span></div>
+                <SearchSelect
+                  placeholder="Select intakes…"
+                  value={intakeSeq}
+                  onChange={v => { setIntakeSeq(v); if (errors.intakeSeq) setErrors(p => ({ ...p, intakeSeq: '' })) }}
+                  options={INTAKE_SEQUENCES}
+                />
+                {errors.intakeSeq && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeSeq}</p>}
+              </div>
               <div className="fg">
                 <div className="lbl">Description <span className="req">*</span></div>
                 <input
@@ -441,26 +499,23 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
                 {errors.description && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.description}</p>}
               </div>
               <div className="fg">
-                <div className="lbl">Financial Year <span className="req">*</span></div>
+                <div className="lbl">Intake Code</div>
                 <input
                   className="ctrl font-mono"
-                  style={errors.financialYear ? { borderColor: 'var(--red)' } : undefined}
-                  type="number"
-                  placeholder="e.g. 2026"
-                  value={financialYear}
-                  onChange={e => { setFinancialYear(e.target.value); if (errors.financialYear) setErrors(p => ({ ...p, financialYear: '' })) }}
+                  style={{ background: 'var(--g100)', color: computeIntakeCode() ? 'var(--g700)' : 'var(--g400)', cursor: 'not-allowed' }}
+                  type="text"
+                  value={computeIntakeCode() ?? ''}
+                  readOnly
+                  placeholder="Set Financial Year and Intakes first"
                 />
-                {errors.financialYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.financialYear}</p>}
               </div>
               <div className="fg">
                 <div className="lbl">Exam Year <span className="req">*</span></div>
-                <input
-                  className="ctrl font-mono"
-                  style={errors.examYear ? { borderColor: 'var(--red)' } : undefined}
-                  type="number"
-                  placeholder="e.g. 2027"
+                <SearchSelect
+                  placeholder="Select exam year…"
                   value={examYear}
-                  onChange={e => { setExamYear(e.target.value); if (errors.examYear) setErrors(p => ({ ...p, examYear: '' })) }}
+                  onChange={v => { setExamYear(v); if (errors.examYear) setErrors(p => ({ ...p, examYear: '' })) }}
+                  options={relativeYearOptions(examYear)}
                 />
                 {errors.examYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.examYear}</p>}
               </div>
@@ -473,16 +528,6 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
                   options={MONTHS}
                 />
                 {errors.examMonth && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.examMonth}</p>}
-              </div>
-              <div className="fg">
-                <div className="lbl">Intake Sequence <span className="req">*</span></div>
-                <SearchSelect
-                  placeholder="Select intake sequence…"
-                  value={intakeSeq}
-                  onChange={v => { setIntakeSeq(v); if (errors.intakeSeq) setErrors(p => ({ ...p, intakeSeq: '' })) }}
-                  options={INTAKE_SEQUENCES}
-                />
-                {errors.intakeSeq && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeSeq}</p>}
               </div>
               <div className="fg" style={{ gridColumn: 'span 3' }}>
                 <div className="lbl">Set As</div>
