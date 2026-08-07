@@ -23,6 +23,20 @@ const INTAKE_SEQUENCES = [
   { value: '2', label: 'Fall' },
 ]
 
+// Financial Year / Exam Year are both restricted to a 3-year window relative
+// to today's real calendar year — Previous/Current/Next — rather than a free
+// number input. Recomputed fresh on each call rather than as a module-level
+// constant so it stays correct if the tab is left open across a year
+// boundary (an edge case, but a cheap one to get right).
+function relativeYearOptions(): { value: string; label: string }[] {
+  const current = new Date().getFullYear()
+  return [
+    { value: String(current - 1), label: `Previous Year (${current - 1})` },
+    { value: String(current), label: `Current Year (${current})` },
+    { value: String(current + 1), label: `Next Year (${current + 1})` },
+  ]
+}
+
 interface NewIntakeModalProps extends ModalProps {
   createIntake: {
     mutate: (input: CreateIntakeInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
@@ -83,6 +97,14 @@ export function NewIntakeModal({ isOpen, onClose, showToast, createIntake }: New
   const [secondFinalExamStartDate, setSecondFinalExamStartDate] = useState('')
   const [secondFinalExamEndDate, setSecondFinalExamEndDate] = useState('')
   const [secondClearanceDate, setSecondClearanceDate] = useState('')
+
+  // Intake Code is now derived, not typed — (Financial Year * 10) + Intake
+  // sequence number, e.g. Financial Year 2025, Spring (sequence 1) ->
+  // 2025*10 + 1 = 20251; the same year's Fall (sequence 2) -> 20252.
+  function computeIntakeCode(): number | null {
+    if (!financialYear || !intakeSeq) return null
+    return Number(financialYear) * 10 + Number(intakeSeq)
+  }
 
   // Convert date-only input to the datetime format expected by the API.
   function toApiDate(value: string): string | null {
@@ -221,7 +243,7 @@ export function NewIntakeModal({ isOpen, onClose, showToast, createIntake }: New
       if (!financialYear.trim())  e.financialYear  = 'Financial Year is required'
       if (!examYear.trim())       e.examYear       = 'Exam Year is required'
       if (!examMonth)             e.examMonth      = 'Please select an Exam Month'
-      if (!intakeSeq.trim())      e.intakeSeq      = 'Intake Sequence is required'
+      if (!intakeSeq.trim())      e.intakeSeq      = 'Intakes is required'
       // Confirmed required by the backend (validation_error: "must not be
       // empty") despite CreateIntakeInput typing these as nullable.
       if (!lastDateForReRegistration) e.lastDateForReRegistration = 'Last Date for Re-registration is required'
@@ -380,6 +402,8 @@ export function NewIntakeModal({ isOpen, onClose, showToast, createIntake }: New
     if (!validate(2)) return
 
     const input: CreateIntakeInput = {
+      // Derived, not typed — see computeIntakeCode() above.
+      intakeCode: computeIntakeCode() ?? 0,
       description,
       financialYear: Number(financialYear),
       examYear: Number(examYear),
@@ -451,23 +475,31 @@ export function NewIntakeModal({ isOpen, onClose, showToast, createIntake }: New
         <div className="modal-scroll">
           {step === 1 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
-              {/* Intake Code used to be typed in here, but the confirmed create
-                  payload doesn't send a code at all — the backend generates
-                  intakeCode itself and hands it back in the response. Left here
-                  for reference rather than deleted outright.
+              {/* Field order: Financial Year -> Intakes -> Description ->
+                  Intake Code -> Exam Year -> Exam Month. Financial Year /
+                  Exam Year are Previous/Current/Next Year dropdowns rather
+                  than free numbers; Intake Code is derived (read-only), not
+                  typed — see computeIntakeCode() above. */}
               <div className="fg">
-                <div className="lbl">Intake Code <span className="req">*</span></div>
-                <input
-                  className="ctrl"
-                  style={errors.intakeCode ? { borderColor: 'var(--red)' } : undefined}
-                  type="text"
-                  placeholder="e.g. 20263"
-                  value={intakeCode}
-                  onChange={e => { setIntakeCode(e.target.value); if (errors.intakeCode) setErrors(p => ({ ...p, intakeCode: '' })) }}
+                <div className="lbl">Financial Year <span className="req">*</span></div>
+                <SearchSelect
+                  placeholder="Select financial year…"
+                  value={financialYear}
+                  onChange={v => { setFinancialYear(v); if (errors.financialYear) setErrors(p => ({ ...p, financialYear: '' })) }}
+                  options={relativeYearOptions()}
                 />
-                {errors.intakeCode && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeCode}</p>}
+                {errors.financialYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.financialYear}</p>}
               </div>
-              */}
+              <div className="fg">
+                <div className="lbl">Intakes <span className="req">*</span></div>
+                <SearchSelect
+                  placeholder="Select intakes…"
+                  value={intakeSeq}
+                  onChange={v => { setIntakeSeq(v); if (errors.intakeSeq) setErrors(p => ({ ...p, intakeSeq: '' })) }}
+                  options={INTAKE_SEQUENCES}
+                />
+                {errors.intakeSeq && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeSeq}</p>}
+              </div>
               <div className="fg">
                 <div className="lbl">Description <span className="req">*</span></div>
                 <input
@@ -480,45 +512,24 @@ export function NewIntakeModal({ isOpen, onClose, showToast, createIntake }: New
                 />
                 {errors.description && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.description}</p>}
               </div>
-              {/* Financial Year used to be a free-text "2026-27" style range.
-                  The confirmed payload wants a single year as a number
-                  (financialYear: 2026), so the field below now takes a plain
-                  year instead — kept the old version here for reference.
               <div className="fg">
-                <div className="lbl">Financial Year <span className="req">*</span></div>
+                <div className="lbl">Intake Code</div>
                 <input
                   className="ctrl font-mono"
-                  style={errors.financialYear ? { borderColor: 'var(--red)' } : undefined}
+                  style={{ background: 'var(--g100)', color: computeIntakeCode() ? 'var(--g700)' : 'var(--g400)', cursor: 'not-allowed' }}
                   type="text"
-                  placeholder="e.g. 2026-27"
-                  maxLength={7}
-                  value={financialYear}
-                  onChange={e => { setFinancialYear(e.target.value.replace(/[^0-9-]/g, '')); if (errors.financialYear) setErrors(p => ({ ...p, financialYear: '' })) }}
+                  value={computeIntakeCode() ?? ''}
+                  readOnly
+                  placeholder="Set Financial Year and Intakes first"
                 />
-                {errors.financialYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.financialYear}</p>}
-              </div>
-              */}
-              <div className="fg">
-                <div className="lbl">Financial Year <span className="req">*</span></div>
-                <input
-                  className="ctrl font-mono"
-                  style={errors.financialYear ? { borderColor: 'var(--red)' } : undefined}
-                  type="number"
-                  placeholder="e.g. 2026"
-                  value={financialYear}
-                  onChange={e => { setFinancialYear(e.target.value); if (errors.financialYear) setErrors(p => ({ ...p, financialYear: '' })) }}
-                />
-                {errors.financialYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.financialYear}</p>}
               </div>
               <div className="fg">
                 <div className="lbl">Exam Year <span className="req">*</span></div>
-                <input
-                  className="ctrl font-mono"
-                  style={errors.examYear ? { borderColor: 'var(--red)' } : undefined}
-                  type="number"
-                  placeholder="e.g. 2027"
+                <SearchSelect
+                  placeholder="Select exam year…"
                   value={examYear}
-                  onChange={e => { setExamYear(e.target.value); if (errors.examYear) setErrors(p => ({ ...p, examYear: '' })) }}
+                  onChange={v => { setExamYear(v); if (errors.examYear) setErrors(p => ({ ...p, examYear: '' })) }}
+                  options={relativeYearOptions()}
                 />
                 {errors.examYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.examYear}</p>}
               </div>
@@ -531,16 +542,6 @@ export function NewIntakeModal({ isOpen, onClose, showToast, createIntake }: New
                   options={MONTHS}
                 />
                 {errors.examMonth && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.examMonth}</p>}
-              </div>
-              <div className="fg">
-                <div className="lbl">Intake Sequence <span className="req">*</span></div>
-                <SearchSelect
-                  placeholder="Select intake sequence…"
-                  value={intakeSeq}
-                  onChange={v => { setIntakeSeq(v); if (errors.intakeSeq) setErrors(p => ({ ...p, intakeSeq: '' })) }}
-                  options={INTAKE_SEQUENCES}
-                />
-                {errors.intakeSeq && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeSeq}</p>}
               </div>
               {/* Intake Type (Spring/Fall) isn't part of the confirmed payload —
                   Exam Year + Exam Month + Intake Sequence above cover the same

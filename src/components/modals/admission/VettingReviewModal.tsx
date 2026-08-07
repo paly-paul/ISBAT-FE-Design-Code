@@ -173,8 +173,9 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
                 {/* Confirmed via a real response: a raw int (e.g. 0), not the
                     "Male"/"Female"/"Other" string the docs describe — no
                     confirmed label mapping, so this displays the raw code
-                    rather than guessing one. */}
-                <div className="fg"><label className="lbl">Gender (code)</label><input className="ctrl" readOnly value={detail.gender != null ? String(detail.gender) : '—'} /></div>
+                    rather than guessing one (just without the "(code)"
+                    suffix in the label itself, per request). */}
+                <div className="fg"><label className="lbl">Gender</label><input className="ctrl" readOnly value={detail.gender != null ? String(detail.gender) : '—'} /></div>
                 {/* Nationality is confirmed always null on the wire today — shown for
                     completeness, not expected to have a value yet (see vetting.ts). */}
                 <div className="fg"><label className="lbl">Nationality</label><input className="ctrl" readOnly value={detail.nationality || '—'} /></div>

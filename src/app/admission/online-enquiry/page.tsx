@@ -52,7 +52,11 @@ export default function OnlineEnquiryPage() {
   // list is empty/disabled until a Campus is chosen.
   const { data: programsByCampus = [] } = useProgramMastersByCampus(campusGuid, !!campusGuid)
 
-  const intakeOptions  = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
+  // Only offer intakes that are actually "live" right now — flagged as the
+  // current academic intake and/or the current admission intake — rather
+  // than every intake the backend has ever recorded (which includes past
+  // ones like "2024 Semester 1").
+  const intakeOptions  = intakes.filter(i => i.currentIntake || i.currentAdmissionIntake).map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   const campusOptions  = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions = programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   const sourceOptions  = enquirySources.map(s => ({ value: s.enquirySourceGuid, label: s.enquirySourceName }))

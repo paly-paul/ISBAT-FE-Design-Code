@@ -2,12 +2,11 @@
 import { Suspense, useLayoutEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-type Tab = 'personal' | 'application' | 'qualification' | 'family' | 'documents'
+type Tab = 'personal' | 'application' | 'qualification' | 'documents'
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'personal',     label: 'Personal Information', icon: 'lni-user-4' },
   { id: 'application',  label: 'Application Details',  icon: 'lni-clipboard' },
   { id: 'qualification', label: 'Qualification',       icon: 'lni-graduation' },
-  { id: 'family',       label: 'Family / Guardian',    icon: 'lni-users-2' },
   { id: 'documents',    label: 'Documents',            icon: 'lni-folder-2' },
 ]
 
@@ -18,15 +17,6 @@ const MOCK_QUALIFICATION = {
   indexNo: 'U1234/056',
   percentage: '14 Points',
   duration: '2 Years',
-}
-
-const MOCK_FAMILY = {
-  fatherName: 'Not on file',
-  fatherPhone: '—',
-  motherName: 'Not on file',
-  motherPhone: '—',
-  emergencyName: 'Not on file',
-  emergencyPhone: '—',
 }
 
 const MOCK_DOCUMENTS = [
@@ -62,7 +52,6 @@ function ApplicantProfileContent() {
   const nationalId  = getParam(searchParams, 'nationalId')
   const phone       = getParam(searchParams, 'phone')
   const email       = getParam(searchParams, 'email')
-  const address     = getParam(searchParams, 'address')
   const intake      = getParam(searchParams, 'intake')
   const campus      = getParam(searchParams, 'campus')
   const submitted   = getParam(searchParams, 'submitted')
@@ -125,7 +114,6 @@ function ApplicantProfileContent() {
               <div className="fg"><label className="lbl">National ID</label><input className="ctrl" readOnly value={nationalId} /></div>
               <div className="fg"><label className="lbl">Phone</label><input className="ctrl" readOnly value={phone} /></div>
               <div className="fg"><label className="lbl">Email</label><input className="ctrl" readOnly value={email} /></div>
-              <div className="fg" style={{ gridColumn: 'span 2' }}><label className="lbl">Address</label><input className="ctrl" readOnly value={address} /></div>
             </div>
           )}
 
@@ -148,17 +136,6 @@ function ApplicantProfileContent() {
               <div className="fg"><label className="lbl">Index No.</label><input className="ctrl" readOnly value={MOCK_QUALIFICATION.indexNo} /></div>
               <div className="fg"><label className="lbl">Percentage / GPA</label><input className="ctrl" readOnly value={MOCK_QUALIFICATION.percentage} /></div>
               <div className="fg"><label className="lbl">Duration</label><input className="ctrl" readOnly value={MOCK_QUALIFICATION.duration} /></div>
-            </div>
-          )}
-
-          {activeTab === 'family' && (
-            <div className="g2">
-              <div className="fg"><label className="lbl">Father Name</label><input className="ctrl" readOnly value={MOCK_FAMILY.fatherName} /></div>
-              <div className="fg"><label className="lbl">Father Phone</label><input className="ctrl" readOnly value={MOCK_FAMILY.fatherPhone} /></div>
-              <div className="fg"><label className="lbl">Mother Name</label><input className="ctrl" readOnly value={MOCK_FAMILY.motherName} /></div>
-              <div className="fg"><label className="lbl">Mother Phone</label><input className="ctrl" readOnly value={MOCK_FAMILY.motherPhone} /></div>
-              <div className="fg"><label className="lbl">Emergency Contact</label><input className="ctrl" readOnly value={MOCK_FAMILY.emergencyName} /></div>
-              <div className="fg"><label className="lbl">Emergency Phone</label><input className="ctrl" readOnly value={MOCK_FAMILY.emergencyPhone} /></div>
             </div>
           )}
 

@@ -97,9 +97,9 @@ export default function Page() {
           {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-alevel-modal')}><i className="lni lni-plus"></i> Add Level</button>}
         </div>
 
-        <div className="info-box mb-[18px]">
+        {/* <div className="info-box mb-[18px]">
           <i className="lni lni-information"></i> Programme Level defines the <strong>fundamental attributes</strong> of every programme at that level (year count, semester count, minimum credit load). Selecting a level in the Programme Master auto-populates these values — e.g. selecting Bachelor&apos;s defaults to 3 years, 6 semesters.
-        </div>
+        </div> */}
 
         <div className="card">
           <div className="card-hdr">

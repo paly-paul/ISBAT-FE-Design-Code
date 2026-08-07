@@ -158,10 +158,10 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="info-box mb-[18px]">
+        {/* <div className="info-box mb-[18px]">
           <i className="lni lni-information"></i>
           <span>Employee is shown as a raw ID — the skills list only returns <code>intEmployee</code>, with no name or faculty attached and no confirmed way to resolve it against the real Employee master.</span>
-        </div>
+        </div> */}
 
         <div className="g4 mb-[18px]">
           <div className="stat-card"><div className="stat-lbl">Total Skills Logged</div><div className="stat-num">{stats.total}</div><div className="stat-sub up">Across all employees</div></div>

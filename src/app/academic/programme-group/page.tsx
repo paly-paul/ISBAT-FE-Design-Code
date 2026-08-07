@@ -95,9 +95,9 @@ export default function Page() {
           {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-proggroup-modal')}><i className="lni lni-plus"></i> Add Programme Group</button>}
         </div>
 
-        <div className="info-box mb-[18px]">
+        {/* <div className="info-box mb-[18px]">
           <i className="lni lni-information"></i> Programme Groups are used for <strong>high-level reporting</strong> — e.g. searching &quot;BCA&quot; returns all students across BCA 2026 <em>and</em> BCA 2031 versions. This ensures a single generic name links all curriculum versions for aggregate analytics.
-        </div>
+        </div> */}
 
         <div className="card">
           <div className="card-hdr">
