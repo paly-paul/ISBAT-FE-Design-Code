@@ -13,7 +13,7 @@ import { useFaculties } from '@/hooks/config/useFaculties'
 import { useCurrencies } from '@/hooks/finance/useCurrencies'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useStreams } from '@/hooks/config/useStreams'
-import { useCourseUnits, useCourseUnit } from '@/hooks/academic/useCourseUnits'
+import { useAllCourseUnits, useCourseUnit } from '@/hooks/academic/useCourseUnits'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { useUnitTypes } from '@/hooks/config/useUnitTypes'
@@ -302,7 +302,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // Step 2's per-semester picker only offers what was picked in Step 1.
   const semesterStreamOptions = streamOptions.filter(o => streamGuids.includes(o.value))
 
-  const { data: courseUnits = [] } = useCourseUnits()
+  const { data: courseUnits = [] } = useAllCourseUnits()
   const courseUnitOptions = courseUnits.map(u => ({
     value: u.courseUnitGuid,
     label: `${u.courseUnitCode} — ${u.courseUnitName} (${u.maxCredits} cr)`,
@@ -442,7 +442,13 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           credits: cu?.maxCredits ?? 0,
           unitType: u.unitTypeGuid ?? '',
           unitCat: u.unitCatGuid ?? '',
-          streamGuid: u.streamGuid ?? '',
+          // Only carry a specialization through for a unit whose category is
+          // actually "Specialization" — the backend can still return a stale
+          // streamGuid on a Core/Elective row (e.g. left over from before the
+          // category was last changed), and showing that in a field the user
+          // never picked it from (even disabled) is misleading. A unit that
+          // isn't a Specialization unit always opens with this field blank.
+          streamGuid: isSpecializationCategory(u.unitCatGuid ?? '') ? (u.streamGuid ?? '') : '',
         })
       })
     } else {
@@ -470,7 +476,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             credits: cu?.maxCredits ?? 0,
             unitType: detail?.unitTypeGuid ?? '',
             unitCat: detail?.unitCatGuid ?? '',
-            streamGuid: detail?.streamGuid ?? '',
+            // Same "only for a real Specialization category" guard as the primary path above.
+            streamGuid: isSpecializationCategory(detail?.unitCatGuid ?? '') ? (detail?.streamGuid ?? '') : '',
           })
         })
       } else {
@@ -490,7 +497,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             credits: cu?.maxCredits ?? 0,
             unitType: u.unitTypeGuid ?? '',
             unitCat: u.unitCatGuid ?? '',
-            streamGuid: u.streamGuid ?? '',
+            // Same "only for a real Specialization category" guard as the primary path above.
+            streamGuid: isSpecializationCategory(u.unitCatGuid ?? '') ? (u.streamGuid ?? '') : '',
           })
         })
       }
@@ -892,7 +900,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       aptechCreditExemptionFeeCurrency: source.aptechCreditExemptionFeeCurrency,
       semFees: source.semFees.map(items => items.map(item => ({ ...item, id: nextId++ }))),
     }))
-    showToast(`Copied fees from ${source.feeCode || `Structure ${feeStructures.findIndex(s => s.id === source.id) + 1}`}`)
+    showToast(`Copied fees from ${source.feeCode || 'New Fee Structure'}`)
   }
 
   function updateFeeStructureMeta(field: Exclude<keyof FeeStructure, 'id' | 'semFees'>, val: string) {
@@ -1205,7 +1213,23 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                 {/* Intake dropdown removed per Program_Master_Change_Requests_Final.md
                     — intakeGuid is auto-filled from the Current Academic Intake
                     instead (see the effect below), same pattern as the standalone
-                    Fee Structure page's Create mode. */}
+                    Fee Structure page's Create mode. CONFIRMED broken as originally
+                    shipped: with no picker at all, a live environment where no intake
+                    is flagged currentIntake left intakeGuid permanently empty with no
+                    way to fix it — Create was silently blocked. Falls back to an
+                    editable picker in exactly that case (Edit mode is unaffected —
+                    it already carries intakeGuid through from fullDetails). */}
+                {mode !== 'edit' && !currentAcademicIntake && (
+                  <div className="fg">
+                    <div className="lbl">Intake</div>
+                    <SearchSelect
+                      placeholder="— Select intake —"
+                      value={intakeGuid}
+                      options={programIntakeOptions}
+                      onChange={setIntakeGuid}
+                    />
+                  </div>
+                )}
                 <div className="fg span3">
                   <div className="lbl">Accreditation Letter</div>
                   <div className="file-zone p-[14px]">
@@ -1259,9 +1283,12 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
               <div className="g3">
                 <div className="fg">
                   <div className="lbl">Admission Status <span className="req">*</span></div>
+                  {/* Just "Active"/"Inactive" — no "(New admissions)"/"(Existing
+                      students only)" qualifier, per the Program Master
+                      requirements doc (req. 3). pgmStatus itself is unchanged. */}
                   <div className="tgl-group">
-                    <button type="button" className={`tgl-btn${pgmStatus ? ' tgl-active' : ''}`} onClick={() => setPgmStatus(true)}><i className="lni lni-checkmark"></i> Active (New admissions)</button>
-                    <button type="button" className={`tgl-btn${!pgmStatus ? ' tgl-active' : ''}`} onClick={() => setPgmStatus(false)}>Inactive (Existing students only)</button>
+                    <button type="button" className={`tgl-btn${pgmStatus ? ' tgl-active' : ''}`} onClick={() => setPgmStatus(true)}><i className="lni lni-checkmark"></i> Active</button>
+                    <button type="button" className={`tgl-btn${!pgmStatus ? ' tgl-active' : ''}`} onClick={() => setPgmStatus(false)}>Inactive</button>
                   </div>
                 </div>
                 <div className="fg">
@@ -1330,7 +1357,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     <i className="lni lni-coin" style={{ color: 'var(--b600)', fontSize: 15 }}></i>
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--b800)' }}>{activeFeeStruct.feeCode || `Structure ${activeFeeIdx + 1}`} — {activeFeeStruct.localOrForeign === 'true' ? 'Foreign' : 'Local'}</div>
+                    {/* Real Programme Fee Header (e.g. "FCS-001 — Local"), not a generic
+                        "Structure N" label, per the Program Master requirements doc
+                        (req. 4) — "New Fee Structure" only shows before a header code
+                        has been typed in for a not-yet-saved structure. */}
+                    <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--b800)' }}>{activeFeeStruct.feeCode || 'New Fee Structure'} — {activeFeeStruct.localOrForeign === 'true' ? 'Foreign' : 'Local'}</div>
                     <div style={{ fontSize: 11, color: 'var(--g400)' }}>Structure {activeFeeIdx + 1} of {feeStructures.length}</div>
                   </div>
                 </div>
@@ -1353,7 +1384,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                       onChange={copyFeeStructure}
                       options={feeStructures.map((s, i) => ({
                         value: String(s.id),
-                        label: (s.feeCode || `Structure ${i + 1}`) + (i === activeFeeIdx ? ' (Current)' : ''),
+                        label: (s.feeCode || 'New Fee Structure') + (i === activeFeeIdx ? ' (Current)' : ''),
                       }))}
                     />
                   </div>
@@ -1361,18 +1392,21 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     <div className="lbl">Base Currency</div>
                     <SearchSelect options={LOCAL_OR_FOREIGN_OPTS} value={activeFeeStruct.localOrForeign} onChange={val => updateFeeStructureMeta('localOrForeign', val)} />
                   </div>
-                  {/* Always read-only now (Fee_Structure_Change_Requests.md
-                      #3/#4): Edit shows the structure's existing intake,
-                      unchangeable; Create has no picker at all — it's
-                      forced onto the Current Academic Intake (see the
-                      effect above and addFeeStructure). */}
+                  {/* Read-only in Edit (existing intake, unchangeable) and in Create once
+                      auto-filled from the Current Academic Intake (Fee_Structure_Change_
+                      Requests.md #3/#4). CONFIRMED broken as originally shipped, though:
+                      when no intake is flagged currentIntake in the live data, the
+                      auto-fill effect never runs and this was `disabled` with nothing to
+                      select and no way to fix it — Create was permanently blocked. Falls
+                      back to an editable picker in exactly that case. */}
                   <div className="fg m-0">
                     <div className="lbl">Intake</div>
                     <SearchSelect
-                      placeholder={mode === 'edit' ? '— Select intake —' : (currentAcademicIntake ? undefined : 'No current intake set')}
+                      placeholder={mode === 'edit' ? '— Select intake —' : (currentAcademicIntake ? undefined : '— Select intake —')}
                       value={activeFeeStruct.intakeGuid}
                       options={programIntakeOptions}
-                      disabled
+                      onChange={val => updateFeeStructureMeta('intakeGuid', val)}
+                      disabled={mode === 'edit' || !!currentAcademicIntake}
                     />
                   </div>
                 </div>

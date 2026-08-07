@@ -56,8 +56,15 @@ export default function KioskEnquiryPage() {
   // Only offer intakes that are actually "live" right now — flagged as the
   // current academic intake and/or the current admission intake — rather
   // than every intake the backend has ever recorded (which includes past
-  // ones like "2024 Semester 1").
-  const intakeOptions  = intakes.filter(i => i.currentIntake || i.currentAdmissionIntake).map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
+  // ones like "2024 Semester 1"). Falls back to the full list if nothing
+  // is currently flagged either way — confirmed the dropdown otherwise goes
+  // silently empty (no error, no options) whenever the backend doesn't have
+  // any intake marked current, which fully blocks this form with no
+  // indication why. Preferring the flagged rows when they exist, but never
+  // leaving the picker with zero options, matches the original intent
+  // without making the form's usability depend on that flag always being set.
+  const currentIntakes = intakes.filter(i => i.currentIntake || i.currentAdmissionIntake)
+  const intakeOptions  = (currentIntakes.length ? currentIntakes : intakes).map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   const campusOptions  = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions = programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   const sourceOptions  = enquirySources.map(s => ({ value: s.enquirySourceGuid, label: s.enquirySourceName }))

@@ -171,15 +171,19 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
     setActiveIdx(0)
   }, [isOpen, mode, editData, feeLines])
 
-  // Create mode has no Intake picker any more (#4) — every structure is
-  // forced onto whatever intake is currently flagged current. Applies to
-  // every structure, not just the active one, since Create no longer offers
-  // a way to pick a different intake per structure at all.
-  useEffect(() => {
-    if (isOpen && mode !== 'edit' && currentAcademicIntake) {
-      setStructures(prev => prev.map(s => s.intake === currentAcademicIntake.intakeGuid ? s : { ...s, intake: currentAcademicIntake.intakeGuid }))
-    }
-  }, [isOpen, mode, currentAcademicIntake])
+  // Per Fee_Structure_Change_Requests.md #4, Create mode used to have no
+  // Intake picker at all — every structure was force-locked onto whatever
+  // intake was flagged current, re-applied on every render via this effect.
+  // Commented out per request — Intake is now a normal editable picker in
+  // both Create and Edit (see the JSX below), so nothing should silently
+  // override whatever the user actually selects. addStructure() below still
+  // pre-fills a new structure's Intake with the Current Academic Intake as a
+  // convenience default, it just no longer gets forced back afterward.
+  // useEffect(() => {
+  //   if (isOpen && mode !== 'edit' && currentAcademicIntake) {
+  //     setStructures(prev => prev.map(s => s.intake === currentAcademicIntake.intakeGuid ? s : { ...s, intake: currentAcademicIntake.intakeGuid }))
+  //   }
+  // }, [isOpen, mode, currentAcademicIntake])
 
   // Applies the picked Copy Fee Code source once its real fee lines have
   // loaded. feeCode/description are deliberately left untouched so the copy
@@ -589,18 +593,16 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                   options={copySourceOptions}
                 />
               </div>
-              {/* Intake is always read-only now (Fee_Structure_Change_Requests.md
-                  #3 and #4): in Edit mode it shows the structure's existing
-                  intake, unchangeable; in Create mode there's no picker at
-                  all — it's forced onto the Current Academic Intake (see the
-                  effect above and addStructure). */}
+              {/* Was always read-only (Fee_Structure_Change_Requests.md #3/#4)
+                  — commented out per request, disabled removed below so
+                  Intake is a normal editable picker in both Create and Edit. */}
               <div className="fg m-0">
                 <div className="lbl">Intake</div>
                 <SearchSelect
-                  placeholder={mode === 'edit' ? '— Select intake —' : (currentAcademicIntake ? undefined : 'No current intake set')}
+                  placeholder="— Select intake —"
                   value={active.intake}
+                  onChange={v => updateStructureMeta('intake', v)}
                   options={intakeOptions}
-                  disabled
                 />
               </div>
               <div className="fg m-0">

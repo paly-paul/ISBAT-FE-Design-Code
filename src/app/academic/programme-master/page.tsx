@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { Breadcrumb } from '@/components/Breadcrumb'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -156,18 +157,15 @@ export default function Page() {
       <div className="page active">
         <div className="pg-hdr">
           <div><div className="pg-title">Programme Master</div><div className="pg-sub">Define programme versions · Manage active/inactive status · Accreditation tracking · Specializations</div></div>
-          {permissions.add && <button className="btn btn-primary" onClick={() => { setProgMode('add'); setEditingProgramGuid(null); openModal('new-prog-modal') }}><i className="lni lni-plus"></i> Add Programme Version</button>}
+          {permissions.add && <button className="btn btn-primary" onClick={() => { setProgMode('add'); setEditingProgramGuid(null); openModal('new-prog-modal') }}><i className="lni lni-plus"></i> Add Programme</button>}
         </div>
 
-        <div className="flex items-center gap-2 mb-[18px] flex-wrap">
-          <button className="btn btn-neu btn-sm text-[var(--fs-xs)]" onClick={() => nav('programme-level')}><i className="lni lni-graduation"></i> Programme Level</button>
-          <span className="text-g300 text-[var(--fs-2xl)]">→</span>
-          <button className="btn btn-neu btn-sm text-[var(--fs-xs)]" onClick={() => nav('programme-group')}><i className="lni lni-folder"></i> Programme Group</button>
-          <span className="text-g300 text-[var(--fs-2xl)]">→</span>
-          <span className="bg-b50 border-[1.5px] border-[var(--b200)] rounded-[var(--rxs)] py-[5px] px-3 text-[var(--fs-xs)] font-bold text-b700"><i className="lni lni-graduation"></i> Programme Master</span>
-          <span className="text-g300 text-[var(--fs-2xl)]">→</span>
-          <button className="btn btn-neu btn-sm text-[var(--fs-xs)]" onClick={() => nav('course-units')}><i className="lni lni-book"></i> Course Units</button>
-        </div>
+        <Breadcrumb items={[
+          { label: 'Programme Level', icon: 'lni lni-graduation', id: 'programme-level' },
+          { label: 'Programme Group', icon: 'lni lni-folder', id: 'programme-group' },
+          { label: 'Programme Master', icon: 'lni lni-graduation' },
+          { label: 'Course Units', icon: 'lni lni-book', id: 'course-units' },
+        ]} />
 
         <div className="card">
           <div className="card-hdr">
@@ -271,9 +269,12 @@ export default function Page() {
                       {r.specializations === '—' ? '—' : <span className="badge badge-blue">{r.specializations}</span>}
                     </td>
                     <td>
+                      {/* Label text is just "Active"/"Inactive" — no "(New Admissions)"/
+                          "(Existing Students Only)" qualifier, per the Program Master
+                          requirements doc (req. 3). */}
                       {r.admissionStatus === 'Active'
                         ? <span className="badge badge-green"><span className="bdot"></span>Active</span>
-                        : <span className="badge badge-grey">Inactive (existing students only)</span>
+                        : <span className="badge badge-grey">Inactive</span>
                       }
                     </td>
                   </tr>

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { Breadcrumb } from '@/components/Breadcrumb'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { ProgrammeGroupModal } from '@/components/modals/academic/ProgrammeGroupModal'
@@ -94,6 +95,12 @@ export default function Page() {
           <div><div className="pg-title">Programme Group Master</div><div className="pg-sub">Generic programme names for reporting · Groups all curriculum versions under one umbrella</div></div>
           {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-proggroup-modal')}><i className="lni lni-plus"></i> Add Programme Group</button>}
         </div>
+
+        <Breadcrumb items={[
+          { label: 'Programme Level', icon: 'lni lni-graduation', id: 'programme-level' },
+          { label: 'Programme Group', icon: 'lni lni-folder' },
+          { label: 'Programme Master', icon: 'lni lni-graduation', id: 'programme-master' },
+        ]} />
 
         {/* <div className="info-box mb-[18px]">
           <i className="lni lni-information"></i> Programme Groups are used for <strong>high-level reporting</strong> — e.g. searching &quot;BCA&quot; returns all students across BCA 2026 <em>and</em> BCA 2031 versions. This ensures a single generic name links all curriculum versions for aggregate analytics.

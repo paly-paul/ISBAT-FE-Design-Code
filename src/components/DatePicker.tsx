@@ -114,13 +114,18 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
   const year = viewDate.getFullYear()
   const months = ['January','February','March','April','May','June','July','August','September','October','November','December']
   const currentYear = new Date().getFullYear()
-  const yearRange = Array.from({ length: 41 }, (_, i) => currentYear - 20 + i)
+  // Wide enough to cover both directions this component is actually used
+  // for: Date of Birth fields (employee/student — needs 80-100 years back)
+  // and forward-looking planning fields (intake/exam years — only a few
+  // years out). The old range (currentYear ± 20) silently made anyone born
+  // before ~2006 unable to pick their real birth year from the dropdown.
+  const yearRange = Array.from({ length: 111 }, (_, i) => currentYear - 100 + i)
   const monthOptions = months.map((m, idx) => ({ value: String(idx), label: m }))
   const yearOptions = yearRange.map(y => ({ value: String(y), label: String(y) }))
 
   return (
     <>
-      <div style={{ position: 'relative', display: 'inline-block' }} ref={ref}>
+      <div style={{ position: 'relative', width: '100%' }} ref={ref}>
       <div style={{ position: 'relative' }}>
         <input
           className="ctrl"
@@ -130,7 +135,7 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
           onChange={e => setDisplay(e.target.value)}
           onBlur={onInputBlur}
           onFocus={() => setOpen(false)}
-          style={{ minWidth: 120, paddingRight: 30, borderColor: hasError ? 'var(--red)' : undefined }}
+          style={{ minWidth: 120, width: '100%', paddingRight: 30, borderColor: hasError ? 'var(--red)' : undefined }}
         />
         <button
           type="button"
@@ -143,7 +148,7 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
             cursor: 'pointer', color: 'var(--g500)', fontSize: 14, lineHeight: 1,
           }}
         >
-          📅
+          <i className="lni lni-calendar" />
         </button>
       </div>
 

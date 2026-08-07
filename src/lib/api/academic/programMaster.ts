@@ -12,19 +12,18 @@ export interface ProgramUnitInput {
   flag: number
 }
 
-// One fee row inside a fee structure.
+// One fee row inside a fee structure. intLedger/intCurrency are kept here
+// purely as internal bookkeeping (ProgrammeModal derives them from the
+// selected Ledger/Currency for its own display logic) — CONFIRMED via
+// SaveComplete.bru that the wire payload itself only ever needs
+// ledgerGuid/currencyGuid/semCode/ledgerNum/amount, so appendFeeStructures()
+// no longer sends these two at all (they were previously an unconfirmed
+// "harmless extra field" guess, now known to not be part of the real
+// schema).
 export interface FeeLineInput {
   intLedger: number
   ledgerGuid: string
   intCurrency: number
-  // Added after a live validation_error ("Currency is required for each fee
-  // line.") on a real payload that already had a valid non-zero intCurrency
-  // — the same "Currency is required" symptom already confirmed on
-  // programLevel.ts's own Currency field meant the backend actually wants
-  // currencyGuid, not intCurrency. Update's FeeLineUpdateInput already sends
-  // CurrencyGuid (see below); Create never sent an equivalent guid at all.
-  // Sent alongside intCurrency (a harmless extra field) since it's
-  // unconfirmed whether the backend still reads intCurrency for this DTO.
   currencyGuid: string
   semCode: number
   ledgerNum: number
@@ -114,10 +113,24 @@ export interface ProgramMaster {
 }
 
 // Same indexed flat-key convention as appendOutlines in courseUnit.ts.
+// CONFIRMED via the real Save Program Complete backend doc (SaveComplete.bru,
+// "Nested arrays use bracket notation: ProgramUnits[n][Field] and
+// FeeStructures[n][FeeLines][m][Field]"): Create uses the exact same bracket
+// notation as Update, not the dot notation (`ProgramUnits[i].Field`) this
+// function used to send. That mismatch is the confirmed root cause of a real
+// validation_error ("'Sem Code' must be greater than '0'.", "'Course Unit
+// Guid' must not be empty.") on a payload whose SemCode/CourseUnitGuid values
+// were genuinely valid — sent under a key shape ASP.NET's model binder
+// couldn't match, so both fields silently landed on their zero/empty
+// defaults. The doc's field names are also UnitTypeGuid/UnitCatGuid (not
+// UnitType/UnitCat as this used to send) — matches what Update's own
+// appendProgramUnitsForUpdate already used, so Create was simply out of sync
+// with Update on both notation and naming, not a genuinely different
+// contract as previously assumed.
 function appendProgramUnits(formData: FormData, units: ProgramUnitInput[]) {
   units.forEach((u, i) => {
-    formData.append(`ProgramUnits[${i}].SemCode`, String(u.semCode))
-    formData.append(`ProgramUnits[${i}].CourseUnitGuid`, u.courseUnitGuid)
+    formData.append(`ProgramUnits[${i}][SemCode]`, String(u.semCode))
+    formData.append(`ProgramUnits[${i}][CourseUnitGuid]`, u.courseUnitGuid)
     // Specialization is optional now (Program_Master_Change_Requests_Final.md),
     // so streamGuid can legitimately be empty for a non-Specialization unit
     // with no top-level pick to fall back to either. Confirmed with the
@@ -126,45 +139,51 @@ function appendProgramUnits(formData: FormData, units: ProgramUnitInput[]) {
     // bind — omitting the key entirely is the only way a Guid? property ends
     // up bound to null the way it's meant to. The .bru example showing a
     // blank-but-present key was misleading here, not a confirmed contract.
-    if (u.streamGuid) formData.append(`ProgramUnits[${i}].StreamGuid`, u.streamGuid)
+    if (u.streamGuid) formData.append(`ProgramUnits[${i}][StreamGuid]`, u.streamGuid)
     // Unit Type/Category are optional in Step 2's UI (no required marker) and
     // GetFullDetails confirms a real unit can come back with both null, so
     // the write side has to tolerate the same — same "empty string AND the
     // literal 'null' both fail the Guid? binder, omit the key entirely"
-    // finding as StreamGuid just above. Sending an empty string here was
-    // producing a raw ASP.NET model-binding 400 (no `code` field on that
-    // response shape at all — client.ts's envelope parsing then has nothing
-    // to surface but "unknown"), not one of the documented custom error
-    // codes in UpdateComplete.bru.
-    if (u.unitType) formData.append(`ProgramUnits[${i}].UnitType`, u.unitType)
-    if (u.unitCat) formData.append(`ProgramUnits[${i}].UnitCat`, u.unitCat)
-    formData.append(`ProgramUnits[${i}].Flag`, String(u.flag))
+    // finding as StreamGuid just above.
+    if (u.unitType) formData.append(`ProgramUnits[${i}][UnitTypeGuid]`, u.unitType)
+    if (u.unitCat) formData.append(`ProgramUnits[${i}][UnitCatGuid]`, u.unitCat)
+    // Confirmed via SaveComplete.bru's docs: "Flag (1=Core, 2=Elective)" —
+    // NOT the constant 1 this used to send regardless of the unit's actual
+    // category. The doc doesn't say what a "Specialization"-category unit
+    // should send though (only Core/Elective are defined), so that case is
+    // deliberately left as the same "1" default rather than guessing 2 —
+    // flag this for confirmation with the backend team if Specialization
+    // units need their own value.
+    formData.append(`ProgramUnits[${i}][Flag]`, String(u.flag))
   })
 }
 
 function appendFeeStructures(formData: FormData, structures: FeeStructureInput[]) {
   structures.forEach((s, i) => {
-    formData.append(`FeeStructures[${i}].FeeCode`, s.feeCode)
-    formData.append(`FeeStructures[${i}].FeeDesc`, s.feeDesc)
-    formData.append(`FeeStructures[${i}].Status`, String(s.status))
-    formData.append(`FeeStructures[${i}].LocalOrForeign`, String(s.localOrForeign))
-    if (s.lef !== null) formData.append(`FeeStructures[${i}].Lef`, String(s.lef))
-    if (s.cef !== null) formData.append(`FeeStructures[${i}].Cef`, String(s.cef))
-    if (s.ace !== null) formData.append(`FeeStructures[${i}].Ace`, String(s.ace))
-    if (s.lec !== null) formData.append(`FeeStructures[${i}].Lec`, String(s.lec))
-    if (s.cec !== null) formData.append(`FeeStructures[${i}].Cec`, String(s.cec))
-    if (s.acec !== null) formData.append(`FeeStructures[${i}].Acec`, String(s.acec))
-    formData.append(`FeeStructures[${i}].CalcType`, String(s.calcType))
-    if (s.amtPer !== null) formData.append(`FeeStructures[${i}].AmtPer`, String(s.amtPer))
-    if (s.intakeGuid) formData.append(`FeeStructures[${i}].IntakeGuid`, s.intakeGuid)
+    formData.append(`FeeStructures[${i}][FeeCode]`, s.feeCode)
+    formData.append(`FeeStructures[${i}][FeeDesc]`, s.feeDesc)
+    formData.append(`FeeStructures[${i}][Status]`, String(s.status))
+    formData.append(`FeeStructures[${i}][LocalOrForeign]`, String(s.localOrForeign))
+    if (s.lef !== null) formData.append(`FeeStructures[${i}][Lef]`, String(s.lef))
+    if (s.cef !== null) formData.append(`FeeStructures[${i}][Cef]`, String(s.cef))
+    if (s.ace !== null) formData.append(`FeeStructures[${i}][Ace]`, String(s.ace))
+    if (s.lec !== null) formData.append(`FeeStructures[${i}][Lec]`, String(s.lec))
+    if (s.cec !== null) formData.append(`FeeStructures[${i}][Cec]`, String(s.cec))
+    if (s.acec !== null) formData.append(`FeeStructures[${i}][Acec]`, String(s.acec))
+    formData.append(`FeeStructures[${i}][CalcType]`, String(s.calcType))
+    if (s.amtPer !== null) formData.append(`FeeStructures[${i}][AmtPer]`, String(s.amtPer))
+    if (s.intakeGuid) formData.append(`FeeStructures[${i}][IntakeGuid]`, s.intakeGuid)
+    // Confirmed via the same doc: FeeLines only has SemCode/LedgerGuid/
+    // CurrencyGuid/LedgerNum/Amount — no IntLedger/IntCurrency at all. Those
+    // two were only ever a "harmless extra field, unconfirmed" guess (see
+    // FeeLineInput's own comment) — dropped now that the real schema is
+    // confirmed not to include them.
     s.feeLines.forEach((l, j) => {
-      formData.append(`FeeStructures[${i}].FeeLines[${j}].IntLedger`, String(l.intLedger))
-      formData.append(`FeeStructures[${i}].FeeLines[${j}].LedgerGuid`, l.ledgerGuid)
-      formData.append(`FeeStructures[${i}].FeeLines[${j}].IntCurrency`, String(l.intCurrency))
-      formData.append(`FeeStructures[${i}].FeeLines[${j}].CurrencyGuid`, l.currencyGuid)
-      formData.append(`FeeStructures[${i}].FeeLines[${j}].SemCode`, String(l.semCode))
-      formData.append(`FeeStructures[${i}].FeeLines[${j}].LedgerNum`, String(l.ledgerNum))
-      formData.append(`FeeStructures[${i}].FeeLines[${j}].Amount`, String(l.amount))
+      formData.append(`FeeStructures[${i}][FeeLines][${j}][SemCode]`, String(l.semCode))
+      formData.append(`FeeStructures[${i}][FeeLines][${j}][LedgerGuid]`, l.ledgerGuid)
+      formData.append(`FeeStructures[${i}][FeeLines][${j}][CurrencyGuid]`, l.currencyGuid)
+      formData.append(`FeeStructures[${i}][FeeLines][${j}][LedgerNum]`, String(l.ledgerNum))
+      formData.append(`FeeStructures[${i}][FeeLines][${j}][Amount]`, String(l.amount))
     })
   })
 }
