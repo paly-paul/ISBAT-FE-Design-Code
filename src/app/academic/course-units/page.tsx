@@ -12,7 +12,6 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
 import { useCourseUnits, useCreateCourseUnit, useUpdateCourseUnit, useDeleteCourseUnit, CourseUnit } from '@/hooks/academic/useCourseUnits'
 import { getCourseUnitById } from '@/lib/api/academic/courseUnit'
 import { openDocumentForViewing, downloadDocument } from '@/lib/documentViewer'
@@ -28,6 +27,7 @@ export default function Page() {
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   // The filter state is kept for future table filtering, but the current view does not need it yet.
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [editingCourseUnitGuid, setEditingCourseUnitGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<CourseUnit | null>(null)
 
@@ -95,11 +95,26 @@ export default function Page() {
   //   { code: 'IT103',      name: 'Engineering Maths I',                            programme: 'BSc. IT', sem: 'Sem 1', credits: 3, unitType: 'Theory',    category: 'Core',                  hasCW: 'No',  hasCBT: 'No',  proration: 'UE100→100',                                  syllabus: 'Attached', syllabusOk: true,  rowClass: '', variant: 'edit' },
   // ]
 
-  const { data: rows = [], isLoading } = useCourseUnits()
+  // Real server-side pagination — fetches PAGE_SIZE (10) rows at a time
+  // instead of the whole table up front, refetching the next 10 only when
+  // the user actually pages forward. Was previously a single pageSize=1000
+  // useCourseUnits() call backing a client-side usePagination() slice, which
+  // made the initial load wait on the entire table before showing anything.
+  const { data, isLoading } = useCourseUnits(page, PAGE_SIZE)
+  const rows = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const createCourseUnit = useCreateCourseUnit()
   const updateCourseUnit = useUpdateCourseUnit()
   const deleteCourseUnit = useDeleteCourseUnit()
-  const filteredRows = rows.filter(r =>
+
+  // NOTE: search/filters now only match within the currently-loaded page of
+  // 10, not the full table — there's no confirmed server-side search param
+  // on GET /courseunits to search the whole dataset without fetching it all
+  // (which is exactly what real pagination was meant to avoid). Same
+  // documented "client-only, this page" tradeoff as enquiry-list.tsx's own
+  // search box.
+  const pageItems = rows.filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
     && (!search.trim() || `${r.courseUnitCode} ${r.courseUnitName}`.toLowerCase().includes(search.trim().toLowerCase()))
   )
@@ -107,8 +122,6 @@ export default function Page() {
   const searchMatches = search.trim()
     ? rows.filter(r => `${r.courseUnitCode} ${r.courseUnitName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
     : []
-
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   // Column filter-popover helper — unused now that no column has a real
   // filterable categorical field (see the commented-out fth() calls in the
@@ -233,7 +246,7 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : filteredRows.length === 0
+                  : pageItems.length === 0
                     ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
                     : null}
                 {pageItems.map((r) => (

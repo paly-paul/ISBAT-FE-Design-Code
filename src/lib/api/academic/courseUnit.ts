@@ -34,7 +34,7 @@ export interface CourseUnit {
   outlines: CourseUnitOutline[]
 }
 
-interface CourseUnitListResponse {
+export interface CourseUnitListResponse {
   items: CourseUnit[]
   totalCount: number
   pageNumber: number
@@ -130,9 +130,17 @@ const mockCourseUnits: CourseUnit[] = [
   },
 ]
 
-export function getCourseUnits(pageNumber = 1, pageSize = 1000): Promise<CourseUnit[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockCourseUnits)
-  return apiGet<CourseUnitListResponse | null>(`/api/v1/academic/courseunits?pageNumber=${pageNumber}&pageSize=${pageSize}`).then(data => data?.items ?? [])
+// Real server-side pagination — returns the full envelope (items + totalCount)
+// instead of just items, so callers can page 10-at-a-time instead of eagerly
+// fetching everything up front (the old default here was pageSize=1000,
+// fetched once; that made the initial page load noticeably slower than it
+// needs to be for a table that only ever shows 10 rows at a time).
+export function getCourseUnits(pageNumber = 1, pageSize = 10): Promise<CourseUnitListResponse> {
+  if (MOCK_AUTH) {
+    return Promise.resolve({ items: mockCourseUnits, totalCount: mockCourseUnits.length, pageNumber, pageSize })
+  }
+  return apiGet<CourseUnitListResponse | null>(`/api/v1/academic/courseunits?pageNumber=${pageNumber}&pageSize=${pageSize}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }
 
 export interface CourseUnitTopicInput {
