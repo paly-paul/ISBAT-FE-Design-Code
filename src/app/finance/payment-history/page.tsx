@@ -172,7 +172,7 @@ export default function Page() {
                     <td><span className="badge badge-gold">{r.currencyCode}</span></td>
                     <td className="font-bold">{fmtAmount(r.ugxValue)}</td>
                     <td className="text-g400" style={{ fontSize: 11 }}>{r.rate != null ? fmtAmount(r.rate) : '—'}</td>
-                    <td><span className={`pill ${payTypePill(r.payType.value)}`}>{r.payType.name}</span></td>
+                    <td>{r.payType ? <span className={`pill ${payTypePill(r.payType.value)}`}>{r.payType.name}</span> : <span className="text-g400">—</span>}</td>
                     <td>
                       <ActionMenu>
                         <button className="btn btn-neu btn-sm" onClick={() => showToast(`Receipt ${r.receiptNo} ready to print.`, 'success')}>

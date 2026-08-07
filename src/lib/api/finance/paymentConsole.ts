@@ -241,7 +241,9 @@ export function getPaymentHistory(applicationGuid: string): Promise<PaymentHisto
 // only for foreign-currency rows). `payType` is an object with its label
 // already resolved server-side (`{value, name}`) — unlike the scoped
 // endpoint's bare `payType: number`, there's no need to cross-reference
-// PAY_TYPE_LABELS for this one.
+// PAY_TYPE_LABELS for this one. Confirmed via a real production crash that
+// `payType` itself can come back `null` on some rows (not just always an
+// object) — treat it as genuinely optional, don't assume every row has one.
 export interface PaymentHistoryListEntry {
   paymentGuid: string
   category: number
@@ -255,7 +257,7 @@ export interface PaymentHistoryListEntry {
   currencyCode: string
   ugxValue: number
   rate: number | null
-  payType: { value: number; name: string }
+  payType: { value: number; name: string } | null
 }
 
 export interface PaymentHistoryListResponse {
