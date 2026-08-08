@@ -2678,13 +2678,6 @@ th:hover .th-fi {
   white-space: nowrap;
 }
 
-.col-filter-opt:first-child {
-  color: var(--g500);
-  font-weight: 600;
-  font-size: var(--fs-xs);
-  border-bottom: 1px solid var(--g100);
-}
-
 .col-filter-opt:hover {
   background: var(--g100)
 }

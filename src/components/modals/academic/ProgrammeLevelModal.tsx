@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
@@ -16,8 +17,10 @@ interface ProgrammeLevelModalProps extends ModalProps {
 }
 
 export function ProgrammeLevelModal({ isOpen, onClose, showToast, createProgramLevel }: ProgrammeLevelModalProps) {
+  const router = useRouter()
   const [saved, setSaved]               = useState(false)
   const [failure, setFailure]           = useState<string | null>(null)
+  const [redirectAfterClose, setRedirectAfterClose] = useState(false)
   const [levelCode, setLevelCode]       = useState('')
   const [levelName, setLevelName]       = useState('')
   const [yearCount, setYearCount]       = useState('')
@@ -41,6 +44,10 @@ export function ProgrammeLevelModal({ isOpen, onClose, showToast, createProgramL
     setLevelCode(''); setLevelName(''); setYearCount(''); setMinCreditLoad('')
     setAppFee(''); setLateFee(''); setCurrency(''); setErrors({})
     onClose()
+    if (redirectAfterClose) {
+      router.push('/academic/programme-group')
+    }
+    setRedirectAfterClose(false)
   }
 
   function clearError(field: string) {
@@ -222,7 +229,11 @@ export function ProgrammeLevelModal({ isOpen, onClose, showToast, createProgramL
                   currencyGuid: currency,
                 },
                 {
-                  onSuccess: () => { setSaved(true); showToast('Programme Level added successfully') },
+                  onSuccess: () => {
+                    setSaved(true)
+                    setRedirectAfterClose(true)
+                    showToast('Programme Level added successfully')
+                  },
                   onError: handleCreateError,
                 },
               )

@@ -87,6 +87,16 @@ export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramG
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
         <div className="g2">
+          <div className="fg span2">
+            <div className="lbl">Programme Level <span className="req">*</span></div>
+            <SearchSelect
+              placeholder="Select programme level…"
+              options={programLevelOptions}
+              value={programLevel}
+              onChange={v => { setProgramLevel(v); clearError('programLevel') }}
+            />
+            {errors.programLevel && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programLevel}</p>}
+          </div>
           <div className="fg">
             <div className="lbl">Group Code <span className="req">*</span></div>
             <input
@@ -108,16 +118,6 @@ export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramG
               style={errors.groupName ? { borderColor: 'var(--red)' } : undefined}
             />
             {errors.groupName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.groupName}</p>}
-          </div>
-          <div className="fg span2">
-            <div className="lbl">Programme Level <span className="req">*</span></div>
-            <SearchSelect
-              placeholder="Select programme level…"
-              options={programLevelOptions}
-              value={programLevel}
-              onChange={v => { setProgramLevel(v); clearError('programLevel') }}
-            />
-            {errors.programLevel && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programLevel}</p>}
           </div>
         </div>
         <div className="modal-footer">
