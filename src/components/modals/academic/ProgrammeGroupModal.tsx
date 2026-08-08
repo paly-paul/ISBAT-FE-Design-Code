@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
@@ -16,8 +17,10 @@ interface ProgrammeGroupModalProps extends ModalProps {
 }
 
 export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramGroup }: ProgrammeGroupModalProps) {
+  const router = useRouter()
   const [saved, setSaved]             = useState(false)
   const [failure, setFailure]         = useState<string | null>(null)
+  const [redirectAfterClose, setRedirectAfterClose] = useState(false)
   const [groupCode, setGroupCode]     = useState('')
   const [groupName, setGroupName]     = useState('')
   const [programLevel, setProgramLevel] = useState('')
@@ -32,6 +35,10 @@ export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramG
     setSaved(false); setFailure(null)
     setGroupCode(''); setGroupName(''); setProgramLevel(''); setErrors({})
     onClose()
+    if (redirectAfterClose) {
+      router.push('/academic/programme-master')
+    }
+    setRedirectAfterClose(false)
   }
 
   function clearError(field: string) {
@@ -130,7 +137,11 @@ export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramG
               createProgramGroup.mutate(
                 { groupCode, groupName, programLevelGuid: programLevel },
                 {
-                  onSuccess: () => { setSaved(true); showToast('Programme Group added successfully') },
+                  onSuccess: () => {
+                    setSaved(true)
+                    setRedirectAfterClose(true)
+                    showToast('Programme Group added successfully')
+                  },
                   onError: handleCreateError,
                 },
               )

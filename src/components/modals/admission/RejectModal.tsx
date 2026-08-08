@@ -43,7 +43,9 @@ export function RejectModal({ isOpen, onClose, showToast, applicationGuid, vetAp
     // reject) — no separate structured "reason" column, so the canned
     // reason and the free-text remarks are combined into it.
     vetApplication.mutate(
-      { applicationGuid, input: { action: 2, justificationReg: `${reason} — ${remarks.trim()}` } },
+      // action: 3 = Rejected — RegistrarDecision now matches the persisted
+      // status enum's own numbering (2=Approved, 3=Rejected).
+      { applicationGuid, input: { action: 3, justificationReg: `${reason} — ${remarks.trim()}` } },
       {
         onSuccess: () => { setSaved(true); showToast('Application rejected successfully.', 'warning') },
         onError: (err: Error) => setFailure(err.message || 'Failed to reject application.'),

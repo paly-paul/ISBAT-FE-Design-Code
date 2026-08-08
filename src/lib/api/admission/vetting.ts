@@ -113,15 +113,15 @@ export interface VettingApplicationDetail {
   qualifications: VettingQualification[]
 }
 
-// The request's own enum (RegistrarAction: 1=Approved, 2=Rejected) — not the
-// same numbering as the persisted `action` byte the response echoes back
-// (EnumApplicationStatus: 2=Approved, 3=Rejected). Same field name, two
-// different enums depending on which side of the call you're reading.
-export type RegistrarDecision = 1 | 2
+// The request's own action now matches the persisted `action` byte the
+// response echoes back (EnumApplicationStatus: 2=Approved, 3=Rejected) —
+// previously a separate RegistrarAction enum (1=Approved, 2=Rejected) with
+// its own numbering; both sides now use the same 2/3 values.
+export type RegistrarDecision = 2 | 3
 
 export interface VetApplicationInput {
   action: RegistrarDecision
-  // Required by the backend when action = 2 (Rejected); optional otherwise.
+  // Required by the backend when action = 3 (Rejected); optional otherwise.
   justificationReg?: string | null
 }
 
@@ -259,7 +259,7 @@ export function vetApplication(applicationGuid: string, input: VetApplicationInp
   if (MOCK_AUTH) {
     console.debug('[vetting API] vetApplication mock', { applicationGuid, input })
     const item = mockQueue.find(i => i.applicationGuid === applicationGuid)
-    return Promise.resolve({ intApplication: item?.intApplication ?? 0, appRefNo: item?.appRefNo ?? '', action: input.action === 1 ? 2 : 3 })
+    return Promise.resolve({ intApplication: item?.intApplication ?? 0, appRefNo: item?.appRefNo ?? '', action: input.action })
   }
   const url = `/api/v1/admissions/application-filling/${applicationGuid}/vet`
   console.debug('[vetting API] vetApplication request', { url, applicationGuid, input })

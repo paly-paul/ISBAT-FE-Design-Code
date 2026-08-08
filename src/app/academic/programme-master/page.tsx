@@ -116,6 +116,7 @@ export default function Page() {
 
   const groupFilterOpts = Array.from(new Set(rows.map(r => r.group)))
   const levelFilterOpts = Array.from(new Set(rows.map(r => r.level)))
+  const levelDropdownOpts = Array.from(new Set(programLevels.map(l => l.levelName)))
 
   // Live preview shown in the search dropdown as the user types — matches
   // the same code/name test as the table's own search filter below, just
@@ -181,7 +182,7 @@ export default function Page() {
               <SearchSelect
                 className="w-auto text-[var(--fs-sm)]"
                 placeholder="All Levels"
-                options={['Bachelor', 'Master', 'PhD', 'Diploma']}
+                options={levelDropdownOpts}
                 value={levelFilter}
                 onChange={setLevelFilter}
               />

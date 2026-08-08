@@ -53,7 +53,10 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
   function handleApprove() {
     if (!applicationGuid) return
     vetApplication.mutate(
-      { applicationGuid, input: { action: 1, justificationReg: null } },
+      // action: 2 = Approved — RegistrarDecision now matches the persisted
+      // status enum's own numbering (2=Approved, 3=Rejected), not the old
+      // separate 1/2 request-side enum.
+      { applicationGuid, input: { action: 2, justificationReg: null } },
       {
         onSuccess: () => setApproved(true),
         onError: (err: Error) => setFailure(err.message || 'Failed to approve application.'),
