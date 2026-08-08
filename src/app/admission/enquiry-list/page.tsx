@@ -15,8 +15,17 @@ import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { usePagination } from '@/hooks/usePagination'
 
-const PAGE_SIZE = 10
+// Fetches up to FETCH_SIZE rows in one request, then paginates that
+// already-fetched set 10-at-a-time client-side via usePagination — same
+// "fetch a big batch once, page through it locally" pattern as Vetting
+// Desk. 12000 covers the real dataset (11k+ rows per the comment on
+// useEnquiries) in one request, so search/filter effectively reaches the
+// whole table now rather than a capped batch — comes at the cost of a much
+// heavier single fetch on every page load.
+const FETCH_SIZE = 12000
+const DISPLAY_PAGE_SIZE = 10
 
 // enquiryStatusGuid resolves against the real Enquiry Status master
 // (useEnquiryStatuses) — same client-side resolution pattern as
@@ -39,17 +48,15 @@ export default function EnquiryListPage() {
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
-  const [page, setPage] = useState(1)
   const [viewingGuid, setViewingGuid] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [channel, setChannel] = useState('')
   const [intakeGuid, setIntakeGuid] = useState('')
 
-  const { data, isLoading } = useEnquiries(page, PAGE_SIZE)
+  const { data, isLoading: loading } = useEnquiries(1, FETCH_SIZE)
   const updateEnquiry = useUpdateEnquiry()
   const rows = data?.items ?? []
-  const totalCount = data?.totalCount ?? 0
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const hasActiveFilters = !!search.trim() || !!channel || !!intakeGuid
 
   // Stats-row summary — GET /api/v1/admissions/enquiries/counts, a separate
   // endpoint from the paginated list above (its own totalCount only ever
@@ -86,24 +93,18 @@ export default function EnquiryListPage() {
     return enquiryStatuses.find(s => s.enquiryStatusGuid === enquiryStatusGuid)?.enquiryStatusName
   }
 
-  // useEnquiries is deliberately NOT fetched at a FETCH_ALL_PAGE_SIZE like
-  // enquiry-followup-master does — this endpoint has 11k+ rows (see the
-  // comment on useEnquiries), so pulling the whole list client-side isn't
-  // viable. Search here only narrows the currently-loaded server page.
+  // Searches across the full FETCH_SIZE batch (effectively the whole table
+  // now — see the comment above), not just whatever page is on screen.
   function matchesSearch(r: typeof rows[number], term: string) {
     return `${r.enquiryCode} ${r.studentName} ${r.mobile} ${r.email} ${resolveProgramName(r)} ${r.sourceName ?? ''} ${resolveStatusName(r.enquiryStatusGuid) ?? ''}`
       .toLowerCase()
       .includes(term)
   }
-  // The enquiry LIST endpoint only takes page/pageSize — no server-side
-  // channel/source filter param exists there, so (same as Search above)
-  // this still only narrows the currently-loaded server page rather than
-  // querying the full 11k+-row table. `channel` stores the real
-  // enquirySourceGuid (not sourceName) so it can double as the counts
-  // endpoint's `sourceGuid` filter above — options are built dynamically
-  // from whatever (guid, name) pairs are actually present on the loaded
-  // page, same "no fixed list, derive from real data" pattern as vetting's
-  // own programme filter.
+  // `channel` stores the real enquirySourceGuid (not sourceName) so it can
+  // double as the counts endpoint's `sourceGuid` filter above — options are
+  // built dynamically from whatever (guid, name) pairs are actually present
+  // on the currently-loaded rows, same "no fixed list, derive from real
+  // data" pattern as vetting's own programme filter.
   const channelOptions = [
     { value: '', label: 'All Channels' },
     ...Array.from(new Map(rows.filter(r => r.enquirySourceGuid && r.sourceName).map(r => [r.enquirySourceGuid as string, r.sourceName as string])).entries())
@@ -114,9 +115,11 @@ export default function EnquiryListPage() {
     (!channel || r.enquirySourceGuid === channel) &&
     (!intakeGuid || r.intakeGuid === intakeGuid)
   )
+  // Client-side pagination over the already-fetched (up to FETCH_SIZE) batch
+  // — 10 rows per page for display, same pattern as Vetting Desk.
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, DISPLAY_PAGE_SIZE)
   const searchMatches = search.trim() ? filteredRows.slice(0, 8) : []
-  const hasActiveFilters = !!search.trim() || !!channel || !!intakeGuid
-  function clearFilters() { setSearch(''); setChannel(''); setIntakeGuid('') }
+  function clearFilters() { setSearch(''); setChannel(''); setIntakeGuid(''); setPage(1) }
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -179,25 +182,25 @@ export default function EnquiryListPage() {
           <div className="flex gap-2">
             <TableSearch
               className="w-56"
-              placeholder="Search enquiries (this page)…"
+              placeholder="Search enquiries…"
               value={search}
-              onChange={setSearch}
+              onChange={v => { setSearch(v); setPage(1) }}
               results={searchMatches.map(r => ({ id: r.enquiryGuid, primary: r.enquiryCode, secondary: r.studentName }))}
             />
-            <SearchSelect className="w-36" options={channelOptions} value={channel} onChange={setChannel} />
-            <SearchSelect className="w-40" options={intakeOptions} value={intakeGuid} onChange={setIntakeGuid} />
+            <SearchSelect className="w-36" options={channelOptions} value={channel} onChange={v => { setChannel(v); setPage(1) }} />
+            <SearchSelect className="w-40" options={intakeOptions} value={intakeGuid} onChange={v => { setIntakeGuid(v); setPage(1) }} />
           </div>
         </div>
         <ScrollTable>
           <table>
             <thead><tr><th style={{ width: 48 }}></th><th>Enq. Ref</th><th>Name</th><th>Phone</th><th>Email</th><th>Programme Interest</th><th>Channel</th><th>Date</th><th>Status</th></tr></thead>
             <tbody>
-              {isLoading
+              {loading
                 ? <TableLoadingState colSpan={999} />
-                : filteredRows.length === 0
+                : pageItems.length === 0
                   ? <EmptyState colSpan={999} hasFilters={hasActiveFilters} onClearFilters={clearFilters} />
                   : null}
-              {filteredRows.map(r => (
+              {pageItems.map(r => (
                 <tr key={r.enquiryGuid}>
                   <td>
                     <ActionMenu>
@@ -222,8 +225,7 @@ export default function EnquiryListPage() {
         {totalCount > 0 && (
           <div className="flex items-center justify-between mt-3" style={{ fontSize: 12.5, color: 'var(--g500)' }}>
             <span>
-              Page {page} of {totalPages} · {totalCount.toLocaleString()} enquiries
-              {hasActiveFilters && filteredRows.length !== rows.length && ` · ${filteredRows.length} match on this page`}
+              Page {page} of {totalPages} · {totalCount.toLocaleString()} {hasActiveFilters ? 'matching' : ''} enquiries
             </span>
             <div className="flex gap-2">
               <button className="btn btn-neu btn-sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>

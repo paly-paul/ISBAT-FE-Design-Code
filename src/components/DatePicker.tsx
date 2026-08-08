@@ -32,6 +32,16 @@ function dateToYmd(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
+function compareYmd(left?: string, right?: string) {
+  if (!left || !right) return 0
+  const [leftY, leftM, leftD] = left.split('-').map(Number)
+  const [rightY, rightM, rightD] = right.split('-').map(Number)
+  if (!leftY || !leftM || !leftD || !rightY || !rightM || !rightD) return 0
+  if (leftY !== rightY) return leftY - rightY
+  if (leftM !== rightM) return leftM - rightM
+  return leftD - rightD
+}
+
 export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy', maxYmd, hasError }: Props) {
   const [open, setOpen] = useState(false)
   const [display, setDisplay] = useState<string>(toDisplay(value))
@@ -65,12 +75,9 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
     const d = new Date(viewDate)
     d.setDate(day)
     const ymd = dateToYmd(d)
-    if (maxYmd) {
-      const max = ymdToDate(maxYmd)!
-      if (d.getTime() > max.getTime()) {
-        setError('Date cannot be in the future')
-        return
-      }
+    if (maxYmd && compareYmd(ymd, maxYmd) > 0) {
+      setError('Date cannot be in the future')
+      return
     }
     setError('')
     onChange(ymd)
@@ -95,13 +102,9 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
     if (m) {
       const [, dd, mm, yyyy] = m
       const ymd = `${yyyy}-${mm}-${dd}`
-      if (maxYmd) {
-        const sel = ymdToDate(ymd)!
-        const max = ymdToDate(maxYmd)!
-        if (sel.getTime() > max.getTime()) {
-          setError('Date cannot be in the future')
-          return
-        }
+      if (maxYmd && compareYmd(ymd, maxYmd) > 0) {
+        setError('Date cannot be in the future')
+        return
       }
       setError('')
       onChange(ymd)
@@ -153,7 +156,10 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
       </div>
 
       {open && (
-        <div style={{ position: 'absolute', zIndex: 60, marginTop: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.12)', background: 'white', borderRadius: 8 }}>
+        <div
+          style={{ position: 'absolute', zIndex: 60, marginTop: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.12)', background: 'white', borderRadius: 8 }}
+          onMouseDown={e => e.stopPropagation()}
+        >
           <div style={{ padding: 6, minWidth: 220 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <button type="button" className="btn btn-neu btn-sm" onClick={prevMonth} style={{ padding: '4px 6px' }}>{'<'}</button>
@@ -186,7 +192,8 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
                 const selDate = value && ymdToDate(value)
                 const selected = selDate && selDate.getFullYear() === viewDate.getFullYear() && selDate.getMonth() === viewDate.getMonth() && selDate.getDate() === cell
                 const cellDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), cell as number)
-                const disabled = !!maxYmd && !!ymdToDate(maxYmd) && cellDate.getTime() > ymdToDate(maxYmd)!.getTime()
+                const cellYmd = dateToYmd(cellDate)
+                const disabled = !!maxYmd && compareYmd(cellYmd, maxYmd) > 0
                 return (
                   <button
                     key={i}

@@ -4364,7 +4364,7 @@ body:has(.modal-overlay.open) {
 
 /* Weightage inputs */
 .wt-input {
-  width: 64px;
+  width: 80px;
   padding: 7px 8px;
   text-align: center;
   font-family: 'Inter', -apple-system, sans-serif;
