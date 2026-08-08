@@ -283,16 +283,173 @@ export function getApplications(page = 1, pageSize = 10): Promise<ApplicationLis
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
-export function searchApplicationsForFiling(searchTerm: string, pageNumber = 1, pageSize = 20): Promise<FilingApplicationSearchResponse> {
+// Confirmed via a real GET /api/v1/admissions/application-payments response
+// (no query params, bare page/pageSize) — a genuinely different, richer
+// record than FilingApplicationSearchResult in most of the guid fields that
+// actually matter for locking Academic Details (campusGuid/programGuid/
+// semesterGuid/batchTimeGuid/batchGuid/feeHdGuid/countryGuid are ALL real
+// here — batchTimeGuid/batchGuid specifically were never confirmed on
+// payment-search, which is why those two stayed editable there). Trade-off:
+// no applicationGuid at all (paymentGuid isn't the same guid space), no
+// split firstName/lastName (just studentName), and none of the personal-
+// detail fields payment-search had (dob/gender/nationalId/passportNo/
+// refugee/refugeeId/*UserFileName) — those simply won't prefill through
+// this source. intEnquiry is present but as a raw int, same "no confirmed
+// guid" gap enquiryGuid already had. No confirmed search/filter query param
+// on this endpoint (the sample call took none) — fetched once, unfiltered,
+// and matched client-side instead of trusting an unconfirmed searchTerm
+// param the way payment-search's own param was confirmed.
+export interface ApplicationPaymentRecord {
+  intApplication: number
+  paymentGuid: string
+  appRefNo: string
+  paymentCode: string
+  intEnquiry: number | null
+  payDate: string
+  intReceipt: number | null
+  receiptNo: number | null
+  amount: number
+  amountUsh: number
+  currencyGuid: string | null
+  exRate: number | null
+  remarks: string | null
+  intProgram: number
+  programGuid: string
+  countryGuid: string
+  mobile: number
+  email: string
+  studentName: string
+  intBank: number
+  fileType: string | null
+  fileName: string | null
+  userFileName: string | null
+  iStatus: number
+  intakeCode: number
+  intCampus: number
+  campusGuid: string
+  intSem: number
+  semesterGuid: string
+  intBatchTime: number
+  batchTimeGuid: string
+  intBatch: number
+  batchGuid: string
+  intFee: number
+  feeHdGuid: string
+  payType: number
+  exemptionType: number | null
+  oDelIntApplication: number | null
+  isDeleted: boolean
+  createdDate: string
+  createdBy: string | null
+  modifiedDate: string | null
+  modifiedBy: string | null
+}
+
+interface ApplicationPaymentListResponse {
+  items: ApplicationPaymentRecord[]
+  totalCount: number
+  pageNumber: number
+  pageSize: number
+}
+
+// intakeCode is a CONFIRMED real server-side filter on this endpoint (a live
+// ?intakeCode=20261 request returned a properly scoped/paginated result —
+// totalCount dropped to just that intake's own count). Optional here since
+// the unfiltered call is still valid (used the fallback way before this was
+// confirmed), but callers should pass it whenever they have one — scoping
+// to the current intake instead of fetching every intake's payments at once
+// is the whole point.
+function getApplicationPayments(page = 1, pageSize = 10, intakeCode?: number | string): Promise<ApplicationPaymentListResponse> {
+  const intakeParam = intakeCode != null ? `&intakeCode=${intakeCode}` : ''
+  return apiGet<ApplicationPaymentListResponse | null>(`/api/v1/admissions/application-payments?page=${page}&pageSize=${pageSize}${intakeParam}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+}
+
+// Adapts a payment record onto the FilingApplicationSearchResult shape this
+// page already knows how to consume — every field this source genuinely
+// doesn't have (see the note above) comes through null rather than guessed.
+function mapApplicationPaymentToSearchResult(r: ApplicationPaymentRecord): FilingApplicationSearchResult {
+  return {
+    applicationGuid: r.paymentGuid,
+    appRefNo: r.appRefNo,
+    firstName: r.studentName,
+    lastName: null,
+    phone: r.mobile != null ? String(r.mobile) : null,
+    emailId: r.email,
+    whatsApp: null,
+    intakeCode: r.intakeCode != null ? String(r.intakeCode) : null,
+    yearCode: null,
+    intakeGuid: null,
+    enquiryGuid: null,
+    campusGuid: r.campusGuid,
+    programGuid: r.programGuid,
+    semesterGuid: r.semesterGuid,
+    batchTimeGuid: r.batchTimeGuid,
+    batchGuid: r.batchGuid,
+    feeHdGuid: r.feeHdGuid,
+    action: null,
+    saveStatus: null,
+    refugee: null,
+    refugeeId: null,
+    studCategory: null,
+    gender: null,
+    nationalId: null,
+    idUserFileName: null,
+    passportNo: null,
+    passUserFileName: null,
+    visaUserFileName: null,
+    studUserFileName: null,
+    countryGuid: r.countryGuid,
+    universityEmail: null,
+    dob: null,
+    justificationReg: null,
+    approveDateReg: null,
+    intRegistrar: null,
+    docVerified: null,
+    verifiedDate: null,
+    docRemarks: null,
+    admLetterSend: null,
+    provLetterSend: null,
+    accLetterSend: null,
+    createdDate: r.createdDate,
+  }
+}
+
+// Was payment-search (see the note above for why this changed) — kept
+// commented rather than deleted in case the new source's missing fields
+// (personal details, applicationGuid, enquiryGuid) turn out to matter more
+// than the guid fields it gains.
+// export function searchApplicationsForFiling(searchTerm: string, pageNumber = 1, pageSize = 20): Promise<FilingApplicationSearchResponse> {
+//   if (MOCK_AUTH) {
+//     const items = searchTerm.trim()
+//       ? mockSearchResults.filter(r => `${r.appRefNo} ${r.firstName} ${r.emailId} ${r.phone}`.toLowerCase().includes(searchTerm.toLowerCase()))
+//       : mockSearchResults
+//     return Promise.resolve({ items, totalCount: items.length, pageNumber, pageSize })
+//   }
+//   return apiGet<FilingApplicationSearchResponse | null>(
+//     `/api/v1/admissions/application-filling/payment-search?searchTerm=${encodeURIComponent(searchTerm)}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
+//   ).then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
+// }
+
+// intakeCode scopes the fetch to one intake (CONFIRMED real filter — see the
+// note on getApplicationPayments) — the caller passes the current academic
+// intake's code so this only ever pulls that one intake's payments (~hundreds
+// of rows per the live sample) instead of every intake ever recorded.
+// searchTerm still has no confirmed server-side param, so matching within
+// that scoped batch stays client-side.
+export function searchApplicationsForFiling(searchTerm: string, pageNumber = 1, pageSize = 20, intakeCode?: number | string): Promise<FilingApplicationSearchResponse> {
   if (MOCK_AUTH) {
     const items = searchTerm.trim()
       ? mockSearchResults.filter(r => `${r.appRefNo} ${r.firstName} ${r.emailId} ${r.phone}`.toLowerCase().includes(searchTerm.toLowerCase()))
       : mockSearchResults
     return Promise.resolve({ items, totalCount: items.length, pageNumber, pageSize })
   }
-  return apiGet<FilingApplicationSearchResponse | null>(
-    `/api/v1/admissions/application-filling/payment-search?searchTerm=${encodeURIComponent(searchTerm)}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
-  ).then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
+  return getApplicationPayments(pageNumber, pageSize, intakeCode).then(res => {
+    const items = res.items
+      .map(mapApplicationPaymentToSearchResult)
+      .filter(a => !searchTerm.trim() || `${a.appRefNo} ${a.firstName} ${a.emailId} ${a.phone}`.toLowerCase().includes(searchTerm.trim().toLowerCase()))
+    return { items, totalCount: items.length, pageNumber, pageSize }
+  })
 }
 
 export function saveGeneral(input: SaveGeneralInput): Promise<SaveGeneralResponse> {

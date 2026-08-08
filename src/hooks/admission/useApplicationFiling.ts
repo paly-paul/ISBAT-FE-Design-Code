@@ -32,10 +32,13 @@ export function useFilingCountries() {
   })
 }
 
-export function useSearchApplicationsForFiling(searchTerm: string, pageNumber: number, pageSize: number, enabled: boolean) {
+// intakeCode scopes the fetch to one intake (see the note on
+// searchApplicationsForFiling) — pass the current academic intake's code so
+// this doesn't pull every intake's applications at once.
+export function useSearchApplicationsForFiling(searchTerm: string, pageNumber: number, pageSize: number, enabled: boolean, intakeCode?: number | string) {
   return useQuery({
-    queryKey: [...FILING_KEY, 'search', searchTerm, pageNumber, pageSize],
-    queryFn: () => searchApplicationsForFiling(searchTerm, pageNumber, pageSize),
+    queryKey: [...FILING_KEY, 'search', searchTerm, pageNumber, pageSize, intakeCode ?? ''],
+    queryFn: () => searchApplicationsForFiling(searchTerm, pageNumber, pageSize, intakeCode),
     enabled,
   })
 }

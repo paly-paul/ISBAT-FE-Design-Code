@@ -6,13 +6,14 @@ import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { SuccessPopup } from '@/components/modals/academic/SuccessPopup'
 import { FailurePopup } from '@/components/modals/academic/FailurePopup'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useCountries } from '@/hooks/config/useCountries'
+import { useEnquiries } from '@/hooks/admission/useEnquiries'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput } from '@/lib/errorMessages'
@@ -182,14 +183,36 @@ export default function FilingPage() {
   const [showApplicantDropdown, setShowApplicantDropdown] = useState(false)
   const [selectedApplication, setSelectedApplication] = useState<FilingApplicationSearchResult | null>(null)
   const [submitted, setSubmitted] = useState(false)
-  // Only fetches once there's an actual search term — opening the box with
-  // nothing typed used to fire the same pageSize=12000 query anyway
-  // (searchTerm=''), pulling the entire unfiltered applicant table on every
-  // focus. That, combined with rendering every single result into the
-  // dropdown below with no cap, was rendering several thousand <button>s at
-  // once — slow/heavy enough to look like results were silently going
-  // missing, when really the browser was just choking on the sheer volume.
-  const { data: searchResults } = useSearchApplicationsForFiling(applicantSearch, 1, 12000, showApplicantDropdown && !!applicantSearch.trim())
+  // Scoped to the current academic intake — intakeCode is a CONFIRMED real
+  // filter on the underlying /application-payments endpoint (a live
+  // ?intakeCode=20261 request came back properly scoped, ~hundreds of rows
+  // instead of the 442+ that one intake alone already had). Only fetches
+  // once there's an actual search term — opening the box with nothing typed
+  // used to fire the same big query anyway (searchTerm=''), pulling the
+  // entire batch on every focus. That, combined with rendering every single
+  // result into the dropdown below with no cap, was rendering several
+  // thousand <button>s at once — slow/heavy enough to look like results
+  // were silently going missing, when really the browser was just choking
+  // on the sheer volume.
+  //
+  // currentAcademicIntake comes back null whenever no intake in the live
+  // data is flagged currentIntake — CONFIRMED the same real data gap that
+  // broke the Intake dropdown on the enquiry forms earlier (see
+  // online-enquiry/ondesk-enquiry/kiosk-enquiry's own fallback). Without a
+  // fallback here, intakeCode silently never made it into the request at
+  // all. Falls back to the intake with the highest intakeCode (a
+  // year+sequence value like 20261 — the most recently created intake) as
+  // a best-guess "current" one, same "prefer the real flag, never leave the
+  // feature fully broken because of it" approach as the enquiry forms fix.
+  const { data: intakes = [] }    = useIntakes()
+  const { data: currentAcademicIntake } = useCurrentAcademicIntake()
+  const latestIntakeCode = intakes.length
+    ? intakes.reduce((max, i) => (i.intakeCode > max ? i.intakeCode : max), intakes[0].intakeCode)
+    : undefined
+  const effectiveIntakeCode = currentAcademicIntake?.intakeCode ?? latestIntakeCode
+  const { data: searchResults } = useSearchApplicationsForFiling(
+    applicantSearch, 1, 12000, showApplicantDropdown && !!applicantSearch.trim(), effectiveIntakeCode,
+  )
   const searchItems = searchResults?.items ?? []
   // Capped to a handful of matches for display — same convention as
   // enquiry-list/vetting's own searchMatches — even though the query above
@@ -322,14 +345,12 @@ export default function FilingPage() {
   const [generalSaved, setGeneralSaved] = useState(false)
   const [intApplication, setIntApplication] = useState<number | null>(null)
 
-  // Enquiry/Intake pickers are hidden per the requirements doc — both guids
-  // still travel in the save payload, auto-filled from the selected
-  // application in selectApplication() above. Enquiry has no confirmed
-  // fallback source if that ever comes back empty (see the note above the
-  // Programme Details fields below) — flagged there rather than restoring a
-  // picker preemptively. intakes is kept for the intakeCode lookup in
-  // handleSaveGeneralAndAdvance below.
-  const { data: intakes = [] }    = useIntakes()
+  // Restored as an editable, required picker — the current search source
+  // (/application-payments) only ever carries intEnquiry (a raw int, no
+  // confirmed guid mapping), never a real enquiryGuid, so every application
+  // selected from search hits the "missing Enquiry" save-blocking toast
+  // with nothing to fix it unless a real picker exists here.
+  const { data: enquiriesData }   = useEnquiries(1, 1000)
   const { data: campuses = [] }   = useCampuses()
   const { data: programs = [] }   = useProgramMasters()
   const { data: semesters = [] }  = useSemestersForProgram(programGuid, !!programGuid)
@@ -351,6 +372,7 @@ export default function FilingPage() {
   const fees = (allFeeStructuresData?.items ?? []).filter(f => f.programGuid === programGuid && f.status)
   const { data: countries = [] }  = useCountries()
 
+  const enquiryOptions   = (enquiriesData?.items ?? []).map(e => ({ value: e.enquiryGuid, label: `${e.studentName} (${e.enquiryCode})` }))
   const campusOptions    = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions   = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
@@ -383,15 +405,14 @@ export default function FilingPage() {
 
   function handleSaveGeneralAndAdvance() {
     if (!selectedApplication) { showToast('Select an application above first', 'error'); return }
-    // Enquiry/Campus/Programme/Fee Structure are all locked/hidden now, auto-
-    // filled from the selected application — if one is still missing here,
-    // the selected application itself doesn't carry it and there's no
-    // picker left on this page to fix it (Enquiry especially: unlike Batch
-    // Time/Batch, it has no confirmed fallback source at all — see the note
-    // on FilingApplicationSearchResult.enquiryGuid). Surface that plainly
-    // instead of a generic "required" message the user can't act on.
-    if (!enquiryGuid || !campusGuid || !programGuid || !feeHdGuid) {
-      showToast('This application is missing Enquiry/Campus/Programme/Fee Structure data — check the source record', 'error')
+    if (!enquiryGuid) { showToast('Enquiry is required', 'error'); return }
+    // Campus/Programme/Fee Structure are locked, auto-filled from the
+    // selected application — if one is still missing here, the selected
+    // application itself doesn't carry it and there's no picker left on
+    // this page to fix it; surface that plainly instead of a generic
+    // "required" message the user can't act on.
+    if (!campusGuid || !programGuid || !feeHdGuid) {
+      showToast('This application is missing Campus/Programme/Fee Structure data — check the source record', 'error')
       return
     }
     if (isRefugee && !refugeeId.trim()) { showToast('Refugee ID is required for refugee students', 'error'); return }
@@ -655,16 +676,13 @@ export default function FilingPage() {
                   {/* <div className="g3 mt-3"><Field label="University Email"><Input readOnly placeholder="Auto-generated" /></Field><Field label="Religion"><Select options={RELIGIONS} /></Field><Field label="Marital Status"><Select options={MARITAL} /></Field></div> */}
 
                   <div className="sec-divider mt-5">Programme Details</div>
-                  {/* Enquiry/Intake pickers hidden per the requirements doc — both guids
-                      still travel in the save payload, auto-filled from the selected
-                      application in selectApplication() above, just no longer
-                      user-editable here. NOTE: Enquiry has no confirmed fallback source
-                      at all if the selected application's search result doesn't carry a
-                      real enquiryGuid (unlike Batch Time/Batch below, which stayed
-                      editable for exactly this reason) — a save on such an application
-                      will hit the "missing Enquiry/Campus/Programme/Fee Structure" toast
-                      in handleSaveGeneralAndAdvance with nothing on this page left to fix
-                      it. Re-add a picker here if that turns out to happen in practice. */}
+                  {/* Intake picker stays hidden — intakeGuid prefills fine from the
+                      selected application. Enquiry is back as an editable, required
+                      picker: the current search source (/application-payments) only
+                      ever carries intEnquiry (a raw int, no confirmed guid mapping),
+                      never a real enquiryGuid, so EVERY application selected from
+                      search was hitting the "missing Enquiry" save-blocking toast
+                      with nothing on this page left to fix it. */}
                   {/* Campus/Programme/Fee Structure/Semester are locked read-only per the
                       same doc (req. 7) — all four are confirmed present on the selected
                       application's search result and prefill correctly; `disabled` keeps
@@ -675,11 +693,12 @@ export default function FilingPage() {
                       them left the picker permanently empty with no way to fix it. Left
                       editable until there's a confirmed source to prefill+lock them from. */}
                   <div className="g3 mt-3">
+                    <Field label="Enquiry" req><SearchSelect options={enquiryOptions} value={enquiryGuid} placeholder="-- Select Enquiry --" onChange={setEnquiryGuid} /></Field>
                     <Field label="Campus" req><SearchSelect options={campusOptions} value={campusGuid} placeholder="-- Select Campus --" onChange={setCampusGuid} disabled /></Field>
                     <Field label="Programme" req><SearchSelect options={programOptions} value={programGuid} placeholder="-- Select Programme --" onChange={setProgramGuid} disabled /></Field>
-                    <Field label="Fee Structure" req><SearchSelect options={feeOptions} value={feeHdGuid} placeholder={programGuid ? '-- Select Fee Structure --' : '-- Select Programme First --'} onChange={setFeeHdGuid} disabled /></Field>
                   </div>
                   <div className="g3 mt-3">
+                    <Field label="Fee Structure" req><SearchSelect options={feeOptions} value={feeHdGuid} placeholder={programGuid ? '-- Select Fee Structure --' : '-- Select Programme First --'} onChange={setFeeHdGuid} disabled /></Field>
                     <Field label="Semester"><SearchSelect options={semesterOptions} value={semesterGuid} placeholder={programGuid ? '-- Select Semester --' : '-- Select Programme First --'} onChange={setSemesterGuid} disabled /></Field>
                     <Field label="Batch Time"><SearchSelect options={batchTimeOptions} value={batchTimeGuid} placeholder="-- Select --" onChange={setBatchTimeGuid} /></Field>
                   </div>
