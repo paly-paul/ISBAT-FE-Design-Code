@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
@@ -12,7 +12,7 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { useCourseUnits, useCreateCourseUnit, useUpdateCourseUnit, useDeleteCourseUnit, CourseUnit } from '@/hooks/academic/useCourseUnits'
+import { useCourseUnits, useAllCourseUnits, useCreateCourseUnit, useUpdateCourseUnit, useDeleteCourseUnit, CourseUnit } from '@/hooks/academic/useCourseUnits'
 import { getCourseUnitById } from '@/lib/api/academic/courseUnit'
 import { openDocumentForViewing, downloadDocument } from '@/lib/documentViewer'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -101,26 +101,40 @@ export default function Page() {
   // useCourseUnits() call backing a client-side usePagination() slice, which
   // made the initial load wait on the entire table before showing anything.
   const { data, isLoading } = useCourseUnits(page, PAGE_SIZE)
+  const { data: allCourseUnits = [], isLoading: isAllCourseUnitsLoading } = useAllCourseUnits(!!search.trim())
   const rows = data?.items ?? []
-  const totalCount = data?.totalCount ?? 0
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const searchRows = search.trim() ? allCourseUnits : rows
   const createCourseUnit = useCreateCourseUnit()
   const updateCourseUnit = useUpdateCourseUnit()
   const deleteCourseUnit = useDeleteCourseUnit()
+  const totalCount = search.trim() ? searchRows.length : data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const loading = isLoading || (search.trim() && isAllCourseUnitsLoading)
 
-  // NOTE: search/filters now only match within the currently-loaded page of
-  // 10, not the full table — there's no confirmed server-side search param
-  // on GET /courseunits to search the whole dataset without fetching it all
-  // (which is exactly what real pagination was meant to avoid). Same
-  // documented "client-only, this page" tradeoff as enquiry-list.tsx's own
-  // search box.
-  const pageItems = rows.filter(r =>
+  // When search is empty, the page still uses real server-side pagination.
+  // When the user enters a query, we load the whole table once and search
+  // across all course units so results are not limited to the current page.
+  useEffect(() => {
+    if (search.trim() && page !== 1) setPage(1)
+  }, [search, page])
+
+  const filteredRows = searchRows.filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
     && (!search.trim() || `${r.courseUnitCode} ${r.courseUnitName}`.toLowerCase().includes(search.trim().toLowerCase()))
   )
 
+  // Only re-slice by page offset while searching — allCourseUnits (searchRows'
+  // source in that case) is the full, unpaginated list. Outside of a search,
+  // filteredRows is already just this page's 10 rows straight from the
+  // server (useCourseUnits(page, PAGE_SIZE)); re-slicing it by
+  // `(page - 1) * PAGE_SIZE` was double-paginating an array that only ever
+  // has PAGE_SIZE items in it — correct by coincidence on page 1
+  // (.slice(0, 10)), but .slice(10, 20) on a 10-item array is always empty,
+  // which is why every page past the first showed a blank table.
+  const pageItems = search.trim() ? filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : filteredRows
+
   const searchMatches = search.trim()
-    ? rows.filter(r => `${r.courseUnitCode} ${r.courseUnitName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    ? searchRows.filter(r => `${r.courseUnitCode} ${r.courseUnitName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
     : []
 
   // Column filter-popover helper — unused now that no column has a real
@@ -244,7 +258,7 @@ export default function Page() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading
+                {loading
                   ? <TableLoadingState colSpan={999} />
                   : pageItems.length === 0
                     ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />

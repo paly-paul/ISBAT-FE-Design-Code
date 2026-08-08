@@ -12,8 +12,16 @@ import { RejectModal } from '@/components/modals/admission/RejectModal'
 import { VettingReviewModal } from '@/components/modals/admission/VettingReviewModal'
 import { useVettingQueue, useVetApplication } from '@/hooks/admission/useVetting'
 import { VettingQueueItem } from '@/lib/api/admission/vetting'
+import { usePagination } from '@/hooks/usePagination'
 
-const PAGE_SIZE = 10
+// Fetches up to FETCH_SIZE rows in one request (still server-filtered by
+// studentName when searching — see the comment on useVettingQueue below),
+// then paginates that already-fetched set 10-at-a-time client-side via
+// usePagination. A real ceiling, not "fetch the whole queue" — if a search
+// genuinely matches more than FETCH_SIZE rows, only the first batch is
+// available to page through.
+const FETCH_SIZE = 1000
+const DISPLAY_PAGE_SIZE = 10
 
 const PIPELINE_STEPS = [
   { num: 1, label: 'Enquiry' }, { num: 2, label: 'Filing' }, { num: 3, label: 'Vetting' },
@@ -51,7 +59,6 @@ export default function VettingPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [filterProg, setFilterProg] = useState('all')
-  const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [selectedApplicationGuid, setSelectedApplicationGuid] = useState<string | null>(null)
 
@@ -59,32 +66,33 @@ export default function VettingPage() {
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
 
-  function updateSearch(value: string) { setSearch(value); setPage(1) }
-
   // studentName is a real server-side partial-match filter (see
-  // VettingApiDocs.md) — search narrows the actual queue, not just the
-  // currently-loaded page.
-  const { data, isLoading } = useVettingQueue(page, PAGE_SIZE, { studentName: search.trim() || undefined })
+  // VettingApiDocs.md) — search narrows the actual queue server-side, not
+  // just the currently-loaded page; always fetches page 1 at FETCH_SIZE,
+  // since search changes what "the queue" even is.
+  const { data, isLoading } = useVettingQueue(1, FETCH_SIZE, { studentName: search.trim() || undefined })
   const vetApplicationMutation = useVetApplication()
 
   useEffect(() => {
-    console.log('[vetting page] render', { page, search, isLoading, itemCount: data?.items?.length ?? 0 })
-  }, [page, search, isLoading, data?.items?.length])
+    console.log('[vetting page] render', { search, isLoading, itemCount: data?.items?.length ?? 0 })
+  }, [search, isLoading, data?.items?.length])
 
   const items = data?.items ?? []
-  const totalCount = data?.totalCount ?? 0
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const summary = data?.summary
 
   // The API has no programme filter param — built dynamically from whatever
-  // programme names are present on the currently-loaded (already
-  // search-filtered) page, same pattern as programme-master's level/group
-  // filter options.
+  // programme names are present on the currently-fetched batch, same
+  // pattern as programme-master's level/group filter options.
   const progOptions = [
     { value: 'all', label: 'All Programmes' },
     ...Array.from(new Set(items.map(i => i.programName))).map(name => ({ value: name, label: name })),
   ]
-  const visibleRows = filterProg === 'all' ? items : items.filter(r => r.programName === filterProg)
+  const filteredItems = filterProg === 'all' ? items : items.filter(r => r.programName === filterProg)
+  // Client-side pagination over the already-fetched (and already
+  // search-filtered server-side) batch — 10 rows per page for display.
+  const { page, setPage, totalPages, totalCount, pageItems: visibleRows } = usePagination(filteredItems, DISPLAY_PAGE_SIZE)
+
+  function updateSearch(value: string) { setSearch(value); setPage(1) }
 
   const searchMatches = search.trim() ? items.slice(0, 8) : []
 
@@ -113,7 +121,7 @@ export default function VettingPage() {
             onChange={updateSearch}
             results={searchMatches.map(row => ({ id: row.applicationGuid, primary: row.appRefNo, secondary: row.studentName }))}
           />
-          <SearchSelect options={progOptions} value={filterProg} onChange={setFilterProg} />
+          <SearchSelect options={progOptions} value={filterProg} onChange={v => { setFilterProg(v); setPage(1) }} />
         </div>
       </div>
 

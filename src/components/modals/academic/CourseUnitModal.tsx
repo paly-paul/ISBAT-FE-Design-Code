@@ -74,6 +74,50 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
     return `${a} marks → prorated ${f} marks`
   }
 
+  function redistributeFinalWeights(nextIncludeCW: boolean, nextIncludeCBT: boolean, nextIncludeUE: boolean, fixed: Partial<Record<'cw' | 'cbt' | 'ue', number>> = {}) {
+    const keys = ['cw', 'cbt', 'ue'] as const
+    const current = { cw: +cwFinal, cbt: +cbtFinal, ue: +ueFinal }
+    const included = { cw: nextIncludeCW, cbt: nextIncludeCBT, ue: nextIncludeUE }
+    const result = { cw: 0, cbt: 0, ue: 0 }
+    const fixedTotal = keys.reduce((sum, key) => {
+      if (included[key] && fixed[key] != null) return sum + fixed[key]!
+      return sum
+    }, 0)
+    const activeKeys = keys.filter(key => included[key] && fixed[key] == null)
+
+    if (activeKeys.length === 0) {
+      if (included.ue) result.ue = 100 - fixedTotal
+      return { ...result, ...fixed }
+    }
+
+    const totalActive = activeKeys.reduce((sum, key) => sum + current[key], 0)
+    if (totalActive === 0) {
+      if (activeKeys.length === 1) {
+        result[activeKeys[0]] = 100 - fixedTotal
+      } else {
+        const keyCombo = activeKeys.slice().sort().join(',')
+        const defaults: Record<string, number> = keyCombo === 'cbt,ue' ? { cbt: 20, ue: 80 }
+          : keyCombo === 'cw,ue' ? { cw: 30, ue: 70 }
+          : keyCombo === 'cw,cbt' ? { cw: 50, cbt: 50 }
+          : { cw: 15, cbt: 15, ue: 70 }
+        activeKeys.forEach(key => { result[key] = defaults[key] ?? 0 })
+      }
+    } else {
+      let remaining = 100 - fixedTotal
+      activeKeys.forEach((key, index) => {
+        if (index === activeKeys.length - 1) {
+          result[key] = remaining
+        } else {
+          const value = Math.round(current[key] * (100 - fixedTotal) / totalActive)
+          result[key] = value
+          remaining -= value
+        }
+      })
+    }
+
+    return { ...result, ...fixed }
+  }
+
   function validateStep1() {
     const e: Record<string, string> = {}
     if (!unitCode.trim())  e.unitCode     = 'Unit Code is required'
@@ -372,7 +416,26 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
               <div className="lbl">Include In</div>
               <div style={{ display: 'flex', gap: 28, marginTop: 8 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--g700)' }}>
-                  <input type="checkbox" checked={includeCBT} onChange={e => setIncludeCBT(e.target.checked)} style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }} />
+                  <input
+                    type="checkbox"
+                    checked={includeCBT}
+                    onChange={e => {
+                      const checked = e.target.checked
+                      setIncludeCBT(checked)
+                      if (!checked) {
+                        const next = redistributeFinalWeights(includeCW, false, true)
+                        setCbtFinal('0')
+                        setCwFinal(String(next.cw))
+                        setUeFinal(String(next.ue))
+                      } else if (+cbtFinal === 0) {
+                        const next = redistributeFinalWeights(includeCW, true, true, { cbt: 15 })
+                        setCbtFinal(String(next.cbt))
+                        setCwFinal(String(next.cw))
+                        setUeFinal(String(next.ue))
+                      }
+                    }}
+                    style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }}
+                  />
                   Class Test
                 </label>
                 {/* <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--g700)' }}>
@@ -391,8 +454,20 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
                     onChange={e => {
                       const checked = e.target.checked
                       setIncludeCW(checked)
-                      // Checking Course Work auto-checks Mid too (per request) — Mid can still be unchecked independently afterward.
-                      if (checked) setIncludeMid(true)
+                      if (!checked) {
+                        const next = redistributeFinalWeights(false, includeCBT, true)
+                        setCwFinal('0')
+                        setCbtFinal(String(next.cbt))
+                        setUeFinal(String(next.ue))
+                      } else {
+                        if (+cwFinal === 0) {
+                          const next = redistributeFinalWeights(true, includeCBT, true, { cw: 15 })
+                          setCwFinal(String(next.cw))
+                          setCbtFinal(String(next.cbt))
+                          setUeFinal(String(next.ue))
+                        }
+                        setIncludeMid(true)
+                      }
                     }}
                     style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }}
                   />

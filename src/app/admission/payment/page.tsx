@@ -2,6 +2,8 @@
 import React, { Suspense, useState, useRef, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
+import { SuccessPopup } from '@/components/modals/academic/SuccessPopup'
+import { FailurePopup } from '@/components/modals/academic/FailurePopup'
 import { ImportSourceModal } from '@/components/modals/admission/ImportSourceModal'
 import { ImportCrmModal } from '@/components/modals/admission/ImportCrmModal'
 import { ImportOdelModal } from '@/components/modals/admission/ImportOdelModal'
@@ -129,6 +131,13 @@ function PaymentPageContent() {
   const [toast, setToast]       = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [showReceipt, setShowReceipt] = useState(false)
+  // Result of createPayment.mutate — shown as the shared SuccessPopup/
+  // FailurePopup overlays (same components ProgrammeModal/Filing use), not
+  // just the plain Toast. This page previously only ever toasted the save
+  // result, never actually wired up these popups despite having the same
+  // "confirm what just happened" need as every other save flow in the app.
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
   const [form, setForm]         = useState<FormData>({ ...initialForm })
   const [payProofFile, setPayProofFile] = useState<File | null>(null)
   // Per Application_Payment_Change_Requests_Final_Updated.md #6 — Receipt
@@ -183,6 +192,44 @@ function PaymentPageContent() {
 
   const set = (k: keyof FormData, v: string) => setForm(prev => ({ ...prev, [k]: v }))
 
+  // Warn on leaving with unfilled work — same beforeunload + confirm-on-nav
+  // pattern as the Filing page's hasUnsavedWork/confirmLeave. "Unsaved" here
+  // means the form has drifted from its blank initial state and the payment
+  // hasn't actually saved yet (showReceipt flips true — and the form itself
+  // gets reset — right after a successful save, so this naturally clears
+  // itself post-save without needing a separate "submitted" flag like
+  // Filing's own submitted state).
+  const hasUnsavedWork = !showReceipt && JSON.stringify(form) !== JSON.stringify(initialForm)
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (!hasUnsavedWork) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedWork])
+
+  function confirmLeave() {
+    return !hasUnsavedWork || window.confirm("You have unsaved changes on this payment. If you leave now, they won't be saved. Continue?")
+  }
+
+  // Confirming "leave" only ever navigated away — it never actually cleared
+  // `form`, so the fields were still sitting in React state the moment you
+  // came back. That's a real gap given what the confirm dialog just
+  // promised ("they won't be saved"), and this page's own searchParams
+  // effect above already notes Next's client-side router cache can reuse
+  // the same PaymentPageContent instance across repeat visits — so without
+  // an explicit reset here, a confirmed "leave" was never actually leaving
+  // the data behind.
+  function leaveTo(path: string) {
+    if (!confirmLeave()) return
+    setForm({ ...initialForm })
+    setPayProofFile(null)
+    appliedEnquiryGuidRef.current = null
+    router.push(path)
+  }
+
   // Cascading resets: changing an upstream selection invalidates whatever
   // was scoped to it downstream (Batch depends on Programme+Semester+Batch
   // Time; Semester and Fee Structure depend on Programme; Programme depends
@@ -206,7 +253,7 @@ function PaymentPageContent() {
   // .../unconverted-enquiries?intakeGuid=...&page=1&pageSize=10), replacing
   // the old generic "first 100 of 11k+" useEnquiries() list — only enabled
   // once an Intake is actually picked.
-  const { data: unconvertedEnquiriesData } = useUnconvertedEnquiries(form.intakeGuid, 1, 10, !!form.intakeGuid)
+  const { data: unconvertedEnquiriesData } = useUnconvertedEnquiries(form.intakeGuid, 1, 1000, !!form.intakeGuid)
   const { data: intakes = [] }       = useIntakes()
   const { data: campuses = [] }      = useCampuses()
   // Per #7 — scoped to the selected Campus instead of every programme.
@@ -240,9 +287,14 @@ function PaymentPageContent() {
   const { data: paymentTypes = [] }  = useApplicationPaymentTypes()
   const { data: currencies = [] }    = useFinanceCurrencies()
   // Per Application_Payment_Change_Requests_Final_Updated.md #4 — sourced
-  // from the Proc Bank Master API (m_proc_bank) instead of the generic
-  // Finance Banks endpoint. Same status enum convention as procBank.ts's
-  // STATUS_VALUES (1 = Inactive, 2 = Active) — only offer Active.
+  // from the Proc Bank Master API (m_proc_bank), not the generic Finance
+  // Banks endpoint. CONFIRMED (the hard way): swapping this to the generic
+  // Banks master produced a live "Bank account not found" 400 on submit —
+  // the payment's bankGuid needs a real bank ACCOUNT (ProcBank has
+  // compCode/branchCode/accountCode; the generic Banks master returns those
+  // as null on every row, i.e. it's a bank-name list only, not accounts).
+  // Same status enum convention as procBank.ts's STATUS_VALUES
+  // (1 = Inactive, 2 = Active) — only offer Active.
   const { data: allProcBanks = [] }  = useProcBanks()
   const banks = allProcBanks.filter(b => b.status === 2)
   // The payment-scoped Dropdowns/ReceiptBooks.bru endpoint 500s server-side
@@ -465,12 +517,12 @@ function PaymentPageContent() {
             dateLabel: formatDate(form.paymentDate || new Date()),
           })
           setShowReceipt(true)
-          showToast('Payment saved & receipt generated', 'success')
+          setShowSuccessPopup(true)
           setForm({ ...initialForm })
           setPayProofFile(null)
           appliedEnquiryGuidRef.current = null
         },
-        onError: (error: Error) => showToast(error.message || 'Failed to save payment. Please try again.', 'error'),
+        onError: (error: Error) => setFailure(error.message || 'Failed to save payment. Please try again.'),
       },
     )
   }
@@ -514,7 +566,7 @@ function PaymentPageContent() {
             <div className="pg-sub">Collect application fee · Supports Cash &amp; Bank Transfer · Generates official receipt</div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/dashboard')}>
+            <button className="btn btn-neu btn-sm" onClick={() => leaveTo('/admission/dashboard')}>
               <i className="lni lni-arrow-left" /> Back
             </button>
             <button className="btn btn-neu btn-sm" onClick={() => openModal('import-source')}>
@@ -736,7 +788,7 @@ function PaymentPageContent() {
             </div>
 
             <div className="flex items-center gap-3 mt-5 pt-4 border-t border-g100 flex-wrap">
-              <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/dashboard')}>
+              <button className="btn btn-neu btn-sm" onClick={() => leaveTo('/admission/dashboard')}>
                 <i className="lni lni-close" /> Cancel / Close
               </button>
               <button className="btn btn-neu btn-sm" onClick={handleClear}>
@@ -853,6 +905,25 @@ function PaymentPageContent() {
       <ImportCrmModal isOpen={openModals.has('import-crm')} onClose={() => closeModal('import-crm')} showToast={showToast} />
       <ImportOdelModal isOpen={openModals.has('import-odel')} onClose={() => closeModal('import-odel')} showToast={showToast} />
       <Toast toast={toast} />
+
+      {showSuccessPopup && (
+        <div className="modal-overlay open">
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <SuccessPopup
+              title="Payment Saved!"
+              subtitle={`${savedReceipt.appRefNo ?? 'The application fee payment'} has been recorded and a receipt generated below.`}
+              onClose={() => setShowSuccessPopup(false)}
+            />
+          </div>
+        </div>
+      )}
+      {failure && (
+        <div className="modal-overlay open">
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <FailurePopup title="Couldn't Save Payment" subtitle={failure} onClose={() => setFailure(null)} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

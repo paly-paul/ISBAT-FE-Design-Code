@@ -5,6 +5,7 @@ import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { SuccessPopup } from '@/components/modals/academic/SuccessPopup'
+import { FailurePopup } from '@/components/modals/academic/FailurePopup'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
@@ -12,7 +13,6 @@ import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useCountries } from '@/hooks/config/useCountries'
-import { useEnquiries } from '@/hooks/admission/useEnquiries'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput } from '@/lib/errorMessages'
@@ -170,6 +170,10 @@ export default function FilingPage() {
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('personal')
+  // Result of the final Submit Application action — shown as FailurePopup,
+  // same "success/failure both get the shared popup" pairing as SuccessPopup
+  // below and the Payment page's Save Payment action.
+  const [failure, setFailure] = useState<string | null>(null)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -178,8 +182,19 @@ export default function FilingPage() {
   const [showApplicantDropdown, setShowApplicantDropdown] = useState(false)
   const [selectedApplication, setSelectedApplication] = useState<FilingApplicationSearchResult | null>(null)
   const [submitted, setSubmitted] = useState(false)
-  const { data: searchResults } = useSearchApplicationsForFiling(applicantSearch, 1, 20, showApplicantDropdown)
+  // Only fetches once there's an actual search term — opening the box with
+  // nothing typed used to fire the same pageSize=12000 query anyway
+  // (searchTerm=''), pulling the entire unfiltered applicant table on every
+  // focus. That, combined with rendering every single result into the
+  // dropdown below with no cap, was rendering several thousand <button>s at
+  // once — slow/heavy enough to look like results were silently going
+  // missing, when really the browser was just choking on the sheer volume.
+  const { data: searchResults } = useSearchApplicationsForFiling(applicantSearch, 1, 12000, showApplicantDropdown && !!applicantSearch.trim())
   const searchItems = searchResults?.items ?? []
+  // Capped to a handful of matches for display — same convention as
+  // enquiry-list/vetting's own searchMatches — even though the query above
+  // can match against up to 12000 real rows.
+  const visibleSearchItems = searchItems.slice(0, 8)
 
   // Auto-carries the appRefNo over from Payment's "Proceed to Filing" button
   // (see lib/filingHandoff.ts) instead of leaving the counsellor to manually
@@ -307,15 +322,13 @@ export default function FilingPage() {
   const [generalSaved, setGeneralSaved] = useState(false)
   const [intApplication, setIntApplication] = useState<number | null>(null)
 
-  // Intake picker stays hidden per the requirements doc — intakeGuid
-  // prefills correctly from the selected application and there's nothing to
-  // fix if it's ever missing. Enquiry does NOT stay hidden despite the same
-  // doc listing it — confirmed via a live "missing Enquiry" save failure
-  // that FilingApplicationSearchResult doesn't reliably carry enquiryGuid on
-  // the wire either (same gap as batchTimeGuid/batchGuid below), and unlike
-  // those two, Enquiry is a hard save-blocking required field with no
-  // fallback — hiding it with no way to fix an empty value bricks the page.
-  const { data: enquiriesData }   = useEnquiries(1, 100)
+  // Enquiry/Intake pickers are hidden per the requirements doc — both guids
+  // still travel in the save payload, auto-filled from the selected
+  // application in selectApplication() above. Enquiry has no confirmed
+  // fallback source if that ever comes back empty (see the note above the
+  // Programme Details fields below) — flagged there rather than restoring a
+  // picker preemptively. intakes is kept for the intakeCode lookup in
+  // handleSaveGeneralAndAdvance below.
   const { data: intakes = [] }    = useIntakes()
   const { data: campuses = [] }   = useCampuses()
   const { data: programs = [] }   = useProgramMasters()
@@ -338,7 +351,6 @@ export default function FilingPage() {
   const fees = (allFeeStructuresData?.items ?? []).filter(f => f.programGuid === programGuid && f.status)
   const { data: countries = [] }  = useCountries()
 
-  const enquiryOptions   = (enquiriesData?.items ?? []).map(e => ({ value: e.enquiryGuid, label: `${e.studentName} (${e.enquiryCode})` }))
   const campusOptions    = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions   = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
@@ -371,14 +383,15 @@ export default function FilingPage() {
 
   function handleSaveGeneralAndAdvance() {
     if (!selectedApplication) { showToast('Select an application above first', 'error'); return }
-    if (!enquiryGuid) { showToast('Enquiry is required', 'error'); return }
-    // Campus/Programme/Fee Structure are locked, auto-filled from the
-    // selected application — if one is still missing here, the selected
-    // application itself doesn't carry it and there's no picker left on
-    // this page to fix it; surface that plainly instead of a generic
-    // "required" message the user can't act on.
-    if (!campusGuid || !programGuid || !feeHdGuid) {
-      showToast('This application is missing Campus/Programme/Fee Structure data — check the source record', 'error')
+    // Enquiry/Campus/Programme/Fee Structure are all locked/hidden now, auto-
+    // filled from the selected application — if one is still missing here,
+    // the selected application itself doesn't carry it and there's no
+    // picker left on this page to fix it (Enquiry especially: unlike Batch
+    // Time/Batch, it has no confirmed fallback source at all — see the note
+    // on FilingApplicationSearchResult.enquiryGuid). Surface that plainly
+    // instead of a generic "required" message the user can't act on.
+    if (!enquiryGuid || !campusGuid || !programGuid || !feeHdGuid) {
+      showToast('This application is missing Enquiry/Campus/Programme/Fee Structure data — check the source record', 'error')
       return
     }
     if (isRefugee && !refugeeId.trim()) { showToast('Refugee ID is required for refugee students', 'error'); return }
@@ -527,7 +540,10 @@ export default function FilingPage() {
       // auto-close timer) rather than immediately, matching the
       // confirmation pattern used elsewhere in this app (e.g. NewBatchModal).
       onSuccess: () => setSubmitted(true),
-      onError: (error: Error) => showToast(error.message || 'Failed to submit application', 'error'),
+      // FailurePopup instead of a toast — same "success/failure both get the
+      // shared popup, not just success" pattern as the Payment page's Save
+      // Payment action, for the equivalent final-submission step here.
+      onError: (error: Error) => setFailure(error.message || 'Failed to submit application'),
     })
   }
 
@@ -562,12 +578,15 @@ export default function FilingPage() {
                 onFocus={() => setShowApplicantDropdown(true)} />
               {showApplicantDropdown && (
                 <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-g200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
-                  {searchItems.length === 0 && <div className="p-3 text-sm text-g400">No results</div>}
-                  {searchItems.map(a => (
-                    <button key={a.appRefNo} className="w-full text-left px-4 py-2 text-sm hover:bg-b50 flex justify-between" onClick={() => selectApplication(a)}>
-                      <span className="font-medium text-g800">{a.appRefNo}</span><span className="text-g500">{applicantName(a)}</span>
-                    </button>
-                  ))}
+                  {!applicantSearch.trim()
+                    ? <div className="p-3 text-sm text-g400">Type to search…</div>
+                    : visibleSearchItems.length === 0
+                      ? <div className="p-3 text-sm text-g400">No results</div>
+                      : visibleSearchItems.map(a => (
+                        <button key={a.appRefNo} className="w-full text-left px-4 py-2 text-sm hover:bg-b50 flex justify-between" onClick={() => selectApplication(a)}>
+                          <span className="font-medium text-g800">{a.appRefNo}</span><span className="text-g500">{applicantName(a)}</span>
+                        </button>
+                      ))}
                 </div>
               )}
             </div>
@@ -636,12 +655,16 @@ export default function FilingPage() {
                   {/* <div className="g3 mt-3"><Field label="University Email"><Input readOnly placeholder="Auto-generated" /></Field><Field label="Religion"><Select options={RELIGIONS} /></Field><Field label="Marital Status"><Select options={MARITAL} /></Field></div> */}
 
                   <div className="sec-divider mt-5">Programme Details</div>
-                  {/* Intake picker stays hidden per the requirements doc — intakeGuid
-                      prefills reliably from the selected application. Enquiry is back as
-                      an editable, required picker despite the doc saying to hide it too —
-                      confirmed via a live "missing Enquiry" save failure that
-                      FilingApplicationSearchResult doesn't reliably carry enquiryGuid on
-                      the wire; hiding it with no fallback blocked every save. */}
+                  {/* Enquiry/Intake pickers hidden per the requirements doc — both guids
+                      still travel in the save payload, auto-filled from the selected
+                      application in selectApplication() above, just no longer
+                      user-editable here. NOTE: Enquiry has no confirmed fallback source
+                      at all if the selected application's search result doesn't carry a
+                      real enquiryGuid (unlike Batch Time/Batch below, which stayed
+                      editable for exactly this reason) — a save on such an application
+                      will hit the "missing Enquiry/Campus/Programme/Fee Structure" toast
+                      in handleSaveGeneralAndAdvance with nothing on this page left to fix
+                      it. Re-add a picker here if that turns out to happen in practice. */}
                   {/* Campus/Programme/Fee Structure/Semester are locked read-only per the
                       same doc (req. 7) — all four are confirmed present on the selected
                       application's search result and prefill correctly; `disabled` keeps
@@ -652,12 +675,11 @@ export default function FilingPage() {
                       them left the picker permanently empty with no way to fix it. Left
                       editable until there's a confirmed source to prefill+lock them from. */}
                   <div className="g3 mt-3">
-                    <Field label="Enquiry" req><SearchSelect options={enquiryOptions} value={enquiryGuid} placeholder="-- Select Enquiry --" onChange={setEnquiryGuid} /></Field>
                     <Field label="Campus" req><SearchSelect options={campusOptions} value={campusGuid} placeholder="-- Select Campus --" onChange={setCampusGuid} disabled /></Field>
                     <Field label="Programme" req><SearchSelect options={programOptions} value={programGuid} placeholder="-- Select Programme --" onChange={setProgramGuid} disabled /></Field>
+                    <Field label="Fee Structure" req><SearchSelect options={feeOptions} value={feeHdGuid} placeholder={programGuid ? '-- Select Fee Structure --' : '-- Select Programme First --'} onChange={setFeeHdGuid} disabled /></Field>
                   </div>
                   <div className="g3 mt-3">
-                    <Field label="Fee Structure" req><SearchSelect options={feeOptions} value={feeHdGuid} placeholder={programGuid ? '-- Select Fee Structure --' : '-- Select Programme First --'} onChange={setFeeHdGuid} disabled /></Field>
                     <Field label="Semester"><SearchSelect options={semesterOptions} value={semesterGuid} placeholder={programGuid ? '-- Select Semester --' : '-- Select Programme First --'} onChange={setSemesterGuid} disabled /></Field>
                     <Field label="Batch Time"><SearchSelect options={batchTimeOptions} value={batchTimeGuid} placeholder="-- Select --" onChange={setBatchTimeGuid} /></Field>
                   </div>
@@ -829,6 +851,13 @@ export default function FilingPage() {
               subtitle={`${selectedApplication?.appRefNo ?? 'Application'} has been submitted for vetting.`}
               onClose={() => router.push('/admission/vetting')}
             />
+          </div>
+        </div>
+      )}
+      {failure && (
+        <div className="modal-overlay open">
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <FailurePopup title="Couldn't Submit Application" subtitle={failure} onClose={() => setFailure(null)} />
           </div>
         </div>
       )}

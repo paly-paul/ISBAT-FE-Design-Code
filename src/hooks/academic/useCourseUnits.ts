@@ -31,12 +31,13 @@ const ALL_COURSE_UNITS_PAGE_SIZE = 1000
 // to the course-units table page itself, which now pages 10 at a time via
 // useCourseUnits() above. Kept as a separate query key/staleTime so paging
 // through the table doesn't touch this cache and vice versa.
-export function useAllCourseUnits() {
+export function useAllCourseUnits(enabled = true) {
   return useQuery({
     queryKey: [...COURSE_UNITS_KEY, 'all'],
     queryFn: () => getCourseUnits(1, ALL_COURSE_UNITS_PAGE_SIZE).then(res => res.items),
     staleTime: Infinity,
     gcTime: Infinity,
+    enabled,
   })
 }
 
