@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -16,6 +16,7 @@ import { useEnquiries } from '@/hooks/admission/useEnquiries'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput } from '@/lib/errorMessages'
+import { consumeFilingPrefillRef } from '@/lib/filingHandoff'
 import {
   FilingApplicationSearchResult,
   useDeleteQualification,
@@ -179,6 +180,36 @@ export default function FilingPage() {
   const [submitted, setSubmitted] = useState(false)
   const { data: searchResults } = useSearchApplicationsForFiling(applicantSearch, 1, 20, showApplicantDropdown)
   const searchItems = searchResults?.items ?? []
+
+  // Auto-carries the appRefNo over from Payment's "Proceed to Filing" button
+  // (see lib/filingHandoff.ts) instead of leaving the counsellor to manually
+  // retype/remember it right after generating a receipt — read once on
+  // mount, consumed immediately so a later manual visit/refresh doesn't
+  // keep re-triggering this.
+  const pendingPrefillRef = useRef<string | null>(null)
+  useEffect(() => {
+    const ref = consumeFilingPrefillRef()
+    if (!ref) return
+    pendingPrefillRef.current = ref
+    setApplicantSearch(ref)
+    setShowApplicantDropdown(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Once the search this triggers actually comes back, auto-select the
+  // matching row so the counsellor lands straight on a filled Personal Info
+  // tab instead of still having to click it from the dropdown. If nothing
+  // matches (e.g. the backend hasn't indexed the new payment yet), surface
+  // that plainly rather than leaving an empty dropdown with no explanation.
+  useEffect(() => {
+    if (!pendingPrefillRef.current || !searchResults) return
+    const ref = pendingPrefillRef.current
+    pendingPrefillRef.current = null
+    const match = searchItems.find(a => a.appRefNo === ref)
+    if (match) selectApplication(match)
+    else showToast(`Could not find application ${ref} yet — try searching again in a moment, or check the reference number`, 'error')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchResults])
 
   // Once an application is picked, warn on leaving until it's actually been
   // submitted for vetting — covers tab close/refresh/typing a new URL/

@@ -28,6 +28,7 @@ import {
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput } from '@/lib/errorMessages'
 import { formatDate } from '@/lib/date'
+import { setFilingPrefillRef } from '@/lib/filingHandoff'
 
 const PIPELINE = [
   { label: 'App. Payment',  desc: 'Current step', status: 'active' },
@@ -59,14 +60,16 @@ const COUNTRY_CODES = [
   { value: '+1',   label: '+1 · USA/Canada' },
 ]
 
-// The backend expects a date/time string for payDate. The actual successful
-// response payload returns it as an ISO-style midnight timestamp, so keep the
-// client-side submission in the same shape rather than the older dd/MMM/yyyy
-// contract that may be stale.
+// CONFIRMED via a live 400 — the ISO-style "yyyy-mm-ddT00:00:00" this used to
+// send was rejected outright ("Payment date must be in dd/MMM/yyyy format."),
+// so the earlier assumption that the response payload's shape was also what
+// Create wants was wrong; payDate genuinely needs the dd/MMM/yyyy string
+// (e.g. "06/Aug/2026"), not an ISO timestamp.
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 function formatPaymentDate(yyyyMmDd: string): string {
   const [y, m, d] = yyyyMmDd.split('-').map(Number)
   if (!y || !m || !d) return ''
-  return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T00:00:00`
+  return `${String(d).padStart(2, '0')}/${MONTH_ABBR[m - 1]}/${String(y).padStart(4, '0')}`
 }
 
 interface Option { value: string; label: string }
@@ -134,7 +137,16 @@ function PaymentPageContent() {
   // real response: there's no receiptType on the wire at all — paymentCode
   // (e.g. "APP20261") is the real human-readable reference, receiptNo is a
   // plain number (e.g. 1024, null for exemption payments).
-  const [savedReceipt, setSavedReceipt] = useState<{ appRefNo?: string; paymentCode?: string; receiptNo?: number | null }>({})
+  // The rest of this snapshot (name/programme/campus/intake/amount/method/
+  // date labels) exists so the form can actually be cleared after a
+  // successful save — the receipt used to read straight off live `form`
+  // state, which is the reason it was never cleared: clearing `form` would
+  // have blanked the just-generated receipt along with it.
+  const [savedReceipt, setSavedReceipt] = useState<{
+    appRefNo?: string; paymentCode?: string; receiptNo?: number | null
+    studentName?: string; programLabel?: string; campusLabel?: string; intakeLabel?: string
+    amountLabel?: string; methodLabel?: string; dateLabel?: string
+  }>({})
 
   // Displayed exchange rates — kept as controlled state (not just readOnly
   // display) so the submitted exRate actually matches what's shown here.
@@ -438,9 +450,25 @@ function PaymentPageContent() {
     createPayment.mutate(payload,
       {
         onSuccess: (response) => {
-          setSavedReceipt({ appRefNo: response?.appRefNo, paymentCode: response?.paymentCode, receiptNo: response?.receiptNo })
+          // Snapshot everything the receipt panel displays BEFORE clearing
+          // the form — the receipt used to read live `form`/labelFor values,
+          // which is why the form was never reset after a successful save
+          // (clearing it would have blanked the receipt too).
+          setSavedReceipt({
+            appRefNo: response?.appRefNo, paymentCode: response?.paymentCode, receiptNo: response?.receiptNo,
+            studentName: `${form.firstName} ${form.lastName}`.trim(),
+            programLabel: labelFor(programOptions, form.programGuid),
+            campusLabel: labelFor(campusOptions, form.campusGuid),
+            intakeLabel: labelFor(intakeOptions, form.intakeGuid),
+            amountLabel: isWaived ? 'Waived' : `${form.feeAmount} ${selectedCurrency?.currencyCode ?? ''}`,
+            methodLabel: isWaived ? 'Waived' : labelFor(payTypeOptions, form.payType),
+            dateLabel: formatDate(form.paymentDate || new Date()),
+          })
           setShowReceipt(true)
           showToast('Payment saved & receipt generated', 'success')
+          setForm({ ...initialForm })
+          setPayProofFile(null)
+          appliedEnquiryGuidRef.current = null
         },
         onError: (error: Error) => showToast(error.message || 'Failed to save payment. Please try again.', 'error'),
       },
@@ -738,13 +766,13 @@ function PaymentPageContent() {
                   {[
                     ['Receipt No.', savedReceipt.receiptNo != null ? String(savedReceipt.receiptNo) : 'RCT-AUTO'],
                     ['Payment Code', savedReceipt.paymentCode || '—'],
-                    ['Date', formatDate(form.paymentDate || new Date())],
-                    ['Candidate', `${form.firstName} ${form.lastName}`.trim()],
-                    ['Programme', labelFor(programOptions, form.programGuid)],
-                    ['Campus', labelFor(campusOptions, form.campusGuid)],
-                    ['Intake', labelFor(intakeOptions, form.intakeGuid)],
-                    ['Amount', isWaived ? 'Waived' : `${form.feeAmount} ${selectedCurrency?.currencyCode ?? ''}`],
-                    ['Method', isWaived ? 'Waived' : labelFor(payTypeOptions, form.payType)],
+                    ['Date', savedReceipt.dateLabel ?? ''],
+                    ['Candidate', savedReceipt.studentName ?? ''],
+                    ['Programme', savedReceipt.programLabel ?? ''],
+                    ['Campus', savedReceipt.campusLabel ?? ''],
+                    ['Intake', savedReceipt.intakeLabel ?? ''],
+                    ['Amount', savedReceipt.amountLabel ?? ''],
+                    ['Method', savedReceipt.methodLabel ?? ''],
                   ].map(([label, value]) => (
                     <div key={label} className="flex justify-between py-1">
                       <span className="text-g500">{label}</span>
@@ -758,7 +786,17 @@ function PaymentPageContent() {
               </div>
               <div className="flex items-center gap-3 mt-4 flex-wrap">
                 <button className="btn btn-neu btn-sm"><i className="lni lni-printer" /> Print Receipt</button>
-                <button className="btn btn-primary btn-sm ml-auto" onClick={() => router.push('/admission/filing')}>
+                <button
+                  className="btn btn-primary btn-sm ml-auto"
+                  onClick={() => {
+                    // Carries the appRefNo over so Filing can auto-search/select this
+                    // application instead of the counsellor having to retype it —
+                    // see the note above savedReceipt's state declaration for why this
+                    // couldn't just reuse live `form` state.
+                    if (savedReceipt.appRefNo) setFilingPrefillRef(savedReceipt.appRefNo)
+                    router.push('/admission/filing')
+                  }}
+                >
                   Proceed to Filing <i className="lni lni-arrow-right" />
                 </button>
               </div>
