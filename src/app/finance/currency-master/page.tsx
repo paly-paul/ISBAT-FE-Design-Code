@@ -11,7 +11,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewCurrencyModal } from '@/components/modals/finance/NewCurrencyModal'
 import { EditCurrencyModal } from '@/components/modals/finance/EditCurrencyModal'
-import { useCurrencies, useCreateCurrency, useUpdateCurrency, Currency } from '@/hooks/finance/useCurrencies'
+import { useCurrencies, useCreateCurrency, useUpdateCurrency, useDeleteCurrency, Currency } from '@/hooks/finance/useCurrencies'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -21,21 +21,31 @@ export default function Page() {
   const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
-  const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null)
+  const [editingCurrencyGuid, setEditingCurrencyGuid] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Currency | null>(null)
   const [search, setSearch] = useState('')
 
   const { data: rows = [], isLoading } = useCurrencies()
   const createCurrency = useCreateCurrency()
   const updateCurrency = useUpdateCurrency()
+  const deleteCurrency = useDeleteCurrency()
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  function openEditModal(currency: Currency) {
-    setEditingCurrency(currency)
+  function openEditModal(guid: string) {
+    setEditingCurrencyGuid(guid)
     openModal('edit-currency-modal')
+  }
+
+  function confirmDeleteCurrency() {
+    if (!deleteTarget?.currencyGuid) return
+    deleteCurrency.mutate(deleteTarget.currencyGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Currency deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete currency', 'error'),
+    })
   }
 
   const filteredRows = rows.filter(r =>
@@ -92,11 +102,28 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.intCurrency}>
                     <td>
-                      {permissions.edit && (
+                      {(permissions.edit || permissions.delete) && (
                         <ActionMenu>
-                          <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
-                            <i className="lni lni-pencil"></i> Edit
-                          </button>
+                          {permissions.edit && (
+                            <button
+                              className="btn btn-neu btn-sm"
+                              disabled={!r.currencyGuid}
+                              title={r.currencyGuid ? undefined : 'This row has no currencyGuid to edit by'}
+                              onClick={() => r.currencyGuid && openEditModal(r.currencyGuid)}
+                            >
+                              <i className="lni lni-pencil"></i> Edit
+                            </button>
+                          )}
+                          {permissions.delete && (
+                            <button
+                              className="btn btn-neu btn-sm"
+                              disabled={!r.currencyGuid}
+                              title={r.currencyGuid ? undefined : 'This row has no currencyGuid to delete by'}
+                              onClick={() => r.currencyGuid && setDeleteTarget(r)}
+                            >
+                              <i className="lni lni-trash-can"></i> Delete
+                            </button>
+                          )}
                         </ActionMenu>
                       )}
                     </td>
@@ -125,10 +152,28 @@ export default function Page() {
         isOpen={openModals.has('edit-currency-modal')}
         onClose={() => closeModal('edit-currency-modal')}
         showToast={showToast}
-        currency={editingCurrency}
+        currencyGuid={editingCurrencyGuid}
         updateCurrency={updateCurrency}
       />
       <Toast toast={toast} />
+
+      {deleteTarget && (
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
+            <div className="perm-delete-title">Delete {deleteTarget.currencyCode}?</div>
+            <div className="perm-delete-sub">
+              This will permanently delete this currency. This can&apos;t be undone.
+            </div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" disabled={deleteCurrency.isPending} onClick={confirmDeleteCurrency}>
+                <i className="lni lni-trash-can"></i> {deleteCurrency.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

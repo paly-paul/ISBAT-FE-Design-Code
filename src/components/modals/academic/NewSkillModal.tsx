@@ -2,23 +2,25 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
-import { SkillInput } from '@/lib/api/academic/skill'
+import { FailurePopup } from './FailurePopup'
+import { SkillMasterInput } from '@/lib/api/academic/skillMaster'
 
 interface NewSkillModalProps extends ModalProps {
   createSkill: {
-    mutate: (input: SkillInput, options?: { onSuccess?: () => void }) => void
+    mutate: (input: SkillMasterInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
     isPending: boolean
   }
 }
 
 export function NewSkillModal({ isOpen, onClose, showToast, createSkill }: NewSkillModalProps) {
   const [saved, setSaved]           = useState(false)
+  const [failure, setFailure]       = useState<string | null>(null)
   const [skillName, setSkillName]   = useState('')
   const [errors, setErrors]         = useState<Record<string, string>>({})
 
   if (!isOpen) return null
 
-  function handleClose() { setSaved(false); setSkillName(''); setErrors({}); onClose() }
+  function handleClose() { setSaved(false); setFailure(null); setSkillName(''); setErrors({}); onClose() }
 
   function validate() {
     const e: Record<string, string> = {}
@@ -32,6 +34,16 @@ export function NewSkillModal({ isOpen, onClose, showToast, createSkill }: NewSk
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
           <SuccessPopup title="Skill Added!" subtitle="The new skill has been saved successfully." onClose={handleClose} />
+        </div>
+      </div>
+    )
+  }
+
+  if (failure) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup title="Couldn't Add Skill" subtitle={failure} onClose={() => setFailure(null)} />
         </div>
       </div>
     )
@@ -65,7 +77,10 @@ export function NewSkillModal({ isOpen, onClose, showToast, createSkill }: NewSk
               if (!validate()) return
               createSkill.mutate(
                 { skillName },
-                { onSuccess: () => { setSaved(true); showToast('Skill added successfully') } },
+                {
+                  onSuccess: () => { setSaved(true); showToast('Skill added successfully') },
+                  onError: (error: Error) => setFailure(error.message || 'Failed to add skill. Please try again.'),
+                },
               )
             }}
           >
