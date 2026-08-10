@@ -1157,6 +1157,26 @@ body {
   color: #fff;
 }
 
+/* Pipeline steps weren't actually landing on equal widths/heights despite
+   .pip-step's flex: 1 — a flex item's default min-width: auto still lets its
+   own content (label + note, e.g. "Reg. Payment" / "$250 check") force it
+   wider than its equal share whenever that text is longer than another
+   step's, and if it wraps to a second line while the others stay on one,
+   the boxes end up different heights too. min-width: 0 lets flex-basis: 0%
+   actually enforce equal widths; nowrap + ellipsis on the label/note then
+   truncates whichever text doesn't fit instead of silently growing the box
+   or wrapping it onto an uneven second line. */
+#page-dashboard .pipeline .pip-step {
+  min-width: 0;
+}
+
+#page-dashboard .pipeline .pip-label,
+#page-dashboard .pipeline .pip-desc {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Admission Progress Charts (Dashboard) */
 .adm-chart-grid {
   display: grid;
@@ -2676,6 +2696,11 @@ th:hover .th-fi {
   cursor: pointer;
   transition: background var(--tr);
   white-space: nowrap;
+  /* Fallback for a label that still exceeds .ss-drop's max-width cap —
+     ellipsize instead of relying on the drop's own overflow:hidden to
+     hard-clip it mid-word. */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .col-filter-opt:hover {

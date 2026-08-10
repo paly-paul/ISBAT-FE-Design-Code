@@ -242,6 +242,22 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // may still come up empty and need picking.
   const [currencyGuid, setCurrencyGuid] = useState('')
 
+  // Programme Level's "auto-fills year/sem/credits" explanation used to sit
+  // as plain parenthetical text right in the field label — moved into a
+  // click-to-open info popover (matching the ⓘ icon convention Step 2's
+  // Syllabus/Outline/Taught By button already uses) so the label itself
+  // reads cleanly and the explanation only shows up when actually asked for.
+  const [levelInfoOpen, setLevelInfoOpen] = useState(false)
+  const levelInfoRef = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (!levelInfoOpen) return
+    function onDoc(e: MouseEvent) {
+      if (!levelInfoRef.current?.contains(e.target as Node)) setLevelInfoOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [levelInfoOpen])
+
   useEffect(() => {
     if (isOpen && mode === 'edit') setCurrencyGuid(initialCurrencyGuid ?? '')
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -305,7 +321,10 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const { data: courseUnits = [] } = useAllCourseUnits()
   const courseUnitOptions = courseUnits.map(u => ({
     value: u.courseUnitGuid,
-    label: `${u.courseUnitCode} — ${u.courseUnitName} (${u.maxCredits} cr)`,
+    // "cr" read ambiguously as "crore" (Indian numbering, 10 million) rather
+    // than "credit" — spelled out and pluralized, same convention as the
+    // semester sidebar's own credit total below.
+    label: `${u.courseUnitCode} — ${u.courseUnitName} (${u.maxCredits} credit${u.maxCredits !== 1 ? 's' : ''})`,
     code: u.courseUnitCode,
     name: u.courseUnitName,
     credits: u.maxCredits,
@@ -569,6 +588,24 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     }
   }, [isOpen, mode, currentAcademicIntake])
 
+  function selectProgramGroup(guid: string) {
+    setProgramGroupGuid(guid)
+    if (step1Errors.programGroupGuid) setStep1Errors(p => ({ ...p, programGroupGuid: '' }))
+    // Every ProgramGroup carries its own programLevelGuid (a group belongs to
+    // exactly one level) — auto-fill Level from the picked group instead of
+    // making the user look up and re-pick the same level a second time.
+    // Routed through selectProgramLevel so App/Late Fee and the Step 2/3
+    // semester-count resize all follow the same auto-fill this level would
+    // get from being picked directly. Guarded on the level actually being in
+    // the loaded programLevels list — otherwise programLevelGuid would point
+    // at a level programLevelOptions has no entry for, and the dropdown
+    // would silently show its placeholder instead of the real selection.
+    const group = programGroups.find(g => g.programGroupGuid === guid)
+    if (group?.programLevelGuid && programLevels.some(l => l.programLevelGuid === group.programLevelGuid)) {
+      selectProgramLevel(group.programLevelGuid)
+    }
+  }
+
   function selectProgramLevel(guid: string) {
     setProgramLevelGuid(guid)
     if (step1Errors.programLevelGuid) setStep1Errors(p => ({ ...p, programLevelGuid: '' }))
@@ -576,6 +613,14 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     if (level) {
       setAppFee(String(level.appFee))
       setLateFee(String(level.lateFee))
+      // Level.currencyGuid itself is unconfirmed on GET (see the comment on
+      // ProgramLevel.currencyGuid in programLevel.ts) — resolve the level's
+      // own currencyCode against useFinanceCurrencies() instead, same
+      // code→real-guid matching selectFeeItemCurrency() already uses below.
+      // Only auto-fills when a match is found, so an unmatched/blank level
+      // currency leaves whatever Currency the user already picked alone.
+      const fc = financeCurrencies.find(c => c.currencyCode === level.currencyCode)
+      if (fc) setCurrencyGuid(fc.currencyGuid)
       // Size Step 2/3 to the level's own semester count for a new programme
       // (Edit mode instead sizes off the real program-course-units data —
       // see the fullDetails effect above). resizeSemesters keeps whatever's
@@ -907,6 +952,22 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setFeeStructures(prev => prev.map((s, i) => i === activeFeeIdx ? { ...s, [field]: val } : s))
   }
 
+  // Lateral Entry/Credit Exemption/Aptech Credit Exemption Fee each kept
+  // their own Currency dropdown, even though in practice a programme's
+  // Lateral Entry Fee, Credit Exemption Fee, and Aptech Credit Exemption Fee
+  // are always meant to share one currency — three separate pickers just
+  // meant picking (and re-checking) the same value three times. FeeStructure
+  // still carries all three underlying fields (FeeStructureInput's
+  // lec/cec/acec are genuinely separate wire fields — see handleFinalSubmit),
+  // this only collapses the UI down to one control that drives all three at
+  // once, in a single state update so they can never drift apart from here.
+  function updateSharedFeeCurrency(val: string) {
+    setFeeStructures(prev => prev.map((s, i) => i === activeFeeIdx
+      ? { ...s, lateralEntryFeeCurrency: val, creditExemptionFeeCurrency: val, aptechCreditExemptionFeeCurrency: val }
+      : s
+    ))
+  }
+
   // Fee Currency default (program_master_frontend_fixes.md, "Programme
   // Details - Fee Section Bugs" #1) — a new fee item is never left with no
   // currency picked; pre-fill it from the structure's own Local/Foreign
@@ -1095,15 +1156,50 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   />
                   {step1Errors.programName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programName}</p>}
                 </div>
+                {/* Group and Level moved directly under Code/Name (was previously split
+                    apart by No. of Course Units sitting between them) so the two
+                    required pickers that most affect the rest of the form read as one
+                    connected block instead of getting broken up by an unrelated field. */}
                 <div className="fg">
                   <div className="lbl">Programme Group <span className="req">*</span></div>
                   <SearchSelect
                     placeholder="— Select group —"
                     value={programGroupGuid}
-                    onChange={v => { setProgramGroupGuid(v); if (step1Errors.programGroupGuid) setStep1Errors(p => ({ ...p, programGroupGuid: '' })) }}
+                    onChange={selectProgramGroup}
                     options={programGroupOptions}
                   />
                   {step1Errors.programGroupGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programGroupGuid}</p>}
+                </div>
+                <div className="fg span2">
+                  {/* Inline style, not the `flex` utility class — .lbl's own
+                      `display: block` (globals.css) loads after Tailwind's
+                      utility layer in this stylesheet, so a `flex` class here
+                      would lose that cascade tie; an inline style always wins
+                      regardless of source order. */}
+                  <div className="lbl" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    Programme Level <span className="req">*</span>
+                    <span ref={levelInfoRef} style={{ position: 'relative', display: 'inline-flex' }}>
+                      <button
+                        type="button"
+                        className="btn btn-neu btn-sm"
+                        style={{ width: 18, height: 18, padding: 0, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="Automatically fills Years, Semesters, Min. Credits, Application/Late Fee, and Currency"
+                        onClick={() => setLevelInfoOpen(v => !v)}
+                      ><i className="lni lni-information" style={{ fontSize: 10 }}></i></button>
+                      {levelInfoOpen && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 20, width: 230, background: 'var(--white)', border: '1px solid var(--g200)', borderRadius: 'var(--rsm)', boxShadow: '0 6px 18px rgba(0,0,0,.12)', padding: '8px 10px', fontSize: 12, fontWeight: 400, color: 'var(--g700)' }}>
+                          Automatically fills No. of Years, No. of Semesters, Min. Credits, Application/Late Fee, and Currency from the picked level.
+                        </div>
+                      )}
+                    </span>
+                  </div>
+                  <SearchSelect placeholder="— Select level —" value={programLevelGuid} onChange={selectProgramLevel} options={programLevelOptions} />
+                  {step1Errors.programLevelGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programLevelGuid}</p>}
+                  <div className="flex gap-2 flex-wrap mt-2">
+                    <span className="lvl-chip"><span className="lvl-chip-lbl">No. of Years</span><span className="lvl-chip-val">{selectedProgramLevel?.yearCount ?? '—'}</span></span>
+                    <span className="lvl-chip"><span className="lvl-chip-lbl">No. of Semesters</span><span className="lvl-chip-val">{selectedProgramLevel?.semCount ?? '—'}</span></span>
+                    <span className="lvl-chip"><span className="lvl-chip-lbl">Min. Credits</span><span className="lvl-chip-val">{selectedProgramLevel?.minCreditLoad ?? '—'}</span></span>
+                  </div>
                 </div>
                 {/* Not mandatory per Program_Master_Change_Requests_Final.md — when
                     left blank, Course Unit Allocation has no count to enforce;
@@ -1119,16 +1215,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     value={unitCount}
                     onChange={e => setUnitCount(e.target.value)}
                   />
-                </div>
-                <div className="fg span2">
-                  <div className="lbl">Programme Level (auto-fills year/sem/credits) <span className="req">*</span></div>
-                  <SearchSelect placeholder="— Select level —" value={programLevelGuid} onChange={selectProgramLevel} options={programLevelOptions} />
-                  {step1Errors.programLevelGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programLevelGuid}</p>}
-                  <div className="flex gap-2 flex-wrap mt-2">
-                    <span className="lvl-chip"><span className="lvl-chip-lbl">No. of Years</span><span className="lvl-chip-val">{selectedProgramLevel?.yearCount ?? '—'}</span></span>
-                    <span className="lvl-chip"><span className="lvl-chip-lbl">No. of Semesters</span><span className="lvl-chip-val">{selectedProgramLevel?.semCount ?? '—'}</span></span>
-                    <span className="lvl-chip"><span className="lvl-chip-lbl">Min. Credits</span><span className="lvl-chip-val">{selectedProgramLevel?.minCreditLoad ?? '—'}</span></span>
-                  </div>
                 </div>
                 <div className="fg">
                   <div className="lbl">Faculty <span className="req">*</span></div>
@@ -1420,7 +1506,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     <span>Programme-level Fees &amp; Discounts</span>
                     <span className="badge badge-blue normal-case tracking-normal font-semibold ml-auto">Applied across all semesters</span>
                   </div>
-                  <div className="g4">
+                  <div className="g3">
                     <div className="fg m-0">
                       <div className="lbl">Lumpsum Discount Type</div>
                       <SearchSelect options={CALC_TYPES} value={activeFeeStruct.discountType} onChange={val => updateFeeStructureMeta('discountType', val)} />
@@ -1428,7 +1514,23 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     <div className="fg m-0">
                       <div className="lbl">{activeFeeStruct.discountType === '2' ? 'Lumpsum Discount Percentage' : 'Lumpsum Discount Amount'}</div>
                       <div className="flex items-center gap-2">
-                        <span className="text-g500 font-bold min-w-[28px] text-center" style={{ fontSize: 'var(--fs-sm)' }}>{activeFeeStruct.discountType === '2' ? '%' : (activeFeeStruct.localOrForeign === 'true' ? 'Foreign' : 'Local')}</span>
+                        {/* Percentage indicator is unambiguous, kept as-is. The
+                            Amount-mode badge is commented out for now, not just
+                            re-labeled — unlike Lateral Entry/Credit Exemption/Aptech
+                            Credit Exemption Fee (each paired with its own Currency
+                            dropdown), a Lumpsum Discount Amount has no currency field
+                            of its own on FeeStructureInput; showing UGX/USD here would
+                            be inferring that it silently follows this structure's own
+                            Local/Foreign designation (defaultFeeItemCurrency()'s
+                            mapping), which is unconfirmed against a real spec/backend
+                            response for this specific field. The original bare
+                            "Local"/"Foreign" text at least wasn't a wrong guess, just
+                            an unexplained one — better to show nothing until the real
+                            currency behavior is confirmed, then restore this with the
+                            confirmed value. */}
+                        {activeFeeStruct.discountType === '2' && (
+                          <span className="text-g500 font-bold min-w-[28px] text-center" style={{ fontSize: 'var(--fs-sm)' }}>%</span>
+                        )}
                         <input className="ctrl flex-1" type="number" placeholder="0" min={0} max={activeFeeStruct.discountType === '2' ? 100 : undefined} value={activeFeeStruct.discountAmount} onChange={e => updateFeeStructureMeta('discountAmount', e.target.value)} />
                       </div>
                     </div>
@@ -1437,24 +1539,25 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                       <input className="ctrl" type="number" placeholder="0" min={0} value={activeFeeStruct.lateralEntryFee} onChange={e => updateFeeStructureMeta('lateralEntryFee', e.target.value)} />
                     </div>
                     <div className="fg m-0">
-                      <div className="lbl">Currency</div>
-                      <SearchSelect placeholder="Currency" options={currencyIntOptions} value={activeFeeStruct.lateralEntryFeeCurrency} onChange={val => updateFeeStructureMeta('lateralEntryFeeCurrency', val)} />
-                    </div>
-                    <div className="fg m-0">
                       <div className="lbl">Credit Exemption Fee</div>
                       <input className="ctrl" type="number" placeholder="0" min={0} value={activeFeeStruct.creditExemptionFee} onChange={e => updateFeeStructureMeta('creditExemptionFee', e.target.value)} />
-                    </div>
-                    <div className="fg m-0">
-                      <div className="lbl">Currency</div>
-                      <SearchSelect placeholder="Currency" options={currencyIntOptions} value={activeFeeStruct.creditExemptionFeeCurrency} onChange={val => updateFeeStructureMeta('creditExemptionFeeCurrency', val)} />
                     </div>
                     <div className="fg m-0">
                       <div className="lbl">Aptech Credit Exemption Fee</div>
                       <input className="ctrl" type="number" placeholder="0" min={0} value={activeFeeStruct.aptechCreditExemptionFee} onChange={e => updateFeeStructureMeta('aptechCreditExemptionFee', e.target.value)} />
                     </div>
+                    {/* One shared Currency picker for all three fees above (Lateral
+                        Entry/Credit Exemption/Aptech Credit Exemption Fee), replacing
+                        the three separate-but-identical dropdowns each used to have —
+                        see updateSharedFeeCurrency() above. Displays whichever of the
+                        three is currently set on Lateral Entry Fee; if an existing
+                        programme somehow has them saved as different currencies
+                        (Edit-mode prefill, pre-dating this change), picking a value
+                        here still normalizes all three to match, same as any other
+                        edit. */}
                     <div className="fg m-0">
-                      <div className="lbl">Currency</div>
-                      <SearchSelect placeholder="Currency" options={currencyIntOptions} value={activeFeeStruct.aptechCreditExemptionFeeCurrency} onChange={val => updateFeeStructureMeta('aptechCreditExemptionFeeCurrency', val)} />
+                      <div className="lbl">Currency <span className="text-g400 font-normal normal-case">(Lateral Entry / Credit Exemption / Aptech Credit Exemption)</span></div>
+                      <SearchSelect placeholder="Currency" options={currencyIntOptions} value={activeFeeStruct.lateralEntryFeeCurrency} onChange={updateSharedFeeCurrency} />
                     </div>
                   </div>
                 </div>
@@ -1625,7 +1728,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                           <span className="badge badge-blue" style={{ flexShrink: 0 }}>Unit {ui + 1}</span>
                           <span className="font-mono font-bold text-b700" style={{ fontSize: 12, minWidth: 50 }}>{u.code}</span>
                           <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: 'var(--g900)' }}>{u.name}</span>
-                          <span className="badge badge-grey">{u.credits} cr</span>
+                          <span className="badge badge-grey">{u.credits} credit{u.credits !== 1 ? 's' : ''}</span>
                           {/* Syllabus/Outline/Taught By — Step 2's "Additional Feature", opened
                               in a popup (see the fixed overlay near the end of this component)
                               rather than expanded inline, so browsing several units' details in a

@@ -1,9 +1,10 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
+import { SearchSelect } from '@/components/SearchSelect'
 import { CourseUnitModal } from '@/components/modals/academic/CourseUnitModal'
 import { EditCourseUnitModal } from '@/components/modals/academic/EditCourseUnitModal'
 import { ElectiveSelectModal } from '@/components/modals/academic/ElectiveSelectModal'
@@ -13,6 +14,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useCourseUnits, useAllCourseUnits, useCreateCourseUnit, useUpdateCourseUnit, useDeleteCourseUnit, CourseUnit } from '@/hooks/academic/useCourseUnits'
+import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useProgramCourseUnits } from '@/hooks/academic/useProgramCourseUnits'
 import { getCourseUnitById } from '@/lib/api/academic/courseUnit'
 import { openDocumentForViewing, downloadDocument } from '@/lib/documentViewer'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -27,6 +30,7 @@ export default function Page() {
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   // The filter state is kept for future table filtering, but the current view does not need it yet.
   const [search, setSearch] = useState('')
+  const [programFilter, setProgramFilter] = useState('')
   const [page, setPage] = useState(1)
   const [editingCourseUnitGuid, setEditingCourseUnitGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<CourseUnit | null>(null)
@@ -101,37 +105,72 @@ export default function Page() {
   // useCourseUnits() call backing a client-side usePagination() slice, which
   // made the initial load wait on the entire table before showing anything.
   const { data, isLoading } = useCourseUnits(page, PAGE_SIZE)
-  const { data: allCourseUnits = [], isLoading: isAllCourseUnitsLoading } = useAllCourseUnits(!!search.trim())
+
+  // "All Programmes" dropdown — there's no programGuid filter on the
+  // course-units endpoint itself (CourseUnit carries no programme field at
+  // all), so a picked programme is resolved via program-course-units.ts's
+  // GET /program-course-units/{programGuid} instead — the same endpoint
+  // ProgrammeModal's Curriculum view uses — which lists exactly which
+  // course-unit guids are actually assigned to that programme. Mock mode
+  // always returns [] here (see programCourseUnits.ts), so the filter has
+  // no matches to show under NEXT_PUBLIC_AUTH_MOCK=true.
+  const { data: programs = [] } = useProgramMasters()
+  const { data: programCourseUnits = [], isLoading: isProgramCourseUnitsLoading } = useProgramCourseUnits(programFilter || null, !!programFilter)
+  const programCourseUnitGuids = useMemo(() => new Set(programCourseUnits.map(u => u.courseUnitGuid)), [programCourseUnits])
+
+  // Filtering by search term or by programme both need the whole table in
+  // memory (a programme's matches, or a search match, can land on any server
+  // page) — same "switch to the full list" trick used for search alone
+  // before the programme filter was added.
+  const usingFullList = !!search.trim() || !!programFilter
+
+  // Fetched eagerly on mount (no `enabled` gate), not lazily on first search
+  // like before — this used to only start once `usingFullList` went true,
+  // meaning the very first keystroke into the search box always paid for a
+  // real network round trip live, which is what made typing feel slow
+  // compared to programme-master (whose useProgramMasters() has no such gate
+  // and is already warm in cache by the time anyone types). This doesn't
+  // reintroduce the slow-initial-load problem useCourseUnits(page, PAGE_SIZE)
+  // was built to avoid — the visible table still renders off that separate,
+  // fast paginated query; this one just warms quietly in the background so
+  // it's normally already cached (staleTime/gcTime: Infinity) by the time
+  // usingFullList flips true and the table actually switches to reading it.
+  const { data: allCourseUnits = [], isLoading: isAllCourseUnitsLoading } = useAllCourseUnits()
   const rows = data?.items ?? []
-  const searchRows = search.trim() ? allCourseUnits : rows
+  const searchRows = usingFullList ? allCourseUnits : rows
   const createCourseUnit = useCreateCourseUnit()
   const updateCourseUnit = useUpdateCourseUnit()
   const deleteCourseUnit = useDeleteCourseUnit()
-  const totalCount = search.trim() ? searchRows.length : data?.totalCount ?? 0
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  const loading = isLoading || (search.trim() && isAllCourseUnitsLoading)
+  const loading = isLoading || (usingFullList && isAllCourseUnitsLoading) || (!!programFilter && isProgramCourseUnitsLoading)
 
-  // When search is empty, the page still uses real server-side pagination.
-  // When the user enters a query, we load the whole table once and search
-  // across all course units so results are not limited to the current page.
+  // Reset back to page 1 whenever a search term or programme filter is
+  // (de)activated — the previous page offset almost never lands on a valid
+  // page of the newly-filtered result set.
   useEffect(() => {
-    if (search.trim() && page !== 1) setPage(1)
-  }, [search, page])
+    if (usingFullList && page !== 1) setPage(1)
+  }, [usingFullList, page])
 
   const filteredRows = searchRows.filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
     && (!search.trim() || `${r.courseUnitCode} ${r.courseUnitName}`.toLowerCase().includes(search.trim().toLowerCase()))
+    && (!programFilter || programCourseUnitGuids.has(r.courseUnitGuid))
   )
 
-  // Only re-slice by page offset while searching — allCourseUnits (searchRows'
-  // source in that case) is the full, unpaginated list. Outside of a search,
-  // filteredRows is already just this page's 10 rows straight from the
-  // server (useCourseUnits(page, PAGE_SIZE)); re-slicing it by
-  // `(page - 1) * PAGE_SIZE` was double-paginating an array that only ever
-  // has PAGE_SIZE items in it — correct by coincidence on page 1
+  // Only re-slice by page offset while working off the full list —
+  // allCourseUnits (searchRows' source in that case) is unpaginated.
+  // Outside of that, filteredRows is already just this page's 10 rows
+  // straight from the server (useCourseUnits(page, PAGE_SIZE)); re-slicing
+  // it by `(page - 1) * PAGE_SIZE` was double-paginating an array that only
+  // ever has PAGE_SIZE items in it — correct by coincidence on page 1
   // (.slice(0, 10)), but .slice(10, 20) on a 10-item array is always empty,
   // which is why every page past the first showed a blank table.
-  const pageItems = search.trim() ? filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : filteredRows
+  const pageItems = usingFullList ? filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : filteredRows
+
+  // totalCount must reflect the actually-matched rows, not the whole table,
+  // once a search/programme filter narrows searchRows down via filteredRows
+  // — otherwise Pagination renders phantom pages past the real matches.
+  const totalCount = usingFullList ? filteredRows.length : data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
   const searchMatches = search.trim()
     ? searchRows.filter(r => `${r.courseUnitCode} ${r.courseUnitName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
@@ -203,6 +242,13 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: r.courseUnitGuid, primary: r.courseUnitCode, secondary: r.courseUnitName }))}
+              // The full-list fetch (useAllCourseUnits) only starts once a
+              // search term is typed, so it's still in flight the instant a
+              // user types their first character — without this, the
+              // dropdown read "No matches" for however long that request
+              // takes, which looked like the search was broken rather than
+              // still loading.
+              loading={isAllCourseUnitsLoading}
             />
             {permissions.add && <button className="btn btn-primary" onClick={() => openModal('cu-new-modal')}><i className="lni lni-plus"></i> Add Course Unit</button>}
           </div>
@@ -224,9 +270,31 @@ export default function Page() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-book"></i></span> Course Unit Master</div>
             <div className="flex gap-2">
-              <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>BEng. Civil</option><option>MBA</option></select>
-              <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Semesters</option><option>Semester 1</option><option>Semester 2</option><option>Semester 3</option></select>
-              <select className="ctrl w-auto text-[var(--fs-sm)]"><option>All Types</option><option>Theory</option><option>Practical</option><option>Combined</option><option>Project</option></select>
+              {/* w-auto (not a fixed px width) — same convention as programme-master's
+                  Level/Status filters, so the trigger grows to fit whatever label
+                  (placeholder or a picked programme's full name) it's currently
+                  showing instead of clipping it into a fixed-width box */}
+              <SearchSelect
+                className="w-auto text-[var(--fs-sm)]"
+                placeholder="All Programmes"
+                value={programFilter}
+                onChange={setProgramFilter}
+                options={programs.map(p => ({ value: p.programGuid, label: p.programName }))}
+              />
+              {/* Semester/Type still have no equivalent field on the real GET response, so
+                  these stay decorative (uncontrolled, not wired to any filter) — only
+                  swapped from a native <select> to SearchSelect for the same look/behavior
+                  (and w-auto sizing) as the Programme filter above */}
+              <SearchSelect
+                className="w-auto text-[var(--fs-sm)]"
+                placeholder="All Semesters"
+                options={['Semester 1', 'Semester 2', 'Semester 3']}
+              />
+              <SearchSelect
+                className="w-auto text-[var(--fs-sm)]"
+                placeholder="All Types"
+                options={['Theory', 'Practical', 'Combined', 'Project']}
+              />
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>
           </div>
@@ -261,7 +329,7 @@ export default function Page() {
                 {loading
                   ? <TableLoadingState colSpan={999} />
                   : pageItems.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0) || !!programFilter} onClearFilters={() => { setFilters({}); setProgramFilter('') }} />
                     : null}
                 {pageItems.map((r) => (
                   <tr key={r.courseUnitGuid}>
