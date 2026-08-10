@@ -2,20 +2,25 @@
 import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
-import { Skill, SkillInput } from '@/lib/api/academic/skill'
+import { FailurePopup } from './FailurePopup'
+import { SkillMaster, SkillMasterInput } from '@/lib/api/academic/skillMaster'
 
 interface EditSkillModalProps extends ModalProps {
-  skill: Skill | null
+  skill: SkillMaster | null
   updateSkill: {
-    mutate: (variables: { id: string; input: SkillInput }, options?: { onSuccess?: () => void }) => void
+    mutate: (variables: { intSkill: number; input: SkillMasterInput }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
     isPending: boolean
   }
 }
 
+// No GetByGuid/GetById endpoint was given for this resource — same
+// row-passed exception receiptBook.ts's EditReceiptBookModal uses: seeded
+// straight from the already-loaded row instead of a fetch-by-guid.
 export function EditSkillModal({ isOpen, onClose, showToast, skill, updateSkill }: EditSkillModalProps) {
-  const [saved, setSaved] = useState(false)
+  const [saved, setSaved]     = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
   const [skillName, setSkillName] = useState('')
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [errors, setErrors]   = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (isOpen && skill) {
@@ -26,7 +31,7 @@ export function EditSkillModal({ isOpen, onClose, showToast, skill, updateSkill 
 
   if (!isOpen || !skill) return null
 
-  function handleClose() { setSaved(false); onClose() }
+  function handleClose() { setSaved(false); setFailure(null); onClose() }
 
   function validate() {
     const e: Record<string, string> = {}
@@ -38,8 +43,11 @@ export function EditSkillModal({ isOpen, onClose, showToast, skill, updateSkill 
   function handleSubmit() {
     if (!skill || !validate()) return
     updateSkill.mutate(
-      { id: skill.id, input: { skillName } },
-      { onSuccess: () => { setSaved(true); showToast('Skill updated successfully') } },
+      { intSkill: skill.intSkill, input: { skillName } },
+      {
+        onSuccess: () => { setSaved(true); showToast('Skill updated successfully') },
+        onError: (error: Error) => setFailure(error.message || 'Failed to update skill. Please try again.'),
+      },
     )
   }
 
@@ -48,6 +56,16 @@ export function EditSkillModal({ isOpen, onClose, showToast, skill, updateSkill 
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
           <SuccessPopup title="Skill Updated!" subtitle="Your changes have been saved successfully." onClose={handleClose} />
+        </div>
+      </div>
+    )
+  }
+
+  if (failure) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup title="Couldn't Update Skill" subtitle={failure} onClose={() => setFailure(null)} />
         </div>
       </div>
     )

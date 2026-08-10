@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from '../client'
+import { apiDelete, apiGet, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -59,13 +59,12 @@ interface CurrencyListResponse {
   pageSize: number
 }
 
-// Update is still handled locally in mock mode until the real endpoint is confirmed.
 const mockCurrencies: Currency[] = [
-  { intCurrency: 1, currencyCode: 'UGX', currencyName: 'Uganda Shilling', isDefault: 1 },
-  { intCurrency: 2, currencyCode: 'USD', currencyName: 'US Dollar',       isDefault: 0 },
-  { intCurrency: 3, currencyCode: 'EUR', currencyName: 'Euro',            isDefault: 0 },
-  { intCurrency: 4, currencyCode: 'GBP', currencyName: 'British Pound',   isDefault: 0 },
-  { intCurrency: 5, currencyCode: 'KES', currencyName: 'Kenyan Shilling', isDefault: 0 },
+  { intCurrency: 1, currencyGuid: 'mock-currency-1', currencyCode: 'UGX', currencyName: 'Uganda Shilling', isDefault: 1 },
+  { intCurrency: 2, currencyGuid: 'mock-currency-2', currencyCode: 'USD', currencyName: 'US Dollar',       isDefault: 0 },
+  { intCurrency: 3, currencyGuid: 'mock-currency-3', currencyCode: 'EUR', currencyName: 'Euro',            isDefault: 0 },
+  { intCurrency: 4, currencyGuid: 'mock-currency-4', currencyCode: 'GBP', currencyName: 'British Pound',   isDefault: 0 },
+  { intCurrency: 5, currencyGuid: 'mock-currency-5', currencyCode: 'KES', currencyName: 'Kenyan Shilling', isDefault: 0 },
 ]
 let mockCurrencySeq = mockCurrencies.length + 1
 
@@ -75,18 +74,49 @@ export function getCurrencies(page = 1, pageSize = 10): Promise<Currency[]> {
   return apiGet<CurrencyListResponse | null>(`/api/v1/finance/currencies?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
 }
 
+// Confirmed real — a live sample response returned currencyGuid populated
+// (previously only an optimistic, unconfirmed field on this type). Backs
+// EditCurrencyModal's fetch-by-guid prefill, same convention every other
+// real master's Edit modal already follows.
+export function getCurrencyById(guid: string): Promise<Currency> {
+  if (MOCK_AUTH) {
+    const existing = mockCurrencies.find(c => c.currencyGuid === guid)
+    if (!existing) return Promise.reject(new Error('Currency not found'))
+    return Promise.resolve(existing)
+  }
+  return apiGet<Currency>(`/api/v1/finance/currencies/${guid}`)
+}
+
 export function createCurrency(input: CurrencyInput): Promise<Currency> {
   if (MOCK_AUTH) {
-    const currency: Currency = { intCurrency: mockCurrencySeq++, ...input }
+    const currency: Currency = { intCurrency: mockCurrencySeq, currencyGuid: `mock-currency-${mockCurrencySeq}`, ...input }
+    mockCurrencySeq++
     mockCurrencies.push(currency)
     return Promise.resolve(currency)
   }
   return apiPost<Currency>('/api/v1/finance/currencies', input)
 }
 
-export function updateCurrency(id: string, input: CurrencyInput): Promise<Currency> {
-  const existing = mockCurrencies.find(c => String(c.intCurrency) === id)
-  if (!existing) return Promise.reject(new Error('Currency not found'))
-  Object.assign(existing, input)
-  return Promise.resolve(existing)
+// Confirmed real — PUT /api/v1/finance/currencies/{guid}, same payload
+// shape as Create. Previously this function never called the backend in
+// any mode (mock-only regardless of NEXT_PUBLIC_AUTH_MOCK), so Edit
+// silently didn't persist — that gap is now closed.
+export function updateCurrency(guid: string, input: CurrencyInput): Promise<Currency> {
+  if (MOCK_AUTH) {
+    const existing = mockCurrencies.find(c => c.currencyGuid === guid)
+    if (!existing) return Promise.reject(new Error('Currency not found'))
+    Object.assign(existing, input)
+    return Promise.resolve(existing)
+  }
+  return apiPut<Currency>(`/api/v1/finance/currencies/${guid}`, input)
+}
+
+export function deleteCurrency(guid: string): Promise<boolean> {
+  if (MOCK_AUTH) {
+    const index = mockCurrencies.findIndex(c => c.currencyGuid === guid)
+    if (index === -1) return Promise.reject(new Error('Currency not found'))
+    mockCurrencies.splice(index, 1)
+    return Promise.resolve(true)
+  }
+  return apiDelete<boolean>(`/api/v1/finance/currencies/${guid}`)
 }
