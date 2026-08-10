@@ -131,7 +131,11 @@ export default function DashboardPage() {
           <React.Fragment key={step.label}>
             <div className={`pip-step ${step.status}`}>
               <div className="pip-circle">{i + 1}</div>
-              <div className="flex flex-col gap-0.5">
+              {/* min-w-0 — this div is itself a flex child of .pip-step; without it,
+                  its default min-width:auto still sizes to the label/note's natural
+                  width and blocks .pip-step's flex:1 from landing on equal widths
+                  across steps (see the #page-dashboard .pip-step rule in globals.css). */}
+              <div className="flex flex-col gap-0.5 min-w-0">
                 <span className="pip-label">{step.label}</span>
                 <span className="pip-desc">{step.note}</span>
               </div>

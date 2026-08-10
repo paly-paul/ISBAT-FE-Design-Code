@@ -330,6 +330,19 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
     setStructures(prev => prev.map((s, i) => i === activeIdx ? { ...s, localOrForeign: val === 'true' } : s))
   }
 
+  // Lateral Entry/Credit Exemption/Aptech Credit Exemption Fee each had their
+  // own Currency dropdown, even though in practice all three are meant to
+  // share one currency — same consolidation as ProgrammeModal's identical
+  // section. lefCurrency/cefCurrency/aceCurrency remain genuinely separate
+  // wire fields (Lec/Cec/Acec on the header payload — see handleSubmitAll), this
+  // only collapses the UI to one control that sets all three at once.
+  function updateSharedFeeCurrency(val: string) {
+    setStructures(prev => prev.map((s, i) => i === activeIdx
+      ? { ...s, lefCurrency: val, cefCurrency: val, aceCurrency: val }
+      : s
+    ))
+  }
+
   // ── Fee item management (scoped to active structure, keyed by semesterGuid) ─
   function addItem(semesterGuid: string) {
     setStructures(prev => prev.map((s, i) =>
@@ -625,7 +638,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                 <span>Programme-level Fees &amp; Discounts</span>
                 <span className="badge badge-blue normal-case tracking-normal font-semibold ml-auto">Applied across all semesters</span>
               </div>
-              <div className="g4">
+              <div className="g3">
                 <div className="fg m-0">
                   <div className="lbl">Lumpsum Discount Type</div>
                   <SearchSelect options={['Amount', 'Percentage']} value={active.discountType} onChange={val => updateStructureMeta('discountType', val)} />
@@ -633,16 +646,29 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                 <div className="fg m-0">
                   <div className="lbl">{active.discountType === 'Percentage' ? 'Lumpsum Discount Percentage' : 'Lumpsum Discount Amount'}</div>
                   <div className="flex items-center gap-2">
-                    <span className="text-g500 font-bold min-w-[28px] text-center" style={{ fontSize: 'var(--fs-sm)' }}>{active.discountType === 'Percentage' ? '%' : active.currency}</span>
+                    {/* Percentage indicator kept — unambiguous. The Amount-mode
+                        currency badge is dropped, not just correct-but-still-shown:
+                        active.currency (Base Currency) is already visible right
+                        above this field and in the sidebar's "Structure N / USD"
+                        label, so repeating it here was redundant, same call as
+                        ProgrammeModal's identical section. */}
+                    {active.discountType === 'Percentage' && (
+                      <span className="text-g500 font-bold min-w-[28px] text-center" style={{ fontSize: 'var(--fs-sm)' }}>%</span>
+                    )}
                     <input className="ctrl flex-1" type="number" placeholder="0" min={0} max={active.discountType === 'Percentage' ? 100 : undefined} value={active.amtPer} onChange={e => updateStructureMeta('amtPer', e.target.value)} />
                   </div>
                 </div>
                 <div className="fg m-0"><div className="lbl">Lateral Entry Fee</div><input className="ctrl" type="number" placeholder="0" min={0} value={active.lef} onChange={e => updateStructureMeta('lef', e.target.value)} /></div>
-                <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={currencyIntOptions} value={active.lefCurrency} onChange={val => updateStructureMeta('lefCurrency', val)} /></div>
                 <div className="fg m-0"><div className="lbl">Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} value={active.cef} onChange={e => updateStructureMeta('cef', e.target.value)} /></div>
-                <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={currencyIntOptions} value={active.cefCurrency} onChange={val => updateStructureMeta('cefCurrency', val)} /></div>
                 <div className="fg m-0"><div className="lbl">Aptech Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} value={active.ace} onChange={e => updateStructureMeta('ace', e.target.value)} /></div>
-                <div className="fg m-0"><div className="lbl">Currency</div><SearchSelect options={currencyIntOptions} value={active.aceCurrency} onChange={val => updateStructureMeta('aceCurrency', val)} /></div>
+                {/* One shared Currency picker for all three fees above, replacing the
+                    three separate-but-identical dropdowns each used to have — see
+                    updateSharedFeeCurrency() above. Same consolidation as
+                    ProgrammeModal's identical section. */}
+                <div className="fg m-0">
+                  <div className="lbl">Currency <span className="text-g400 font-normal normal-case">(Lateral Entry / Credit Exemption / Aptech Credit Exemption)</span></div>
+                  <SearchSelect options={currencyIntOptions} value={active.lefCurrency} onChange={updateSharedFeeCurrency} />
+                </div>
               </div>
             </div>
 

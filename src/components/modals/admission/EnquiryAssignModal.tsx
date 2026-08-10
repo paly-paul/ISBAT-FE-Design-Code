@@ -39,6 +39,15 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
     const intake = intakes.find(i => i.intakeGuid === guid)
     return intake ? `${intake.intakeCode} — ${intake.description}` : '—'
   }
+  // enquiry.campusName is confirmed null on both GET and this modal's own
+  // PUT response (a live sample: campusGuid populated, campusName null) —
+  // same "guid real, name field null" gap Intake already had to work around
+  // above. campuses is already loaded here for the editable Campus dropdown
+  // below, so resolving against it costs nothing extra.
+  function resolveCampusName(guid: string | null) {
+    if (!guid) return '—'
+    return campuses.find(c => c.campusGuid === guid)?.campusName ?? '—'
+  }
 
   const [saved, setSaved]     = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
@@ -136,44 +145,61 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
 
   return (
     <div className="modal-overlay open" id="enquiry-assign-modal">
-      <div className="modal modal-md" onClick={e => e.stopPropagation()}>
+      {/* modal-flex + modal-scroll, not a directly-scrolling plain .modal —
+          the base .modal class carries both border-radius and its own
+          overflow-y: auto, and a container that scrolls itself doesn't clip
+          its own native scrollbar to that radius (a real rendering quirk,
+          worst on classic non-overlay Windows scrollbars) — the scrollbar
+          track sits flush against the corner and pokes a small square notch
+          out past the rounded edge. modal-flex keeps the outer box
+          non-scrolling (overflow: hidden, safe with border-radius) and moves
+          the actual scrolling to an inner plain-rectangle div, which is what
+          ProgrammeModal/VettingReviewModal/EditIntakeModal already do.
+          height: auto overrides modal-flex's own fixed `height: 85vh` (meant
+          for tall multi-step wizards) — this modal's content is short, and
+          85vh would leave most of it empty space. The base .modal class's
+          own max-height: 90vh still applies underneath, so modal-scroll only
+          actually starts scrolling if content ever genuinely exceeds that. */}
+      <div className="modal modal-md modal-flex" style={{ height: 'auto' }} onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-eye"></i> Enquiry Details — {enquiry.enquiryCode}</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
-        {/* Read-only — the update endpoint doesn't accept these fields at all */}
-        <div className="g2" style={{ marginBottom: 18 }}>
-          <div className="fg m-0"><div className="lbl">Name</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.studentName}</div></div>
-          <div className="fg m-0"><div className="lbl">Phone</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.mobile}</div></div>
-          <div className="fg m-0"><div className="lbl">Email</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.email || '—'}</div></div>
-          <div className="fg m-0"><div className="lbl">Enquiry Date</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.enquiryDate.slice(0, 10)}</div></div>
-          <div className="fg m-0"><div className="lbl">Source</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.sourceName || '—'}</div></div>
-          <div className="fg m-0"><div className="lbl">Intake</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{resolveIntakeLabel(enquiry.intakeGuid)}</div></div>
-          <div className="fg m-0"><div className="lbl">Campus</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.campusName || '—'}</div></div>
-          <div className="fg m-0"><div className="lbl">Status</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.enquiryStatusName || '—'}</div></div>
-          <div className="fg m-0"><div className="lbl">Remarks</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.remarks || '—'}</div></div>
-        </div>
+        <div className="modal-scroll">
+          {/* Read-only — the update endpoint doesn't accept these fields at all */}
+          <div className="g2" style={{ marginBottom: 18 }}>
+            <div className="fg m-0"><div className="lbl">Name</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.studentName}</div></div>
+            <div className="fg m-0"><div className="lbl">Phone</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.mobile}</div></div>
+            <div className="fg m-0"><div className="lbl">Email</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.email || '—'}</div></div>
+            <div className="fg m-0"><div className="lbl">Enquiry Date</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.enquiryDate.slice(0, 10)}</div></div>
+            <div className="fg m-0"><div className="lbl">Source</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.sourceName || '—'}</div></div>
+            <div className="fg m-0"><div className="lbl">Intake</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{resolveIntakeLabel(enquiry.intakeGuid)}</div></div>
+            <div className="fg m-0"><div className="lbl">Campus</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{resolveCampusName(enquiry.campusGuid)}</div></div>
+            <div className="fg m-0"><div className="lbl">Status</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.enquiryStatusName || '—'}</div></div>
+            <div className="fg m-0"><div className="lbl">Remarks</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.remarks || '—'}</div></div>
+          </div>
 
-        <div className="sec-divider">Assign</div>
-        <div className="g2">
-          <div className="fg">
-            <div className="lbl">Advisor</div>
-            <SearchSelect placeholder="— unassigned —" options={advisorOptions} value={advisorGuid} onChange={setAdvisorGuid} />
-          </div>
-          <div className="fg">
-            <div className="lbl">Programme</div>
-            <SearchSelect placeholder="— select —" options={programOptions} value={programGuid} onChange={setProgramGuid} />
-          </div>
-          <div className="fg">
-            <div className="lbl">Campus <span className="req">*</span></div>
-            <SearchSelect
-              placeholder="— select —"
-              options={campusOptions}
-              value={campusGuid}
-              onChange={val => { setCampusGuid(val); if (errors.campusGuid) setErrors(p => ({ ...p, campusGuid: '' })) }}
-            />
-            {errors.campusGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campusGuid}</p>}
+          <div className="sec-divider">Assign</div>
+          <div className="g2">
+            <div className="fg">
+              <div className="lbl">Advisor</div>
+              <SearchSelect placeholder="— unassigned —" options={advisorOptions} value={advisorGuid} onChange={setAdvisorGuid} />
+            </div>
+            <div className="fg">
+              <div className="lbl">Programme</div>
+              <SearchSelect placeholder="— select —" options={programOptions} value={programGuid} onChange={setProgramGuid} />
+            </div>
+            <div className="fg">
+              <div className="lbl">Campus <span className="req">*</span></div>
+              <SearchSelect
+                placeholder="— select —"
+                options={campusOptions}
+                value={campusGuid}
+                onChange={val => { setCampusGuid(val); if (errors.campusGuid) setErrors(p => ({ ...p, campusGuid: '' })) }}
+              />
+              {errors.campusGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campusGuid}</p>}
+            </div>
           </div>
         </div>
 

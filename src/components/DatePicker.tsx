@@ -32,6 +32,20 @@ function dateToYmd(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
+// Live dd/mm/yyyy formatting as the user types — strips anything that
+// isn't a digit and re-inserts the slashes at the right positions, so
+// typing "12011985" progressively reads "12" → "12/01" → "12/01/1985"
+// instead of sitting there as a bare number until blur (which is what made
+// it look like a numeric field rather than a date one). Deleting a slash
+// with backspace still works correctly since this rebuilds from the digits
+// alone every time, not from cursor position.
+function formatDateInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 8)
+  if (digits.length <= 2) return digits
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+}
+
 function compareYmd(left?: string, right?: string) {
   if (!left || !right) return 0
   const [leftY, leftM, leftD] = left.split('-').map(Number)
@@ -97,8 +111,11 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
     return cells
   }
 
-  function onInputBlur() {
-    const m = display.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  // Shared by both onBlur (typed text is left incomplete/abandoned) and
+  // onChange (typed text just became a complete 8-digit date) — same
+  // dd/mm/yyyy → ymd parse + max-date check either way.
+  function commitDisplay(text: string) {
+    const m = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
     if (m) {
       const [, dd, mm, yyyy] = m
       const ymd = `${yyyy}-${mm}-${dd}`
@@ -108,9 +125,22 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
       }
       setError('')
       onChange(ymd)
-    } else if (!display) {
+    } else if (!text) {
       onChange('')
     }
+  }
+
+  function onInputChange(raw: string) {
+    const formatted = formatDateInput(raw)
+    setDisplay(formatted)
+    // Commit as soon as the date is fully typed (dd/mm/yyyy complete) rather
+    // than waiting for blur — matches picking a day on the calendar, which
+    // already commits immediately on click.
+    if (formatted.length === 10) commitDisplay(formatted)
+  }
+
+  function onInputBlur() {
+    commitDisplay(display)
   }
 
   const monthName = viewDate.toLocaleString('en-GB', { month: 'long' })
@@ -135,8 +165,10 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
           type="text"
           placeholder={placeholder}
           value={display}
-          onChange={e => setDisplay(e.target.value)}
+          onChange={e => onInputChange(e.target.value)}
           onBlur={onInputBlur}
+          inputMode="numeric"
+          maxLength={10}
           onFocus={() => setOpen(false)}
           style={{ minWidth: 120, width: '100%', paddingRight: 30, borderColor: hasError ? 'var(--red)' : undefined }}
         />
@@ -160,33 +192,46 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
           style={{ position: 'absolute', zIndex: 60, marginTop: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.12)', background: 'white', borderRadius: 8 }}
           onMouseDown={e => e.stopPropagation()}
         >
-          <div style={{ padding: 6, minWidth: 220 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <button type="button" className="btn btn-neu btn-sm" onClick={prevMonth} style={{ padding: '4px 6px' }}>{'<'}</button>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 130 }}>
+          {/* Fixed width, not just a minWidth — previously the popup had no
+              real width cap and just grew to fit the header row (130px month
+              + 96px year select + gaps + nav buttons, 300px+ total), which
+              then stretched the 7-column day grid into oversized cells to
+              match. ~228px is a normal compact-calendar width; the
+              month/year select widths below are sized to still show every
+              month name (up to "September") and a 4-digit year in full. */}
+          <div style={{ padding: 8, width: 228 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 4 }}>
+              <button type="button" className="btn btn-neu btn-sm" onClick={prevMonth} style={{ padding: '3px 6px' }}>{'<'}</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ width: 106 }}>
+                  {/* No `placeholder` here — month/year always have a real
+                      value (there's no meaningful "cleared" state for the
+                      calendar's own current view), but passing one is what
+                      makes SearchSelect render its × clear button. That
+                      button was eating into the narrow width from the
+                      space-saving pass above, which is what left "September"/
+                      "2026" truncated to "Septe…"/"2." despite the trigger
+                      itself having room for the text alone. */}
                   <SearchSelect
                     options={monthOptions}
                     value={String(viewDate.getMonth())}
                     onChange={v => setViewDate(new Date(viewDate.getFullYear(), Number(v), 1))}
-                    placeholder={months[viewDate.getMonth()]}
                   />
                 </div>
-                <div style={{ width: 96 }}>
+                <div style={{ width: 66 }}>
                   <SearchSelect
                     options={yearOptions}
                     value={String(viewDate.getFullYear())}
                     onChange={v => setViewDate(new Date(Number(v), viewDate.getMonth(), 1))}
-                    placeholder={String(viewDate.getFullYear())}
                   />
                 </div>
               </div>
-              <button type="button" className="btn btn-neu btn-sm" onClick={nextMonth} style={{ padding: '4px 6px' }}>{'>'}</button>
+              <button type="button" className="btn btn-neu btn-sm" onClick={nextMonth} style={{ padding: '3px 6px' }}>{'>'}</button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, textAlign: 'center', marginBottom: 6, color: '#666', fontSize: 11 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, textAlign: 'center', marginBottom: 4, color: '#666', fontSize: 10.5 }}>
               {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => <div key={d}>{d}</div>)}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
               {daysMatrix().map((cell, i) => {
                 if (cell === null) return <div key={i} />
                 const selDate = value && ymdToDate(value)
@@ -201,7 +246,7 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
                     onClick={() => { if (!disabled) pick(cell as number) }}
                     disabled={disabled}
                     aria-disabled={disabled}
-                    style={{ padding: 6, borderRadius: 6, background: selected ? '#0b5cff' : 'transparent', color: selected ? 'white' : (disabled ? '#bbb' : '#111'), border: 'none', fontSize: 13, opacity: disabled ? 0.6 : 1 }}
+                    style={{ padding: 5, borderRadius: 6, background: selected ? '#0b5cff' : 'transparent', color: selected ? 'white' : (disabled ? '#bbb' : '#111'), border: 'none', fontSize: 12, opacity: disabled ? 0.6 : 1 }}
                   >
                     {cell}
                   </button>
