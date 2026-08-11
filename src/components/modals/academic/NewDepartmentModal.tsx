@@ -34,7 +34,7 @@ export function NewDepartmentModal({ isOpen, onClose, showToast, createDepartmen
   const [hod, setHod]             = useState('')
   const [errors, setErrors]       = useState<Record<string, string>>({})
 
-  const { data: employees = [] } = useEmployees()
+  const { data: employees = [] } = useEmployees(isOpen)
   const hodOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
 
   if (!isOpen) return null

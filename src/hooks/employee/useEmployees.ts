@@ -9,7 +9,17 @@ const EMPLOYEE_PERMISSION_GROUPS_KEY = ['employeePermissionGroups']
 // in one request — the page itself paginates client-side on top of this.
 const EMPLOYEES_PAGE_SIZE = 1000
 
-export function useEmployees() {
+// enabled defaults to true so every existing call site (Employee Master's
+// own table, Faculty's dean-name resolution, etc.) keeps eagerly fetching
+// exactly as before — only a caller that explicitly wants this deferred
+// (e.g. a modal that shouldn't hit the network until it's actually open)
+// needs to pass enabled={isOpen}. Without this, a modal component's own
+// useEmployees() call fires the moment its *page* mounts, since React hooks
+// run on every render of an always-mounted-but-conditionally-rendered modal
+// regardless of its isOpen prop — confirmed as a real bug in
+// New/EditDepartmentModal, which called this unconditionally even though
+// department-master/page.tsx itself never needs the employee list at all.
+export function useEmployees(enabled = true) {
   return useQuery({
     queryKey: EMPLOYEES_KEY,
     queryFn: () => getEmployees(1, EMPLOYEES_PAGE_SIZE),
@@ -18,6 +28,7 @@ export function useEmployees() {
     // instead of on every remount/window focus.
     staleTime: Infinity,
     gcTime: Infinity,
+    enabled,
   })
 }
 

@@ -25,10 +25,10 @@ export function EditFacultyModal({ isOpen, onClose, showToast, faculty, updateFa
   const [saved, setSaved] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
 
-  const { data: campusDropdown = [] } = useCampusDropdown()
+  const { data: campusDropdown = [] } = useCampusDropdown(isOpen)
   const campusOptions = campusDropdown.map(c => ({ value: c.campusGuid, label: c.campusName }))
 
-  const { data: employees = [] } = useEmployees()
+  const { data: employees = [] } = useEmployees(isOpen)
   const deanOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
 
   useEffect(() => {

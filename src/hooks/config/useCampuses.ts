@@ -16,13 +16,20 @@ export function useCampuses() {
   })
 }
 
-// Small lookup for the filter dropdown in the campus table.
-export function useCampusDropdown() {
+// Small lookup for the Campus dropdown in New/EditFacultyModal (and the
+// filter dropdown in the campus table). enabled defaults to true for that
+// second case; New/EditFacultyModal passes enabled={isOpen} explicitly —
+// this hook was previously firing the moment /config/faculty-master loaded,
+// before Add/Edit Faculty was ever opened, since faculty-master/page.tsx
+// itself has no use for the campus dropdown data and the modal components
+// are always mounted regardless of isOpen.
+export function useCampusDropdown(enabled = true) {
   return useQuery({
     queryKey: [...CAMPUSES_KEY, 'dropdown'],
     queryFn: () => getCampusDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
+    enabled,
   })
 }
 
