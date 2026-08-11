@@ -33,7 +33,7 @@ export function EditDepartmentModal({ isOpen, onClose, showToast, department, up
   const [hod, setHod] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const { data: employees = [] } = useEmployees()
+  const { data: employees = [] } = useEmployees(isOpen)
   const hodOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
 
   useEffect(() => {
