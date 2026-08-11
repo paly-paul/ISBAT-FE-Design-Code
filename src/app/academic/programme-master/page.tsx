@@ -7,6 +7,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
 import { TableSearch } from '@/components/TableSearch'
 import { ProgrammeModal } from '@/components/modals/academic/ProgrammeModal'
+import { ViewProgrammeModal } from '@/components/modals/academic/ViewProgrammeModal'
 import { SpecializationModal } from '@/components/modals/academic/SpecializationModal'
 import { CurriculumModal } from '@/components/modals/academic/CurriculumModal'
 import { Toast } from '@/components/Toast'
@@ -38,6 +39,7 @@ export default function Page() {
   const [search, setSearch] = useState('')
   const [progMode, setProgMode] = useState<'add' | 'edit'>('add')
   const [editingProgramGuid, setEditingProgramGuid] = useState<string | null>(null)
+  const [viewingProgramGuid, setViewingProgramGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ programGuid: string; progName: string } | null>(null)
   // Which programme the Home Page "Specialization"/"Curriculum" three-dot
   // actions are scoped to — see Program_Master_Change_Requests_Final.md.
@@ -240,6 +242,7 @@ export default function Page() {
                       )}
                       */}
                       <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => { setViewingProgramGuid(r.programGuid); openModal('view-prog-modal') }}><i className="lni lni-eye"></i> View</button>
                         {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => { setProgMode('edit'); setEditingProgramGuid(r.programGuid); openModal('new-prog-modal') }}><i className="lni lni-pencil"></i> Edit</button>}
                         <button className="btn btn-neu btn-sm" onClick={() => { setSelectedProgram({ programGuid: r.programGuid, progName: r.progName }); openModal('curriculum-modal') }}><i className="lni lni-book"></i> Curriculum</button>
                         {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => { setSelectedProgram({ programGuid: r.programGuid, progName: r.progName }); openModal('specialization-modal') }}><i className="lni lni-target"></i> Specializations</button>}
@@ -295,6 +298,12 @@ export default function Page() {
         initialCurrencyGuid={programs.find(p => p.programGuid === editingProgramGuid)?.currencyGuid ?? null}
         createProgramMaster={createProgramMaster}
         updateProgramMasterComplete={updateProgramMasterComplete}
+      />
+      <ViewProgrammeModal
+        isOpen={openModals.has('view-prog-modal')}
+        onClose={() => closeModal('view-prog-modal')}
+        showToast={showToast}
+        programGuid={viewingProgramGuid}
       />
       <SpecializationModal
         isOpen={openModals.has('specialization-modal')}
