@@ -6,7 +6,7 @@ import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { AuthError } from '@/lib/api/client'
 import { CreateIntakeInput } from '@/lib/api/academic/intake'
-import { useIntake } from '@/hooks/academic/useIntakes'
+import { useIntake, useUpdateIntake } from '@/hooks/academic/useIntakes'
 
 // Default duration used until the calendar dates are available.
 const DEFAULT_SEMESTER_WEEKS = 15
@@ -72,6 +72,7 @@ interface ViewIntakeModalProps extends ModalProps {
 
 export function ViewIntakeModal({ isOpen, onClose, showToast, intakeGuid }: ViewIntakeModalProps) {
   const { data: intake, isLoading, isError, error } = useIntake(intakeGuid, isOpen)
+  const updateIntake = useUpdateIntake()
 
   const [step, setStep]     = useState(1)
   const [saved, setSaved]   = useState(false)
@@ -379,6 +380,7 @@ export function ViewIntakeModal({ isOpen, onClose, showToast, intakeGuid }: View
     if (!intakeGuid) return
 
     const input: CreateIntakeInput = {
+      intakeCode: intake?.intakeCode ?? 0,
       description,
       financialYear: Number(financialYear),
       examYear: Number(examYear),

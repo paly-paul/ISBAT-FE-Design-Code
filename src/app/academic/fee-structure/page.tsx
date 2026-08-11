@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { FeeStructureModal } from '@/components/modals/academic/FeeStructureModal'
+import { ViewFeeStructureModal } from '@/components/modals/academic/ViewFeeStructureModal'
 import { Toast } from '@/components/Toast'
 import { TableSearch } from '@/components/TableSearch'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -32,6 +33,7 @@ export default function Page() {
   // this row supplies the header fields (feeCode, calcType, lef/cef/ace,
   // intakeGuid, etc.) that endpoint doesn't return.
   const [editRecord, setEditRecord] = useState<ProgramFeeStructureHeader | null>(null)
+  const [viewRecord, setViewRecord] = useState<ProgramFeeStructureHeader | null>(null)
   const [search, setSearch] = useState('')
 
   const { data, isLoading } = useProgramFeeStructures(1, FEE_STRUCTURES_LOAD_SIZE)
@@ -136,17 +138,19 @@ export default function Page() {
                 return (
                   <tr key={r.feeHdGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
-                        <ActionMenu>
-                          {permissions.edit && (
-                            <button
-                              className="btn btn-neu btn-sm"
-                              onClick={() => { setEditRecord(r); openModal('edit-fee-structure-modal') }}
-                            ><i className="lni lni-pencil"></i> Edit</button>
-                          )}
-                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={deleteRecord}><i className="lni lni-trash-can"></i> Delete</button>}
-                        </ActionMenu>
-                      )}
+                      <ActionMenu>
+                        <button
+                          className="btn btn-neu btn-sm"
+                          onClick={() => { setViewRecord(r); openModal('view-fee-structure-modal') }}
+                        ><i className="lni lni-eye"></i> View</button>
+                        {permissions.edit && (
+                          <button
+                            className="btn btn-neu btn-sm"
+                            onClick={() => { setEditRecord(r); openModal('edit-fee-structure-modal') }}
+                          ><i className="lni lni-pencil"></i> Edit</button>
+                        )}
+                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={deleteRecord}><i className="lni lni-trash-can"></i> Delete</button>}
+                      </ActionMenu>
                     </td>
                     <td><span className="font-mono text-[var(--b700)] font-semibold">{r.feeCode}</span></td>
                     <td>{r.feeDesc}</td>
@@ -165,6 +169,7 @@ export default function Page() {
 
       <FeeStructureModal isOpen={openModals.has('new-fee-structure-modal')} onClose={() => closeModal('new-fee-structure-modal')} showToast={showToast} nav={nav} />
       <FeeStructureModal isOpen={openModals.has('edit-fee-structure-modal')} onClose={() => closeModal('edit-fee-structure-modal')} showToast={showToast} nav={nav} mode="edit" editData={editRecord ?? undefined} />
+      <ViewFeeStructureModal isOpen={openModals.has('view-fee-structure-modal')} onClose={() => closeModal('view-fee-structure-modal')} showToast={showToast} feeStructure={viewRecord ?? undefined} />
       <Toast toast={toast} />
     </>
   )

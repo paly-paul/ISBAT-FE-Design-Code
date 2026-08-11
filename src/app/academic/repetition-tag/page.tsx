@@ -6,6 +6,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { NewRepTagModal } from '@/components/modals/academic/NewRepTagModal'
 import { EditRepTagModal } from '@/components/modals/academic/EditRepTagModal'
+import { ViewRepTagModal } from '@/components/modals/academic/ViewRepTagModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -26,6 +27,7 @@ export default function Page() {
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [editingRepTagGuid, setEditingRepTagGuid] = useState<string | null>(null)
+  const [viewingRepTagGuid, setViewingRepTagGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<RepetitionTag | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
@@ -36,6 +38,11 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingRepTagGuid(guid)
     openModal('edit-rep-tag-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setViewingRepTagGuid(guid)
+    openModal('view-rep-tag-modal')
   }
 
   function confirmDeleteRepetitionTag() {
@@ -149,6 +156,9 @@ export default function Page() {
                     <td>
                       {(permissions.edit || permissions.delete) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.courseUnitRepetitionGuid)}>
+                            <i className="lni lni-eye"></i> View
+                          </button>
                           {permissions.edit && (
                             <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.courseUnitRepetitionGuid)}>
                               <i className="lni lni-pencil"></i> Edit
@@ -180,6 +190,12 @@ export default function Page() {
         showToast={showToast}
         courseUnitRepetitionGuid={editingRepTagGuid}
         updateRepetitionTag={updateRepetitionTag}
+      />
+      <ViewRepTagModal
+        isOpen={openModals.has('view-rep-tag-modal')}
+        onClose={() => closeModal('view-rep-tag-modal')}
+        showToast={showToast}
+        courseUnitRepetitionGuid={viewingRepTagGuid}
       />
       <Toast toast={toast} />
 

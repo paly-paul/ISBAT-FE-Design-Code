@@ -6,6 +6,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { ProgrammeGroupModal } from '@/components/modals/academic/ProgrammeGroupModal'
 import { EditProgrammeGroupModal } from '@/components/modals/academic/EditProgrammeGroupModal'
+import { ViewProgrammeGroupModal } from '@/components/modals/academic/ViewProgrammeGroupModal'
 import { Toast } from '@/components/Toast'
 import { TableSearch } from '@/components/TableSearch'
 import { FilterTh } from '@/components/FilterTh'
@@ -27,6 +28,7 @@ export default function Page() {
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingProgramGroupGuid, setEditingProgramGroupGuid] = useState<string | null>(null)
+  const [viewingProgramGroupGuid, setViewingProgramGroupGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ProgramGroup | null>(null)
   const [search, setSearch] = useState('')
 
@@ -145,16 +147,17 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.programGroupGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
-                        <ActionMenu>
-                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.programGroupGuid)}>
-                            <i className="lni lni-pencil"></i> Edit
-                          </button>}
-                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                            <i className="lni lni-trash-can"></i> Delete
-                          </button>}
-                        </ActionMenu>
-                      )}
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => { setViewingProgramGroupGuid(r.programGroupGuid); openModal('view-proggroup-modal') }}>
+                          <i className="lni lni-eye"></i> View
+                        </button>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.programGroupGuid)}>
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>}
+                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                          <i className="lni lni-trash-can"></i> Delete
+                        </button>}
+                      </ActionMenu>
                     </td>
                     <td className="font-mono text-b700">{r.groupCode}</td>
                     <td><strong>{r.groupName}</strong></td>
@@ -173,6 +176,12 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="programme groups" onPageChange={setPage} />
         </div>
       </div>
+      <ViewProgrammeGroupModal
+        isOpen={openModals.has('view-proggroup-modal')}
+        onClose={() => closeModal('view-proggroup-modal')}
+        showToast={showToast}
+        programGroupGuid={viewingProgramGroupGuid}
+      />
       <ProgrammeGroupModal
         isOpen={openModals.has('new-proggroup-modal')}
         onClose={() => closeModal('new-proggroup-modal')}

@@ -7,6 +7,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { ProgrammeLevelModal } from '@/components/modals/academic/ProgrammeLevelModal'
 import { EditProgrammeLevelModal } from '@/components/modals/academic/EditProgrammeLevelModal'
+import { ViewProgrammeLevelModal } from '@/components/modals/academic/ViewProgrammeLevelModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -27,6 +28,7 @@ export default function Page() {
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [editingProgramLevelGuid, setEditingProgramLevelGuid] = useState<string | null>(null)
+  const [viewingProgramLevelGuid, setViewingProgramLevelGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ProgramLevel | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
@@ -145,8 +147,10 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.programLevelGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
                       <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => { setViewingProgramLevelGuid(r.programLevelGuid); openModal('view-alevel-modal') }}>
+                          <i className="lni lni-eye"></i> View
+                        </button>
                         {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.programLevelGuid)}>
                           <i className="lni lni-pencil"></i> Edit
                         </button>}
@@ -154,7 +158,6 @@ export default function Page() {
                           <i className="lni lni-trash-can"></i> Delete
                         </button>}
                       </ActionMenu>
-                      )}
                     </td>
                     <td className="font-mono text-b700">{r.levelCode}</td>
                     <td><strong>{r.levelName}</strong></td>
@@ -179,6 +182,12 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="programme levels" onPageChange={setPage} />
         </div>
       </div>
+      <ViewProgrammeLevelModal
+        isOpen={openModals.has('view-alevel-modal')}
+        onClose={() => closeModal('view-alevel-modal')}
+        showToast={showToast}
+        programLevelGuid={viewingProgramLevelGuid}
+      />
       <ProgrammeLevelModal
         isOpen={openModals.has('new-alevel-modal')}
         onClose={() => closeModal('new-alevel-modal')}
