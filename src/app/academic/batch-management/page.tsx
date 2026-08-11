@@ -6,6 +6,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { NewBatchModal } from '@/components/modals/academic/NewBatchModal'
 import { EditBatchModal } from '@/components/modals/academic/EditBatchModal'
+import { ViewBatchModal } from '@/components/modals/academic/ViewBatchModal'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
@@ -176,9 +177,10 @@ export default function Page() {
                 {pageItems.map(r => (
                   <tr key={r.batchGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
-                        <ActionMenu>
-                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.batchGuid)}><i className="lni lni-pencil"></i> Edit</button>}
+                        {(permissions.edit || permissions.delete || true) && (
+                          <ActionMenu>
+                            <button className="btn btn-neu btn-sm" onClick={() => { setEditingBatchGuid(r.batchGuid); openModal('view-batch-modal') }}><i className="lni lni-eye"></i> View</button>
+                            {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.batchGuid)}><i className="lni lni-pencil"></i> Edit</button>}
                           {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
                         </ActionMenu>
                       )}
@@ -207,6 +209,12 @@ export default function Page() {
         showToast={showToast}
         batchGuid={editingBatchGuid}
         updateBatch={updateBatch}
+      />
+      <ViewBatchModal
+        isOpen={openModals.has('view-batch-modal')}
+        onClose={() => closeModal('view-batch-modal')}
+        showToast={showToast}
+        batchGuid={editingBatchGuid}
       />
       <Toast toast={toast} />
 

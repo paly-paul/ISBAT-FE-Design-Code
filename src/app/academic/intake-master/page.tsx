@@ -6,6 +6,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { NewIntakeModal } from '@/components/modals/academic/NewIntakeModal'
 import { EditIntakeModal } from '@/components/modals/academic/EditIntakeModal'
+import { ViewIntakeModal } from '@/components/modals/academic/ViewIntakeModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -274,8 +275,9 @@ export default function Page() {
                   return (
                     <tr key={r.intakeGuid} className={r.currentIntake ? 'selected-row' : ''}>
                       <td>
-                        {(permissions.edit || permissions.delete) && (
+                        {(permissions.edit || permissions.delete || true) && (
                           <ActionMenu>
+                            <button className="btn btn-neu btn-sm" onClick={() => { setEditingIntakeGuid(r.intakeGuid); openModal('intake-view-modal') }}><i className="lni lni-eye"></i> View</button>
                             {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => { setEditingIntakeGuid(r.intakeGuid); openModal('intake-edit-modal') }}><i className="lni lni-pencil"></i> Edit</button>}
                             {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
                           </ActionMenu>
@@ -312,6 +314,12 @@ export default function Page() {
         showToast={showToast}
         intakeGuid={editingIntakeGuid}
         updateIntake={updateIntake}
+      />
+      <ViewIntakeModal
+        isOpen={openModals.has('intake-view-modal')}
+        onClose={() => closeModal('intake-view-modal')}
+        showToast={showToast}
+        intakeGuid={editingIntakeGuid}
       />
       <Toast toast={toast} />
 

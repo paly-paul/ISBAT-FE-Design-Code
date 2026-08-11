@@ -12,6 +12,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { AddSkillModal } from '@/components/modals/academic/AddSkillModal'
 import { EditLecturerSkillModal } from '@/components/modals/academic/EditLecturerSkillModal'
+import { ViewLecturerSkillModal } from '@/components/modals/academic/ViewLecturerSkillModal'
 import { useLecturerSkills, useCreateLecturerSkill, useUpdateLecturerSkill, useDeleteLecturerSkill, LecturerSkill } from '@/hooks/academic/useLecturerSkills'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -203,8 +204,11 @@ export default function Page() {
                 {pageItems.map(s => (
                   <tr key={s.lecturerSkillGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(permissions.edit || permissions.delete || true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => { setEditingSkillGuid(s.lecturerSkillGuid); openModal('view-lecturer-skill-modal') }}>
+                            <i className="lni lni-eye"></i> View
+                          </button>
                           {permissions.edit && (
                             <button className="btn btn-neu btn-sm" onClick={() => openEditModal(s.lecturerSkillGuid)}>
                               <i className="lni lni-pencil"></i> Edit
@@ -245,6 +249,12 @@ export default function Page() {
         showToast={showToast}
         lecturerSkillGuid={editingSkillGuid}
         updateSkill={updateSkill}
+      />
+      <ViewLecturerSkillModal
+        isOpen={openModals.has('view-lecturer-skill-modal')}
+        onClose={() => closeModal('view-lecturer-skill-modal')}
+        showToast={showToast}
+        lecturerSkillGuid={editingSkillGuid}
       />
       <Toast toast={toast} />
 
