@@ -7,7 +7,7 @@ export function AllocImportModal({ isOpen, onClose, showToast }: ModalProps) {
   return (
     <div className="modal-overlay open" id="alloc-import-modal">
       <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-download"></i> Import Allocation from Excel</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>

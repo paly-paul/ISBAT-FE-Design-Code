@@ -1,9 +1,10 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 import { MultiSelect } from '@/components/MultiSelect'
 import { ProgramMasterInput } from '@/lib/api/academic/programMaster'
 import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
@@ -12,7 +13,7 @@ import { useFaculties } from '@/hooks/config/useFaculties'
 import { useCurrencies } from '@/hooks/finance/useCurrencies'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useStreams } from '@/hooks/config/useStreams'
-import { useCourseUnits, useCourseUnit } from '@/hooks/academic/useCourseUnits'
+import { useAllCourseUnits, useCourseUnit } from '@/hooks/academic/useCourseUnits'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { useUnitTypes } from '@/hooks/config/useUnitTypes'
@@ -38,12 +39,16 @@ const CALC_TYPES = [
 // currencyGuid is the edit-mode counterpart of currency (intCurrency) — Update
 // wants a real currencyGuid on FeeLines where Create wants intCurrency, see
 // the note on ProgramMasterUpdateInput in lib/api/academic/programMaster.ts.
-// title dropped and ledgerPriority added per Fee_Structure_Change_Requests.md
-// (mirrored from the standalone /academic/fee-structure page's
-// FeeStructureModal.tsx) — title was never part of FeeStructureInput's
-// feeLines contract, and ledgerPriority is kept local-only for now since
-// there's no confirmed backend field for it yet.
-type FeeItem     = { id: number; amount: string; currency: string; currencyGuid: string; ledger: string; ledgerPriority: string }
+// title dropped per Fee_Structure_Change_Requests.md (mirrored from the
+// standalone /academic/fee-structure page's FeeStructureModal.tsx) — it was
+// never part of FeeStructureInput's feeLines contract. Ledger Priority
+// (LedgerNum on the wire) is no longer a manually-typed field on this type —
+// confirmed per program_master_frontend_fixes.md that it's the fee line's
+// 1-based position within its semester, auto-derived at submit time and
+// displayed read-only (see the feeLines mapping in handleFinalSubmit and the
+// "Pri." column below) — same "position IS the sequence" convention as
+// Course Unit's read-only Study Sequence.
+type FeeItem     = { id: number; amount: string; currency: string; currencyGuid: string; ledger: string }
 type SemFees     = FeeItem[][]
 // streamGuid here is the per-course-unit specialization pick — only meaningful
 // (and only editable) when unitCat resolves to a "Specialization" category;
@@ -57,7 +62,7 @@ type SemUnits    = CUItem[][]
 // localOrForeign→localOrForeign, lateralEntryFee/-Currency→lef/lec,
 // creditExemptionFee/-Currency→cef/cec,
 // aptechCreditExemptionFee/-Currency→ace/acec,
-// discountType/discountAmount→calcType/amtPer, intakeCode→intakeCode, and
+// discountType/discountAmount→calcType/amtPer, intakeGuid→intakeGuid, and
 // semFees (the per-semester Ledger/Ledger Priority/Amount/Currency accordion)
 // is the source of FeeStructureInput.feeLines.
 type FeeStructure = {
@@ -65,10 +70,11 @@ type FeeStructure = {
   feeCode: string
   description: string
   localOrForeign: string
-  intakeCode: string
-  // Edit-mode counterpart of intakeCode — Update wants a real intakeGuid on
-  // each FeeStructure where Create wants intakeCode, see the note on
-  // ProgramMasterUpdateInput in lib/api/academic/programMaster.ts.
+  // Confirmed per program_master_frontend_fixes.md: Create wants a real
+  // IntakeGuid here too now, not an integer IntakeCode — this field now
+  // backs the (always read-only) Intake picker in both modes; Create
+  // auto-fills it from the Current Academic Intake, Edit carries through
+  // whatever the structure already has (see the effects below).
   intakeGuid: string
   discountType: string
   discountAmount: string
@@ -81,8 +87,8 @@ type FeeStructure = {
   semFees: SemFees
 }
 
-function blankItem(id: number): FeeItem {
-  return { id, amount: '', currency: '', currencyGuid: '', ledger: '', ledgerPriority: '' }
+function blankItem(id: number, defaultCurrencyGuid = '', defaultCurrencyLegacy = ''): FeeItem {
+  return { id, amount: '', currency: defaultCurrencyLegacy, currencyGuid: defaultCurrencyGuid, ledger: '' }
 }
 
 // Semester count varies per programme rather than being a fixed number, so
@@ -102,7 +108,6 @@ function blankFeeStructure(id: number, semCount: number): FeeStructure {
     feeCode: '',
     description: '',
     localOrForeign: 'false',
-    intakeCode: '',
     intakeGuid: '',
     discountType: '1',
     discountAmount: '',
@@ -182,6 +187,25 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const [feeStructures, setFeeStructures] = useState<FeeStructure[]>(() => makeDefaultFeeStructures(1))
   const [activeFeeIdx, setActiveFeeIdx]   = useState(0)
   const [feeAccordion, setFeeAccordion]   = useState(0)
+  // Copy Fee Code (program_master_frontend_fixes.md, "Programme Details -
+  // Fee Section Bugs" #2) — controlled value for the "Copy Fee Code"
+  // SearchSelect below; previously had no value/onChange at all, so picking
+  // an option did nothing. Reset whenever the active structure changes so a
+  // stale source selection never lingers on a different structure.
+  const [copySourceId, setCopySourceId] = useState('')
+  // Guards the fullDetails prefill effect below against running more than
+  // once per open-session for a given programme. Neither
+  // useProgramMasterFullDetails nor useProgramCourseUnits overrides the
+  // global QueryClient's defaults (staleTime: 0, refetchOnWindowFocus:
+  // true), so a plain alt-tab/refocus while the user is mid-edit on Step
+  // 2/3 can trigger a background refetch; if that refetch's result isn't
+  // reference-identical to what's cached (react-query's structural sharing
+  // only skips the new reference when the data is byte-for-byte the same),
+  // the effect re-runs and silently overwrites whatever course units/fee
+  // structures the user just added with the server's original (possibly
+  // empty) data — so Save then submits nothing for either, even though they
+  // looked filled in on screen a moment earlier.
+  const prefilledForRef = useRef<string | null>(null)
   // Semester count isn't fixed — it varies per programme. Starts at 1 and
   // grows to match the picked Programme Level's semCount (Add mode) or the
   // real semesters returned by program-course-units (Edit mode); the user
@@ -208,13 +232,31 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const [facultyGuid, setFacultyGuid] = useState('')
   const [appFee, setAppFee] = useState('')
   const [lateFee, setLateFee] = useState('')
-  const [currencyCode, setCurrencyCode] = useState('')
-  // Edit-mode counterpart of currencyCode — Update wants a real currencyGuid
-  // where Create wants Currency.intCurrency. Prefilled from initialCurrencyGuid
-  // (the list row's own currencyGuid) below, not from full-details, which
-  // doesn't return one — but that list field has been observed null in every
-  // real sample seen so far, so this may still come up empty and need picking.
+  // Confirmed per program_master_frontend_fixes.md: Create wants a real
+  // currencyGuid too now, not Currency.intCurrency — so this one state now
+  // backs the Currency picker in both modes (previously Create used a
+  // separate currencyCode/currencyIntOptions pair). In Edit mode it's
+  // prefilled from initialCurrencyGuid (the list row's own currencyGuid)
+  // below, not from full-details, which doesn't return one — but that list
+  // field has been observed null in every real sample seen so far, so this
+  // may still come up empty and need picking.
   const [currencyGuid, setCurrencyGuid] = useState('')
+
+  // Programme Level's "auto-fills year/sem/credits" explanation used to sit
+  // as plain parenthetical text right in the field label — moved into a
+  // click-to-open info popover (matching the ⓘ icon convention Step 2's
+  // Syllabus/Outline/Taught By button already uses) so the label itself
+  // reads cleanly and the explanation only shows up when actually asked for.
+  const [levelInfoOpen, setLevelInfoOpen] = useState(false)
+  const levelInfoRef = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (!levelInfoOpen) return
+    function onDoc(e: MouseEvent) {
+      if (!levelInfoRef.current?.contains(e.target as Node)) setLevelInfoOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [levelInfoOpen])
 
   useEffect(() => {
     if (isOpen && mode === 'edit') setCurrencyGuid(initialCurrencyGuid ?? '')
@@ -254,14 +296,20 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const selectedFaculty = faculties.find(f => f.facultyGuid === facultyGuid)
 
   const { data: currencies = [] } = useCurrencies()
-  // Every currency field on this payload (this Step 1 picker included) takes
-  // Currency.intCurrency (a number), not the currency code — see the
-  // ProgramMasterInput/FeeStructureInput comments for why.
+  // Lec/Cec/Acec (Lateral Entry/Credit Exemption/Aptech Credit Exemption Fee
+  // Currency) still take Currency.intCurrency (a number) — those are NOT
+  // confirmed to have switched to guids the way the top-level programme
+  // Currency and FeeLines[].CurrencyGuid did (see the FeeStructureUpdateInput
+  // comment in lib/api/academic/programMaster.ts), so this is only used for
+  // those three fields now, not the top-level Step 1 Currency picker below.
   const currencyIntOptions = currencies.map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` }))
 
-  // Edit-only: Update wants a real currencyGuid, confirmed via the "three
-  // currency guid spaces" gotcha elsewhere in this app — useFinanceCurrencies()
-  // carries the real one, unlike useCurrencies() (Currency Master) above.
+  // Update wants a real currencyGuid, confirmed via the "three currency guid
+  // spaces" gotcha elsewhere in this app — useFinanceCurrencies() carries the
+  // real one, unlike useCurrencies() (Currency Master) above. Create was
+  // confirmed to want the same real currencyGuid too (see the
+  // ProgramMasterInput.currencyGuid note), so this now backs the top-level
+  // Currency picker in both modes.
   const { data: financeCurrencies = [] } = useFinanceCurrencies()
   const financeCurrencyOptions = financeCurrencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))
 
@@ -270,10 +318,13 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // Step 2's per-semester picker only offers what was picked in Step 1.
   const semesterStreamOptions = streamOptions.filter(o => streamGuids.includes(o.value))
 
-  const { data: courseUnits = [] } = useCourseUnits()
+  const { data: courseUnits = [] } = useAllCourseUnits()
   const courseUnitOptions = courseUnits.map(u => ({
     value: u.courseUnitGuid,
-    label: `${u.courseUnitCode} — ${u.courseUnitName} (${u.maxCredits} cr)`,
+    // "cr" read ambiguously as "crore" (Indian numbering, 10 million) rather
+    // than "credit" — spelled out and pluralized, same convention as the
+    // semester sidebar's own credit total below.
+    label: `${u.courseUnitCode} — ${u.courseUnitName} (${u.maxCredits} credit${u.maxCredits !== 1 ? 's' : ''})`,
     code: u.courseUnitCode,
     name: u.courseUnitName,
     credits: u.maxCredits,
@@ -312,11 +363,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const ledgerOptions = ledgers.map(l => ({ value: l.ledgerGuid, label: l.ledgerName }))
 
   const { data: intakes = [] } = useIntakes()
-  // Per-fee-structure Intake — uses intakeCode in create mode, the real
-  // intakeGuid in edit mode (see the FeeStructure type comment on
-  // intakeGuid); the top-level programme Intake (intakeGuid on
-  // ProgramMasterInput, Step 1) is a separate field entirely.
-  const intakeOptions = intakes.map(i => ({ value: String(i.intakeCode), label: `${i.intakeCode} — ${i.description}` }))
+  // Per-fee-structure Intake — a real intakeGuid in both modes now (see the
+  // FeeStructure type comment on intakeGuid); the top-level programme Intake
+  // (intakeGuid on ProgramMasterInput, Step 1) is a separate field entirely.
   const programIntakeOptions = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   // Per Fee_Structure_Change_Requests.md #3/#4 (mirrored from the standalone
   // /academic/fee-structure page) — Step 3's per-structure Intake is now
@@ -352,6 +401,14 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     // (e.g. editing a different programme first). This is the "sometimes
     // fields aren't populated after closing and reopening Edit" bug.
     if (!isOpen || mode !== 'edit' || !fullDetails) return
+    // Prefill exactly once per (open session, programme) — a later
+    // reference change on fullDetails/programCourseUnitRows (a background
+    // refetch on window focus, since neither query overrides the default
+    // staleTime/refetchOnWindowFocus) must NOT re-run this and stomp on
+    // Step 2/3 edits the user has made since the initial prefill. See the
+    // prefilledForRef comment above.
+    if (prefilledForRef.current === programGuid) return
+    prefilledForRef.current = programGuid ?? null
 
     setProgramCode(fullDetails.programCode)
     setProgramName(fullDetails.programName)
@@ -404,7 +461,13 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           credits: cu?.maxCredits ?? 0,
           unitType: u.unitTypeGuid ?? '',
           unitCat: u.unitCatGuid ?? '',
-          streamGuid: u.streamGuid ?? '',
+          // Only carry a specialization through for a unit whose category is
+          // actually "Specialization" — the backend can still return a stale
+          // streamGuid on a Core/Elective row (e.g. left over from before the
+          // category was last changed), and showing that in a field the user
+          // never picked it from (even disabled) is misleading. A unit that
+          // isn't a Specialization unit always opens with this field blank.
+          streamGuid: isSpecializationCategory(u.unitCatGuid ?? '') ? (u.streamGuid ?? '') : '',
         })
       })
     } else {
@@ -432,7 +495,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             credits: cu?.maxCredits ?? 0,
             unitType: detail?.unitTypeGuid ?? '',
             unitCat: detail?.unitCatGuid ?? '',
-            streamGuid: detail?.streamGuid ?? '',
+            // Same "only for a real Specialization category" guard as the primary path above.
+            streamGuid: isSpecializationCategory(detail?.unitCatGuid ?? '') ? (detail?.streamGuid ?? '') : '',
           })
         })
       } else {
@@ -452,7 +516,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             credits: cu?.maxCredits ?? 0,
             unitType: u.unitTypeGuid ?? '',
             unitCat: u.unitCatGuid ?? '',
-            streamGuid: u.streamGuid ?? '',
+            // Same "only for a real Specialization category" guard as the primary path above.
+            streamGuid: isSpecializationCategory(u.unitCatGuid ?? '') ? (u.streamGuid ?? '') : '',
           })
         })
       }
@@ -473,7 +538,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
               currency: '',
               currencyGuid: l.currencyGuid,
               ledger: l.ledgerGuid,
-              ledgerPriority: '',
             })
           })
           return {
@@ -481,7 +545,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             feeCode: s.feeCode,
             description: s.feeDesc,
             localOrForeign: String(s.localOrForeign),
-            intakeCode: '',
             intakeGuid: s.intakeGuid ?? '',
             discountType: String(s.calcType),
             discountAmount: s.amtPer != null ? String(s.amtPer) : '',
@@ -503,11 +566,14 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
   // Create mode has no per-structure Intake picker any more (#4) — every
   // fee structure is forced onto whatever intake is currently flagged
-  // current. Applies to every structure, not just the active one.
+  // current. Applies to every structure, not just the active one. Stores
+  // the real intakeGuid now (see the FeeStructure.intakeGuid comment) —
+  // used to send FeeStructures[n].IntakeGuid instead of the old integer
+  // IntakeCode per program_master_frontend_fixes.md.
   useEffect(() => {
     if (isOpen && mode !== 'edit' && currentAcademicIntake) {
-      const code = String(currentAcademicIntake.intakeCode)
-      setFeeStructures(prev => prev.map(s => s.intakeCode === code ? s : { ...s, intakeCode: code }))
+      const guid = currentAcademicIntake.intakeGuid
+      setFeeStructures(prev => prev.map(s => s.intakeGuid === guid ? s : { ...s, intakeGuid: guid }))
     }
   }, [isOpen, mode, currentAcademicIntake])
 
@@ -522,6 +588,24 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     }
   }, [isOpen, mode, currentAcademicIntake])
 
+  function selectProgramGroup(guid: string) {
+    setProgramGroupGuid(guid)
+    if (step1Errors.programGroupGuid) setStep1Errors(p => ({ ...p, programGroupGuid: '' }))
+    // Every ProgramGroup carries its own programLevelGuid (a group belongs to
+    // exactly one level) — auto-fill Level from the picked group instead of
+    // making the user look up and re-pick the same level a second time.
+    // Routed through selectProgramLevel so App/Late Fee and the Step 2/3
+    // semester-count resize all follow the same auto-fill this level would
+    // get from being picked directly. Guarded on the level actually being in
+    // the loaded programLevels list — otherwise programLevelGuid would point
+    // at a level programLevelOptions has no entry for, and the dropdown
+    // would silently show its placeholder instead of the real selection.
+    const group = programGroups.find(g => g.programGroupGuid === guid)
+    if (group?.programLevelGuid && programLevels.some(l => l.programLevelGuid === group.programLevelGuid)) {
+      selectProgramLevel(group.programLevelGuid)
+    }
+  }
+
   function selectProgramLevel(guid: string) {
     setProgramLevelGuid(guid)
     if (step1Errors.programLevelGuid) setStep1Errors(p => ({ ...p, programLevelGuid: '' }))
@@ -529,6 +613,14 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     if (level) {
       setAppFee(String(level.appFee))
       setLateFee(String(level.lateFee))
+      // Level.currencyGuid itself is unconfirmed on GET (see the comment on
+      // ProgramLevel.currencyGuid in programLevel.ts) — resolve the level's
+      // own currencyCode against useFinanceCurrencies() instead, same
+      // code→real-guid matching selectFeeItemCurrency() already uses below.
+      // Only auto-fills when a match is found, so an unmatched/blank level
+      // currency leaves whatever Currency the user already picked alone.
+      const fc = financeCurrencies.find(c => c.currencyCode === level.currencyCode)
+      if (fc) setCurrencyGuid(fc.currencyGuid)
       // Size Step 2/3 to the level's own semester count for a new programme
       // (Edit mode instead sizes off the real program-course-units data —
       // see the fullDetails effect above). resizeSemesters keeps whatever's
@@ -547,7 +639,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     if (!facultyGuid) e.facultyGuid = 'Please select a Faculty'
     if (!appFee) e.appFee = 'Application Fee is required'
     if (!lateFee) e.lateFee = 'Late Fee is required'
-    if (mode === 'edit' ? !currencyGuid : !currencyCode) e.currencyCode = 'Please select a Currency'
+    if (!currencyGuid) e.currencyCode = 'Please select a Currency'
     // No. of Course Units, Accreditation Date, and Specialization are all
     // optional per Program_Master_Change_Requests_Final.md — unitCount is
     // still validated against Step 2's actual course-unit count (but only
@@ -615,14 +707,15 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const isSaving = mode === 'edit' ? !!updateProgramMasterComplete?.isPending : createProgramMaster.isPending
 
   function handleClose() {
+    prefilledForRef.current = null
     setStep(1); setSaved(false); setFailure(null)
     setFeeStructures(makeDefaultFeeStructures(1))
-    setActiveFeeIdx(0); setFeeAccordion(0); setActiveAcc(0)
+    setActiveFeeIdx(0); setFeeAccordion(0); setActiveAcc(0); setCopySourceId('')
     setSemUnits([[]])
     setPendingSel([''])
     setSemLabels(['Semester 1'])
     setProgramCode(''); setProgramName(''); setProgramGroupGuid(''); setProgramLevelGuid('')
-    setFacultyGuid(''); setAppFee(''); setLateFee(''); setCurrencyCode(''); setCurrencyGuid(''); setUnitCount('')
+    setFacultyGuid(''); setAppFee(''); setLateFee(''); setCurrencyGuid(''); setUnitCount('')
     setDateAcc(''); setStreamGuids([])
     setIntakeGuid(''); setPgmStatus(true); setNoIa(false); setAccLetterFile(null); setStep1Errors({})
     onClose()
@@ -670,24 +763,30 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         calcType: +s.discountType || 1,
         amtPer: s.discountAmount ? +s.discountAmount : null,
         intakeGuid: s.intakeGuid || null,
+        // LedgerNum is the fee line's own priority/sequence within this
+        // structure — confirmed per program_master_frontend_fixes.md that
+        // this was always coming out 0 because it was being read off the
+        // Ledger master's own ledgerNum field instead (a per-ledger id,
+        // unrelated to this fee structure's ordering). Auto-generated here
+        // from each item's 1-based position, same "position IS the
+        // sequence" convention as Course Unit's Study Sequence — the
+        // existing Pri. up/down reorder controls double as how a user
+        // changes it.
         feeLines: s.semFees.flatMap((items, si) =>
-          items.map(item => {
-            const ledger = ledgers.find(l => l.ledgerGuid === item.ledger)
-            return {
-              semCode: si + 1,
-              ledgerGuid: item.ledger,
-              currencyGuid: item.currencyGuid,
-              ledgerNum: ledger?.ledgerNum ?? 0,
-              amount: +item.amount || 0,
-            }
-          })
+          items.map((item, idx) => ({
+            semCode: si + 1,
+            ledgerGuid: item.ledger,
+            currencyGuid: item.currencyGuid,
+            ledgerNum: idx + 1,
+            amount: +item.amount || 0,
+          }))
         ),
       }))
 
       const updateInput: ProgramMasterUpdateInput = {
         programCode, programName, programLevelGuid, pgmStatus, noIa, programGroupGuid,
         unitCount: +unitCount || 0, appFee: +appFee || 0, lateFee: +lateFee || 0,
-        facultyGuid, currencyGuid, dateAcc: `${dateAcc}T00:00:00`,
+        facultyGuid, currencyGuid, dateAcc: dateAcc ? `${dateAcc}T00:00:00` : null,
         // Top-level field only accepts one specialization — see the
         // streamGuids state comment above.
         streamGuid: streamGuids[0] || '',
@@ -744,14 +843,19 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
       calcType: +s.discountType || 1,
       amtPer: s.discountAmount ? +s.discountAmount : null,
-      intakeCode: s.intakeCode ? +s.intakeCode : null,
+      // Confirmed per program_master_frontend_fixes.md: the backend wants
+      // the real IntakeGuid here, not an integer IntakeCode — see the note
+      // on FeeStructureInput.intakeGuid.
+      intakeGuid: s.intakeGuid || null,
+      // LedgerNum is auto-generated from each item's 1-based position — see
+      // the identical note on the Update branch above.
       feeLines: s.semFees.flatMap((items, si) =>
-        items.map(item => {
+        items.map((item, idx) => {
           const ledger = ledgers.find(l => l.ledgerGuid === item.ledger)
           return {
             intLedger: ledger?.intLedger ?? 0,
             ledgerGuid: item.ledger,
-            ledgerNum: ledger?.ledgerNum ?? 0,
+            ledgerNum: idx + 1,
             intCurrency: +item.currency || 0,
             // Real currencyGuid — see FeeLineInput.currencyGuid note; this is
             // what actually satisfies the backend's "Currency is required"
@@ -776,8 +880,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         appFee: +appFee || 0,
         lateFee: +lateFee || 0,
         facultyGuid,
-        currencyCode: +currencyCode || 0,
-        dateAcc: `${dateAcc}T00:00:00`,
+        currencyGuid,
+        dateAcc: dateAcc ? `${dateAcc}T00:00:00` : null,
         // Top-level field only accepts one specialization — see the
         // streamGuids state comment above.
         streamGuid: streamGuids[0] || '',
@@ -807,11 +911,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     const newStruct: FeeStructure = {
       ...blankFeeStructure(nextFeeStructId++, semUnits.length),
       semFees: makeEmptySemFees(semUnits.length),
-      intakeCode: mode !== 'edit' && currentAcademicIntake ? String(currentAcademicIntake.intakeCode) : '',
+      intakeGuid: mode !== 'edit' && currentAcademicIntake ? currentAcademicIntake.intakeGuid : '',
     }
     setFeeStructures(prev => [...prev, newStruct])
     setActiveFeeIdx(feeStructures.length)
-    setFeeAccordion(0)
+    setFeeAccordion(0); setCopySourceId('')
   }
 
   function removeFeeStructure(idx: number) {
@@ -820,15 +924,69 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setActiveFeeIdx(prev => (prev >= idx && prev > 0 ? prev - 1 : prev))
   }
 
+  // Copies another structure's fees/discounts/fee lines onto the active one
+  // — Fee Code/Description are deliberately left untouched so the copy
+  // never collides with the source's own code. Fee lines are deep-cloned
+  // with fresh local ids so editing the copy never mutates the source.
+  function copyFeeStructure(sourceId: string) {
+    setCopySourceId(sourceId)
+    const source = feeStructures.find(s => String(s.id) === sourceId)
+    if (!source) return
+    setFeeStructures(prev => prev.map((s, i) => i !== activeFeeIdx ? s : {
+      ...s,
+      localOrForeign: source.localOrForeign,
+      discountType: source.discountType,
+      discountAmount: source.discountAmount,
+      lateralEntryFee: source.lateralEntryFee,
+      lateralEntryFeeCurrency: source.lateralEntryFeeCurrency,
+      creditExemptionFee: source.creditExemptionFee,
+      creditExemptionFeeCurrency: source.creditExemptionFeeCurrency,
+      aptechCreditExemptionFee: source.aptechCreditExemptionFee,
+      aptechCreditExemptionFeeCurrency: source.aptechCreditExemptionFeeCurrency,
+      semFees: source.semFees.map(items => items.map(item => ({ ...item, id: nextId++ }))),
+    }))
+    showToast(`Copied fees from ${source.feeCode || 'New Fee Structure'}`)
+  }
+
   function updateFeeStructureMeta(field: Exclude<keyof FeeStructure, 'id' | 'semFees'>, val: string) {
     setFeeStructures(prev => prev.map((s, i) => i === activeFeeIdx ? { ...s, [field]: val } : s))
   }
 
+  // Lateral Entry/Credit Exemption/Aptech Credit Exemption Fee each kept
+  // their own Currency dropdown, even though in practice a programme's
+  // Lateral Entry Fee, Credit Exemption Fee, and Aptech Credit Exemption Fee
+  // are always meant to share one currency — three separate pickers just
+  // meant picking (and re-checking) the same value three times. FeeStructure
+  // still carries all three underlying fields (FeeStructureInput's
+  // lec/cec/acec are genuinely separate wire fields — see handleFinalSubmit),
+  // this only collapses the UI down to one control that drives all three at
+  // once, in a single state update so they can never drift apart from here.
+  function updateSharedFeeCurrency(val: string) {
+    setFeeStructures(prev => prev.map((s, i) => i === activeFeeIdx
+      ? { ...s, lateralEntryFeeCurrency: val, creditExemptionFeeCurrency: val, aptechCreditExemptionFeeCurrency: val }
+      : s
+    ))
+  }
+
+  // Fee Currency default (program_master_frontend_fixes.md, "Programme
+  // Details - Fee Section Bugs" #1) — a new fee item is never left with no
+  // currency picked; pre-fill it from the structure's own Local/Foreign
+  // toggle (UGX for Local, USD for Foreign) via the same real currencyGuid
+  // source the picker itself uses, falling back to whichever currency
+  // happens to load first if neither code is found.
+  function defaultFeeItemCurrency(localOrForeign: string): { guid: string; legacy: string } {
+    const code = localOrForeign === 'true' ? 'USD' : 'UGX'
+    const fc = financeCurrencies.find(c => c.currencyCode === code) ?? financeCurrencies[0]
+    const legacy = fc ? currencies.find(c => c.currencyCode === fc.currencyCode) : undefined
+    return { guid: fc?.currencyGuid ?? '', legacy: legacy ? String(legacy.intCurrency) : '' }
+  }
+
   /* ── fee item helpers ── */
   function addItem(si: number) {
+    const { guid, legacy } = defaultFeeItemCurrency(feeStructures[activeFeeIdx].localOrForeign)
     setFeeStructures(prev => prev.map((s, i) =>
       i === activeFeeIdx
-        ? { ...s, semFees: s.semFees.map((items, j) => j === si ? [...items, blankItem(nextId++)] : items) }
+        ? { ...s, semFees: s.semFees.map((items, j) => j === si ? [...items, blankItem(nextId++, guid, legacy)] : items) }
         : s
     ))
   }
@@ -956,7 +1114,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   return (
     <div className="modal-overlay open" id="new-prog-modal">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-graduation"></i> {mode === 'edit' ? 'Edit' : 'Add'} Programme Version</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
@@ -998,15 +1156,50 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   />
                   {step1Errors.programName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programName}</p>}
                 </div>
+                {/* Group and Level moved directly under Code/Name (was previously split
+                    apart by No. of Course Units sitting between them) so the two
+                    required pickers that most affect the rest of the form read as one
+                    connected block instead of getting broken up by an unrelated field. */}
                 <div className="fg">
                   <div className="lbl">Programme Group <span className="req">*</span></div>
                   <SearchSelect
                     placeholder="— Select group —"
                     value={programGroupGuid}
-                    onChange={v => { setProgramGroupGuid(v); if (step1Errors.programGroupGuid) setStep1Errors(p => ({ ...p, programGroupGuid: '' })) }}
+                    onChange={selectProgramGroup}
                     options={programGroupOptions}
                   />
                   {step1Errors.programGroupGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programGroupGuid}</p>}
+                </div>
+                <div className="fg span2">
+                  {/* Inline style, not the `flex` utility class — .lbl's own
+                      `display: block` (globals.css) loads after Tailwind's
+                      utility layer in this stylesheet, so a `flex` class here
+                      would lose that cascade tie; an inline style always wins
+                      regardless of source order. */}
+                  <div className="lbl" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    Programme Level <span className="req">*</span>
+                    <span ref={levelInfoRef} style={{ position: 'relative', display: 'inline-flex' }}>
+                      <button
+                        type="button"
+                        className="btn btn-neu btn-sm"
+                        style={{ width: 18, height: 18, padding: 0, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="Automatically fills Years, Semesters, Min. Credits, Application/Late Fee, and Currency"
+                        onClick={() => setLevelInfoOpen(v => !v)}
+                      ><i className="lni lni-information" style={{ fontSize: 10 }}></i></button>
+                      {levelInfoOpen && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 20, width: 230, background: 'var(--white)', border: '1px solid var(--g200)', borderRadius: 'var(--rsm)', boxShadow: '0 6px 18px rgba(0,0,0,.12)', padding: '8px 10px', fontSize: 12, fontWeight: 400, color: 'var(--g700)' }}>
+                          Automatically fills No. of Years, No. of Semesters, Min. Credits, Application/Late Fee, and Currency from the picked level.
+                        </div>
+                      )}
+                    </span>
+                  </div>
+                  <SearchSelect placeholder="— Select level —" value={programLevelGuid} onChange={selectProgramLevel} options={programLevelOptions} />
+                  {step1Errors.programLevelGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programLevelGuid}</p>}
+                  <div className="flex gap-2 flex-wrap mt-2">
+                    <span className="lvl-chip"><span className="lvl-chip-lbl">No. of Years</span><span className="lvl-chip-val">{selectedProgramLevel?.yearCount ?? '—'}</span></span>
+                    <span className="lvl-chip"><span className="lvl-chip-lbl">No. of Semesters</span><span className="lvl-chip-val">{selectedProgramLevel?.semCount ?? '—'}</span></span>
+                    <span className="lvl-chip"><span className="lvl-chip-lbl">Min. Credits</span><span className="lvl-chip-val">{selectedProgramLevel?.minCreditLoad ?? '—'}</span></span>
+                  </div>
                 </div>
                 {/* Not mandatory per Program_Master_Change_Requests_Final.md — when
                     left blank, Course Unit Allocation has no count to enforce;
@@ -1022,16 +1215,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     value={unitCount}
                     onChange={e => setUnitCount(e.target.value)}
                   />
-                </div>
-                <div className="fg span2">
-                  <div className="lbl">Programme Level (auto-fills year/sem/credits) <span className="req">*</span></div>
-                  <SearchSelect placeholder="— Select level —" value={programLevelGuid} onChange={selectProgramLevel} options={programLevelOptions} />
-                  {step1Errors.programLevelGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programLevelGuid}</p>}
-                  <div className="flex gap-2 flex-wrap mt-2">
-                    <span className="lvl-chip"><span className="lvl-chip-lbl">No. of Years</span><span className="lvl-chip-val">{selectedProgramLevel?.yearCount ?? '—'}</span></span>
-                    <span className="lvl-chip"><span className="lvl-chip-lbl">No. of Semesters</span><span className="lvl-chip-val">{selectedProgramLevel?.semCount ?? '—'}</span></span>
-                    <span className="lvl-chip"><span className="lvl-chip-lbl">Min. Credits</span><span className="lvl-chip-val">{selectedProgramLevel?.minCreditLoad ?? '—'}</span></span>
-                  </div>
                 </div>
                 <div className="fg">
                   <div className="lbl">Faculty <span className="req">*</span></div>
@@ -1068,26 +1251,17 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                       onChange={e => { setLateFee(e.target.value); if (step1Errors.lateFee) setStep1Errors(p => ({ ...p, lateFee: '' })) }}
                       style={step1Errors.lateFee ? { borderColor: 'var(--red)' } : undefined}
                     />
-                    {mode === 'edit' ? (
-                      <SearchSelect
-                        placeholder="Currency"
-                        value={currencyGuid}
-                        onChange={v => { setCurrencyGuid(v); if (step1Errors.currencyCode) setStep1Errors(p => ({ ...p, currencyCode: '' })) }}
-                        options={financeCurrencyOptions}
-                      />
-                    ) : (
-                      <SearchSelect
-                        placeholder="Currency"
-                        value={currencyCode}
-                        onChange={v => { setCurrencyCode(v); if (step1Errors.currencyCode) setStep1Errors(p => ({ ...p, currencyCode: '' })) }}
-                        options={currencyIntOptions}
-                      />
-                    )}
+                    <SearchSelect
+                      placeholder="Currency"
+                      value={currencyGuid}
+                      onChange={v => { setCurrencyGuid(v); if (step1Errors.currencyCode) setStep1Errors(p => ({ ...p, currencyCode: '' })) }}
+                      options={financeCurrencyOptions}
+                    />
                   </div>
                   <div className="text-g500 mt-[5px]" style={{ fontSize: 'var(--fs-xs)' }}>
                     {mode === 'edit'
                       ? (currencyGuid ? 'Pre-filled from the existing programme — override if needed.' : 'Not available on the existing programme record — please select it.')
-                      : 'Pre-loaded from the selected Programme Level. Override per programme if needed.'}
+                      : 'Please select the programme\'s base currency.'}
                   </div>
                   {(step1Errors.appFee || step1Errors.lateFee || step1Errors.currencyCode) && (
                     <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.appFee || step1Errors.lateFee || step1Errors.currencyCode}</p>
@@ -1097,11 +1271,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     required marker, no validation. */}
                 <div className="fg">
                   <div className="lbl">Accreditation Date</div>
-                  <input
-                    className="ctrl"
-                    type="date"
+                  <DatePicker
                     value={dateAcc}
-                    onChange={e => setDateAcc(e.target.value)}
+                    onChange={setDateAcc}
                   />
                 </div>
                 {/* Accreditation Expiry Date — commented out per request.
@@ -1127,7 +1299,23 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                 {/* Intake dropdown removed per Program_Master_Change_Requests_Final.md
                     — intakeGuid is auto-filled from the Current Academic Intake
                     instead (see the effect below), same pattern as the standalone
-                    Fee Structure page's Create mode. */}
+                    Fee Structure page's Create mode. CONFIRMED broken as originally
+                    shipped: with no picker at all, a live environment where no intake
+                    is flagged currentIntake left intakeGuid permanently empty with no
+                    way to fix it — Create was silently blocked. Falls back to an
+                    editable picker in exactly that case (Edit mode is unaffected —
+                    it already carries intakeGuid through from fullDetails). */}
+                {mode !== 'edit' && !currentAcademicIntake && (
+                  <div className="fg">
+                    <div className="lbl">Intake</div>
+                    <SearchSelect
+                      placeholder="— Select intake —"
+                      value={intakeGuid}
+                      options={programIntakeOptions}
+                      onChange={setIntakeGuid}
+                    />
+                  </div>
+                )}
                 <div className="fg span3">
                   <div className="lbl">Accreditation Letter</div>
                   <div className="file-zone p-[14px]">
@@ -1181,9 +1369,12 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
               <div className="g3">
                 <div className="fg">
                   <div className="lbl">Admission Status <span className="req">*</span></div>
+                  {/* Just "Active"/"Inactive" — no "(New admissions)"/"(Existing
+                      students only)" qualifier, per the Program Master
+                      requirements doc (req. 3). pgmStatus itself is unchanged. */}
                   <div className="tgl-group">
-                    <button type="button" className={`tgl-btn${pgmStatus ? ' tgl-active' : ''}`} onClick={() => setPgmStatus(true)}><i className="lni lni-checkmark"></i> Active (New admissions)</button>
-                    <button type="button" className={`tgl-btn${!pgmStatus ? ' tgl-active' : ''}`} onClick={() => setPgmStatus(false)}>Inactive (Existing students only)</button>
+                    <button type="button" className={`tgl-btn${pgmStatus ? ' tgl-active' : ''}`} onClick={() => setPgmStatus(true)}><i className="lni lni-checkmark"></i> Active</button>
+                    <button type="button" className={`tgl-btn${!pgmStatus ? ' tgl-active' : ''}`} onClick={() => setPgmStatus(false)}>Inactive</button>
                   </div>
                 </div>
                 <div className="fg">
@@ -1211,7 +1402,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   {feeStructures.map((s, i) => (
                     <div
                       key={s.id}
-                      onClick={() => { setActiveFeeIdx(i); setFeeAccordion(0) }}
+                      onClick={() => { setActiveFeeIdx(i); setFeeAccordion(0); setCopySourceId('') }}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 8,
                         padding: '9px 10px', borderRadius: 'var(--rsm)', marginBottom: 2,
@@ -1252,7 +1443,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     <i className="lni lni-coin" style={{ color: 'var(--b600)', fontSize: 15 }}></i>
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--b800)' }}>{activeFeeStruct.feeCode || `Structure ${activeFeeIdx + 1}`} — {activeFeeStruct.localOrForeign === 'true' ? 'Foreign' : 'Local'}</div>
+                    {/* Real Programme Fee Header (e.g. "FCS-001 — Local"), not a generic
+                        "Structure N" label, per the Program Master requirements doc
+                        (req. 4) — "New Fee Structure" only shows before a header code
+                        has been typed in for a not-yet-saved structure. */}
+                    <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--b800)' }}>{activeFeeStruct.feeCode || 'New Fee Structure'} — {activeFeeStruct.localOrForeign === 'true' ? 'Foreign' : 'Local'}</div>
                     <div style={{ fontSize: 11, color: 'var(--g400)' }}>Structure {activeFeeIdx + 1} of {feeStructures.length}</div>
                   </div>
                 </div>
@@ -1271,25 +1466,34 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     <div className="lbl">Copy Fee Code</div>
                     <SearchSelect
                       placeholder="— Select source structure —"
-                      options={feeStructures.map((s, i) => ({ s, i })).filter(({ i }) => i !== activeFeeIdx).map(({ s, i }) => ({ value: String(s.id), label: s.feeCode || `Structure ${i + 1}` }))}
+                      value={copySourceId}
+                      onChange={copyFeeStructure}
+                      options={feeStructures.map((s, i) => ({
+                        value: String(s.id),
+                        label: (s.feeCode || 'New Fee Structure') + (i === activeFeeIdx ? ' (Current)' : ''),
+                      }))}
                     />
                   </div>
                   <div className="fg m-0">
                     <div className="lbl">Base Currency</div>
                     <SearchSelect options={LOCAL_OR_FOREIGN_OPTS} value={activeFeeStruct.localOrForeign} onChange={val => updateFeeStructureMeta('localOrForeign', val)} />
                   </div>
-                  {/* Always read-only now (Fee_Structure_Change_Requests.md
-                      #3/#4): Edit shows the structure's existing intake,
-                      unchangeable; Create has no picker at all — it's
-                      forced onto the Current Academic Intake (see the
-                      effect above and addFeeStructure). */}
+                  {/* Read-only in Edit (existing intake, unchangeable) and in Create once
+                      auto-filled from the Current Academic Intake (Fee_Structure_Change_
+                      Requests.md #3/#4). CONFIRMED broken as originally shipped, though:
+                      when no intake is flagged currentIntake in the live data, the
+                      auto-fill effect never runs and this was `disabled` with nothing to
+                      select and no way to fix it — Create was permanently blocked. Falls
+                      back to an editable picker in exactly that case. */}
                   <div className="fg m-0">
                     <div className="lbl">Intake</div>
-                    {mode === 'edit' ? (
-                      <SearchSelect placeholder="— Select intake —" value={activeFeeStruct.intakeGuid} options={programIntakeOptions} disabled />
-                    ) : (
-                      <SearchSelect placeholder={currentAcademicIntake ? undefined : 'No current intake set'} value={activeFeeStruct.intakeCode} options={intakeOptions} disabled />
-                    )}
+                    <SearchSelect
+                      placeholder={mode === 'edit' ? '— Select intake —' : (currentAcademicIntake ? undefined : '— Select intake —')}
+                      value={activeFeeStruct.intakeGuid}
+                      options={programIntakeOptions}
+                      onChange={val => updateFeeStructureMeta('intakeGuid', val)}
+                      disabled={mode === 'edit' || !!currentAcademicIntake}
+                    />
                   </div>
                 </div>
 
@@ -1302,7 +1506,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     <span>Programme-level Fees &amp; Discounts</span>
                     <span className="badge badge-blue normal-case tracking-normal font-semibold ml-auto">Applied across all semesters</span>
                   </div>
-                  <div className="g4">
+                  <div className="g3">
                     <div className="fg m-0">
                       <div className="lbl">Lumpsum Discount Type</div>
                       <SearchSelect options={CALC_TYPES} value={activeFeeStruct.discountType} onChange={val => updateFeeStructureMeta('discountType', val)} />
@@ -1310,7 +1514,23 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     <div className="fg m-0">
                       <div className="lbl">{activeFeeStruct.discountType === '2' ? 'Lumpsum Discount Percentage' : 'Lumpsum Discount Amount'}</div>
                       <div className="flex items-center gap-2">
-                        <span className="text-g500 font-bold min-w-[28px] text-center" style={{ fontSize: 'var(--fs-sm)' }}>{activeFeeStruct.discountType === '2' ? '%' : (activeFeeStruct.localOrForeign === 'true' ? 'Foreign' : 'Local')}</span>
+                        {/* Percentage indicator is unambiguous, kept as-is. The
+                            Amount-mode badge is commented out for now, not just
+                            re-labeled — unlike Lateral Entry/Credit Exemption/Aptech
+                            Credit Exemption Fee (each paired with its own Currency
+                            dropdown), a Lumpsum Discount Amount has no currency field
+                            of its own on FeeStructureInput; showing UGX/USD here would
+                            be inferring that it silently follows this structure's own
+                            Local/Foreign designation (defaultFeeItemCurrency()'s
+                            mapping), which is unconfirmed against a real spec/backend
+                            response for this specific field. The original bare
+                            "Local"/"Foreign" text at least wasn't a wrong guess, just
+                            an unexplained one — better to show nothing until the real
+                            currency behavior is confirmed, then restore this with the
+                            confirmed value. */}
+                        {activeFeeStruct.discountType === '2' && (
+                          <span className="text-g500 font-bold min-w-[28px] text-center" style={{ fontSize: 'var(--fs-sm)' }}>%</span>
+                        )}
                         <input className="ctrl flex-1" type="number" placeholder="0" min={0} max={activeFeeStruct.discountType === '2' ? 100 : undefined} value={activeFeeStruct.discountAmount} onChange={e => updateFeeStructureMeta('discountAmount', e.target.value)} />
                       </div>
                     </div>
@@ -1319,24 +1539,25 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                       <input className="ctrl" type="number" placeholder="0" min={0} value={activeFeeStruct.lateralEntryFee} onChange={e => updateFeeStructureMeta('lateralEntryFee', e.target.value)} />
                     </div>
                     <div className="fg m-0">
-                      <div className="lbl">Currency</div>
-                      <SearchSelect placeholder="Currency" options={currencyIntOptions} value={activeFeeStruct.lateralEntryFeeCurrency} onChange={val => updateFeeStructureMeta('lateralEntryFeeCurrency', val)} />
-                    </div>
-                    <div className="fg m-0">
                       <div className="lbl">Credit Exemption Fee</div>
                       <input className="ctrl" type="number" placeholder="0" min={0} value={activeFeeStruct.creditExemptionFee} onChange={e => updateFeeStructureMeta('creditExemptionFee', e.target.value)} />
-                    </div>
-                    <div className="fg m-0">
-                      <div className="lbl">Currency</div>
-                      <SearchSelect placeholder="Currency" options={currencyIntOptions} value={activeFeeStruct.creditExemptionFeeCurrency} onChange={val => updateFeeStructureMeta('creditExemptionFeeCurrency', val)} />
                     </div>
                     <div className="fg m-0">
                       <div className="lbl">Aptech Credit Exemption Fee</div>
                       <input className="ctrl" type="number" placeholder="0" min={0} value={activeFeeStruct.aptechCreditExemptionFee} onChange={e => updateFeeStructureMeta('aptechCreditExemptionFee', e.target.value)} />
                     </div>
+                    {/* One shared Currency picker for all three fees above (Lateral
+                        Entry/Credit Exemption/Aptech Credit Exemption Fee), replacing
+                        the three separate-but-identical dropdowns each used to have —
+                        see updateSharedFeeCurrency() above. Displays whichever of the
+                        three is currently set on Lateral Entry Fee; if an existing
+                        programme somehow has them saved as different currencies
+                        (Edit-mode prefill, pre-dating this change), picking a value
+                        here still normalizes all three to match, same as any other
+                        edit. */}
                     <div className="fg m-0">
-                      <div className="lbl">Currency</div>
-                      <SearchSelect placeholder="Currency" options={currencyIntOptions} value={activeFeeStruct.aptechCreditExemptionFeeCurrency} onChange={val => updateFeeStructureMeta('aptechCreditExemptionFeeCurrency', val)} />
+                      <div className="lbl">Currency <span className="text-g400 font-normal normal-case">(Lateral Entry / Credit Exemption / Aptech Credit Exemption)</span></div>
+                      <SearchSelect placeholder="Currency" options={currencyIntOptions} value={activeFeeStruct.lateralEntryFeeCurrency} onChange={updateSharedFeeCurrency} />
                     </div>
                   </div>
                 </div>
@@ -1367,7 +1588,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                           <div style={{ padding: '10px 14px' }}>
                             {/* Pri. | Ledger | Ledger Priority | Amount | Currency | remove —
                                 reordered per Fee_Structure_Change_Requests.md #1/#2
-                                (Fee Title dropped, Ledger moved first, Ledger Priority added). */}
+                                (Fee Title dropped, Ledger moved first, Ledger Priority added).
+                                Ledger Priority is read-only now — it's this item's 1-based
+                                position within the semester (the LedgerNum sent on save), not
+                                a manually-typed number; use the Pri. arrows to reorder it — see
+                                program_master_frontend_fixes.md's "not auto-incrementing" fix. */}
                             {items.length > 0 && (
                               <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 90px 110px 150px 32px', gap: 6, padding: '0 0 4px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                 <span style={{ textAlign: 'center' }}>Pri.</span><span>Ledger</span><span>Ledger Priority</span><span>Amount</span><span>Currency</span><span></span>
@@ -1384,7 +1609,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                                     <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(si, idx, 1)} disabled={idx === items.length - 1}><i className="lni lni-chevron-down"></i></button>
                                   </div>
                                   <SearchSelect placeholder="— Select Ledger —" options={ledgerOptions} value={f.ledger} onChange={val => updateItem(si, f.id, 'ledger', val)} />
-                                  <input className="ctrl" value={f.ledgerPriority} onChange={e => updateItem(si, f.id, 'ledgerPriority', e.target.value)} type="number" min={0} placeholder="e.g. 1" />
+                                  <input className="ctrl" value={idx + 1} readOnly disabled title="Auto-assigned from this item's position — use the Pri. arrows to reorder" />
                                   <input className="ctrl" value={f.amount} onChange={e => updateItem(si, f.id, 'amount', e.target.value)} type="number" min={0} placeholder="0" />
                                   <SearchSelect placeholder="— Currency —" options={financeCurrencyOptions} value={f.currencyGuid} onChange={val => selectFeeItemCurrency(si, f.id, val)} />
                                   <button className="btn btn-danger btn-sm" style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => removeItem(si, f.id)}><i className="lni lni-trash-can"></i></button>
@@ -1410,7 +1635,12 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         {step === 2 && (() => {
           const si            = activeAcc
           const units         = semUnits[si]
-          const assignedCodes = units.map(u => u.code)
+          // A course unit already allocated to ANY semester shouldn't be
+          // pickable again in another one — this used to only exclude
+          // duplicates within the active semester itself (assignedCodes
+          // scoped to `units` alone), so the same unit could silently end up
+          // assigned to two or more semesters with nothing to stop it.
+          const assignedCodes = semUnits.flatMap(semUnitsForSem => semUnitsForSem.map(u => u.code))
           const availableOpts = courseUnitOptions.filter(o => !assignedCodes.includes(o.code))
           return (
             <div className="fsm-layout">
@@ -1492,19 +1722,22 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   <div className="flex flex-col gap-2" style={{ marginBottom: 10 }}>
                     {units.map((u, ui) => {
                       const isSpecUnit = isSpecializationCategory(u.unitCat)
-                      const isExpanded = expandedUnitId === u.id
                       return (
                       <div key={u.id} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', background: 'var(--white)', border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', boxShadow: 'var(--neu-sm)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <span className="badge badge-blue" style={{ flexShrink: 0 }}>Unit {ui + 1}</span>
                           <span className="font-mono font-bold text-b700" style={{ fontSize: 12, minWidth: 50 }}>{u.code}</span>
                           <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: 'var(--g900)' }}>{u.name}</span>
-                          <span className="badge badge-grey">{u.credits} cr</span>
+                          <span className="badge badge-grey">{u.credits} credit{u.credits !== 1 ? 's' : ''}</span>
+                          {/* Syllabus/Outline/Taught By — Step 2's "Additional Feature", opened
+                              in a popup (see the fixed overlay near the end of this component)
+                              rather than expanded inline, so browsing several units' details in a
+                              row doesn't keep growing this semester's scroll height. */}
                           <button
                             className="btn btn-neu btn-sm"
                             style={{ width: 26, height: 26, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                             title="Syllabus, outline &amp; taught by"
-                            onClick={() => setExpandedUnitId(isExpanded ? null : u.id)}
+                            onClick={() => setExpandedUnitId(u.id)}
                           ><i className="lni lni-information" style={{ fontSize: 12 }}></i></button>
                           <button
                             className="btn btn-danger btn-sm"
@@ -1532,57 +1765,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                             />
                           </div>
                         </div>
-                        {/* Syllabus/Outline/Taught By — Step 2's "Additional
-                            Feature", fetched via the same Get Course Unit
-                            endpoint the Course Unit master's own Edit modal uses. */}
-                        {isExpanded && (
-                          <div style={{ borderTop: '1px solid var(--g100)', paddingTop: 8, marginTop: 2 }}>
-                            {expandedUnitLoading && <div className="text-g400 italic" style={{ fontSize: 12 }}>Loading details…</div>}
-                            {!expandedUnitLoading && expandedUnitDetail && (() => {
-                              const taughtBy = Array.from(new Set(
-                                expandedUnitDetail.outlines.flatMap(o => o.topics.map(t => t.employeeGuid)).filter(Boolean)
-                              )).map(employeeName)
-                              return (
-                                <div className="flex flex-col gap-2">
-                                  <div>
-                                    <div className="lbl" style={{ fontSize: 11 }}>Syllabus</div>
-                                    {expandedUnitDetail.syllabus
-                                      ? <a href={expandedUnitDetail.syllabus} target="_blank" rel="noopener noreferrer" className="btn btn-neu btn-sm" style={{ display: 'inline-flex', fontSize: 11.5 }}><i className="lni lni-download"></i> View Syllabus</a>
-                                      : <span className="text-g400 italic" style={{ fontSize: 12 }}>No syllabus uploaded</span>
-                                    }
-                                  </div>
-                                  <div>
-                                    <div className="lbl" style={{ fontSize: 11 }}>Taught By</div>
-                                    {taughtBy.length > 0
-                                      ? <div className="flex flex-wrap gap-1">{taughtBy.map((name, i) => <span key={i} className="badge badge-blue">{name}</span>)}</div>
-                                      : <span className="text-g400 italic" style={{ fontSize: 12 }}>Not assigned yet</span>
-                                    }
-                                  </div>
-                                  <div>
-                                    <div className="lbl" style={{ fontSize: 11 }}>Outline</div>
-                                    {expandedUnitDetail.outlines.length === 0
-                                      ? <span className="text-g400 italic" style={{ fontSize: 12 }}>No chapters added yet</span>
-                                      : (
-                                        <div className="flex flex-col gap-1">
-                                          {expandedUnitDetail.outlines.map(o => (
-                                            <div key={o.courseUnitOutlineGuid} style={{ fontSize: 12.5 }}>
-                                              <strong>Ch. {o.chapter}: {o.chapterName}</strong>
-                                              {o.topics.length > 0 && (
-                                                <ul style={{ margin: '2px 0 0 18px', color: 'var(--g500)' }}>
-                                                  {o.topics.map(t => <li key={t.courseUnitTopicGuid}>{t.courseUnitTopicDetails}</li>)}
-                                                </ul>
-                                              )}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )
-                                    }
-                                  </div>
-                                </div>
-                              )
-                            })()}
-                          </div>
-                        )}
                       </div>
                       )
                     })}
@@ -1622,6 +1804,82 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           )}
         </div>
       </div>
+
+      {/* Syllabus/Outline/Taught By popup — a separate overlay (not an inline
+          expand inside the unit card) so paging through several units'
+          details in a row doesn't keep growing Step 2's scroll height. Sits
+          above .modal-overlay's own z-index (500). */}
+      {expandedUnit && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 700, padding: 20 }}
+          onClick={() => setExpandedUnitId(null)}
+        >
+          <div
+            style={{ background: 'var(--white)', borderRadius: 'var(--radius)', boxShadow: '0 20px 60px rgba(15, 30, 61, .25)', width: '100%', maxWidth: 520, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: '1.5px solid var(--g200)', flexShrink: 0 }}>
+              <span className="font-mono font-bold text-b700" style={{ fontSize: 12.5 }}>{expandedUnit.code}</span>
+              <span style={{ flex: 1, fontSize: 15, fontWeight: 700, color: 'var(--g900)' }}>{expandedUnit.name}</span>
+              <button className="modal-close" onClick={() => setExpandedUnitId(null)}><i className="lni lni-close"></i></button>
+            </div>
+            <div style={{ padding: '16px 18px', overflowY: 'auto' }}>
+              {expandedUnitLoading && <div className="text-g400 italic" style={{ fontSize: 12 }}>Loading details…</div>}
+              {!expandedUnitLoading && expandedUnitDetail && (() => {
+                const taughtBy = Array.from(new Set(
+                  expandedUnitDetail.outlines.flatMap(o => o.topics.map(t => t.employeeGuid)).filter(Boolean)
+                )).map(employeeName)
+                return (
+                  <div className="flex flex-col gap-3">
+                    <div>
+                      <div className="lbl" style={{ fontSize: 11 }}>Syllabus</div>
+                      {expandedUnitDetail.syllabus
+                        ? <a href={expandedUnitDetail.syllabus} target="_blank" rel="noopener noreferrer" className="btn btn-neu btn-sm" style={{ display: 'inline-flex', fontSize: 11.5 }}><i className="lni lni-download"></i> View Syllabus</a>
+                        : <span className="text-g400 italic" style={{ fontSize: 12 }}>No syllabus uploaded</span>
+                      }
+                    </div>
+                    <div>
+                      <div className="lbl" style={{ fontSize: 11 }}>Taught By</div>
+                      {taughtBy.length > 0
+                        ? <div className="flex flex-wrap gap-1">{taughtBy.map((name, i) => <span key={i} className="badge badge-blue">{name}</span>)}</div>
+                        : <span className="text-g400 italic" style={{ fontSize: 12 }}>Not assigned yet</span>
+                      }
+                    </div>
+                    <div>
+                      <div className="lbl" style={{ fontSize: 11 }}>Outline</div>
+                      {expandedUnitDetail.outlines.length === 0
+                        ? <span className="text-g400 italic" style={{ fontSize: 12 }}>No chapters added yet</span>
+                        : (
+                          <div className="flex flex-col gap-2" style={{ marginTop: 4 }}>
+                            {expandedUnitDetail.outlines.map(o => (
+                              <div key={o.courseUnitOutlineGuid} style={{ background: 'var(--g100)', border: '1px solid var(--g200)', borderRadius: 'var(--rxs)', padding: '8px 10px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span className="badge badge-grey" style={{ fontSize: 10.5, padding: '1px 7px', flexShrink: 0 }}>Ch. {o.chapter}</span>
+                                  <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--g900)' }}>{o.chapterName}</span>
+                                </div>
+                                {o.topics.length > 0 && (
+                                  <ul style={{ margin: '6px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    {o.topics.map(t => (
+                                      <li key={t.courseUnitTopicGuid} style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 12, color: 'var(--g500)', lineHeight: 1.4 }}>
+                                        <span style={{ color: 'var(--g300)', flexShrink: 0 }}>•</span>
+                                        <span>{t.courseUnitTopicDetails}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      }
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

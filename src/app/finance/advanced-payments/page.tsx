@@ -53,9 +53,9 @@ export default function Page() {
           </button>
         </div>
 
-        <div className="info-box mb-[18px]">
+        {/* <div className="info-box mb-[18px]">
           <i className="lni lni-information"></i> Advanced payments allow students or sponsors to deposit funds before the fee is due. The payment is locked at the rate on the date of payment, protecting against currency fluctuation.
-        </div>
+        </div> */}
 
         <div className="card">
           <div className="card-hdr">

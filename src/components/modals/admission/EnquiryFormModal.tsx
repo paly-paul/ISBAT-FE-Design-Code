@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../academic/SuccessPopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import { sanitizePhoneInput } from '@/lib/errorMessages'
 
 const EMPTY = {
   firstName: '', lastName: '', phone: '', email: '',
@@ -47,7 +48,7 @@ export function EnquiryFormModal({ isOpen, onClose }: ModalProps) {
   return (
     <div className="modal-overlay open">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-notepad"></i> New Enquiry &mdash; Information Desk</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
@@ -70,7 +71,7 @@ export function EnquiryFormModal({ isOpen, onClose }: ModalProps) {
           <div className="fg">
             <label className="lbl">Phone <span className="req">*</span></label>
             <input className="ctrl" type="tel" inputMode="numeric" placeholder="+256 7XX XXX XXX" value={form.phone}
-              onChange={e => set('phone', e.target.value.replace(/[^0-9+\s-]/g, ''))}
+              onChange={e => set('phone', sanitizePhoneInput(e.target.value))}
               style={errors.phone ? { borderColor: 'var(--red)' } : undefined} />
             {errors.phone && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.phone}</p>}
           </div>

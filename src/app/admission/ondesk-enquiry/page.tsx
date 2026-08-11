@@ -2,15 +2,17 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 import { SuccessPopup } from '@/components/modals/academic/SuccessPopup'
 import { FailurePopup } from '@/components/modals/academic/FailurePopup'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useCampuses } from '@/hooks/config/useCampuses'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useProgramMastersByCampus } from '@/hooks/academic/useProgramMaster'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
 import { useCreateEnquiry } from '@/hooks/admission/useEnquiries'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
+import { sanitizePhoneInput } from '@/lib/errorMessages'
 
 // Today's date at midnight, formatted the same way the confirmed payload
 // sample uses (no timezone offset) — matches enquiryDate/dob's "T00:00:00" shape.
@@ -30,14 +32,8 @@ export default function OnDeskEnquiryPage() {
 
   const { data: intakes = [] }        = useIntakes()
   const { data: campuses = [] }       = useCampuses()
-  const { data: programs = [] }       = useProgramMasters()
   const { data: enquirySources = [] } = useEnquirySourceMasters()
   const createEnquiry = useCreateEnquiry()
-
-  const intakeOptions  = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
-  const campusOptions  = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
-  const programOptions = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
-  const sourceOptions  = enquirySources.map(s => ({ value: s.enquirySourceGuid, label: s.enquirySourceName }))
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName]   = useState('')
@@ -51,6 +47,29 @@ export default function OnDeskEnquiryPage() {
   const [sourceGuid, setSourceGuid]   = useState('')
   const [notes, setNotes]         = useState('')
   const [errors, setErrors]       = useState<Record<string, string>>({})
+
+  // Same "programmes scoped to the selected campus" convention as the
+  // Payment and Filing pages — a programme belongs to one campus, so the
+  // list is empty/disabled until a Campus is chosen.
+  const { data: programsByCampus = [] } = useProgramMastersByCampus(campusGuid, !!campusGuid)
+
+  // Only offer intakes that are actually "live" right now — flagged as the
+  // current academic intake and/or the current admission intake — rather
+  // than every intake the backend has ever recorded (which includes past
+  // ones like "2024 Semester 1"). Falls back to the full list if nothing
+  // is currently flagged either way — confirmed the dropdown otherwise goes
+  // silently empty (no error, no options) whenever the backend doesn't have
+  // any intake marked current, which fully blocks this form with no
+  // indication why. Preferring the flagged rows when they exist, but never
+  // leaving the picker with zero options, matches the original intent
+  // without making the form's usability depend on that flag always being set.
+  const currentIntakes = intakes.filter(i => i.currentIntake || i.currentAdmissionIntake)
+  const intakeOptions  = (currentIntakes.length ? currentIntakes : intakes).map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
+  const campusOptions  = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
+  const programOptions = programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
+  const sourceOptions  = enquirySources.map(s => ({ value: s.enquirySourceGuid, label: s.enquirySourceName }))
+
+  function setCampus(v: string) { setCampusGuid(v); setProgramGuid(''); clearError('campusGuid') }
 
   function clearError(field: string) {
     setErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
@@ -139,7 +158,7 @@ export default function OnDeskEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Phone <span className="text-clr-red">*</span></label>
-            <input className="ctrl" placeholder="+256 7XX XXX XXX" value={phone} onChange={e => { setPhone(e.target.value); clearError('phone') }} style={errors.phone ? { borderColor: 'var(--red)' } : undefined} />
+            <input className="ctrl" type="tel" inputMode="numeric" placeholder="+256 7XX XXX XXX" value={phone} onChange={e => { setPhone(sanitizePhoneInput(e.target.value)); clearError('phone') }} style={errors.phone ? { borderColor: 'var(--red)' } : undefined} />
             {errors.phone && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.phone}</p>}
           </div>
           <div className="fg">
@@ -149,17 +168,17 @@ export default function OnDeskEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Date of Birth <span className="text-clr-red">*</span></label>
-            <input className="ctrl" type="date" value={dob} onChange={e => { setDob(e.target.value); clearError('dob') }} style={errors.dob ? { borderColor: 'var(--red)' } : undefined} />
+            <DatePicker value={dob} onChange={v => { setDob(v); clearError('dob') }} hasError={!!errors.dob} />
             {errors.dob && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.dob}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Enquiry Date <span className="text-clr-red">*</span></label>
-            <input className="ctrl" type="date" value={enquiryDate} onChange={e => { setEnquiryDate(e.target.value); clearError('enquiryDate') }} style={errors.enquiryDate ? { borderColor: 'var(--red)' } : undefined} />
+            <DatePicker value={enquiryDate} onChange={v => { setEnquiryDate(v); clearError('enquiryDate') }} hasError={!!errors.enquiryDate} />
             {errors.enquiryDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryDate}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Campus <span className="text-clr-red">*</span></label>
-            <SearchSelect placeholder="— select —" options={campusOptions} value={campusGuid} onChange={val => { setCampusGuid(val); clearError('campusGuid') }} />
+            <SearchSelect placeholder="— select —" options={campusOptions} value={campusGuid} onChange={setCampus} />
             {errors.campusGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campusGuid}</p>}
           </div>
           <div className="fg">
@@ -173,7 +192,13 @@ export default function OnDeskEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Programme Interest</label>
-            <SearchSelect placeholder="— select —" options={programOptions} value={programGuid} onChange={setProgramGuid} />
+            <SearchSelect
+              placeholder={campusGuid ? '— select —' : 'Select a campus first'}
+              options={programOptions}
+              value={programGuid}
+              onChange={setProgramGuid}
+              disabled={!campusGuid}
+            />
           </div>
           <div className="fg">
             <label className="lbl">Preferred Intake <span className="text-clr-red">*</span></label>

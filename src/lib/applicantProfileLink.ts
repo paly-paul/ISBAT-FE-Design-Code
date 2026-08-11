@@ -9,7 +9,6 @@ export interface ApplicantProfileLinkData {
   nationalId?: string
   phone?: string
   email?: string
-  address?: string
   intake?: string
   campus?: string
   submitted?: string

@@ -15,6 +15,7 @@ import { EditLecturerSkillModal } from '@/components/modals/academic/EditLecture
 import { ViewLecturerSkillModal } from '@/components/modals/academic/ViewLecturerSkillModal'
 import { useLecturerSkills, useCreateLecturerSkill, useUpdateLecturerSkill, useDeleteLecturerSkill, LecturerSkill } from '@/hooks/academic/useLecturerSkills'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { formatDate } from '@/lib/date'
 
 const PAGE_SIZE = 10
 
@@ -25,15 +26,8 @@ const PROFICIENCY_LABELS: Record<number, string> = { 1: 'Familiar', 2: 'Proficie
 function approvalBadge(status: string) {
   if (status === 'Approved') return <span className="badge badge-green"><i className="lni lni-checkmark"></i> Approved</span>
   if (status === 'Rejected') return <span className="badge badge-red"><i className="lni lni-close"></i> Rejected</span>
-  if (status === 'Pending')  return <span className="badge badge-amber"><i className="lni lni-timer"></i> Pending</span>
+  if (status === 'Pending') return <span className="badge badge-amber"><i className="lni lni-timer"></i> Pending</span>
   return <span className="badge badge-grey">{status}</span>
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -159,10 +153,10 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="info-box mb-[18px]">
+        {/* <div className="info-box mb-[18px]">
           <i className="lni lni-information"></i>
           <span>Employee is shown as a raw ID — the skills list only returns <code>intEmployee</code>, with no name or faculty attached and no confirmed way to resolve it against the real Employee master.</span>
-        </div>
+        </div> */}
 
         <div className="g4 mb-[18px]">
           <div className="stat-card"><div className="stat-lbl">Total Skills Logged</div><div className="stat-num">{stats.total}</div><div className="stat-sub up">Across all employees</div></div>

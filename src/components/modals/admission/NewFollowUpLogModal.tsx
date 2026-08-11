@@ -4,6 +4,7 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from '../academic/SuccessPopup'
 import { FailurePopup } from '../academic/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 import { EnquiryFollowUpInput, EnquiryFollowUpListItem } from '@/lib/api/admission/enquiryFollowUp'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { useFollowUpStatuses } from '@/hooks/config/useFollowUpStatuses'
@@ -130,7 +131,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, enquiries, cre
   return (
     <div className="modal-overlay open" id="new-followup-log-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-phone"></i> Log Follow-up</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
@@ -148,7 +149,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, enquiries, cre
           </div>
           <div className="fg">
             <div className="lbl">Follow-up Date <span className="req">*</span></div>
-            <input className="ctrl" type="date" value={followUpDate} onChange={e => setFollowUpDate(e.target.value)} />
+            <DatePicker value={followUpDate} onChange={setFollowUpDate} hasError={!!errors.followUpDate} />
             {errors.followUpDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.followUpDate}</p>}
           </div>
           <div className="fg">
@@ -172,7 +173,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, enquiries, cre
           </div>
           <div className="fg">
             <div className="lbl">Next Follow-up Date</div>
-            <input className="ctrl" type="date" value={nextFollowDate} onChange={e => setNextFollowDate(e.target.value)} />
+            <DatePicker value={nextFollowDate} onChange={setNextFollowDate} />
           </div>
           <div className="fg" style={{ gridColumn: 'span 2' }}>
             <div className="lbl">Remarks <span className="req">*</span></div>

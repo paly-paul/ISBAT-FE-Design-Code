@@ -1,9 +1,10 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, CSSProperties } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 import { AuthError } from '@/lib/api/client'
 import { CreateIntakeInput } from '@/lib/api/academic/intake'
 import { useIntake } from '@/hooks/academic/useIntakes'
@@ -22,6 +23,33 @@ const INTAKE_SEQUENCES = [
   { value: '1', label: 'Spring' },
   { value: '2', label: 'Fall' },
 ]
+
+// Card styling shared by every date-category group ("Admission Dates",
+// "Semester & Exam Dates", etc.) in the Semester Planning Calendar step.
+const CATEGORY_CARD_STYLE: CSSProperties = {
+  padding: '1rem',
+  boxShadow: '1px 3px 3px 3px rgba(0, 0, 0, 0.15)',
+  borderRadius: '10px',
+}
+
+// Financial Year / Exam Year are both restricted to a 3-year window relative
+// to today's real calendar year — Previous/Current/Next — rather than a free
+// number input. `existing` (the loaded intake's own current value) is added
+// as an extra option when it falls outside that window, so editing an older
+// record never silently blanks the field just because its year isn't one of
+// the three "current" choices.
+function relativeYearOptions(existing?: string): { value: string; label: string }[] {
+  const current = new Date().getFullYear()
+  const options = [
+    { value: String(current - 1), label: `Previous Year (${current - 1})` },
+    { value: String(current), label: `Current Year (${current})` },
+    { value: String(current + 1), label: `Next Year (${current + 1})` },
+  ]
+  if (existing && !options.some(o => o.value === existing)) {
+    options.unshift({ value: existing, label: existing })
+  }
+  return options
+}
 
 // One accordion section's worth of semester-calendar fields. Keyed by a
 // stable UI-only `id` (not sent to the backend — semCode is derived from
@@ -83,6 +111,11 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
 
   // First step: the main intake details.
   const [description, setDescription]     = useState('')
+  // Tracks whether the Description reflects a real, intentional value (either
+  // the record's own saved description on load, or something the user typed)
+  // — once true, Financial Year/Intakes changes stop auto-suggesting a new
+  // one, same non-destructive convention as NewIntakeModal.
+  const [descriptionTouched, setDescriptionTouched] = useState(false)
   const [financialYear, setFinancialYear] = useState('')
   const [examYear, setExamYear]           = useState('')
   const [examMonth, setExamMonth]         = useState('')
@@ -114,6 +147,7 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
     if (!isOpen || !intake) return
 
     setDescription(intake.description)
+    setDescriptionTouched(true)
     setFinancialYear(String(intake.financialYear))
     setExamYear(String(intake.examYear))
     setExamMonth(String(intake.examMonth))
@@ -150,6 +184,27 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
     setErrors({})
     setStep(1)
   }, [isOpen, intake])
+
+  // Intake Code is now derived, not typed — (Financial Year * 10) + Intake
+  // sequence number, e.g. Financial Year 2025, Spring (sequence 1) ->
+  // 2025*10 + 1 = 20251; the same year's Fall (sequence 2) -> 20252.
+  // Recomputed live on Edit too, overriding whatever the record originally
+  // had — this is now the single source of truth for the value, not just a
+  // default at creation time.
+  function computeIntakeCode(): number | null {
+    if (!financialYear || !intakeSeq) return null
+    return Number(financialYear) * 10 + Number(intakeSeq)
+  }
+
+  // Auto-suggests "{Spring/Fall} {Financial Year} Intake" — only while
+  // descriptionTouched is false, so it never overwrites the record's own
+  // saved description or anything the user has typed (see the note above).
+  useEffect(() => {
+    if (descriptionTouched || !financialYear || !intakeSeq) return
+    const label = INTAKE_SEQUENCES.find(s => s.value === intakeSeq)?.label
+    if (!label) return
+    setDescription(`${label} ${financialYear} Intake`)
+  }, [financialYear, intakeSeq, descriptionTouched])
 
   // Estimate the visible duration in weeks from the first semester's dates —
   // durationInWeeks is a single intake-level field, not per-semester.
@@ -238,7 +293,7 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
       if (!financialYear.trim())  e.financialYear  = 'Financial Year is required'
       if (!examYear.trim())       e.examYear       = 'Exam Year is required'
       if (!examMonth)             e.examMonth      = 'Please select an Exam Month'
-      if (!intakeSeq.trim())      e.intakeSeq      = 'Intake Sequence is required'
+      if (!intakeSeq.trim())      e.intakeSeq      = 'Intakes is required'
       // Confirmed required by the backend (validation_error: "must not be
       // empty") despite CreateIntakeInput typing these as nullable.
       if (!lastDateForReRegistration) e.lastDateForReRegistration = 'Last Date for Re-registration is required'
@@ -357,7 +412,7 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
     return (
       <div className="modal-overlay open" id="intake-edit-modal">
         <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+          <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-pencil"></i> Edit Intake</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
@@ -383,6 +438,8 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
     if (!intakeGuid) return
 
     const input: CreateIntakeInput = {
+      // Derived, not typed — see computeIntakeCode() above.
+      intakeCode: computeIntakeCode() ?? 0,
       description,
       financialYear: Number(financialYear),
       examYear: Number(examYear),
@@ -408,7 +465,7 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
   return (
     <div className="modal-overlay open" id="intake-edit-modal">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-pencil"></i> Edit Intake — <span className="font-mono">{intake.intakeCode}</span></div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
@@ -428,6 +485,32 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
         {step === 1 && (
           <div className="modal-scroll">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
+              {/* Field order: Financial Year -> Intakes -> Description ->
+                  Intake Code -> Exam Year -> Exam Month. Financial Year /
+                  Exam Year are Previous/Current/Next Year dropdowns (plus
+                  the record's own existing value if it falls outside that
+                  window); Intake Code is derived (read-only), not typed —
+                  see computeIntakeCode() above. */}
+              <div className="fg">
+                <div className="lbl">Financial Year <span className="req">*</span></div>
+                <SearchSelect
+                  placeholder="Select financial year…"
+                  value={financialYear}
+                  onChange={v => { setFinancialYear(v); if (errors.financialYear) setErrors(p => ({ ...p, financialYear: '' })) }}
+                  options={relativeYearOptions(financialYear)}
+                />
+                {errors.financialYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.financialYear}</p>}
+              </div>
+              <div className="fg">
+                <div className="lbl">Intakes <span className="req">*</span></div>
+                <SearchSelect
+                  placeholder="Select intakes…"
+                  value={intakeSeq}
+                  onChange={v => { setIntakeSeq(v); if (errors.intakeSeq) setErrors(p => ({ ...p, intakeSeq: '' })) }}
+                  options={INTAKE_SEQUENCES}
+                />
+                {errors.intakeSeq && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeSeq}</p>}
+              </div>
               <div className="fg">
                 <div className="lbl">Description <span className="req">*</span></div>
                 <input
@@ -436,31 +519,28 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
                   type="text"
                   placeholder="e.g. September 2027 Intake"
                   value={description}
-                  onChange={e => { setDescription(e.target.value); if (errors.description) setErrors(p => ({ ...p, description: '' })) }}
+                  onChange={e => { setDescription(e.target.value); setDescriptionTouched(true); if (errors.description) setErrors(p => ({ ...p, description: '' })) }}
                 />
                 {errors.description && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.description}</p>}
               </div>
               <div className="fg">
-                <div className="lbl">Financial Year <span className="req">*</span></div>
+                <div className="lbl">Intake Code</div>
                 <input
                   className="ctrl font-mono"
-                  style={errors.financialYear ? { borderColor: 'var(--red)' } : undefined}
-                  type="number"
-                  placeholder="e.g. 2026"
-                  value={financialYear}
-                  onChange={e => { setFinancialYear(e.target.value); if (errors.financialYear) setErrors(p => ({ ...p, financialYear: '' })) }}
+                  style={{ background: 'var(--g100)', color: computeIntakeCode() ? 'var(--g700)' : 'var(--g400)', cursor: 'not-allowed' }}
+                  type="text"
+                  value={computeIntakeCode() ?? ''}
+                  readOnly
+                  placeholder="Set Financial Year and Intakes first"
                 />
-                {errors.financialYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.financialYear}</p>}
               </div>
               <div className="fg">
                 <div className="lbl">Exam Year <span className="req">*</span></div>
-                <input
-                  className="ctrl font-mono"
-                  style={errors.examYear ? { borderColor: 'var(--red)' } : undefined}
-                  type="number"
-                  placeholder="e.g. 2027"
+                <SearchSelect
+                  placeholder="Select exam year…"
                   value={examYear}
-                  onChange={e => { setExamYear(e.target.value); if (errors.examYear) setErrors(p => ({ ...p, examYear: '' })) }}
+                  onChange={v => { setExamYear(v); if (errors.examYear) setErrors(p => ({ ...p, examYear: '' })) }}
+                  options={relativeYearOptions(examYear)}
                 />
                 {errors.examYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.examYear}</p>}
               </div>
@@ -473,16 +553,6 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
                   options={MONTHS}
                 />
                 {errors.examMonth && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.examMonth}</p>}
-              </div>
-              <div className="fg">
-                <div className="lbl">Intake Sequence <span className="req">*</span></div>
-                <SearchSelect
-                  placeholder="Select intake sequence…"
-                  value={intakeSeq}
-                  onChange={v => { setIntakeSeq(v); if (errors.intakeSeq) setErrors(p => ({ ...p, intakeSeq: '' })) }}
-                  options={INTAKE_SEQUENCES}
-                />
-                {errors.intakeSeq && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeSeq}</p>}
               </div>
               <div className="fg" style={{ gridColumn: 'span 3' }}>
                 <div className="lbl">Set As</div>
@@ -509,17 +579,17 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
               </div>
               <div className="fg">
                 <div className="lbl">Last Date for Re-registration <span className="req">*</span></div>
-                <input className="ctrl" style={errors.lastDateForReRegistration ? { borderColor: 'var(--red)' } : undefined} type="date" value={lastDateForReRegistration} onChange={e => { setLastDateForReRegistration(e.target.value); if (errors.lastDateForReRegistration) setErrors(p => ({ ...p, lastDateForReRegistration: '' })) }} />
+                <DatePicker value={lastDateForReRegistration} onChange={v => { setLastDateForReRegistration(v); if (errors.lastDateForReRegistration) setErrors(p => ({ ...p, lastDateForReRegistration: '' })) }} hasError={!!errors.lastDateForReRegistration} />
                 {errors.lastDateForReRegistration && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lastDateForReRegistration}</p>}
               </div>
               <div className="fg">
                 <div className="lbl">Grievance Start Date <span className="req">*</span></div>
-                <input className="ctrl" style={errors.grievanceStartDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={grievanceStartDate} onChange={e => { setGrievanceStartDate(e.target.value); if (errors.grievanceStartDate) setErrors(p => ({ ...p, grievanceStartDate: '' })) }} />
+                <DatePicker value={grievanceStartDate} onChange={v => { setGrievanceStartDate(v); if (errors.grievanceStartDate) setErrors(p => ({ ...p, grievanceStartDate: '' })) }} hasError={!!errors.grievanceStartDate} />
                 {errors.grievanceStartDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.grievanceStartDate}</p>}
               </div>
               <div className="fg">
                 <div className="lbl">Grievance End Date <span className="req">*</span></div>
-                <input className="ctrl" style={errors.grievanceEndDate ? { borderColor: 'var(--red)' } : undefined} type="date" value={grievanceEndDate} onChange={e => { setGrievanceEndDate(e.target.value); if (errors.grievanceEndDate) setErrors(p => ({ ...p, grievanceEndDate: '' })) }} />
+                <DatePicker value={grievanceEndDate} onChange={v => { setGrievanceEndDate(v); if (errors.grievanceEndDate) setErrors(p => ({ ...p, grievanceEndDate: '' })) }} hasError={!!errors.grievanceEndDate} />
                 {errors.grievanceEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.grievanceEndDate}</p>}
               </div>
             </div>
@@ -591,36 +661,56 @@ export function EditIntakeModal({ isOpen, onClose, showToast, intakeGuid, update
                       </div>
                     </div>
 
+                    <div style={CATEGORY_CARD_STYLE}>
+                      {/* <p className="text-[10px] font-bold tracking-widest uppercase text-b500 mb-3">Admission Dates</p> */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
+                        <div className="fg"><div className="lbl">Admission Start Date</div><DatePicker value={active.admissionStartDate} onChange={v => updateEntry(active.id, 'admissionStartDate', v)} /></div>
+                        <div className="fg"><div className="lbl">Admission End Date</div><DatePicker value={active.admissionEndDate} onChange={v => updateEntry(active.id, 'admissionEndDate', v)} hasError={!!errors[errKey(active.id, 'admissionEndDate')]} />{errors[errKey(active.id, 'admissionEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'admissionEndDate')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Admission Late Fee Date</div><DatePicker value={active.admissionLateFeeDate} onChange={v => updateEntry(active.id, 'admissionLateFeeDate', v)} hasError={!!errors[errKey(active.id, 'admissionLateFeeDate')]} />{errors[errKey(active.id, 'admissionLateFeeDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'admissionLateFeeDate')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Re-entry Start Date</div><DatePicker value={active.reentryStartDate} onChange={v => updateEntry(active.id, 'reentryStartDate', v)} /></div>
+                        <div className="fg"><div className="lbl">Re-entry End Date</div><DatePicker value={active.reentryEndDate} onChange={v => updateEntry(active.id, 'reentryEndDate', v)} hasError={!!errors[errKey(active.id, 'reentryEndDate')]} />{errors[errKey(active.id, 'reentryEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'reentryEndDate')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Re-entry Late Fee Date</div><DatePicker value={active.reentryLateFeeDate} onChange={v => updateEntry(active.id, 'reentryLateFeeDate', v)} hasError={!!errors[errKey(active.id, 'reentryLateFeeDate')]} />{errors[errKey(active.id, 'reentryLateFeeDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'reentryLateFeeDate')]}</p>}</div>
+                      </div>
+                    </div>
+
+                    {/* <p className="text-[10px] font-bold tracking-widest uppercase text-b500 mb-3" style={{ marginTop: '1.25rem' }}>Re-entry Dates</p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
-                      <div className="fg"><div className="lbl">Admission Start Date</div><input className="ctrl" type="date" value={active.admissionStartDate} onChange={e => updateEntry(active.id, 'admissionStartDate', e.target.value)} /></div>
-                      <div className="fg"><div className="lbl">Admission Late Fee Date</div><input className="ctrl" style={errors[errKey(active.id, 'admissionLateFeeDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.admissionLateFeeDate} onChange={e => updateEntry(active.id, 'admissionLateFeeDate', e.target.value)} />{errors[errKey(active.id, 'admissionLateFeeDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'admissionLateFeeDate')]}</p>}</div>
-                      <div className="fg"><div className="lbl">Admission End Date</div><input className="ctrl" style={errors[errKey(active.id, 'admissionEndDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.admissionEndDate} onChange={e => updateEntry(active.id, 'admissionEndDate', e.target.value)} />{errors[errKey(active.id, 'admissionEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'admissionEndDate')]}</p>}</div>
-                      <div className="fg"><div className="lbl">Re-entry Start Date</div><input className="ctrl" type="date" value={active.reentryStartDate} onChange={e => updateEntry(active.id, 'reentryStartDate', e.target.value)} /></div>
-                      <div className="fg"><div className="lbl">Re-entry Late Fee Date</div><input className="ctrl" style={errors[errKey(active.id, 'reentryLateFeeDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.reentryLateFeeDate} onChange={e => updateEntry(active.id, 'reentryLateFeeDate', e.target.value)} />{errors[errKey(active.id, 'reentryLateFeeDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'reentryLateFeeDate')]}</p>}</div>
-                      <div className="fg"><div className="lbl">Re-entry End Date</div><input className="ctrl" style={errors[errKey(active.id, 'reentryEndDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.reentryEndDate} onChange={e => updateEntry(active.id, 'reentryEndDate', e.target.value)} />{errors[errKey(active.id, 'reentryEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'reentryEndDate')]}</p>}</div>
-                      <div className="fg"><div className="lbl">Semester/Term 1 Start Date</div><input className="ctrl" style={errors[errKey(active.id, 'semStart')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.semStart} onChange={e => updateEntry(active.id, 'semStart', e.target.value)} />{errors[errKey(active.id, 'semStart')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'semStart')]}</p>}</div>
-                      <div className="fg"><div className="lbl">Lump Sum Date</div><input className="ctrl" type="date" value={active.lumpsumDate} onChange={e => updateEntry(active.id, 'lumpsumDate', e.target.value)} /></div>
-                      <div className="fg"><div className="lbl">Term 1 End Date</div><input className="ctrl" style={errors[errKey(active.id, 'term1EndDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.term1EndDate} onChange={e => updateEntry(active.id, 'term1EndDate', e.target.value)} />{errors[errKey(active.id, 'term1EndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'term1EndDate')]}</p>}</div>
-                      <div className="fg"><div className="lbl">Term 2 Start Date</div><input className="ctrl" style={errors[errKey(active.id, 'term2StartDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.term2StartDate} onChange={e => updateEntry(active.id, 'term2StartDate', e.target.value)} />{errors[errKey(active.id, 'term2StartDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'term2StartDate')]}</p>}</div>
-                      <div className="fg"><div className="lbl">Semester/Term 2 End Date</div><input className="ctrl" style={errors[errKey(active.id, 'term2End')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.term2End} onChange={e => updateEntry(active.id, 'term2End', e.target.value)} />{errors[errKey(active.id, 'term2End')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'term2End')]}</p>}</div>
-                      {activeIdx === 0 && (
-                        <div className="fg">
-                          <div className="lbl">Duration (weeks)</div>
-                          <input
-                            className="ctrl"
-                            style={{ background: 'var(--g100)', color: calcDuration() ? 'var(--g700)' : 'var(--g400)', cursor: 'not-allowed' }}
-                            type="text"
-                            value={calcDuration()}
-                            readOnly
-                            placeholder="Set semester dates below"
-                          />
-                        </div>
-                      )}
-                      <div className="fg"><div className="lbl">Resit Start Date</div><input className="ctrl" type="date" value={active.resitStartDate} onChange={e => updateEntry(active.id, 'resitStartDate', e.target.value)} /></div>
-                      <div className="fg"><div className="lbl">Resit End Date</div><input className="ctrl" style={errors[errKey(active.id, 'resitEndDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.resitEndDate} onChange={e => updateEntry(active.id, 'resitEndDate', e.target.value)} />{errors[errKey(active.id, 'resitEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'resitEndDate')]}</p>}</div>
-                      <div className="fg"><div className="lbl">Final Exam Start Date</div><input className="ctrl" type="date" value={active.finalExamStartDate} onChange={e => updateEntry(active.id, 'finalExamStartDate', e.target.value)} /></div>
-                      <div className="fg"><div className="lbl">Final Exam End Date</div><input className="ctrl" style={errors[errKey(active.id, 'finalExamEndDate')] ? { borderColor: 'var(--red)' } : undefined} type="date" value={active.finalExamEndDate} onChange={e => updateEntry(active.id, 'finalExamEndDate', e.target.value)} />{errors[errKey(active.id, 'finalExamEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'finalExamEndDate')]}</p>}</div>
-                      <div className="fg"><div className="lbl">Clearance Date (80%)</div><input className="ctrl" type="date" value={active.clearanceDate} onChange={e => updateEntry(active.id, 'clearanceDate', e.target.value)} /></div>
+
+                    </div> */}
+
+                    <div style={{ ...CATEGORY_CARD_STYLE, marginTop: '1.25rem' }}>
+                      {/* <p className="text-[10px] font-bold tracking-widest uppercase text-b500 mb-3">Semester &amp; Exam Dates</p> */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
+                        <div className="fg"><div className="lbl">Semester/Term 1 Start Date</div><DatePicker value={active.semStart} onChange={v => updateEntry(active.id, 'semStart', v)} hasError={!!errors[errKey(active.id, 'semStart')]} />{errors[errKey(active.id, 'semStart')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'semStart')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Term 1 End Date</div><DatePicker value={active.term1EndDate} onChange={v => updateEntry(active.id, 'term1EndDate', v)} hasError={!!errors[errKey(active.id, 'term1EndDate')]} />{errors[errKey(active.id, 'term1EndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'term1EndDate')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Lump Sum Date</div><DatePicker value={active.lumpsumDate} onChange={v => updateEntry(active.id, 'lumpsumDate', v)} /></div>
+                        <div className="fg"><div className="lbl">Term 2 Start Date</div><DatePicker value={active.term2StartDate} onChange={v => updateEntry(active.id, 'term2StartDate', v)} hasError={!!errors[errKey(active.id, 'term2StartDate')]} />{errors[errKey(active.id, 'term2StartDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'term2StartDate')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Semester/Term 2 End Date</div><DatePicker value={active.term2End} onChange={v => updateEntry(active.id, 'term2End', v)} hasError={!!errors[errKey(active.id, 'term2End')]} />{errors[errKey(active.id, 'term2End')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'term2End')]}</p>}</div>
+                        {activeIdx === 0 && (
+                          <div className="fg">
+                            <div className="lbl">Duration (weeks)</div>
+                            <input
+                              className="ctrl"
+                              style={{ background: 'var(--g100)', color: calcDuration() ? 'var(--g700)' : 'var(--g400)', cursor: 'not-allowed' }}
+                              type="text"
+                              value={calcDuration()}
+                              readOnly
+                              placeholder="Set semester dates below"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ ...CATEGORY_CARD_STYLE, marginTop: '1.25rem' }}>
+                      {/* <p className="text-[10px] font-bold tracking-widest uppercase text-b500 mb-3">Resit &amp; Exam Dates</p> */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
+                        <div className="fg"><div className="lbl">Resit Start Date</div><DatePicker value={active.resitStartDate} onChange={v => updateEntry(active.id, 'resitStartDate', v)} /></div>
+                        <div className="fg"><div className="lbl">Resit End Date</div><DatePicker value={active.resitEndDate} onChange={v => updateEntry(active.id, 'resitEndDate', v)} hasError={!!errors[errKey(active.id, 'resitEndDate')]} />{errors[errKey(active.id, 'resitEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'resitEndDate')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Clearance Date (80%)</div><DatePicker value={active.clearanceDate} onChange={v => updateEntry(active.id, 'clearanceDate', v)} /></div>
+                        <div className="fg"><div className="lbl">Final Exam Start Date</div><DatePicker value={active.finalExamStartDate} onChange={v => updateEntry(active.id, 'finalExamStartDate', v)} /></div>
+                        <div className="fg"><div className="lbl">Final Exam End Date</div><DatePicker value={active.finalExamEndDate} onChange={v => updateEntry(active.id, 'finalExamEndDate', v)} hasError={!!errors[errKey(active.id, 'finalExamEndDate')]} />{errors[errKey(active.id, 'finalExamEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'finalExamEndDate')]}</p>}</div>
+                      </div>
                     </div>
                   </>
                 )}

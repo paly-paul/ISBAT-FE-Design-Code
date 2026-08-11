@@ -6,6 +6,12 @@ import { Sidebar, RailId } from '@/components/Sidebar'
 import { refreshSession } from '@/lib/auth'
 import { getSessionIdentity, setSessionIdentity } from '@/lib/session'
 
+// The proactive keep-alive refresh timer lives in src/app/providers.tsx now
+// — a single app-wide interval, not one per module layout. See the note
+// there for why: a per-layout interval is destroyed and restarted from zero
+// on every cross-module navigation, which could mean it never survives long
+// enough to fire at all for a user who switches modules frequently.
+
 export default function AcademicLayout({ children }: { children: React.ReactNode }) {
   const [panelOpen, setPanelOpen] = useState(true)
   const [profileOpen, setProfileOpen] = useState(false)

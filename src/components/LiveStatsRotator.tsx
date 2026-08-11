@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react'
 
 const STATS = [
-  { big: '14,208', label: 'Students enrolled this intake',    trend: '+6.2% vs last intake' },
+  { big: '400+',   label: 'Students enrolled this intake',    trend: '+6.2% vs last intake' },
   { big: '142',    label: 'Applications being vetted today',  trend: 'Spring 2026 · 20261' },
-  { big: '36',     label: 'Active academic programmes',       trend: '12 undergraduate · 24 graduate' },
+  { big: '60+',    label: 'Active academic programmes',       trend: '12 undergraduate · 24 graduate' },
   { big: '418',    label: 'Faculty & teaching staff online',  trend: 'Last 24 hours' },
   { big: '98.4%',  label: 'Registrations completed on time', trend: 'Records · Spring 2026' },
 ]

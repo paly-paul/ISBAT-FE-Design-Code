@@ -32,6 +32,18 @@ export function validateStudentId(id: string): string | null {
   return null
 }
 
+// Keystroke filter for phone number inputs — strips anything that isn't a
+// digit, space, or hyphen (formatting only), plus a leading '+' when the
+// field has no separate country-code selector alongside it (allowPlus).
+// Fields that already pair with a country-code SearchSelect (e.g. Filing/
+// Payment's "+256" dropdown) should pass allowPlus=false so the number
+// itself stays digits-only. Applied on every real phone field in the
+// admission module — previously each one accepted free text, letters
+// included.
+export function sanitizePhoneInput(value: string, allowPlus = true): string {
+  return allowPlus ? value.replace(/[^0-9+\s-]/g, '') : value.replace(/[^0-9\s-]/g, '')
+}
+
 export function validatePassword(pw: string): string | null {
   if (!pw) return 'Password is required.'
   // if (pw.length < 8) return 'Password must be at least 8 characters.'

@@ -11,7 +11,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewSkillModal } from '@/components/modals/academic/NewSkillModal'
 import { EditSkillModal } from '@/components/modals/academic/EditSkillModal'
-import { useSkills, useCreateSkill, useUpdateSkill, Skill } from '@/hooks/config/useSkills'
+import { useSkillMasters, useCreateSkillMaster, useUpdateSkillMaster, useDeleteSkillMaster, SkillMaster } from '@/hooks/config/useSkillMaster'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -21,12 +21,15 @@ export default function Page() {
   const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
-  const [editingSkill, setEditingSkill] = useState<Skill | null>(null)
+  const [editingSkill, setEditingSkill] = useState<SkillMaster | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<SkillMaster | null>(null)
   const [search, setSearch] = useState('')
 
-  const { data: rows = [], isLoading } = useSkills()
-  const createSkill = useCreateSkill()
-  const updateSkill = useUpdateSkill()
+  const { data, isLoading } = useSkillMasters()
+  const rows = data?.items ?? []
+  const createSkill = useCreateSkillMaster()
+  const updateSkill = useUpdateSkillMaster()
+  const deleteSkill = useDeleteSkillMaster()
 
   const searchMatches = search.trim()
     ? rows.filter(r => r.skillName.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
@@ -43,9 +46,17 @@ export default function Page() {
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  function openEditModal(skill: Skill) {
+  function openEditModal(skill: SkillMaster) {
     setEditingSkill(skill)
     openModal('edit-skill-modal')
+  }
+
+  function confirmDeleteSkill() {
+    if (!deleteTarget) return
+    deleteSkill.mutate(deleteTarget.intSkill, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Skill deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete skill', 'error'),
+    })
   }
 
   return (
@@ -71,7 +82,7 @@ export default function Page() {
                 placeholder="Search by code or name…"
                 value={search}
                 onChange={setSearch}
-                results={searchMatches.map(r => ({ id: r.id, primary: r.skillName }))}
+                results={searchMatches.map(r => ({ id: String(r.intSkill), primary: r.skillName }))}
               />
             </div>
           </div>
@@ -90,13 +101,20 @@ export default function Page() {
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
                 {pageItems.map((r) => (
-                  <tr key={r.id}>
+                  <tr key={r.intSkill}>
                     <td>
-                      {permissions.edit && (
+                      {(permissions.edit || permissions.delete) && (
                         <ActionMenu>
-                          <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
-                            <i className="lni lni-pencil"></i> Edit
-                          </button>
+                          {permissions.edit && (
+                            <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
+                              <i className="lni lni-pencil"></i> Edit
+                            </button>
+                          )}
+                          {permissions.delete && (
+                            <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                              <i className="lni lni-trash-can"></i> Delete
+                            </button>
+                          )}
                         </ActionMenu>
                       )}
                     </td>
@@ -123,6 +141,24 @@ export default function Page() {
         updateSkill={updateSkill}
       />
       <Toast toast={toast} />
+
+      {deleteTarget && (
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
+            <div className="perm-delete-title">Delete {deleteTarget.skillName}?</div>
+            <div className="perm-delete-sub">
+              This will permanently delete this skill. This can&apos;t be undone.
+            </div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" disabled={deleteSkill.isPending} onClick={confirmDeleteSkill}>
+                <i className="lni lni-trash-can"></i> {deleteSkill.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

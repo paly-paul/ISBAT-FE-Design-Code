@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
@@ -16,8 +17,10 @@ interface ProgrammeGroupModalProps extends ModalProps {
 }
 
 export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramGroup }: ProgrammeGroupModalProps) {
+  const router = useRouter()
   const [saved, setSaved]             = useState(false)
   const [failure, setFailure]         = useState<string | null>(null)
+  const [redirectAfterClose, setRedirectAfterClose] = useState(false)
   const [groupCode, setGroupCode]     = useState('')
   const [groupName, setGroupName]     = useState('')
   const [programLevel, setProgramLevel] = useState('')
@@ -32,6 +35,10 @@ export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramG
     setSaved(false); setFailure(null)
     setGroupCode(''); setGroupName(''); setProgramLevel(''); setErrors({})
     onClose()
+    if (redirectAfterClose) {
+      router.push('/academic/programme-master')
+    }
+    setRedirectAfterClose(false)
   }
 
   function clearError(field: string) {
@@ -82,11 +89,21 @@ export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramG
   return (
     <div className="modal-overlay open" id="new-proggroup-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-folder"></i> Add Programme Group</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
         <div className="g2">
+          <div className="fg span2">
+            <div className="lbl">Programme Level <span className="req">*</span></div>
+            <SearchSelect
+              placeholder="Select programme level…"
+              options={programLevelOptions}
+              value={programLevel}
+              onChange={v => { setProgramLevel(v); clearError('programLevel') }}
+            />
+            {errors.programLevel && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programLevel}</p>}
+          </div>
           <div className="fg">
             <div className="lbl">Group Code <span className="req">*</span></div>
             <input
@@ -109,16 +126,6 @@ export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramG
             />
             {errors.groupName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.groupName}</p>}
           </div>
-          <div className="fg span2">
-            <div className="lbl">Programme Level <span className="req">*</span></div>
-            <SearchSelect
-              placeholder="Select programme level…"
-              options={programLevelOptions}
-              value={programLevel}
-              onChange={v => { setProgramLevel(v); clearError('programLevel') }}
-            />
-            {errors.programLevel && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programLevel}</p>}
-          </div>
         </div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
@@ -130,7 +137,11 @@ export function ProgrammeGroupModal({ isOpen, onClose, showToast, createProgramG
               createProgramGroup.mutate(
                 { groupCode, groupName, programLevelGuid: programLevel },
                 {
-                  onSuccess: () => { setSaved(true); showToast('Programme Group added successfully') },
+                  onSuccess: () => {
+                    setSaved(true)
+                    setRedirectAfterClose(true)
+                    showToast('Programme Group added successfully')
+                  },
                   onError: handleCreateError,
                 },
               )

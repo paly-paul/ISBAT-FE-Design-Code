@@ -46,7 +46,7 @@ export function ImportOdelModal({ isOpen, onClose }: ModalProps) {
   return (
     <div className="modal-overlay open">
       <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title flex items-center gap-2"><i className="lni lni-world"></i> Import from ODel Application</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

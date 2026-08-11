@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../academic/SuccessPopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 import { CreateEmployeeInput } from '@/lib/api/employee/employee'
 import { useCreateEmployee } from '@/hooks/employee/useEmployees'
 import { useDepartments } from '@/hooks/config/useDepartments'
@@ -75,8 +76,9 @@ export function NewEmployeeModal({ isOpen, onClose, showToast }: ModalProps) {
   // response, see the note in lib/api/academic/country.ts), but Employee's
   // own intCountryCode is a genuinely separate, real int field with no
   // confirmed mapping back to a country. Sent as the option's 1-based list
-  // position, same workaround convention as Batch's bInCharge — flagged,
-  // not a confirmed id.
+  // position — flagged, not a confirmed id. (Batch's own bInCharge used to
+  // be the reference example for this workaround; it's since been confirmed
+  // as a real employeeGuid and no longer needs it — see batch.ts.)
   const countryOptions = countries.map((c, i) => ({ value: String(i + 1), label: c.countryName }))
   const defaultCountryIndex = countries.findIndex(c => c.defaultCountry === 1)
   const defaultCountryCode = defaultCountryIndex >= 0 ? defaultCountryIndex + 1 : 1
@@ -188,7 +190,7 @@ export function NewEmployeeModal({ isOpen, onClose, showToast }: ModalProps) {
   return (
     <div className="modal-overlay open" id="new-employee-modal">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-user"></i> Add Employee</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
@@ -231,14 +233,11 @@ export function NewEmployeeModal({ isOpen, onClose, showToast }: ModalProps) {
             </div>
             <div className="fg">
               <div className="lbl">Date of Birth <span className="req">*</span></div>
-              <input
-                className="ctrl"
-                type="date"
+              <DatePicker
                 value={birthDate}
-                max={getMaxBirthDate()}
-                title="Must be 18 years or older"
-                onChange={e => { setBirthDate(e.target.value); clearError('birthDate') }}
-                style={errors.birthDate ? { borderColor: 'var(--red)' } : undefined}
+                maxYmd={getMaxBirthDate()}
+                onChange={v => { setBirthDate(v); clearError('birthDate') }}
+                hasError={!!errors.birthDate}
               />
               {errors.birthDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.birthDate}</p>}
             </div>

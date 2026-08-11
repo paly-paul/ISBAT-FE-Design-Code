@@ -15,16 +15,9 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { useIntakes, useCreateIntake, useUpdateIntake, useDeleteIntake, useCurrentAcademicIntake, useCurrentAdmissionIntake, Intake } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { formatDate } from '@/lib/date'
 
 const PAGE_SIZE = 10
-
-// Format API dates for the table and fall back to a dash if the value is invalid.
-function formatDate(value: string | undefined | null): string {
-  if (!value) return '—'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return '—'
-  return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-}
 
 // Convert the backend year into the display format used on the page.
 function formatFinancialYear(startYear: number): string {

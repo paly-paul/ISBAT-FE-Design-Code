@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Currency, CurrencyInput, createCurrency, getCurrencies, updateCurrency } from '@/lib/api/finance/currencyMaster'
+import { Currency, CurrencyInput, createCurrency, deleteCurrency, getCurrencies, getCurrencyById, updateCurrency } from '@/lib/api/finance/currencyMaster'
 
 const CURRENCIES_KEY = ['currencies']
 
@@ -16,6 +16,16 @@ export function useCurrencies() {
   })
 }
 
+// Fetch-by-guid convention, same as every other real master's Edit modal —
+// only enabled while the Edit modal is actually open with a guid.
+export function useCurrency(guid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...CURRENCIES_KEY, guid],
+    queryFn: () => getCurrencyById(guid as string),
+    enabled: enabled && !!guid,
+  })
+}
+
 export function useCreateCurrency() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -27,7 +37,18 @@ export function useCreateCurrency() {
 export function useUpdateCurrency() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: CurrencyInput }) => updateCurrency(id, input),
+    mutationFn: ({ guid, input }: { guid: string; input: CurrencyInput }) => updateCurrency(guid, input),
+    onSuccess: (_data, { guid }) => {
+      queryClient.invalidateQueries({ queryKey: CURRENCIES_KEY })
+      queryClient.invalidateQueries({ queryKey: [...CURRENCIES_KEY, guid] })
+    },
+  })
+}
+
+export function useDeleteCurrency() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (guid: string) => deleteCurrency(guid),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: CURRENCIES_KEY }),
   })
 }

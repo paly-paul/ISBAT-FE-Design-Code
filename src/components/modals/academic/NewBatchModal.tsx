@@ -4,6 +4,7 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 import { BatchCreateInput } from '@/lib/api/academic/batch'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useIntakes } from '@/hooks/academic/useIntakes'
@@ -19,12 +20,15 @@ interface NewBatchModalProps extends ModalProps {
   }
 }
 
-// Programme/Semester/Stream/Batch Time are now sent as real guids
-// (confirmed via the updated Create schema — see BatchCreateInput in
-// lib/api/academic/batch.ts). Batch In-Charge is the one field still
-// unconfirmed — Employee only ever exposes employeeGuid, no matching int —
-// so it's still sent as that option's 1-based position in its list, same
-// approach used for enquiry-followup's Create form.
+// Programme/Semester/Stream/Batch Time/Batch In-Charge/Intake are all sent
+// as real guids now (confirmed via the updated Create schema — see
+// BatchCreateInput in lib/api/academic/batch.ts). Batch In-Charge used to be
+// sent as a list-position workaround since Employee only ever exposed
+// employeeGuid with no confirmed int counterpart — a live sample payload
+// confirmed the backend actually wants that same employeeGuid directly, so
+// the workaround is gone. pHead ("Programme Head") now has a UI control —
+// same Employee master/options as Batch In-Charge, optional, sent as null
+// when left unselected.
 export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBatchModalProps) {
   const { data: programs = [] } = useProgramMasters()
   const { data: intakes = [] }  = useIntakes()
@@ -40,7 +44,7 @@ export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBa
   const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
   const streamOptions    = streams.map(s => ({ value: s.streamGuid, label: s.streamName }))
   const batchTimeOptions = batchTimes.map(b => ({ value: b.batchTimeGuid, label: b.batchTime }))
-  const advisorOptions   = employees.map((e, i) => ({ value: String(i), label: e.empName }))
+  const advisorOptions   = employees.map(e => ({ value: e.employeeGuid, label: e.empName }))
 
   const [saved, setSaved]     = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
@@ -48,7 +52,8 @@ export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBa
   const [semesterGuid, setSemesterGuid]   = useState('')
   const [streamGuid, setStreamGuid]       = useState('')
   const [batchTimeGuid, setBatchTimeGuid] = useState('')
-  const [inChargeIdx, setInChargeIdx]     = useState('')
+  const [inChargeGuid, setInChargeGuid]   = useState('')
+  const [pHeadGuid, setPHeadGuid]         = useState('')
   const [startDate, setStartDate]         = useState('')
   const [endDate, setEndDate]             = useState('')
   const [errors, setErrors]               = useState<Record<string, string>>({})
@@ -57,7 +62,8 @@ export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBa
 
   function handleClose() {
     setSaved(false); setFailure(null)
-    setProgramGuid(''); setIntakeGuid(''); setSemesterGuid(''); setStreamGuid(''); setBatchTimeGuid(''); setInChargeIdx('')
+    setProgramGuid(''); setIntakeGuid(''); setSemesterGuid(''); setStreamGuid(''); setBatchTimeGuid(''); setInChargeGuid('')
+    setPHeadGuid('')
     setStartDate(''); setEndDate(''); setErrors({})
     onClose()
   }
@@ -69,15 +75,13 @@ export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBa
     if (!semesterGuid)   e.semesterGuid = 'Please select a Semester'
     if (!streamGuid)     e.streamGuid = 'Please select a Specialization'
     if (!batchTimeGuid)  e.batchTimeGuid = 'Please select a Batch Time'
-    if (!inChargeIdx)    e.inChargeIdx = 'Please select a Batch In-Charge'
+    if (!inChargeGuid)   e.inChargeGuid = 'Please select a Batch In-Charge'
     setErrors(e)
     return Object.keys(e).length === 0
   }
 
   function handleSubmit() {
     if (!validate()) return
-    const intake = intakes.find(i => i.intakeGuid === intakeGuid)
-    if (!intake) return
     createBatch.mutate(
       {
         programGuid,
@@ -86,8 +90,9 @@ export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBa
         batchTimeGuid,
         bStartDate: startDate ? `${startDate}T00:00:00` : null,
         bEndDate: endDate ? `${endDate}T00:00:00` : null,
-        bInCharge: Number(inChargeIdx) + 1,
-        intakeCode: intake.intakeCode,
+        bInCharge: inChargeGuid,
+        intakeGuid,
+        pHead: pHeadGuid || null,
       },
       {
         onSuccess: () => { setSaved(true); showToast('Batch created successfully') },
@@ -126,6 +131,11 @@ export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBa
 
         <div className="g3">
           <div className="fg">
+            <div className="lbl">Intake <span className="req">*</span></div>
+            <SearchSelect placeholder="— Select intake —" options={intakeOptions} value={intakeGuid} onChange={val => { setIntakeGuid(val); if (errors.intakeGuid) setErrors(p => ({ ...p, intakeGuid: '' })) }} />
+            {errors.intakeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
+          </div>
+          <div className="fg">
             <div className="lbl">Programme <span className="req">*</span></div>
             <SearchSelect
               placeholder="— Select programme —"
@@ -134,11 +144,6 @@ export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBa
               onChange={val => { setProgramGuid(val); setSemesterGuid(''); if (errors.programGuid) setErrors(p => ({ ...p, programGuid: '' })) }}
             />
             {errors.programGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programGuid}</p>}
-          </div>
-          <div className="fg">
-            <div className="lbl">Intake <span className="req">*</span></div>
-            <SearchSelect placeholder="— Select intake —" options={intakeOptions} value={intakeGuid} onChange={val => { setIntakeGuid(val); if (errors.intakeGuid) setErrors(p => ({ ...p, intakeGuid: '' })) }} />
-            {errors.intakeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Semester <span className="req">*</span></div>
@@ -157,11 +162,15 @@ export function NewBatchModal({ isOpen, onClose, showToast, createBatch }: NewBa
           </div>
           <div className="fg">
             <div className="lbl">Batch In-Charge <span className="req">*</span></div>
-            <SearchSelect placeholder="— Select faculty member —" options={advisorOptions} value={inChargeIdx} onChange={val => { setInChargeIdx(val); if (errors.inChargeIdx) setErrors(p => ({ ...p, inChargeIdx: '' })) }} />
-            {errors.inChargeIdx && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.inChargeIdx}</p>}
+            <SearchSelect placeholder="— Select faculty member —" options={advisorOptions} value={inChargeGuid} onChange={val => { setInChargeGuid(val); if (errors.inChargeGuid) setErrors(p => ({ ...p, inChargeGuid: '' })) }} />
+            {errors.inChargeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.inChargeGuid}</p>}
           </div>
-          <div className="fg"><div className="lbl">Start Date</div><input className="ctrl" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
-          <div className="fg"><div className="lbl">End Date</div><input className="ctrl" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
+          <div className="fg">
+            <div className="lbl">Programme Head</div>
+            <SearchSelect placeholder="— Select faculty member —" options={advisorOptions} value={pHeadGuid} onChange={setPHeadGuid} />
+          </div>
+          <div className="fg"><div className="lbl">Start Date</div><DatePicker value={startDate} onChange={setStartDate} /></div>
+          <div className="fg"><div className="lbl">End Date</div><DatePicker value={endDate} onChange={setEndDate} /></div>
         </div>
 
 

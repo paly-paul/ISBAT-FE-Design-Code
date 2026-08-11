@@ -30,7 +30,7 @@ export function CurriculumModal({ isOpen, onClose, programGuid, programName }: C
   return (
     <div className="modal-overlay open" id="curriculum-modal">
       <div className="modal modal-md modal-scroll" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-book"></i> Curriculum{programName ? ` — ${programName}` : ''}</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>

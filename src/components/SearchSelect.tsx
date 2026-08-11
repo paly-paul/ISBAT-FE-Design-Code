@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 
-type Opt = { value: string; label: string }
+type Opt = { value: string; label: string; disabled?: boolean }
 
 interface SearchSelectProps {
   options: (string | Opt)[]
@@ -143,7 +143,13 @@ export function SearchSelect({
         <div
           ref={dropRef}
           className="ss-drop"
-          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}
+          // Never shrink narrower than the trigger, but let long option
+          // labels (e.g. full programme names) grow the popup past it up to
+          // a sane cap instead of hard-clipping — a fixed `width: pos.width`
+          // here plus `.ss-drop`'s `overflow: hidden` was silently cutting
+          // "Diploma in Networking" off mid-word rather than wrapping or
+          // ellipsizing it.
+          style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.width, width: 'max-content', maxWidth: Math.max(pos.width, 360), zIndex: 9999 }}
         >
           <div className="ss-search">
             <input
@@ -163,8 +169,9 @@ export function SearchSelect({
               : visible.map(o => (
                   <div
                     key={o.value}
-                    className={`col-filter-opt${current === o.value ? ' fil-active' : ''}`}
-                    onClick={() => select(o.value)}
+                    className={`col-filter-opt${current === o.value ? ' fil-active' : ''}${o.disabled ? ' fil-disabled' : ''}`}
+                    onClick={() => { if (!o.disabled) select(o.value) }}
+                    aria-disabled={o.disabled}
                   >
                     {o.label}
                   </div>

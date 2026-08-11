@@ -32,18 +32,19 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
 
   const [remarks, setRemarks] = useState('')
   const [approved, setApproved] = useState(false)
+  const [waited, setWaited] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
 
   if (!isOpen || !applicationGuid) return null
 
-  function handleClose() { setApproved(false); setFailure(null); setRemarks(''); onClose() }
+  function handleClose() { setApproved(false); setWaited(false); setFailure(null); setRemarks(''); onClose() }
 
   function handleWait() {
     if (!applicationGuid) return
     waitApplication.mutate(
       { applicationGuid, remarks: remarks.trim() || null },
       {
-        onSuccess: () => showToast('Applicant placed on hold — waiting for original documents', 'amber'),
+        onSuccess: () => { setWaited(true); showToast('Applicant placed on hold — waiting for original documents', 'amber') },
         onError: (err: Error) => setFailure(err.message || 'Failed to place application on hold.'),
       },
     )
@@ -52,7 +53,10 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
   function handleApprove() {
     if (!applicationGuid) return
     vetApplication.mutate(
-      { applicationGuid, input: { action: 1, justificationReg: null } },
+      // action: 2 = Approved — RegistrarDecision now matches the persisted
+      // status enum's own numbering (2=Approved, 3=Rejected), not the old
+      // separate 1/2 request-side enum.
+      { applicationGuid, input: { action: 2, justificationReg: null } },
       {
         onSuccess: () => setApproved(true),
         onError: (err: Error) => setFailure(err.message || 'Failed to approve application.'),
@@ -65,6 +69,16 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
           <SuccessPopup title="Application Approved!" subtitle={`${detail.firstName} ${detail.lastName}'s provisional admission letter has been issued.`} onClose={handleClose} />
+        </div>
+      </div>
+    )
+  }
+
+  if (waited && detail) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <SuccessPopup title="Application On Hold" subtitle={`${detail.firstName} ${detail.lastName} is now waiting on original documents.`} onClose={handleClose} />
         </div>
       </div>
     )
@@ -98,7 +112,7 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
     return (
       <div className="modal-overlay open">
         <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+          <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-eye"></i> Reviewing Application</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
@@ -115,7 +129,7 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
   return (
     <div className="modal-overlay open">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title flex items-center gap-2">
             <i className="lni lni-eye"></i> Reviewing: {detail.firstName} {detail.lastName} &middot; {detail.programName}
             <span className="badge badge-blue">{detail.admissionType}</span>
@@ -162,8 +176,9 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
                 {/* Confirmed via a real response: a raw int (e.g. 0), not the
                     "Male"/"Female"/"Other" string the docs describe — no
                     confirmed label mapping, so this displays the raw code
-                    rather than guessing one. */}
-                <div className="fg"><label className="lbl">Gender (code)</label><input className="ctrl" readOnly value={detail.gender != null ? String(detail.gender) : '—'} /></div>
+                    rather than guessing one (just without the "(code)"
+                    suffix in the label itself, per request). */}
+                <div className="fg"><label className="lbl">Gender</label><input className="ctrl" readOnly value={detail.gender != null ? String(detail.gender) : '—'} /></div>
                 {/* Nationality is confirmed always null on the wire today — shown for
                     completeness, not expected to have a value yet (see vetting.ts). */}
                 <div className="fg"><label className="lbl">Nationality</label><input className="ctrl" readOnly value={detail.nationality || '—'} /></div>

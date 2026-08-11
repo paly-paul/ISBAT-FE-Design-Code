@@ -113,15 +113,15 @@ export interface VettingApplicationDetail {
   qualifications: VettingQualification[]
 }
 
-// The request's own enum (RegistrarAction: 1=Approved, 2=Rejected) — not the
-// same numbering as the persisted `action` byte the response echoes back
-// (EnumApplicationStatus: 2=Approved, 3=Rejected). Same field name, two
-// different enums depending on which side of the call you're reading.
-export type RegistrarDecision = 1 | 2
+// The request's own action now matches the persisted `action` byte the
+// response echoes back (EnumApplicationStatus: 2=Approved, 3=Rejected) —
+// previously a separate RegistrarAction enum (1=Approved, 2=Rejected) with
+// its own numbering; both sides now use the same 2/3 values.
+export type RegistrarDecision = 2 | 3
 
 export interface VetApplicationInput {
   action: RegistrarDecision
-  // Required by the backend when action = 2 (Rejected); optional otherwise.
+  // Required by the backend when action = 3 (Rejected); optional otherwise.
   justificationReg?: string | null
 }
 
@@ -210,24 +210,46 @@ export function getVettingQueue(page = 1, pageSize = 10, filters?: { appRefNo?: 
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (filters?.appRefNo) params.set('appRefNo', filters.appRefNo)
   if (filters?.studentName) params.set('studentName', filters.studentName)
-  return apiGet<VettingQueueResponse | null>(`/api/v1/admissions/vetting/applications?${params.toString()}`)
-    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize, summary: { pendingCount: 0, oldestSubmittedDate: null } })
+  const url = `/api/v1/admissions/vetting/applications?${params.toString()}`
+  console.log('[vetting API] getVettingQueue request', { url, page, pageSize, filters })
+  return apiGet<VettingQueueResponse | null>(url)
+    .then(data => {
+      const result = data ?? { items: [], totalCount: 0, pageNumber: page, pageSize, summary: { pendingCount: 0, oldestSubmittedDate: null } }
+      console.log('[vetting API] getVettingQueue response', result)
+      return result
+    })
 }
 
 export function getVettingApplicationDetail(applicationGuid: string): Promise<VettingApplicationDetail> {
   if (MOCK_AUTH) {
     const found = mockDetails[applicationGuid]
     if (!found) return Promise.reject(new Error('Application not found'))
+    console.log('[vetting API] getVettingApplicationDetail mock', { applicationGuid })
     return Promise.resolve(found)
   }
-  return apiGet<VettingApplicationDetail>(`/api/v1/admissions/vetting/applications/${applicationGuid}`)
+  const url = `/api/v1/admissions/vetting/applications/${applicationGuid}`
+  console.log('[vetting API] getVettingApplicationDetail request', { url, applicationGuid })
+  return apiGet<VettingApplicationDetail>(url)
+    .then(data => {
+      console.log('[vetting API] getVettingApplicationDetail response', { applicationGuid, data })
+      return data
+    })
 }
 
 // Non-terminal — sets action=0 (Waiting), which drops the application out of
 // the Submitted-only (action==1) vetting queue.
 export function waitApplication(applicationGuid: string, remarks?: string | null): Promise<boolean> {
-  if (MOCK_AUTH) return Promise.resolve(true)
-  return apiPost<boolean>(`/api/v1/admissions/vetting/applications/${applicationGuid}/wait`, { remarks: remarks ?? null })
+  if (MOCK_AUTH) {
+    console.debug('[vetting API] waitApplication mock', { applicationGuid, remarks })
+    return Promise.resolve(true)
+  }
+  const url = `/api/v1/admissions/vetting/applications/${applicationGuid}/wait`
+  console.debug('[vetting API] waitApplication request', { url, applicationGuid, remarks })
+  return apiPost<boolean>(url, { remarks: remarks ?? null })
+    .then(result => {
+      console.debug('[vetting API] waitApplication response', { applicationGuid, result })
+      return result
+    })
 }
 
 // Terminal Approve/Reject. Note this hits Application Filling's base path,
@@ -235,8 +257,15 @@ export function waitApplication(applicationGuid: string, remarks?: string | null
 // Filling, not Vetting").
 export function vetApplication(applicationGuid: string, input: VetApplicationInput): Promise<VetApplicationResponse> {
   if (MOCK_AUTH) {
+    console.debug('[vetting API] vetApplication mock', { applicationGuid, input })
     const item = mockQueue.find(i => i.applicationGuid === applicationGuid)
-    return Promise.resolve({ intApplication: item?.intApplication ?? 0, appRefNo: item?.appRefNo ?? '', action: input.action === 1 ? 2 : 3 })
+    return Promise.resolve({ intApplication: item?.intApplication ?? 0, appRefNo: item?.appRefNo ?? '', action: input.action })
   }
-  return apiPost<VetApplicationResponse>(`/api/v1/admissions/application-filling/${applicationGuid}/vet`, input)
+  const url = `/api/v1/admissions/application-filling/${applicationGuid}/vet`
+  console.debug('[vetting API] vetApplication request', { url, applicationGuid, input })
+  return apiPost<VetApplicationResponse>(url, input)
+    .then(result => {
+      console.debug('[vetting API] vetApplication response', { applicationGuid, result })
+      return result
+    })
 }

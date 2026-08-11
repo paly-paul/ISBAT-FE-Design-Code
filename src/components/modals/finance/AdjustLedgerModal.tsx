@@ -53,7 +53,7 @@ export function AdjustLedgerModal({ isOpen, onClose, showToast, target }: Adjust
   return (
     <div className="modal-overlay open" onClick={handleClose}>
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-pencil-alt"></i> Adjust Ledger Entry</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

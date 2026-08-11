@@ -89,9 +89,10 @@ interface IntakeListResponse {
 }
 
 // What the "Add Intake" form actually sends to POST /api/v1/academic/intakes.
-// intakeGuid/intakeCode aren't part of this — the backend generates both of
-// those itself and hands them back in the response, so they only belong on
-// the `Intake` read-shape above, never on something we send up.
+// intakeGuid is still backend-generated only, never sent up. intakeCode used
+// to be the same — auto-generated and returned in the response, never
+// accepted as input — but the backend now also accepts a user-set
+// intakeCode on both Create and Update.
 export interface CreateAcademicCalendarEntryInput {
   // Always sent as null when creating — the backend assigns the real guid
   // and gives it back to us in the response.
@@ -126,6 +127,7 @@ export interface CreateAcademicCalendarEntryInput {
 }
 
 export interface CreateIntakeInput {
+  intakeCode: number
   description: string
   financialYear: number
   examYear: number
@@ -206,7 +208,6 @@ const mockIntakes: Intake[] = [
     ],
   },
 ]
-let mockIntakeSeq = mockIntakes.length + 1
 
 // currentIntake/currentAdmissionIntake used to be sent as GET query params
 // so the backend could hand back just the one flagged row for each hero
@@ -237,7 +238,8 @@ export function createIntake(input: CreateIntakeInput): Promise<Intake> {
   if (MOCK_AUTH) {
     const intake: Intake = {
       intakeGuid: crypto.randomUUID(),
-      intakeCode: input.financialYear * 10 + (mockIntakeSeq++),
+      // intakeCode is now user-set (see CreateIntakeInput) — comes straight
+      // from input via the spread below rather than being auto-computed.
       ...input,
       // The backend assigns a real guid to each calendar entry on save —
       // mimic that here instead of leaving the null we sent it with.

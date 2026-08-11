@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { Breadcrumb } from '@/components/Breadcrumb'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -20,6 +21,7 @@ import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
 import { useFaculties } from '@/hooks/config/useFaculties'
 import { useStreams } from '@/hooks/config/useStreams'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { formatDate } from '@/lib/date'
 
 const PAGE_SIZE = 10
 
@@ -105,7 +107,7 @@ export default function Page() {
       // date field the list endpoint returns (no created/updated timestamp),
       // so it's what "newest to oldest" sorts on.
       dateAccRaw: p.dateAcc,
-      accredDate: new Date(p.dateAcc).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      accredDate: formatDate(p.dateAcc),
       noIA: p.noIa ? 'Yes' : 'No',
       specializations: specializationNames.length > 0 ? specializationNames.join(', ') : '—',
       admissionStatus: p.pgmStatus ? 'Active' : 'Inactive',
@@ -114,6 +116,7 @@ export default function Page() {
 
   const groupFilterOpts = Array.from(new Set(rows.map(r => r.group)))
   const levelFilterOpts = Array.from(new Set(rows.map(r => r.level)))
+  const levelDropdownOpts = Array.from(new Set(programLevels.map(l => l.levelName)))
 
   // Live preview shown in the search dropdown as the user types — matches
   // the same code/name test as the table's own search filter below, just
@@ -155,18 +158,15 @@ export default function Page() {
       <div className="page active">
         <div className="pg-hdr">
           <div><div className="pg-title">Programme Master</div><div className="pg-sub">Define programme versions · Manage active/inactive status · Accreditation tracking · Specializations</div></div>
-          {permissions.add && <button className="btn btn-primary" onClick={() => { setProgMode('add'); setEditingProgramGuid(null); openModal('new-prog-modal') }}><i className="lni lni-plus"></i> Add Programme Version</button>}
+          {permissions.add && <button className="btn btn-primary" onClick={() => { setProgMode('add'); setEditingProgramGuid(null); openModal('new-prog-modal') }}><i className="lni lni-plus"></i> Add Programme</button>}
         </div>
 
-        <div className="flex items-center gap-2 mb-[18px] flex-wrap">
-          <button className="btn btn-neu btn-sm text-[var(--fs-xs)]" onClick={() => nav('programme-level')}><i className="lni lni-graduation"></i> Programme Level</button>
-          <span className="text-g300 text-[var(--fs-2xl)]">→</span>
-          <button className="btn btn-neu btn-sm text-[var(--fs-xs)]" onClick={() => nav('programme-group')}><i className="lni lni-folder"></i> Programme Group</button>
-          <span className="text-g300 text-[var(--fs-2xl)]">→</span>
-          <span className="bg-b50 border-[1.5px] border-[var(--b200)] rounded-[var(--rxs)] py-[5px] px-3 text-[var(--fs-xs)] font-bold text-b700"><i className="lni lni-graduation"></i> Programme Master ← You are here</span>
-          <span className="text-g300 text-[var(--fs-2xl)]">→</span>
-          <button className="btn btn-neu btn-sm text-[var(--fs-xs)]" onClick={() => nav('course-units')}><i className="lni lni-book"></i> Course Units</button>
-        </div>
+        <Breadcrumb items={[
+          { label: 'Programme Level', icon: 'lni lni-graduation', id: 'programme-level' },
+          { label: 'Programme Group', icon: 'lni lni-folder', id: 'programme-group' },
+          { label: 'Programme Master', icon: 'lni lni-graduation' },
+          { label: 'Course Units', icon: 'lni lni-book', id: 'course-units' },
+        ]} />
 
         <div className="card">
           <div className="card-hdr">
@@ -182,7 +182,7 @@ export default function Page() {
               <SearchSelect
                 className="w-auto text-[var(--fs-sm)]"
                 placeholder="All Levels"
-                options={['Bachelor', 'Master', 'PhD', 'Diploma']}
+                options={levelDropdownOpts}
                 value={levelFilter}
                 onChange={setLevelFilter}
               />
@@ -270,9 +270,12 @@ export default function Page() {
                       {r.specializations === '—' ? '—' : <span className="badge badge-blue">{r.specializations}</span>}
                     </td>
                     <td>
+                      {/* Label text is just "Active"/"Inactive" — no "(New Admissions)"/
+                          "(Existing Students Only)" qualifier, per the Program Master
+                          requirements doc (req. 3). */}
                       {r.admissionStatus === 'Active'
                         ? <span className="badge badge-green"><span className="bdot"></span>Active</span>
-                        : <span className="badge badge-grey">Inactive (existing students only)</span>
+                        : <span className="badge badge-grey">Inactive</span>
                       }
                     </td>
                   </tr>

@@ -170,9 +170,9 @@ export default function Page() {
                   <span>Closes: <strong>15 Jul 2026</strong></span>
                 </div>
               </div>
-              <div className="info-box text-[var(--fs-xs)]">
+              {/* <div className="info-box text-[var(--fs-xs)]">
                 <i className="lni lni-information"></i> Academic Intake and Admission Intake must always be <strong>different</strong> — only one of each can be active at a time.
-              </div>
+              </div> */}
             </div>
           </div>
 

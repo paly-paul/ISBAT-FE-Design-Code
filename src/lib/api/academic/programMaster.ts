@@ -12,19 +12,18 @@ export interface ProgramUnitInput {
   flag: number
 }
 
-// One fee row inside a fee structure.
+// One fee row inside a fee structure. intLedger/intCurrency are kept here
+// purely as internal bookkeeping (ProgrammeModal derives them from the
+// selected Ledger/Currency for its own display logic) — CONFIRMED via
+// SaveComplete.bru that the wire payload itself only ever needs
+// ledgerGuid/currencyGuid/semCode/ledgerNum/amount, so appendFeeStructures()
+// no longer sends these two at all (they were previously an unconfirmed
+// "harmless extra field" guess, now known to not be part of the real
+// schema).
 export interface FeeLineInput {
   intLedger: number
   ledgerGuid: string
   intCurrency: number
-  // Added after a live validation_error ("Currency is required for each fee
-  // line.") on a real payload that already had a valid non-zero intCurrency
-  // — the same "Currency is required" symptom already confirmed on
-  // programLevel.ts's own Currency field meant the backend actually wants
-  // currencyGuid, not intCurrency. Update's FeeLineUpdateInput already sends
-  // CurrencyGuid (see below); Create never sent an equivalent guid at all.
-  // Sent alongside intCurrency (a harmless extra field) since it's
-  // unconfirmed whether the backend still reads intCurrency for this DTO.
   currencyGuid: string
   semCode: number
   ledgerNum: number
@@ -45,7 +44,12 @@ export interface FeeStructureInput {
   acec: number | null
   calcType: number
   amtPer: number | null
-  intakeCode: number | null
+  // Confirmed per program_master_frontend_fixes.md: the create payload was
+  // sending an integer IntakeCode (e.g. 20261) — the backend wants the real
+  // IntakeGuid instead, same as Update's FeeStructureUpdateInput.intakeGuid
+  // already does. Omit the key when there's nothing to send (see the
+  // Guid?-must-be-omitted-not-blank convention used elsewhere on this DTO).
+  intakeGuid: string | null
   feeLines: FeeLineInput[]
 }
 
@@ -61,12 +65,17 @@ export interface ProgramMasterInput {
   appFee: number
   lateFee: number
   facultyGuid: string
-  // Despite the field name, this takes Currency.intCurrency (a number), not
-  // the currency code string — every other currency field on this payload
-  // (Lec/Cec/Acec/FeeLines[].IntCurrency) already used intCurrency, and
-  // "Currency not found" persisted until this one was switched too.
-  currencyCode: number
-  dateAcc: string
+  // Was `currencyCode: number` (Currency.intCurrency) — confirmed per
+  // program_master_frontend_fixes.md the backend actually wants the real
+  // currencyGuid here too, same "wants the guid, not the int" symptom
+  // already confirmed on programLevel.ts's Currency field and Update's own
+  // currencyGuid. FeeLines[].IntCurrency is unaffected — that one's a
+  // different, still-int-keyed field per FeeLineInput's own comment.
+  currencyGuid: string
+  // Optional — Accreditation Date has no required marker in Step 1. Omit
+  // the key entirely when unset rather than sending "T00:00:00" with no
+  // actual date, which the backend was silently accepting as a bogus date.
+  dateAcc: string | null
   streamGuid: string
   intakeGuid: string
   programUnits: ProgramUnitInput[]
@@ -104,10 +113,24 @@ export interface ProgramMaster {
 }
 
 // Same indexed flat-key convention as appendOutlines in courseUnit.ts.
+// CONFIRMED via the real Save Program Complete backend doc (SaveComplete.bru,
+// "Nested arrays use bracket notation: ProgramUnits[n][Field] and
+// FeeStructures[n][FeeLines][m][Field]"): Create uses the exact same bracket
+// notation as Update, not the dot notation (`ProgramUnits[i].Field`) this
+// function used to send. That mismatch is the confirmed root cause of a real
+// validation_error ("'Sem Code' must be greater than '0'.", "'Course Unit
+// Guid' must not be empty.") on a payload whose SemCode/CourseUnitGuid values
+// were genuinely valid — sent under a key shape ASP.NET's model binder
+// couldn't match, so both fields silently landed on their zero/empty
+// defaults. The doc's field names are also UnitTypeGuid/UnitCatGuid (not
+// UnitType/UnitCat as this used to send) — matches what Update's own
+// appendProgramUnitsForUpdate already used, so Create was simply out of sync
+// with Update on both notation and naming, not a genuinely different
+// contract as previously assumed.
 function appendProgramUnits(formData: FormData, units: ProgramUnitInput[]) {
   units.forEach((u, i) => {
-    formData.append(`ProgramUnits[${i}].SemCode`, String(u.semCode))
-    formData.append(`ProgramUnits[${i}].CourseUnitGuid`, u.courseUnitGuid)
+    formData.append(`ProgramUnits[${i}][SemCode]`, String(u.semCode))
+    formData.append(`ProgramUnits[${i}][CourseUnitGuid]`, u.courseUnitGuid)
     // Specialization is optional now (Program_Master_Change_Requests_Final.md),
     // so streamGuid can legitimately be empty for a non-Specialization unit
     // with no top-level pick to fall back to either. Confirmed with the
@@ -116,36 +139,51 @@ function appendProgramUnits(formData: FormData, units: ProgramUnitInput[]) {
     // bind — omitting the key entirely is the only way a Guid? property ends
     // up bound to null the way it's meant to. The .bru example showing a
     // blank-but-present key was misleading here, not a confirmed contract.
-    if (u.streamGuid) formData.append(`ProgramUnits[${i}].StreamGuid`, u.streamGuid)
-    formData.append(`ProgramUnits[${i}].UnitType`, u.unitType)
-    formData.append(`ProgramUnits[${i}].UnitCat`, u.unitCat)
-    formData.append(`ProgramUnits[${i}].Flag`, String(u.flag))
+    if (u.streamGuid) formData.append(`ProgramUnits[${i}][StreamGuid]`, u.streamGuid)
+    // Unit Type/Category are optional in Step 2's UI (no required marker) and
+    // GetFullDetails confirms a real unit can come back with both null, so
+    // the write side has to tolerate the same — same "empty string AND the
+    // literal 'null' both fail the Guid? binder, omit the key entirely"
+    // finding as StreamGuid just above.
+    if (u.unitType) formData.append(`ProgramUnits[${i}][UnitTypeGuid]`, u.unitType)
+    if (u.unitCat) formData.append(`ProgramUnits[${i}][UnitCatGuid]`, u.unitCat)
+    // Confirmed via SaveComplete.bru's docs: "Flag (1=Core, 2=Elective)" —
+    // NOT the constant 1 this used to send regardless of the unit's actual
+    // category. The doc doesn't say what a "Specialization"-category unit
+    // should send though (only Core/Elective are defined), so that case is
+    // deliberately left as the same "1" default rather than guessing 2 —
+    // flag this for confirmation with the backend team if Specialization
+    // units need their own value.
+    formData.append(`ProgramUnits[${i}][Flag]`, String(u.flag))
   })
 }
 
 function appendFeeStructures(formData: FormData, structures: FeeStructureInput[]) {
   structures.forEach((s, i) => {
-    formData.append(`FeeStructures[${i}].FeeCode`, s.feeCode)
-    formData.append(`FeeStructures[${i}].FeeDesc`, s.feeDesc)
-    formData.append(`FeeStructures[${i}].Status`, String(s.status))
-    formData.append(`FeeStructures[${i}].LocalOrForeign`, String(s.localOrForeign))
-    if (s.lef !== null) formData.append(`FeeStructures[${i}].Lef`, String(s.lef))
-    if (s.cef !== null) formData.append(`FeeStructures[${i}].Cef`, String(s.cef))
-    if (s.ace !== null) formData.append(`FeeStructures[${i}].Ace`, String(s.ace))
-    if (s.lec !== null) formData.append(`FeeStructures[${i}].Lec`, String(s.lec))
-    if (s.cec !== null) formData.append(`FeeStructures[${i}].Cec`, String(s.cec))
-    if (s.acec !== null) formData.append(`FeeStructures[${i}].Acec`, String(s.acec))
-    formData.append(`FeeStructures[${i}].CalcType`, String(s.calcType))
-    if (s.amtPer !== null) formData.append(`FeeStructures[${i}].AmtPer`, String(s.amtPer))
-    if (s.intakeCode !== null) formData.append(`FeeStructures[${i}].IntakeCode`, String(s.intakeCode))
+    formData.append(`FeeStructures[${i}][FeeCode]`, s.feeCode)
+    formData.append(`FeeStructures[${i}][FeeDesc]`, s.feeDesc)
+    formData.append(`FeeStructures[${i}][Status]`, String(s.status))
+    formData.append(`FeeStructures[${i}][LocalOrForeign]`, String(s.localOrForeign))
+    if (s.lef !== null) formData.append(`FeeStructures[${i}][Lef]`, String(s.lef))
+    if (s.cef !== null) formData.append(`FeeStructures[${i}][Cef]`, String(s.cef))
+    if (s.ace !== null) formData.append(`FeeStructures[${i}][Ace]`, String(s.ace))
+    if (s.lec !== null) formData.append(`FeeStructures[${i}][Lec]`, String(s.lec))
+    if (s.cec !== null) formData.append(`FeeStructures[${i}][Cec]`, String(s.cec))
+    if (s.acec !== null) formData.append(`FeeStructures[${i}][Acec]`, String(s.acec))
+    formData.append(`FeeStructures[${i}][CalcType]`, String(s.calcType))
+    if (s.amtPer !== null) formData.append(`FeeStructures[${i}][AmtPer]`, String(s.amtPer))
+    if (s.intakeGuid) formData.append(`FeeStructures[${i}][IntakeGuid]`, s.intakeGuid)
+    // Confirmed via the same doc: FeeLines only has SemCode/LedgerGuid/
+    // CurrencyGuid/LedgerNum/Amount — no IntLedger/IntCurrency at all. Those
+    // two were only ever a "harmless extra field, unconfirmed" guess (see
+    // FeeLineInput's own comment) — dropped now that the real schema is
+    // confirmed not to include them.
     s.feeLines.forEach((l, j) => {
-      formData.append(`FeeStructures[${i}].FeeLines[${j}].IntLedger`, String(l.intLedger))
-      formData.append(`FeeStructures[${i}].FeeLines[${j}].LedgerGuid`, l.ledgerGuid)
-      formData.append(`FeeStructures[${i}].FeeLines[${j}].IntCurrency`, String(l.intCurrency))
-      formData.append(`FeeStructures[${i}].FeeLines[${j}].CurrencyGuid`, l.currencyGuid)
-      formData.append(`FeeStructures[${i}].FeeLines[${j}].SemCode`, String(l.semCode))
-      formData.append(`FeeStructures[${i}].FeeLines[${j}].LedgerNum`, String(l.ledgerNum))
-      formData.append(`FeeStructures[${i}].FeeLines[${j}].Amount`, String(l.amount))
+      formData.append(`FeeStructures[${i}][FeeLines][${j}][SemCode]`, String(l.semCode))
+      formData.append(`FeeStructures[${i}][FeeLines][${j}][LedgerGuid]`, l.ledgerGuid)
+      formData.append(`FeeStructures[${i}][FeeLines][${j}][CurrencyGuid]`, l.currencyGuid)
+      formData.append(`FeeStructures[${i}][FeeLines][${j}][LedgerNum]`, String(l.ledgerNum))
+      formData.append(`FeeStructures[${i}][FeeLines][${j}][Amount]`, String(l.amount))
     })
   })
 }
@@ -170,11 +208,11 @@ export function createProgramMaster(input: ProgramMasterInput): Promise<ProgramM
       yearCount: 0,
       semCount: 0,
       facultyGuid: input.facultyGuid,
-      dateAcc: input.dateAcc,
+      dateAcc: input.dateAcc ?? '',
       accLetter: null,
       appFee: input.appFee,
       lateFee: input.lateFee,
-      currencyGuid: null,
+      currencyGuid: input.currencyGuid || null,
       intakeGuid: input.intakeGuid,
       streamGuids: [input.streamGuid],
       semesters: [],
@@ -194,8 +232,14 @@ export function createProgramMaster(input: ProgramMasterInput): Promise<ProgramM
   formData.append('appFee', String(input.appFee))
   formData.append('lateFee', String(input.lateFee))
   formData.append('facultyGuid', input.facultyGuid)
-  formData.append('currencyCode', String(input.currencyCode))
-  formData.append('dateAcc', input.dateAcc)
+  formData.append('currencyGuid', input.currencyGuid)
+  // Accreditation Date is optional (no required marker in Step 1) —
+  // confirmed per program_master_frontend_fixes.md that sending "T00:00:00"
+  // with no actual date picked was a real bug, not a harmless placeholder.
+  // DateAcc is nullable on the backend, so omitting the key entirely when
+  // unset is safe — same "omit rather than send a bogus value" convention
+  // as streamGuid/intakeGuid below.
+  if (input.dateAcc) formData.append('dateAcc', input.dateAcc)
   // Specialization is optional now — this can legitimately be empty. Omit
   // the key rather than send an empty string (see the note on
   // ProgramUnits[].StreamGuid above — confirmed with the backend team).
@@ -215,6 +259,20 @@ export function createProgramMaster(input: ProgramMasterInput): Promise<ProgramM
 export function getProgramMasters(search = ''): Promise<ProgramMaster[]> {
   if (MOCK_AUTH) return Promise.resolve(mockProgramMasters)
   return apiGet<ProgramMaster[] | null>(`/api/v1/academic/program-master?search=${encodeURIComponent(search)}`)
+    .then(data => data ?? [])
+}
+
+// GET /api/v1/academic/program-master/by-campus/:campusGuid — per
+// Application_Payment_Change_Requests_Final_Updated.md #7, backs the
+// Application Payment page's Interested Programme dropdown, scoped to the
+// selected Campus instead of the full unfiltered programme list. Response
+// shape assumed identical to the plain list (same ProgramMaster type, same
+// controller family) — unconfirmed against a real sample, same "reasonable
+// best-effort until seen live" convention as the rest of this app's
+// not-yet-verified endpoints.
+export function getProgramMastersByCampus(campusGuid: string): Promise<ProgramMaster[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockProgramMasters)
+  return apiGet<ProgramMaster[] | null>(`/api/v1/academic/program-master/by-campus/${campusGuid}`)
     .then(data => data ?? [])
 }
 
@@ -370,7 +428,8 @@ export interface ProgramMasterUpdateInput {
   lateFee: number
   facultyGuid: string
   currencyGuid: string
-  dateAcc: string
+  // Optional, same as Create's — see the note on ProgramMasterInput.dateAcc.
+  dateAcc: string | null
   streamGuid: string
   intakeGuid: string
   programUnits: ProgramUnitUpdateInput[]
@@ -390,8 +449,16 @@ function appendProgramUnitsForUpdate(formData: FormData, units: ProgramUnitUpdat
     // a Guid, so both an empty string and the literal string "null" fail to
     // bind — omit the key entirely so the Guid? property binds to null.
     if (u.streamGuid) formData.append(`ProgramUnits[${i}][StreamGuid]`, u.streamGuid)
-    formData.append(`ProgramUnits[${i}][UnitTypeGuid]`, u.unitTypeGuid)
-    formData.append(`ProgramUnits[${i}][UnitCatGuid]`, u.unitCatGuid)
+    // Same fix as Create's appendProgramUnits above, and the actual root
+    // cause of a real "400 with no usable error code" report: Unit Type/
+    // Category have no required marker in Step 2's UI, so these can
+    // legitimately be empty — sending them as "" hit the same Guid?-binder
+    // failure StreamGuid was already fixed for, except this one produces a
+    // raw framework validation response with no `code` field for
+    // client.ts's envelope parsing to surface, so it fell back to "unknown"
+    // instead of a real error.
+    if (u.unitTypeGuid) formData.append(`ProgramUnits[${i}][UnitTypeGuid]`, u.unitTypeGuid)
+    if (u.unitCatGuid) formData.append(`ProgramUnits[${i}][UnitCatGuid]`, u.unitCatGuid)
     formData.append(`ProgramUnits[${i}][Flag]`, String(u.flag))
   })
 }
@@ -437,7 +504,7 @@ export function updateProgramMasterComplete(programGuid: string, input: ProgramM
       programLevelGuid: input.programLevelGuid,
       facultyGuid: input.facultyGuid,
       currencyGuid: input.currencyGuid,
-      dateAcc: input.dateAcc,
+      dateAcc: input.dateAcc ?? existing.dateAcc,
       streamGuids: [input.streamGuid],
       intakeGuid: input.intakeGuid,
     })
@@ -456,7 +523,9 @@ export function updateProgramMasterComplete(programGuid: string, input: ProgramM
   formData.append('programLevelGuid', input.programLevelGuid)
   formData.append('facultyGuid', input.facultyGuid)
   formData.append('currencyGuid', input.currencyGuid)
-  formData.append('dateAcc', input.dateAcc)
+  // Same "omit rather than send a bogus date" fix as Create — see the note
+  // on ProgramMasterInput.dateAcc.
+  if (input.dateAcc) formData.append('dateAcc', input.dateAcc)
   // Specialization is optional now — this can legitimately be empty. Omit
   // the key rather than send an empty string (see the note on
   // ProgramUnits[].StreamGuid above — confirmed with the backend team).

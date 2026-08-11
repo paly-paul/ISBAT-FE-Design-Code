@@ -71,7 +71,7 @@ export function NewCurrencyModal({ isOpen, onClose, showToast, createCurrency }:
   return (
     <div className="modal-overlay open" id="new-currency-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-dollar"></i> Add Currency</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

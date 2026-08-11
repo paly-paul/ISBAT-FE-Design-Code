@@ -76,7 +76,7 @@ export function NewReceiptBookModal({ isOpen, onClose, showToast, createReceiptB
   return (
     <div className="modal-overlay open" id="new-receipt-book-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-ticket"></i> Add Receipt Book</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

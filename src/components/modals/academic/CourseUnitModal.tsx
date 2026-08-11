@@ -9,11 +9,16 @@ import { useRepetitionTags } from '@/hooks/academic/useRepetitionTags'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
 
-type Topic   = { name: string; studySeq: string; taughtBy: string }
+type Topic   = { name: string; taughtBy: string; studySequence: string }
 type Chapter = { title: string; topics: Topic[] }
 
-function blankTopic(): Topic   { return { name: '', studySeq: '', taughtBy: '' } }
-function blankChapter(n: number): Chapter { return { title: `Chapter ${n}`, topics: [blankTopic()] } }
+// Study Sequence defaults to the topic's 1-based position within its
+// chapter when added, but is now a real editable field — the user can
+// override it to any value (e.g. to reorder without dragging, or to leave
+// gaps) rather than it always being silently forced back to array position
+// on submit.
+function blankTopic(order: number): Topic { return { name: '', taughtBy: '', studySequence: String(order) } }
+function blankChapter(): Chapter { return { title: '', topics: [blankTopic(1)] } }
 
 interface CourseUnitModalProps extends ModalProps {
   createCourseUnit: {
@@ -26,7 +31,7 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
   const [saved, setSaved]               = useState(false)
   const [failure, setFailure]           = useState<string | null>(null)
   const [step, setStep]                 = useState(1)
-  const [chapters, setChapters]         = useState<Chapter[]>([blankChapter(1)])
+  const [chapters, setChapters]         = useState<Chapter[]>([blankChapter()])
   const [activeChapterIdx, setActiveChapterIdx] = useState(0)
   const [unitCode, setUnitCode]         = useState('')
   const [unitName, setUnitName]         = useState('')
@@ -39,6 +44,11 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
   const [syllabusFile, setSyllabusFile] = useState<File | null>(null)
   const [errors, setErrors]               = useState<Record<string, string>>({})
   const [chapterErrors, setChapterErrors] = useState<string[]>([])
+  // Keyed by "chapterIdx-topicIdx" — taughtBy (employeeGuid) is required by
+  // the backend; omitting it on any topic 400s the whole outline save, not
+  // just that one topic, so this has to be caught client-side before submit
+  // rather than left to surface as an opaque failure popup.
+  const [topicTaughtByErrors, setTopicTaughtByErrors] = useState<Set<string>>(new Set())
   const [includeCW, setIncludeCW]       = useState(true)
   const [includeCBT, setIncludeCBT]     = useState(true)
   const [includeMid, setIncludeMid]     = useState(true)
@@ -64,6 +74,50 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
     return `${a} marks → prorated ${f} marks`
   }
 
+  function redistributeFinalWeights(nextIncludeCW: boolean, nextIncludeCBT: boolean, nextIncludeUE: boolean, fixed: Partial<Record<'cw' | 'cbt' | 'ue', number>> = {}) {
+    const keys = ['cw', 'cbt', 'ue'] as const
+    const current = { cw: +cwFinal, cbt: +cbtFinal, ue: +ueFinal }
+    const included = { cw: nextIncludeCW, cbt: nextIncludeCBT, ue: nextIncludeUE }
+    const result = { cw: 0, cbt: 0, ue: 0 }
+    const fixedTotal = keys.reduce((sum, key) => {
+      if (included[key] && fixed[key] != null) return sum + fixed[key]!
+      return sum
+    }, 0)
+    const activeKeys = keys.filter(key => included[key] && fixed[key] == null)
+
+    if (activeKeys.length === 0) {
+      if (included.ue) result.ue = 100 - fixedTotal
+      return { ...result, ...fixed }
+    }
+
+    const totalActive = activeKeys.reduce((sum, key) => sum + current[key], 0)
+    if (totalActive === 0) {
+      if (activeKeys.length === 1) {
+        result[activeKeys[0]] = 100 - fixedTotal
+      } else {
+        const keyCombo = activeKeys.slice().sort().join(',')
+        const defaults: Record<string, number> = keyCombo === 'cbt,ue' ? { cbt: 20, ue: 80 }
+          : keyCombo === 'cw,ue' ? { cw: 30, ue: 70 }
+          : keyCombo === 'cw,cbt' ? { cw: 50, cbt: 50 }
+          : { cw: 15, cbt: 15, ue: 70 }
+        activeKeys.forEach(key => { result[key] = defaults[key] ?? 0 })
+      }
+    } else {
+      let remaining = 100 - fixedTotal
+      activeKeys.forEach((key, index) => {
+        if (index === activeKeys.length - 1) {
+          result[key] = remaining
+        } else {
+          const value = Math.round(current[key] * (100 - fixedTotal) / totalActive)
+          result[key] = value
+          remaining -= value
+        }
+      })
+    }
+
+    return { ...result, ...fixed }
+  }
+
   function validateStep1() {
     const e: Record<string, string> = {}
     if (!unitCode.trim())  e.unitCode     = 'Unit Code is required'
@@ -78,13 +132,34 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
   function validateStep2() {
     const chapErrs = chapters.map(ch => ch.title.trim() ? '' : 'Chapter title is required')
     setChapterErrors(chapErrs)
-    return chapErrs.every(err => !err)
+
+    const missingTaughtBy = new Set<string>()
+    chapters.forEach((ch, ci) => {
+      ch.topics.forEach((t, ti) => {
+        if (!t.taughtBy) missingTaughtBy.add(`${ci}-${ti}`)
+      })
+    })
+    setTopicTaughtByErrors(missingTaughtBy)
+
+    if (missingTaughtBy.size > 0) {
+      // Jump to the first chapter with a missing Taught By so the error is
+      // actually visible — it could otherwise be sitting in a chapter the
+      // user isn't currently looking at.
+      const firstBadChapter = chapters.findIndex((_, ci) =>
+        Array.from(missingTaughtBy).some(key => key.startsWith(`${ci}-`))
+      )
+      if (firstBadChapter !== -1) setActiveChapterIdx(firstBadChapter)
+      showToast('Select Taught By for every topic before saving', 'error')
+    }
+
+    return chapErrs.every(err => !err) && missingTaughtBy.size === 0
   }
 
   if (!isOpen) return null
 
   function handleClose() {
-    setSaved(false); setFailure(null); setStep(1); setChapters([blankChapter(1)]); setActiveChapterIdx(0); setErrors({}); setChapterErrors([])
+    setSaved(false); setFailure(null); setStep(1); setChapters([blankChapter()]); setActiveChapterIdx(0); setErrors({}); setChapterErrors([])
+    setTopicTaughtByErrors(new Set())
     setUnitCode(''); setUnitName(''); setNumChapters(''); setCredits(''); setRepetitionTagGuid('')
     setSyllabusFile(null)
     setIncludeCW(true); setIncludeCBT(true); setIncludeMid(true)
@@ -98,9 +173,9 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
     const outlines = chapters.map((ch, ci) => ({
       chapter: ci + 1,
       chapterName: ch.title,
-      topics: ch.topics.map(t => ({
+      topics: ch.topics.map((t, ti) => ({
         courseUnitTopicDetails: t.name,
-        studySequence: +t.studySeq || 0,
+        studySequence: +t.studySequence || ti + 1,
         taughtBy: t.taughtBy,
       })),
     }))
@@ -132,15 +207,35 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
     )
   }
 
+  // chapter cap — Step 2 can never hold more chapters than Step 1's "No. of Chapters" (when set)
+  const chapterCap = +numChapters || 0
+  const atChapterCap = chapterCap > 0 && chapters.length >= chapterCap
+
+  function goToStep2() {
+    if (!validateStep1()) return
+    // If the user lowered No. of Chapters after already building some out, trim the excess from the end.
+    if (chapterCap > 0 && chapters.length > chapterCap) {
+      setChapters(p => p.slice(0, chapterCap))
+      setChapterErrors(p => p.slice(0, chapterCap))
+      setActiveChapterIdx(i => Math.min(i, chapterCap - 1))
+    }
+    setStep(2)
+  }
+
   // chapter helpers
   function addChapter() {
-    setChapters(p => [...p, blankChapter(p.length + 1)])
+    if (atChapterCap) { showToast(`No. of Chapters is set to ${chapterCap} — remove a chapter or increase that value first`, 'error'); return }
+    setChapters(p => [...p, blankChapter()])
     setChapterErrors(p => [...p, ''])
     setActiveChapterIdx(chapters.length)
   }
   function removeChapter(ci: number) {
     setChapters(p => p.filter((_, i) => i !== ci))
     setChapterErrors(p => p.filter((_, i) => i !== ci))
+    // Every chapter after the removed one shifts down an index — rather
+    // than remap keys, just clear pending topic errors; they'll be
+    // recomputed correctly on the next submit attempt.
+    setTopicTaughtByErrors(new Set())
     setActiveChapterIdx(current => {
       const newLength = chapters.length - 1
       if (ci < current) return current - 1
@@ -155,16 +250,30 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
 
   // topic helpers
   function addTopic(ci: number) {
-    setChapters(p => p.map((c, i) => i === ci ? { ...c, topics: [...c.topics, blankTopic()] } : c))
+    setChapters(p => p.map((c, i) => i === ci ? { ...c, topics: [...c.topics, blankTopic(c.topics.length + 1)] } : c))
+    // Topic indices within this chapter shift for everything after the
+    // insertion point — simplest to just drop all pending errors for this
+    // chapter rather than try to remap keys; they'll be recomputed on the
+    // next submit attempt anyway.
+    setTopicTaughtByErrors(prev => new Set(Array.from(prev).filter(key => !key.startsWith(`${ci}-`))))
   }
   function removeTopic(ci: number, ti: number) {
     setChapters(p => p.map((c, i) => i === ci ? { ...c, topics: c.topics.filter((_, j) => j !== ti) } : c))
+    setTopicTaughtByErrors(prev => new Set(Array.from(prev).filter(key => !key.startsWith(`${ci}-`))))
   }
   function setTopic(ci: number, ti: number, field: keyof Topic, v: string) {
     setChapters(p => p.map((c, i) => i === ci
       ? { ...c, topics: c.topics.map((t, j) => j === ti ? { ...t, [field]: v } : t) }
       : c
     ))
+    if (field === 'taughtBy' && v) {
+      setTopicTaughtByErrors(prev => {
+        if (!prev.has(`${ci}-${ti}`)) return prev
+        const next = new Set(prev)
+        next.delete(`${ci}-${ti}`)
+        return next
+      })
+    }
   }
 
   if (saved) {
@@ -190,7 +299,7 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
   return (
     <div className="modal-overlay open" id="cu-new-modal">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-book"></i> Add Course Unit</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
@@ -307,7 +416,26 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
               <div className="lbl">Include In</div>
               <div style={{ display: 'flex', gap: 28, marginTop: 8 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--g700)' }}>
-                  <input type="checkbox" checked={includeCBT} onChange={e => setIncludeCBT(e.target.checked)} style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }} />
+                  <input
+                    type="checkbox"
+                    checked={includeCBT}
+                    onChange={e => {
+                      const checked = e.target.checked
+                      setIncludeCBT(checked)
+                      if (!checked) {
+                        const next = redistributeFinalWeights(includeCW, false, true)
+                        setCbtFinal('0')
+                        setCwFinal(String(next.cw))
+                        setUeFinal(String(next.ue))
+                      } else if (+cbtFinal === 0) {
+                        const next = redistributeFinalWeights(includeCW, true, true, { cbt: 15 })
+                        setCbtFinal(String(next.cbt))
+                        setCwFinal(String(next.cw))
+                        setUeFinal(String(next.ue))
+                      }
+                    }}
+                    style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }}
+                  />
                   Class Test
                 </label>
                 {/* <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--g700)' }}>
@@ -326,8 +454,20 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
                     onChange={e => {
                       const checked = e.target.checked
                       setIncludeCW(checked)
-                      // Checking Course Work auto-checks Mid too (per request) — Mid can still be unchecked independently afterward.
-                      if (checked) setIncludeMid(true)
+                      if (!checked) {
+                        const next = redistributeFinalWeights(false, includeCBT, true)
+                        setCwFinal('0')
+                        setCbtFinal(String(next.cbt))
+                        setUeFinal(String(next.ue))
+                      } else {
+                        if (+cwFinal === 0) {
+                          const next = redistributeFinalWeights(true, includeCBT, true, { cw: 15 })
+                          setCwFinal(String(next.cw))
+                          setCbtFinal(String(next.cbt))
+                          setUeFinal(String(next.ue))
+                        }
+                        setIncludeMid(true)
+                      }
                     }}
                     style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }}
                   />
@@ -477,7 +617,7 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
               {/* Left sidebar — one entry per chapter */}
               <div className="fsm-sidebar">
                 <div style={{ padding: '14px 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
-                  Chapters <span style={{ color: 'var(--b500)' }}>({chapters.length})</span>
+                  Chapters <span style={{ color: 'var(--b500)' }}>({chapterCap > 0 ? `${chapters.length}/${chapterCap}` : chapters.length})</span>
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
                   {chapters.map((ch, ci) => (
@@ -511,9 +651,10 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
                   ))}
                 </div>
                 <div style={{ borderTop: '1.5px solid var(--g200)', padding: '6px 8px 10px' }}>
-                  <button type="button" className="btn btn-neu btn-sm" style={{ width: '100%' }} onClick={addChapter}>
+                  <button type="button" className="btn btn-neu btn-sm" style={{ width: '100%' }} onClick={addChapter} disabled={atChapterCap} title={atChapterCap ? `No. of Chapters is set to ${chapterCap}` : undefined}>
                     <i className="lni lni-plus"></i> Add Chapter
                   </button>
+                  {atChapterCap && <div style={{ fontSize: 10.5, color: 'var(--g400)', textAlign: 'center', marginTop: 6 }}>Chapter limit reached ({chapterCap})</div>}
                 </div>
               </div>
 
@@ -542,12 +683,28 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      {activeChapter.topics.map((t, ti) => (
+                      {activeChapter.topics.map((t, ti) => {
+                        const taughtByMissing = topicTaughtByErrors.has(`${activeChapterIdx}-${ti}`)
+                        return (
                         <div key={ti} style={{ display: 'grid', gridTemplateColumns: '20px 1fr 150px 130px 30px', gap: 6, alignItems: 'center' }}>
                           <span style={{ fontSize: 11, color: 'var(--g400)', textAlign: 'center' }}>{ti + 1}.</span>
                           <input className="ctrl" value={t.name} onChange={e => setTopic(activeChapterIdx, ti, 'name', e.target.value)} placeholder="e.g. Introduction to Arrays" />
-                          <input className="ctrl" type="number" min={1} value={t.studySeq} onChange={e => setTopic(activeChapterIdx, ti, 'studySeq', e.target.value)} placeholder="e.g. 3" />
-                          <SearchSelect placeholder="— Select —" value={t.taughtBy} onChange={v => setTopic(activeChapterIdx, ti, 'taughtBy', v)} options={employeeOptions} />
+                          {/* Auto-fills to the topic's 1-based position when added, but editable — the user can reorder/renumber without dragging. */}
+                          <input
+                            className="ctrl"
+                            type="number"
+                            min={1}
+                            style={{ textAlign: 'center' }}
+                            value={t.studySequence}
+                            onChange={e => setTopic(activeChapterIdx, ti, 'studySequence', e.target.value)}
+                          />
+                          <SearchSelect
+                            placeholder="— Select —"
+                            value={t.taughtBy}
+                            onChange={v => setTopic(activeChapterIdx, ti, 'taughtBy', v)}
+                            options={employeeOptions}
+                            style={taughtByMissing ? { boxShadow: '0 0 0 1.5px var(--red)', borderRadius: 'var(--rsm)' } : undefined}
+                          />
                           <button
                             className="btn btn-danger btn-sm"
                             style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
@@ -557,7 +714,11 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
                             <i className="lni lni-trash-can"></i>
                           </button>
                         </div>
-                      ))}
+                        )
+                      })}
+                      {activeChapter.topics.some((_, ti) => topicTaughtByErrors.has(`${activeChapterIdx}-${ti}`)) && (
+                        <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 2 }}>Taught By is required for every topic</p>
+                      )}
                       <button className="btn btn-neu btn-sm mt-1" style={{ alignSelf: 'flex-start', fontSize: 11 }} onClick={() => addTopic(activeChapterIdx)}>
                         <i className="lni lni-plus"></i> Add Topic
                       </button>
@@ -578,7 +739,7 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
             </button>
           )}
           {step === 1 && (
-            <button className="btn btn-primary" onClick={() => { if (validateStep1()) setStep(2) }}>
+            <button className="btn btn-primary" onClick={goToStep2}>
               Save &amp; Continue <i className="lni lni-arrow-right"></i>
             </button>
           )}

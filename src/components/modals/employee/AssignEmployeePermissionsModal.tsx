@@ -163,7 +163,7 @@ export function AssignEmployeePermissionsModal({ isOpen, onClose, showToast, emp
     return (
       <div className="modal-overlay open" id="assign-employee-permissions-modal">
         <div className="modal modal-xl" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+          <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-lock"></i> Assign Permissions — <span className="font-mono">{employeeName}</span></div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
@@ -194,7 +194,7 @@ export function AssignEmployeePermissionsModal({ isOpen, onClose, showToast, emp
   return (
     <div className="modal-overlay open" id="assign-employee-permissions-modal">
       <div className="modal modal-xl modal-flex" style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-lock"></i> Assign Permissions — <span className="font-mono">{employeeName}</span></div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

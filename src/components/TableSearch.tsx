@@ -20,6 +20,11 @@ interface TableSearchProps {
   placeholder?: string
   className?: string
   emptyLabel?: string
+  // Set while the caller's own `results` source is still being fetched (e.g.
+  // a page that only loads its full, unpaginated list once a search term is
+  // typed) — shows a "Searching…" row instead of `emptyLabel`, so an
+  // still-loading list doesn't briefly read as a genuine zero-match result.
+  loading?: boolean
 }
 
 // Search-by-code/name input + live "as you type" results dropdown, meant to
@@ -34,6 +39,7 @@ export function TableSearch({
   placeholder = 'Search…',
   className,
   emptyLabel = 'No matches',
+  loading = false,
 }: TableSearchProps) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -65,7 +71,9 @@ export function TableSearch({
       />
       {open && value.trim() && (
         <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-g200 rounded-lg shadow-lg z-20 max-h-56 overflow-y-auto">
-          {results.length === 0
+          {loading
+            ? <div className="p-3 text-sm text-g400 flex items-center gap-2"><i className="lni lni-reload animate-spin"></i> Searching…</div>
+            : results.length === 0
             ? <div className="p-3 text-sm text-g400">{emptyLabel}</div>
             : results.map(r => (
                 <button

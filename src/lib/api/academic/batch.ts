@@ -28,13 +28,42 @@ interface BatchListResult {
   pageSize: number
 }
 
+// Confirmed via a real GET /api/v1/academic/batches/:guid response — this
+// endpoint DOES return intakeGuid and bInCharge after all (superseding the
+// BatchUpdateInput note below claiming neither could be prefilled); it's
+// just a richer shape than the list endpoint's own Batch, not a plain
+// re-fetch of the same fields. bInCharge comes back as the all-zero sentinel
+// guid ("00000000-0000-0000-0000-000000000000") when unset — .NET's default
+// Guid value, not a real employee reference — so treat that value as "no
+// in-charge assigned" (null) the same way an empty string is treated
+// elsewhere in this app, rather than trying to resolve it against the
+// Employee master. intakeCode/intakeDescription/batchTimeName/
+// batchTimeCode/yearCode are resolved display strings the create/update
+// payload doesn't need (intakeGuid/batchTimeGuid already cover those), and
+// pHead is still of unconfirmed purpose with no UI control.
+export interface BatchDetail extends Batch {
+  bInCharge: string
+  intakeGuid: string
+  intakeCode: number
+  intakeDescription: string
+  yearCode: number
+  pHead: string | null
+  batchTimeName: string
+  batchTimeCode: string
+}
+
+// .NET's default/unset Guid value — never a real employee/intake reference.
+export const EMPTY_GUID = '00000000-0000-0000-0000-000000000000'
+
 // Confirmed via the updated Create/Update schema — programGuid/semesterGuid/
-// streamGuid/batchTimeGuid are now real guids, resolving the old int-FK-
-// with-no-guid-source gap for four of the five previously unconfirmed
-// fields. bInCharge is still a plain number with no confirmed guid or real
-// int source anywhere (Employee only ever exposes employeeGuid) — kept as
-// the option's 1-based list position, same workaround as before, flagged
-// in-UI. intakeCode is Intake.intakeCode, unchanged.
+// streamGuid/batchTimeGuid are real guids, and bInCharge is now CONFIRMED to
+// be a real employeeGuid too (a live sample payload showed a genuine guid,
+// not a list-position int) — this resolves the last "int FK with no guid
+// source" gap noted for this domain; the 1-based-list-position workaround is
+// gone, both here and in NewBatchModal/EditBatchModal. intakeGuid replaces
+// the old intakeCode int field (no more Intake lookup-by-code needed to
+// submit). pHead is a new field of unconfirmed purpose (possibly "Programme
+// Head") — no UI control exists for it yet, always sent null.
 export interface BatchCreateInput {
   programGuid: string
   semesterGuid: string
@@ -42,19 +71,17 @@ export interface BatchCreateInput {
   batchTimeGuid: string
   bStartDate: string | null
   bEndDate: string | null
-  bInCharge: number
-  intakeCode: number
+  bInCharge: string
+  intakeGuid: string
+  pHead: string | null
 }
 
-// Confirmed: Update now takes the identical shape as Create — a full
-// replace, not the old narrower intStream/dates/bInCharge-only body where
-// batchCode/batchTime were required but silently ignored. GET
-// /batches/:guid now returns matching guid fields too (confirmed via a real
-// list response — see Batch above), so EditBatchModal prefills Programme/
-// Semester/Stream/Batch Time from the fetched record. Intake and Batch
-// In-Charge still can't be prefilled — Batch's GET shape has no intake
-// field at all, and no confirmed guid/int source for the employee either
-// (see the note in NewBatchModal) — both must be re-picked on every edit.
+// Confirmed: Update takes the identical shape as Create — a full replace,
+// not a narrower partial body. GET /batches/:guid returns real guid fields
+// for all of Programme/Semester/Stream/Batch Time/Intake — see BatchDetail
+// above — so EditBatchModal can now prefill every field, including Intake
+// and Batch In-Charge (previously believed unrecoverable from GetByGuid;
+// corrected by a real sample response — see BatchDetail's own note).
 export type BatchUpdateInput = BatchCreateInput
 
 let mockBatchSeq = 1
@@ -94,13 +121,23 @@ export function createBatch(input: BatchCreateInput): Promise<Batch> {
 }
 
 // Fetch one batch by its GUID.
-export function getBatchById(guid: string): Promise<Batch> {
+export function getBatchById(guid: string): Promise<BatchDetail> {
   if (MOCK_AUTH) {
     const existing = mockBatches.find(b => b.batchGuid === guid)
     if (!existing) return Promise.reject(new Error('Batch not found'))
-    return Promise.resolve(existing)
+    return Promise.resolve({
+      ...existing,
+      bInCharge: EMPTY_GUID,
+      intakeGuid: '',
+      intakeCode: 0,
+      intakeDescription: '',
+      yearCode: 0,
+      pHead: null,
+      batchTimeName: '',
+      batchTimeCode: '',
+    })
   }
-  return apiGet<Batch>(`/api/v1/academic/batches/${guid}`)
+  return apiGet<BatchDetail>(`/api/v1/academic/batches/${guid}`)
 }
 
 // Update a batch by GUID and return the updated record.

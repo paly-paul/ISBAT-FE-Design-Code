@@ -1,10 +1,12 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 import { SuccessPopup } from '@/components/modals/academic/SuccessPopup'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { FailurePopup } from '@/components/modals/academic/FailurePopup'
+import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
@@ -12,8 +14,10 @@ import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useCountries } from '@/hooks/config/useCountries'
 import { useEnquiries } from '@/hooks/admission/useEnquiries'
-import { useApplicationPaymentFees } from '@/hooks/admission/useApplicationPayments'
+import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { sanitizePhoneInput } from '@/lib/errorMessages'
+import { consumeFilingPrefillRef } from '@/lib/filingHandoff'
 import {
   FilingApplicationSearchResult,
   useDeleteQualification,
@@ -24,11 +28,12 @@ import {
   useUploadPhoto,
 } from '@/hooks/admission/useApplicationFiling'
 
-type Tab = 'personal' | 'qualifications' | 'family' | 'documents'
+// Family Details tab removed per the Application Filling requirements doc
+// (req. 10) — sponsorship fields already live in Personal Info.
+type Tab = 'personal' | 'qualifications' | 'documents'
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'personal',       label: 'Personal Info',    icon: 'lni-user-4' },
   { id: 'qualifications', label: 'Qualifications',   icon: 'lni-graduation' },
-  { id: 'family',         label: 'Family Details',   icon: 'lni-users-2' },
   { id: 'documents',      label: 'Documents',        icon: 'lni-folder-2' },
 ]
 
@@ -86,6 +91,9 @@ function Field({ label, req, children, span }: { label: string; req?: boolean; s
   )
 }
 function Input({ placeholder, type = 'text', readOnly, value, onChange }: { placeholder?: string; type?: string; readOnly?: boolean; value?: string; onChange?: (v: string) => void }) {
+  if (type === 'date' && !readOnly) {
+    return <DatePicker value={value} onChange={v => onChange?.(v)} placeholder={placeholder} />
+  }
   if (value !== undefined) {
     return <input className="ctrl" type={type} placeholder={placeholder} readOnly={readOnly} value={value} onChange={e => onChange?.(e.target.value)} />
   }
@@ -110,6 +118,49 @@ function applicantName(a: FilingApplicationSearchResult): string {
   return [a.firstName, a.lastName].filter(Boolean).join(' ').trim()
 }
 
+// One row in the Documents tab's "Uploaded Documents" list (req. 11: view/
+// download uploaded documents). Two sources of a document, handled
+// differently since only one of them is actually viewable client-side:
+// - `file`: a File the user just picked in this session (not yet saved, or
+//   saved this session) — View/Download work via a real object-URL, no
+//   backend round-trip needed.
+// - `savedName`: a filename the backend already has on record from a prior
+//   save (e.g. FilingApplicationSearchResult.idUserFileName) — there is no
+//   confirmed document-retrieval endpoint anywhere in the Application Filing
+//   API surface, so this can only show the filename, not serve the file.
+//   Flagged rather than guessed at a URL, same convention as this file's
+//   other "display raw, don't guess" fields.
+function DocRow({ label, file, savedName }: { label: string; file: File | null; savedName?: string | null }) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!file) { setUrl(null); return }
+    const objectUrl = URL.createObjectURL(file)
+    setUrl(objectUrl)
+    return () => URL.revokeObjectURL(objectUrl)
+  }, [file])
+
+  const name = file?.name ?? savedName ?? null
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-g100 last:border-0">
+      <div className="flex items-center gap-2 min-w-0">
+        <i className="lni lni-files text-g400" />
+        <span className="text-sm text-g700">{label}</span>
+        {name && <span className="text-xs text-g400 truncate">{name}</span>}
+      </div>
+      {url ? (
+        <div className="flex gap-2 flex-shrink-0">
+          <a className="btn text-xs" href={url} target="_blank" rel="noreferrer"><i className="lni lni-eye" /> View</a>
+          <a className="btn text-xs" href={url} download={file?.name}><i className="lni lni-download" /> Download</a>
+        </div>
+      ) : name ? (
+        <span className="text-xs text-g400 flex-shrink-0">Previously uploaded — no retrieval endpoint yet</span>
+      ) : (
+        <span className="text-xs text-g400 flex-shrink-0">Not uploaded</span>
+      )}
+    </div>
+  )
+}
+
 const PIPELINE = [
   { label: 'Payment', done: true }, { label: 'Filing', active: true },
   { label: 'Vetting', done: false }, { label: 'Registration', done: false }, { label: 'Onboarding', done: false },
@@ -120,6 +171,10 @@ export default function FilingPage() {
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('personal')
+  // Result of the final Submit Application action — shown as FailurePopup,
+  // same "success/failure both get the shared popup" pairing as SuccessPopup
+  // below and the Payment page's Save Payment action.
+  const [failure, setFailure] = useState<string | null>(null)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -128,8 +183,71 @@ export default function FilingPage() {
   const [showApplicantDropdown, setShowApplicantDropdown] = useState(false)
   const [selectedApplication, setSelectedApplication] = useState<FilingApplicationSearchResult | null>(null)
   const [submitted, setSubmitted] = useState(false)
-  const { data: searchResults } = useSearchApplicationsForFiling(applicantSearch, 1, 20, showApplicantDropdown)
+  // Scoped to the current academic intake — intakeCode is a CONFIRMED real
+  // filter on the underlying /application-payments endpoint (a live
+  // ?intakeCode=20261 request came back properly scoped, ~hundreds of rows
+  // instead of the 442+ that one intake alone already had). Only fetches
+  // once there's an actual search term — opening the box with nothing typed
+  // used to fire the same big query anyway (searchTerm=''), pulling the
+  // entire batch on every focus. That, combined with rendering every single
+  // result into the dropdown below with no cap, was rendering several
+  // thousand <button>s at once — slow/heavy enough to look like results
+  // were silently going missing, when really the browser was just choking
+  // on the sheer volume.
+  //
+  // currentAcademicIntake comes back null whenever no intake in the live
+  // data is flagged currentIntake — CONFIRMED the same real data gap that
+  // broke the Intake dropdown on the enquiry forms earlier (see
+  // online-enquiry/ondesk-enquiry/kiosk-enquiry's own fallback). Without a
+  // fallback here, intakeCode silently never made it into the request at
+  // all. Falls back to the intake with the highest intakeCode (a
+  // year+sequence value like 20261 — the most recently created intake) as
+  // a best-guess "current" one, same "prefer the real flag, never leave the
+  // feature fully broken because of it" approach as the enquiry forms fix.
+  const { data: intakes = [] }    = useIntakes()
+  const { data: currentAcademicIntake } = useCurrentAcademicIntake()
+  const latestIntakeCode = intakes.length
+    ? intakes.reduce((max, i) => (i.intakeCode > max ? i.intakeCode : max), intakes[0].intakeCode)
+    : undefined
+  const effectiveIntakeCode = currentAcademicIntake?.intakeCode ?? latestIntakeCode
+  const { data: searchResults } = useSearchApplicationsForFiling(
+    applicantSearch, 1, 12000, showApplicantDropdown && !!applicantSearch.trim(), effectiveIntakeCode,
+  )
   const searchItems = searchResults?.items ?? []
+  // Capped to a handful of matches for display — same convention as
+  // enquiry-list/vetting's own searchMatches — even though the query above
+  // can match against up to 12000 real rows.
+  const visibleSearchItems = searchItems.slice(0, 8)
+
+  // Auto-carries the appRefNo over from Payment's "Proceed to Filing" button
+  // (see lib/filingHandoff.ts) instead of leaving the counsellor to manually
+  // retype/remember it right after generating a receipt — read once on
+  // mount, consumed immediately so a later manual visit/refresh doesn't
+  // keep re-triggering this.
+  const pendingPrefillRef = useRef<string | null>(null)
+  useEffect(() => {
+    const ref = consumeFilingPrefillRef()
+    if (!ref) return
+    pendingPrefillRef.current = ref
+    setApplicantSearch(ref)
+    setShowApplicantDropdown(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Once the search this triggers actually comes back, auto-select the
+  // matching row so the counsellor lands straight on a filled Personal Info
+  // tab instead of still having to click it from the dropdown. If nothing
+  // matches (e.g. the backend hasn't indexed the new payment yet), surface
+  // that plainly rather than leaving an empty dropdown with no explanation.
+  useEffect(() => {
+    if (!pendingPrefillRef.current || !searchResults) return
+    const ref = pendingPrefillRef.current
+    pendingPrefillRef.current = null
+    const match = searchItems.find(a => a.appRefNo === ref)
+    if (match) selectApplication(match)
+    else showToast(`Could not find application ${ref} yet — try searching again in a moment, or check the reference number`, 'error')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchResults])
 
   // Once an application is picked, warn on leaving until it's actually been
   // submitted for vetting — covers tab close/refresh/typing a new URL/
@@ -176,9 +294,12 @@ export default function FilingPage() {
     setRefugeeId(a.refugeeId ?? '')
 
     setIntakeGuid(a.intakeGuid ?? '')
+    setEnquiryGuid(a.enquiryGuid ?? '')
     setCampusGuid(a.campusGuid ?? '')
     setProgramGuidState(a.programGuid ?? '')
     setSemesterGuidState(a.semesterGuid ?? '')
+    setBatchTimeGuidState(a.batchTimeGuid ?? '')
+    setBatchGuid(a.batchGuid ?? '')
     setFeeHdGuid(a.feeHdGuid ?? '')
   }
 
@@ -224,8 +345,12 @@ export default function FilingPage() {
   const [generalSaved, setGeneralSaved] = useState(false)
   const [intApplication, setIntApplication] = useState<number | null>(null)
 
-  const { data: enquiriesData }   = useEnquiries(1, 100)
-  const { data: intakes = [] }    = useIntakes()
+  // Restored as an editable, required picker — the current search source
+  // (/application-payments) only ever carries intEnquiry (a raw int, no
+  // confirmed guid mapping), never a real enquiryGuid, so every application
+  // selected from search hits the "missing Enquiry" save-blocking toast
+  // with nothing to fix it unless a real picker exists here.
+  const { data: enquiriesData }   = useEnquiries(1, 1000)
   const { data: campuses = [] }   = useCampuses()
   const { data: programs = [] }   = useProgramMasters()
   const { data: semesters = [] }  = useSemestersForProgram(programGuid, !!programGuid)
@@ -238,11 +363,16 @@ export default function FilingPage() {
   const batches = (allBatchesData?.items ?? []).filter(b =>
     b.programGuid === programGuid && b.semesterGuid === semesterGuid && b.batchTimeGuid === batchTimeGuid,
   )
-  const { data: fees = [] }       = useApplicationPaymentFees(programGuid, !!programGuid)
+  // Same payment-scoped Dropdowns/Fees.bru endpoint that turned out
+  // unreliable on the Payment page (blank for a Programme that does have
+  // real fee structures) — use the generic, already-confirmed-correct
+  // Programme Fee Structure list filtered client-side instead, same fix as
+  // applied there.
+  const { data: allFeeStructuresData } = useProgramFeeStructures(1, 1000)
+  const fees = (allFeeStructuresData?.items ?? []).filter(f => f.programGuid === programGuid && f.status)
   const { data: countries = [] }  = useCountries()
 
   const enquiryOptions   = (enquiriesData?.items ?? []).map(e => ({ value: e.enquiryGuid, label: `${e.studentName} (${e.enquiryCode})` }))
-  const intakeOptions    = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   const campusOptions    = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions   = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
@@ -253,6 +383,17 @@ export default function FilingPage() {
 
   // Passport/Visa/Refugee sections only apply to non-home-country nationals.
   const isForeign = countryGuid !== '' && !countries.find(c => c.countryGuid === countryGuid)?.defaultCountry
+
+  // Per the requirements doc (req. 8): entering any Passport or Visa detail
+  // locks out Refugee Details entirely. Clearing isRefugee/refugeeId/
+  // refugeeFile the moment this flips true keeps what's saved consistent
+  // with what the locked-out UI shows, rather than silently submitting
+  // stale refugee data the user can no longer see or edit.
+  const hasPassportOrVisa = !!(passportNo.trim() || passportFile || vStartDate || vEndDate || visaFile)
+  useEffect(() => {
+    if (!hasPassportOrVisa) return
+    setIsRefugee(false); setRefugeeId(''); setRefugeeFile(null)
+  }, [hasPassportOrVisa])
 
   // ── Sponsor (Family tab fields that actually map to the API) ────────────
   const [spName, setSpName] = useState('')
@@ -265,7 +406,15 @@ export default function FilingPage() {
   function handleSaveGeneralAndAdvance() {
     if (!selectedApplication) { showToast('Select an application above first', 'error'); return }
     if (!enquiryGuid) { showToast('Enquiry is required', 'error'); return }
-    if (!campusGuid || !programGuid || !feeHdGuid) { showToast('Campus, Programme and Fee Structure are required', 'error'); return }
+    // Campus/Programme/Fee Structure are locked, auto-filled from the
+    // selected application — if one is still missing here, the selected
+    // application itself doesn't carry it and there's no picker left on
+    // this page to fix it; surface that plainly instead of a generic
+    // "required" message the user can't act on.
+    if (!campusGuid || !programGuid || !feeHdGuid) {
+      showToast('This application is missing Campus/Programme/Fee Structure data — check the source record', 'error')
+      return
+    }
     if (isRefugee && !refugeeId.trim()) { showToast('Refugee ID is required for refugee students', 'error'); return }
 
     // Intake.intakeCode is a number on the wire (e.g. 20264) — this API's
@@ -412,7 +561,10 @@ export default function FilingPage() {
       // auto-close timer) rather than immediately, matching the
       // confirmation pattern used elsewhere in this app (e.g. NewBatchModal).
       onSuccess: () => setSubmitted(true),
-      onError: (error: Error) => showToast(error.message || 'Failed to submit application', 'error'),
+      // FailurePopup instead of a toast — same "success/failure both get the
+      // shared popup, not just success" pattern as the Payment page's Save
+      // Payment action, for the equivalent final-submission step here.
+      onError: (error: Error) => setFailure(error.message || 'Failed to submit application'),
     })
   }
 
@@ -447,25 +599,33 @@ export default function FilingPage() {
                 onFocus={() => setShowApplicantDropdown(true)} />
               {showApplicantDropdown && (
                 <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-g200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
-                  {searchItems.length === 0 && <div className="p-3 text-sm text-g400">No results</div>}
-                  {searchItems.map(a => (
-                    <button key={a.appRefNo} className="w-full text-left px-4 py-2 text-sm hover:bg-b50 flex justify-between" onClick={() => selectApplication(a)}>
-                      <span className="font-medium text-g800">{a.appRefNo}</span><span className="text-g500">{applicantName(a)}</span>
-                    </button>
-                  ))}
+                  {!applicantSearch.trim()
+                    ? <div className="p-3 text-sm text-g400">Type to search…</div>
+                    : visibleSearchItems.length === 0
+                      ? <div className="p-3 text-sm text-g400">No results</div>
+                      : visibleSearchItems.map(a => (
+                        <button key={a.appRefNo} className="w-full text-left px-4 py-2 text-sm hover:bg-b50 flex justify-between" onClick={() => selectApplication(a)}>
+                          <span className="font-medium text-g800">{a.appRefNo}</span><span className="text-g500">{applicantName(a)}</span>
+                        </button>
+                      ))}
                 </div>
               )}
             </div>
           </div>
-          <Field label="Application Reference Number">
-            <input className="ctrl" placeholder="APP2026/1" readOnly value={selectedApplication?.appRefNo ?? ''} />
-          </Field>
+          {/* Hidden until an application is selected, per the Application Filling
+              requirements doc — the ref number box has nothing useful to show
+              (or edit — it's always read-only) before that point. */}
+          {selectedApplication && (
+            <Field label="Application Reference Number">
+              <input className="ctrl" readOnly value={selectedApplication.appRefNo} />
+            </Field>
+          )}
         </div>
         {selectedApplication && (
           <div className="info-box mt-4">
-            <div className="g3">
-              {/* saveStatus is an int-encoded enum with no confirmed label mapping — show raw, don't guess. */}
-              <div><span className="text-xs text-g400 block">Save Status</span><span className="text-sm font-semibold text-g800">{selectedApplication.saveStatus ?? '—'}</span></div>
+            {/* Save Status intentionally not shown here — requirements doc says
+                not to display it in the UI at all. */}
+            <div className="g2">
               <div><span className="text-xs text-g400 block">Email</span><span className="text-sm font-semibold text-g800">{selectedApplication.emailId ?? '—'}</span></div>
               <div><span className="text-xs text-g400 block">Phone</span><span className="text-sm font-semibold text-g800">{selectedApplication.phone ?? '—'}</span></div>
             </div>
@@ -505,7 +665,7 @@ export default function FilingPage() {
                     <Field label="Phone" req>
                       <div className="flex gap-2">
                         <SearchSelect options={COUNTRY_CODES} value={phoneCode} onChange={setPhoneCode} style={{ width: 108, flexShrink: 0 }} />
-                        <input className="ctrl flex-1" placeholder="7XX XXX XXX" value={phone} onChange={e => setPhone(e.target.value)} />
+                        <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="7XX XXX XXX" value={phone} onChange={e => setPhone(sanitizePhoneInput(e.target.value, false))} />
                       </div>
                     </Field>
                   </div>
@@ -516,18 +676,33 @@ export default function FilingPage() {
                   {/* <div className="g3 mt-3"><Field label="University Email"><Input readOnly placeholder="Auto-generated" /></Field><Field label="Religion"><Select options={RELIGIONS} /></Field><Field label="Marital Status"><Select options={MARITAL} /></Field></div> */}
 
                   <div className="sec-divider mt-5">Programme Details</div>
+                  {/* Intake picker stays hidden — intakeGuid prefills fine from the
+                      selected application. Enquiry is back as an editable, required
+                      picker: the current search source (/application-payments) only
+                      ever carries intEnquiry (a raw int, no confirmed guid mapping),
+                      never a real enquiryGuid, so EVERY application selected from
+                      search was hitting the "missing Enquiry" save-blocking toast
+                      with nothing on this page left to fix it. */}
+                  {/* Campus/Programme/Fee Structure/Semester are locked read-only per the
+                      same doc (req. 7) — all four are confirmed present on the selected
+                      application's search result and prefill correctly; `disabled` keeps
+                      them visible but non-editable. Batch Time/Batch are NOT locked, despite
+                      req. 7 listing them too — confirmed via a real save that
+                      FilingApplicationSearchResult doesn't actually carry batchTimeGuid/
+                      batchGuid on the wire (Semester prefills, these two don't), so locking
+                      them left the picker permanently empty with no way to fix it. Left
+                      editable until there's a confirmed source to prefill+lock them from. */}
                   <div className="g3 mt-3">
                     <Field label="Enquiry" req><SearchSelect options={enquiryOptions} value={enquiryGuid} placeholder="-- Select Enquiry --" onChange={setEnquiryGuid} /></Field>
-                    <Field label="Intake"><SearchSelect options={intakeOptions} value={intakeGuid} placeholder="-- Select Intake --" onChange={setIntakeGuid} /></Field>
-                    <Field label="Campus" req><SearchSelect options={campusOptions} value={campusGuid} placeholder="-- Select Campus --" onChange={setCampusGuid} /></Field>
+                    <Field label="Campus" req><SearchSelect options={campusOptions} value={campusGuid} placeholder="-- Select Campus --" onChange={setCampusGuid} disabled /></Field>
+                    <Field label="Programme" req><SearchSelect options={programOptions} value={programGuid} placeholder="-- Select Programme --" onChange={setProgramGuid} disabled /></Field>
                   </div>
                   <div className="g3 mt-3">
-                    <Field label="Programme" req><SearchSelect options={programOptions} value={programGuid} placeholder="-- Select Programme --" onChange={setProgramGuid} /></Field>
-                    <Field label="Fee Structure" req><SearchSelect options={feeOptions} value={feeHdGuid} placeholder={programGuid ? '-- Select Fee Structure --' : '-- Select Programme First --'} onChange={setFeeHdGuid} /></Field>
-                    <Field label="Semester"><SearchSelect options={semesterOptions} value={semesterGuid} placeholder={programGuid ? '-- Select Semester --' : '-- Select Programme First --'} onChange={setSemesterGuid} /></Field>
-                  </div>
-                  <div className="g3 mt-3">
+                    <Field label="Fee Structure" req><SearchSelect options={feeOptions} value={feeHdGuid} placeholder={programGuid ? '-- Select Fee Structure --' : '-- Select Programme First --'} onChange={setFeeHdGuid} disabled /></Field>
+                    <Field label="Semester"><SearchSelect options={semesterOptions} value={semesterGuid} placeholder={programGuid ? '-- Select Semester --' : '-- Select Programme First --'} onChange={setSemesterGuid} disabled /></Field>
                     <Field label="Batch Time"><SearchSelect options={batchTimeOptions} value={batchTimeGuid} placeholder="-- Select --" onChange={setBatchTimeGuid} /></Field>
+                  </div>
+                  <div className="g3 mt-3">
                     <Field label="Batch">
                       <SearchSelect
                         options={batchOptions}
@@ -560,6 +735,8 @@ export default function FilingPage() {
                   <div className="sec-divider mt-5">Refugee Details</div>
                   {!isForeign ? (
                     <p className="text-g400 mt-2" style={{ fontSize: 'var(--fs-xs)' }}>Applies to non-Ugandan nationals — select a Nationality above to unlock.</p>
+                  ) : hasPassportOrVisa ? (
+                    <p className="text-g400 mt-2" style={{ fontSize: 'var(--fs-xs)' }}>Locked — Passport/Visa details were entered above. Clear them to record Refugee details instead.</p>
                   ) : (
                     <>
                       <label className="flex items-center gap-2 mt-3" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
@@ -579,7 +756,7 @@ export default function FilingPage() {
                   <div className="sec-divider mt-5">Sponsorship Details</div>
                   <div className="g3 mt-3">
                     <Field label="Sponsor Name"><Input placeholder="Sponsor name" value={spName} onChange={setSpName} /></Field>
-                    <Field label="Sponsor Phone"><Input placeholder="+256 7XX XXX XXX" value={spPhone} onChange={setSpPhone} /></Field>
+                    <Field label="Sponsor Phone"><Input type="tel" placeholder="+256 7XX XXX XXX" value={spPhone} onChange={v => setSpPhone(sanitizePhoneInput(v))} /></Field>
                     <Field label="Sponsor Email"><Input type="email" placeholder="sponsor@email.com" value={spEmail} onChange={setSpEmail} /></Field>
                   </div>
                   <div className="g3 mt-3">
@@ -614,32 +791,13 @@ export default function FilingPage() {
                   ))} */}
                   <div className="flex justify-between mt-5">
                     <button className="btn" onClick={() => setActiveTab('personal')}><i className="lni lni-arrow-left" /> Personal Info</button>
-                    <button className="btn" onClick={() => setActiveTab('family')}>Next: Family Details <i className="lni lni-arrow-right" /></button>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'family' && (
-                <div>
-                  {/* <div className="sec-divider">Father / Guardian</div>
-                  <div className="g3 mt-3"><Field label="Full Name"><Input placeholder="Father's / Guardian's name" /></Field><Field label="Phone"><Input placeholder="+256 7XX XXX XXX" /></Field><Field label="Occupation"><Input placeholder="Occupation" /></Field></div>
-                  <div className="g3 mt-3"><Field label="Email"><Input type="email" placeholder="email@example.com" /></Field><div className="fg" /><div className="fg" /></div>
-                  <div className="sec-divider mt-5">Mother</div>
-                  <div className="g3 mt-3"><Field label="Full Name"><Input placeholder="Mother's name" /></Field><Field label="Phone"><Input placeholder="+256 7XX XXX XXX" /></Field><Field label="Occupation"><Input placeholder="Occupation" /></Field></div>
-                  <div className="g3 mt-3"><Field label="Email"><Input type="email" placeholder="email@example.com" /></Field><div className="fg" /><div className="fg" /></div>
-                  <div className="sec-divider mt-5">Emergency Contact</div>
-                  <div className="g3 mt-3"><Field label="Name" req><Input placeholder="Contact person" /></Field><Field label="Relationship"><Input placeholder="e.g. Uncle" /></Field><Field label="Phone" req><Input placeholder="+256 7XX XXX XXX" /></Field></div>
-                  <div className="sec-divider mt-5">Family Address</div>
-                  <div className="g3 mt-3"><Field label="District"><Input placeholder="District" /></Field><Field label="Sub-county"><Input placeholder="Sub-county" /></Field><Field label="Village / Street"><Input placeholder="Village" /></Field></div>
-                  <div className="sec-divider mt-5">Sponsorship Details</div> */}
-                  <p className="text-g400 text-sm">Sponsorship details are in the Personal Info tab.</p>
-                  
-                  <div className="flex justify-between mt-5">
-                    <button className="btn" onClick={() => setActiveTab('qualifications')}><i className="lni lni-arrow-left" /> Qualifications</button>
                     <button className="btn" onClick={() => setActiveTab('documents')}>Next: Documents <i className="lni lni-arrow-right" /></button>
                   </div>
                 </div>
               )}
+
+              {/* Family Details tab removed per the Application Filling requirements
+                  doc (req. 10) — sponsorship fields already live in Personal Info. */}
 
               {activeTab === 'documents' && (
                 <div>
@@ -651,6 +809,18 @@ export default function FilingPage() {
                         {photoSaved ? <><i className="lni lni-checkmark-circle" /> Uploaded</> : uploadPhoto.isPending ? 'Uploading…' : 'Upload Photo'}
                       </button>
                     </div>
+                  </div>
+
+                  <div className="sec-divider mt-5">Uploaded Documents</div>
+                  <div className="mt-3">
+                    <DocRow label="National ID" file={nationalIdFile} savedName={selectedApplication.idUserFileName} />
+                    <DocRow label="Passport Copy" file={passportFile} savedName={selectedApplication.passUserFileName} />
+                    <DocRow label="Visa Copy" file={visaFile} savedName={selectedApplication.visaUserFileName} />
+                    <DocRow label="Refugee Certificate" file={refugeeFile} savedName={null} />
+                    <DocRow label="Student Photo" file={photoFile} savedName={selectedApplication.studUserFileName} />
+                    {qualRows.map((row, i) => (
+                      <DocRow key={row.id} label={`Qualification Proof #${i + 1}`} file={row.proofFile} savedName={null} />
+                    ))}
                   </div>
 
                   <div className="sec-divider mt-5">Application Status</div>
@@ -678,7 +848,7 @@ export default function FilingPage() {
                   </label>
 
                   <div className="flex justify-between mt-5">
-                    <button className="btn" onClick={() => setActiveTab('family')}><i className="lni lni-arrow-left" /> Family</button>
+                    <button className="btn" onClick={() => setActiveTab('qualifications')}><i className="lni lni-arrow-left" /> Qualifications</button>
                     <button className="btn bg-b500 text-white" disabled={!canSubmit || submitApplication.isPending || !permissions.add} onClick={handleSubmitApplication}>
                       <i className="lni lni-checkmark" /> {submitApplication.isPending ? 'Submitting…' : 'Submit Application for Vetting'}
                     </button>
@@ -700,6 +870,13 @@ export default function FilingPage() {
               subtitle={`${selectedApplication?.appRefNo ?? 'Application'} has been submitted for vetting.`}
               onClose={() => router.push('/admission/vetting')}
             />
+          </div>
+        </div>
+      )}
+      {failure && (
+        <div className="modal-overlay open">
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <FailurePopup title="Couldn't Submit Application" subtitle={failure} onClose={() => setFailure(null)} />
           </div>
         </div>
       )}

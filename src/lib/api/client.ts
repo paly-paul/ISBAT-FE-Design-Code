@@ -1,9 +1,16 @@
-const API_BASE = (process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? '').trim()
+const NEXT_PUBLIC_API_BASE = (process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? '').trim()
+const SERVER_API_GATEWAY_URL = (process.env.API_GATEWAY_URL ?? '').trim()
+const API_BASE = SERVER_API_GATEWAY_URL || NEXT_PUBLIC_API_BASE
+const USE_API_PROXY = Boolean(API_BASE)
 
 // Skip ngrok's browser warning page for local gateway requests.
 const NGROK_HEADERS = { 'ngrok-skip-browser-warning': 'true' }
 
 function buildUrl(path: string): string {
+  // When the gateway URL is configured in Next.js, `/api/*` is rewritten by
+  // next.config.mjs through the dev server to the real backend. Keep browser
+  // requests same-origin so httpOnly cookies like erp_refresh can be sent.
+  if (USE_API_PROXY && path.startsWith('/api/')) return path
   if (!API_BASE) return path
   return `${API_BASE}${path}`
 }
@@ -48,33 +55,54 @@ export function refreshAccessToken(): Promise<RefreshData> {
   return refreshInFlight
 }
 
-function redirectToLogin() {
-  if (typeof window !== 'undefined') window.location.href = '/login'
+function redirectToLogin(triggeredBy: string, cause: unknown) {
+  // Logged before navigating away — once the redirect fires, the tab reloads
+  // and this context would otherwise be lost, making a "why did I get logged
+  // out on this page" report impossible to root-cause after the fact.
+  if (typeof window !== 'undefined') {
+    console.warn(
+      `[auth] Redirecting to /login — refresh failed after a 401 from "${triggeredBy}".`,
+      cause,
+    )
+    window.location.href = '/login'
+  }
 }
 
 // Only a real refresh failure should log the user out. The backend's
 // erp_refresh cookie is single-use (rotates on every call, confirmed via a
 // real concurrent-request test: two /auth/refresh calls with the same
 // still-valid token raced 200/401) — so a 401 here doesn't necessarily mean
-// the session is actually gone. If the user has a second tab open (or an
-// unrelated refresh from elsewhere in this same tab slipped past the dedup
-// above, e.g. via a call site that doesn't route through
-// refreshAccessToken()), it may have already rotated the cookie a moment
-// before this attempt reached the server. Give that a brief window to land
-// in the browser's cookie store and try once more before concluding the
-// session is genuinely gone — only redirect if the retry also fails.
-async function handleUnauthorized(): Promise<void> {
+// the session is actually gone. If the user has a second tab open (each tab
+// runs its own independent proactive refresh timer — see the module
+// layouts' SESSION_REFRESH_INTERVAL_MS — so this isn't a rare edge case),
+// or an unrelated refresh from elsewhere in this same tab slipped past the
+// dedup above, it may have already rotated the cookie a moment before this
+// attempt reached the server. Give that a brief window to land in the
+// browser's cookie store and try once more before concluding the session is
+// genuinely gone. Shared by both the reactive 401 handler below AND the
+// proactive keep-alive (via refreshSession() in auth.ts) — every caller
+// needs this same tolerance, not just the reactive path; a previous version
+// of the proactive timer skipped it and logged users out on the very first
+// racy collision instead of retrying, which is exactly the failure this was
+// built to prevent.
+export async function refreshAccessTokenWithRetry(): Promise<RefreshData> {
   try {
-    await refreshAccessToken()
+    return await refreshAccessToken()
   } catch (err) {
     if (!(err instanceof AuthError)) throw err
-    try {
-      await new Promise(resolve => setTimeout(resolve, 500))
-      await refreshAccessToken()
-    } catch (retryErr) {
-      if (retryErr instanceof AuthError) redirectToLogin()
-      throw retryErr
-    }
+    await new Promise(resolve => setTimeout(resolve, 500))
+    return await refreshAccessToken()
+  }
+}
+
+// `triggeredBy` is the path of the original request whose 401 kicked this
+// off — purely for diagnostics, see redirectToLogin() above.
+async function handleUnauthorized(triggeredBy: string): Promise<void> {
+  try {
+    await refreshAccessTokenWithRetry()
+  } catch (err) {
+    if (err instanceof AuthError) redirectToLogin(triggeredBy, err)
+    throw err
   }
 }
 
@@ -88,7 +116,7 @@ export async function post<T>(path: string, body: unknown, retried = false): Pro
   })
 
   if (res.status === 401 && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return post<T>(path, body, true)
   }
 
@@ -109,7 +137,7 @@ export async function get<T>(path: string, retried = false): Promise<T> {
   })
 
   if (res.status === 401 && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return get<T>(path, true)
   }
 
@@ -131,6 +159,27 @@ interface ApiEnvelope<T> {
   errors: string[] | null
 }
 
+// A raw ASP.NET model-binding failure (e.g. a Guid?-typed field getting an
+// empty string, caught by the framework before the controller — and one's
+// own custom validation — ever runs) returns its built-in
+// ValidationProblemDetails shape instead: { title, errors: { field: [msg] } }.
+// `errors` there is a DICTIONARY keyed by field name, not the app's own
+// `string[]`, and there's no `code` at all. Without this fallback, every
+// such failure surfaced as a bare `AuthError('unknown')` with no usable
+// message — confirmed on a real 400 from program-master's update-complete
+// where an empty-string UnitTypeGuid/UnitCatGuid hit exactly this shape.
+function extractErrorInfo(envelope: unknown): { code: string; message?: string } {
+  const e = envelope as (Partial<ApiEnvelope<unknown>> & { title?: string; errors?: unknown }) | null
+  if (!e) return { code: 'unknown' }
+  if (e.code) return { code: e.code, message: (Array.isArray(e.errors) ? e.errors[0] : undefined) ?? e.message ?? undefined }
+  if (e.errors && !Array.isArray(e.errors) && typeof e.errors === 'object') {
+    const fieldErrors = e.errors as Record<string, string[]>
+    const firstField = Object.keys(fieldErrors)[0]
+    return { code: 'validation_error', message: (firstField ? fieldErrors[firstField]?.[0] : undefined) ?? e.title ?? undefined }
+  }
+  return { code: 'unknown', message: e.title ?? undefined }
+}
+
 export async function apiPost<T>(path: string, body: unknown, retried = false): Promise<T> {
   const res = await fetch(buildUrl(path), {
     method: 'POST',
@@ -143,7 +192,7 @@ export async function apiPost<T>(path: string, body: unknown, retried = false): 
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return apiPost<T>(path, body, true)
   }
 
@@ -158,7 +207,8 @@ export async function apiPost<T>(path: string, body: unknown, retried = false): 
     return envelope.data as T
   }
 
-  throw new AuthError(envelope?.code ?? 'unknown', envelope?.errors?.[0] ?? envelope?.message ?? undefined)
+  const { code, message } = extractErrorInfo(envelope)
+  throw new AuthError(code, message)
 }
 
 // multipart/form-data variant of apiPost — for endpoints that accept a file
@@ -169,7 +219,8 @@ export async function apiPostForm<T>(path: string, formData: FormData, retried =
   // Debug: log FormData keys before sending
   console.log(`📡 apiPostForm to ${path}`)
   console.log('📦 FormData entries:')
-  for (const [key, value] of formData.entries()) {
+  for (const key of (formData as any).keys()) {
+    const value = formData.get(key)
     if (value instanceof File) {
       console.log(`   ${key}: [File] ${value.name} (${value.size} bytes, ${value.type})`)
     } else {
@@ -193,7 +244,7 @@ export async function apiPostForm<T>(path: string, formData: FormData, retried =
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return apiPostForm<T>(path, formData, true)
   }
 
@@ -205,7 +256,8 @@ export async function apiPostForm<T>(path: string, formData: FormData, retried =
     return envelope.data as T
   }
 
-  throw new AuthError(envelope?.code ?? 'unknown', envelope?.errors?.[0] ?? envelope?.message ?? undefined)
+  const { code, message } = extractErrorInfo(envelope)
+  throw new AuthError(code, message)
 }
 
 // multipart/form-data variant of apiPut — mirrors apiPostForm for endpoints
@@ -223,7 +275,7 @@ export async function apiPutForm<T>(path: string, formData: FormData, retried = 
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return apiPutForm<T>(path, formData, true)
   }
 
@@ -235,7 +287,8 @@ export async function apiPutForm<T>(path: string, formData: FormData, retried = 
     return envelope.data as T
   }
 
-  throw new AuthError(envelope?.code ?? 'unknown', envelope?.errors?.[0] ?? envelope?.message ?? undefined)
+  const { code, message } = extractErrorInfo(envelope)
+  throw new AuthError(code, message)
 }
 
 export async function apiPut<T>(path: string, body: unknown, retried = false): Promise<T> {
@@ -250,7 +303,7 @@ export async function apiPut<T>(path: string, body: unknown, retried = false): P
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return apiPut<T>(path, body, true)
   }
 
@@ -262,7 +315,8 @@ export async function apiPut<T>(path: string, body: unknown, retried = false): P
     return envelope.data as T
   }
 
-  throw new AuthError(envelope?.code ?? 'unknown', envelope?.errors?.[0] ?? envelope?.message ?? undefined)
+  const { code, message } = extractErrorInfo(envelope)
+  throw new AuthError(code, message)
 }
 
 export async function apiDelete<T>(path: string, retried = false): Promise<T> {
@@ -276,7 +330,7 @@ export async function apiDelete<T>(path: string, retried = false): Promise<T> {
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return apiDelete<T>(path, true)
   }
 
@@ -288,7 +342,8 @@ export async function apiDelete<T>(path: string, retried = false): Promise<T> {
     return envelope.data as T
   }
 
-  throw new AuthError(envelope?.code ?? 'unknown', envelope?.errors?.[0] ?? envelope?.message ?? undefined)
+  const { code, message } = extractErrorInfo(envelope)
+  throw new AuthError(code, message)
 }
 
 export async function apiGet<T>(path: string, retried = false): Promise<T> {
@@ -302,7 +357,7 @@ export async function apiGet<T>(path: string, retried = false): Promise<T> {
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized()
+    await handleUnauthorized(path)
     return apiGet<T>(path, true)
   }
 
@@ -314,5 +369,6 @@ export async function apiGet<T>(path: string, retried = false): Promise<T> {
     return envelope.data as T
   }
 
-  throw new AuthError(envelope?.code ?? 'unknown', envelope?.errors?.[0] ?? envelope?.message ?? undefined)
+  const { code, message } = extractErrorInfo(envelope)
+  throw new AuthError(code, message)
 }

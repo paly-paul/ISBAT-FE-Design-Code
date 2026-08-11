@@ -86,7 +86,7 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="g2 mb-[14px]">
+        {/* <div className="g2 mb-[14px]">
           <div className="danger-box flex-col items-start gap-1">
             <span className="font-bold text-[var(--fs-sm)]"><i className="lni lni-volume-high"></i> Dual Clash Prevention (Hard Block)</span>
             <span className="text-[var(--fs-sm)]">The system checks <strong>both</strong> conditions simultaneously on every slot entry:</span>
@@ -101,7 +101,7 @@ export default function Page() {
             <span className="text-[var(--fs-sm)]">Once published, the schedule is <strong>immediately visible</strong> on both the Student Portal and the Lecturer&apos;s view — no delay.</span>
             <span className="text-[var(--fs-sm)] mt-[2px]">Subjects with a <strong>Repetition Tag</strong> (set in Course Master) allow multiple batches to be combined into a single slot — system provides a combine option when a tag match is detected.</span>
           </div>
-        </div>
+        </div> */}
 
         <div className="card mb-[14px] p-4">
           <div className="g4">
@@ -140,9 +140,9 @@ export default function Page() {
           </div>
         </div>
 
-        <div id="tt-conflict-banner" className="danger-box hidden mb-[14px]">
+        {/* <div id="tt-conflict-banner" className="danger-box hidden mb-[14px]">
           <i className="lni lni-volume-high"></i> <span id="tt-conflict-msg">Conflict detected — entry blocked.</span>
-        </div>
+        </div> */}
 
         <div className="card" id="tt-week-view">
           <div className="card-hdr">

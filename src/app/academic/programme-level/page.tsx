@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { Breadcrumb } from '@/components/Breadcrumb'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
@@ -97,9 +98,15 @@ export default function Page() {
           {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-alevel-modal')}><i className="lni lni-plus"></i> Add Level</button>}
         </div>
 
-        <div className="info-box mb-[18px]">
+        <Breadcrumb items={[
+          { label: 'Programme Level', icon: 'lni lni-graduation' },
+          { label: 'Programme Group', icon: 'lni lni-folder', id: 'programme-group' },
+          { label: 'Programme Master', icon: 'lni lni-graduation', id: 'programme-master' },
+        ]} />
+
+        {/* <div className="info-box mb-[18px]">
           <i className="lni lni-information"></i> Programme Level defines the <strong>fundamental attributes</strong> of every programme at that level (year count, semester count, minimum credit load). Selecting a level in the Programme Master auto-populates these values — e.g. selecting Bachelor&apos;s defaults to 3 years, 6 semesters.
-        </div>
+        </div> */}
 
         <div className="card">
           <div className="card-hdr">

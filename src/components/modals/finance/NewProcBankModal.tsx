@@ -77,7 +77,7 @@ export function NewProcBankModal({ isOpen, onClose, showToast, createProcBank }:
   return (
     <div className="modal-overlay open" id="new-proc-bank-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-wallet"></i> Add Bank</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>

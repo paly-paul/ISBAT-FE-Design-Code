@@ -7,7 +7,7 @@ export function FeeItemModal({ isOpen, onClose, showToast }: ModalProps) {
   return (
     <div className="modal-overlay open" id="new-fee-item-modal">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-dollar"></i> Add / Edit Fee Item</div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>

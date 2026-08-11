@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../academic/SuccessPopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 
 export interface FollowupEnquiry {
   ref: string; name: string; programme: string; assignedTo: string; followupDate: string; priority: string
@@ -57,7 +58,7 @@ export function AllocateFollowupModal({ isOpen, onClose, enquiry, onAllocate }: 
   return (
     <div className="modal-overlay open">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title flex items-center gap-2"><i className="lni lni-calendar"></i> Allocate Follow-up &mdash; {enquiry.ref}</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
@@ -75,9 +76,9 @@ export function AllocateFollowupModal({ isOpen, onClose, enquiry, onAllocate }: 
           </div>
           <div className="fg">
             <label className="lbl">Follow-up Date <span className="req">*</span></label>
-            <input className="ctrl" type="date" value={followupDate}
-              onChange={e => { setFollowupDate(e.target.value); if (errors.followupDate) setErrors(p => ({ ...p, followupDate: '' })) }}
-              style={errors.followupDate ? { borderColor: 'var(--red)' } : undefined} />
+            <DatePicker value={followupDate}
+              onChange={v => { setFollowupDate(v); if (errors.followupDate) setErrors(p => ({ ...p, followupDate: '' })) }}
+              hasError={!!errors.followupDate} />
             {errors.followupDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.followupDate}</p>}
           </div>
           <div className="fg" style={{ gridColumn: 'span 2' }}>

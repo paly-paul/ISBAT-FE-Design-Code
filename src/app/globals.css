@@ -1157,6 +1157,26 @@ body {
   color: #fff;
 }
 
+/* Pipeline steps weren't actually landing on equal widths/heights despite
+   .pip-step's flex: 1 — a flex item's default min-width: auto still lets its
+   own content (label + note, e.g. "Reg. Payment" / "$250 check") force it
+   wider than its equal share whenever that text is longer than another
+   step's, and if it wraps to a second line while the others stay on one,
+   the boxes end up different heights too. min-width: 0 lets flex-basis: 0%
+   actually enforce equal widths; nowrap + ellipsis on the label/note then
+   truncates whichever text doesn't fit instead of silently growing the box
+   or wrapping it onto an uneven second line. */
+#page-dashboard .pipeline .pip-step {
+  min-width: 0;
+}
+
+#page-dashboard .pipeline .pip-label,
+#page-dashboard .pipeline .pip-desc {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Admission Progress Charts (Dashboard) */
 .adm-chart-grid {
   display: grid;
@@ -2676,13 +2696,11 @@ th:hover .th-fi {
   cursor: pointer;
   transition: background var(--tr);
   white-space: nowrap;
-}
-
-.col-filter-opt:first-child {
-  color: var(--g500);
-  font-weight: 600;
-  font-size: var(--fs-xs);
-  border-bottom: 1px solid var(--g100);
+  /* Fallback for a label that still exceeds .ss-drop's max-width cap —
+     ellipsize instead of relying on the drop's own overflow:hidden to
+     hard-clip it mid-word. */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .col-filter-opt:hover {
@@ -2693,6 +2711,19 @@ th:hover .th-fi {
   background: var(--b50);
   color: var(--b700);
   font-weight: 600
+}
+
+/* Per-option disabled state (SearchSelect's Opt.disabled) — visible but not
+   selectable, e.g. Copy Fee Code's "this is the record you're already
+   editing" entry. */
+.col-filter-opt.fil-disabled {
+  cursor: not-allowed;
+  color: var(--g400);
+  font-style: italic;
+}
+
+.col-filter-opt.fil-disabled:hover {
+  background: transparent
 }
 
 /* FilterTh — checkbox multi-select additions */
@@ -3411,8 +3442,21 @@ body:has(.modal-overlay.open) {
 .modal.modal-flex>.prog-steps,
 .modal.modal-flex>.modal-footer {
   flex-shrink: 0;
-  background: var(--white);
   z-index: 3
+}
+
+/* .modal.modal-flex>.modal-hdr above has higher specificity (3 classes) than
+   .modal-hdr-blue (1 class), so a plain shared `background: var(--white)`
+   on that combined rule was silently overriding the blue gradient on every
+   modal-flex modal that also opts into modal-hdr-blue (ProgrammeModal,
+   VettingReviewModal, EditIntakeModal, etc.) — the header rendered plain
+   white instead of blue regardless of the modal-hdr-blue class being
+   present. Scoped to :not(.modal-hdr-blue) so the accent variant's own
+   gradient wins again; .modal-footer is never a colored variant, so it
+   keeps the unconditional white background. */
+.modal.modal-flex>.modal-hdr:not(.modal-hdr-blue),
+.modal.modal-flex>.modal-footer {
+  background: var(--white)
 }
 
 .modal.modal-flex>.prog-steps {
@@ -4345,7 +4389,7 @@ body:has(.modal-overlay.open) {
 
 /* Weightage inputs */
 .wt-input {
-  width: 64px;
+  width: 80px;
   padding: 7px 8px;
   text-align: center;
   font-family: 'Inter', -apple-system, sans-serif;

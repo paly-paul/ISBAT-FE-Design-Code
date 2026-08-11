@@ -13,7 +13,10 @@ const VETTING_DETAIL_KEY = ['vetting-detail']
 export function useVettingQueue(page: number, pageSize: number, filters?: { appRefNo?: string; studentName?: string }) {
   return useQuery({
     queryKey: [...VETTING_QUEUE_KEY, page, pageSize, filters?.appRefNo ?? '', filters?.studentName ?? ''],
-    queryFn: () => getVettingQueue(page, pageSize, filters),
+    queryFn: () => {
+      console.log('[vetting hook] useVettingQueue queryFn', { page, pageSize, filters })
+      return getVettingQueue(page, pageSize, filters)
+    },
     staleTime: Infinity,
     gcTime: Infinity,
   })
@@ -25,7 +28,10 @@ export function useVettingQueue(page: number, pageSize: number, filters?: { appR
 export function useVettingApplicationDetail(applicationGuid: string | null, enabled: boolean) {
   return useQuery({
     queryKey: [...VETTING_DETAIL_KEY, applicationGuid],
-    queryFn: () => getVettingApplicationDetail(applicationGuid as string),
+    queryFn: () => {
+      console.log('[vetting hook] useVettingApplicationDetail queryFn', { applicationGuid, enabled })
+      return getVettingApplicationDetail(applicationGuid as string)
+    },
     enabled: enabled && !!applicationGuid,
   })
 }

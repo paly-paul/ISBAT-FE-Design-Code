@@ -1,129 +1,89 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
-import { NewStudentModal } from '@/components/modals/student/NewStudentModal'
-import { EditStudentModal } from '@/components/modals/student/EditStudentModal'
-import { StudentProfileModal, StudentRecord } from '@/components/modals/student/StudentProfileModal'
+import { StudentProfileModal } from '@/components/modals/student/StudentProfileModal'
 import { Toast } from '@/components/Toast'
-import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
+import { useStudents } from '@/hooks/student/useStudents'
 
 const PAGE_SIZE = 10
-
-function statusBadge(status: string) {
-  const map: Record<string, string> = { Active: 'badge-green', Suspended: 'badge-red', Deferred: 'badge-amber', Graduated: 'badge-blue' }
-  return map[status] || 'badge-grey'
-}
 
 export default function Page() {
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [filters, setFilters] = useState<Record<string, string[]>>({})
-  const [openFilter, setOpenFilter] = useState<string | null>(null)
-  const [selectedStudent, setSelectedStudent] = useState<StudentRecord | null>(null)
+  const [selectedStudentGuid, setSelectedStudentGuid] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
 
   function nav(id: string) { router.push('/student/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
-  function handleView(row: StudentRecord) { setSelectedStudent(row); openModal('view-student-modal') }
+  function handleView(studentGuid: string) { setSelectedStudentGuid(studentGuid); openModal('view-student-modal') }
+  function updateSearch(value: string) { setSearch(value); setPage(1) }
 
-  useEffect(() => {
-    function closeFilter(e: MouseEvent) {
-      const target = e.target as HTMLElement
-      if (!target.closest('th')) setOpenFilter(null)
-    }
-    document.addEventListener('click', closeFilter)
-    return () => document.removeEventListener('click', closeFilter)
-  }, [])
-
-  const rows = [
-    { id: 'ISB/2024/BSCS/0142', name: 'Aisha Nakamya',   programme: 'BSc. Computer Science',       batch: 'BSC-IT-S26-DA', status: 'Active' },
-    { id: 'ISB/2024/BBA/0089',  name: 'Okello James',    programme: 'BBA Business Administration', batch: 'BBA-2024-JAN-A', status: 'Active' },
-    { id: 'ISB/2023/BSIT/0201', name: 'Grace Nampijja',  programme: 'BSc. Information Technology', batch: 'BSIT-2023-SEP-B', status: 'Deferred' },
-    { id: 'ISB/2021/NUR/0034',  name: 'Brian Ssemanda',  programme: 'Diploma in Nursing',          batch: 'NUR-2025-MAY-A', status: 'Graduated' },
-  ]
-  function matchesSearch(r: typeof rows[number], term: string) {
-    return `${r.id} ${r.name}`.toLowerCase().includes(term)
-  }
-  const q = search.trim().toLowerCase()
-  const filteredRows = rows.filter(r =>
-    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k]))) &&
-    (!q || matchesSearch(r, q))
-  )
-  const searchMatches = q ? rows.filter(r => matchesSearch(r, q)).slice(0, 8) : []
-
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
-
-  function fth(label: string, col: string, opts: string[]) {
-    return (
-      <FilterTh
-        label={label}
-        opts={opts}
-        isOpen={openFilter === col}
-        activeFilter={filters[col] ?? []}
-        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
-        onClose={() => setOpenFilter(null)}
-      />
-    )
-  }
+  // Real, server-side searchTerm/pagination — GET /api/v1/students.
+  const { data, isLoading } = useStudents(page, PAGE_SIZE, { searchTerm: search.trim() || undefined })
+  const items = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const searchMatches = search.trim() ? items.slice(0, 8) : []
 
   return (
     <>
       <div className="page active">
         <div className="pg-hdr">
-          <div><div className="pg-title">Student Master</div><div className="pg-sub">Master list of enrolled students · Programme, batch &amp; status</div></div>
-          <button className="btn btn-primary" onClick={() => openModal('new-student-modal')}><i className="lni lni-plus"></i> Add Student</button>
+          <div><div className="pg-title">Student Master</div><div className="pg-sub">Master list of enrolled students · Programme, semester &amp; batch</div></div>
         </div>
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-graduation"></i></span> Students</div>
             <TableSearch
               className="w-56"
-              placeholder="Search by Student ID or name…"
+              placeholder="Search by Student No., Reg No. or name…"
               value={search}
-              onChange={setSearch}
-              results={searchMatches.map(r => ({ id: r.id, primary: r.id, secondary: r.name }))}
+              onChange={updateSearch}
+              results={searchMatches.map(r => ({ id: r.studentGuid, primary: r.studentNum, secondary: r.studentName }))}
             />
           </div>
-          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
+          <ScrollTable>
             <table>
               <thead>
                 <tr>
                   <th style={{ width: 48 }}></th>
-                  <th>Student ID</th>
+                  <th>Student No.</th>
+                  <th>Reg No.</th>
                   <th>Name</th>
-                  {fth('Programme', 'programme', ['BSc. Computer Science', 'BBA Business Administration', 'BSc. Information Technology', 'Diploma in Nursing'])}
+                  <th>Programme</th>
+                  <th>Semester</th>
                   <th>Batch</th>
-                  {fth('Status', 'status', ['Active', 'Suspended', 'Deferred', 'Graduated'])}
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0) || !!search.trim()} onClearFilters={() => { setFilters({}); setSearch('') }} />
-                  : null}
-                {pageItems.map((r, i) => (
-                  <tr key={i}>
+                {isLoading
+                  ? <TableLoadingState colSpan={7} />
+                  : items.length === 0
+                    ? <EmptyState colSpan={7} hasFilters={!!search.trim()} onClearFilters={() => { setSearch(''); setPage(1) }} />
+                    : null}
+                {items.map(r => (
+                  <tr key={r.studentGuid}>
                     <td>
                       <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => handleView(r)}><i className="lni lni-eye"></i> View</button>
-                        <button className="btn btn-neu btn-sm" onClick={() => openModal('edit-student-modal')}><i className="lni lni-pencil"></i> Edit</button>
+                        <button className="btn btn-neu btn-sm" onClick={() => handleView(r.studentGuid)}><i className="lni lni-eye"></i> View</button>
                       </ActionMenu>
                     </td>
-                    <td className="font-mono">{r.id}</td>
-                    <td><strong>{r.name}</strong></td>
-                    <td>{r.programme}</td>
-                    <td>{r.batch}</td>
-                    <td><span className={`badge ${statusBadge(r.status)}`}>{r.status}</span></td>
+                    <td className="font-mono">{r.studentNum}</td>
+                    <td className="font-mono">{r.studentRegNo}</td>
+                    <td><strong>{r.studentName}</strong></td>
+                    <td>{r.programName || '—'}</td>
+                    <td>{r.semesterName || '—'}</td>
+                    <td>{r.batchCode || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -132,9 +92,7 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="students" onPageChange={setPage} />
         </div>
       </div>
-      <NewStudentModal isOpen={openModals.has('new-student-modal')} onClose={() => closeModal('new-student-modal')} showToast={showToast} />
-      <EditStudentModal isOpen={openModals.has('edit-student-modal')} onClose={() => closeModal('edit-student-modal')} showToast={showToast} />
-      <StudentProfileModal isOpen={openModals.has('view-student-modal')} onClose={() => closeModal('view-student-modal')} showToast={showToast} student={selectedStudent} />
+      <StudentProfileModal isOpen={openModals.has('view-student-modal')} onClose={() => closeModal('view-student-modal')} showToast={showToast} nav={nav} studentGuid={selectedStudentGuid} />
       <Toast toast={toast} />
     </>
   )
