@@ -161,7 +161,7 @@ export default function Page() {
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
-              <thead><tr><th style={{ width: 48 }}></th><th>Prog. Code</th><th>Programme Name</th>{fth('Group', 'group', groupFilterOpts)}{fth('Programme Level', 'level', levelFilterOpts)}<th>Faculty → Campus</th><th>Accreditation Date</th><th>No IA</th><th>Specializations</th><th>Status</th></tr></thead>
+              <thead><tr><th style={{ width: 48 }}></th><th>Prog. Code</th><th>Programme Name</th>{fth('Group', 'group', groupFilterOpts)}{fth('Programme Level', 'level', levelFilterOpts)}<th>Faculty → Campus</th><th>Accreditation Date</th><th>No IA</th></tr></thead>
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
@@ -188,12 +188,6 @@ export default function Page() {
                         ? <span className="badge badge-amber"><i className="lni lni-checkmark"></i> No Internal Assessment</span>
                         : <span className="badge badge-grey">No</span>
                       }
-                    </td>
-                    <td>
-                      {r.specializations === '—' ? '—' : <span className="badge badge-blue">{r.specializations}</span>}
-                    </td>
-                    <td>
-                      <span className="badge badge-grey">Not Approved</span>
                     </td>
                   </tr>
                 ))}
