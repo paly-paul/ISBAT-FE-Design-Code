@@ -74,11 +74,9 @@ export function ViewIntakeModal({ isOpen, onClose, showToast, intakeGuid }: View
   const { data: intake, isLoading, isError, error } = useIntake(intakeGuid, isOpen)
   const updateIntake = useUpdateIntake()
 
-  const [step, setStep]     = useState(1)
   const [saved, setSaved]   = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
 
-  // First step: the main intake details.
   const [description, setDescription]     = useState('')
   const [financialYear, setFinancialYear] = useState('')
   const [examYear, setExamYear]           = useState('')
@@ -91,14 +89,8 @@ export function ViewIntakeModal({ isOpen, onClose, showToast, intakeGuid }: View
   const [grievanceEndDate, setGrievanceEndDate]     = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Second step: a left sidebar listing one entry per semester calendar
-  // (same "sidebar list + active-record form" layout as FeeStructureModal's
-  // Fee Structures panel) — starts with whatever the intake already has (at
-  // least one, even if blank), and grows/shrinks via
-  // addSemester()/removeSemester() instead of the old fixed "1st Semester" +
-  // toggle-gated "2nd Semester" layout.
   const [calendarEntries, setCalendarEntries] = useState<CalendarEntryForm[]>([])
-  const [activeIdx, setActiveIdx] = useState(0)
+  const [activeSection, setActiveSection] = useState<'basic' | number>('basic')
 
   // The API returns full datetime values, so the form strips the time portion for date fields.
   function toDateInputValue(value: string | null | undefined): string {
@@ -142,10 +134,9 @@ export function ViewIntakeModal({ isOpen, onClose, showToast, intakeGuid }: View
       finalExamEndDate: toDateInputValue(entry?.finalExamEndDate),
       clearanceDate: toDateInputValue(entry?.clearanceDate),
     })))
-    setActiveIdx(0)
+    setActiveSection('basic')
 
     setErrors({})
-    setStep(1)
   }, [isOpen, intake])
 
   // Estimate the visible duration in weeks from the first semester's dates —
@@ -183,158 +174,19 @@ export function ViewIntakeModal({ isOpen, onClose, showToast, intakeGuid }: View
     return `${datePart}T00:00:00`
   }
 
-  function buildAcademicCalendarEntries(): CreateIntakeInput['academicCalendar'] {
-    return calendarEntries.map((entry, idx) => ({
-      academicCalendarGuid: null,
-      semCode: idx + 1,
-      admissionStartDate: toApiDate(entry.admissionStartDate),
-      admissionLateFeeDate: toApiDate(entry.admissionLateFeeDate),
-      admissionEndDate: toApiDate(entry.admissionEndDate),
-      reentryStartDate: toApiDate(entry.reentryStartDate),
-      reentryLateFeeDate: toApiDate(entry.reentryLateFeeDate),
-      reentryEndDate: toApiDate(entry.reentryEndDate),
-      semesterStartDate: toApiDate(entry.semStart),
-      semesterEndDate: toApiDate(entry.term2End),
-      lumpsumDate: toApiDate(entry.lumpsumDate),
-      term1StartDate: toApiDate(entry.semStart),
-      term1EndDate: toApiDate(entry.term1EndDate),
-      term2StartDate: toApiDate(entry.term2StartDate),
-      term2EndDate: toApiDate(entry.term2End),
-      resitStartDate: toApiDate(entry.resitStartDate),
-      resitEndDate: toApiDate(entry.resitEndDate),
-      finalExamStartDate: toApiDate(entry.finalExamStartDate),
-      finalExamEndDate: toApiDate(entry.finalExamEndDate),
-      clearanceDate: toApiDate(entry.clearanceDate),
-    }))
-  }
 
-  function addSemester() {
-    const id = nextCalendarEntryId++
-    setCalendarEntries(prev => [...prev, blankCalendarEntry(id)])
-    setActiveIdx(calendarEntries.length)
-  }
-
-  function removeSemester(id: number) {
-    if (calendarEntries.length <= 1) return
-    const idx = calendarEntries.findIndex(en => en.id === id)
-    setCalendarEntries(prev => prev.filter(en => en.id !== id))
-    setActiveIdx(prev => (prev >= idx && prev > 0 ? prev - 1 : prev))
-  }
-
-  function updateEntry(id: number, field: keyof Omit<CalendarEntryForm, 'id'>, value: string) {
-    setCalendarEntries(prev => prev.map(en => en.id === id ? { ...en, [field]: value } : en))
-    const key = errKey(id, field)
-    if (errors[key]) setErrors(p => { const next = { ...p }; delete next[key]; return next })
-  }
-
-  function validate(stepNumber = step) {
-    const e: Record<string, string> = {}
-
-    if (stepNumber === 1) {
-      if (!description.trim())    e.description   = 'Description is required'
-      if (!financialYear.trim())  e.financialYear  = 'Financial Year is required'
-      if (!examYear.trim())       e.examYear       = 'Exam Year is required'
-      if (!examMonth)             e.examMonth      = 'Please select an Exam Month'
-      if (!intakeSeq.trim())      e.intakeSeq      = 'Intake Sequence is required'
-      // Confirmed required by the backend (validation_error: "must not be
-      // empty") despite CreateIntakeInput typing these as nullable.
-      if (!lastDateForReRegistration) e.lastDateForReRegistration = 'Last Date for Re-registration is required'
-      if (!grievanceStartDate)        e.grievanceStartDate        = 'Grievance Start Date is required'
-      if (!grievanceEndDate)          e.grievanceEndDate          = 'Grievance End Date is required'
-    }
-
-    if (stepNumber === 2) {
-      calendarEntries.forEach((entry, idx) => {
-        const startDate = parseDate(entry.semStart)
-        const endDate   = parseDate(entry.term2End)
-
-        if (!entry.semStart)      e[errKey(entry.id, 'semStart')]      = `Semester ${idx + 1} start date is required`
-        if (!entry.term1EndDate)  e[errKey(entry.id, 'term1EndDate')]  = `Semester ${idx + 1} term 1 end date is required`
-        if (!entry.term2StartDate) e[errKey(entry.id, 'term2StartDate')] = `Semester ${idx + 1} term 2 start date is required`
-        if (!entry.term2End)      e[errKey(entry.id, 'term2End')]      = `Semester ${idx + 1} end date is required`
-
-        // No client-side cap on how far term2End can be from semStart — the
-        // backend enforces its own max-end-date rule (semesterStartDate +
-        // (durationInWeeks - 2) weeks), but durationInWeeks itself is now
-        // derived from the first entry's own dates (see calcDurationWeeks()
-        // / handleUpdate), so that check is satisfied by construction. A
-        // validation_error would still surface via the failure screen if the
-        // backend ever disagrees.
-        if (startDate && endDate && endDate < startDate) {
-          e[errKey(entry.id, 'term2End')] = `Semester ${idx + 1} end date must be on or after its start date`
-        }
-
-        const admissionStart   = parseDate(entry.admissionStartDate)
-        const admissionLateFee = parseDate(entry.admissionLateFeeDate)
-        const admissionEnd     = parseDate(entry.admissionEndDate)
-        if (admissionStart && admissionLateFee && admissionLateFee < admissionStart) {
-          e[errKey(entry.id, 'admissionLateFeeDate')] = 'Admission late fee date must be on or after the admission start date'
-        }
-        if (admissionLateFee && admissionEnd && admissionEnd < admissionLateFee) {
-          e[errKey(entry.id, 'admissionEndDate')] = 'Admission end date must be on or after the admission late fee date'
-        }
-
-        const reentryStart   = parseDate(entry.reentryStartDate)
-        const reentryLateFee = parseDate(entry.reentryLateFeeDate)
-        const reentryEnd     = parseDate(entry.reentryEndDate)
-        if (reentryStart && reentryLateFee && reentryLateFee < reentryStart) {
-          e[errKey(entry.id, 'reentryLateFeeDate')] = 'Re-entry late fee date must be on or after the re-entry start date'
-        }
-        if (reentryStart && reentryEnd && reentryEnd < reentryStart) {
-          e[errKey(entry.id, 'reentryEndDate')] = 'Re-entry end date must be on or after the re-entry start date'
-        }
-
-        const resitStart = parseDate(entry.resitStartDate)
-        const resitEnd   = parseDate(entry.resitEndDate)
-        if (resitStart && resitEnd && resitEnd < resitStart) {
-          e[errKey(entry.id, 'resitEndDate')] = 'Resit end date must be on or after the resit start date'
-        }
-
-        const finalExamStart = parseDate(entry.finalExamStartDate)
-        const finalExamEnd   = parseDate(entry.finalExamEndDate)
-        if (finalExamStart && finalExamEnd && finalExamEnd < finalExamStart) {
-          e[errKey(entry.id, 'finalExamEndDate')] = 'Final exam end date must be on or after the final exam start date'
-        }
-      })
-    }
-
-    setErrors(e)
-    return Object.keys(e).length === 0
-  }
 
   if (!isOpen) return null
 
   function handleClose() {
-    setStep(1)
+    setActiveSection('basic')
     setSaved(false)
     setFailure(null)
     setErrors({})
     onClose()
   }
 
-  if (saved) {
-    return (
-      <div className="modal-overlay open">
-        <div className="modal" style={{ maxWidth: 400 }}>
-          <SuccessPopup
-            title="Intake Updated!"
-            subtitle="Your changes have been saved successfully."
-            onClose={handleClose}
-          />
-        </div>
-      </div>
-    )
-  }
 
-  if (failure) {
-    return (
-      <div className="modal-overlay open">
-        <div className="modal" style={{ maxWidth: 400 }}>
-          <FailurePopup title="Couldn't Update Intake" subtitle={failure} onClose={() => setFailure(null)} />
-        </div>
-      </div>
-    )
-  }
 
   if (isError) {
     return (
@@ -366,42 +218,6 @@ export function ViewIntakeModal({ isOpen, onClose, showToast, intakeGuid }: View
     )
   }
 
-  // This endpoint does not expose a confirmed failure-code list yet.
-  // (unlike countries/departments), so anything the API sends back just
-  // shows the failure screen with whatever message it gave us — same as
-  // NewIntakeModal's create-error handling.
-  function handleUpdateError(error: Error) {
-    const code = error instanceof AuthError ? error.code : undefined
-    setFailure(error.message || `Failed to update intake${code ? ` (${code})` : ''}. Please try again.`)
-  }
-
-  function handleUpdate() {
-    if (!validate(2)) return
-    if (!intakeGuid) return
-
-    const input: CreateIntakeInput = {
-      intakeCode: intake?.intakeCode ?? 0,
-      description,
-      financialYear: Number(financialYear),
-      examYear: Number(examYear),
-      intakes: Number(intakeSeq),
-      examMonth: Number(examMonth),
-      month: MONTHS.find(m => m.value === examMonth)?.label ?? '',
-      // See DEFAULT_SEMESTER_WEEKS comment above — must be the actual
-      // semester span (+2 buffer weeks), not a fixed nominal number.
-      durationInWeeks: (calcDurationWeeks() ?? (DEFAULT_SEMESTER_WEEKS - 2)) + 2,
-      lastDateForReRegistration: toApiDate(lastDateForReRegistration),
-      currentIntake,
-      grievanceStartDate: toApiDate(grievanceStartDate),
-      currentAdmissionIntake,
-      grievanceEndDate: toApiDate(grievanceEndDate),
-      academicCalendar: buildAcademicCalendarEntries(),
-    }
-    updateIntake.mutate({ intakeGuid, input }, {
-      onSuccess: () => { setSaved(true); showToast('Intake updated successfully') },
-      onError: handleUpdateError,
-    })
-  }
 
   return (
     <div className="modal-overlay open" id="intake-view-modal">
@@ -411,165 +227,224 @@ export function ViewIntakeModal({ isOpen, onClose, showToast, intakeGuid }: View
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
-        <div className="prog-steps">
-          <div className={`prog-step${step === 1 ? ' active' : ''}`}>
-            <span className="prog-step-num">1</span>
-            <span>Intake Details</span>
+        <div className="fsm-layout" style={{ borderTop: '1px solid var(--g200)' }}>
+          {/* Left sidebar */}
+          <div className="fsm-sidebar">
+            <div style={{ padding: '14px 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
+              Basic Details
+            </div>
+            <div style={{ padding: '0 8px', marginBottom: 12 }}>
+              <div
+                onClick={() => setActiveSection('basic')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '9px 10px', borderRadius: 'var(--rsm)',
+                  background: activeSection === 'basic' ? 'var(--b500)' : 'transparent',
+                  color: activeSection === 'basic' ? '#fff' : 'var(--g700)',
+                  cursor: 'pointer', transition: 'background .15s',
+                }}
+              >
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: activeSection === 'basic' ? 'rgba(255,255,255,.2)' : 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <i className="lni lni-information" style={{ fontSize: 13, color: activeSection === 'basic' ? '#fff' : 'var(--b600)' }}></i>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>Intake Details</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '0 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
+              Semesters <span style={{ color: 'var(--b500)' }}>({calendarEntries.length})</span>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 8px' }}>
+              {calendarEntries.map((entry, i) => (
+                <div
+                  key={entry.id}
+                  onClick={() => setActiveSection(i)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '9px 10px', borderRadius: 'var(--rsm)', marginBottom: 2,
+                    background: activeSection === i ? 'var(--b500)' : 'transparent',
+                    color: activeSection === i ? '#fff' : 'var(--g700)',
+                    cursor: 'pointer', transition: 'background .15s',
+                  }}
+                >
+                  <div style={{ width: 30, height: 30, borderRadius: '50%', background: activeSection === i ? 'rgba(255,255,255,.2)' : 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <i className="lni lni-calendar" style={{ fontSize: 13, color: activeSection === i ? '#fff' : 'var(--b600)' }}></i>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>Semester {i + 1}</div>
+                    <div style={{ fontSize: 11, opacity: .65, lineHeight: 1.3 }}>{entry.semStart ? `Starts ${entry.semStart}` : 'No dates set'}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="prog-step-line"></div>
-          <div className={`prog-step${step === 2 ? ' active' : ''}`}>
-            <span className="prog-step-num">2</span>
-            <span>Semester Planning Calendar</span>
+
+          {/* Right panel */}
+          <div className="fsm-main" style={{ padding: '24px' }}>
+            {activeSection === 'basic' ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, padding: '12px 16px', background: 'var(--b50)', borderRadius: 'var(--rsm)', border: '1.5px solid var(--b100)' }}>
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <i className="lni lni-information" style={{ color: 'var(--b600)', fontSize: 17 }}></i>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--b800)' }}>
+                      Intake Details
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--g400)' }}>
+                      General information about this intake
+                    </div>
+                  </div>
+                </div>
+                
+                <div style={{ padding: '0 8px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', rowGap: '20px', columnGap: '24px' }}>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Description</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{description || '—'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Financial Year</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{financialYear || '—'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Exam Year</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{examYear || '—'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Exam Month</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{MONTHS.find(m => m.value === String(examMonth))?.label || '—'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Intake Sequence</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{INTAKE_SEQUENCES.find(s => s.value === String(intakeSeq))?.label || '—'}</div>
+                  </div>
+                  <div style={{ gridColumn: 'span 3' }}>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Set As</div>
+                    <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
+                      {currentIntake ? <span className="badge badge-green">Academic Intake</span> : <span className="badge badge-neu">Not Academic Intake</span>}
+                      {currentAdmissionIntake ? <span className="badge badge-green">Admission Intake</span> : <span className="badge badge-neu">Not Admission Intake</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Last Date for Re-registration</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{lastDateForReRegistration || '—'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Grievance Start Date</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{grievanceStartDate || '—'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Grievance End Date</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{grievanceEndDate || '—'}</div>
+                  </div>
+                </div>
+              </>
+            ) : (() => {
+              const active = calendarEntries[activeSection as number]
+              if (!active) return null
+              
+              return (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, padding: '12px 16px', background: 'var(--b50)', borderRadius: 'var(--rsm)', border: '1.5px solid var(--b100)' }}>
+                    <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <i className="lni lni-calendar" style={{ color: 'var(--b600)', fontSize: 17 }}></i>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--b800)' }}>
+                        {activeSection === 0 ? '1st Semester Planning Calendar' : `Semester ${(activeSection as number) + 1} Planning Calendar`}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--g400)' }}>
+                        Semester ${(activeSection as number) + 1} of {calendarEntries.length}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', rowGap: '20px', columnGap: '24px', paddingBottom: 24, paddingLeft: 8, paddingRight: 8 }}>
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Admission Start Date</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.admissionStartDate || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Admission Late Fee Date</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.admissionLateFeeDate || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Admission End Date</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.admissionEndDate || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Re-entry Start Date</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.reentryStartDate || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Re-entry Late Fee Date</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.reentryLateFeeDate || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Re-entry End Date</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.reentryEndDate || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Semester/Term 1 Start Date</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.semStart || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Lump Sum Date</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.lumpsumDate || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Term 1 End Date</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.term1EndDate || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Term 2 Start Date</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.term2StartDate || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Semester/Term 2 End Date</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.term2End || '—'}</div>
+                    </div>
+                    {activeSection === 0 && (
+                      <div>
+                        <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Duration (weeks)</div>
+                        <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{calcDuration() || '—'}</div>
+                      </div>
+                    )}
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Resit Start Date</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.resitStartDate || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Resit End Date</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.resitEndDate || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Final Exam Start Date</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.finalExamStartDate || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Final Exam End Date</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.finalExamEndDate || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Clearance Date (80%)</div>
+                      <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{active.clearanceDate || '—'}</div>
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
           </div>
         </div>
 
-        {step === 1 && (
-          <div className="modal-scroll" style={{ paddingBottom: 24 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1.5rem' }}>
-              <div className="fg">
-                <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Description</div>
-                <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{description || '—'}</div>
-              </div>
-              <div className="fg">
-                <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Financial Year</div>
-                <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{financialYear || '—'}</div>
-              </div>
-              <div className="fg">
-                <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Exam Year</div>
-                <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{examYear || '—'}</div>
-              </div>
-              <div className="fg">
-                <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Exam Month</div>
-                <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{MONTHS.find(m => m.value === String(examMonth))?.label || '—'}</div>
-              </div>
-              <div className="fg">
-                <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Intake Sequence</div>
-                <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{INTAKE_SEQUENCES.find(s => s.value === String(intakeSeq))?.label || '—'}</div>
-              </div>
-              <div className="fg" style={{ gridColumn: 'span 3' }}>
-                <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Set As</div>
-                <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
-                  {currentIntake ? <span className="badge badge-green">Academic Intake</span> : <span className="badge badge-neu">Not Academic Intake</span>}
-                  {currentAdmissionIntake ? <span className="badge badge-green">Admission Intake</span> : <span className="badge badge-neu">Not Admission Intake</span>}
-                </div>
-              </div>
-              <div className="fg">
-                <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Last Date for Re-registration</div>
-                <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{lastDateForReRegistration || '—'}</div>
-              </div>
-              <div className="fg">
-                <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Grievance Start Date</div>
-                <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{grievanceStartDate || '—'}</div>
-              </div>
-              <div className="fg">
-                <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Grievance End Date</div>
-                <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{grievanceEndDate || '—'}</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (() => {
-          const active = calendarEntries[activeIdx]
-          return (
-            <div className="fsm-layout">
-              {/* Left sidebar — one entry per semester */}
-              <div className="fsm-sidebar">
-                <div style={{ padding: '14px 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
-                  Semesters <span style={{ color: 'var(--b500)' }}>({calendarEntries.length})</span>
-                </div>
-                <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
-                  {calendarEntries.map((entry, i) => (
-                    <div
-                      key={entry.id}
-                      onClick={() => setActiveIdx(i)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 8,
-                        padding: '9px 10px', borderRadius: 'var(--rsm)', marginBottom: 2,
-                        background: activeIdx === i ? 'var(--b500)' : 'transparent',
-                        color: activeIdx === i ? '#fff' : 'var(--g700)',
-                        cursor: 'pointer', transition: 'background .15s',
-                      }}
-                    >
-                      <div style={{ width: 30, height: 30, borderRadius: '50%', background: activeIdx === i ? 'rgba(255,255,255,.2)' : 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <i className="lni lni-calendar" style={{ fontSize: 13, color: activeIdx === i ? '#fff' : 'var(--b600)' }}></i>
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>Semester {i + 1}</div>
-                        <div style={{ fontSize: 11, opacity: .65, lineHeight: 1.3 }}>{entry.semStart ? `Starts ${entry.semStart}` : 'No dates set'}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Right panel — active semester's calendar fields */}
-              <div className="fsm-main">
-                {active && (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, padding: '12px 16px', background: 'var(--b50)', borderRadius: 'var(--rsm)', border: '1.5px solid var(--b100)' }}>
-                      <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <i className="lni lni-calendar" style={{ color: 'var(--b600)', fontSize: 17 }}></i>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--b800)' }}>
-                          {activeIdx === 0 ? '1st Semester Planning Calendar' : `Semester ${activeIdx + 1} Planning Calendar`}
-                        </div>
-                        <div style={{ fontSize: 11.5, color: 'var(--g400)' }}>
-                          Semester {activeIdx + 1} of {calendarEntries.length}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1.5rem', paddingBottom: 24 }}>
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Admission Start Date</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.admissionStartDate || '—'}</div></div>
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Admission Late Fee Date</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.admissionLateFeeDate || '—'}</div></div>
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Admission End Date</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.admissionEndDate || '—'}</div></div>
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Re-entry Start Date</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.reentryStartDate || '—'}</div></div>
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Re-entry Late Fee Date</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.reentryLateFeeDate || '—'}</div></div>
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Re-entry End Date</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.reentryEndDate || '—'}</div></div>
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Semester/Term 1 Start Date</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.semStart || '—'}</div></div>
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Lump Sum Date</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.lumpsumDate || '—'}</div></div>
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Term 1 End Date</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.term1EndDate || '—'}</div></div>
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Term 2 Start Date</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.term2StartDate || '—'}</div></div>
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Semester/Term 2 End Date</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.term2End || '—'}</div></div>
-                      {activeIdx === 0 && (
-                        <div className="fg">
-                          <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Duration (weeks)</div>
-                          <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{calcDuration() || '—'}</div>
-                        </div>
-                      )}
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Resit Start Date</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.resitStartDate || '—'}</div></div>
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Resit End Date</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.resitEndDate || '—'}</div></div>
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Final Exam Start Date</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.finalExamStartDate || '—'}</div></div>
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Final Exam End Date</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.finalExamEndDate || '—'}</div></div>
-                      <div className="fg"><div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Clearance Date (80%)</div><div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>{active.clearanceDate || '—'}</div></div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )
-        })()}
-
-        <div className="modal-footer">
+        <div className="modal-footer" style={{ borderTop: '1px solid var(--g200)' }}>
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
           <span className="flex-1"></span>
-          {step === 2 && (
-            <button className="btn btn-neu" onClick={() => setStep(1)}>
-              <i className="lni lni-arrow-left"></i> Back
-            </button>
-          )}
-          {step === 1 && (
-            <button className="btn btn-primary" onClick={() => setStep(2)}>
-              Continue <i className="lni lni-arrow-right"></i>
-            </button>
-          )}
-          {step === 2 && (
-            <button className="btn btn-primary" onClick={handleClose}>
-              Close
-            </button>
-          )}
+          <button className="btn btn-primary" onClick={handleClose}>
+            Close
+          </button>
         </div>
       </div>
     </div>

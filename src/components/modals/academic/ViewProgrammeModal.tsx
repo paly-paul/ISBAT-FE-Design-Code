@@ -18,7 +18,7 @@ interface ViewProgrammeModalProps extends ModalProps {
 
 export function ViewProgrammeModal({ isOpen, onClose, programGuid }: ViewProgrammeModalProps) {
   const { data: program, isLoading, isError, error } = useProgramMasterFullDetails(programGuid, isOpen)
-  
+
   const [step, setStep] = useState(1)
   const [activeFeeIdx, setActiveFeeIdx] = useState(0)
   const [feeAccordion, setFeeAccordion] = useState(0)
@@ -50,9 +50,9 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid }: ViewProgram
     return (
       <div className="modal-overlay open">
         <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+          <div className="modal-hdr" style={{ background: 'var(--b600)', color: 'white' }}>
             <div className="modal-title"><i className="lni lni-eye"></i> View Programme</div>
-            <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
+            <button className="modal-close" style={{ color: 'white' }} onClick={onClose}><i className="lni lni-close"></i></button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 240 }}>
             <span style={{ color: 'var(--g400)' }}>Loading programme details…</span>
@@ -66,17 +66,17 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid }: ViewProgram
   const levelName = programLevels.find(l => l.programLevelGuid === program.programLevelGuid)?.levelName || '—'
   const facultyName = faculties.find(f => f.facultyGuid === program.facultyGuid)?.facultyName || '—'
   const intakeName = intakes.find(i => i.intakeGuid === program.intakeGuid)?.description || '—'
-  
+
   const activeFeeStruct = program.feeStructures?.[activeFeeIdx]
 
   return (
     <div className="modal-overlay open">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr" style={{ background: 'var(--b600)', color: 'white' }}>
           <div className="modal-title"><i className="lni lni-eye"></i> View Programme — <span className="font-mono">{program.programCode}</span></div>
-          <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
+          <button className="modal-close" style={{ color: 'white' }} onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
-        
+
         <div className="prog-steps" style={{ padding: '0 24px', cursor: 'pointer' }}>
           <div className={`prog-step${step === 1 ? ' active' : ''}`} onClick={() => setStep(1)}><span className="prog-step-num">1</span><span>Programme Details</span></div>
           <div className="prog-step-line"></div>
@@ -86,7 +86,7 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid }: ViewProgram
         </div>
 
         <div className="modal-scroll" style={{ paddingBottom: 24 }}>
-          
+
           {/* STEP 1: Basic Details */}
           {step === 1 && (
             <>
@@ -324,7 +324,7 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid }: ViewProgram
                             }
                             <i className="lni lni-chevron-down" style={{ fontSize: 11, color: 'var(--g400)', flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.25s ease' }} />
                           </button>
-                          
+
                           <div style={{ overflow: 'hidden', maxHeight: isOpen ? 800 : 0, transition: 'max-height 0.3s ease' }}>
                             <div style={{ padding: '10px 14px' }}>
                               {items.length > 0 && (

@@ -95,7 +95,7 @@ export default function Page() {
     const group = programGroups.find(g => g.programGroupGuid === p.programGroupGuid)
     const level = programLevels.find(l => l.programLevelGuid === p.programLevelGuid)
     const faculty = faculties.find(f => f.facultyGuid === p.facultyGuid)
-    const specializationNames = p.streamGuids
+    const specializationNames = (p.streamGuids || [])
       .map(guid => streams.find(s => s.streamGuid === guid)?.streamName)
       .filter((name): name is string => !!name)
     return {
@@ -167,6 +167,7 @@ export default function Page() {
           { label: 'Programme Level', icon: 'lni lni-graduation', id: 'programme-level' },
           { label: 'Programme Group', icon: 'lni lni-folder', id: 'programme-group' },
           { label: 'Programme Master', icon: 'lni lni-graduation' },
+          { label: 'Programme Approval', icon: 'lni lni-check-box', id: 'programme-approval' },
           { label: 'Course Units', icon: 'lni lni-book', id: 'course-units' },
         ]} />
 

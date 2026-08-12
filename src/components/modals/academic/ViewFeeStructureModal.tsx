@@ -16,7 +16,7 @@ interface ViewFeeStructureModalProps extends ModalProps {
 
 export function ViewFeeStructureModal({ isOpen, onClose, feeStructure }: ViewFeeStructureModalProps) {
   const { data: feeLines = [], isLoading: feeLinesLoading, isError: feeLinesError, error: feeLinesErrorObj } = useProgramFeeLines(feeStructure?.feeHdGuid ?? null, isOpen && !!feeStructure)
-  
+
   const { data: programs = [] } = useProgramMasters()
   const { data: intakes = [] } = useIntakes()
   const { data: financeCurrencies = [] } = useFinanceCurrencies()
@@ -52,7 +52,7 @@ export function ViewFeeStructureModal({ isOpen, onClose, feeStructure }: ViewFee
           <div className="modal-title"><i className="lni lni-eye"></i> View Fee Structure — <span className="font-mono">{feeStructure.feeCode}</span></div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
-        
+
         {feeLinesLoading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 240, flex: 1 }}>
             <span style={{ color: 'var(--g400)' }}>Loading fee structure details…</span>
@@ -164,7 +164,7 @@ export function ViewFeeStructureModal({ isOpen, onClose, feeStructure }: ViewFee
                       }
                       <i className="lni lni-chevron-down" style={{ fontSize: 11, color: 'var(--g400)', flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.25s ease' }} />
                     </button>
-                    
+
                     <div style={{ overflow: 'hidden', maxHeight: isOpen ? 800 : 0, transition: 'max-height 0.3s ease' }}>
                       <div style={{ padding: '10px 14px' }}>
                         {items.length > 0 && (

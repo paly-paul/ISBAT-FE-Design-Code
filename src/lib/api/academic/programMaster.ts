@@ -258,8 +258,13 @@ export function createProgramMaster(input: ProgramMasterInput): Promise<ProgramM
 // List query for the programme-master table.
 export function getProgramMasters(search = ''): Promise<ProgramMaster[]> {
   if (MOCK_AUTH) return Promise.resolve(mockProgramMasters)
-  return apiGet<ProgramMaster[] | null>(`/api/v1/academic/program-master?search=${encodeURIComponent(search)}`)
-    .then(data => data ?? [])
+  return apiGet<any>(`/api/v1/academic/program-master?search=${encodeURIComponent(search)}`)
+    .then(data => {
+      if (Array.isArray(data)) return data
+      if (data && Array.isArray(data.items)) return data.items
+      if (data && Array.isArray(data.data)) return data.data
+      return []
+    })
 }
 
 // GET /api/v1/academic/program-master/by-campus/:campusGuid — per

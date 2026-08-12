@@ -102,6 +102,7 @@ const mockMenu: MenuNode[] = [
       leaf('Programme Level', 'layers', '/academic/programme-level'),
       leaf('Programme Group', 'folder', '/academic/programme-group'),
       leaf('Programme Master', 'graduation', '/academic/programme-master'),
+      leaf('Programme Approval', 'check-box', '/academic/programme-approval'),
       leaf('Fee Structure', 'dollar', '/academic/fee-structure'),
     ]),
     section('Timetable', [
@@ -212,13 +213,43 @@ function mergeFinanceSections(menu: MenuNode[]): MenuNode[] {
 
 export interface MenuResult {
   menu: MenuNode[]
-  // true when the real /me/menu call failed and `menu` is placeholder,
-  // full-navigation data instead — never treat this as verified permission
-  // data. TEMPORARY: covers a live backend issue where /me/menu 401s even
-  // with a valid session, so the sidebar doesn't go fully blank while
-  // that's investigated separately. Remove once the backend call is
-  // reliable — real permission gating must go back to failing closed.
   isFallback: boolean
+}
+
+function ensureProgrammeApproval(menu: MenuNode[]): MenuNode[] {
+  const acadIdx = menu.findIndex(n => n.name === 'Academic')
+  if (acadIdx === -1) return menu
+
+  const acadModule = menu[acadIdx]
+  const progMasterIdx = acadModule.children.findIndex(c => c.name === 'Programme Master')
+  if (progMasterIdx === -1) return menu
+
+  const progMasterSection = acadModule.children[progMasterIdx]
+  if (progMasterSection.children.some(l => l.name === 'Programme Approval')) {
+    return menu
+  }
+
+  const children = [...progMasterSection.children]
+  const pmNodeIdx = children.findIndex(l => l.name === 'Programme Master')
+  
+  if (pmNodeIdx !== -1) {
+    children.splice(pmNodeIdx + 1, 0, leaf('Programme Approval', 'check-box', '/academic/programme-approval'))
+  } else {
+    children.push(leaf('Programme Approval', 'check-box', '/academic/programme-approval'))
+  }
+
+  const mergedSection = { 
+    ...progMasterSection, 
+    children
+  }
+
+  const mergedAcad = { ...acadModule }
+  mergedAcad.children = [...acadModule.children]
+  mergedAcad.children[progMasterIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[acadIdx] = mergedAcad
+  return mergedMenu
 }
 
 export function getMenu(): Promise<MenuResult> {
@@ -228,7 +259,8 @@ export function getMenu(): Promise<MenuResult> {
       const menu = data ?? []
       const withEmployee = menu.some(n => n.name === 'Employee') ? menu : [...menu, HARDCODED_EMPLOYEE_MODULE]
       const withFinance  = mergeFinanceSections(withEmployee)
-      return { menu: withFinance, isFallback: false }
+      const finalMenu = ensureProgrammeApproval(withFinance)
+      return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: mockMenu, isFallback: true }))
 }

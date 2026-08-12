@@ -24,9 +24,9 @@ export function ViewLecturerSkillModal({ isOpen, onClose, showToast, lecturerSki
   const { data: employees = [] } = useEmployees()
 
   const [employeeGuid, setEmployeeGuid] = useState('')
-  const [skillName, setSkillName]   = useState('')
+  const [skillName, setSkillName] = useState('')
   const [proficiency, setProficiency] = useState('1')
-  const [approved, setApproved]     = useState(true)
+  const [approved, setApproved] = useState(true)
 
   // Prefill everything the response actually carries. employeeGuid is
   // deliberately left blank — GetByGuid only returns intEmployee, with no
