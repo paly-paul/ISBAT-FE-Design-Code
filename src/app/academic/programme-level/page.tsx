@@ -104,6 +104,8 @@ export default function Page() {
           { label: 'Programme Level', icon: 'lni lni-graduation' },
           { label: 'Programme Group', icon: 'lni lni-folder', id: 'programme-group' },
           { label: 'Programme Master', icon: 'lni lni-graduation', id: 'programme-master' },
+          { label: 'Programme Approval', icon: 'lni lni-check-box', id: 'programme-approval' },
+          { label: 'Course Units', icon: 'lni lni-book', id: 'course-units' },
         ]} />
 
         {/* <div className="info-box mb-[18px]">
