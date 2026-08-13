@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createIntake, CreateIntakeInput, deleteIntake, getIntakeById, getIntakes, Intake, updateIntake } from '@/lib/api/academic/intake'
 
 const INTAKES_KEY = ['intakes']
@@ -47,26 +47,45 @@ export function useIntake(intakeGuid: string | null, enabled: boolean) {
 // react-query rejects a queryFn that resolves to `undefined` ("Query data
 // cannot be undefined") — null is the explicit "no current intake found"
 // value instead.
-async function fetchCurrentIntake(predicate: (intake: Intake) => boolean): Promise<Intake | null> {
-  const intakes = await getIntakes(1, INTAKES_PAGE_SIZE)
+//
+// Both the list lookup and the by-guid lookup go through queryClient's own
+// cache (ensureQueryData) using the same query keys as useIntakes/useIntake,
+// instead of calling getIntakes/getIntakeById directly. react-query dedupes
+// ensureQueryData calls that share a queryKey — including concurrent
+// in-flight ones — so useCurrentAcademicIntake and useCurrentAdmissionIntake
+// no longer each trigger their own full ?pageSize=1000 request (or their own
+// by-guid request when they happen to resolve to the same intake); they
+// reuse whatever useIntakes() already fetched/is fetching.
+async function fetchCurrentIntake(queryClient: QueryClient, predicate: (intake: Intake) => boolean): Promise<Intake | null> {
+  const intakes = await queryClient.ensureQueryData({
+    queryKey: INTAKES_KEY,
+    queryFn: () => getIntakes(1, INTAKES_PAGE_SIZE),
+    staleTime: Infinity,
+  })
   const match = intakes.find(predicate)
   if (!match) return null
-  return getIntakeById(match.intakeGuid)
+  return queryClient.ensureQueryData({
+    queryKey: [...INTAKES_KEY, match.intakeGuid],
+    queryFn: () => getIntakeById(match.intakeGuid),
+    staleTime: Infinity,
+  })
 }
 
 export function useCurrentAcademicIntake() {
+  const queryClient = useQueryClient()
   return useQuery({
     queryKey: [...INTAKES_KEY, 'current-academic'],
-    queryFn: () => fetchCurrentIntake(i => i.currentIntake),
+    queryFn: () => fetchCurrentIntake(queryClient, i => i.currentIntake),
     staleTime: Infinity,
     gcTime: Infinity,
   })
 }
 
 export function useCurrentAdmissionIntake() {
+  const queryClient = useQueryClient()
   return useQuery({
     queryKey: [...INTAKES_KEY, 'current-admission'],
-    queryFn: () => fetchCurrentIntake(i => i.currentAdmissionIntake),
+    queryFn: () => fetchCurrentIntake(queryClient, i => i.currentAdmissionIntake),
     staleTime: Infinity,
     gcTime: Infinity,
   })

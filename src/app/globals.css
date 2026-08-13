@@ -3581,6 +3581,26 @@ body:has(.modal-overlay.open) {
 }
 
 /* ═══════════════════════════════════════
+   VIEW-MODAL DETAIL GRID — responsive label/value
+   grid used by the sidebar-less "View X" modals
+   (Programme Level, Programme Group, Repetition Tag,
+   etc), same bare-field spacing as ViewIntakeModal's
+   Basic Details grid. Mobile-first: 1 col → 2 col →
+   3 col, same breakpoint shape as .g-dates above. A
+   class instead of an inline grid-template-columns
+   because inline styles can't be overridden by media
+   queries.
+═══════════════════════════════════════ */
+.view-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  row-gap: 20px;
+  column-gap: 24px
+}
+@media (min-width: 560px) { .view-detail-grid { grid-template-columns: repeat(2, 1fr) } }
+@media (min-width: 820px) { .view-detail-grid { grid-template-columns: repeat(3, 1fr) } }
+
+/* ═══════════════════════════════════════
    TOAST
 ═══════════════════════════════════════ */
 .toast {
