@@ -189,6 +189,11 @@ export default function Page() {
         onClose={() => closeModal('view-alevel-modal')}
         showToast={showToast}
         programLevelGuid={viewingProgramLevelGuid}
+        canEdit={permissions.edit}
+        onEdit={() => {
+          closeModal('view-alevel-modal')
+          if (viewingProgramLevelGuid) openEditModal(viewingProgramLevelGuid)
+        }}
       />
       <ProgrammeLevelModal
         isOpen={openModals.has('new-alevel-modal')}
