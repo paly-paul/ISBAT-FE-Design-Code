@@ -244,7 +244,7 @@ export default function Page() {
         lecturerSkillGuid={editingSkillGuid}
         updateSkill={updateSkill}
       />
-      <ViewLecturerSkillModal
+      <ViewLecturerSkillModal canEdit={permissions.edit} onEdit={() => { closeModal('view-lecturer-skill-modal'); openEditModal(editingSkillGuid || '') }}
         isOpen={openModals.has('view-lecturer-skill-modal')}
         onClose={() => closeModal('view-lecturer-skill-modal')}
         showToast={showToast}

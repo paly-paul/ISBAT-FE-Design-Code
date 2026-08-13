@@ -305,6 +305,12 @@ export default function Page() {
         onClose={() => closeModal('view-prog-modal')}
         showToast={showToast}
         programGuid={viewingProgramGuid}
+        onEdit={(guid) => {
+          closeModal('view-prog-modal')
+          setProgMode('edit')
+          setEditingProgramGuid(guid)
+          openModal('new-prog-modal')
+        }}
       />
       <SpecializationModal
         isOpen={openModals.has('specialization-modal')}

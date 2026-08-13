@@ -178,7 +178,7 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="programme groups" onPageChange={setPage} />
         </div>
       </div>
-      <ViewProgrammeGroupModal
+      <ViewProgrammeGroupModal canEdit={permissions.edit} onEdit={() => { closeModal('view-proggroup-modal'); openEditModal(viewingProgramGroupGuid || '') }}
         isOpen={openModals.has('view-proggroup-modal')}
         onClose={() => closeModal('view-proggroup-modal')}
         showToast={showToast}

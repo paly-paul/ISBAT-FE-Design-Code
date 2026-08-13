@@ -14,9 +14,10 @@ import { formatDate } from '@/lib/date'
 
 interface ViewProgrammeModalProps extends ModalProps {
   programGuid: string | null
+  onEdit?: (guid: string) => void
 }
 
-export function ViewProgrammeModal({ isOpen, onClose, programGuid }: ViewProgrammeModalProps) {
+export function ViewProgrammeModal({ isOpen, onClose, programGuid, onEdit }: ViewProgrammeModalProps) {
   const { data: program, isLoading, isError, error } = useProgramMasterFullDetails(programGuid, isOpen)
 
   const [activeSection, setActiveSection] = useState<'details' | 'units' | 'fees'>('details')
@@ -51,7 +52,7 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid }: ViewProgram
     return (
       <div className="modal-overlay open">
         <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+          <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-eye"></i> View Programme</div>
             <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
           </div>
@@ -73,154 +74,142 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid }: ViewProgram
   return (
     <div className="modal-overlay open">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-eye"></i> View Programme — <span className="font-mono">{program.programCode}</span></div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
 
-        <div className="fsm-layout" style={{ borderTop: '1px solid var(--g200)' }}>
-          {/* Left sidebar */}
-          <div className="fsm-sidebar">
-            <div style={{ padding: '14px 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
-              Programme Information
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+          {/* Horizontal Tabs */}
+          <div style={{ 
+            display: 'flex', 
+            borderBottom: '1px solid var(--g200)', 
+            padding: '0 24px', 
+            gap: 0,
+            background: '#fafafa',
+            flexShrink: 0
+          }}>
+            <div
+              onClick={() => setActiveSection('details')}
+              style={{
+                flex: 1, justifyContent: 'center',
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '16px 0',
+                background: activeSection === 'details' ? 'var(--b50)' : 'transparent',
+                borderBottom: activeSection === 'details' ? '2px solid var(--b500)' : '2px solid transparent',
+                color: activeSection === 'details' ? 'var(--b700)' : 'var(--g600)',
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: 'pointer', transition: 'all .15s'
+              }}
+            >
+              <i className="lni lni-information" style={{ fontSize: 16 }}></i>
+              Basic Details
             </div>
-            <div style={{ padding: '0 8px', marginBottom: 12 }}>
-              <div
-                onClick={() => setActiveSection('details')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '9px 10px', borderRadius: 'var(--rsm)', marginBottom: 2,
-                  background: activeSection === 'details' ? 'var(--b500)' : 'transparent',
-                  color: activeSection === 'details' ? '#fff' : 'var(--g700)',
-                  cursor: 'pointer', transition: 'background .15s',
-                }}
-              >
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: activeSection === 'details' ? 'rgba(255,255,255,.2)' : 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <i className="lni lni-information" style={{ fontSize: 13, color: activeSection === 'details' ? '#fff' : 'var(--b600)' }}></i>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>Basic Details</div>
-                </div>
-              </div>
+            
+            <div
+              onClick={() => setActiveSection('units')}
+              style={{
+                flex: 1, justifyContent: 'center',
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '16px 0',
+                background: activeSection === 'units' ? 'var(--b50)' : 'transparent',
+                borderBottom: activeSection === 'units' ? '2px solid var(--b500)' : '2px solid transparent',
+                color: activeSection === 'units' ? 'var(--b700)' : 'var(--g600)',
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: 'pointer', transition: 'all .15s'
+              }}
+            >
+              <i className="lni lni-book" style={{ fontSize: 16 }}></i>
+              Course Unit Allocation
             </div>
 
-            <div style={{ padding: '0 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
-              Academic & Finances
-            </div>
-            <div style={{ padding: '0 8px', marginBottom: 12 }}>
-              <div
-                onClick={() => setActiveSection('units')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '9px 10px', borderRadius: 'var(--rsm)', marginBottom: 2,
-                  background: activeSection === 'units' ? 'var(--b500)' : 'transparent',
-                  color: activeSection === 'units' ? '#fff' : 'var(--g700)',
-                  cursor: 'pointer', transition: 'background .15s',
-                }}
-              >
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: activeSection === 'units' ? 'rgba(255,255,255,.2)' : 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <i className="lni lni-book" style={{ fontSize: 13, color: activeSection === 'units' ? '#fff' : 'var(--b600)' }}></i>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>Course Unit Allocation</div>
-                </div>
-              </div>
-              <div
-                onClick={() => setActiveSection('fees')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '9px 10px', borderRadius: 'var(--rsm)',
-                  background: activeSection === 'fees' ? 'var(--b500)' : 'transparent',
-                  color: activeSection === 'fees' ? '#fff' : 'var(--g700)',
-                  cursor: 'pointer', transition: 'background .15s',
-                }}
-              >
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: activeSection === 'fees' ? 'rgba(255,255,255,.2)' : 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <i className="lni lni-coin" style={{ fontSize: 13, color: activeSection === 'fees' ? '#fff' : 'var(--b600)' }}></i>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>Fee Structure</div>
-                </div>
-              </div>
+            <div
+              onClick={() => setActiveSection('fees')}
+              style={{
+                flex: 1, justifyContent: 'center',
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '16px 0',
+                background: activeSection === 'fees' ? 'var(--b50)' : 'transparent',
+                borderBottom: activeSection === 'fees' ? '2px solid var(--b500)' : '2px solid transparent',
+                color: activeSection === 'fees' ? 'var(--b700)' : 'var(--g600)',
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: 'pointer', transition: 'all .15s'
+              }}
+            >
+              <i className="lni lni-coin" style={{ fontSize: 16 }}></i>
+              Fee Structure
             </div>
           </div>
 
-          <div className="fsm-main modal-scroll" style={{ padding: '24px' }}>
+          <div className="modal-scroll" style={{ padding: '24px', flex: 1, overflowY: 'auto', background: '#fff' }}>
             {/* STEP 1: Basic Details */}
             {activeSection === 'details' && (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, padding: '12px 16px', background: 'var(--b50)', borderRadius: 'var(--rsm)', border: '1.5px solid var(--b100)' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <i className="lni lni-information" style={{ color: 'var(--b600)', fontSize: 17 }}></i>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--b800)' }}>Basic Details</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--g400)' }}>General information about this programme</div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1.5rem', marginBottom: 32 }}>
-                  <div className="fg m-0">
-                    <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Programme Code</div>
-                    <div className="ctrl font-mono uppercase" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', columnGap: '24px', rowGap: '20px', marginBottom: 32 }}>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Programme Code</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500, fontFamily: 'var(--font-mono)' }}>
                       {program.programCode}
                     </div>
                   </div>
-                  <div className="fg span2 m-0">
-                    <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Programme Name</div>
-                    <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Programme Name</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
                       {program.programName}
                     </div>
                   </div>
-                  <div className="fg m-0">
-                    <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Programme Group</div>
-                    <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Programme Group</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
                       {groupName}
                     </div>
                   </div>
-                  <div className="fg m-0">
-                    <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Programme Level</div>
-                    <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Programme Level</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
                       {levelName}
                     </div>
                   </div>
-                  <div className="fg m-0">
-                    <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Faculty</div>
-                    <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Faculty</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
                       {facultyName}
                     </div>
                   </div>
-                  <div className="fg m-0">
-                    <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Intake</div>
-                    <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Intake</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
                       {intakeName}
                     </div>
                   </div>
-                  <div className="fg m-0">
-                    <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Total Course Units</div>
-                    <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Total Course Units</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
                       {program.unitCount}
                     </div>
                   </div>
-                  <div className="fg m-0">
-                    <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Accreditation Date</div>
-                    <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Accreditation Date</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
                       {program.dateAcc ? formatDate(program.dateAcc) : '—'}
                     </div>
                   </div>
                 </div>
 
                 <div className="sec-divider">Status &amp; Flags</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1.5rem' }}>
-                  <div className="fg m-0">
-                    <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Admission Status</div>
-                    <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', columnGap: '24px', rowGap: '20px' }}>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Admission Status</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
                       {program.pgmStatus ? <span className="badge badge-green"><span className="bdot"></span>Active</span> : <span className="badge badge-grey">Inactive</span>}
                     </div>
                   </div>
-                  <div className="fg m-0">
-                    <div className="lbl" style={{ color: 'var(--g500)', marginBottom: 4 }}>Internal Assessment</div>
-                    <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                  <div>
+                    <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Internal Assessment</div>
+                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
                       {program.noIa ? <span className="badge badge-amber"><i className="lni lni-checkmark"></i> No Internal Assessment</span> : <span className="badge badge-grey">Standard</span>}
                     </div>
                   </div>
@@ -231,16 +220,6 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid }: ViewProgram
             {/* STEP 2: Course Units */}
             {activeSection === 'units' && (
               <div className="flex flex-col gap-3">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, padding: '12px 16px', background: 'var(--b50)', borderRadius: 'var(--rsm)', border: '1.5px solid var(--b100)' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <i className="lni lni-book" style={{ color: 'var(--b600)', fontSize: 17 }}></i>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--b800)' }}>Course Unit Allocation</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--g400)' }}>Semester-wise course units</div>
-                  </div>
-                </div>
-
                 {program.semesters.length === 0 && (
                   <div className="text-g400 italic text-sm mt-4">No course units found for this programme.</div>
                 )}
@@ -300,7 +279,7 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid }: ViewProgram
               <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
                 {/* Left fee structure list */}
                 <div style={{ width: 220, flexShrink: 0, background: 'var(--surface)', border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: 480 }}>
-                  <div style={{ padding: '14px 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
+                  <div style={{ padding: '14px 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', letterSpacing: '.07em' }}>
                     Fee Structures <span style={{ color: 'var(--b500)' }}>({program.feeStructures?.length || 0})</span>
                   </div>
                   <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px', paddingBottom: 12 }}>
@@ -344,22 +323,22 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid }: ViewProgram
                       </div>
                     </div>
 
-                    <div className="g3 mb-[14px]">
-                      <div className="fg m-0">
-                        <div className="lbl">Fee Description</div>
-                        <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '24px', rowGap: '20px', marginBottom: 24 }}>
+                      <div>
+                        <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Fee Description</div>
+                        <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
                           {activeFeeStruct.feeDesc || '—'}
                         </div>
                       </div>
-                      <div className="fg m-0">
-                        <div className="lbl">Lumpsum Discount Type</div>
-                        <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                      <div>
+                        <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Lumpsum Discount Type</div>
+                        <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
                           {activeFeeStruct.calcType === 2 ? 'Percentage' : 'Amount'}
                         </div>
                       </div>
-                      <div className="fg m-0">
-                        <div className="lbl">Lumpsum Discount Value</div>
-                        <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--g50)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                      <div>
+                        <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Lumpsum Discount Value</div>
+                        <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
                           {activeFeeStruct.amtPer ?? '0'} {activeFeeStruct.calcType === 2 ? '%' : ''}
                         </div>
                       </div>
@@ -370,22 +349,22 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid }: ViewProgram
                         <i className="lni lni-tag" style={{ fontSize: 'var(--fs-md)' }}></i>
                         <span>Programme-level Fees</span>
                       </div>
-                      <div className="g3">
-                        <div className="fg m-0">
-                          <div className="lbl">Lateral Entry Fee</div>
-                          <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--white)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '24px', rowGap: '20px' }}>
+                        <div>
+                          <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Lateral Entry Fee</div>
+                          <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
                             {activeFeeStruct.lef ?? '0'}
                           </div>
                         </div>
-                        <div className="fg m-0">
-                          <div className="lbl">Credit Exemption Fee</div>
-                          <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--white)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                        <div>
+                          <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Credit Exemption Fee</div>
+                          <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
                             {activeFeeStruct.cef ?? '0'}
                           </div>
                         </div>
-                        <div className="fg m-0">
-                          <div className="lbl">Aptech Credit Exemption Fee</div>
-                          <div className="ctrl" style={{ display: 'flex', alignItems: 'center', background: 'var(--white)', color: 'var(--g900)', fontWeight: 500, minHeight: 34, fontSize: 13.5, border: '1.5px solid var(--g200)', borderRadius: 'var(--rxs)' }}>
+                        <div>
+                          <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Aptech Credit Exemption Fee</div>
+                          <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
                             {activeFeeStruct.ace ?? '0'}
                           </div>
                         </div>
@@ -418,7 +397,7 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid }: ViewProgram
                             <div style={{ overflow: 'hidden', maxHeight: isOpen ? 800 : 0, transition: 'max-height 0.3s ease' }}>
                               <div style={{ padding: '10px 14px' }}>
                                 {items.length > 0 && (
-                                  <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 90px 130px', gap: 6, padding: '0 0 4px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 90px 130px', gap: 6, padding: '0 0 4px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', letterSpacing: '0.05em' }}>
                                     <span style={{ textAlign: 'center' }}>Pri.</span><span>Ledger</span><span>Amount</span><span>Currency</span>
                                   </div>
                                 )}
@@ -458,6 +437,11 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid }: ViewProgram
 
         <div className="modal-footer" style={{ borderTop: '1px solid var(--g200)' }}>
           <span className="flex-1"></span>
+          {onEdit && (
+            <button className="btn btn-neu" style={{ marginRight: 8 }} onClick={() => { if(programGuid) onEdit(programGuid) }}>
+              <i className="lni lni-pencil"></i> Edit
+            </button>
+          )}
           <button className="btn btn-primary" onClick={onClose}>
             Close
           </button>
