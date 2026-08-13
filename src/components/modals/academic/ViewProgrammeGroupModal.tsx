@@ -8,12 +8,22 @@ import { FailurePopup } from './FailurePopup'
 
 interface ViewProgrammeGroupModalProps extends ModalProps {
   programGroupGuid: string | null
+  onEdit?: () => void
+  canEdit?: boolean
 }
 
-export function ViewProgrammeGroupModal({ isOpen, onClose, programGroupGuid }: ViewProgrammeGroupModalProps) {
+function Field({ label, value, mono, wide }: { label: string; value: React.ReactNode; mono?: boolean; wide?: boolean }) {
+  return (
+    <div style={{ gridColumn: wide ? '1 / -1' : undefined }}>
+      <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--g500)', marginBottom: '4px' }}>{label}</div>
+      <div className={mono ? 'font-mono' : undefined} style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{value}</div>
+    </div>
+  )
+}
+
+export function ViewProgrammeGroupModal({ isOpen, onClose, programGroupGuid, onEdit, canEdit }: ViewProgrammeGroupModalProps) {
   const { data: programGroup, isLoading, isError, error } = useProgramGroup(programGroupGuid, isOpen)
   const { data: programLevels = [] } = useProgramLevels()
-  const [activeSection, setActiveSection] = useState<'details'>('details')
 
   if (!isOpen) return null
 
@@ -34,8 +44,8 @@ export function ViewProgrammeGroupModal({ isOpen, onClose, programGroupGuid }: V
   if (isLoading || !programGroup) {
     return (
       <div className="modal-overlay open" id="view-proggroup-modal">
-        <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+        <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+          <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-eye"></i> View Programme Group</div>
             <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
           </div>
@@ -51,80 +61,27 @@ export function ViewProgrammeGroupModal({ isOpen, onClose, programGroupGuid }: V
 
   return (
     <div className="modal-overlay open" id="view-proggroup-modal">
-      <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+      <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-eye"></i> View Programme Group — <span className="font-mono">{programGroup.groupCode}</span></div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
 
-        <div className="fsm-layout" style={{ borderTop: '1px solid var(--g200)' }}>
-          {/* Left sidebar */}
-          <div className="fsm-sidebar">
-            <div style={{ padding: '14px 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
-              Group Information
-            </div>
-            <div style={{ padding: '0 8px', marginBottom: 12 }}>
-              <div
-                onClick={() => setActiveSection('details')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '9px 10px', borderRadius: 'var(--rsm)', marginBottom: 2,
-                  background: activeSection === 'details' ? 'var(--b500)' : 'transparent',
-                  color: activeSection === 'details' ? '#fff' : 'var(--g700)',
-                  cursor: 'pointer', transition: 'background .15s',
-                }}
-              >
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: activeSection === 'details' ? 'rgba(255,255,255,.2)' : 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <i className="lni lni-information" style={{ fontSize: 13, color: activeSection === 'details' ? '#fff' : 'var(--b600)' }}></i>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>Basic Details</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right main panel */}
-          <div className="fsm-main modal-scroll" style={{ padding: '24px' }}>
-            {activeSection === 'details' && (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, padding: '12px 16px', background: 'var(--b50)', borderRadius: 'var(--rsm)', border: '1.5px solid var(--b100)' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <i className="lni lni-information" style={{ color: 'var(--b600)', fontSize: 17 }}></i>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--b800)' }}>Basic Details</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--g400)' }}>General information about this programme group</div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', columnGap: '24px', rowGap: '20px' }}>
-                  <div>
-                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Group Code</div>
-                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500, fontFamily: 'var(--font-mono)' }}>
-                      {programGroup.groupCode}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Group Name</div>
-                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
-                      {programGroup.groupName}
-                    </div>
-                  </div>
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Programme Level</div>
-                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
-                      {levelName}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
+        <div style={{ padding: '20px clamp(14px, 4vw, 22px)' }}>
+          <div className="view-detail-grid">
+            <Field label="Group Code" value={programGroup.groupCode} mono />
+            <Field label="Group Name" value={programGroup.groupName} />
+            <Field label="Programme Level" value={levelName} />
           </div>
         </div>
 
         <div className="modal-footer" style={{ borderTop: '1px solid var(--g200)' }}>
           <span className="flex-1"></span>
+          {canEdit && onEdit && (
+            <button className="btn btn-neu" onClick={onEdit}>
+              <i className="lni lni-pencil"></i> Edit
+            </button>
+          )}
           <button className="btn btn-primary" onClick={onClose}>
             Close
           </button>

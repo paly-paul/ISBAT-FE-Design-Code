@@ -31,7 +31,7 @@ export default function Page() {
   const [deleteTarget, setDeleteTarget] = useState<RepetitionTag | null>(null)
 
   function nav(id: string) { router.push('/academic/' + id) }
-  function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
+  function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -73,7 +73,15 @@ export default function Page() {
   //   { code: 'RT-CU-005', description: 'Credit exemption repeat for lateral entrants',   level: 'Postgraduate Diploma' },
   // ]
 
-  const { data: rows = [], isLoading } = useRepetitionTags()
+  const { data, isLoading } = useRepetitionTags()
+
+  const rows: RepetitionTag[] = Array.isArray(data)
+    ? data
+    : Array.isArray((data as any)?.data)
+      ? (data as any).data
+      : Array.isArray((data as any)?.items)
+        ? (data as any).items
+        : []
   const createRepetitionTag = useCreateRepetitionTag()
   const updateRepetitionTag = useUpdateRepetitionTag()
   const deleteRepetitionTag = useDeleteRepetitionTag()
@@ -183,7 +191,7 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="repetition tags" onPageChange={setPage} />
         </div>
       </div>
-      <NewRepTagModal  isOpen={openModals.has('new-rep-tag-modal')}  onClose={() => closeModal('new-rep-tag-modal')}  showToast={showToast} createRepetitionTag={createRepetitionTag} />
+      <NewRepTagModal isOpen={openModals.has('new-rep-tag-modal')} onClose={() => closeModal('new-rep-tag-modal')} showToast={showToast} createRepetitionTag={createRepetitionTag} />
       <EditRepTagModal
         isOpen={openModals.has('edit-rep-tag-modal')}
         onClose={() => closeModal('edit-rep-tag-modal')}
@@ -191,7 +199,7 @@ export default function Page() {
         courseUnitRepetitionGuid={editingRepTagGuid}
         updateRepetitionTag={updateRepetitionTag}
       />
-      <ViewRepTagModal
+      <ViewRepTagModal canEdit={permissions.edit} onEdit={() => { closeModal('view-reptag-modal'); openEditModal(viewingRepTagGuid || '') }}
         isOpen={openModals.has('view-rep-tag-modal')}
         onClose={() => closeModal('view-rep-tag-modal')}
         showToast={showToast}

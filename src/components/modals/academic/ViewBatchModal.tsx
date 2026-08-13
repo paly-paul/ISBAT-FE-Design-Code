@@ -14,9 +14,20 @@ import { AuthError } from '@/lib/api/client'
 
 interface ViewBatchModalProps extends ModalProps {
   batchGuid: string | null
+  onEdit?: () => void
+  canEdit?: boolean
 }
 
-export function ViewBatchModal({ isOpen, onClose, showToast, batchGuid }: ViewBatchModalProps) {
+function Field({ label, value, mono, wide }: { label: string; value: React.ReactNode; mono?: boolean; wide?: boolean }) {
+  return (
+    <div style={{ gridColumn: wide ? '1 / -1' : undefined }}>
+      <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--g500)', marginBottom: '4px' }}>{label}</div>
+      <div className={mono ? 'font-mono' : undefined} style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{value}</div>
+    </div>
+  )
+}
+
+export function ViewBatchModal({ isOpen, onClose, showToast, batchGuid, onEdit, canEdit }: ViewBatchModalProps) {
   const { data: batch, isLoading, isError, error } = useBatch(batchGuid, isOpen)
   const { data: programs = [] }   = useProgramMasters()
   const { data: intakes = [] }    = useIntakes()
@@ -26,8 +37,6 @@ export function ViewBatchModal({ isOpen, onClose, showToast, batchGuid }: ViewBa
 
   const [programGuid, setProgramGuid] = useState('')
   const { data: semesters = [] } = useSemestersForProgram(programGuid, !!programGuid)
-
-  const [activeSection, setActiveSection] = useState<'basic' | 'schedule'>('basic')
 
   const [intakeGuid, setIntakeGuid]       = useState('')
   const [semesterGuid, setSemesterGuid]   = useState('')
@@ -73,7 +82,7 @@ export function ViewBatchModal({ isOpen, onClose, showToast, batchGuid }: ViewBa
     return (
       <div className="modal-overlay open" id="edit-batch-modal">
         <div className="modal modal-xl modal-flex" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr">
+          <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-eye"></i> View Batch</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
@@ -87,132 +96,33 @@ export function ViewBatchModal({ isOpen, onClose, showToast, batchGuid }: ViewBa
 
   return (
     <div className="modal-overlay open" id="edit-batch-modal">
-      <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr">
+      <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+        <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-eye"></i> View Batch — <span className="font-mono">{batch.batchCode}</span></div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
-        <div className="fsm-layout" style={{ borderTop: '1px solid var(--g200)' }}>
-          {/* Left sidebar */}
-          <div className="fsm-sidebar">
-            <div style={{ padding: '14px 14px 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
-              Batch Information
-            </div>
-            <div style={{ padding: '0 8px', marginBottom: 12 }}>
-              <div
-                onClick={() => setActiveSection('basic')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '9px 10px', borderRadius: 'var(--rsm)', marginBottom: 2,
-                  background: activeSection === 'basic' ? 'var(--b500)' : 'transparent',
-                  color: activeSection === 'basic' ? '#fff' : 'var(--g700)',
-                  cursor: 'pointer', transition: 'background .15s',
-                }}
-              >
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: activeSection === 'basic' ? 'rgba(255,255,255,.2)' : 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <i className="lni lni-information" style={{ fontSize: 13, color: activeSection === 'basic' ? '#fff' : 'var(--b600)' }}></i>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>Basic Details</div>
-                </div>
-              </div>
-              <div
-                onClick={() => setActiveSection('schedule')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '9px 10px', borderRadius: 'var(--rsm)', marginBottom: 2,
-                  background: activeSection === 'schedule' ? 'var(--b500)' : 'transparent',
-                  color: activeSection === 'schedule' ? '#fff' : 'var(--g700)',
-                  cursor: 'pointer', transition: 'background .15s',
-                }}
-              >
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: activeSection === 'schedule' ? 'rgba(255,255,255,.2)' : 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <i className="lni lni-calendar" style={{ fontSize: 13, color: activeSection === 'schedule' ? '#fff' : 'var(--b600)' }}></i>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>Schedule & Timing</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right main panel */}
-          <div className="fsm-main modal-scroll" style={{ padding: '24px' }}>
-            {activeSection === 'basic' && (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, padding: '12px 16px', background: 'var(--b50)', borderRadius: 'var(--rsm)', border: '1.5px solid var(--b100)' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <i className="lni lni-information" style={{ color: 'var(--b600)', fontSize: 17 }}></i>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--b800)' }}>Basic Details</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--g400)' }}>Academic mappings for this batch</div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', columnGap: '24px', rowGap: '20px' }}>
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Programme</div>
-                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
-                      {programs.find(p => p.programGuid === programGuid)?.programName || '—'}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Semester</div>
-                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
-                      {semesters.find(s => s.semesterGuid === semesterGuid)?.semName || '—'}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Specialization</div>
-                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
-                      {streams.find(s => s.streamGuid === streamGuid)?.streamName || '—'}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {activeSection === 'schedule' && (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, padding: '12px 16px', background: 'var(--b50)', borderRadius: 'var(--rsm)', border: '1.5px solid var(--b100)' }}>
-                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--b100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <i className="lni lni-calendar" style={{ color: 'var(--b600)', fontSize: 17 }}></i>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--b800)' }}>Schedule & Timing</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--g400)' }}>Session timings and dates</div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', columnGap: '24px', rowGap: '20px' }}>
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Batch Time</div>
-                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
-                      {batchTimes.find(b => b.batchTimeGuid === batchTimeGuid)?.batchTime || '—'}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Start Date</div>
-                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
-                      {startDate || '—'}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>End Date</div>
-                    <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>
-                      {endDate || '—'}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
+        <div style={{ padding: '20px clamp(14px, 4vw, 22px)' }}>
+          <div className="view-detail-grid">
+            <Field label="Programme" value={programs.find(p => p.programGuid === programGuid)?.programName || '—'} />
+            <Field label="Semester" value={semesters.find(s => s.semesterGuid === semesterGuid)?.semName || '—'} />
+            <Field label="Specialization" value={streams.find(s => s.streamGuid === streamGuid)?.streamName || '—'} />
+            
+            <div style={{ gridColumn: '1 / -1', height: '1px', background: 'var(--g200)', margin: '8px 0' }} />
+            
+            <Field label="Batch Time" value={batchTimes.find(b => b.batchTimeGuid === batchTimeGuid)?.batchTime || '—'} />
+            <Field label="Start Date" value={startDate || '—'} />
+            <Field label="End Date" value={endDate || '—'} />
           </div>
         </div>
 
         <div className="modal-footer" style={{ borderTop: '1px solid var(--g200)' }}>
           <span className="flex-1"></span>
+          {canEdit && onEdit && (
+            <button className="btn btn-neu" onClick={onEdit}>
+              <i className="lni lni-pencil"></i> Edit
+            </button>
+          )}
           <button className="btn btn-primary" onClick={handleClose}>Close</button>
         </div>
       </div>

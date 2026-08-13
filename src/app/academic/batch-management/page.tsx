@@ -210,7 +210,7 @@ export default function Page() {
         batchGuid={editingBatchGuid}
         updateBatch={updateBatch}
       />
-      <ViewBatchModal
+      <ViewBatchModal canEdit={permissions.edit} onEdit={() => { closeModal('view-batch-modal'); openEditModal(editingBatchGuid || '') }}
         isOpen={openModals.has('view-batch-modal')}
         onClose={() => closeModal('view-batch-modal')}
         showToast={showToast}

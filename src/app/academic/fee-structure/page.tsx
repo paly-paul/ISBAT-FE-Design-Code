@@ -169,7 +169,17 @@ export default function Page() {
 
       <FeeStructureModal isOpen={openModals.has('new-fee-structure-modal')} onClose={() => closeModal('new-fee-structure-modal')} showToast={showToast} nav={nav} />
       <FeeStructureModal isOpen={openModals.has('edit-fee-structure-modal')} onClose={() => closeModal('edit-fee-structure-modal')} showToast={showToast} nav={nav} mode="edit" editData={editRecord ?? undefined} />
-      <ViewFeeStructureModal isOpen={openModals.has('view-fee-structure-modal')} onClose={() => closeModal('view-fee-structure-modal')} showToast={showToast} feeStructure={viewRecord ?? undefined} />
+      <ViewFeeStructureModal 
+        isOpen={openModals.has('view-fee-structure-modal')} 
+        onClose={() => closeModal('view-fee-structure-modal')} 
+        showToast={showToast} 
+        feeStructure={viewRecord ?? undefined} 
+        onEdit={(r) => {
+          closeModal('view-fee-structure-modal')
+          setEditRecord(r)
+          openModal('edit-fee-structure-modal')
+        }}
+      />
       <Toast toast={toast} />
     </>
   )
