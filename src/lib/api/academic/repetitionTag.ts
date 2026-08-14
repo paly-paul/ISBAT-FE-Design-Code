@@ -24,7 +24,7 @@ const mockRepetitionTags: RepetitionTag[] = [
 // Fetch all repetition tags.
 export function getRepetitionTags(): Promise<RepetitionTag[]> {
   if (MOCK_AUTH) return Promise.resolve(mockRepetitionTags)
-  return apiGet<RepetitionTag[] | null>('/api/v1/academic/course-unit-repetitions').then(data => data ?? [])
+  return apiGet<any>('/api/v1/academic/course-unit-repetitions').then(data => Array.isArray(data) ? data : Array.isArray(data?.courseUnitRepetitions) ? data.courseUnitRepetitions : [])
 }
 
 // Payload used when creating or updating a repetition tag.

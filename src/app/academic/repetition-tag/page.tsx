@@ -73,15 +73,7 @@ export default function Page() {
   //   { code: 'RT-CU-005', description: 'Credit exemption repeat for lateral entrants',   level: 'Postgraduate Diploma' },
   // ]
 
-  const { data, isLoading } = useRepetitionTags()
-
-  const rows: RepetitionTag[] = Array.isArray(data)
-    ? data
-    : Array.isArray((data as any)?.data)
-      ? (data as any).data
-      : Array.isArray((data as any)?.items)
-        ? (data as any).items
-        : []
+  const { data: rows = [], isLoading } = useRepetitionTags()
   const createRepetitionTag = useCreateRepetitionTag()
   const updateRepetitionTag = useUpdateRepetitionTag()
   const deleteRepetitionTag = useDeleteRepetitionTag()
@@ -199,7 +191,7 @@ export default function Page() {
         courseUnitRepetitionGuid={editingRepTagGuid}
         updateRepetitionTag={updateRepetitionTag}
       />
-      <ViewRepTagModal canEdit={permissions.edit} onEdit={() => { closeModal('view-reptag-modal'); openEditModal(viewingRepTagGuid || '') }}
+      <ViewRepTagModal canEdit={permissions.edit} onEdit={() => { closeModal('view-rep-tag-modal'); openEditModal(viewingRepTagGuid || '') }}
         isOpen={openModals.has('view-rep-tag-modal')}
         onClose={() => closeModal('view-rep-tag-modal')}
         showToast={showToast}

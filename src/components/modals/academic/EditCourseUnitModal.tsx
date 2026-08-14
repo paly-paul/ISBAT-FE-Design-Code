@@ -136,7 +136,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
     setIncludeCBT(!!courseUnit.ca)
     setRepetitionTagGuid(courseUnit.courseUnitRepetitionGuid ?? '')
     setChapters(
-      courseUnit.outlines.length
+      courseUnit.outlines?.length
         ? courseUnit.outlines.map(o => ({
             title: o.chapterName,
             // Sort by the server's real studySequence on load so on-screen
