@@ -89,6 +89,7 @@ const mockMenu: MenuNode[] = [
     ]),
     section('Academic Core', [
       leaf('Intake Master', 'calendar', '/academic/intake-master'),
+      leaf('Bulk Intake Edit', 'layers', '/academic/bulk-intake-edit'),
       leaf('Skill Management', 'bulb', '/academic/skill-master'),
       leaf('Batch Management', 'users', '/academic/batch-management'),
       leaf('Room Management', 'home', '/academic/room-management'),
@@ -216,6 +217,43 @@ export interface MenuResult {
   isFallback: boolean
 }
 
+// Same idea as ensureProgrammeApproval below, one section over: Bulk Intake
+// Edit is a new frontend-only page (no backend permission entry yet), so it
+// would otherwise vanish from the real /me/menu tree even though the page
+// exists and works. Injected right after Intake Master, matching its
+// position in mockMenu above.
+function ensureBulkIntakeEdit(menu: MenuNode[]): MenuNode[] {
+  const acadIdx = menu.findIndex(n => n.name === 'Academic')
+  if (acadIdx === -1) return menu
+
+  const acadModule = menu[acadIdx]
+  const coreIdx = acadModule.children.findIndex(c => c.name === 'Academic Core')
+  if (coreIdx === -1) return menu
+
+  const coreSection = acadModule.children[coreIdx]
+  if (coreSection.children.some(l => l.name === 'Bulk Intake Edit')) return menu
+
+  const children = [...coreSection.children]
+  const intakeIdx = children.findIndex(l => l.name === 'Intake Master')
+  const bulkEditLeaf = leaf('Bulk Intake Edit', 'layers', '/academic/bulk-intake-edit')
+
+  if (intakeIdx !== -1) {
+    children.splice(intakeIdx + 1, 0, bulkEditLeaf)
+  } else {
+    children.push(bulkEditLeaf)
+  }
+
+  const mergedSection = { ...coreSection, children }
+
+  const mergedAcad = { ...acadModule }
+  mergedAcad.children = [...acadModule.children]
+  mergedAcad.children[coreIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[acadIdx] = mergedAcad
+  return mergedMenu
+}
+
 function ensureProgrammeApproval(menu: MenuNode[]): MenuNode[] {
   const acadIdx = menu.findIndex(n => n.name === 'Academic')
   if (acadIdx === -1) return menu
@@ -259,7 +297,8 @@ export function getMenu(): Promise<MenuResult> {
       const menu = data ?? []
       const withEmployee = menu.some(n => n.name === 'Employee') ? menu : [...menu, HARDCODED_EMPLOYEE_MODULE]
       const withFinance  = mergeFinanceSections(withEmployee)
-      const finalMenu = ensureProgrammeApproval(withFinance)
+      const withBulkEdit = ensureBulkIntakeEdit(withFinance)
+      const finalMenu = ensureProgrammeApproval(withBulkEdit)
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: mockMenu, isFallback: true }))

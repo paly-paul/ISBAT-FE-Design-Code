@@ -319,6 +319,34 @@ export async function apiPut<T>(path: string, body: unknown, retried = false): P
   throw new AuthError(code, message)
 }
 
+export async function apiPatch<T>(path: string, body: unknown, retried = false): Promise<T> {
+  const res = await fetch(buildUrl(path), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...NGROK_HEADERS },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  })
+
+  const envelope = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
+  const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
+
+  if (unauthorized && !isAuthEndpoint(path) && !retried) {
+    await handleUnauthorized(path)
+    return apiPatch<T>(path, body, true)
+  }
+
+  if (res.ok) {
+    if (!envelope) return null as T
+    if (!envelope.success) {
+      throw new AuthError(envelope.code ?? 'unknown', envelope.errors?.[0] ?? envelope.message ?? undefined)
+    }
+    return envelope.data as T
+  }
+
+  const { code, message } = extractErrorInfo(envelope)
+  throw new AuthError(code, message)
+}
+
 export async function apiDelete<T>(path: string, retried = false): Promise<T> {
   const res = await fetch(buildUrl(path), {
     method: 'DELETE',
