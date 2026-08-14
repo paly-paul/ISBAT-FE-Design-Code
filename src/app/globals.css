@@ -3338,6 +3338,30 @@ body:has(.modal-overlay.open) {
   overflow-y: auto
 }
 
+/* Opt-in entrance animation for confirm-style dialogs (e.g. the calendar
+   bulk-update confirm popup) — a plain fade+scale-up so it reads as
+   "arriving" rather than just appearing, without changing every other
+   modal's default (instant) open behavior. Overlay fades in a touch faster
+   than the modal scales up, same stagger feel as the rest of the app's
+   dropdown/popover entrances (see @keyframes dd-in above). */
+.confirm-modal-overlay {
+  animation: confirm-overlay-in .15s ease-out
+}
+
+.confirm-modal-pop {
+  animation: confirm-pop-in .22s cubic-bezier(.34, 1.56, .64, 1)
+}
+
+@keyframes confirm-overlay-in {
+  from { opacity: 0 }
+  to { opacity: 1 }
+}
+
+@keyframes confirm-pop-in {
+  from { opacity: 0; transform: scale(.94) translateY(8px) }
+  to { opacity: 1; transform: scale(1) translateY(0) }
+}
+
 .modal-sm {
   max-width: 420px
 }

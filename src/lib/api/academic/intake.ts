@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, apiPut } from '../client'
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -283,4 +283,138 @@ export function deleteIntake(intakeGuid: string): Promise<boolean> {
     return Promise.resolve(true)
   }
   return apiDelete<boolean>(`/api/v1/academic/intakes/${intakeGuid}`)
+}
+
+// One row of the current admission intake's calendar "back-fill batch" — see
+// PATCH /api/v1/academic/intakes/calendar-batch (patch-calendar-batch-bulk.md).
+// Flatter than AcademicCalendarEntry: it carries the owning intake's
+// intakeGuid/intakeCode/description alongside the calendar fields, since a
+// batch can span more than one intake (older, back-filled intakes included
+// under the current admission intake's group) — display-only, never edited
+// through this endpoint. semesterStartDate/EndDate and term1/term2
+// Start/EndDate are required on every submitted entry even though the DTO
+// types them nullable (matches the backend's own datetime? + "required per
+// entry" validation split); every other date field is genuinely optional.
+export interface AcademicCalendarBatchEntryDto {
+  intakeGuid: string
+  intakeCode: number
+  description: string
+  academicCalendarGuid: string
+  semCode: number
+  admissionStartDate: string | null
+  admissionLateFeeDate: string | null
+  admissionEndDate: string | null
+  reentryStartDate: string | null
+  reentryLateFeeDate: string | null
+  reentryEndDate: string | null
+  semesterStartDate: string | null
+  semesterEndDate: string | null
+  lumpsumDate: string | null
+  term1StartDate: string | null
+  term1EndDate: string | null
+  term2StartDate: string | null
+  term2EndDate: string | null
+  resitStartDate: string | null
+  resitEndDate: string | null
+  finalExamStartDate: string | null
+  finalExamEndDate: string | null
+  clearanceDate: string | null
+}
+
+// Small stand-in batch for local/offline work, same convention as
+// mockIntakes above. Two rows on purpose — one on the current admission
+// intake itself (20242) and one back-filled from an older intake (20241) —
+// so the mock data actually demonstrates a batch spanning more than one
+// intake, not just a single-row edge case.
+const mockCalendarBatch: AcademicCalendarBatchEntryDto[] = [
+  {
+    intakeGuid: 'a1b2c3d4-0000-4000-8000-000000000002',
+    intakeCode: 20242,
+    description: '2024 Semester 2',
+    academicCalendarGuid: 'b2c3d4e5-0000-4000-8000-000000000001',
+    semCode: 2,
+    admissionStartDate: '2024-07-15T00:00:00',
+    admissionLateFeeDate: '2024-08-15T00:00:00',
+    admissionEndDate: '2024-08-30T00:00:00',
+    reentryStartDate: '2024-07-01T00:00:00',
+    reentryLateFeeDate: '2024-08-15T00:00:00',
+    reentryEndDate: '2024-08-30T00:00:00',
+    semesterStartDate: '2024-08-19T00:00:00',
+    semesterEndDate: '2024-12-13T00:00:00',
+    lumpsumDate: '2024-09-15T00:00:00',
+    term1StartDate: '2024-08-19T00:00:00',
+    term1EndDate: '2024-10-11T00:00:00',
+    term2StartDate: '2024-10-14T00:00:00',
+    term2EndDate: '2024-12-13T00:00:00',
+    resitStartDate: '2025-01-06T00:00:00',
+    resitEndDate: '2025-01-17T00:00:00',
+    finalExamStartDate: '2024-12-02T00:00:00',
+    finalExamEndDate: '2024-12-13T00:00:00',
+    clearanceDate: '2024-12-20T00:00:00',
+  },
+  {
+    intakeGuid: 'a1b2c3d4-0000-4000-8000-000000000001',
+    intakeCode: 20241,
+    description: '2024 Semester 1',
+    academicCalendarGuid: 'b2c3d4e5-0000-4000-8000-000000000002',
+    semCode: 1,
+    admissionStartDate: '2024-01-15T00:00:00',
+    admissionLateFeeDate: '2024-02-01T00:00:00',
+    admissionEndDate: '2024-02-15T00:00:00',
+    reentryStartDate: '2024-01-05T00:00:00',
+    reentryLateFeeDate: '2024-02-01T00:00:00',
+    reentryEndDate: '2024-02-15T00:00:00',
+    semesterStartDate: '2024-02-12T00:00:00',
+    semesterEndDate: '2024-06-07T00:00:00',
+    lumpsumDate: '2024-03-01T00:00:00',
+    term1StartDate: '2024-02-12T00:00:00',
+    term1EndDate: '2024-04-05T00:00:00',
+    term2StartDate: '2024-04-08T00:00:00',
+    term2EndDate: '2024-06-07T00:00:00',
+    resitStartDate: '2024-07-01T00:00:00',
+    resitEndDate: '2024-07-12T00:00:00',
+    finalExamStartDate: '2024-05-20T00:00:00',
+    finalExamEndDate: '2024-06-07T00:00:00',
+    clearanceDate: '2024-06-14T00:00:00',
+  },
+]
+
+// GET /api/v1/academic/intakes/calendar-batch — no guid/params: it always
+// resolves against whichever intake currently has currentAdmissionIntake =
+// true and returns that intake's back-fill batch (one row per semester
+// calendar entry, potentially spanning older back-filled intakes too).
+export function getCalendarBatch(): Promise<AcademicCalendarBatchEntryDto[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockCalendarBatch)
+  return apiGet<AcademicCalendarBatchEntryDto[]>('/api/v1/academic/intakes/calendar-batch')
+}
+
+// PATCH /api/v1/academic/intakes/calendar-batch — bulk-updates the calendar
+// date fields on one or more entries in that same batch in a single request.
+// Atomic on the backend: any academicCalendarGuid that doesn't belong to the
+// current batch fails the whole request, so the mock branch mirrors that by
+// rejecting outright rather than partially applying. intakeGuid/intakeCode/
+// description/semCode are accepted but never actually changed server-side
+// (semCode especially — see patch-calendar-batch-bulk.md), so the mock keeps
+// the existing row's values for those instead of trusting the submitted ones.
+export function bulkUpdateCalendarBatch(entries: AcademicCalendarBatchEntryDto[]): Promise<AcademicCalendarBatchEntryDto[]> {
+  if (MOCK_AUTH) {
+    for (const entry of entries) {
+      if (!mockCalendarBatch.some(e => e.academicCalendarGuid === entry.academicCalendarGuid)) {
+        return Promise.reject(new Error(`Calendar entries not found for this intake: ${entry.academicCalendarGuid}`))
+      }
+    }
+    for (const entry of entries) {
+      const idx = mockCalendarBatch.findIndex(e => e.academicCalendarGuid === entry.academicCalendarGuid)
+      mockCalendarBatch[idx] = {
+        ...mockCalendarBatch[idx],
+        ...entry,
+        intakeGuid: mockCalendarBatch[idx].intakeGuid,
+        intakeCode: mockCalendarBatch[idx].intakeCode,
+        description: mockCalendarBatch[idx].description,
+        semCode: mockCalendarBatch[idx].semCode,
+      }
+    }
+    return Promise.resolve(mockCalendarBatch)
+  }
+  return apiPatch<AcademicCalendarBatchEntryDto[]>('/api/v1/academic/intakes/calendar-batch', entries)
 }
