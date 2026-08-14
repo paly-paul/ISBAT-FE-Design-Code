@@ -302,6 +302,7 @@ export default function Page() {
         onEdit={() => { closeModal('view-course-unit-modal'); openEditModal(viewingCourseUnitGuid || '') }}
         isOpen={openModals.has('view-course-unit-modal')}
         onClose={() => closeModal('view-course-unit-modal')}
+        showToast={showToast}
         courseUnitGuid={viewingCourseUnitGuid}
       />
       <ElectiveSelectModal isOpen={openModals.has('elective-select-modal')} onClose={() => closeModal('elective-select-modal')} showToast={showToast} />
