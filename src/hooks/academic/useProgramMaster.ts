@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createProgramMaster,
+  createProgramMasterStep1,
   deleteProgramMasterComplete,
   getProgramMasterFullDetails,
   getProgramMasters,
@@ -8,6 +9,9 @@ import {
   updateProgramMasterComplete,
   ProgramMaster,
   ProgramMasterInput,
+  ProgramMasterCreateInput,
+  ProgramMasterCreated,
+  ProgramMasterSemester,
   ProgramUnitInput,
   FeeStructureInput,
   FeeLineInput,
@@ -21,7 +25,11 @@ import {
   FeeStructureUpdateInput,
 } from '@/lib/api/academic/programMaster'
 
-const PROGRAM_MASTERS_KEY = ['programMasters']
+// Exported so other mutations that affect the Programme Master list from
+// elsewhere — e.g. useUpdateProgramApproval, which approves/rejects a
+// programme on a completely separate page — can invalidate this same query
+// instead of leaving it stale until the next hard reload.
+export const PROGRAM_MASTERS_KEY = ['programMasters']
 
 export function useProgramMasters() {
   return useQuery({
@@ -51,6 +59,19 @@ export function useCreateProgramMaster() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: ProgramMasterInput) => createProgramMaster(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRAM_MASTERS_KEY }),
+  })
+}
+
+// Step 1 of ProgrammeModal's Add-mode wizard — see post-program-master.md.
+// Deliberately a separate mutation from useCreateProgramMaster above, not a
+// variant of it: that one calls the combined save-complete endpoint in a
+// single shot; this one creates only the bare programme record so Steps
+// 2/3 can follow with their own calls using the semesterGuids it returns.
+export function useCreateProgramMasterStep1() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: ProgramMasterCreateInput) => createProgramMasterStep1(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRAM_MASTERS_KEY }),
   })
 }
@@ -85,6 +106,9 @@ export function useDeleteProgramMasterComplete() {
 export type {
   ProgramMaster,
   ProgramMasterInput,
+  ProgramMasterCreateInput,
+  ProgramMasterCreated,
+  ProgramMasterSemester,
   ProgramUnitInput,
   FeeStructureInput,
   FeeLineInput,

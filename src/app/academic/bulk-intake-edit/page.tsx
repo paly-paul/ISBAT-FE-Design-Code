@@ -339,17 +339,19 @@ export default function Page() {
     return formatDate(row[field.key])
   }
 
-  // Bordered, filled icon-button look (not a bare icon) for the pencil/tick
-  // column, so it reads as clickable rather than decorative — 'edit' (grey,
-  // ready to click), 'cancel' (blue, already active/editing), 'save' (green,
-  // has a real change to submit).
-  function rowIconBtnStyle(variant: 'edit' | 'cancel' | 'save'): React.CSSProperties {
+  // Bordered, filled icon-button look (not a bare icon) for the pencil/
+  // tick/cancel column, so it reads as clickable rather than decorative —
+  // 'edit' (grey, ready to click), 'save' (green, has a real change to
+  // submit), 'save-disabled' (muted green, editing but nothing changed
+  // yet), 'cancel' (red-tinted, always available while editing).
+  function rowIconBtnStyle(variant: 'edit' | 'save' | 'save-disabled' | 'cancel'): React.CSSProperties {
     const base: React.CSSProperties = {
       width: 28, height: 28, borderRadius: 'var(--rxs)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       cursor: 'pointer', transition: 'var(--tr)', flexShrink: 0, fontSize: 13,
     }
     if (variant === 'save') return { ...base, border: '1.5px solid var(--green-bd)', background: 'var(--green-bg)', color: 'var(--green)' }
-    if (variant === 'cancel') return { ...base, border: '1.5px solid var(--b200)', background: 'var(--b50)', color: 'var(--b600)' }
+    if (variant === 'save-disabled') return { ...base, border: '1.5px solid var(--g200)', background: 'var(--g100)', color: 'var(--g400)', cursor: 'default' }
+    if (variant === 'cancel') return { ...base, border: '1.5px solid var(--red-bd)', background: 'var(--red-bg)', color: 'var(--red)' }
     return { ...base, border: '1.5px solid var(--g200)', background: 'var(--surface)', color: 'var(--g500)' }
   }
 
@@ -425,7 +427,7 @@ export default function Page() {
                   <th style={{ width: 40 }}>
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }} />
                   </th>
-                  <th style={{ width: 40 }}></th>
+                  <th style={{ width: 76 }}></th>
                   <th>Intake Code</th>
                   <th>Description</th>
                   <th>Sem</th>
@@ -459,30 +461,30 @@ export default function Page() {
                       </td>
                       <td>
                         {editing ? (
-                          rowChanged ? (
+                          <div style={{ display: 'flex', gap: 6 }}>
                             <button
                               type="button"
                               onClick={() => saveRow(row)}
-                              disabled={isRowSaving}
-                              title="Save this row"
-                              style={{ ...rowIconBtnStyle('save'), cursor: isRowSaving ? 'default' : 'pointer', opacity: isRowSaving ? 0.7 : 1 }}
-                              onMouseEnter={e => { if (!isRowSaving) { e.currentTarget.style.background = 'var(--green)'; e.currentTarget.style.color = 'var(--white)' } }}
-                              onMouseLeave={e => { e.currentTarget.style.background = 'var(--green-bg)'; e.currentTarget.style.color = 'var(--green)' }}
+                              disabled={!rowChanged || isRowSaving}
+                              title={rowChanged ? 'Save this row' : 'No changes to save yet'}
+                              style={{ ...rowIconBtnStyle(rowChanged ? 'save' : 'save-disabled'), opacity: isRowSaving ? 0.7 : 1 }}
+                              onMouseEnter={e => { if (rowChanged && !isRowSaving) { e.currentTarget.style.background = 'var(--green)'; e.currentTarget.style.color = 'var(--white)' } }}
+                              onMouseLeave={e => { if (rowChanged) { e.currentTarget.style.background = 'var(--green-bg)'; e.currentTarget.style.color = 'var(--green)' } }}
                             >
                               <i className={isRowSaving ? 'lni lni-reload animate-spin' : 'lni lni-checkmark-circle'}></i>
                             </button>
-                          ) : (
                             <button
                               type="button"
                               onClick={() => cancelEditRow(row)}
+                              disabled={isRowSaving}
                               title="Cancel edit"
                               style={rowIconBtnStyle('cancel')}
-                              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--red-bd)'; e.currentTarget.style.background = 'var(--red-bg)'; e.currentTarget.style.color = 'var(--red)' }}
-                              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--b200)'; e.currentTarget.style.background = 'var(--b50)'; e.currentTarget.style.color = 'var(--b600)' }}
+                              onMouseEnter={e => { e.currentTarget.style.background = 'var(--red)'; e.currentTarget.style.color = 'var(--white)' }}
+                              onMouseLeave={e => { e.currentTarget.style.background = 'var(--red-bg)'; e.currentTarget.style.color = 'var(--red)' }}
                             >
-                              <i className="lni lni-pencil"></i>
+                              <i className="lni lni-close"></i>
                             </button>
-                          )
+                          </div>
                         ) : (
                           <button
                             type="button"
