@@ -23,7 +23,7 @@ const mockEnquiryStatuses: EnquiryStatus[] = [
 // Fetch all enquiry status values.
 export function getEnquiryStatuses(): Promise<EnquiryStatus[]> {
   if (MOCK_AUTH) return Promise.resolve(mockEnquiryStatuses)
-  return apiGet<EnquiryStatus[] | null>('/api/v1/admissions/enquiry-statuses').then(data => data ?? [])
+  return apiGet<EnquiryStatus[] | null>('/api/v1/admissions/enquiry-statuses').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Create a new enquiry status and return the saved record.

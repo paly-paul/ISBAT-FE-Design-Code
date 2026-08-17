@@ -22,7 +22,7 @@ const mockFollowUpStatuses: FollowUpStatus[] = [
 // Fetch all follow-up statuses.
 export function getFollowUpStatuses(): Promise<FollowUpStatus[]> {
   if (MOCK_AUTH) return Promise.resolve(mockFollowUpStatuses)
-  return apiGet<FollowUpStatus[] | null>('/api/v1/admissions/follow-up-statuses').then(data => data ?? [])
+  return apiGet<FollowUpStatus[] | null>('/api/v1/admissions/follow-up-statuses').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Create a new follow-up status and return the saved record.

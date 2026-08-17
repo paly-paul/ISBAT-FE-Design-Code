@@ -26,7 +26,7 @@ const mockWeekdays: Weekday[] = [
 // Fetch all weekdays.
 export function getWeekdays(): Promise<Weekday[]> {
   if (MOCK_AUTH) return Promise.resolve(mockWeekdays)
-  return apiGet<Weekday[] | null>('/api/v1/academic/weekdays').then(data => data ?? [])
+  return apiGet<Weekday[] | null>('/api/v1/academic/weekdays').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Create a new weekday and return the saved record.

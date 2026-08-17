@@ -29,8 +29,10 @@ function blocksFromPermissionIds(permissionIds: number[], moduleByPermissionId: 
 // alongside the page's own permission-groups fetch, which made it more
 // likely to trip the refresh/401 race documented in src/lib/api/client.ts
 // and log the user out. See PROJECT_STRUCTURE.md's client.ts notes.
+const EMPTY_CATALOG: any[] = []
+
 export function usePermissionWizard(enabled = true) {
-  const { data: catalog = [] } = usePermissionCatalog(enabled)
+  const { data: catalog = EMPTY_CATALOG } = usePermissionCatalog(enabled)
 
   // Merge permissions from catalog entries that share the same module.
   const permissionsByModule = useMemo(() => {

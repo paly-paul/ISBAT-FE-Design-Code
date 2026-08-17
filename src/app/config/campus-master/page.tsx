@@ -12,6 +12,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewCampusModal } from '@/components/modals/academic/NewCampusModal'
 import { EditCampusModal } from '@/components/modals/academic/EditCampusModal'
+import { ViewCampusModal } from '@/components/modals/academic/ViewCampusModal'
 import { useCampuses, useCampusDropdown, useCreateCampus, useUpdateCampus, useDeleteCampus, Campus } from '@/hooks/config/useCampuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -25,6 +26,7 @@ export default function Page() {
   const [filters, setFilters]       = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingCampus, setEditingCampus] = useState<Campus | null>(null)
+  const [viewingCampus, setViewingCampus] = useState<Campus | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Campus | null>(null)
   const [search, setSearch] = useState('')
 
@@ -42,6 +44,11 @@ export default function Page() {
   function openEditModal(campus: Campus) {
     setEditingCampus(campus)
     openModal('edit-campus-modal')
+  }
+
+  function openViewModal(campus: Campus) {
+    setViewingCampus(campus)
+    openModal('view-campus-modal')
   }
 
   function confirmDeleteCampus() {
@@ -159,8 +166,9 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.campusGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r)}><i className="lni lni-eye"></i> View</button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
                             <i className="lni lni-pencil"></i> Edit
                           </button>}
@@ -195,6 +203,16 @@ export default function Page() {
         showToast={showToast}
         campus={editingCampus}
         updateCampus={updateCampus}
+      />
+      <ViewCampusModal
+        isOpen={openModals.has('view-campus-modal')}
+        onClose={() => closeModal('view-campus-modal')}
+        showToast={showToast}
+        campus={viewingCampus}
+        onEdit={() => {
+          closeModal('view-campus-modal')
+          openEditModal(viewingCampus!)
+        }}
       />
       <Toast toast={toast} />
 

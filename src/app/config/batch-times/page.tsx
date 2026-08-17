@@ -11,6 +11,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewBatchTimeModal } from '@/components/modals/academic/NewBatchTimeModal'
 import { EditBatchTimeModal } from '@/components/modals/academic/EditBatchTimeModal'
+import { ViewBatchTimeModal } from '@/components/modals/academic/ViewBatchTimeModal'
 import { useBatchTimes, useCreateBatchTime, useUpdateBatchTime, useDeleteBatchTime, BatchTime } from '@/hooks/config/useBatchTimes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -22,6 +23,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingBatchTimeGuid, setEditingBatchTimeGuid] = useState<string | null>(null)
+  const [viewingBatchTimeGuid, setViewingBatchTimeGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<BatchTime | null>(null)
   const [search, setSearch] = useState('')
 
@@ -50,6 +52,11 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingBatchTimeGuid(guid)
     openModal('edit-batch-time-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setViewingBatchTimeGuid(guid)
+    openModal('view-batch-time-modal')
   }
 
   function confirmDeleteBatchTime() {
@@ -105,8 +112,9 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.batchTimeGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.batchTimeGuid)}><i className="lni lni-eye"></i> View</button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.batchTimeGuid)}>
                             <i className="lni lni-pencil"></i> Edit
                           </button>}
@@ -138,6 +146,16 @@ export default function Page() {
         showToast={showToast}
         batchTimeGuid={editingBatchTimeGuid}
         updateBatchTime={updateBatchTime}
+      />
+      <ViewBatchTimeModal
+        isOpen={openModals.has('view-batch-time-modal')}
+        onClose={() => closeModal('view-batch-time-modal')}
+        showToast={showToast}
+        batchTimeGuid={viewingBatchTimeGuid}
+        onEdit={() => {
+          closeModal('view-batch-time-modal')
+          openEditModal(viewingBatchTimeGuid!)
+        }}
       />
       <Toast toast={toast} />
 

@@ -23,7 +23,7 @@ const mockRegistrationTypes: RegistrationType[] = [
 export function getRegistrationTypes(): Promise<RegistrationType[]> {
   if (MOCK_AUTH) return Promise.resolve(mockRegistrationTypes)
   return apiGet<RegistrationType[] | null>('/api/v1/admissions/registration-types')
-    .then(data => data ?? [])
+    .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
     .catch(err => {
       // Confirmed via a real response: an empty Registration Type master
       // returns { success: false, code: "bad_request", errors: ["No

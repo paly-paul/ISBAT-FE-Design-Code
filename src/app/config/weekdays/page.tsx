@@ -11,6 +11,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewWeekdayModal } from '@/components/modals/academic/NewWeekdayModal'
 import { EditWeekdayModal } from '@/components/modals/academic/EditWeekdayModal'
+import { ViewWeekdayModal } from '@/components/modals/academic/ViewWeekdayModal'
 import { useWeekdays, useCreateWeekday, useUpdateWeekday, useDeleteWeekday, Weekday } from '@/hooks/config/useWeekdays'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -22,6 +23,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingWeekdayGuid, setEditingWeekdayGuid] = useState<string | null>(null)
+  const [viewingWeekdayGuid, setViewingWeekdayGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Weekday | null>(null)
   const [search, setSearch] = useState('')
 
@@ -48,6 +50,11 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingWeekdayGuid(guid)
     openModal('edit-weekday-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setViewingWeekdayGuid(guid)
+    openModal('view-weekday-modal')
   }
 
   function confirmDeleteWeekday() {
@@ -103,8 +110,9 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.weekDayGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.weekDayGuid)}><i className="lni lni-eye"></i> View</button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.weekDayGuid)}>
                             <i className="lni lni-pencil"></i> Edit
                           </button>}
@@ -136,6 +144,16 @@ export default function Page() {
         showToast={showToast}
         weekDayGuid={editingWeekdayGuid}
         updateWeekday={updateWeekday}
+      />
+      <ViewWeekdayModal
+        isOpen={openModals.has('view-weekday-modal')}
+        onClose={() => closeModal('view-weekday-modal')}
+        showToast={showToast}
+        weekDayGuid={viewingWeekdayGuid}
+        onEdit={() => {
+          closeModal('view-weekday-modal')
+          openEditModal(viewingWeekdayGuid!)
+        }}
       />
       <Toast toast={toast} />
 
