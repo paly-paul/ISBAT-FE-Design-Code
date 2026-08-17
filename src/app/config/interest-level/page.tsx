@@ -11,6 +11,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewInterestLevelModal } from '@/components/modals/academic/NewInterestLevelModal'
 import { EditInterestLevelModal } from '@/components/modals/academic/EditInterestLevelModal'
+import { ViewInterestLevelModal } from '@/components/modals/academic/ViewInterestLevelModal'
 import { useInterestLevels, useCreateInterestLevel, useUpdateInterestLevel, useDeleteInterestLevel, InterestLevel } from '@/hooks/admission/useInterestLevels'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -22,6 +23,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingLevelGuid, setEditingLevelGuid] = useState<string | null>(null)
+  const [viewingLevelGuid, setViewingLevelGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<InterestLevel | null>(null)
   const [search, setSearch] = useState('')
 
@@ -48,6 +50,11 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingLevelGuid(guid)
     openModal('edit-interest-level-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setViewingLevelGuid(guid)
+    openModal('view-interest-level-modal')
   }
 
   function confirmDeleteInterestLevel() {
@@ -102,8 +109,9 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.interestLevelGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.interestLevelGuid)}><i className="lni lni-eye"></i> View</button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.interestLevelGuid)}>
                             <i className="lni lni-pencil"></i> Edit
                           </button>}
@@ -134,6 +142,16 @@ export default function Page() {
         showToast={showToast}
         interestLevelGuid={editingLevelGuid}
         updateInterestLevel={updateInterestLevel}
+      />
+      <ViewInterestLevelModal
+        isOpen={openModals.has('view-interest-level-modal')}
+        onClose={() => closeModal('view-interest-level-modal')}
+        showToast={showToast}
+        interestLevelGuid={viewingLevelGuid}
+        onEdit={() => {
+          closeModal('view-interest-level-modal')
+          openEditModal(viewingLevelGuid!)
+        }}
       />
       <Toast toast={toast} />
 

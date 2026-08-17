@@ -148,7 +148,7 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid, onEdit }: Vie
             {/* STEP 1: Basic Details */}
             {activeSection === 'details' && (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', columnGap: '24px', rowGap: '20px', marginBottom: 32 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '24px', rowGap: '20px', marginBottom: 32 }}>
                   <div>
                     <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Programme Code</div>
                     <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500, fontFamily: 'var(--font-mono)' }}>
@@ -200,7 +200,7 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid, onEdit }: Vie
                 </div>
 
                 <div className="sec-divider">Status &amp; Flags</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', columnGap: '24px', rowGap: '20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '24px', rowGap: '20px' }}>
                   <div>
                     <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--g500)', letterSpacing: '0.04em', marginBottom: '4px' }}>Admission Status</div>
                     <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>

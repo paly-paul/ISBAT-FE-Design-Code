@@ -26,7 +26,7 @@ const mockEnquirySourceMasters: EnquirySourceMaster[] = [
 // Fetch all enquiry sources.
 export function getEnquirySourceMasters(): Promise<EnquirySourceMaster[]> {
   if (MOCK_AUTH) return Promise.resolve(mockEnquirySourceMasters)
-  return apiGet<EnquirySourceMaster[] | null>('/api/v1/admissions/enquiry-sources').then(data => data ?? [])
+  return apiGet<EnquirySourceMaster[] | null>('/api/v1/admissions/enquiry-sources').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Create a new enquiry source and return the saved record.

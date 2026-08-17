@@ -313,6 +313,7 @@ export default function Page() {
         onClose={() => closeModal('intake-view-modal')}
         showToast={showToast}
         intakeGuid={editingIntakeGuid}
+        onEdit={permissions.edit ? () => { closeModal('intake-view-modal'); openModal('intake-edit-modal'); } : undefined}
       />
       <Toast toast={toast} />
 

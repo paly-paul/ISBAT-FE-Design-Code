@@ -23,7 +23,7 @@ const mockBatchTimes: BatchTime[] = [
 // Fetch all batch times.
 export function getBatchTimes(): Promise<BatchTime[]> {
   if (MOCK_AUTH) return Promise.resolve(mockBatchTimes)
-  return apiGet<BatchTime[] | null>('/api/v1/academic/batchtimes').then(data => data ?? [])
+  return apiGet<BatchTime[] | null>('/api/v1/academic/batchtimes').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Create a new batch time and return the saved record.

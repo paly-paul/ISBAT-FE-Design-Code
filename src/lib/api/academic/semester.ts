@@ -19,5 +19,5 @@ const mockSemesters: SemesterOption[] = [
 export function getSemestersForProgram(programGuid: string): Promise<SemesterOption[]> {
   if (MOCK_AUTH) return Promise.resolve(mockSemesters)
   return apiGet<SemesterOption[] | null>(`/api/v1/academic/semesters/dropdownforprogram?programGuid=${programGuid}`)
-    .then(data => data ?? [])
+    .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }

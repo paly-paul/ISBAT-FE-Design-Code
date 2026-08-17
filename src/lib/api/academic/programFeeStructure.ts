@@ -113,7 +113,7 @@ export interface ProgramFeeLineDetail {
 export function getProgramFeeLines(feeHdGuid: string): Promise<ProgramFeeLineDetail[]> {
   if (MOCK_AUTH) return Promise.resolve([])
   return apiGet<ProgramFeeLineDetail[] | null>(`/api/v1/academic/Programfee-structure/fee-lines/${feeHdGuid}`)
-    .then(data => data ?? [])
+    .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Confirmed via a real update-complete payload — same shape as

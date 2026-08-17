@@ -11,6 +11,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewStreamModal } from '@/components/modals/academic/NewStreamModal'
 import { EditStreamModal } from '@/components/modals/academic/EditStreamModal'
+import { ViewStreamModal } from '@/components/modals/academic/ViewStreamModal'
 import { useStreams, useCreateStream, useUpdateStream, useDeleteStream, Stream } from '@/hooks/config/useStreams'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -22,6 +23,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingStreamGuid, setEditingStreamGuid] = useState<string | null>(null)
+  const [viewingStreamGuid, setViewingStreamGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Stream | null>(null)
   const [search, setSearch] = useState('')
 
@@ -48,6 +50,11 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingStreamGuid(guid)
     openModal('edit-stream-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setViewingStreamGuid(guid)
+    openModal('view-stream-modal')
   }
 
   function confirmDeleteStream() {
@@ -103,8 +110,9 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.streamGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.streamGuid)}><i className="lni lni-eye"></i> View</button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.streamGuid)}>
                             <i className="lni lni-pencil"></i> Edit
                           </button>}
@@ -136,6 +144,16 @@ export default function Page() {
         showToast={showToast}
         streamGuid={editingStreamGuid}
         updateStream={updateStream}
+      />
+      <ViewStreamModal
+        isOpen={openModals.has('view-stream-modal')}
+        onClose={() => closeModal('view-stream-modal')}
+        showToast={showToast}
+        streamGuid={viewingStreamGuid}
+        onEdit={() => {
+          closeModal('view-stream-modal')
+          openEditModal(viewingStreamGuid!)
+        }}
       />
       <Toast toast={toast} />
 

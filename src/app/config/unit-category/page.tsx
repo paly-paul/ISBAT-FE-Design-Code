@@ -10,6 +10,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewUnitCategoryModal } from '@/components/modals/academic/NewUnitCategoryModal'
 import { EditUnitCategoryModal } from '@/components/modals/academic/EditUnitCategoryModal'
+import { ViewUnitCategoryModal } from '@/components/modals/academic/ViewUnitCategoryModal'
 import { useUnitCategories, useCreateUnitCategory, useUpdateUnitCategory, useDeleteUnitCategory, UnitCategory } from '@/hooks/config/useUnitCategories'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -20,6 +21,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingUnitCatGuid, setEditingUnitCatGuid] = useState<string | null>(null)
+  const [viewingUnitCatGuid, setViewingUnitCatGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UnitCategory | null>(null)
   const [search, setSearch] = useState('')
 
@@ -45,6 +47,11 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingUnitCatGuid(guid)
     openModal('edit-unit-category-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setViewingUnitCatGuid(guid)
+    openModal('view-unit-category-modal')
   }
 
   function confirmDeleteUnitCategory() {
@@ -99,8 +106,9 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.unitCatGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.unitCatGuid)}><i className="lni lni-eye"></i> View</button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.unitCatGuid)}>
                             <i className="lni lni-pencil"></i> Edit
                           </button>}
@@ -131,6 +139,16 @@ export default function Page() {
         showToast={showToast}
         unitCatGuid={editingUnitCatGuid}
         updateUnitCategory={updateUnitCategory}
+      />
+      <ViewUnitCategoryModal
+        isOpen={openModals.has('view-unit-category-modal')}
+        onClose={() => closeModal('view-unit-category-modal')}
+        showToast={showToast}
+        unitCatGuid={viewingUnitCatGuid}
+        onEdit={() => {
+          closeModal('view-unit-category-modal')
+          openEditModal(viewingUnitCatGuid!)
+        }}
       />
       <Toast toast={toast} />
 

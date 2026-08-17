@@ -19,7 +19,7 @@ const mockInterestLevels: InterestLevel[] = [
 // Fetch all interest levels.
 export function getInterestLevels(): Promise<InterestLevel[]> {
   if (MOCK_AUTH) return Promise.resolve(mockInterestLevels)
-  return apiGet<InterestLevel[] | null>('/api/v1/admissions/interest-levels').then(data => data ?? [])
+  return apiGet<InterestLevel[] | null>('/api/v1/admissions/interest-levels').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Create a new interest level and return the saved record.
