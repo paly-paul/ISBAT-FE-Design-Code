@@ -1,7 +1,6 @@
 'use client'
 import { ModalProps } from '../types'
 import { useCourseUnit } from '@/hooks/academic/useCourseUnits'
-import { useRepetitionTags } from '@/hooks/academic/useRepetitionTags'
 import { AuthError } from '@/lib/api/client'
 import { FailurePopup } from './FailurePopup'
 
@@ -22,7 +21,6 @@ function Field({ label, value, mono, wide }: { label: string; value: React.React
 
 export function ViewCourseUnitModal({ isOpen, onClose, courseUnitGuid, onEdit, canEdit }: ViewCourseUnitModalProps) {
   const { data: courseUnit, isLoading, isError, error } = useCourseUnit(courseUnitGuid, isOpen)
-  const { data: repetitionTags = [] } = useRepetitionTags()
 
   if (!isOpen) return null
 
@@ -56,9 +54,6 @@ export function ViewCourseUnitModal({ isOpen, onClose, courseUnitGuid, onEdit, c
     )
   }
 
-  const repTagName = repetitionTags.find(t => t.courseUnitRepetitionGuid === courseUnit.courseUnitRepetitionGuid)?.tagName || '?"'
-  const repTagCode = repetitionTags.find(t => t.courseUnitRepetitionGuid === courseUnit.courseUnitRepetitionGuid)?.tagCode
-
   return (
     <div className="modal-overlay open">
       <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
@@ -73,9 +68,7 @@ export function ViewCourseUnitModal({ isOpen, onClose, courseUnitGuid, onEdit, c
             <Field label="Course Unit Name" value={courseUnit.courseUnitName} />
             <Field label="Maximum Credits" value={courseUnit.maxCredits} />
             
-            <Field label="Repetition Tag" value={
-              repTagCode ? <><span className="font-mono" style={{ marginRight: 6 }}>{repTagCode}</span>{repTagName}</> : '?"'
-            } wide />
+            <Field label="Repetition Tag" value={courseUnit.courseUnitRepetitionName || '—'} wide />
 
             <div style={{ gridColumn: '1 / -1', marginTop: 12, marginBottom: 8, fontSize: 13, fontWeight: 700, color: 'var(--b800)', borderBottom: '1px solid var(--b100)', paddingBottom: 6 }}>
               Exam Weighting

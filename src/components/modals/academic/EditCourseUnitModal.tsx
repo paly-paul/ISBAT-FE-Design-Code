@@ -5,14 +5,21 @@ import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { CourseUnitInput, getCourseUnitById } from '@/lib/api/academic/courseUnit'
+import { UpsertCourseUnitOutlineInput } from '@/lib/api/academic/courseUnitOutlines'
 import { openDocumentForViewing, downloadDocument } from '@/lib/documentViewer'
-import { useCourseUnit } from '@/hooks/academic/useCourseUnits'
+import { useCourseUnit, useUpsertCourseUnitOutlines } from '@/hooks/academic/useCourseUnits'
 import { useRepetitionTags } from '@/hooks/academic/useRepetitionTags'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
 
-type Topic   = { name: string; taughtBy: string; studySequence: string }
-type Chapter = { title: string; topics: Topic[] }
+// courseUnitOutlineGuid/courseUnitTopicGuid carry the real guid when this
+// chapter/topic came from the loaded record (via useCourseUnit, now backed
+// by GET .../details) — undefined for one freshly added in this editing
+// session. Threaded through to handleSubmit's outline payload so the
+// upsert endpoint updates existing rows in place instead of creating a new
+// one and soft-deleting the old one on every save.
+type Topic   = { name: string; taughtBy: string; studySequence: string; courseUnitTopicGuid?: string }
+type Chapter = { title: string; topics: Topic[]; courseUnitOutlineGuid?: string }
 
 // Study Sequence defaults to the topic's 1-based position within its
 // chapter when added, but is now a real editable field — the user can
@@ -32,6 +39,7 @@ interface EditCourseUnitModalProps extends ModalProps {
 
 export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid, updateCourseUnit }: EditCourseUnitModalProps) {
   const { data: courseUnit, isLoading, isError, error } = useCourseUnit(courseUnitGuid, isOpen)
+  const upsertOutlines = useUpsertCourseUnitOutlines()
 
   const [saved, setSaved]               = useState(false)
   const [failure, setFailure]           = useState<string | null>(null)
@@ -139,6 +147,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
       courseUnit.outlines?.length
         ? courseUnit.outlines.map(o => ({
             title: o.chapterName,
+            courseUnitOutlineGuid: o.courseUnitOutlineGuid,
             // Sort by the server's real studySequence on load so on-screen
             // order matches what's actually stored, and prefill the field
             // itself from that same real value (not array position) — it's
@@ -146,7 +155,7 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
             // just a recomputed 1-based position.
             topics: [...o.topics]
               .sort((a, b) => a.studySequence - b.studySequence)
-              .map(t => ({ name: t.courseUnitTopicDetails, taughtBy: t.employeeGuid, studySequence: String(t.studySequence) })),
+              .map(t => ({ name: t.courseUnitTopicDetails, taughtBy: t.employeeGuid, studySequence: String(t.studySequence), courseUnitTopicGuid: t.courseUnitTopicGuid })),
           }))
         : [blankChapter()]
     )
@@ -224,44 +233,35 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
     onClose()
   }
 
+  // Step 2's Update Course Unit — writes chapters/topics via the separate
+  // outlines endpoint, not updateCourseUnit (that already ran back in
+  // goToStep2). courseUnitOutlineGuid/courseUnitTopicGuid pass through when
+  // a chapter/topic came from the loaded record (see the Chapter/Topic type
+  // comment above), so the upsert updates existing rows in place instead of
+  // creating new ones and soft-deleting the old ones. Sent even when
+  // unchanged — this always replaces the FULL outline state, not a diff of
+  // what's different from load time.
   function handleSubmit() {
-    if (!courseUnitGuid || !courseUnit || !validateStep2()) return
-    const outlines = chapters.map((ch, ci) => ({
+    if (!courseUnitGuid || !validateStep2()) return
+    const outlines: UpsertCourseUnitOutlineInput[] = chapters.map((ch, ci) => ({
+      courseUnitOutlineGuid: ch.courseUnitOutlineGuid ?? null,
       chapter: ci + 1,
       chapterName: ch.title,
       topics: ch.topics.map((t, ti) => ({
+        courseUnitTopicGuid: t.courseUnitTopicGuid ?? null,
         courseUnitTopicDetails: t.name,
         studySequence: +t.studySequence || ti + 1,
-        taughtBy: t.taughtBy,
+        employeeGuid: t.taughtBy,
       })),
     }))
-    updateCourseUnit.mutate(
-      {
-        guid: courseUnitGuid,
-        input: {
-          courseUnitCode: unitCode,
-          courseUnitName: unitName,
-          maxCredits: +credits || 0,
-          chapterCount: chapters.length,
-          courseUnitRepetitionGuid: repetitionTagGuid || null,
-          mid: includeMid ? 1 : 0,
-          cw: includeCW ? 1 : 0,
-          ca: includeCBT ? 1 : 0,
-          // No UI control yet, and not part of the confirmed GET response
-          // to preserve from the loaded record — defaults to approved.
-          approved: 1,
-          cbtWeightage: +cbtFinal || 0,
-          cwWeightage: +cwFinal || 0,
-          ueWeightage: +ueFinal || 0,
-          outlines,
-          syllabus: syllabusFile,
-        },
-      },
+
+    upsertOutlines.mutate(
+      { courseUnitGuid, outlines },
       {
         onSuccess: () => { setSaved(true); showToast('Course unit updated successfully') },
         onError: (error: Error) => {
           const code = error instanceof AuthError ? error.code : undefined
-          setFailure(error.message || `Failed to update course unit${code ? ` (${code})` : ''}. Please try again.`)
+          setFailure(error.message || `Failed to save the course outline${code ? ` (${code})` : ''}. Please try again.`)
         },
       },
     )
@@ -271,15 +271,55 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
   const chapterCap = +numChapters || 0
   const atChapterCap = chapterCap > 0 && chapters.length >= chapterCap
 
+  // Step 1's Save & Continue — PUTs /courseunits/{guid} right away (Unit
+  // Details only, no outlines: put-courseunit.md is explicit that outlines
+  // aren't part of this request, and see the CourseUnitInput comment in
+  // courseUnit.ts for why this call never touches them at all now). Unlike
+  // CourseUnitModal's create flow, there's no "already created" guard
+  // needed here — the guid already exists before this modal ever opens, so
+  // re-clicking Save & Continue just re-PUTs the same fields, which is safe
+  // to repeat (update, not create).
   function goToStep2() {
-    if (!validateStep1()) return
-    // If the user lowered No. of Chapters after already building some out, trim the excess from the end.
-    if (chapterCap > 0 && chapters.length > chapterCap) {
-      setChapters(p => p.slice(0, chapterCap))
-      setChapterErrors(p => p.slice(0, chapterCap))
-      setActiveChapterIdx(i => Math.min(i, chapterCap - 1))
-    }
-    setStep(2)
+    if (!validateStep1() || !courseUnitGuid || !courseUnit) return
+    updateCourseUnit.mutate(
+      {
+        guid: courseUnitGuid,
+        input: {
+          courseUnitCode: unitCode,
+          courseUnitName: unitName,
+          maxCredits: +credits || 0,
+          chapterCount: +numChapters || 0,
+          courseUnitRepetitionGuid: repetitionTagGuid || null,
+          mid: includeMid ? 1 : 0,
+          cw: includeCW ? 1 : 0,
+          ca: includeCBT ? 1 : 0,
+          // Confirmed part of the GET .../details response (see
+          // CourseUnitDetailFields.approved) — preserve the loaded record's
+          // own value rather than forcing it.
+          approved: courseUnit.approved,
+          cbtWeightage: +cbtFinal || 0,
+          cwWeightage: +cwFinal || 0,
+          ueWeightage: +ueFinal || 0,
+          syllabus: syllabusFile,
+        },
+      },
+      {
+        onSuccess: () => {
+          // If the user lowered No. of Chapters after already building some
+          // out, trim the excess from the end.
+          if (chapterCap > 0 && chapters.length > chapterCap) {
+            setChapters(p => p.slice(0, chapterCap))
+            setChapterErrors(p => p.slice(0, chapterCap))
+            setActiveChapterIdx(i => Math.min(i, chapterCap - 1))
+          }
+          setStep(2)
+        },
+        onError: (error: Error) => {
+          const code = error instanceof AuthError ? error.code : undefined
+          setFailure(error.message || `Failed to save unit details${code ? ` (${code})` : ''}. Please try again.`)
+        },
+      },
+    )
   }
 
   // chapter helpers
@@ -867,13 +907,13 @@ export function EditCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
             </button>
           )}
           {step === 1 && (
-            <button className="btn btn-primary" onClick={goToStep2}>
-              Save &amp; Continue <i className="lni lni-arrow-right"></i>
+            <button className="btn btn-primary" disabled={updateCourseUnit.isPending} onClick={goToStep2}>
+              {updateCourseUnit.isPending ? 'Saving…' : <>Save &amp; Continue <i className="lni lni-arrow-right"></i></>}
             </button>
           )}
           {step === 2 && (
-            <button className="btn btn-primary" disabled={updateCourseUnit.isPending} onClick={handleSubmit}>
-              <i className="lni lni-checkmark"></i> {updateCourseUnit.isPending ? 'Updating…' : 'Update Course Unit'}
+            <button className="btn btn-primary" disabled={upsertOutlines.isPending} onClick={handleSubmit}>
+              <i className="lni lni-checkmark"></i> {upsertOutlines.isPending ? 'Updating…' : 'Update Course Unit'}
             </button>
           )}
         </div>
