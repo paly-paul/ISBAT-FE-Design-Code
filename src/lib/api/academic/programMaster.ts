@@ -255,6 +255,91 @@ export function createProgramMaster(input: ProgramMasterInput): Promise<ProgramM
   return apiPostForm<ProgramMaster>('/api/v1/academic/program-master/save-complete', formData)
 }
 
+// --- Plain create (Step 1 of the 3-call save-and-continue flow) ----------
+// See post-program-master.md — a genuinely different endpoint from
+// createProgramMaster/save-complete above, not a variant of it: this one
+// creates ONLY the programme record (no ProgramUnits/FeeStructures in the
+// payload at all) and hands back the server-generated semesters[], each
+// carrying a real semesterGuid the caller then threads into
+// POST /program-course-units (Step 2) and
+// POST /Programfee-structure/hd/save-complete (Step 3). Used by
+// ProgrammeModal's Add-mode wizard, one call per Save & Continue click,
+// instead of the single combined save-complete call above (which is still
+// what Edit mode's update-complete flow uses).
+export type ProgramMasterCreateInput = Omit<ProgramMasterInput, 'programUnits' | 'feeStructures'>
+
+// The doc's own example response for this endpoint only shows
+// { semCode, semName } on each semester, but its prose is explicit that
+// "semesterGuid values from the response are required for subsequent
+// course-unit and fee-structure creation" — treated as a doc/example
+// mismatch rather than semesterGuid genuinely being absent, since Step 2/3
+// have no other way to know these guids. Flag this if a real response ever
+// comes back without it.
+export interface ProgramMasterSemester {
+  semesterGuid: string
+  semCode: number
+  semName: string
+}
+
+export interface ProgramMasterCreated extends Omit<ProgramMaster, 'semesters'> {
+  semesters: ProgramMasterSemester[]
+}
+
+export function createProgramMasterStep1(input: ProgramMasterCreateInput): Promise<ProgramMasterCreated> {
+  if (MOCK_AUTH) {
+    // Mock has no program-level lookup available at this layer to size
+    // semesters realistically — two generically-named semesters is enough
+    // to exercise Step 2/3's semesterGuid plumbing in local/offline work,
+    // same "close enough for a UI prototype" convention as mockIntakes etc.
+    const program: ProgramMasterCreated = {
+      programGuid: String(mockProgramSeq++),
+      programCode: input.programCode,
+      programName: input.programName,
+      pgmStatus: input.pgmStatus,
+      noIa: input.noIa,
+      programGroupGuid: input.programGroupGuid,
+      unitCount: input.unitCount,
+      programLevelGuid: input.programLevelGuid,
+      yearCount: 0,
+      semCount: 2,
+      facultyGuid: input.facultyGuid,
+      dateAcc: input.dateAcc ?? '',
+      accLetter: null,
+      appFee: input.appFee,
+      lateFee: input.lateFee,
+      currencyGuid: input.currencyGuid || null,
+      intakeGuid: input.intakeGuid,
+      streamGuids: [input.streamGuid],
+      semesters: [
+        { semesterGuid: `mock-sem-${mockProgramSeq}-1`, semCode: 1, semName: 'Year One - Semester One' },
+        { semesterGuid: `mock-sem-${mockProgramSeq}-2`, semCode: 2, semName: 'Year One - Semester Two' },
+      ],
+    }
+    mockProgramMasters.push({ ...program, semesters: [] })
+    return Promise.resolve(program)
+  }
+
+  const formData = new FormData()
+  formData.append('programCode', input.programCode)
+  formData.append('programName', input.programName)
+  formData.append('programLevelGuid', input.programLevelGuid)
+  formData.append('pgmStatus', String(input.pgmStatus))
+  formData.append('noIa', String(input.noIa))
+  formData.append('programGroupGuid', input.programGroupGuid)
+  formData.append('unitCount', String(input.unitCount))
+  formData.append('appFee', String(input.appFee))
+  formData.append('lateFee', String(input.lateFee))
+  formData.append('facultyGuid', input.facultyGuid)
+  formData.append('currencyGuid', input.currencyGuid)
+  // Same "omit rather than send a bogus/empty value" conventions as
+  // createProgramMaster above — see its comments on these same fields.
+  if (input.dateAcc) formData.append('dateAcc', input.dateAcc)
+  if (input.streamGuid) formData.append('streamGuid', input.streamGuid)
+  if (input.intakeGuid) formData.append('intakeGuid', input.intakeGuid)
+  if (input.accLetterFile) formData.append('accLetterFile', input.accLetterFile)
+  return apiPostForm<ProgramMasterCreated>('/api/v1/academic/program-master', formData)
+}
+
 // List query for the programme-master table.
 export function getProgramMasters(search = ''): Promise<ProgramMaster[]> {
   if (MOCK_AUTH) return Promise.resolve(mockProgramMasters)

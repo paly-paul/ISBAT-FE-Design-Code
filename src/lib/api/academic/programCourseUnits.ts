@@ -1,4 +1,4 @@
-import { apiGet } from '../client'
+import { apiGet, apiPost } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -25,4 +25,62 @@ export function getProgramCourseUnits(programGuid: string): Promise<ProgramCours
   if (MOCK_AUTH) return Promise.resolve([])
   return apiGet<ProgramCourseUnitDto[] | null>(`/api/v1/academic/program-course-units/${programGuid}`)
     .then(data => data ?? [])
+}
+
+// POST /api/v1/academic/program-course-units — see post-program-course-units.md.
+// Step 2 of ProgrammeModal's Add-mode wizard (bulk-adds every course unit
+// across every semester in one call, keyed by the real semesterGuid values
+// Step 1's createProgramMasterStep1 handed back — semCode alone isn't
+// accepted here, unlike the old combined save-complete payload).
+export interface ProgramCourseUnitBulkItem {
+  semesterGuid: string
+  courseUnitGuid: string
+  streamGuid?: string | null
+  unitTypeGuid?: string | null
+  unitCatGuid?: string | null
+  // 1 = Core, 2 = Elective — same "Specialization has no documented value,
+  // defaults to 1" caveat as ProgramUnitInput.flag in programMaster.ts.
+  flag: number
+}
+
+export interface ProgramCourseUnitBulkInput {
+  programGuid: string
+  // Audit-log label only — not persisted (see the doc's field table).
+  programName?: string
+  units: ProgramCourseUnitBulkItem[]
+}
+
+export interface ProgramCourseUnitBulkResult {
+  courseUnitGuid: string
+  courseUnitName: string
+  courseUnitCode: string
+  semesterGuid: string
+  semName: string
+  flag: number
+  streamGuid: string | null
+  streamName: string | null
+  unitTypeGuid: string | null
+  unitTypeName: string | null
+  unitCatGuid: string | null
+  unitCatName: string | null
+}
+
+export function addProgramCourseUnitsBulk(input: ProgramCourseUnitBulkInput): Promise<ProgramCourseUnitBulkResult[]> {
+  if (MOCK_AUTH) {
+    return Promise.resolve(input.units.map(u => ({
+      courseUnitGuid: u.courseUnitGuid,
+      courseUnitName: '',
+      courseUnitCode: '',
+      semesterGuid: u.semesterGuid,
+      semName: '',
+      flag: u.flag,
+      streamGuid: u.streamGuid ?? null,
+      streamName: null,
+      unitTypeGuid: u.unitTypeGuid ?? null,
+      unitTypeName: null,
+      unitCatGuid: u.unitCatGuid ?? null,
+      unitCatName: null,
+    })))
+  }
+  return apiPost<ProgramCourseUnitBulkResult[]>('/api/v1/academic/program-course-units', input)
 }

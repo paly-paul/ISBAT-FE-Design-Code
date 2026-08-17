@@ -19,8 +19,12 @@ import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntake
 import { useUnitTypes } from '@/hooks/config/useUnitTypes'
 import { useUnitCategories } from '@/hooks/config/useUnitCategories'
 import { useLedgers } from '@/hooks/finance/useLedgers'
-import { ProgramUnitInput, FeeStructureInput, ProgramUnitUpdateInput, FeeStructureUpdateInput, ProgramMasterUpdateInput, useProgramMasterFullDetails } from '@/hooks/academic/useProgramMaster'
-import { useProgramCourseUnits } from '@/hooks/academic/useProgramCourseUnits'
+import {
+  ProgramUnitUpdateInput, FeeStructureUpdateInput, ProgramMasterUpdateInput,
+  ProgramMasterCreateInput, ProgramMasterSemester, useProgramMasterFullDetails, useCreateProgramMasterStep1,
+} from '@/hooks/academic/useProgramMaster'
+import { useProgramCourseUnits, useAddProgramCourseUnitsBulk, ProgramCourseUnitBulkItem } from '@/hooks/academic/useProgramCourseUnits'
+import { useSaveProgramFeeStructureComplete, ProgramFeeStructureSaveCompleteInput } from '@/hooks/academic/useProgramFeeStructure'
 import { AuthError } from '@/lib/api/client'
 
 // Toggle between UGX and USD.
@@ -170,7 +174,13 @@ interface ProgrammeModalProps extends ModalProps {
   // already loaded in page.tsx. Passed in from there rather than issuing a
   // second network call for data already in memory.
   initialCurrencyGuid?: string | null
-  createProgramMaster: {
+  // No longer called by this modal — Add mode now saves through its own
+  // per-step mutations (useCreateProgramMasterStep1/useAddProgramCourseUnitsBulk/
+  // useSaveProgramFeeStructureComplete below) instead of one combined
+  // save-complete call. Kept optional rather than removed so page.tsx's
+  // existing useCreateProgramMaster() wiring isn't a breaking change to
+  // touch as part of this refactor.
+  createProgramMaster?: {
     mutate: (input: ProgramMasterInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
     isPending: boolean
   }
@@ -184,9 +194,57 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const [step, setStep]           = useState(1)
   const [saved, setSaved]         = useState(false)
   const [failure, setFailure]     = useState<string | null>(null)
+
+  // Add-mode-only "save & continue per step" flow (post-program-master.md /
+  // post-program-course-units.md / post-fee-hd-save-complete.md) — genuinely
+  // different from Edit mode, which still submits everything in one shot via
+  // updateProgramMasterComplete at the very end. createdProgramGuid/
+  // createdSemesters are set once Step 1's plain create call succeeds;
+  // createdSemesters' real semesterGuid per semCode is what Steps 2/3 then
+  // submit against instead of the local semCode-based array index. Once set,
+  // createdProgramGuid also means "don't re-POST /program-master" — that
+  // endpoint only ever creates, so a second call after Step 1 already
+  // succeeded would either hit duplicate_program_code or silently create a
+  // second, orphaned programme.
+  const [createdProgramGuid, setCreatedProgramGuid] = useState<string | null>(null)
+  const [createdSemesters, setCreatedSemesters]     = useState<ProgramMasterSemester[]>([])
+  // Same "don't re-POST" guard as createdProgramGuid, for Step 2's bulk-add —
+  // resubmitting unchanged units would hit duplicate_program_unit.
+  const [unitsSubmitted, setUnitsSubmitted] = useState(false)
+  const createProgramStep1 = useCreateProgramMasterStep1()
+  const addProgramCourseUnits = useAddProgramCourseUnitsBulk()
+  const saveFeeStructureComplete = useSaveProgramFeeStructureComplete()
+  // Add mode only — Step 1's programme record already exists once this is
+  // set, so its own fields lock (see the banner + pointerEvents wrapper in
+  // Step 1's JSX below) rather than risking a duplicate/orphaned create.
+  const programAlreadyCreated = mode !== 'edit' && !!createdProgramGuid
+  // Step 1's real semesters are keyed by semCode (1-based), same as the
+  // local semUnits/feeStructures arrays' 0-based index + 1 — so semCode is
+  // the join key between "what the user is editing locally" and "what the
+  // server actually generated a semesterGuid for".
+  //
+  // CONFIRMED GAP (2026-08): post-program-master.md's prose says the create
+  // response's semesters[] carries a semesterGuid Steps 2/3 need, but a real
+  // response only ever has { semCode, semName } — no guid, matching the
+  // doc's own (misleading) example rather than its prose. Neither
+  // full-details' semesters[] nor program-course-units' GET (which only
+  // lists semesters that already have a unit on them — no help for a brand
+  // new programme) has one either. Until the backend team confirms where a
+  // fresh programme's semesterGuids actually come from, this always
+  // resolves to '' — see the guards in handleStep2Continue and Step 3's
+  // submit below, which refuse to submit an empty semesterGuid rather than
+  // send one and get back a confusing not_found.
+  function semesterGuidForIndex(si: number): string {
+    return createdSemesters.find(s => s.semCode === si + 1)?.semesterGuid ?? ''
+  }
   const [feeStructures, setFeeStructures] = useState<FeeStructure[]>(() => makeDefaultFeeStructures(1))
   const [activeFeeIdx, setActiveFeeIdx]   = useState(0)
   const [feeAccordion, setFeeAccordion]   = useState(0)
+  // Which fee item is currently being dragged, for Step 3's drag-to-reorder
+  // — scoped to a semester index (si) so a drop is only honored within the
+  // same semester's list it started in, never across semesters.
+  const [draggedItem, setDraggedItem] = useState<{ si: number; idx: number } | null>(null)
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
   // Copy Fee Code (program_master_frontend_fixes.md, "Programme Details -
   // Fee Section Bugs" #2) — controlled value for the "Copy Fee Code"
   // SearchSelect below; previously had no value/onChange at all, so picking
@@ -674,6 +732,76 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     // return true
   }
 
+  // Step 1's Save & Continue in Add mode — see post-program-master.md.
+  // Edit mode never calls this; its Save & Continue stays pure local
+  // validation (see the footer button below).
+  async function handleStep1Continue() {
+    if (!validateStep1()) return
+    // Already created this session — never re-POST (see the
+    // createdProgramGuid comment above). Fields are locked in the UI too,
+    // so this only fires if the user clicks Continue again without having
+    // been able to change anything.
+    if (createdProgramGuid) { setStep(2); return }
+
+    const input: ProgramMasterCreateInput = {
+      programCode, programName, programLevelGuid, pgmStatus, noIa, programGroupGuid,
+      unitCount: +unitCount || 0, appFee: +appFee || 0, lateFee: +lateFee || 0,
+      facultyGuid, currencyGuid, dateAcc: dateAcc ? `${dateAcc}T00:00:00` : null,
+      streamGuid: streamGuids[0] || '', intakeGuid, accLetterFile,
+    }
+    try {
+      const created = await createProgramStep1.mutateAsync(input)
+      setCreatedProgramGuid(created.programGuid)
+      setCreatedSemesters(created.semesters)
+      showToast('Programme details saved')
+      setStep(2)
+    } catch (err) {
+      const code = err instanceof AuthError ? err.code : undefined
+      setFailure(err instanceof Error ? (err.message || `Failed to save programme details${code ? ` (${code})` : ''}. Please try again.`) : 'Failed to save programme details. Please try again.')
+    }
+  }
+
+  // Step 2's Save & Continue in Add mode — see post-program-course-units.md.
+  // Skips the API call entirely when no units were added (same "nothing to
+  // submit" precedent as Step 3's blank fee structures), and never re-POSTs
+  // once this session's units already saved (see unitsSubmitted above).
+  async function handleStep2Continue() {
+    if (!validateStep2()) return
+    if (unitsSubmitted) { setStep(3); return }
+    if (!createdProgramGuid) { setFailure('Programme details have not been saved yet — go back to Step 1.'); return }
+
+    const units: ProgramCourseUnitBulkItem[] = semUnits.flatMap((us, si) =>
+      us.map(u => ({
+        semesterGuid: semesterGuidForIndex(si),
+        courseUnitGuid: u.guid,
+        streamGuid: u.streamGuid || streamGuids[0] || null,
+        unitTypeGuid: u.unitType || null,
+        unitCatGuid: u.unitCat || null,
+        flag: 1,
+      }))
+    )
+
+    if (units.length === 0) { setUnitsSubmitted(true); setStep(3); return }
+
+    // See the CONFIRMED GAP note on semesterGuidForIndex above — refuse to
+    // submit rather than send a unit with semesterGuid: '' and get back a
+    // not_found that doesn't explain why.
+    if (units.some(u => !u.semesterGuid)) {
+      setFailure('Course units can\'t be saved yet — the server hasn\'t provided a semester ID for this programme. This is a known backend gap, not something fixable from this form.')
+      return
+    }
+
+    try {
+      await addProgramCourseUnits.mutateAsync({ programGuid: createdProgramGuid, programName, units })
+      setUnitsSubmitted(true)
+      showToast('Course units saved')
+      setStep(3)
+    } catch (err) {
+      const code = err instanceof AuthError ? err.code : undefined
+      setFailure(err instanceof Error ? (err.message || `Failed to save course units${code ? ` (${code})` : ''}. Please try again.`) : 'Failed to save course units. Please try again.')
+    }
+  }
+
   if (!isOpen) return null
 
   const activeFeeStruct = feeStructures[activeFeeIdx]
@@ -704,7 +832,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const anyCurrencyGaps   = feeStructures.some(feeStructHasCurrencyGaps)
   const anyLedgerGaps     = feeStructures.some(feeStructHasLedgerGaps)
   const allFeeComplete    = feeStructures.every(feeStructComplete) && !anyCurrencyGaps && !anyLedgerGaps
-  const isSaving = mode === 'edit' ? !!updateProgramMasterComplete?.isPending : createProgramMaster.isPending
+  const isSaving = mode === 'edit'
+    ? !!updateProgramMasterComplete?.isPending
+    : createProgramStep1.isPending || addProgramCourseUnits.isPending || saveFeeStructureComplete.isPending
 
   function handleClose() {
     prefilledForRef.current = null
@@ -718,6 +848,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setFacultyGuid(''); setAppFee(''); setLateFee(''); setCurrencyGuid(''); setUnitCount('')
     setDateAcc(''); setStreamGuids([])
     setIntakeGuid(''); setPgmStatus(true); setNoIa(false); setAccLetterFile(null); setStep1Errors({})
+    setCreatedProgramGuid(null); setCreatedSemesters([]); setUnitsSubmitted(false)
     onClose()
   }
 
@@ -807,28 +938,22 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       return
     }
 
+    // Step 3 of the Add-mode wizard — see post-fee-hd-save-complete.md.
+    // Steps 1/2 (programme + course units) are already saved by this point
+    // (handleStep1Continue/handleStep2Continue below), so all that's left
+    // here is the fee structure(s). Async now (was createProgramMaster.mutate
+    // with callbacks) since it may need to POST more than one structure —
+    // the endpoint only ever creates ONE header per call, unlike the old
+    // combined save-complete payload's FeeStructures[] array, so a
+    // programme with multiple fee structures needs one call per structure.
     if (!validateStep1()) { setStep(1); return }
     if (!validateStep2()) { setStep(2); return }
-
-    const programUnits: ProgramUnitInput[] = semUnits.flatMap((units, si) =>
-      units.map(u => ({
-        semCode: si + 1,
-        courseUnitGuid: u.guid,
-        // Prefer this unit's own specialization pick (only settable when its
-        // Unit Category is "Specialization"), falling back to the first
-        // Step 1 pick otherwise.
-        streamGuid: u.streamGuid || streamGuids[0] || '',
-        unitType: u.unitType,
-        unitCat: u.unitCat,
-        // See the note on the Update branch above — confirmed via
-        // UpdateComplete.bru's example, was an unconfirmed 0 guess before.
-        flag: 1,
-      }))
-    )
+    if (!createdProgramGuid) { setFailure('Programme details have not been saved yet — go back to Step 1.'); return }
 
     // Fee Structure is optional — an untouched structure is never sent, not
     // even as an empty shell (see feeStructureIsBlank above).
-    const feeStructuresPayload: FeeStructureInput[] = feeStructures.filter(s => !feeStructureIsBlank(s)).map(s => ({
+    const feeStructuresPayload: ProgramFeeStructureSaveCompleteInput[] = feeStructures.filter(s => !feeStructureIsBlank(s)).map(s => ({
+      programGuid: createdProgramGuid,
       feeCode: s.feeCode,
       feeDesc: s.description,
       // No UI toggle for this yet — every structure created here defaults
@@ -843,61 +968,42 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
       calcType: +s.discountType || 1,
       amtPer: s.discountAmount ? +s.discountAmount : null,
-      // Confirmed per program_master_frontend_fixes.md: the backend wants
-      // the real IntakeGuid here, not an integer IntakeCode — see the note
-      // on FeeStructureInput.intakeGuid.
       intakeGuid: s.intakeGuid || null,
-      // LedgerNum is auto-generated from each item's 1-based position — see
-      // the identical note on the Update branch above.
+      // Real semesterGuid from Step 1's response, not the semCode-keyed
+      // convention the old combined endpoint used — see semesterGuidForIndex.
+      // LedgerNum is still auto-generated from each item's 1-based position,
+      // same "position IS the sequence" convention as before.
       feeLines: s.semFees.flatMap((items, si) =>
-        items.map((item, idx) => {
-          const ledger = ledgers.find(l => l.ledgerGuid === item.ledger)
-          return {
-            intLedger: ledger?.intLedger ?? 0,
-            ledgerGuid: item.ledger,
-            ledgerNum: idx + 1,
-            intCurrency: +item.currency || 0,
-            // Real currencyGuid — see FeeLineInput.currencyGuid note; this is
-            // what actually satisfies the backend's "Currency is required"
-            // check, intCurrency alone isn't enough.
-            currencyGuid: item.currencyGuid,
-            semCode: si + 1,
-            amount: +item.amount || 0,
-          }
-        })
+        items.map((item, idx) => ({
+          semesterGuid: semesterGuidForIndex(si),
+          ledgerGuid: item.ledger,
+          currencyGuid: item.currencyGuid,
+          ledgerNum: idx + 1,
+          amount: +item.amount || 0,
+        }))
       ),
     }))
 
-    createProgramMaster.mutate(
-      {
-        programCode,
-        programName,
-        programLevelGuid,
-        pgmStatus,
-        noIa,
-        programGroupGuid,
-        unitCount: +unitCount || 0,
-        appFee: +appFee || 0,
-        lateFee: +lateFee || 0,
-        facultyGuid,
-        currencyGuid,
-        dateAcc: dateAcc ? `${dateAcc}T00:00:00` : null,
-        // Top-level field only accepts one specialization — see the
-        // streamGuids state comment above.
-        streamGuid: streamGuids[0] || '',
-        intakeGuid,
-        programUnits,
-        feeStructures: feeStructuresPayload,
-        accLetterFile,
-      },
-      {
-        onSuccess: () => { setSaved(true); showToast('Programme saved successfully') },
-        onError: (error: Error) => {
-          const code = error instanceof AuthError ? error.code : undefined
-          setFailure(error.message || `Failed to save programme${code ? ` (${code})` : ''}. Please try again.`)
-        },
-      },
-    )
+    // See the CONFIRMED GAP note on semesterGuidForIndex above — refuse to
+    // submit rather than send a fee line with semesterGuid: '' and get back
+    // a not_found that doesn't explain why.
+    if (feeStructuresPayload.some(s => s.feeLines.some(l => !l.semesterGuid))) {
+      setFailure('Fee structure can\'t be saved yet — the server hasn\'t provided a semester ID for this programme. This is a known backend gap, not something fixable from this form.')
+      return
+    }
+
+    ;(async () => {
+      try {
+        for (const payload of feeStructuresPayload) {
+          await saveFeeStructureComplete.mutateAsync(payload)
+        }
+        setSaved(true)
+        showToast('Programme saved successfully')
+      } catch (err) {
+        const code = err instanceof AuthError ? err.code : undefined
+        setFailure(err instanceof Error ? (err.message || `Failed to save fee structure${code ? ` (${code})` : ''}. Please try again.`) : 'Failed to save fee structure. Please try again.')
+      }
+    })()
   }
 
   // Old repeatable multi-specialization helpers — superseded by the single
@@ -1034,6 +1140,27 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       }
     }))
   }
+  // Drag-and-drop counterpart to moveItem above — moves an item to any
+  // arbitrary position in one go (a drag can skip several rows at once),
+  // rather than moveItem's single-step swap with its immediate neighbor.
+  // Reuses the same "position IS the LedgerNum sequence" convention, so a
+  // drag reorders Ledger Priority exactly the way the Pri. arrows do.
+  function moveItemTo(si: number, from: number, to: number) {
+    if (from === to) return
+    setFeeStructures(prev => prev.map((s, i) => {
+      if (i !== activeFeeIdx) return s
+      return {
+        ...s,
+        semFees: s.semFees.map((items, j) => {
+          if (j !== si || to < 0 || to >= items.length) return items
+          const next = [...items]
+          const [moved] = next.splice(from, 1)
+          next.splice(to, 0, moved)
+          return next
+        }),
+      }
+    }))
+  }
 
   /* ── semester count helpers — no fixed count any more; Course Unit
      Allocation and Fee Structure share one dynamic list of slots so a
@@ -1133,6 +1260,13 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           {/* ── Step 1: Programme Details ──────────────────────── */}
           {step === 1 && (
             <div>
+              {programAlreadyCreated && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, padding: '10px 14px', background: 'var(--green-bg)', border: '1.5px solid var(--green-bd)', borderRadius: 'var(--rsm)', fontSize: 12.5, color: 'var(--g700)' }}>
+                  <i className="lni lni-checkmark-circle" style={{ color: 'var(--green)', fontSize: 16 }}></i>
+                  Programme details already saved — locked to avoid creating a duplicate. Continue below to Course Unit Allocation.
+                </div>
+              )}
+              <div style={programAlreadyCreated ? { opacity: .55, pointerEvents: 'none' } : undefined}>
               <div className="g3">
                 <div className="fg">
                   <div className="lbl">Programme Code <span className="req">*</span></div>
@@ -1385,6 +1519,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   </div>
                 </div>
               </div>
+              </div>
             </div>
           )}
 
@@ -1594,8 +1729,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                                 a manually-typed number; use the Pri. arrows to reorder it — see
                                 program_master_frontend_fixes.md's "not auto-incrementing" fix. */}
                             {items.length > 0 && (
-                              <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 90px 110px 150px 32px', gap: 6, padding: '0 0 4px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                <span style={{ textAlign: 'center' }}>Pri.</span><span>Ledger</span><span>Ledger Priority</span><span>Amount</span><span>Currency</span><span></span>
+                              <div style={{ display: 'grid', gridTemplateColumns: '18px 32px 1fr 90px 110px 150px 32px', gap: 6, padding: '0 0 4px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <span></span><span style={{ textAlign: 'center' }}>Pri.</span><span>Ledger</span><span>Ledger Priority</span><span>Amount</span><span>Currency</span><span></span>
                               </div>
                             )}
                             <div className="flex flex-col gap-1">
@@ -1603,13 +1738,40 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                                 <div className="text-g400 italic" style={{ fontSize: 12.5, marginBottom: 8 }}>No fee items — click &ldquo;Add Fee Item&rdquo; to begin.</div>
                               )}
                               {items.map((f, idx) => (
-                                <div key={f.id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 90px 110px 150px 32px', gap: 6, alignItems: 'center' }}>
+                                <div
+                                  key={f.id}
+                                  onDragOver={e => { if (draggedItem?.si === si) { e.preventDefault(); setDragOverIdx(idx) } }}
+                                  onDragLeave={() => setDragOverIdx(prev => (prev === idx ? null : prev))}
+                                  onDrop={e => {
+                                    e.preventDefault()
+                                    if (draggedItem && draggedItem.si === si) moveItemTo(si, draggedItem.idx, idx)
+                                    setDraggedItem(null); setDragOverIdx(null)
+                                  }}
+                                  style={{
+                                    display: 'grid', gridTemplateColumns: '18px 32px 1fr 90px 110px 150px 32px', gap: 6, alignItems: 'center',
+                                    borderRadius: 'var(--rxs)', transition: 'background .12s',
+                                    background: dragOverIdx === idx && draggedItem?.si === si && draggedItem.idx !== idx ? 'var(--b50)' : undefined,
+                                  }}
+                                >
+                                  {/* Drag handle — the row itself is the drop target (onDragOver/
+                                      onDrop above), but only this handle is draggable, so grabbing
+                                      the Ledger/Amount/Currency controls to type or pick a value
+                                      never accidentally starts a drag. */}
+                                  <div
+                                    draggable
+                                    onDragStart={() => setDraggedItem({ si, idx })}
+                                    onDragEnd={() => { setDraggedItem(null); setDragOverIdx(null) }}
+                                    title="Drag to reorder"
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', cursor: 'grab', color: 'var(--g300)', fontSize: 13 }}
+                                  >
+                                    <i className="lni lni-menu"></i>
+                                  </div>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
                                     <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(si, idx, -1)} disabled={idx === 0}><i className="lni lni-chevron-up"></i></button>
                                     <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(si, idx, 1)} disabled={idx === items.length - 1}><i className="lni lni-chevron-down"></i></button>
                                   </div>
                                   <SearchSelect placeholder="— Select Ledger —" options={ledgerOptions} value={f.ledger} onChange={val => updateItem(si, f.id, 'ledger', val)} />
-                                  <input className="ctrl" value={idx + 1} readOnly disabled title="Auto-assigned from this item's position — use the Pri. arrows to reorder" />
+                                  <input className="ctrl" value={idx + 1} readOnly disabled title="Auto-assigned from this item's position — drag the handle or use the Pri. arrows to reorder" />
                                   <input className="ctrl" value={f.amount} onChange={e => updateItem(si, f.id, 'amount', e.target.value)} type="number" min={0} placeholder="0" />
                                   <SearchSelect placeholder="— Currency —" options={financeCurrencyOptions} value={f.currencyGuid} onChange={val => selectFeeItemCurrency(si, f.id, val)} />
                                   <button className="btn btn-danger btn-sm" style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => removeItem(si, f.id)}><i className="lni lni-trash-can"></i></button>
@@ -1643,6 +1805,13 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           const assignedCodes = semUnits.flatMap(semUnitsForSem => semUnitsForSem.map(u => u.code))
           const availableOpts = courseUnitOptions.filter(o => !assignedCodes.includes(o.code))
           return (
+            <>
+            {mode !== 'edit' && unitsSubmitted && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, padding: '10px 14px', background: 'var(--green-bg)', border: '1.5px solid var(--green-bd)', borderRadius: 'var(--rsm)', fontSize: 12.5, color: 'var(--g700)' }}>
+                <i className="lni lni-checkmark-circle" style={{ color: 'var(--green)', fontSize: 16 }}></i>
+                Course units already saved for this programme — further changes here won&apos;t be re-submitted. Continue below to Fee Structure.
+              </div>
+            )}
             <div className="fsm-layout">
 
               {/* Left sidebar — one entry per semester. No fixed count any
@@ -1778,6 +1947,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                 />
               </div>
             </div>
+            </>
           )
         })()}
 
@@ -1790,8 +1960,26 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             </button>
           )}
           {step < 3 && (
-            <button className="btn btn-primary" onClick={() => { if (step === 1 && !validateStep1()) return; if (step === 2 && !validateStep2()) return; setStep(s => s + 1) }}>
-              Save &amp; Continue <i className="lni lni-arrow-right"></i>
+            <button
+              className="btn btn-primary"
+              disabled={isSaving}
+              onClick={() => {
+                // Edit mode: pure local validation + advance, same as
+                // before — the whole programme is still saved in one shot
+                // at Step 3 via updateProgramMasterComplete.
+                if (mode === 'edit') {
+                  if (step === 1 && !validateStep1()) return
+                  if (step === 2 && !validateStep2()) return
+                  setStep(s => s + 1)
+                  return
+                }
+                // Add mode: each step's own API call per
+                // post-program-master.md / post-program-course-units.md.
+                if (step === 1) handleStep1Continue()
+                else handleStep2Continue()
+              }}
+            >
+              {isSaving ? 'Saving…' : <>Save &amp; Continue <i className="lni lni-arrow-right"></i></>}
             </button>
           )}
           {step === 3 && (anyCurrencyGaps || anyLedgerGaps) && (
