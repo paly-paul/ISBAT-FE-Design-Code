@@ -33,6 +33,21 @@ slug.
   "permissions": null,
   "children": [
     {
+      "name": "Overview",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Dashboard",
+          "icon": "lni lni-dashboard",
+          "url": "/academic/acad-dashboard",
+          "permissions": { "get": true },
+          "children": []
+        }
+      ]
+    },
+    {
       "name": "Academic Core",
       "icon": null,
       "url": null,
@@ -42,6 +57,13 @@ slug.
           "name": "Intake Master",
           "icon": "lni lni-calendar",
           "url": "/academic/intake-master",
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
+          "children": []
+        },
+        {
+          "name": "Bulk Intake Edit",
+          "icon": "lni lni-layers",
+          "url": "/academic/bulk-intake-edit",
           "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
@@ -74,6 +96,13 @@ slug.
           "children": []
         },
         {
+          "name": "Room Management",
+          "icon": "lni lni-home",
+          "url": "/academic/room-management",
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
+          "children": []
+        },
+        {
           "name": "Session Movement",
           "icon": "lni lni-reload",
           "url": "/academic/session-movement",
@@ -88,6 +117,13 @@ slug.
       "url": null,
       "permissions": null,
       "children": [
+        {
+          "name": "Repetition Tag",
+          "icon": "lni lni-reload",
+          "url": "/academic/repetition-tag",
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
+          "children": []
+        },
         {
           "name": "Course Units",
           "icon": "lni lni-book",
@@ -106,7 +142,7 @@ slug.
         {
           "name": "Programme Level",
           "icon": "lni lni-layers",
-          "url": "/academic/a-level-master",
+          "url": "/academic/programme-level",
           "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
@@ -122,6 +158,13 @@ slug.
           "icon": "lni lni-graduation",
           "url": "/academic/programme-master",
           "permissions": { "add": true, "delete": true, "edit": true, "get": true },
+          "children": []
+        },
+        {
+          "name": "Programme Approval",
+          "icon": "lni lni-check-box",
+          "url": "/academic/programme-approval",
+          "permissions": { "get": true, "approve": true },
           "children": []
         },
         {

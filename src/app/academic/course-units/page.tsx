@@ -78,12 +78,17 @@ export default function Page() {
     })
   }
 
-  // Real server-side pagination — fetches PAGE_SIZE (10) rows at a time
-  // instead of the whole table up front, refetching the next 10 only when
-  // the user actually pages forward. Was previously a single pageSize=1000
-  // useCourseUnits() call backing a client-side usePagination() slice, which
-  // made the initial load wait on the entire table before showing anything.
-  const { data, isLoading } = useCourseUnits(page, PAGE_SIZE)
+  // Real server-side pagination AND search — fetches PAGE_SIZE (10) rows at
+  // a time instead of the whole table up front, refetching the next 10 only
+  // when the user actually pages forward, and `search` is a real server-side
+  // filter (get-courseunits.md), not a client-side one. Was previously a
+  // single pageSize=1000 useCourseUnits() call backing a client-side
+  // usePagination() slice, which made the initial load wait on the entire
+  // table before showing anything — and, once the real table grew past
+  // 1000 rows, silently missed anything past that cap when searching too
+  // (confirmed live: a freshly created unit past row 1000 of 1500 never
+  // showed up in search results until this switched to server-side search).
+  const { data, isLoading } = useCourseUnits(page, PAGE_SIZE, search)
 
   // "All Programmes" dropdown — there's no programGuid filter on the
   // course-units endpoint itself (CourseUnit carries no programme field at
@@ -97,23 +102,21 @@ export default function Page() {
   const { data: programCourseUnits = [], isLoading: isProgramCourseUnitsLoading } = useProgramCourseUnits(programFilter || null, !!programFilter)
   const programCourseUnitGuids = useMemo(() => new Set(programCourseUnits.map(u => u.courseUnitGuid)), [programCourseUnits])
 
-  // Filtering by search term or by programme both need the whole table in
-  // memory (a programme's matches, or a search match, can land on any server
-  // page) — same "switch to the full list" trick used for search alone
-  // before the programme filter was added.
-  const usingFullList = !!search.trim() || !!programFilter
+  // Only the programme filter still needs the whole table in memory — course
+  // units carry no programme field of their own to filter by server-side,
+  // so matching against a picked programme has to happen client-side against
+  // every row. Search no longer needs this (see useCourseUnits above): it's
+  // a real server-side filter now, so it stays correct and paginated no
+  // matter how large the real table gets, without a client-side row cap.
+  const usingFullList = !!programFilter
 
-  // Fetched eagerly on mount (no `enabled` gate), not lazily on first search
-  // like before — this used to only start once `usingFullList` went true,
-  // meaning the very first keystroke into the search box always paid for a
-  // real network round trip live, which is what made typing feel slow
-  // compared to programme-master (whose useProgramMasters() has no such gate
-  // and is already warm in cache by the time anyone types). This doesn't
-  // reintroduce the slow-initial-load problem useCourseUnits(page, PAGE_SIZE)
-  // was built to avoid — the visible table still renders off that separate,
-  // fast paginated query; this one just warms quietly in the background so
-  // it's normally already cached (staleTime/gcTime: Infinity) by the time
-  // usingFullList flips true and the table actually switches to reading it.
+  // Fetched eagerly on mount (no `enabled` gate) so picking a programme
+  // doesn't pay for a cold fetch on the first click — this list is still
+  // capped at 1000 rows (ALL_COURSE_UNITS_PAGE_SIZE), which is a real,
+  // known gap for programme filtering once the table exceeds that (same
+  // class of bug search just had) — not fixed here since there's no
+  // server-side "filter by programme" query param on this endpoint to
+  // switch to instead.
   const { data: allCourseUnits = [], isLoading: isAllCourseUnitsLoading } = useAllCourseUnits()
   const rows = data?.items ?? []
   const searchRows = usingFullList ? allCourseUnits : rows
@@ -122,12 +125,15 @@ export default function Page() {
   const deleteCourseUnit = useDeleteCourseUnit()
   const loading = isLoading || (usingFullList && isAllCourseUnitsLoading) || (!!programFilter && isProgramCourseUnitsLoading)
 
-  // Reset back to page 1 whenever a search term or programme filter is
-  // (de)activated — the previous page offset almost never lands on a valid
-  // page of the newly-filtered result set.
+  // Reset back to page 1 whenever the search term or programme filter
+  // changes — the previous page offset almost never lands on a valid page
+  // of the newly-filtered result set. Depends on search/programFilter
+  // directly (not usingFullList) since search now re-queries the server on
+  // every keystroke even without the programme filter active.
   useEffect(() => {
-    if (usingFullList && page !== 1) setPage(1)
-  }, [usingFullList, page])
+    setPage(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, programFilter])
 
   const filteredRows = searchRows.filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))

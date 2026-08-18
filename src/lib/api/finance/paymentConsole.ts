@@ -29,10 +29,11 @@ interface ApplicationSummaryListResponse {
   pageSize: number
 }
 
-// Confirmed via GetStudentProfile.bru. The docs mention the response also
-// carries "any active discount assignments" but give no field name/shape
-// for it — omitted here rather than guessing; add it once a real sample
-// response confirms the shape.
+// Confirmed via payment-console/get-student-profile.md plus a real live
+// response — the live DTO carries more than the spec's own sample shows.
+// The docs mention the response also carries "any active discount
+// assignments" but give no field name/shape for it — still omitted here
+// rather than guessing.
 export interface StudentProfile {
   applicationGuid: string
   appRefNo: string
@@ -54,57 +55,101 @@ export interface StudentProfile {
   gender: number | null
   action: number | null
   universityEmail: string | null
+  // Confirmed via a real live student-profile response — not in the .md
+  // spec's own sample. studentGuid is the one that matters functionally:
+  // it's the studentGuid outstanding-ledgers/payable-ledgers/createPayment
+  // all optionally accept (see get-outstanding-ledgers.md,
+  // get-payable-ledgers.md) — null until the application becomes an
+  // enrolled student, same lifecycle as studentRegNo/studentNum below.
+  studentGuid: string | null
+  studentRegNo: string | null
+  studentNum: string | null
+  studentName: string | null
+  // Pre-resolved display names, server-side — prefer these over the
+  // client-side GUID lookups (useProgramMasters/useBatches/
+  // useSemestersForProgram) the page falls back to when a field here comes
+  // back null, which a live sample confirms it can (programName, batchCode
+  // and semesterName were all null on an application with a fee structure
+  // and program level otherwise fully resolved).
+  programCode: string | null
+  programName: string | null
+  programLevelGuid: string | null
+  levelCode: string | null
+  levelName: string | null
+  semesterName: string | null
+  batchCode: string | null
+  batchIntakeCode: string | null
+  feeCode: string | null
+  intType: string | null
+  admissionTypeLabel: string | null
+  // Type genuinely unconfirmed — null on every live sample seen so far, no
+  // spec coverage, and the name isn't self-explanatory enough to guess a
+  // shape for. Left as unknown rather than assuming string; narrow it once
+  // a non-null sample turns up.
+  ucam: unknown
 }
 
-// Confirmed via GetOutstandingLedgers.bru — tuition-only ledger lines for
-// the student's current programme/semester. Unlike the old mock's flat
-// Admission/Registration/Tuition/NCHE/Guild list, this endpoint has no
-// "priority" or fee-category concept at all — GetAllOutstandingLedgers
+// Confirmed via payment-console/get-outstanding-ledgers.md — tuition-only
+// ledger lines for the student's current programme/semester. Unlike the old
+// mock's flat Admission/Registration/Tuition/NCHE/Guild list, this endpoint
+// has no "priority" or fee-category concept at all — GetAllOutstandingLedgers
 // (not wired here) is what covers the other/NCHE/guild categories.
+//
+// GUID-keyed (ledgerGuid/currencyGuid), not int-keyed — a correction from an
+// earlier version of this file that keyed rows by intLedger/intCurrency per
+// a since-superseded .bru sample. Don't reintroduce the int fields; the spec
+// doc is explicit that the DTO carries GUIDs.
 export interface OutstandingLedger {
-  intLedger: number
+  ledgerGuid: string | null
   semesterGuid: string | null
   ledgerName: string
-  ledgerNum: string | null
-  intCurrency: number
+  ledgerNum: number | null
+  currencyGuid: string | null
   currencyName: string
   ledgerAmount: number
   paidAmount: number
   outstanding: number
 }
 
-// Confirmed via GetPaymentHistory.bru — category/payType are documented
-// with explicit int↔label mappings right in the spec (unlike most other
-// int-enum fields in this codebase), so labelling them client-side here is
-// safe, not a guess.
+// Confirmed via payment-console/get-payment-history.md — category is
+// documented with an explicit int↔label mapping right in the spec (unlike
+// most other int-enum fields in this codebase), so PAYMENT_CATEGORY_LABELS
+// below is safe, not a guess. payType, however, comes back **pre-resolved**
+// as `{ value, name }` (and null for NCHE/guild rows, which have no
+// pay-type column) — a correction from an earlier version of this file that
+// treated it as a bare number per a since-superseded .bru sample; use
+// `payType.name` directly instead of cross-referencing PAY_TYPE_LABELS for
+// this endpoint. Likewise currencyGuid, not intCurrency; receiptBookGuid,
+// not intReceipt.
 export interface PaymentHistoryEntry {
   paymentGuid: string
   category: number
   paymentCode: string
   payDate: string
   amount: number
-  intCurrency: number
+  currencyGuid: string | null
   currencyName: string
   receipt: string | null
-  intReceipt: number | null
+  receiptBookGuid: string | null
   bookCode: string | null
-  payType: number
+  payType: { value: number; name: string } | null
 }
 
-// Confirmed via GetPayableLedgers.bru — given a tuition amount + currency +
-// date, the backend returns how it would actually be allocated (discount
-// and rounding lines included, flagged explicitly rather than needing to
-// be inferred). intCurrency here, not currencyGuid — a different currency
-// key from CreatePayment's own currencyGuid below; both are sourced from
-// the same useFinanceCurrencies() record (it carries both fields), so
-// don't cross-reference two different currency lists for this.
+// Confirmed via payment-console/get-payable-ledgers.md — given a tuition
+// amount + currency + date, the backend returns how it would actually be
+// allocated (discount and rounding lines included, flagged explicitly
+// rather than needing to be inferred). currencyGuid here — same GUID as
+// CreatePayment's own currencyGuid below, both sourced from the same
+// useFinanceCurrencies() record — not intCurrency, which an earlier version
+// of this file used per a since-superseded .bru sample; the query is bound
+// straight off currencyGuid and rejects an int.
 export interface PayableLedgerLine {
-  intLedger: number
+  ledgerGuid: string | null
   semesterGuid: string | null
   ledgerName: string
-  ledgerNum: string | null
+  ledgerNum: number | null
   amount: number
-  intCurrency: number
+  currencyGuid: string | null
   currencyName: string
   amtDef: number
   isDiscountLine: boolean
@@ -120,7 +165,7 @@ export interface PayableLedgersParams {
   applicationGuid: string
   studentGuid?: string | null
   amount: number
-  intCurrency: number
+  currencyGuid: string
   payDate: string
 }
 
@@ -192,9 +237,15 @@ export function getStudentProfile(applicationGuid: string): Promise<StudentProfi
   return apiGet<StudentProfile>(`/api/v1/finance/payment-console/student-profile/${applicationGuid}`)
 }
 
-export function getOutstandingLedgers(applicationGuid: string): Promise<OutstandingLedger[]> {
+// studentGuid is optional per get-outstanding-ledgers.md, but supplying it
+// once the applicant has become a student lets the handler resolve the
+// student's real current/registration semester instead of falling back to
+// the application's own semester, which can widen or narrow the billed
+// range.
+export function getOutstandingLedgers(applicationGuid: string, studentGuid?: string | null): Promise<OutstandingLedger[]> {
   if (MOCK_AUTH) return Promise.resolve(mockOutstandingLedgers[applicationGuid] ?? [])
-  return apiGet<OutstandingLedger[] | null>(`/api/v1/finance/payment-console/outstanding-ledgers/${applicationGuid}`)
+  const qs = studentGuid ? `?studentGuid=${encodeURIComponent(studentGuid)}` : ''
+  return apiGet<OutstandingLedger[] | null>(`/api/v1/finance/payment-console/outstanding-ledgers/${applicationGuid}${qs}`)
     .then(data => data ?? [])
     // Confirmed live: an application with no fee structure lines wired up
     // yet returns a 404 `not_found` ("No fee structure lines found.")
@@ -279,7 +330,7 @@ export function getPayableLedgers(params: PayableLedgersParams): Promise<Payable
   const qs = new URLSearchParams({
     applicationGuid: params.applicationGuid,
     amount: String(params.amount),
-    intCurrency: String(params.intCurrency),
+    currencyGuid: params.currencyGuid,
     payDate: params.payDate,
   })
   if (params.studentGuid) qs.set('studentGuid', params.studentGuid)

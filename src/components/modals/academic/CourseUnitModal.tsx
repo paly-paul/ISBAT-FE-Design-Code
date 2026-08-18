@@ -4,7 +4,9 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
-import { CourseUnitInput } from '@/lib/api/academic/courseUnit'
+import { CourseUnit, CourseUnitInput } from '@/lib/api/academic/courseUnit'
+import { UpsertCourseUnitOutlineInput } from '@/lib/api/academic/courseUnitOutlines'
+import { useUpsertCourseUnitOutlines } from '@/hooks/academic/useCourseUnits'
 import { useRepetitionTags } from '@/hooks/academic/useRepetitionTags'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
@@ -22,15 +24,25 @@ function blankChapter(): Chapter { return { title: '', topics: [blankTopic(1)] }
 
 interface CourseUnitModalProps extends ModalProps {
   createCourseUnit: {
-    mutate: (input: CourseUnitInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
+    mutate: (input: CourseUnitInput, options?: { onSuccess?: (data: CourseUnit) => void; onError?: (error: Error) => void }) => void
     isPending: boolean
   }
 }
 
 export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }: CourseUnitModalProps) {
+  const upsertOutlines = useUpsertCourseUnitOutlines()
   const [saved, setSaved]               = useState(false)
   const [failure, setFailure]           = useState<string | null>(null)
   const [step, setStep]                 = useState(1)
+  // Set once Step 1's Save & Continue creates the course unit via
+  // POST /courseunits — Step 2 then only writes chapters/topics through the
+  // separate courseunit-outlines PUT (see put-courseunit-outlines-by-courseunit.md),
+  // using this guid. Also doubles as the "already created" guard: Step 1's
+  // fields lock once this is set (see the banner/pointerEvents wrapper in
+  // its JSX below), and re-clicking Save & Continue just advances instead of
+  // POSTing again — that endpoint only ever creates, so a second call would
+  // either 400 on the same courseUnitCode or create a second, orphaned unit.
+  const [createdCourseUnitGuid, setCreatedCourseUnitGuid] = useState<string | null>(null)
   const [chapters, setChapters]         = useState<Chapter[]>([blankChapter()])
   const [activeChapterIdx, setActiveChapterIdx] = useState(0)
   const [unitCode, setUnitCode]         = useState('')
@@ -165,43 +177,37 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
     setIncludeCW(true); setIncludeCBT(true); setIncludeMid(true)
     setCwAssessed('25'); setCbtAssessed('50'); setUeAssessed('100')
     setCwFinal('15'); setCbtFinal('15'); setUeFinal('70')
+    setCreatedCourseUnitGuid(null)
     onClose()
   }
 
+  // Step 2's Save Course Unit — writes chapters/topics via the separate
+  // outlines endpoint (createCourseUnit never touches them at all — see its
+  // comment in courseUnit.ts). Always sends the full outline state, since
+  // the endpoint is a diff-based replace, not a partial patch.
   function handleSubmit() {
     if (!validateStep2()) return
-    const outlines = chapters.map((ch, ci) => ({
+    if (!createdCourseUnitGuid) { setFailure('Unit details have not been saved yet — go back to Step 1.'); return }
+
+    const outlines: UpsertCourseUnitOutlineInput[] = chapters.map((ch, ci) => ({
+      courseUnitOutlineGuid: null,
       chapter: ci + 1,
       chapterName: ch.title,
       topics: ch.topics.map((t, ti) => ({
+        courseUnitTopicGuid: null,
         courseUnitTopicDetails: t.name,
         studySequence: +t.studySequence || ti + 1,
-        taughtBy: t.taughtBy,
+        employeeGuid: t.taughtBy,
       })),
     }))
-    createCourseUnit.mutate(
-      {
-        courseUnitCode: unitCode,
-        courseUnitName: unitName,
-        maxCredits: +credits || 0,
-        chapterCount: chapters.length,
-        courseUnitRepetitionGuid: repetitionTagGuid || null,
-        mid: includeMid ? 1 : 0,
-        cw: includeCW ? 1 : 0,
-        ca: includeCBT ? 1 : 0,
-        // No UI control yet — defaults new units to approved.
-        approved: 1,
-        cbtWeightage: +cbtFinal || 0,
-        cwWeightage: +cwFinal || 0,
-        ueWeightage: +ueFinal || 0,
-        outlines,
-        syllabus: syllabusFile,
-      },
+
+    upsertOutlines.mutate(
+      { courseUnitGuid: createdCourseUnitGuid, outlines },
       {
         onSuccess: () => { setSaved(true); showToast('Course unit added successfully') },
         onError: (error: Error) => {
           const code = error instanceof AuthError ? error.code : undefined
-          setFailure(error.message || `Failed to add course unit${code ? ` (${code})` : ''}. Please try again.`)
+          setFailure(error.message || `Failed to save the course outline${code ? ` (${code})` : ''}. Please try again.`)
         },
       },
     )
@@ -211,6 +217,11 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
   const chapterCap = +numChapters || 0
   const atChapterCap = chapterCap > 0 && chapters.length >= chapterCap
 
+  // Step 1's Save & Continue — POSTs /courseunits right away (Unit Details
+  // only, no outlines: post-courseunit.md is explicit that outlines aren't
+  // part of this request) so Step 2 has a real courseUnitGuid to write
+  // chapters/topics against. Already-created guard: see createdCourseUnitGuid
+  // above.
   function goToStep2() {
     if (!validateStep1()) return
     // If the user lowered No. of Chapters after already building some out, trim the excess from the end.
@@ -219,7 +230,37 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
       setChapterErrors(p => p.slice(0, chapterCap))
       setActiveChapterIdx(i => Math.min(i, chapterCap - 1))
     }
-    setStep(2)
+    if (createdCourseUnitGuid) { setStep(2); return }
+
+    createCourseUnit.mutate(
+      {
+        courseUnitCode: unitCode,
+        courseUnitName: unitName,
+        maxCredits: +credits || 0,
+        // The real final chapter count isn't known yet at this point (Step 2
+        // hasn't been built out) — this is Step 1's own "No. of Chapters"
+        // declaration, which the outlines upsert later enforces as a cap
+        // (see post-courseunit.md's ChapterCount note).
+        chapterCount: +numChapters || 0,
+        courseUnitRepetitionGuid: repetitionTagGuid || null,
+        mid: includeMid ? 1 : 0,
+        cw: includeCW ? 1 : 0,
+        ca: includeCBT ? 1 : 0,
+        // No UI control yet — defaults new units to approved.
+        approved: 1,
+        cbtWeightage: +cbtFinal || 0,
+        cwWeightage: +cwFinal || 0,
+        ueWeightage: +ueFinal || 0,
+        syllabus: syllabusFile,
+      },
+      {
+        onSuccess: (unit: CourseUnit) => { setCreatedCourseUnitGuid(unit.courseUnitGuid); showToast('Unit details saved'); setStep(2) },
+        onError: (error: Error) => {
+          const code = error instanceof AuthError ? error.code : undefined
+          setFailure(error.message || `Failed to save unit details${code ? ` (${code})` : ''}. Please try again.`)
+        },
+      },
+    )
   }
 
   // chapter helpers
@@ -319,6 +360,13 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
         {/* ── Step 1: Basic Info ─────────────────────────────── */}
         {step === 1 && (
         <div className="modal-scroll">
+          {createdCourseUnitGuid && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, padding: '10px 14px', background: 'var(--green-bg)', border: '1.5px solid var(--green-bd)', borderRadius: 'var(--rsm)', fontSize: 12.5, color: 'var(--g700)' }}>
+              <i className="lni lni-checkmark-circle" style={{ color: 'var(--green)', fontSize: 16 }}></i>
+              Unit details already saved — locked to avoid creating a duplicate. Continue below to Course Outline.
+            </div>
+          )}
+          <div style={createdCourseUnitGuid ? { opacity: .55, pointerEvents: 'none' } : undefined}>
 
           {/* ── Basic Info ─────────────────────────────────────── */}
           <div className="g3">
@@ -605,6 +653,7 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
             </div>
           </div>
 
+          </div>
         </div>
         )}
 
@@ -739,13 +788,13 @@ export function CourseUnitModal({ isOpen, onClose, showToast, createCourseUnit }
             </button>
           )}
           {step === 1 && (
-            <button className="btn btn-primary" onClick={goToStep2}>
-              Save &amp; Continue <i className="lni lni-arrow-right"></i>
+            <button className="btn btn-primary" disabled={createCourseUnit.isPending} onClick={goToStep2}>
+              {createCourseUnit.isPending ? 'Saving…' : <>Save &amp; Continue <i className="lni lni-arrow-right"></i></>}
             </button>
           )}
           {step === 2 && (
-            <button className="btn btn-primary" disabled={createCourseUnit.isPending} onClick={handleSubmit}>
-              <i className="lni lni-checkmark"></i> {createCourseUnit.isPending ? 'Saving…' : 'Save Course Unit'}
+            <button className="btn btn-primary" disabled={upsertOutlines.isPending} onClick={handleSubmit}>
+              <i className="lni lni-checkmark"></i> {upsertOutlines.isPending ? 'Saving…' : 'Save Course Unit'}
             </button>
           )}
         </div>

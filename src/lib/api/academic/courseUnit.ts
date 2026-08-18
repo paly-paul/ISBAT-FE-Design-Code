@@ -135,40 +135,48 @@ const mockCourseUnits: CourseUnit[] = [
 // fetching everything up front (the old default here was pageSize=1000,
 // fetched once; that made the initial page load noticeably slower than it
 // needs to be for a table that only ever shows 10 rows at a time).
-export function getCourseUnits(pageNumber = 1, pageSize = 10): Promise<CourseUnitListResponse> {
+// search is a real server-side filter (see get-courseunits.md: "optionally
+// filtered by a free-text search term", "No max page size or bound enforced
+// server-side") — NOT just a client-side convenience. Searching should
+// always go through this, not a capped "fetch everything, filter locally"
+// list — a real dataset can run into the thousands of rows, well past any
+// reasonable client-side page-size cap.
+export function getCourseUnits(pageNumber = 1, pageSize = 10, search = ''): Promise<CourseUnitListResponse> {
   if (MOCK_AUTH) {
-    return Promise.resolve({ items: mockCourseUnits, totalCount: mockCourseUnits.length, pageNumber, pageSize })
+    const items = search.trim()
+      ? mockCourseUnits.filter(u => `${u.courseUnitCode} ${u.courseUnitName}`.toLowerCase().includes(search.trim().toLowerCase()))
+      : mockCourseUnits
+    return Promise.resolve({ items, totalCount: items.length, pageNumber, pageSize })
   }
-  return apiGet<CourseUnitListResponse | null>(`/api/v1/academic/courseunits?pageNumber=${pageNumber}&pageSize=${pageSize}`)
+  const params = new URLSearchParams({ pageNumber: String(pageNumber), pageSize: String(pageSize) })
+  if (search.trim()) params.set('search', search.trim())
+  return apiGet<CourseUnitListResponse | null>(`/api/v1/academic/courseunits?${params.toString()}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }
 
-export interface CourseUnitTopicInput {
-  courseUnitTopicDetails: string
-  studySequence: number
-  // Employee guid — see the comment on CourseUnitTopic.employeeGuid above.
-  // Kept as taughtBy here since that's the payload's own field name
-  // (appendOutlines sends it under the EmployeeGuid form key regardless).
-  taughtBy: string
-}
-
-export interface CourseUnitOutlineInput {
-  chapter: number
-  chapterName: string
-  topics: CourseUnitTopicInput[]
-}
-
-// Confirmed create payload — sent as multipart/form-data (not JSON) since
-// syllabus is an optional file. Outlines is sent using ASP.NET's indexed
-// flat-key convention (see appendOutlines below), not a single JSON string
-// field — a JSON string came back as an empty list in testing. Note the
-// PascalCase keys under Outlines[] (Chapter/ChapterName/Topics[]/...) versus
-// camelCase for the top-level fields — that's the confirmed casing from a
-// working Bruno request, not a typo. courseUnitRepetitionGuid
-// (RepetitionTag.courseUnitRepetitionGuid) is optional — omitted/null when
-// no tag is picked. cwWeightage/cbtWeightage/ueWeightage are the "Final Wt."
-// marks from the Assessment Weightage section. approved has no UI control
-// yet — hardcoded to 1 at the call site pending a real toggle.
+// CONFIRMED per post-courseunit.md / put-courseunit.md: outlines are NOT
+// part of either the create or update request at all — they're written
+// separately via PUT /courseunit-outlines/by-courseunit/{courseUnitGuid}
+// (see courseUnitOutlines.ts / useUpsertCourseUnitOutlines). createCourseUnit/
+// updateCourseUnit below are deliberately unit-details-only now, with no
+// internal chaining to that endpoint — CourseUnitModal/EditCourseUnitModal
+// call useUpsertCourseUnitOutlines themselves, from Step 2's own save,
+// building UpsertCourseUnitOutlineInput[] directly.
+//
+// This used to be chained internally (create skipped the call when
+// outlines was empty; update never did, since an empty array is
+// legitimately "the user cleared every chapter" there) — but that made it
+// unsafe to call updateCourseUnit from Step 1's Save & Continue: at that
+// point Step 2 hasn't been visited yet, so firing the chain there risked
+// wiping real chapters depending on exactly what was passed. Splitting the
+// two calls apart removes that hazard entirely — Step 1 can never touch
+// outlines, no matter when it's called.
+//
+// Confirmed create/update payload — sent as multipart/form-data since
+// syllabus is an optional file. courseUnitRepetitionGuid (RepetitionTag.
+// courseUnitRepetitionGuid) is optional — omitted/null when no tag is
+// picked. cwWeightage/cbtWeightage/ueWeightage are the "Final Wt." marks
+// from the Assessment Weightage section.
 export interface CourseUnitInput {
   courseUnitCode: string
   courseUnitName: string
@@ -178,37 +186,23 @@ export interface CourseUnitInput {
   mid: number
   cw: number
   ca: number
-  approved: number
+  // Nullable per put-courseunit.md's own request table ("Approved | enum?
+  // (Disabled=0, Enabled=1)") — a course unit that's never had this
+  // explicitly set comes back null. Omitted from the wire entirely when
+  // null (see the formData.append below) rather than sent as the literal
+  // string "null", which is what String(null) produces and what a .NET
+  // enum?/int? binder can't parse — confirmed the cause of a real 400 with
+  // no response body.
+  approved: number | null
   cbtWeightage: number
   cwWeightage: number
   ueWeightage: number
-  outlines: CourseUnitOutlineInput[]
   syllabus?: File | null
-}
-
-// ASP.NET Core's default model binder doesn't auto-parse a JSON string
-// sitting in one multipart/form-data field into a nested List<T> — it needs
-// either an explicit server-side JsonSerializer.Deserialize on that field,
-// or the indexed flat-key convention below, which the default binder does
-// understand for [FromForm] complex-object lists. A single JSON-string
-// 'outlines' field came back as an empty list in testing; this flat-key
-// form (with the confirmed PascalCase casing) is what a working Bruno
-// request used instead.
-function appendOutlines(formData: FormData, outlines: CourseUnitOutlineInput[]) {
-  outlines.forEach((o, oi) => {
-    formData.append(`Outlines[${oi}].Chapter`, String(o.chapter))
-    formData.append(`Outlines[${oi}].ChapterName`, o.chapterName)
-    o.topics.forEach((t, ti) => {
-      formData.append(`Outlines[${oi}].Topics[${ti}].CourseUnitTopicDetails`, t.courseUnitTopicDetails)
-      formData.append(`Outlines[${oi}].Topics[${ti}].StudySequence`, String(t.studySequence))
-      formData.append(`Outlines[${oi}].Topics[${ti}].EmployeeGuid`, t.taughtBy)
-    })
-  })
 }
 
 let mockCourseUnitSeq = mockCourseUnits.length + 1
 
-export function createCourseUnit(input: CourseUnitInput): Promise<CourseUnit> {
+export async function createCourseUnit(input: CourseUnitInput): Promise<CourseUnit> {
   if (MOCK_AUTH) {
     const guid = String(mockCourseUnitSeq++)
     const unit: CourseUnit = {
@@ -224,19 +218,9 @@ export function createCourseUnit(input: CourseUnitInput): Promise<CourseUnit> {
       // Real syllabus value is a server-hosted URL once uploaded — no local
       // file host to resolve one against in mock mode.
       syllabus: input.syllabus ? input.syllabus.name : null,
-      outlines: input.outlines.map((o, oi) => ({
-        courseUnitOutlineGuid: `${guid}-${oi}`,
-        courseUnitGuid: guid,
-        chapter: o.chapter,
-        chapterName: o.chapterName,
-        topics: o.topics.map((t, ti) => ({
-          courseUnitTopicGuid: `${guid}-${oi}-${ti}`,
-          courseUnitTopicCode: `${input.courseUnitCode}_${ti + 1}`,
-          courseUnitTopicDetails: t.courseUnitTopicDetails,
-          studySequence: t.studySequence,
-          employeeGuid: t.taughtBy,
-        })),
-      })),
+      // Outlines are created empty — same as the real endpoint, they're
+      // written separately via the outlines upsert call.
+      outlines: [],
     }
     mockCourseUnits.push(unit)
     return Promise.resolve(unit)
@@ -251,17 +235,24 @@ export function createCourseUnit(input: CourseUnitInput): Promise<CourseUnit> {
   formData.append('mid', String(input.mid))
   formData.append('cw', String(input.cw))
   formData.append('ca', String(input.ca))
-  formData.append('approved', String(input.approved))
+  // Omit rather than send the literal string "null" — see the
+  // CourseUnitInput.approved comment above.
+  if (input.approved != null) formData.append('approved', String(input.approved))
   formData.append('cbtWeightage', String(input.cbtWeightage))
   formData.append('cwWeightage', String(input.cwWeightage))
   formData.append('ueWeightage', String(input.ueWeightage))
-  appendOutlines(formData, input.outlines)
   if (input.syllabus) formData.append('syllabus', input.syllabus)
   return apiPostForm<CourseUnit>('/api/v1/academic/courseunits', formData)
 }
 
-// Confirmed GET-by-guid endpoint. Returns the same shape as one item of the
-// list response (including outlines).
+// CONFIRMED per get-courseunit-by-guid.md: this plain endpoint does NOT
+// include outlines ("Does not include outlines — use GET
+// /courseunits/{guid}/details for that") — despite the old comment here
+// claiming otherwise. Kept only for the one caller that genuinely needs
+// nothing but a fresh syllabus URL (page.tsx's/EditCourseUnitModal's
+// handleSyllabus — see their own comments on why a fresh fetch matters
+// there); View/Edit and anything wanting the outline should use
+// getCourseUnitWithDetails below instead.
 export function getCourseUnitById(guid: string): Promise<CourseUnit> {
   if (MOCK_AUTH) {
     const existing = mockCourseUnits.find(u => u.courseUnitGuid === guid)
@@ -271,11 +262,107 @@ export function getCourseUnitById(guid: string): Promise<CourseUnit> {
   return apiGet<CourseUnit>(`/api/v1/academic/courseunits/${guid}`)
 }
 
+// --- Full details (course unit + real outlines) ---------------------------
+// See get-courseunit-details-by-guid.md — composes GET /courseunits/{guid}
+// and GET /courseunit-outlines/by-courseunit/{guid} server-side into one
+// call. This is the only endpoint that actually returns a course unit's
+// outlines for real (see the note on getCourseUnitById above) — View/Edit
+// modals and ProgrammeModal's Syllabus/Outline/Taught By popup all rely on
+// useCourseUnit(), which now fetches through here instead.
+export interface CourseUnitTopicDetail extends CourseUnitTopic {
+  employeeName: string
+}
+
+export interface CourseUnitOutlineDetail extends Omit<CourseUnitOutline, 'topics'> {
+  topics: CourseUnitTopicDetail[]
+}
+
+// Same fields as CourseUnitDto (get-courseunit-by-guid.md / get-courseunits.md)
+// but genuinely confirmed complete this time — courseUnitRepetitionName,
+// approved, and the three weightage fields exist on the real DTO and were
+// simply missing from the plain CourseUnit type above (that type having
+// gone unverified against a real full response until now).
+export interface CourseUnitDetailFields {
+  courseUnitGuid: string
+  courseUnitCode: string
+  courseUnitName: string
+  maxCredits: number
+  chapterCount: number
+  courseUnitRepetitionGuid: string | null
+  courseUnitRepetitionName: string | null
+  mid: number
+  cw: number
+  ca: number
+  // Nullable — see the identical note on CourseUnitInput.approved above.
+  // Confirmed by a real response: a course unit that's never been
+  // explicitly approved/rejected comes back with this null, not 0/1.
+  approved: number | null
+  cbtWeightage: number
+  cwWeightage: number
+  ueWeightage: number
+  syllabus: string | null
+}
+
+export interface CourseUnitFullDto {
+  courseUnit: CourseUnitDetailFields
+  outlines: CourseUnitOutlineDetail[]
+}
+
+export function getCourseUnitDetailsByGuid(guid: string): Promise<CourseUnitFullDto> {
+  if (MOCK_AUTH) {
+    const existing = mockCourseUnits.find(u => u.courseUnitGuid === guid)
+    if (!existing) return Promise.reject(new Error('Course unit not found'))
+    return Promise.resolve({
+      courseUnit: {
+        courseUnitGuid: existing.courseUnitGuid,
+        courseUnitCode: existing.courseUnitCode,
+        courseUnitName: existing.courseUnitName,
+        maxCredits: existing.maxCredits,
+        chapterCount: existing.chapterCount,
+        courseUnitRepetitionGuid: existing.courseUnitRepetitionGuid,
+        courseUnitRepetitionName: null,
+        mid: existing.mid,
+        cw: existing.cw,
+        ca: existing.ca,
+        approved: 1,
+        cbtWeightage: 0,
+        cwWeightage: 0,
+        ueWeightage: 0,
+        syllabus: existing.syllabus,
+      },
+      outlines: existing.outlines.map(o => ({
+        ...o,
+        topics: o.topics.map(t => ({ ...t, employeeName: `Employee #${t.employeeGuid}` })),
+      })),
+    })
+  }
+  return apiGet<CourseUnitFullDto>(`/api/v1/academic/courseunits/${guid}/details`)
+}
+
+// Merged shape (CourseUnitDetailFields + real outlines) — structurally a
+// superset of CourseUnit (same fields, plus the extra detail ones, plus
+// richer outlines), so every existing consumer of the old useCourseUnit()
+// shape (ViewCourseUnitModal, EditCourseUnitModal, ProgrammeModal's
+// Syllabus/Outline/Taught By popup) keeps working unchanged, just with real
+// data where it used to silently get none.
+export interface CourseUnitWithDetails extends CourseUnitDetailFields {
+  outlines: CourseUnitOutlineDetail[]
+}
+
+export function getCourseUnitWithDetails(guid: string): Promise<CourseUnitWithDetails> {
+  return getCourseUnitDetailsByGuid(guid).then(full => ({ ...full.courseUnit, outlines: full.outlines }))
+}
+
 // Same payload shape as create (see CourseUnitInput above), sent as
 // multipart/form-data to the same .../courseunits/:guid endpoint used for
 // GET. syllabus is only appended when the user picks a new file — omitting
 // it leaves the existing attachment untouched rather than clearing it.
-export function updateCourseUnit(guid: string, input: CourseUnitInput): Promise<CourseUnit> {
+// Details-only, same as createCourseUnit — see the note above on why the
+// outlines chaining this used to do was removed. Callers that need the
+// merged shape (details + real outlines) should re-fetch via
+// getCourseUnitWithDetails / useCourseUnit after both calls settle, rather
+// than trusting this response's outlines (always [] here now).
+export async function updateCourseUnit(guid: string, input: CourseUnitInput): Promise<CourseUnit> {
   if (MOCK_AUTH) {
     const existing = mockCourseUnits.find(u => u.courseUnitGuid === guid)
     if (!existing) return Promise.reject(new Error('Course unit not found'))
@@ -288,19 +375,6 @@ export function updateCourseUnit(guid: string, input: CourseUnitInput): Promise<
     existing.cw = input.cw
     existing.ca = input.ca
     if (input.syllabus) existing.syllabus = input.syllabus.name
-    existing.outlines = input.outlines.map((o, oi) => ({
-      courseUnitOutlineGuid: `${guid}-${oi}`,
-      courseUnitGuid: guid,
-      chapter: o.chapter,
-      chapterName: o.chapterName,
-      topics: o.topics.map((t, ti) => ({
-        courseUnitTopicGuid: `${guid}-${oi}-${ti}`,
-        courseUnitTopicCode: `${input.courseUnitCode}_${ti + 1}`,
-        courseUnitTopicDetails: t.courseUnitTopicDetails,
-        studySequence: t.studySequence,
-        employeeGuid: t.taughtBy,
-      })),
-    }))
     return Promise.resolve(existing)
   }
 
@@ -313,11 +387,12 @@ export function updateCourseUnit(guid: string, input: CourseUnitInput): Promise<
   formData.append('mid', String(input.mid))
   formData.append('cw', String(input.cw))
   formData.append('ca', String(input.ca))
-  formData.append('approved', String(input.approved))
+  // Omit rather than send the literal string "null" — see the
+  // CourseUnitInput.approved comment above.
+  if (input.approved != null) formData.append('approved', String(input.approved))
   formData.append('cbtWeightage', String(input.cbtWeightage))
   formData.append('cwWeightage', String(input.cwWeightage))
   formData.append('ueWeightage', String(input.ueWeightage))
-  appendOutlines(formData, input.outlines)
   if (input.syllabus) formData.append('syllabus', input.syllabus)
   return apiPutForm<CourseUnit>(`/api/v1/academic/courseunits/${guid}`, formData)
 }

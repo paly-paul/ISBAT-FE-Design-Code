@@ -112,7 +112,8 @@ export interface ProgramMaster {
   semesters: unknown[]
 }
 
-// Same indexed flat-key convention as appendOutlines in courseUnit.ts.
+// Same indexed flat-key convention courseUnit.ts's create/update payloads
+// used to send Outlines with, before that moved to a separate endpoint.
 // CONFIRMED via the real Save Program Complete backend doc (SaveComplete.bru,
 // "Nested arrays use bracket notation: ProgramUnits[n][Field] and
 // FeeStructures[n][FeeLines][m][Field]"): Create uses the exact same bracket
