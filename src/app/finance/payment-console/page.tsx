@@ -1,9 +1,10 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import DatePicker from '@/components/DatePicker'
+import { SearchSelect } from '@/components/SearchSelect'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
@@ -78,6 +79,15 @@ export default function PaymentConsolePage() {
 
   const [search, setSearch] = useState('')
   const [committedSearch, setCommittedSearch] = useState('')
+  // Drives the results dropdown's visibility, separately from whether it
+  // has matches — clicking into the box shows it (listing everything if
+  // the box is still empty; GetSearchStudents.md: an omitted/blank
+  // searchTerm lists all applications), clicking away or picking a result
+  // hides it again. searchBoxRef scopes the click-outside check to the
+  // search field + dropdown, same pattern as ActionMenu.tsx's trigger/
+  // dropdown refs.
+  const [searchFocused, setSearchFocused] = useState(false)
+  const searchBoxRef = useRef<HTMLDivElement>(null)
   const [selectedApplicationGuid, setSelectedApplicationGuid] = useState<string | null>(null)
   const [showDetails, setShowDetails] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
@@ -112,11 +122,52 @@ export default function PaymentConsolePage() {
     return () => clearTimeout(t)
   }, [search])
 
-  const { data: searchResults, isFetching: isSearching } = useSearchStudents(committedSearch, 1, 20, !!committedSearch.trim())
+  useEffect(() => {
+    if (!searchFocused) return
+    function handle(e: MouseEvent) {
+      if (!searchBoxRef.current?.contains(e.target as Node)) setSearchFocused(false)
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [searchFocused])
+
+  // isError kept separate from the [] fallback on purpose — same reasoning
+  // as usePaymentHistory below: a failed search (a 401, a downstream
+  // "Could not retrieve applications from the admissions service." per
+  // get-search-students.md, or a validation_error from a sub-2-char term
+  // since every keystroke is sent through committedSearch) must not render
+  // as the same "No matching applications found" a genuinely empty result
+  // gets, or a real error goes unnoticed as "this student doesn't exist".
+  // Matches SearchStudentsQueryValidator's "min 2 chars, only when
+  // non-blank" rule (get-search-students.md) — don't fire a request the
+  // backend will just 400 on while the user is still mid-keystroke. An
+  // empty committedSearch is allowed too, but only once the box has focus
+  // (searchFocused) — that's the "list everything" case for clicking into
+  // an empty box, not something to fetch on mount before the user has
+  // interacted with the field at all.
+  const searchTermLen = committedSearch.trim().length
+  const { data: searchResults, isFetching: isSearching, isError: isSearchError, error: searchError } = useSearchStudents(
+    committedSearch, 1, 20,
+    searchFocused && (searchTermLen === 0 || searchTermLen >= 2),
+  )
   const matches = searchResults?.items ?? []
 
-  const { data: profile, isLoading: isProfileLoading } = useStudentProfile(selectedApplicationGuid, !!selectedApplicationGuid)
-  const { data: ledgers = [], isLoading: isLedgersLoading } = useOutstandingLedgers(selectedApplicationGuid, !!selectedApplicationGuid)
+  // isError surfaced explicitly — without it, a profile fetch failure (e.g.
+  // a real "Application not found." 404 for a guid the search endpoint just
+  // returned, confirmed live) silently renders nothing once isLoading flips
+  // false, leaving the whole "select a student" action look like it did
+  // nothing rather than showing why.
+  const { data: profile, isLoading: isProfileLoading, isError: isProfileError, error: profileError } = useStudentProfile(selectedApplicationGuid, !!selectedApplicationGuid)
+  // profile.studentGuid — confirmed via a real live student-profile
+  // response, not documented in the spec's own sample — is the studentGuid
+  // outstanding-ledgers/payable-ledgers/createPayment all optionally
+  // accept (see the .md docs' notes on it narrowing the billed semester
+  // range). Previously always sent as null/omitted for lack of a source;
+  // now sourced from the profile the moment it loads. It's undefined while
+  // the profile is still loading, which is fine — these queries just
+  // refetch once it resolves, since studentGuid is part of their query key.
+  const studentGuid = profile?.studentGuid ?? null
+  const { data: ledgers = [], isLoading: isLedgersLoading } = useOutstandingLedgers(selectedApplicationGuid, !!selectedApplicationGuid, studentGuid)
   // isError kept separate from the [] fallback on purpose — a failed fetch
   // (confirmed live: this endpoint can 500 with server_error for some
   // applications) must not render the same "No payment history" message as
@@ -126,17 +177,25 @@ export default function PaymentConsolePage() {
 
   // Client-side name resolution for the profile's guid FKs — same fallback
   // pattern used throughout the app (faculty.ts's deanName, enquiry-list's
-  // resolveProgramName) rather than trusting a resolved string on the DTO.
+  // resolveProgramName), but only as a fallback now: a real live
+  // student-profile response confirms the server pre-resolves these names
+  // itself (programName, levelName, batchCode, semesterName, feeCode) —
+  // prefer those and only fall back to the client-side lookup when the
+  // server sends null, which it does for some of these on some
+  // applications (programName/batchCode/semesterName were null on an
+  // otherwise fully-resolved sample).
   const { data: campuses = [] } = useCampuses()
   const { data: programs = [] } = useProgramMasters()
   const { data: allBatchesData } = useBatches(1, 1000)
   const batches = allBatchesData?.items ?? []
   const { data: semesters = [] } = useSemestersForProgram(profile?.programGuid ?? '', !!profile?.programGuid)
 
+  // campusName has no server-resolved counterpart on the DTO — always
+  // client-resolved.
   const campusName = campuses.find(c => c.campusGuid === profile?.campusGuid)?.campusName
-  const programName = programs.find(p => p.programGuid === profile?.programGuid)?.programName
-  const batchCode = batches.find(b => b.batchGuid === profile?.batchGuid)?.batchCode
-  const semName = semesters.find(s => s.semesterGuid === profile?.semesterGuid)?.semName
+  const programName = profile?.programName ?? programs.find(p => p.programGuid === profile?.programGuid)?.programName
+  const batchCode = profile?.batchCode ?? batches.find(b => b.batchGuid === profile?.batchGuid)?.batchCode
+  const semName = profile?.semesterName ?? semesters.find(s => s.semesterGuid === profile?.semesterGuid)?.semName
 
   const totalOutstanding = ledgers.reduce((sum, l) => sum + l.outstanding, 0)
   const selectedCurrency = currencies.find(c => c.currencyGuid === currencyGuid)
@@ -144,16 +203,24 @@ export default function PaymentConsolePage() {
   const payableLedgersParams = useMemo(() => {
     const amt = parseFloat(debouncedAmount) || 0
     if (!selectedApplicationGuid || !selectedCurrency || amt <= 0 || !payDate) return null
-    return { applicationGuid: selectedApplicationGuid, amount: amt, intCurrency: selectedCurrency.intCurrency, payDate }
-  }, [selectedApplicationGuid, selectedCurrency, debouncedAmount, payDate])
+    return { applicationGuid: selectedApplicationGuid, studentGuid, amount: amt, currencyGuid: selectedCurrency.currencyGuid, payDate }
+  }, [selectedApplicationGuid, studentGuid, selectedCurrency, debouncedAmount, payDate])
 
-  const { data: payableLedgers, isFetching: isPreviewLoading } = usePayableLedgers(payableLedgersParams, !!payableLedgersParams)
+  // isError surfaced explicitly — same reasoning as isSearchError/
+  // isProfileError above. A real failure here (confirmed live: "Today's
+  // exchange rate has not been entered for the payment date... Please add
+  // it before proceeding." when the currency has no rate on file for
+  // payDate) must not render as the same "No payable ledger lines for this
+  // amount" a genuinely empty allocation gets, or the cashier has no idea
+  // why the preview is blank.
+  const { data: payableLedgers, isFetching: isPreviewLoading, isError: isPreviewError, error: previewError } = usePayableLedgers(payableLedgersParams, !!payableLedgersParams)
 
   const createPayment = useCreatePayment()
 
   function handleSearchClick() {
     const term = search.trim()
     if (!term) { showToast('Please enter a student number or name.', 'warn'); return }
+    if (term.length < 2) { showToast('Search term must be at least 2 characters.', 'warn'); return }
     setCommittedSearch(term)
   }
 
@@ -173,6 +240,7 @@ export default function PaymentConsolePage() {
     setSelectedApplicationGuid(applicationGuid)
     setSearch(name)
     setCommittedSearch('')
+    setSearchFocused(false)
     setShowDetails(false)
     setShowHistory(false)
     resetPaymentForm()
@@ -194,7 +262,7 @@ export default function PaymentConsolePage() {
     createPayment.mutate(
       {
         applicationGuid: selectedApplicationGuid,
-        studentGuid: null,
+        studentGuid,
         amount: amt,
         currencyGuid: selectedCurrency.currencyGuid,
         receiptBookGuid,
@@ -282,7 +350,7 @@ export default function PaymentConsolePage() {
               <div className="card-hdr">
                 <div className="card-title"><span className="ctitle-icon"><i className="lni lni-search-alt"></i></span> Step 1 · Student Lookup</div>
               </div>
-              <div className="fg" style={{ marginBottom: 0 }}>
+              <div className="fg" style={{ marginBottom: 0, position: 'relative' }} ref={searchBoxRef}>
                 <div className="lbl">Search by Applicant Name, Ref No, Phone, or Email <span className="req">*</span></div>
                 <div className="flex gap-2 flex-wrap">
                   <div className="inp-wrap" style={{ flex: 1, minWidth: 180 }}>
@@ -293,35 +361,61 @@ export default function PaymentConsolePage() {
                       placeholder="e.g. APP20222/667 or Tumukunde Alice"
                       value={search}
                       onChange={e => setSearch(e.target.value)}
+                      onFocus={() => setSearchFocused(true)}
                       onKeyDown={e => { if (e.key === 'Enter') handleSearchClick() }}
                     />
                   </div>
                   <button className="btn btn-primary" onClick={handleSearchClick}><i className="lni lni-search-alt"></i> Search</button>
                 </div>
+
+                {/* Dropdown: opens on focus (empty box lists every application,
+                    per GetSearchStudents.md's "omit searchTerm to list all"),
+                    closes on outside click via the searchBoxRef effect above
+                    or on picking a result. Floats over the page below the
+                    input row rather than pushing content down, since "list
+                    all" can return many rows. */}
+                {searchFocused && (
+                  <div
+                    className="mt-1"
+                    style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
+                      background: 'var(--white)', border: '1.5px solid var(--b200)', borderRadius: 'var(--rsm)',
+                      boxShadow: 'var(--neu-out)', maxHeight: 260, overflowY: 'auto',
+                    }}
+                  >
+                    {isSearching && <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>Searching…</div>}
+                    {!isSearching && isSearchError && (
+                      <div className="text-clr-red px-3 py-2" style={{ fontSize: 12.5 }}>
+                        <i className="lni lni-warning"></i> {searchError instanceof Error ? searchError.message : 'Search failed. Please try again.'}
+                      </div>
+                    )}
+                    {!isSearching && !isSearchError && matches.length === 0 && (
+                      <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>
+                        {committedSearch ? 'No matching applications found.' : 'No applications found.'}
+                      </div>
+                    )}
+                    {matches.map(a => (
+                      <div
+                        key={a.applicationGuid}
+                        className="cursor-pointer px-3 py-2 hover:bg-b50 border-b border-g100 last:border-b-0"
+                        onClick={() => selectStudent(a.applicationGuid, applicantName(a))}
+                      >
+                        <div className="font-bold">{applicantName(a)}</div>
+                        <div className="text-g500" style={{ fontSize: 11 }}>{a.appRefNo} · {a.phone ?? '—'} · {a.emailId ?? '—'}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-
-              {isSearching && <div className="mt-2 text-g400" style={{ fontSize: 12.5 }}>Searching…</div>}
-              {!isSearching && committedSearch && matches.length === 0 && (
-                <div className="mt-2 text-g400" style={{ fontSize: 12.5 }}>No matching applications found.</div>
-              )}
-
-              {matches.length > 0 && (
-                <div className="mt-2" style={{ border: '1.5px solid var(--b200)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
-                  {matches.map(a => (
-                    <div
-                      key={a.applicationGuid}
-                      className="cursor-pointer px-3 py-2 hover:bg-b50 border-b border-g100 last:border-b-0"
-                      onClick={() => selectStudent(a.applicationGuid, applicantName(a))}
-                    >
-                      <div className="font-bold">{applicantName(a)}</div>
-                      <div className="text-g500" style={{ fontSize: 11 }}>{a.appRefNo} · {a.phone ?? '—'} · {a.emailId ?? '—'}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
 
               {isProfileLoading && selectedApplicationGuid && (
                 <div className="mt-4 text-g400" style={{ fontSize: 12.5 }}>Loading applicant profile…</div>
+              )}
+
+              {isProfileError && selectedApplicationGuid && (
+                <div className="mt-4 text-clr-red" style={{ fontSize: 12.5 }}>
+                  <i className="lni lni-warning"></i> {profileError instanceof Error ? profileError.message : "Couldn't load this applicant's profile."}
+                </div>
               )}
 
               {profile && selectedApplicationGuid && (
@@ -381,7 +475,7 @@ export default function PaymentConsolePage() {
                       <thead><tr><th>Ledger</th><th>Paid</th><th>Outstanding</th><th>Cur.</th></tr></thead>
                       <tbody>
                         {ledgers.map((l, i) => (
-                          <tr key={`${l.intLedger}-${l.semesterGuid ?? 'none'}-${i}`}>
+                          <tr key={`${l.ledgerGuid ?? 'none'}-${l.semesterGuid ?? 'none'}-${i}`}>
                             <td>{l.ledgerName}{l.ledgerNum ? <span className="text-g400"> ({l.ledgerNum})</span> : null}</td>
                             <td className={l.paidAmount > 0 ? 'text-green font-bold' : 'text-muted'}>{l.paidAmount > 0 ? `${l.currencyName} ${l.paidAmount.toLocaleString()} ✓` : '—'}</td>
                             <td className={l.outstanding === 0 ? 'text-green font-bold' : 'text-amber'}>{l.outstanding > 0 ? `${l.currencyName} ${l.outstanding.toLocaleString()}` : '0 ✓'}</td>
@@ -417,7 +511,7 @@ export default function PaymentConsolePage() {
                                   <td>{h.payDate.slice(0, 10)}</td>
                                   <td>{PAYMENT_CATEGORY_LABELS[h.category] ?? `Category ${h.category}`}</td>
                                   <td className="text-green font-bold">{h.currencyName} {h.amount.toLocaleString()}</td>
-                                  <td><span className="pill pill-blue">{PAY_TYPE_LABELS[h.payType] ?? `Type ${h.payType}`}</span></td>
+                                  <td><span className="pill pill-blue">{h.payType?.name ?? '—'}</span></td>
                                   <td className="font-mono text-blue">{h.receipt ?? h.paymentCode}</td>
                                 </tr>
                               ))}
@@ -447,10 +541,12 @@ export default function PaymentConsolePage() {
                   </div>
                   <div className="fg">
                     <div className="lbl">Currency Received <span className="req">*</span></div>
-                    <select className="ctrl" value={currencyGuid} onChange={e => setCurrencyGuid(e.target.value)}>
-                      <option value="">— Select Currency —</option>
-                      {currencies.map(c => <option key={c.currencyGuid} value={c.currencyGuid}>{c.currencyCode} — {c.currencyName}</option>)}
-                    </select>
+                    <SearchSelect
+                      placeholder="— Select Currency —"
+                      options={currencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))}
+                      value={currencyGuid}
+                      onChange={setCurrencyGuid}
+                    />
                   </div>
                 </div>
 
@@ -461,18 +557,22 @@ export default function PaymentConsolePage() {
                   </div>
                   <div className="fg">
                     <div className="lbl">Payment Method <span className="req">*</span></div>
-                    <select className="ctrl" value={payType} onChange={e => { setPayType(e.target.value); setReceiptBookGuid('') }}>
-                      {Object.entries(PAY_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </select>
+                    <SearchSelect
+                      options={Object.entries(PAY_TYPE_LABELS).map(([value, label]) => ({ value, label }))}
+                      value={payType}
+                      onChange={val => { setPayType(val); setReceiptBookGuid('') }}
+                    />
                   </div>
                 </div>
 
                 <div className="fg mb-[14px]">
                   <div className="lbl">Receipt Book <span className="req">*</span></div>
-                  <select className="ctrl" value={receiptBookGuid} onChange={e => setReceiptBookGuid(e.target.value)}>
-                    <option value="">— Select Receipt Book —</option>
-                    {receiptBooks.map(r => <option key={r.receiptBookGuid} value={r.receiptBookGuid}>{r.bookCode}</option>)}
-                  </select>
+                  <SearchSelect
+                    placeholder="— Select Receipt Book —"
+                    options={receiptBooks.map(r => ({ value: r.receiptBookGuid, label: r.bookCode }))}
+                    value={receiptBookGuid}
+                    onChange={setReceiptBookGuid}
+                  />
                 </div>
 
                 {showBankFields && (
@@ -480,10 +580,12 @@ export default function PaymentConsolePage() {
                     <div className="g2">
                       <div className="fg">
                         <div className="lbl">Bank Name <span className="req">*</span></div>
-                        <select className="ctrl" value={procBankGuid} onChange={e => setProcBankGuid(e.target.value)}>
-                          <option value="">— Select Bank —</option>
-                          {banks.map(b => <option key={b.procBankGuid} value={b.procBankGuid}>{b.bankName}</option>)}
-                        </select>
+                        <SearchSelect
+                          placeholder="— Select Bank —"
+                          options={banks.map(b => ({ value: b.procBankGuid, label: b.bankName }))}
+                          value={procBankGuid}
+                          onChange={setProcBankGuid}
+                        />
                       </div>
                       <div className="fg">
                         <div className="lbl">Bank Transaction Ref</div>
@@ -523,6 +625,10 @@ export default function PaymentConsolePage() {
                   </div>
                 ) : isPreviewLoading ? (
                   <div className="text-center text-g400" style={{ padding: 32, fontSize: 13 }}>Calculating allocation…</div>
+                ) : isPreviewError ? (
+                  <div className="text-center text-clr-red" style={{ padding: 32, fontSize: 13 }}>
+                    <i className="lni lni-warning"></i> {previewError instanceof Error ? previewError.message : "Couldn't calculate the allocation."}
+                  </div>
                 ) : !payableLedgers || payableLedgers.lines.length === 0 ? (
                   <div className="text-center text-g400" style={{ padding: 32, fontSize: 13 }}>No payable ledger lines for this amount.</div>
                 ) : (
@@ -532,7 +638,7 @@ export default function PaymentConsolePage() {
                         <thead><tr><th>Ledger</th><th>Amount</th><th>Type</th></tr></thead>
                         <tbody>
                           {payableLedgers.lines.map((l, i) => (
-                            <tr key={`${l.intLedger}-${i}`}>
+                            <tr key={`${l.ledgerGuid ?? 'none'}-${i}`}>
                               <td>{l.ledgerName}</td>
                               <td className="text-green font-bold">{l.currencyName} {l.amount.toLocaleString()}</td>
                               <td>
@@ -545,8 +651,18 @@ export default function PaymentConsolePage() {
                         </tbody>
                       </table>
                     </ScrollTable>
+                    {/* payableLedgers.balance is what's left UNALLOCATED from
+                        this payment amount after applying it to the lines
+                        above — NOT the student's total outstanding balance
+                        (get-payable-ledgers.md). A common misreading: 0 here
+                        just means the entered amount was small enough to be
+                        fully absorbed by the top of the ledger queue, not
+                        that the account is settled. Labeled accordingly so a
+                        cashier doesn't read "0" as "fully paid off" — Step 2
+                        · Outstanding Balance is the real "what's still owed"
+                        view, and it refetches after Save. */}
                     <div className="mt-[10px] p-3 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100 flex justify-between items-center">
-                      <span className="text-muted" style={{ fontSize: 12 }}>Remaining Balance After Payment</span>
+                      <span className="text-muted" style={{ fontSize: 12 }}>Unallocated from This Payment{payableLedgers.balance > 0 ? ' (→ advance deposit)' : ''}</span>
                       <span className="font-bold text-blue">{selectedCurrency?.currencyCode ?? ''} {payableLedgers.balance.toLocaleString()}</span>
                     </div>
                   </div>
@@ -556,7 +672,11 @@ export default function PaymentConsolePage() {
 
             {receipt && (
               <div className="card">
-                <div className="border border-g200 rounded-xl p-5 bg-g50">
+                {/* receipt-print-area (globals.css) — window.print() below
+                    previously printed the entire page (sidebar, header,
+                    Step 1-3 forms, everything), since no print-scoped CSS
+                    existed anywhere in this app. Now only this card prints. */}
+                <div className="receipt-print-area border border-g200 rounded-xl p-5 bg-g50">
                   <div className="text-center mb-4 pb-3 border-b border-g200">
                     <h3 className="font-bold text-g900" style={{ fontSize: 'var(--fs-lg)' }}>ISBAT University</h3>
                     <p className="text-g500" style={{ fontSize: 'var(--fs-xs)' }}>Institute of Skill Development And Training</p>
@@ -573,7 +693,19 @@ export default function PaymentConsolePage() {
                   <div className="receipt-row" style={{ background: 'var(--green-bg)', borderRadius: 'var(--rxs)', padding: '6px 2px' }}>
                     <span className="text-muted">Allocated To</span><span className="font-bold text-green">Outstanding ledgers — see allocation above</span>
                   </div>
-                  <div className="receipt-total"><span>New Outstanding</span><span>{receipt.balance}</span></div>
+                  {/* receipt.balance is PaymentResultDto.balance — the
+                      amount left UNALLOCATED from this payment, not the
+                      student's total outstanding balance (post-payment.md).
+                      Was previously labeled "New Outstanding", which reads
+                      as "the account is now settled" — wrong whenever the
+                      payment was smaller than what's owed, which is the
+                      common case. Step 2 · Outstanding Balance (which
+                      refetches after Save) is where the real remaining
+                      balance is shown. */}
+                  <div className="receipt-total"><span>Unallocated Amount</span><span>{receipt.balance}</span></div>
+                  <div className="text-g400" style={{ fontSize: 10.5, marginTop: -4 }}>
+                    Leftover from this payment only — see Step 2 · Outstanding Balance for the student&apos;s updated total owed.
+                  </div>
                   {receipt.advanceMessage && (
                     <div className="mt-2"><div className="info-box"><i className="lni lni-information"></i> {receipt.advanceMessage}</div></div>
                   )}
@@ -582,7 +714,7 @@ export default function PaymentConsolePage() {
                     System-generated receipt. Unique code: <span className="font-mono">{receipt.code}</span>
                   </div>
                 </div>
-                <div className="flex gap-2 mt-3 flex-wrap">
+                <div className="flex gap-2 mt-3 flex-wrap no-print">
                   <button className="btn btn-neu flex-1 justify-center" onClick={() => window.print()}><i className="lni lni-printer"></i> Print Receipt</button>
                   <button className="btn btn-primary flex-1 justify-center" onClick={handleClear}>← New Payment</button>
                 </div>

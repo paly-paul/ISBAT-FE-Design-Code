@@ -29,10 +29,13 @@ export function useStudentProfile(applicationGuid: string | null, enabled: boole
   })
 }
 
-export function useOutstandingLedgers(applicationGuid: string | null, enabled: boolean) {
+// studentGuid is optional (see getOutstandingLedgers) — pass it once the
+// caller has one; most callers today don't (the payment console only ever
+// resolves an applicationGuid via search, never a separate studentGuid).
+export function useOutstandingLedgers(applicationGuid: string | null, enabled: boolean, studentGuid?: string | null) {
   return useQuery({
-    queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-ledgers', applicationGuid],
-    queryFn: () => getOutstandingLedgers(applicationGuid as string),
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-ledgers', applicationGuid, studentGuid],
+    queryFn: () => getOutstandingLedgers(applicationGuid as string, studentGuid),
     enabled: enabled && !!applicationGuid,
   })
 }

@@ -2908,6 +2908,61 @@ th:hover .th-fi {
   color: var(--g900)
 }
 
+/* Narrow screens: side-by-side label/value (the default above) squeezes
+   both columns into half the already-narrow width, which wraps labels
+   awkwardly mid-word ("Student" / "Name" on separate lines — confirmed
+   live at ~380px) and right-aligns values with barely any room to
+   breathe. Below this width, stack label above value instead — full
+   width for each, left-aligned, no more forced mid-word wraps. Applies
+   wherever .receipt-row is used (payment-console's own receipt card and
+   payment-history's ViewPaymentReceiptModal alike), not just one page's. */
+@media(max-width:480px) {
+  .receipt-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px
+  }
+
+  .receipt-row>span:last-child {
+    align-self: flex-start
+  }
+}
+
+/* Printing a receipt via window.print() previously printed the WHOLE page
+   as-is — sidebar, header, whatever modal chrome, everything — because no
+   print-scoped CSS existed anywhere in this app. Any element marked
+   .receipt-print-area is hoisted to the only visible thing on the printed
+   page; .no-print elements (modal header/footer/buttons) are dropped
+   entirely rather than just hidden, so they don't reserve blank print
+   layout space. Applies to any receipt in the app, not just one page's —
+   see payment-console's own receipt card and payment-history's
+   ViewPaymentReceiptModal, both opted in via this same class. */
+@media print {
+  body * {
+    visibility: hidden
+  }
+
+  .receipt-print-area,
+  .receipt-print-area * {
+    visibility: visible
+  }
+
+  .receipt-print-area {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 24px;
+    box-shadow: none;
+    border: none
+  }
+
+  .no-print {
+    display: none !important
+  }
+}
+
 /* ═══════════════════════════════════════
    TIMELINE / ACTIVITY LIST
 ═══════════════════════════════════════ */

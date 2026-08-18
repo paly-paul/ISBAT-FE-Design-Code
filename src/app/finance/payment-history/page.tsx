@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
+import { SearchSelect } from '@/components/SearchSelect'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
@@ -10,10 +11,16 @@ import { Toast } from '@/components/Toast'
 import { usePaymentHistoryList } from '@/hooks/finance/usePaymentConsole'
 import type { PaymentHistoryListEntry } from '@/hooks/finance/usePaymentConsole'
 import { formatDate } from '@/lib/date'
+import { ViewPaymentReceiptModal } from '@/components/modals/finance/ViewPaymentReceiptModal'
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 
 const FEE_TYPES = ['Admission Fee', 'Registration Fee', 'Tuition Fee', 'Semester Entry Fee', 'NCHE Fee', 'Guild Fee']
+
+// Explicit '' → 'All Fee Types' option, same convention as enquiry-list's
+// channelOptions/intakeOptions, rather than relying on SearchSelect's own
+// placeholder/isEmpty fallback — keeps '' a real, matchable option value.
+const FEE_TYPE_OPTIONS = [{ value: '', label: 'All Fee Types' }, ...FEE_TYPES.map(f => ({ value: f, label: f }))]
 
 const FEE_TYPE_BADGES: Record<string, string> = {
   'Admission Fee': 'badge-blue',
@@ -47,6 +54,21 @@ export default function Page() {
   const [search, setSearch] = useState('')
   const [feeType, setFeeType] = useState('')
   const [page, setPage] = useState(1)
+
+  // Row data (PaymentHistoryListEntry) already carries everything a receipt
+  // reprint needs — no separate "get receipt" endpoint required. autoPrint
+  // distinguishes the row's quick Print action (open + print immediately)
+  // from View (open only); both reuse the same modal/row selection.
+  const [receiptEntry, setReceiptEntry] = useState<PaymentHistoryListEntry | null>(null)
+  const [autoPrint, setAutoPrint] = useState(false)
+  function openReceipt(r: PaymentHistoryListEntry, print: boolean) {
+    setReceiptEntry(r)
+    setAutoPrint(print)
+  }
+  function closeReceipt() {
+    setReceiptEntry(null)
+    setAutoPrint(false)
+  }
 
   const { data, isLoading } = usePaymentHistoryList(page, PAGE_SIZE)
   const rows = data?.items ?? []
@@ -86,26 +108,17 @@ export default function Page() {
   return (
     <>
       <div className="page active">
+        {/* pg-hdr holds only the title, matching the app-wide convention
+            (receipt-books, discounts, …) — search/filter controls live in
+            the table's own card-hdr below instead, which has the full page
+            width to itself rather than sharing the row with the title. The
+            three controls here (Search + Fee Type + Export) previously sat
+            in pg-hdr alongside the title and didn't fit at narrower widths,
+            wrapping into an awkward 3-row stack (confirmed live). */}
         <div className="pg-hdr">
           <div>
             <div className="pg-title">Payment History</div>
             <div className="pg-sub">Complete transaction ledger · Search &amp; Fee Type filter apply to this page only</div>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <TableSearch
-              className="w-56"
-              placeholder="Name, receipt#, student no… (this page)"
-              value={search}
-              onChange={setSearch}
-              results={searchMatches.map(r => ({ id: `${r.paymentGuid}-${r.feeType}`, primary: r.studentName ?? r.receiptNo, secondary: `${r.receiptNo} · ${r.studentNo ?? '—'}` }))}
-            />
-            <select className="ctrl w-auto" value={feeType} onChange={e => setFeeType(e.target.value)}>
-              <option value="">All Fee Types</option>
-              {FEE_TYPES.map(f => <option key={f} value={f}>{f}</option>)}
-            </select>
-            <button className="btn btn-neu btn-sm" onClick={() => showToast('Exporting payment history to CSV…', 'success')}>
-              <i className="lni lni-upload"></i> Export CSV
-            </button>
           </div>
         </div>
 
@@ -140,13 +153,34 @@ export default function Page() {
         </div>
 
         <div className="card">
+          <div className="card-hdr">
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-list"></i></span> Transactions</div>
+          </div>
+          <div className="flex gap-2 mb-[14px]">
+            <TableSearch
+              className="w-80"
+              placeholder="Name, receipt#, student no… (this page)"
+              value={search}
+              onChange={setSearch}
+              results={searchMatches.map(r => ({ id: `${r.paymentGuid}-${r.feeType}`, primary: r.studentName ?? r.receiptNo, secondary: `${r.receiptNo} · ${r.studentNo ?? '—'}` }))}
+            />
+            <SearchSelect className="w-36" options={FEE_TYPE_OPTIONS} value={feeType} onChange={setFeeType} />
+            {/* Export CSV — commented out per request, not wired to a real
+                export (was only ever a showToast stub); kept here rather
+                than deleted so it's easy to bring back once there's an
+                actual export to call. */}
+            {/* <button className="btn btn-neu btn-sm" onClick={() => showToast('Exporting payment history to CSV…', 'success')}>
+              <i className="lni lni-upload"></i> Export CSV
+            </button> */}
+          </div>
           <ScrollTable>
             <table>
               <thead>
                 <tr>
+                  <th style={{ width: 48 }}></th>
                   <th>Receipt #</th><th>Date</th><th>Student No.</th><th>Student Name</th>
                   <th>Programme</th><th>Fee Type</th><th>Paid</th><th>Cur.</th>
-                  <th>UGX Value</th><th>Rate</th><th>Method</th><th>Actions</th>
+                  <th>UGX Value</th><th>Rate</th><th>Method</th>
                 </tr>
               </thead>
               <tbody>
@@ -157,6 +191,16 @@ export default function Page() {
                     : null}
                 {!isLoading && filteredRows.map((r, i) => (
                   <tr key={`${r.paymentGuid}-${r.feeType}-${i}`}>
+                    <td>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openReceipt(r, true)}>
+                          <i className="lni lni-printer"></i> Print
+                        </button>
+                        <button className="btn btn-neu btn-sm" onClick={() => openReceipt(r, false)}>
+                          <i className="lni lni-eye"></i> View
+                        </button>
+                      </ActionMenu>
+                    </td>
                     <td className="text-blue font-bold font-mono">{r.receiptNo}</td>
                     <td className="text-muted">{formatDate(r.payDate)}</td>
                     <td className="font-mono text-blue">{r.studentNo ?? '—'}</td>
@@ -168,16 +212,6 @@ export default function Page() {
                     <td className="font-bold">{fmtAmount(r.ugxValue)}</td>
                     <td className="text-g400" style={{ fontSize: 11 }}>{r.rate != null ? fmtAmount(r.rate) : '—'}</td>
                     <td>{r.payType ? <span className={`pill ${payTypePill(r.payType.value)}`}>{r.payType.name}</span> : <span className="text-g400">—</span>}</td>
-                    <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => showToast(`Receipt ${r.receiptNo} ready to print.`, 'success')}>
-                          <i className="lni lni-printer"></i> Print
-                        </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => showToast(`Viewing receipt ${r.receiptNo}…`)}>
-                          <i className="lni lni-eye"></i> View
-                        </button>
-                      </ActionMenu>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -186,6 +220,13 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="records" onPageChange={setPage} />
         </div>
       </div>
+      <ViewPaymentReceiptModal
+        isOpen={!!receiptEntry}
+        onClose={closeReceipt}
+        showToast={showToast}
+        entry={receiptEntry}
+        autoPrint={autoPrint}
+      />
       <Toast toast={toast} />
     </>
   )
