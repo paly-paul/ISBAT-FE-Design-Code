@@ -210,6 +210,21 @@ export const PAY_TYPE_LABELS: Record<number, string> = {
   5: 'Online',
 }
 
+// Maps payType (1=Cash/2=Cheque/3=Bank/4=DemandDraft/5=Online, per
+// CreatePayment.bru) onto ReceiptBook.category (0=Cash/1=Bank/2=Online, per
+// receiptBook.ts's CATEGORY_VALUES) so a Receipt Book dropdown only offers
+// books the backend will actually accept for the chosen payment method —
+// picking a mismatched pair is otherwise only caught after Save, via a real
+// backend validation_error ("Receipt book category does not match the
+// selected payment type."). Neither .bru spec documents this pairing
+// explicitly, so Cheque/Bank/DemandDraft are grouped under the Bank receipt
+// category as the closest reasonable read of "non-cash, non-online paper/
+// bank instrument" — flagged as unconfirmed, not verified against a spec.
+// Shared by both CreatePayment (payment-console/page.tsx) and
+// CreateAdvanceDeposit (NewAdvanceDepositModal.tsx) — the same receipt book
+// master applies to both.
+export const PAY_TYPE_TO_RECEIPT_CATEGORY: Record<number, number> = { 1: 0, 2: 1, 3: 1, 4: 1, 5: 2 }
+
 const mockApplicationSummaries: ApplicationSummary[] = []
 const mockStudentProfiles: Record<string, StudentProfile> = {}
 const mockOutstandingLedgers: Record<string, OutstandingLedger[]> = {}
@@ -350,4 +365,42 @@ export function createPayment(input: PaymentInput): Promise<PaymentResult> {
     return Promise.resolve(result)
   }
   return apiPost<PaymentResult>('/api/v1/finance/payment-console/payments', input)
+}
+
+// Confirmed via CreateAdvanceDeposit.bru / payment-console/post-advance-
+// deposit.md — takes money ahead of any specific fee and holds it as a
+// credit, later drawn down by an "other" payment referencing this
+// deposit's paymentAdvanceGuid. Same shape as PaymentInput above; the only
+// real difference is `amount` must be strictly > 0 here (CreatePayment
+// allows 0, to book a pure-discount settlement that moves no cash).
+export interface AdvanceDepositInput {
+  applicationGuid: string
+  studentGuid: string | null
+  amount: number
+  currencyGuid: string
+  receiptBookGuid: string
+  payDate: string
+  payType: number
+  procBankGuid: string | null
+  remarks: string | null
+}
+
+export interface AdvanceDepositResult {
+  paymentAdvanceGuid: string
+  advPaymentCode: string
+  receipt: string
+  balance: number
+}
+
+export function createAdvanceDeposit(input: AdvanceDepositInput): Promise<AdvanceDepositResult> {
+  if (MOCK_AUTH) {
+    const result: AdvanceDepositResult = {
+      paymentAdvanceGuid: `mock-advance-${mockPaymentSeq}`,
+      advPaymentCode: `ADV-MOCK-${mockPaymentSeq++}`,
+      receipt: `RCP-MOCK-${Date.now()}`,
+      balance: input.amount,
+    }
+    return Promise.resolve(result)
+  }
+  return apiPost<AdvanceDepositResult>('/api/v1/finance/payment-console/advance-deposit', input)
 }

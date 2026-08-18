@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  createAdvanceDeposit,
   createPayment,
   getOutstandingLedgers,
   getPayableLedgers,
@@ -7,6 +8,7 @@ import {
   getPaymentHistoryList,
   getStudentProfile,
   searchStudents,
+  AdvanceDepositInput,
   PaymentInput,
   PayableLedgersParams,
 } from '@/lib/api/finance/paymentConsole'
@@ -85,5 +87,21 @@ export function useCreatePayment() {
   })
 }
 
-export type { ApplicationSummary, OutstandingLedger, PayableLedgerLine, PayableLedgersParams, PaymentHistoryEntry, PaymentHistoryListEntry, PaymentInput, PaymentResult, StudentProfile } from '@/lib/api/finance/paymentConsole'
-export { PAYMENT_CATEGORY_LABELS, PAY_TYPE_LABELS } from '@/lib/api/finance/paymentConsole'
+// Invalidates advanced-payments' own list (usePaymentAdvances, in
+// usePayments.ts) — a separate query-key family (['payments','advances'])
+// from this file's own ['payment-console', …] keys, but a new deposit here
+// is exactly the data that list shows, so it needs to refetch too. Broad
+// invalidation (no page number) matches useCreatePayment's own
+// outstanding-ledgers/payment-history invalidation above — cheap to
+// refetch, and the mutation has no way to know which page the caller has
+// open.
+export function useCreateAdvanceDeposit() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: AdvanceDepositInput) => createAdvanceDeposit(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payments', 'advances'] }),
+  })
+}
+
+export type { AdvanceDepositInput, AdvanceDepositResult, ApplicationSummary, OutstandingLedger, PayableLedgerLine, PayableLedgersParams, PaymentHistoryEntry, PaymentHistoryListEntry, PaymentInput, PaymentResult, StudentProfile } from '@/lib/api/finance/paymentConsole'
+export { PAYMENT_CATEGORY_LABELS, PAY_TYPE_LABELS, PAY_TYPE_TO_RECEIPT_CATEGORY } from '@/lib/api/finance/paymentConsole'
