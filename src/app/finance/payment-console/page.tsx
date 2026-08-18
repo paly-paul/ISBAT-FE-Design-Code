@@ -305,7 +305,12 @@ export default function PaymentConsolePage() {
 
   return (
     <>
-      <div className="page active">
+      {/* id scopes the .g2 override in globals.css to just this page's outer
+          Left-form/Right-preview split — same "direct-child combinator, not
+          a plain descendant selector" reasoning as #page-payment's own .g2
+          override, so Step 3's inner 2-column field grids (Amount/Currency,
+          Payment Date/Method) don't get caught by it too. */}
+      <div className="page active" id="page-payment-console">
 
         {/* Exchange Rate Bar */}
         <div className="card flex items-center gap-4 flex-wrap">
