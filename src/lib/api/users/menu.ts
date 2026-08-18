@@ -58,6 +58,50 @@ const FINANCE_PAYMENT_SECTIONS: MenuNode[] = [
   ]),
 ]
 
+const ASSESSMENT_SECTIONS: MenuNode[] = [
+  section('Overview', [
+    leaf('Assessment Dashboard', 'dashboard', '/assessment/dashboard'),
+  ]),
+  section('Assessment Structure', [
+    leaf('Weight Configuration', 'cog', '/assessment/weight-config'),
+    leaf('Assessment Schedule', 'calendar', '/assessment/schedule'),
+  ]),
+  section('Coursework (CW)', [
+    leaf('CW Overview', 'folder', '/assessment/cw-overview'),
+    leaf('Question Bank Upload', 'upload', '/assessment/cw-qbank'),
+    leaf('CW Submissions', 'files', '/assessment/cw-submissions'),
+    leaf('CW Rectification', 'reload', '/assessment/cw-rectify'),
+  ]),
+  section('Class Test (CBT)', [
+    leaf('CBT Overview', 'folder', '/assessment/cbt-overview'),
+    leaf('CBT Schedule', 'calendar', '/assessment/cbt-schedule'),
+    leaf('CBT Question Upload', 'upload', '/assessment/cbt-qupload'),
+    leaf('CBT Monitor', 'display', '/assessment/cbt-monitor'),
+  ]),
+  section('University Exam (UE)', [
+    leaf('UE Schedule', 'calendar', '/assessment/ue-schedule'),
+    leaf('QP Upload & Vetting', 'upload', '/assessment/qp-vetting'),
+    leaf('Hall Ticket Issuance', 'ticket', '/assessment/hall-ticket'),
+    leaf('Hall Ticket Print', 'printer', '/assessment/hall-print'),
+  ]),
+  section('Mark Entry & Results', [
+    leaf('Mark Entry — CW', 'pencil-alt', '/assessment/mark-cw'),
+    leaf('Mark Entry — CBT', 'pencil-alt', '/assessment/mark-cbt'),
+    leaf('Mark Entry — UE', 'pencil-alt', '/assessment/mark-ue'),
+    leaf('Result & Moderation', 'bar-chart', '/assessment/moderation'),
+  ]),
+  section('Resit & Disputes', [
+    leaf('Resit Calendar', 'calendar', '/assessment/resit-calendar'),
+    leaf('Resit Seating Allocator', 'users', '/assessment/resit-seating'),
+    leaf('CW Reevaluation', 'reload', '/assessment/reeval'),
+    leaf('CW Recheck Hub', 'search-alt', '/assessment/recheck'),
+  ]),
+  section('Reports', [
+    leaf('Pending QP Upload', 'folder', '/assessment/rpt-pending-qp'),
+    leaf('Faculty Summary', 'users', '/assessment/rpt-faculty'),
+  ]),
+]
+
 // Mirrors docs/MENU_ROUTES_REFERENCE.md — full access to everything, matching
 // the app's pre-permission behavior, so mock mode still exercises every page.
 const mockMenu: MenuNode[] = [
@@ -172,6 +216,7 @@ const mockMenu: MenuNode[] = [
       leaf('Permission Master', 'lock', '/config/permission-master'),
     ]),
   ]),
+  module_('Assessment', 'pencil-alt', ASSESSMENT_SECTIONS),
 ]
 
 // TEMPORARY: the real /me/menu response has no Employee module yet (backend
@@ -184,6 +229,8 @@ const HARDCODED_EMPLOYEE_MODULE: MenuNode = module_('Employee', 'briefcase', [
     leaf('Employee Master', 'user', 'employee-master'),
   ]),
 ])
+
+const HARDCODED_ASSESSMENT_MODULE: MenuNode = module_('Assessment', 'pencil-alt', ASSESSMENT_SECTIONS)
 
 // TEMPORARY: unlike Employee above, the real /me/menu response DOES have a
 // Finance module (it backs the already-real Cooperates/Discounts/Ledgers/
@@ -296,7 +343,8 @@ export function getMenu(): Promise<MenuResult> {
     .then(data => {
       const menu = data ?? []
       const withEmployee = menu.some(n => n.name === 'Employee') ? menu : [...menu, HARDCODED_EMPLOYEE_MODULE]
-      const withFinance  = mergeFinanceSections(withEmployee)
+      const withAssessment = withEmployee.some(n => n.name === 'Assessment') ? withEmployee : [...withEmployee, HARDCODED_ASSESSMENT_MODULE]
+      const withFinance  = mergeFinanceSections(withAssessment)
       const withBulkEdit = ensureBulkIntakeEdit(withFinance)
       const finalMenu = ensureProgrammeApproval(withBulkEdit)
       return { menu: finalMenu, isFallback: false }

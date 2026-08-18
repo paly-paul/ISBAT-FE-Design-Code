@@ -1,0 +1,148 @@
+'use client'
+import { ScrollTable } from '@/components/ScrollTable'
+import { ActionMenu } from '@/components/ActionMenu'
+
+export default function PendingQPUploadReport() {
+  return (
+    <div className="page active">
+      <div className="pg-hdr">
+        <div>
+          <div className="pg-title">Pending QP Upload Report</div>
+          <div className="pg-sub">Track which faculty have not uploaded question papers · Send bulk reminders</div>
+        </div>
+        <div className="pg-actions flex items-center gap-3">
+          <button className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium text-[13px] px-4 py-2.5 rounded-md transition-colors shadow-sm whitespace-nowrap">
+            Send Bulk Reminder
+          </button>
+          <button className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium text-[13px] px-4 py-2.5 rounded-md transition-colors shadow-sm whitespace-nowrap flex items-center gap-2">
+            <i className="lni lni-download"></i> Export
+          </button>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="p-5 border-b border-slate-100 flex gap-4 bg-slate-50/50 rounded-t-[14px]">
+          <div className="flex-1">
+            <label className="block text-[12px] font-semibold text-slate-700 mb-1.5">Session</label>
+            <select className="form-control px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 w-full appearance-none shadow-sm" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'8\' viewBox=\'0 0 12 8\'%3E%3Cpath d=\'M1 1l5 5 5-5\' stroke=\'%2364748b\' stroke-width=\'1.5\' fill=\'none\' stroke-linecap=\'round\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: '30px' }}>
+              <option>2024/25 Semester 1</option>
+              <option>2023/24 Semester 2</option>
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="block text-[12px] font-semibold text-slate-700 mb-1.5">Term</label>
+            <select className="form-control px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 w-full appearance-none shadow-sm" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'8\' viewBox=\'0 0 12 8\'%3E%3Cpath d=\'M1 1l5 5 5-5\' stroke=\'%2364748b\' stroke-width=\'1.5\' fill=\'none\' stroke-linecap=\'round\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: '30px' }}>
+              <option>Term 1</option>
+              <option>Term 2</option>
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="block text-[12px] font-semibold text-slate-700 mb-1.5">Exam Type</label>
+            <select className="form-control px-3 py-2 border-[1.5px] border-purple-400 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 w-full appearance-none shadow-sm ring-2 ring-purple-100" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'8\' viewBox=\'0 0 12 8\'%3E%3Cpath d=\'M1 1l5 5 5-5\' stroke=\'%2364748b\' stroke-width=\'1.5\' fill=\'none\' stroke-linecap=\'round\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: '30px' }}>
+              <option>All</option>
+              <option>CW</option>
+              <option>CBT</option>
+              <option>UE</option>
+            </select>
+          </div>
+        </div>
+        
+        <ScrollTable>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 48 }}></th>
+                <th>FACULTY</th>
+                <th>SUBJECT</th>
+                <th>TYPE</th>
+                <th>PROGRAMME</th>
+                <th>DEADLINE</th>
+                <th>DAYS OVERDUE</th>
+                <th>STATUS</th>
+                <th>ACTION</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <ActionMenu>
+                    <button className="btn btn-neu btn-sm"><i className="lni lni-eye"></i> View Profile</button>
+                  </ActionMenu>
+                </td>
+                <td className="text-slate-800">Tom Kizito</td>
+                <td className="font-mono text-[12.5px] text-slate-500">CSE 1212</td>
+                <td><span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[11px] font-bold">CW</span></td>
+                <td className="text-slate-600">BCS Sem 1</td>
+                <td className="text-red-500 font-medium">05 Nov</td>
+                <td><span className="bg-red-50 text-red-600 px-2.5 py-0.5 rounded-full text-[11px] font-bold">6 days</span></td>
+                <td><span className="bg-red-50 text-red-600 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-red-200">Overdue</span></td>
+                <td>
+                  <button className="bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-[11.5px] px-3 py-1 rounded-full transition-colors">
+                    Remind
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <ActionMenu>
+                    <button className="btn btn-neu btn-sm"><i className="lni lni-eye"></i> View Profile</button>
+                  </ActionMenu>
+                </td>
+                <td className="text-slate-800">Joseph Ayuma</td>
+                <td className="font-mono text-[12.5px] text-slate-500">BIO 2201</td>
+                <td><span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[11px] font-bold">CW</span></td>
+                <td className="text-slate-600">BMLT Sem 2</td>
+                <td className="text-red-500 font-medium">06 Nov</td>
+                <td><span className="bg-red-50 text-red-600 px-2.5 py-0.5 rounded-full text-[11px] font-bold">5 days</span></td>
+                <td><span className="bg-red-50 text-red-600 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-red-200">Overdue</span></td>
+                <td>
+                  <button className="bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-[11.5px] px-3 py-1 rounded-full transition-colors">
+                    Remind
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <ActionMenu>
+                    <button className="btn btn-neu btn-sm"><i className="lni lni-eye"></i> View Profile</button>
+                  </ActionMenu>
+                </td>
+                <td className="text-slate-800">Mary Nakato</td>
+                <td className="font-mono text-[12.5px] text-slate-500">ACC 3101</td>
+                <td><span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[11px] font-bold">CBT</span></td>
+                <td className="text-slate-600">BBA Sem 3</td>
+                <td className="text-amber-600 font-medium">10 Nov</td>
+                <td><span className="bg-amber-50 text-amber-600 px-2.5 py-0.5 rounded-full text-[11px] font-bold">1 day</span></td>
+                <td><span className="bg-amber-50 text-amber-600 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-amber-200">Due Soon</span></td>
+                <td>
+                  <button className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-[11.5px] px-3 py-1 rounded-full transition-colors shadow-sm">
+                    Remind
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <ActionMenu>
+                    <button className="btn btn-neu btn-sm"><i className="lni lni-eye"></i> View Profile</button>
+                  </ActionMenu>
+                </td>
+                <td className="text-slate-800">Tom Kizito</td>
+                <td className="font-mono text-[12.5px] text-slate-500">CSE 1212</td>
+                <td><span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[11px] font-bold">UE</span></td>
+                <td className="text-slate-600">BCS Sem 1</td>
+                <td className="text-slate-600 font-medium">20 Nov</td>
+                <td className="text-slate-400">—</td>
+                <td><span className="bg-amber-50 text-amber-600 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-amber-200">Pending</span></td>
+                <td>
+                  <button className="text-slate-500 hover:text-slate-800 font-medium text-[11.5px] px-2 py-1 rounded-md transition-colors">
+                    Remind
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </ScrollTable>
+      </div>
+    </div>
+  )
+}

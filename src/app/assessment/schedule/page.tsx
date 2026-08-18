@@ -1,0 +1,140 @@
+'use client'
+import { ScrollTable } from '@/components/ScrollTable'
+import { ActionMenu } from '@/components/ActionMenu'
+
+export default function AssessmentSchedulePage() {
+  return (
+    <div className="page active">
+      <div className="pg-hdr">
+        <div>
+          <div className="pg-title">Assessment Schedule</div>
+          <div className="pg-sub">Unified scheduler — define CW and CBT windows by scope</div>
+        </div>
+        <div className="pg-actions">
+          <button className="btn btn-primary btn-sm"><i className="lni lni-plus"></i> New Schedule</button>
+        </div>
+      </div>
+
+      <div className="card mb-4">
+        <div className="card-hdr">
+          <div className="card-title">Filter & Scope</div>
+        </div>
+        <div className="p-4 flex gap-4 flex-wrap">
+          <div className="flex-1 min-w-[200px]">
+            <label className="form-label text-[var(--fs-xs)] font-bold text-g700 block mb-1">Assessment Type</label>
+            <select className="ctrl w-full text-[var(--fs-sm)]">
+              <option>Coursework (CW)</option>
+              <option>Class Test (CBT)</option>
+            </select>
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <label className="form-label text-[var(--fs-xs)] font-bold text-g700 block mb-1">Scope</label>
+            <select className="ctrl w-full text-[var(--fs-sm)]">
+              <option>All (Campus-wide)</option>
+              <option>By Programme / Semester</option>
+              <option>Individual Subject</option>
+            </select>
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <label className="form-label text-[var(--fs-xs)] font-bold text-g700 block mb-1">Programme</label>
+            <select className="ctrl w-full text-[var(--fs-sm)]">
+              <option>— All Programmes —</option>
+              <option>BSc Computer Science</option>
+              <option>BBA</option>
+              <option>BMIT</option>
+            </select>
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <label className="form-label text-[var(--fs-xs)] font-bold text-g700 block mb-1">Term</label>
+            <select className="ctrl w-full text-[var(--fs-sm)]">
+              <option>Term 1</option>
+              <option>Term 2</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-hdr">
+          <div className="card-title">Scheduled Assessments</div>
+        </div>
+        <ScrollTable>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 48 }}></th>
+                <th>Subject</th>
+                <th>Type</th>
+                <th>Programme</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Publish</th>
+                <th>Rule</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <ActionMenu>
+                    <button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button>
+                    <button className="btn btn-neu btn-sm text-red-600"><i className="lni lni-trash"></i> Delete</button>
+                  </ActionMenu>
+                </td>
+                <td>
+                  <span className="font-bold text-[var(--blue)] font-mono">CSE 1212</span><br />
+                  <span className="text-[var(--fs-xs)] text-g500">Data Structures</span>
+                </td>
+                <td><span className="badge badge-purple">CW</span></td>
+                <td>BCS Sem 1</td>
+                <td className="text-g500">01 Nov 9:00 AM</td>
+                <td className="text-g500">15 Nov 11:59 PM</td>
+                <td><span className="badge badge-green">Published</span></td>
+                <td><span className="font-mono text-g700 font-bold">R3</span></td>
+                <td><span className="badge badge-green">Active</span></td>
+              </tr>
+              <tr>
+                <td>
+                  <ActionMenu>
+                    <button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button>
+                    <button className="btn btn-neu btn-sm text-red-600"><i className="lni lni-trash"></i> Delete</button>
+                  </ActionMenu>
+                </td>
+                <td>
+                  <span className="font-bold text-[var(--blue)] font-mono">CSE 1301</span><br />
+                  <span className="text-[var(--fs-xs)] text-g500">Algorithms</span>
+                </td>
+                <td><span className="badge badge-blue">CBT</span></td>
+                <td>BCS Sem 1</td>
+                <td className="text-g500">10 Nov 9:00 AM</td>
+                <td className="text-g500">10 Nov 11:00 AM</td>
+                <td><span className="badge badge-green">Published</span></td>
+                <td><span className="font-mono text-g700 font-bold">R1</span></td>
+                <td><span className="badge badge-green">Active</span></td>
+              </tr>
+              <tr>
+                <td>
+                  <ActionMenu>
+                    <button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit</button>
+                    <button className="btn btn-neu btn-sm text-red-600"><i className="lni lni-trash"></i> Delete</button>
+                  </ActionMenu>
+                </td>
+                <td>
+                  <span className="font-bold text-[var(--blue)] font-mono">MGT 2101</span><br />
+                  <span className="text-[var(--fs-xs)] text-g500">Business Mgmt</span>
+                </td>
+                <td><span className="badge badge-purple">CW</span></td>
+                <td>BBA Sem 3</td>
+                <td className="text-g500">05 Nov 9:00 AM</td>
+                <td className="text-g500">20 Nov 11:59 PM</td>
+                <td><span className="badge badge-amber">Hidden</span></td>
+                <td><span className="font-mono text-g700 font-bold">R3</span></td>
+                <td><span className="badge badge-amber">Pending</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </ScrollTable>
+      </div>
+    </div>
+  )
+}
