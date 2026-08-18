@@ -30,6 +30,11 @@ function blocksFromPermissionIds(permissionIds: number[], moduleByPermissionId: 
 // likely to trip the refresh/401 race documented in src/lib/api/client.ts
 // and log the user out. See PROJECT_STRUCTURE.md's client.ts notes.
 export function usePermissionWizard(enabled = true) {
+  // Plain `[]` here (not a separately-declared `any[]`-typed constant) so
+  // TypeScript contextually types the default against usePermissionCatalog's
+  // real return type — an explicitly any[]-typed fallback was widening
+  // `catalog` itself to `any`, which cascaded into "Parameter 'sm' implicitly
+  // has an 'any' type" below and failed the build under strict/noImplicitAny.
   const { data: catalog = [] } = usePermissionCatalog(enabled)
 
   // Merge permissions from catalog entries that share the same module.

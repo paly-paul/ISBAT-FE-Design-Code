@@ -22,7 +22,7 @@ const mockUnitTypes: UnitType[] = [
 // Fetch all unit types.
 export function getUnitTypes(): Promise<UnitType[]> {
   if (MOCK_AUTH) return Promise.resolve(mockUnitTypes)
-  return apiGet<UnitType[] | null>('/api/v1/academic/unit-types').then(data => data ?? [])
+  return apiGet<UnitType[] | null>('/api/v1/academic/unit-types').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Create a new unit type and return the saved record.

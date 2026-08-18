@@ -12,6 +12,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewCountryModal } from '@/components/modals/academic/NewCountryModal'
 import { EditCountryModal } from '@/components/modals/academic/EditCountryModal'
+import { ViewCountryModal } from '@/components/modals/academic/ViewCountryModal'
 import { useCountries, useCreateCountry, useUpdateCountry, useDeleteCountry, Country } from '@/hooks/config/useCountries'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -25,6 +26,7 @@ export default function Page() {
   const [filters, setFilters]       = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingCountry, setEditingCountry] = useState<Country | null>(null)
+  const [viewingCountry, setViewingCountry] = useState<Country | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Country | null>(null)
   const [search, setSearch] = useState('')
 
@@ -41,6 +43,11 @@ export default function Page() {
   function openEditModal(country: Country) {
     setEditingCountry(country)
     openModal('edit-country-modal')
+  }
+
+  function openViewModal(country: Country) {
+    setViewingCountry(country)
+    openModal('view-country-modal')
   }
 
   function confirmDeleteCountry() {
@@ -175,8 +182,9 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.countryGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r)}><i className="lni lni-eye"></i> View</button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
                             <i className="lni lni-pencil"></i> Edit
                           </button>}
@@ -215,6 +223,16 @@ export default function Page() {
         showToast={showToast}
         country={editingCountry}
         updateCountry={updateCountry}
+      />
+      <ViewCountryModal
+        isOpen={openModals.has('view-country-modal')}
+        onClose={() => closeModal('view-country-modal')}
+        showToast={showToast}
+        country={viewingCountry}
+        onEdit={() => {
+          closeModal('view-country-modal')
+          openEditModal(viewingCountry!)
+        }}
       />
       <Toast toast={toast} />
 

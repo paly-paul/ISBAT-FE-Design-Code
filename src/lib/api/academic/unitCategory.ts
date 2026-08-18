@@ -21,7 +21,7 @@ const mockUnitCategories: UnitCategory[] = [
 // Fetch all unit categories.
 export function getUnitCategories(): Promise<UnitCategory[]> {
   if (MOCK_AUTH) return Promise.resolve(mockUnitCategories)
-  return apiGet<UnitCategory[] | null>('/api/v1/academic/unit-categories').then(data => data ?? [])
+  return apiGet<UnitCategory[] | null>('/api/v1/academic/unit-categories').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Create a new unit category and return the saved record.

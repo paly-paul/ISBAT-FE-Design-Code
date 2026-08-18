@@ -364,7 +364,7 @@ export function getProgramMasters(search = ''): Promise<ProgramMaster[]> {
 export function getProgramMastersByCampus(campusGuid: string): Promise<ProgramMaster[]> {
   if (MOCK_AUTH) return Promise.resolve(mockProgramMasters)
   return apiGet<ProgramMaster[] | null>(`/api/v1/academic/program-master/by-campus/${campusGuid}`)
-    .then(data => data ?? [])
+    .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // --- Full details / Update / Delete ---------------------------------------

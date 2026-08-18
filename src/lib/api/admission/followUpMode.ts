@@ -19,7 +19,7 @@ const mockFollowUpModes: FollowUpMode[] = [
 // Fetch all followup modes.
 export function getFollowUpModes(): Promise<FollowUpMode[]> {
   if (MOCK_AUTH) return Promise.resolve(mockFollowUpModes)
-  return apiGet<FollowUpMode[] | null>('/api/v1/admissions/followup-modes').then(data => data ?? [])
+  return apiGet<FollowUpMode[] | null>('/api/v1/admissions/followup-modes').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Create a new followup mode and return the saved record.

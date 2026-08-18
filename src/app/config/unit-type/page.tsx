@@ -10,6 +10,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewUnitTypeModal } from '@/components/modals/academic/NewUnitTypeModal'
 import { EditUnitTypeModal } from '@/components/modals/academic/EditUnitTypeModal'
+import { ViewUnitTypeModal } from '@/components/modals/academic/ViewUnitTypeModal'
 import { useUnitTypes, useCreateUnitType, useUpdateUnitType, useDeleteUnitType, UnitType } from '@/hooks/config/useUnitTypes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -20,6 +21,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingUnitTypeGuid, setEditingUnitTypeGuid] = useState<string | null>(null)
+  const [viewingUnitTypeGuid, setViewingUnitTypeGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UnitType | null>(null)
   const [search, setSearch] = useState('')
 
@@ -45,6 +47,11 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingUnitTypeGuid(guid)
     openModal('edit-unit-type-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setViewingUnitTypeGuid(guid)
+    openModal('view-unit-type-modal')
   }
 
   function confirmDeleteUnitType() {
@@ -99,9 +106,10 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.unitTypeGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                       <ActionMenu>
-                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.unitTypeGuid)}>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.unitTypeGuid)}><i className="lni lni-eye"></i> View</button>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.unitTypeGuid)}>
                           <i className="lni lni-pencil"></i> Edit
                         </button>}
                         {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
@@ -131,6 +139,16 @@ export default function Page() {
         showToast={showToast}
         unitTypeGuid={editingUnitTypeGuid}
         updateUnitType={updateUnitType}
+      />
+      <ViewUnitTypeModal
+        isOpen={openModals.has('view-unit-type-modal')}
+        onClose={() => closeModal('view-unit-type-modal')}
+        showToast={showToast}
+        unitTypeGuid={viewingUnitTypeGuid}
+        onEdit={() => {
+          closeModal('view-unit-type-modal')
+          openEditModal(viewingUnitTypeGuid!)
+        }}
       />
       <Toast toast={toast} />
 

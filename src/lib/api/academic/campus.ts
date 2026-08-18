@@ -82,7 +82,7 @@ export interface CampusDropdownItem {
 
 export function getCampusDropdown(): Promise<CampusDropdownItem[]> {
   if (MOCK_AUTH) return Promise.resolve(mockCampuses.map(({ campusGuid, campusName }) => ({ campusGuid, campusName })))
-  return apiGet<CampusDropdownItem[] | null>('/api/v1/academic/campus/dropdown').then(data => data ?? [])
+  return apiGet<CampusDropdownItem[] | null>('/api/v1/academic/campus/dropdown').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Create a campus and return the saved record.

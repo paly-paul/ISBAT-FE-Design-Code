@@ -167,7 +167,7 @@ const mockPaymentTypes: PaymentTypeDto[] = [
 
 export function getApplicationPaymentBanks(): Promise<BankAccountInfoDto[]> {
   if (MOCK_AUTH) return Promise.resolve(mockBanks)
-  return apiGet<BankAccountInfoDto[] | null>('/api/v1/admissions/application-payments/dropdowns/banks').then(data => data ?? [])
+  return apiGet<BankAccountInfoDto[] | null>('/api/v1/admissions/application-payments/dropdowns/banks').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 interface UnconvertedEnquiriesResult {
@@ -198,22 +198,22 @@ export function getApplicationPaymentBatches(programGuid: string, semesterGuid: 
   if (MOCK_AUTH) return Promise.resolve(mockBatches)
   return apiGet<BatchInfoDto[] | null>(
     `/api/v1/admissions/application-payments/dropdowns/batches?programGuid=${programGuid}&semesterGuid=${semesterGuid}&batchTimeGuid=${batchTimeGuid}`,
-  ).then(data => data ?? [])
+  ).then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 export function getApplicationPaymentExemptionTypes(): Promise<ExemptionTypeDto[]> {
   if (MOCK_AUTH) return Promise.resolve(mockExemptionTypes)
-  return apiGet<ExemptionTypeDto[] | null>('/api/v1/admissions/application-payments/dropdowns/exemption-types').then(data => data ?? [])
+  return apiGet<ExemptionTypeDto[] | null>('/api/v1/admissions/application-payments/dropdowns/exemption-types').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 export function getApplicationPaymentFees(programGuid: string): Promise<ProgramFeeHeadInfoDto[]> {
   if (MOCK_AUTH) return Promise.resolve(mockFees)
-  return apiGet<ProgramFeeHeadInfoDto[] | null>(`/api/v1/admissions/application-payments/dropdowns/fees?programGuid=${programGuid}`).then(data => data ?? [])
+  return apiGet<ProgramFeeHeadInfoDto[] | null>(`/api/v1/admissions/application-payments/dropdowns/fees?programGuid=${programGuid}`).then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 export function getApplicationPaymentTypes(): Promise<PaymentTypeDto[]> {
   if (MOCK_AUTH) return Promise.resolve(mockPaymentTypes)
-  return apiGet<PaymentTypeDto[] | null>('/api/v1/admissions/application-payments/dropdowns/payment-types').then(data => data ?? [])
+  return apiGet<PaymentTypeDto[] | null>('/api/v1/admissions/application-payments/dropdowns/payment-types').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Dropdowns/ReceiptBooks.bru (GET .../dropdowns/receipt-books) is NOT wired

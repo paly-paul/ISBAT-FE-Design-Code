@@ -11,6 +11,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewEnquiryStatusModal } from '@/components/modals/academic/NewEnquiryStatusModal'
 import { EditEnquiryStatusModal } from '@/components/modals/academic/EditEnquiryStatusModal'
+import { ViewEnquiryStatusModal } from '@/components/modals/academic/ViewEnquiryStatusModal'
 import { useEnquiryStatuses, useCreateEnquiryStatus, useUpdateEnquiryStatus, useDeleteEnquiryStatus, EnquiryStatus } from '@/hooks/config/useEnquiryStatuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -22,6 +23,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingEnquiryStatusGuid, setEditingEnquiryStatusGuid] = useState<string | null>(null)
+  const [viewingEnquiryStatusGuid, setViewingEnquiryStatusGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<EnquiryStatus | null>(null)
   const [search, setSearch] = useState('')
 
@@ -50,6 +52,11 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingEnquiryStatusGuid(guid)
     openModal('edit-enquiry-status-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setViewingEnquiryStatusGuid(guid)
+    openModal('view-enquiry-status-modal')
   }
 
   function confirmDeleteEnquiryStatus() {
@@ -105,8 +112,9 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.enquiryStatusGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.enquiryStatusGuid)}><i className="lni lni-eye"></i> View</button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.enquiryStatusGuid)}>
                             <i className="lni lni-pencil"></i> Edit
                           </button>}
@@ -138,6 +146,16 @@ export default function Page() {
         showToast={showToast}
         enquiryStatusGuid={editingEnquiryStatusGuid}
         updateEnquiryStatus={updateEnquiryStatus}
+      />
+      <ViewEnquiryStatusModal
+        isOpen={openModals.has('view-enquiry-status-modal')}
+        onClose={() => closeModal('view-enquiry-status-modal')}
+        showToast={showToast}
+        enquiryStatusGuid={viewingEnquiryStatusGuid}
+        onEdit={() => {
+          closeModal('view-enquiry-status-modal')
+          openEditModal(viewingEnquiryStatusGuid!)
+        }}
       />
       <Toast toast={toast} />
 
