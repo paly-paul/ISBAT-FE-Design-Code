@@ -1874,6 +1874,28 @@ textarea.ctrl {
   }
 }
 
+/* Payment Console's outer Left-form/Right-preview split had the same
+   overflow bug as #page-payment's own .g2 above, and for the same reason:
+   plain .g2 (grid-template-columns: 1fr 1fr, no explicit min) leaves each
+   grid item's minimum width at the browser default (auto), which — just
+   like a flex child — can't shrink below its content's natural minimum
+   width. Step 2's ledger/history tables and Step 3's form easily exceed
+   half the page at anything under ~1500px, so instead of the column
+   shrinking, it overflowed and visually bled into the Allocation Preview
+   column next to it (confirmed live at 1300px and 1198px widths — this is
+   NOT gated behind the 1024px breakpoint below; it happens well above it).
+   minmax(0, 1fr) sets each track's floor to 0, so the column shrinks and
+   lets ScrollTable's own horizontal scroll do its job instead. */
+#page-payment-console > .g2 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)
+}
+
+@media(max-width:1024px) {
+  #page-payment-console > .g2 {
+    grid-template-columns: 1fr
+  }
+}
+
 .amt-display {
   display: flex;
   align-items: center;
@@ -2254,8 +2276,19 @@ textarea.ctrl {
 /* ═══════════════════════════════════════
    TABLE
 ═══════════════════════════════════════ */
+/* min-width: 0 — without it, ScrollTable's own wrapper (a flex/grid
+   descendant almost everywhere it's used) can be forced wider than its
+   container by the wide <table> inside, escaping past the card boundary
+   all the way to the page edge instead of staying put and letting
+   .tbl-wrap's own overflow-x:auto scroll internally (confirmed live at
+   ~500px on payment-console: Step 2's ledger table and the Allocation
+   Preview table both bled off the right edge of the viewport with no
+   scrollbar or arrow visible, rather than scrolling within their card).
+   Same fix as .card's own min-width:0 above it in the chain — applies
+   everywhere ScrollTable is used, not just this one page. */
 .tbl-scroll-host {
-  position: relative
+  position: relative;
+  min-width: 0
 }
 
 .tbl-empty-cell {
