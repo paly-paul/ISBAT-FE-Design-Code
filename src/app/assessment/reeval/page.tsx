@@ -62,7 +62,7 @@ export default function ReevaluationPage() {
                     <div className="text-[11px] font-medium text-amber-600">Day 3 / 5</div>
                   </div>
                 </td>
-                <td><span className="bg-amber-50 text-amber-600 border border-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap">Pending Faculty</span></td>
+                <td><span className="badge badge-amber">Pending Faculty</span></td>
                 <td className="text-right">
                   <button className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium text-[12px] px-3 py-1.5 rounded-md transition-colors shadow-sm whitespace-nowrap">
                     Remind Faculty
@@ -90,7 +90,7 @@ export default function ReevaluationPage() {
                     <div className="text-[11px] font-medium text-green-600">Day 2 / 5</div>
                   </div>
                 </td>
-                <td><span className="bg-amber-50 text-amber-600 border border-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap">Pending Faculty</span></td>
+                <td><span className="badge badge-amber">Pending Faculty</span></td>
                 <td className="text-right">
                   <button className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium text-[12px] px-3 py-1.5 rounded-md transition-colors shadow-sm whitespace-nowrap">
                     Remind Faculty
@@ -118,9 +118,9 @@ export default function ReevaluationPage() {
                     <div className="text-[11px] font-bold text-red-500">Overdue</div>
                   </div>
                 </td>
-                <td><span className="bg-red-50 text-red-600 border border-red-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap">Overdue</span></td>
+                <td><span className="badge badge-red">Overdue</span></td>
                 <td className="text-right">
-                  <button className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 font-bold text-[12px] px-3 py-1.5 rounded-md transition-colors shadow-sm whitespace-nowrap">
+                  <button className="btn btn-danger">
                     Escalate to Dean
                   </button>
                 </td>
@@ -146,7 +146,7 @@ export default function ReevaluationPage() {
                     <div className="text-[11px] font-medium text-green-600">Day 1 / 5</div>
                   </div>
                 </td>
-                <td><span className="bg-amber-50 text-amber-600 border border-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap">Pending Faculty</span></td>
+                <td><span className="badge badge-amber">Pending Faculty</span></td>
                 <td className="text-right">
                   <button className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium text-[12px] px-3 py-1.5 rounded-md transition-colors shadow-sm whitespace-nowrap">
                     Remind Faculty

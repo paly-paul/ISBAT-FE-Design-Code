@@ -1,6 +1,7 @@
 'use client'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function MarkEntryUePage() {
   return (
@@ -11,9 +12,12 @@ export default function MarkEntryUePage() {
           <div className="pg-sub">Enter UE marks · Matching Code for anonymous marking · IA + UE pass gate enforced</div>
         </div>
         <div className="pg-actions flex items-center gap-3">
-          <select className="px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none min-w-[300px]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-            <option>CSE 1301 - Algorithms (Standard/70m)</option>
-          </select>
+          <SearchSelect
+                options={[
+                  'CSE 1301 - Algorithms (Standard/70m)'
+                ]}
+                className="w-full"
+              />
           <button className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium text-[13px] px-5 py-2.5 rounded-md transition-colors shadow-sm whitespace-nowrap">
             Save All
           </button>
@@ -128,7 +132,7 @@ export default function MarkEntryUePage() {
                     <span className="text-[10px] font-semibold">(42%)</span>
                   </div>
                 </td>
-                <td><span className="bg-red-50 text-red-600 border border-red-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">FAIL<br/>(UE)</span></td>
+                <td><span className="badge badge-red">FAIL<br/>(UE)</span></td>
               </tr>
             </tbody>
           </table>

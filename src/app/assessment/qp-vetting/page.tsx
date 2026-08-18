@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function QpUploadVettingPage() {
   const [activeTab, setActiveTab] = useState('faculty')
@@ -15,7 +16,7 @@ export default function QpUploadVettingPage() {
         </div>
       </div>
 
-      <div className="flex gap-4 border-b border-slate-200 mb-6">
+      <div className="flex flex-wrap gap-4 border-b border-slate-200 mb-6">
         <button 
           className={`px-4 py-2.5 text-[13.5px] flex items-center gap-2 transition-colors ${activeTab === 'faculty' ? 'font-bold text-purple-700 border-b-[3px] border-purple-700' : 'font-medium text-slate-500 hover:text-slate-700'}`}
           onClick={() => setActiveTab('faculty')}
@@ -36,21 +37,27 @@ export default function QpUploadVettingPage() {
           
           {/* Left Side: Upload Form */}
           <div className="lg:col-span-3 bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5">
-            <div className="text-[13.5px] font-bold text-slate-900 mb-4">Upload Question Paper</div>
+            <div className="card-title mb-4">Upload Question Paper</div>
             
-            <div className="flex gap-4 mb-4">
+            <div className="flex flex-col md:flex-row gap-4 mb-4">
               <div className="flex-1">
                 <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Subject</label>
-                <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-                  <option>CSE 1212 – Data Structures</option>
-                </select>
+                <SearchSelect
+                options={[
+                  'CSE 1212 – Data Structures'
+                ]}
+                className="w-full"
+              />
               </div>
               <div className="flex-1">
                 <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Exam Type</label>
-                <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-                  <option>University Examination (UG)</option>
-                  <option>University Examination (PG)</option>
-                </select>
+                <SearchSelect
+                options={[
+                  'University Examination (UG)',
+                  'University Examination (PG)'
+                ]}
+                className="w-full"
+              />
               </div>
             </div>
             
@@ -77,7 +84,7 @@ export default function QpUploadVettingPage() {
 
           {/* Right Side: Status */}
           <div className="lg:col-span-2">
-            <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] mb-5">
+            <div className="card">
               <div className="p-5 pb-3">
                 <div className="text-[13.5px] font-bold text-slate-900">My QP Status</div>
               </div>
@@ -100,7 +107,7 @@ export default function QpUploadVettingPage() {
                     <tr>
                       <td className="font-mono text-slate-700">CSE 1212</td>
                       <td className="text-slate-400">—</td>
-                      <td><span className="bg-red-50 text-red-600 border border-red-100 px-2 py-0.5 rounded-full text-[10px] font-semibold">Pending Upload</span></td>
+                      <td><span className="badge badge-red">Pending Upload</span></td>
                     </tr>
                   </tbody>
                 </table>
@@ -125,7 +132,7 @@ export default function QpUploadVettingPage() {
       )}
 
       {activeTab === 'vetting' && (
-        <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5">
+        <div className="card">
           <div className="flex items-center gap-3 mb-4">
             <div className="text-[13.5px] font-bold text-slate-900">Vetting Queue</div>
             <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded-full text-[11px] font-semibold border border-red-100">2 awaiting review</span>

@@ -57,7 +57,7 @@ export default function UeSchedulePage() {
                 <td className="text-slate-700 font-mono text-[12px]">9:00 AM</td>
                 <td className="text-slate-800">Hall A</td>
                 <td className="text-slate-700 font-semibold">62</td>
-                <td><span className="bg-red-50 text-red-600 border border-red-100 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">QP Pending</span></td>
+                <td><span className="badge badge-red">QP Pending</span></td>
               </tr>
               <tr>
                 <td>
@@ -93,7 +93,7 @@ export default function UeSchedulePage() {
                 <td className="text-slate-700 font-mono text-[12px]">9:00 AM</td>
                 <td className="text-slate-800">Hall C</td>
                 <td className="text-slate-700 font-semibold">55</td>
-                <td><span className="bg-amber-50 text-amber-600 border border-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">Under Vetting</span></td>
+                <td><span className="badge badge-amber">Under Vetting</span></td>
               </tr>
               <tr>
                 <td>

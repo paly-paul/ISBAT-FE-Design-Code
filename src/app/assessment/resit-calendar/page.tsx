@@ -21,7 +21,7 @@ export default function ResitCalendarPage() {
         
         {/* Active Resit Window */}
         <div className="w-full lg:w-1/2 bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5 flex flex-col">
-          <div className="text-[13.5px] font-bold text-slate-900 mb-4">Active Resit Window</div>
+          <div className="card-title mb-4">Active Resit Window</div>
           
           <div className="grid grid-cols-[130px_1fr] gap-y-3 text-[13px] mb-5">
             <div className="text-slate-500">Session:</div>
@@ -50,7 +50,7 @@ export default function ResitCalendarPage() {
 
         {/* Fee Structure */}
         <div className="w-full lg:w-1/2 bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5 flex flex-col">
-          <div className="text-[13.5px] font-bold text-slate-900 mb-4">Fee Structure — Resit</div>
+          <div className="card-title mb-4">Fee Structure — Resit</div>
           
           <div className="flex-1">
             <table className="w-full text-[13px] text-left">
@@ -124,8 +124,8 @@ export default function ResitCalendarPage() {
                 <td className="text-slate-700">UE – Algorithms</td>
                 <td className="text-slate-700">UE Resit</td>
                 <td className="font-medium text-slate-900">$55</td>
-                <td><span className="bg-green-50 text-green-600 border border-green-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">Paid</span></td>
-                <td><span className="bg-green-50 text-green-600 border border-green-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">Cleared</span></td>
+                <td><span className="badge badge-green">Paid</span></td>
+                <td><span className="badge badge-green">Cleared</span></td>
               </tr>
               <tr>
                 <td>
@@ -139,8 +139,8 @@ export default function ResitCalendarPage() {
                 <td className="text-slate-700">IA – Business Mgmt</td>
                 <td className="text-slate-700">IA Resit</td>
                 <td className="font-medium text-slate-900">$40</td>
-                <td><span className="bg-amber-50 text-amber-600 border border-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">Pending</span></td>
-                <td><span className="bg-amber-50 text-amber-600 border border-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">Awaiting Fee</span></td>
+                <td><span className="badge badge-amber">Pending</span></td>
+                <td><span className="badge badge-amber">Awaiting Fee</span></td>
               </tr>
             </tbody>
           </table>

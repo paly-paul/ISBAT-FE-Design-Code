@@ -1,6 +1,7 @@
 'use client'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function PendingQPUploadReport() {
   return (
@@ -11,39 +12,37 @@ export default function PendingQPUploadReport() {
           <div className="pg-sub">Track which faculty have not uploaded question papers · Send bulk reminders</div>
         </div>
         <div className="pg-actions flex items-center gap-3">
-          <button className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium text-[13px] px-4 py-2.5 rounded-md transition-colors shadow-sm whitespace-nowrap">
+          <button className="btn btn-neu">
             Send Bulk Reminder
           </button>
-          <button className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium text-[13px] px-4 py-2.5 rounded-md transition-colors shadow-sm whitespace-nowrap flex items-center gap-2">
+          <button className="btn btn-neu">
             <i className="lni lni-download"></i> Export
           </button>
         </div>
       </div>
 
       <div className="card">
-        <div className="p-5 border-b border-slate-100 flex gap-4 bg-slate-50/50 rounded-t-[14px]">
+        <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row gap-4 bg-slate-50/50 rounded-t-[14px]">
           <div className="flex-1">
             <label className="block text-[12px] font-semibold text-slate-700 mb-1.5">Session</label>
-            <select className="form-control px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 w-full appearance-none shadow-sm" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'8\' viewBox=\'0 0 12 8\'%3E%3Cpath d=\'M1 1l5 5 5-5\' stroke=\'%2364748b\' stroke-width=\'1.5\' fill=\'none\' stroke-linecap=\'round\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: '30px' }}>
-              <option>2024/25 Semester 1</option>
-              <option>2023/24 Semester 2</option>
-            </select>
+            <SearchSelect
+              options={['2024/25 Semester 1', '2023/24 Semester 2']}
+              className="w-full"
+            />
           </div>
           <div className="flex-1">
             <label className="block text-[12px] font-semibold text-slate-700 mb-1.5">Term</label>
-            <select className="form-control px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 w-full appearance-none shadow-sm" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'8\' viewBox=\'0 0 12 8\'%3E%3Cpath d=\'M1 1l5 5 5-5\' stroke=\'%2364748b\' stroke-width=\'1.5\' fill=\'none\' stroke-linecap=\'round\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: '30px' }}>
-              <option>Term 1</option>
-              <option>Term 2</option>
-            </select>
+            <SearchSelect
+              options={['Term 1', 'Term 2']}
+              className="w-full"
+            />
           </div>
           <div className="flex-1">
             <label className="block text-[12px] font-semibold text-slate-700 mb-1.5">Exam Type</label>
-            <select className="form-control px-3 py-2 border-[1.5px] border-purple-400 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 w-full appearance-none shadow-sm ring-2 ring-purple-100" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'8\' viewBox=\'0 0 12 8\'%3E%3Cpath d=\'M1 1l5 5 5-5\' stroke=\'%2364748b\' stroke-width=\'1.5\' fill=\'none\' stroke-linecap=\'round\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: '30px' }}>
-              <option>All</option>
-              <option>CW</option>
-              <option>CBT</option>
-              <option>UE</option>
-            </select>
+            <SearchSelect
+              options={['All', 'CW', 'CBT', 'UE']}
+              className="w-full"
+            />
           </div>
         </div>
         

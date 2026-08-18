@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function HallTicketIssuancePage() {
   const [term, setTerm] = useState('Term 1')
@@ -15,35 +16,41 @@ export default function HallTicketIssuancePage() {
         </div>
       </div>
 
-      <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5 mb-5">
-        <div className="flex gap-4 items-end">
+      <div className="card">
+        <div className="flex flex-col md:flex-row gap-4 md:items-end">
           <div className="flex-1">
             <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Term</label>
-            <select 
-              value={term}
-              onChange={(e) => setTerm(e.target.value)}
-              className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" 
-              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}
-            >
-              <option value="Term 1">Term 1</option>
-              <option value="Term 2">Term 2</option>
-            </select>
+            <SearchSelect
+                options={[
+                  { value: 'Term 1', label: 'Term 1' },
+                  { value: 'Term 2', label: 'Term 2' }
+                ]}
+                value={term}
+                onChange={setTerm}
+                className="w-full"
+              />
           </div>
-          <div className="flex-[1.5]">
+          <div className="w-full md:w-auto" style={{ flex: 1.5 }}>
             <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Programme</label>
-            <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-              <option>BSc Computer Science</option>
-              <option>BBA</option>
-            </select>
+            <SearchSelect
+                options={[
+                  'BSc Computer Science',
+                  'BBA'
+                ]}
+                className="w-full"
+              />
           </div>
-          <div className="flex-[1.5]">
+          <div className="w-full md:w-auto" style={{ flex: 1.5 }}>
             <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Semester</label>
-            <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-              <option>Semester 1</option>
-            </select>
+            <SearchSelect
+                options={[
+                  'Semester 1'
+                ]}
+                className="w-full"
+              />
           </div>
           <div className="flex-1">
-            <input type="text" className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600" placeholder="Search" />
+            <input type="text" className="ctrl w-full" placeholder="Search" />
           </div>
         </div>
       </div>
@@ -51,8 +58,8 @@ export default function HallTicketIssuancePage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
         
         {/* Clearance Criteria */}
-        <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-6">
-          <div className="text-[13.5px] font-bold text-slate-900 mb-5 flex items-center gap-2">
+        <div className="card">
+          <div className="card-title mb-4 flex items-center gap-2">
             Clearance Criteria 
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${term === 'Term 1' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-purple-50 text-purple-600 border-purple-100'}`}>
               {term}
@@ -101,8 +108,8 @@ export default function HallTicketIssuancePage() {
         </div>
 
         {/* Selected Student */}
-        <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-6">
-          <div className="text-[13.5px] font-bold text-slate-900 mb-5">Selected Student</div>
+        <div className="card">
+          <div className="card-title mb-4">Selected Student</div>
           
           <div className="space-y-3 mb-6">
             <div className="flex text-[13px]">
@@ -119,16 +126,16 @@ export default function HallTicketIssuancePage() {
             </div>
             <div className="flex text-[13px] items-center">
               <div className="w-[100px] text-slate-500 font-medium">CW Status:</div>
-              <div><span className="bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full text-[11px] font-semibold">Submitted</span></div>
+              <div><span className="badge badge-green">Submitted</span></div>
             </div>
             <div className="flex text-[13px] items-center">
               <div className="w-[100px] text-slate-500 font-medium">CBT Status:</div>
-              <div><span className="bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full text-[11px] font-semibold">Submitted</span></div>
+              <div><span className="badge badge-green">Submitted</span></div>
             </div>
           </div>
 
           <div className="pt-4 border-t border-slate-100">
-            <button className="bg-green-50 text-green-600 font-semibold text-[13px] px-4 py-2 rounded-md opacity-60 cursor-not-allowed border border-green-200">
+            <button className="btn btn-success opacity-60 cursor-not-allowed" disabled>
               Issue Hall Ticket
             </button>
             <div className="text-[11px] text-red-500 mt-2 font-medium">Issue blocked — 50% fee clearance not met</div>
@@ -138,7 +145,7 @@ export default function HallTicketIssuancePage() {
       </div>
 
       <div className="card">
-        <div className="px-5 py-4 border-b border-slate-100">
+        <div className="card-hdr">
           <div className="text-[13.5px] font-bold text-slate-900">Student Clearance List</div>
         </div>
         <ScrollTable>
@@ -163,10 +170,10 @@ export default function HallTicketIssuancePage() {
                 </td>
                 <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0017</span></td>
                 <td className="text-slate-800">Emmanuel Okello</td>
-                <td><span className="bg-green-50 text-green-700 border border-green-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">100%</span></td>
-                <td><span className="bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full text-[10px] font-bold">✓</span></td>
-                <td><span className="bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full text-[10px] font-bold">✓</span></td>
-                <td><span className="bg-green-50 text-green-700 border border-green-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">Ready</span></td>
+                <td><span className="badge badge-green">100%</span></td>
+                <td><span className="badge badge-green">✓</span></td>
+                <td><span className="badge badge-green">✓</span></td>
+                <td><span className="badge badge-green">Ready</span></td>
               </tr>
               <tr>
                 <td>
@@ -176,10 +183,10 @@ export default function HallTicketIssuancePage() {
                 </td>
                 <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0031</span></td>
                 <td className="text-slate-800">Amara Nkosi</td>
-                <td><span className="bg-red-50 text-red-600 border border-red-100 px-2.5 py-0.5 rounded-full text-[11px] font-bold">50%</span></td>
-                <td><span className="bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full text-[10px] font-bold">✓</span></td>
-                <td><span className="bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full text-[10px] font-bold">✓</span></td>
-                <td><span className="bg-red-50 text-red-600 border border-red-100 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">Fee Pending</span></td>
+                <td><span className="badge badge-red">50%</span></td>
+                <td><span className="badge badge-green">✓</span></td>
+                <td><span className="badge badge-green">✓</span></td>
+                <td><span className="badge badge-red">Fee Pending</span></td>
               </tr>
               <tr>
                 <td>
@@ -189,10 +196,10 @@ export default function HallTicketIssuancePage() {
                 </td>
                 <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0044</span></td>
                 <td className="text-slate-800">Grace Akello</td>
-                <td><span className="bg-amber-50 text-amber-600 border border-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">60%</span></td>
-                <td><span className="bg-red-50 text-red-600 border border-red-100 px-2 py-0.5 rounded-full text-[10px] font-bold">✗</span></td>
-                <td><span className="bg-red-50 text-red-600 border border-red-100 px-2 py-0.5 rounded-full text-[10px] font-bold">✗</span></td>
-                <td><span className="bg-red-50 text-red-600 border border-red-100 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">CW/CBT Pending</span></td>
+                <td><span className="badge badge-amber">60%</span></td>
+                <td><span className="badge badge-red">✗</span></td>
+                <td><span className="badge badge-red">✗</span></td>
+                <td><span className="badge badge-red">CW/CBT Pending</span></td>
               </tr>
               <tr>
                 <td>
@@ -202,10 +209,10 @@ export default function HallTicketIssuancePage() {
                 </td>
                 <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0058</span></td>
                 <td className="text-slate-800">David Ssemwogerere</td>
-                <td><span className="bg-green-50 text-green-700 border border-green-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">100%</span></td>
-                <td><span className="bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full text-[10px] font-bold">✓</span></td>
-                <td><span className="bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full text-[10px] font-bold">✓</span></td>
-                <td><span className="bg-green-50 text-green-700 border border-green-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">Ready</span></td>
+                <td><span className="badge badge-green">100%</span></td>
+                <td><span className="badge badge-green">✓</span></td>
+                <td><span className="badge badge-green">✓</span></td>
+                <td><span className="badge badge-green">Ready</span></td>
               </tr>
             </tbody>
           </table>

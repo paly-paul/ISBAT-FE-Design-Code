@@ -1,6 +1,7 @@
 'use client'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function HallTicketPrintPage() {
   return (
@@ -12,28 +13,37 @@ export default function HallTicketPrintPage() {
         </div>
       </div>
 
-      <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5 mb-5">
-        <div className="flex gap-4 items-end mb-4">
+      <div className="card">
+        <div className="flex flex-col md:flex-row gap-4 md:items-end mb-4">
           <div className="flex-1">
             <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Programme</label>
-            <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-              <option>BSc Computer Science</option>
-              <option>BBA</option>
-              <option>BMIT</option>
-            </select>
+            <SearchSelect
+                options={[
+                  'BSc Computer Science',
+                  'BBA',
+                  'BMIT'
+                ]}
+                className="w-full"
+              />
           </div>
           <div className="flex-1">
             <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Semester</label>
-            <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-              <option>Semester 1</option>
-            </select>
+            <SearchSelect
+                options={[
+                  'Semester 1'
+                ]}
+                className="w-full"
+              />
           </div>
           <div className="flex-1">
             <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Term</label>
-            <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-              <option>Term 1</option>
-              <option>Term 2</option>
-            </select>
+            <SearchSelect
+                options={[
+                  'Term 1',
+                  'Term 2'
+                ]}
+                className="w-full"
+              />
           </div>
           <div className="flex justify-end">
             <button className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium text-[13px] px-5 py-2.5 rounded-md transition-colors shadow-sm flex items-center gap-2 h-[38.5px]">

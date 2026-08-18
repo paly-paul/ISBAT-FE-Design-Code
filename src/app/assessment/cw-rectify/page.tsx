@@ -1,4 +1,5 @@
 'use client'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function CwRectificationPage() {
   return (
@@ -11,35 +12,44 @@ export default function CwRectificationPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
-        <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5">
-          <div className="text-[13.5px] font-bold text-slate-900 mb-4">Find Submission</div>
+        <div className="card">
+          <div className="card-title mb-4">Find Submission</div>
           
-          <div className="flex gap-4 mb-4">
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
             <div className="flex-1">
               <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Programme</label>
-              <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-                <option>BSc Computer Science</option>
-              </select>
+              <SearchSelect
+                options={[
+                  'BSc Computer Science'
+                ]}
+                className="w-full"
+              />
             </div>
             <div className="flex-1">
               <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Semester</label>
-              <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-                <option>Semester 1</option>
-              </select>
+              <SearchSelect
+                options={[
+                  'Semester 1'
+                ]}
+                className="w-full"
+              />
             </div>
           </div>
           
-          <div className="flex gap-4 mb-5">
+          <div className="flex flex-col md:flex-row gap-4 mb-5">
             <div className="flex-1">
               <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Subject</label>
-              <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-                <option>CSE 1212 – Data Structures</option>
-                <option>CSE 1301 – Algorithms</option>
-              </select>
+              <SearchSelect
+                options={[
+                  'CSE 1212 – Data Structures',
+                  'CSE 1301 – Algorithms'
+                ]}
+                className="w-full"
+              />
             </div>
             <div className="flex-1">
               <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Student (Reg. No.)</label>
-              <input type="text" className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600" placeholder="BCS/2024/0031" />
+              <input type="text" className="ctrl w-full" placeholder="BCS/2024/0031" />
             </div>
           </div>
           
@@ -48,8 +58,8 @@ export default function CwRectificationPage() {
           </button>
         </div>
 
-        <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5">
-          <div className="text-[13.5px] font-bold text-slate-900 mb-4">Submission Details</div>
+        <div className="card">
+          <div className="card-title mb-4">Submission Details</div>
           <div className="space-y-3">
             <div className="flex text-[13px]">
               <div className="w-[120px] text-slate-500 font-medium">Student:</div>
@@ -116,7 +126,7 @@ export default function CwRectificationPage() {
           <div className="text-[12.5px] text-slate-500 leading-snug mb-5 flex-1">
             Routes submission back to <strong className="text-slate-700">original faculty</strong> for mark review. A pending alert is added to their dashboard. Used for routine grading variance (1–2% of cases).
           </div>
-          <button className="bg-green-50 text-green-700 border border-green-200 rounded-lg px-4 py-2 text-[12.5px] font-semibold shadow-sm hover:bg-green-100 transition-colors">
+          <button className="badge badge-green">
             Send for Reevaluation
           </button>
         </div>
