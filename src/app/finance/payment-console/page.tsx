@@ -348,7 +348,20 @@ export default function PaymentConsolePage() {
 
         <div className="g2">
           {/* LEFT column */}
-          <div className="flex flex-col gap-5">
+          {/* min-w-0 — minmax(0,1fr) on .g2's own track (globals.css) stops
+              this grid item from being forced wider than its column by its
+              CONTENT's min-content size, but that's a track-level fix; this
+              div is also a flex container in its own right (flex-col) whose
+              CHILDREN (the .card's card-hdr rows) still computed against
+              whatever width this div settled on. Without an explicit floor
+              here too, a still-too-wide badge+title row inside Step 2's
+              card-hdr wasn't triggering its own flex-wrap — the layout
+              engine considered it "fits" against a wider-than-visible box,
+              and the overflow past the true viewport edge was silently
+              clipped by body's app-wide overflow-x:hidden instead of
+              wrapping or scrolling (confirmed live at ~455px: "UGX
+              2,700,250 outstanding" cut off mid-word, no wrap, no scrollbar). */}
+          <div className="flex flex-col gap-5 min-w-0">
 
             {/* Step 1: Student Lookup */}
             <div className="card">
@@ -615,8 +628,9 @@ export default function PaymentConsolePage() {
             )}
           </div>
 
-          {/* RIGHT column: Allocation Preview + Receipt */}
-          <div className="flex flex-col gap-5">
+          {/* RIGHT column: Allocation Preview + Receipt — min-w-0 for the
+              same reason as the LEFT column above. */}
+          <div className="flex flex-col gap-5 min-w-0">
             {selectedApplicationGuid && (
               <div className="card" style={{ background: 'linear-gradient(135deg,var(--b50),var(--white))' }}>
                 <div className="card-hdr">

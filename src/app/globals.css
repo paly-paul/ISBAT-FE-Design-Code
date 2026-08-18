@@ -2276,8 +2276,19 @@ textarea.ctrl {
 /* ═══════════════════════════════════════
    TABLE
 ═══════════════════════════════════════ */
+/* min-width: 0 — without it, ScrollTable's own wrapper (a flex/grid
+   descendant almost everywhere it's used) can be forced wider than its
+   container by the wide <table> inside, escaping past the card boundary
+   all the way to the page edge instead of staying put and letting
+   .tbl-wrap's own overflow-x:auto scroll internally (confirmed live at
+   ~500px on payment-console: Step 2's ledger table and the Allocation
+   Preview table both bled off the right edge of the viewport with no
+   scrollbar or arrow visible, rather than scrolling within their card).
+   Same fix as .card's own min-width:0 above it in the chain — applies
+   everywhere ScrollTable is used, not just this one page. */
 .tbl-scroll-host {
-  position: relative
+  position: relative;
+  min-width: 0
 }
 
 .tbl-empty-cell {
