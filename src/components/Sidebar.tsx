@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useMenu } from '@/hooks/users/useMenu'
 import { MenuNode } from '@/lib/api/users/menu'
 
-export type RailId = 'admission' | 'academic' | 'finance' | 'student' | 'employee' | 'config'
+export type RailId = 'admission' | 'academic' | 'finance' | 'student' | 'employee' | 'assessment' | 'config'
 
 interface SidebarProps {
   panelOpen: boolean
@@ -31,6 +31,7 @@ const RAIL_DEFS: RailDef[] = [
   { id: 'finance', name: 'Finance', fallbackIcon: 'lni lni-dollar', footer: 'S5 · Finance Service' },
   { id: 'student', name: 'Student', fallbackIcon: 'lni lni-user', footer: 'S10 · Student Service' },
   { id: 'employee', name: 'Employee', fallbackIcon: 'lni lni-briefcase', footer: 'S4 · Employee Service' },
+  { id: 'assessment', name: 'Assessment', fallbackIcon: 'lni lni-pencil-alt', footer: 'S4 · Evaluation Lifecycle' },
   { id: 'config', name: 'Config', fallbackIcon: 'lni lni-cog', footer: 'S0 · Core Config' },
 ]
 
@@ -47,6 +48,7 @@ const BADGES: Record<string, { text: string; variant?: 'warn' | 'green' }> = {
   'session-movement': { text: '1', variant: 'warn' },
   'odl-applications': { text: '7' },
   'odl-reconciliation': { text: '4', variant: 'warn' },
+  'cw-qbank': { text: '3', variant: 'warn' },
 }
 
 function slug(s: string) {
@@ -218,6 +220,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
           <span className="rail-label">Admin</span>
           <span className="rail-tooltip">User &amp; Role · Coming Soon</span>
         </div>
+        {renderRailSlot(RAIL_DEFS[6])}
       </div>
 
       <div className={`sb-panel-shell${panelOpen ? ' open' : ''}`}>
