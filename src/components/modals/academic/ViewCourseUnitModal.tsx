@@ -1,8 +1,9 @@
 'use client'
 import { ModalProps } from '../types'
-import { useCourseUnit } from '@/hooks/academic/useCourseUnits'
-import { AuthError } from '@/lib/api/client'
 import { FailurePopup } from './FailurePopup'
+import { AuthError } from '@/lib/api/client'
+import { useCourseUnit } from '@/hooks/academic/useCourseUnits'
+import { useRepetitionTags } from '@/hooks/academic/useRepetitionTags'
 
 interface ViewCourseUnitModalProps extends ModalProps {
   courseUnitGuid: string | null

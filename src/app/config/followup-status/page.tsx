@@ -11,6 +11,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewFollowUpStatusModal } from '@/components/modals/academic/NewFollowUpStatusModal'
 import { EditFollowUpStatusModal } from '@/components/modals/academic/EditFollowUpStatusModal'
+import { ViewFollowUpStatusModal } from '@/components/modals/academic/ViewFollowUpStatusModal'
 import { useFollowUpStatuses, useCreateFollowUpStatus, useUpdateFollowUpStatus, useDeleteFollowUpStatus, FollowUpStatus } from '@/hooks/config/useFollowUpStatuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -22,6 +23,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingFollowUpStatusGuid, setEditingFollowUpStatusGuid] = useState<string | null>(null)
+  const [viewingFollowUpStatusGuid, setViewingFollowUpStatusGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<FollowUpStatus | null>(null)
   const [search, setSearch] = useState('')
 
@@ -48,6 +50,11 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingFollowUpStatusGuid(guid)
     openModal('edit-followup-status-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setViewingFollowUpStatusGuid(guid)
+    openModal('view-followup-status-modal')
   }
 
   function confirmDeleteFollowUpStatus() {
@@ -104,8 +111,9 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.followUpStatusGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.followUpStatusGuid)}><i className="lni lni-eye"></i> View</button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.followUpStatusGuid)}>
                             <i className="lni lni-pencil"></i> Edit
                           </button>}
@@ -143,6 +151,16 @@ export default function Page() {
         showToast={showToast}
         followUpStatusGuid={editingFollowUpStatusGuid}
         updateFollowUpStatus={updateFollowUpStatus}
+      />
+      <ViewFollowUpStatusModal
+        isOpen={openModals.has('view-followup-status-modal')}
+        onClose={() => closeModal('view-followup-status-modal')}
+        showToast={showToast}
+        followUpStatusGuid={viewingFollowUpStatusGuid}
+        onEdit={() => {
+          closeModal('view-followup-status-modal')
+          openEditModal(viewingFollowUpStatusGuid!)
+        }}
       />
       <Toast toast={toast} />
 

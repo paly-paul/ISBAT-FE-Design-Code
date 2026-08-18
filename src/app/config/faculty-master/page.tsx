@@ -6,6 +6,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { NewFacultyModal } from '@/components/modals/academic/NewFacultyModal'
 import { EditFacultyModal } from '@/components/modals/academic/EditFacultyModal'
+import { ViewFacultyModal } from '@/components/modals/academic/ViewFacultyModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -26,6 +27,7 @@ export default function Page() {
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingFaculty, setEditingFaculty] = useState<Faculty | null>(null)
+  const [viewingFaculty, setViewingFaculty] = useState<Faculty | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Faculty | null>(null)
   const [search, setSearch] = useState('')
 
@@ -53,6 +55,11 @@ export default function Page() {
   function openEditModal(faculty: Faculty) {
     setEditingFaculty(faculty)
     openModal('edit-faculty-modal')
+  }
+
+  function openViewModal(faculty: Faculty) {
+    setViewingFaculty(faculty)
+    openModal('view-faculty-modal')
   }
 
   function confirmDeleteFaculty() {
@@ -156,8 +163,9 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.facultyGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r)}><i className="lni lni-eye"></i> View</button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}><i className="lni lni-pencil"></i> Edit</button>}
                           {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
                         </ActionMenu>
@@ -187,6 +195,16 @@ export default function Page() {
         showToast={showToast}
         faculty={editingFaculty}
         updateFaculty={updateFaculty}
+      />
+      <ViewFacultyModal
+        isOpen={openModals.has('view-faculty-modal')}
+        onClose={() => closeModal('view-faculty-modal')}
+        showToast={showToast}
+        faculty={viewingFaculty}
+        onEdit={() => {
+          closeModal('view-faculty-modal')
+          openEditModal(viewingFaculty!)
+        }}
       />
       <Toast toast={toast} />
 

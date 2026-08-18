@@ -11,6 +11,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewSkillModal } from '@/components/modals/academic/NewSkillModal'
 import { EditSkillModal } from '@/components/modals/academic/EditSkillModal'
+import { ViewSkillModal } from '@/components/modals/academic/ViewSkillModal'
 import { useSkillMasters, useCreateSkillMaster, useUpdateSkillMaster, useDeleteSkillMaster, SkillMaster } from '@/hooks/config/useSkillMaster'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -22,6 +23,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingSkill, setEditingSkill] = useState<SkillMaster | null>(null)
+  const [viewingSkill, setViewingSkill] = useState<SkillMaster | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<SkillMaster | null>(null)
   const [search, setSearch] = useState('')
 
@@ -49,6 +51,11 @@ export default function Page() {
   function openEditModal(skill: SkillMaster) {
     setEditingSkill(skill)
     openModal('edit-skill-modal')
+  }
+
+  function openViewModal(skill: SkillMaster) {
+    setViewingSkill(skill)
+    openModal('view-skill-modal')
   }
 
   function confirmDeleteSkill() {
@@ -103,8 +110,11 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.intSkill}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r)}>
+                            <i className="lni lni-eye"></i> View
+                          </button>
                           {permissions.edit && (
                             <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
                               <i className="lni lni-pencil"></i> Edit
@@ -139,6 +149,16 @@ export default function Page() {
         showToast={showToast}
         skill={editingSkill}
         updateSkill={updateSkill}
+      />
+      <ViewSkillModal
+        isOpen={openModals.has('view-skill-modal')}
+        onClose={() => closeModal('view-skill-modal')}
+        showToast={showToast}
+        skill={viewingSkill}
+        onEdit={() => {
+          closeModal('view-skill-modal')
+          openEditModal(viewingSkill!)
+        }}
       />
       <Toast toast={toast} />
 

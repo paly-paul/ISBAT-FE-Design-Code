@@ -11,6 +11,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewEnquirySourceModal } from '@/components/modals/academic/NewEnquirySourceModal'
 import { EditEnquirySourceModal } from '@/components/modals/academic/EditEnquirySourceModal'
+import { ViewEnquirySourceModal } from '@/components/modals/academic/ViewEnquirySourceModal'
 import { useEnquirySources, useCreateEnquirySource, useUpdateEnquirySource, useDeleteEnquirySource, EnquirySource } from '@/hooks/admission/useEnquirySources'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -22,6 +23,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingSourceGuid, setEditingSourceGuid] = useState<string | null>(null)
+  const [viewingSourceGuid, setViewingSourceGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<EnquirySource | null>(null)
   const [search, setSearch] = useState('')
 
@@ -50,6 +52,11 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingSourceGuid(guid)
     openModal('edit-enquiry-source-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setViewingSourceGuid(guid)
+    openModal('view-enquiry-source-modal')
   }
 
   function confirmDeleteEnquirySource() {
@@ -104,8 +111,9 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.isbatSourceGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.isbatSourceGuid)}><i className="lni lni-eye"></i> View</button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.isbatSourceGuid)}>
                             <i className="lni lni-pencil"></i> Edit
                           </button>}
@@ -136,6 +144,16 @@ export default function Page() {
         showToast={showToast}
         isbatSourceGuid={editingSourceGuid}
         updateEnquirySource={updateEnquirySource}
+      />
+      <ViewEnquirySourceModal
+        isOpen={openModals.has('view-enquiry-source-modal')}
+        onClose={() => closeModal('view-enquiry-source-modal')}
+        showToast={showToast}
+        isbatSourceGuid={viewingSourceGuid}
+        onEdit={() => {
+          closeModal('view-enquiry-source-modal')
+          openEditModal(viewingSourceGuid!)
+        }}
       />
       <Toast toast={toast} />
 

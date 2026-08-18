@@ -47,7 +47,7 @@ const mockProgramLevels: ProgramLevel[] = [
 export function getProgramLevels(search = ''): Promise<ProgramLevel[]> {
   if (MOCK_AUTH) return Promise.resolve(mockProgramLevels)
   const query = search ? `?search=${encodeURIComponent(search)}` : ''
-  return apiGet<ProgramLevel[] | null>(`/api/v1/academic/program-levels${query}`).then(data => data ?? [])
+  return apiGet<ProgramLevel[] | null>(`/api/v1/academic/program-levels${query}`).then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Payload used when creating or updating a programme level.

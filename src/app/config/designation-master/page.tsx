@@ -12,6 +12,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewDesignationModal } from '@/components/modals/academic/NewDesignationModal'
 import { EditDesignationModal } from '@/components/modals/academic/EditDesignationModal'
+import { ViewDesignationModal } from '@/components/modals/academic/ViewDesignationModal'
 import { useDesignations, useCreateDesignation, useUpdateDesignation, useDeleteDesignation, Designation } from '@/hooks/config/useDesignations'
 import { useDepartments } from '@/hooks/config/useDepartments'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -26,6 +27,7 @@ export default function Page() {
   const [filters, setFilters]       = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingDesignation, setEditingDesignation] = useState<Designation | null>(null)
+  const [viewingDesignation, setViewingDesignation] = useState<Designation | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Designation | null>(null)
   const [search, setSearch] = useState('')
 
@@ -48,6 +50,11 @@ export default function Page() {
   function openEditModal(designation: Designation) {
     setEditingDesignation(designation)
     openModal('edit-designation-modal')
+  }
+
+  function openViewModal(designation: Designation) {
+    setViewingDesignation(designation)
+    openModal('view-designation-modal')
   }
 
   function confirmDeleteDesignation() {
@@ -170,8 +177,9 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.intDesignation}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r)}><i className="lni lni-eye"></i> View</button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
                             <i className="lni lni-pencil"></i> Edit
                           </button>}
@@ -203,6 +211,16 @@ export default function Page() {
         showToast={showToast}
         designation={editingDesignation}
         updateDesignation={updateDesignation}
+      />
+      <ViewDesignationModal
+        isOpen={openModals.has('view-designation-modal')}
+        onClose={() => closeModal('view-designation-modal')}
+        showToast={showToast}
+        designation={viewingDesignation}
+        onEdit={() => {
+          closeModal('view-designation-modal')
+          openEditModal(viewingDesignation!)
+        }}
       />
       <Toast toast={toast} />
 

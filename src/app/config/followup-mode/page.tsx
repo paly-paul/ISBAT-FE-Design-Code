@@ -11,6 +11,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewFollowUpModeModal } from '@/components/modals/academic/NewFollowUpModeModal'
 import { EditFollowUpModeModal } from '@/components/modals/academic/EditFollowUpModeModal'
+import { ViewFollowUpModeModal } from '@/components/modals/academic/ViewFollowUpModeModal'
 import { useFollowUpModes, useCreateFollowUpMode, useUpdateFollowUpMode, useDeleteFollowUpMode, FollowUpMode } from '@/hooks/admission/useFollowUpModes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -22,6 +23,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingModeGuid, setEditingModeGuid] = useState<string | null>(null)
+  const [viewingModeGuid, setViewingModeGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<FollowUpMode | null>(null)
   const [search, setSearch] = useState('')
 
@@ -48,6 +50,11 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingModeGuid(guid)
     openModal('edit-followup-mode-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setViewingModeGuid(guid)
+    openModal('view-followup-mode-modal')
   }
 
   function confirmDeleteFollowUpMode() {
@@ -102,8 +109,9 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.followUpModeGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.followUpModeGuid)}><i className="lni lni-eye"></i> View</button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.followUpModeGuid)}>
                             <i className="lni lni-pencil"></i> Edit
                           </button>}
@@ -134,6 +142,16 @@ export default function Page() {
         showToast={showToast}
         followUpModeGuid={editingModeGuid}
         updateFollowUpMode={updateFollowUpMode}
+      />
+      <ViewFollowUpModeModal
+        isOpen={openModals.has('view-followup-mode-modal')}
+        onClose={() => closeModal('view-followup-mode-modal')}
+        showToast={showToast}
+        followUpModeGuid={viewingModeGuid}
+        onEdit={() => {
+          closeModal('view-followup-mode-modal')
+          openEditModal(viewingModeGuid!)
+        }}
       />
       <Toast toast={toast} />
 

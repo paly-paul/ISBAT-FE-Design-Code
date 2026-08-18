@@ -268,7 +268,7 @@ const mockCountries: CountryDropdownDto[] = [
 
 export function getFilingCountries(): Promise<CountryDropdownDto[]> {
   if (MOCK_AUTH) return Promise.resolve(mockCountries)
-  return apiGet<CountryDropdownDto[] | null>('/api/v1/admissions/application-filling/countries').then(data => data ?? [])
+  return apiGet<CountryDropdownDto[] | null>('/api/v1/admissions/application-filling/countries').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Backs /admission/applicants — confirmed via a real GET response (see

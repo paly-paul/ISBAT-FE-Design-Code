@@ -12,6 +12,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewDepartmentModal } from '@/components/modals/academic/NewDepartmentModal'
 import { EditDepartmentModal } from '@/components/modals/academic/EditDepartmentModal'
+import { ViewDepartmentModal } from '@/components/modals/academic/ViewDepartmentModal'
 import { useDepartments, useCreateDepartment, useUpdateDepartment, useDeleteDepartment, Department } from '@/hooks/config/useDepartments'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -30,6 +31,7 @@ export default function Page() {
   const [filters, setFilters]       = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null)
+  const [viewingDepartment, setViewingDepartment] = useState<Department | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null)
   const [search, setSearch] = useState('')
 
@@ -46,6 +48,11 @@ export default function Page() {
   function openEditModal(department: Department) {
     setEditingDepartment(department)
     openModal('edit-dept-modal')
+  }
+
+  function openViewModal(department: Department) {
+    setViewingDepartment(department)
+    openModal('view-dept-modal')
   }
 
   function confirmDeleteDepartment() {
@@ -168,8 +175,9 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.intDept}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r)}><i className="lni lni-eye"></i> View</button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
                             <i className="lni lni-pencil"></i> Edit
                           </button>}
@@ -201,6 +209,16 @@ export default function Page() {
         showToast={showToast}
         department={editingDepartment}
         updateDepartment={updateDepartment}
+      />
+      <ViewDepartmentModal
+        isOpen={openModals.has('view-dept-modal')}
+        onClose={() => closeModal('view-dept-modal')}
+        showToast={showToast}
+        department={viewingDepartment}
+        onEdit={() => {
+          closeModal('view-dept-modal')
+          openEditModal(viewingDepartment!)
+        }}
       />
       <Toast toast={toast} />
 

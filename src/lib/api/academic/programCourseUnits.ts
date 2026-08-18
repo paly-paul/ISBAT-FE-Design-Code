@@ -24,7 +24,7 @@ export interface ProgramCourseUnitDto {
 export function getProgramCourseUnits(programGuid: string): Promise<ProgramCourseUnitDto[]> {
   if (MOCK_AUTH) return Promise.resolve([])
   return apiGet<ProgramCourseUnitDto[] | null>(`/api/v1/academic/program-course-units/${programGuid}`)
-    .then(data => data ?? [])
+    .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // POST /api/v1/academic/program-course-units — see post-program-course-units.md.
