@@ -56,7 +56,7 @@ export default function CbtMonitorPage() {
                 </td>
                 <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0017</span></td>
                 <td className="text-slate-800">Emmanuel Okello</td>
-                <td className="text-center"><span className="bg-green-50 text-green-700 border border-green-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">Submitted</span></td>
+                <td className="text-center"><span className="badge badge-green">Submitted</span></td>
                 <td className="text-center font-mono text-[12px] text-slate-700">25 / 25</td>
                 <td className="text-slate-500 font-mono text-[12px]">14:20:11</td>
                 <td className="text-slate-400 font-mono text-[12px]">—</td>
@@ -70,7 +70,7 @@ export default function CbtMonitorPage() {
                 </td>
                 <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0044</span></td>
                 <td className="text-slate-800">Grace Akello</td>
-                <td className="text-center"><span className="bg-red-50 text-red-600 border border-red-100 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">Blocked</span></td>
+                <td className="text-center"><span className="badge badge-red">Blocked</span></td>
                 <td className="text-center text-slate-400 font-mono text-[12px]">—</td>
                 <td className="text-slate-400 font-mono text-[12px]">—</td>
                 <td className="text-slate-400 font-mono text-[12px]">—</td>
@@ -84,7 +84,7 @@ export default function CbtMonitorPage() {
                 </td>
                 <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0058</span></td>
                 <td className="text-slate-800">David Ssemwogerere</td>
-                <td className="text-center"><span className="bg-green-50 text-green-700 border border-green-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">Submitted</span></td>
+                <td className="text-center"><span className="badge badge-green">Submitted</span></td>
                 <td className="text-center font-mono text-[12px] text-slate-700">25 / 25</td>
                 <td className="text-slate-500 font-mono text-[12px]">14:15:33</td>
                 <td className="text-slate-400 font-mono text-[12px]">—</td>

@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function RecheckHub() {
   const [assignModalOpen, setAssignModalOpen] = useState(false)
@@ -63,7 +64,7 @@ export default function RecheckHub() {
                   </td>
                   <td><span className="bg-amber-50 text-amber-600 px-2.5 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap">Awaiting Auditor</span></td>
                   <td>
-                    <button className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 font-bold text-[12px] px-3 py-1.5 rounded-md transition-colors shadow-sm whitespace-nowrap" onClick={openAssignModal}>
+                    <button className="btn btn-danger" onClick={openAssignModal}>
                       Assign Independent Auditor
                     </button>
                   </td>
@@ -96,7 +97,7 @@ export default function RecheckHub() {
                   <td className="text-slate-800 font-semibold">Dr. Fatuma Wanjiku</td>
                   <td className="text-slate-600">Dean Registrar</td>
                   <td className="text-slate-500">Mar 2024</td>
-                  <td><span className="bg-green-50 text-green-600 px-2.5 py-0.5 rounded-full text-[11px] font-bold">Resolved</span></td>
+                  <td><span className="badge badge-green">Resolved</span></td>
                   <td className="text-slate-700">Marks revised upward for 12 students</td>
                 </tr>
                 <tr>
@@ -137,12 +138,15 @@ export default function RecheckHub() {
 
             <div className="flex flex-col gap-1 mb-4">
               <label className="text-[12px] font-semibold text-slate-700">Select Independent Auditor</label>
-              <select className="form-control px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-colors appearance-none" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'8\' viewBox=\'0 0 12 8\'%3E%3Cpath d=\'M1 1l5 5 5-5\' stroke=\'%2364748b\' stroke-width=\'1.5\' fill=\'none\' stroke-linecap=\'round\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', paddingRight: '28px' }}>
-                <option>— Select Auditor —</option>
-                <option>Dr. Sarah Mugisha (CS Dept Head)</option>
-                <option>Prof. James Ochieng (Senior Faculty)</option>
-                <option>Dr. Fatuma Wanjiku (Dean of Studies)</option>
-              </select>
+              <SearchSelect
+                options={[
+                  '— Select Auditor —',
+                  'Dr. Sarah Mugisha (CS Dept Head)',
+                  'Prof. James Ochieng (Senior Faculty)',
+                  'Dr. Fatuma Wanjiku (Dean of Studies)'
+                ]}
+                className="w-full"
+              />
             </div>
 
             <div className="flex flex-col gap-1 mb-4">
@@ -151,8 +155,8 @@ export default function RecheckHub() {
             </div>
 
             <div className="flex gap-2 justify-end mt-5 pt-4 border-t border-slate-200">
-              <button className="btn btn-secondary px-4 py-2 border-[1.5px] border-slate-200 bg-white text-slate-700 rounded-md text-[13px] font-medium hover:bg-slate-50 transition-colors shadow-sm" onClick={closeAssignModal}>Cancel</button>
-              <button className="btn btn-danger px-4 py-2 bg-red-100 text-red-600 border border-red-300 rounded-md text-[13px] font-medium hover:bg-red-200 hover:text-red-800 transition-colors" onClick={() => { closeAssignModal(); alert('Recheck dispatched to auditor — original faculty locked out') }}>Confirm &amp; Dispatch Recheck</button>
+              <button className="btn btn-neu" onClick={closeAssignModal}>Cancel</button>
+              <button className="btn btn-danger" onClick={() => { closeAssignModal(); alert('Recheck dispatched to auditor — original faculty locked out') }}>Confirm &amp; Dispatch Recheck</button>
             </div>
           </div>
         </div>

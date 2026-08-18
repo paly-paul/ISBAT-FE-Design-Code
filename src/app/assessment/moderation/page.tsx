@@ -26,7 +26,7 @@ export default function ModerationPage() {
         
         {/* Moderation Parameters */}
         <div className="w-full lg:w-[60%] bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5 flex flex-col">
-          <div className="text-[13.5px] font-bold text-slate-900 mb-4">Moderation Parameters</div>
+          <div className="card-title mb-4">Moderation Parameters</div>
           
           <div className="border-b border-slate-200 mb-5 flex gap-4">
             <button 
@@ -72,7 +72,7 @@ export default function ModerationPage() {
 
         {/* Result Summary */}
         <div className="w-full lg:w-[40%] bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5 flex flex-col">
-          <div className="text-[13.5px] font-bold text-slate-900 mb-4">Result Summary</div>
+          <div className="card-title mb-4">Result Summary</div>
           
           <div className="grid grid-cols-2 gap-3 flex-1">
             <div className="text-center p-3 bg-green-50 rounded-md border border-green-100 flex flex-col justify-center min-h-[85px]">
@@ -163,7 +163,7 @@ export default function ModerationPage() {
                 <td className="font-medium text-slate-700">29.4</td>
                 <td className={`text-slate-400 ${ueGrace > 0 ? 'text-purple-600 font-medium' : ''}`}>+{ueGrace}</td>
                 <td className="font-bold text-slate-900">{(29.4 + ueGrace).toFixed(1)}</td>
-                <td><span className="bg-red-50 text-red-600 border border-red-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">FAIL (UE)</span></td>
+                <td><span className="badge badge-red">FAIL (UE)</span></td>
               </tr>
             </tbody>
           </table>

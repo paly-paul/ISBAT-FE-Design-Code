@@ -1,4 +1,5 @@
 'use client'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function QuestionBankUploadPage() {
   return (
@@ -17,42 +18,54 @@ export default function QuestionBankUploadPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Left Side: Upload Form */}
-        <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5">
-          <div className="text-[13.5px] font-bold text-slate-900 mb-4">Upload Questions</div>
+        <div className="card">
+          <div className="card-title mb-4">Upload Questions</div>
           
-          <div className="flex gap-4 mb-4">
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
             <div className="flex-1">
               <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Subject</label>
-              <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-                <option>CSE 1212 – Data Structures</option>
-                <option>CSE 1301 – Algorithms</option>
-              </select>
+              <SearchSelect
+                options={[
+                  'CSE 1212 – Data Structures',
+                  'CSE 1301 – Algorithms'
+                ]}
+                className="w-full"
+              />
             </div>
             <div className="flex-1">
               <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Assessment Type</label>
-              <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-                <option>Coursework (DQ)</option>
-                <option>Class Test (MCQ/SA)</option>
-                <option>University Examination</option>
-              </select>
+              <SearchSelect
+                options={[
+                  'Coursework (DQ)',
+                  'Class Test (MCQ/SA)',
+                  'University Examination'
+                ]}
+                className="w-full"
+              />
             </div>
           </div>
           
-          <div className="flex gap-4 mb-4">
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
             <div className="flex-1">
               <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Term</label>
-              <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-                <option>Term 1</option>
-                <option>Term 2</option>
-              </select>
+              <SearchSelect
+                options={[
+                  'Term 1',
+                  'Term 2'
+                ]}
+                className="w-full"
+              />
             </div>
             <div className="flex-1">
               <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Question Type</label>
-              <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-                <option>DQ – Descriptive Question</option>
-                <option>MCQ – Multiple Choice</option>
-                <option>SA – Short Answer</option>
-              </select>
+              <SearchSelect
+                options={[
+                  'DQ – Descriptive Question',
+                  'MCQ – Multiple Choice',
+                  'SA – Short Answer'
+                ]}
+                className="w-full"
+              />
             </div>
           </div>
 
@@ -73,7 +86,7 @@ export default function QuestionBankUploadPage() {
         </div>
 
         {/* Right Side: Pending Uploads & Alerts */}
-        <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] flex flex-col">
+        <div className="card">
           <div className="p-5 flex gap-2 items-center">
             <div className="text-[13.5px] font-bold text-slate-900">Pending Uploads</div>
             <span className="badge badge-red ml-1">3 overdue</span>
@@ -95,7 +108,7 @@ export default function QuestionBankUploadPage() {
                   <td className="px-5 py-3.5 border-b border-slate-100 font-mono text-[var(--blue)] font-medium">CSE 1212</td>
                   <td className="px-5 py-3.5 border-b border-slate-100 text-red-500 font-medium text-[12px]"><span className="flex items-center gap-1">5 Nov <i className="lni lni-warning text-[10px]"></i></span></td>
                   <td className="px-5 py-3.5 border-b border-slate-100 text-center">
-                    <button className="bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-full text-[11px] font-semibold hover:bg-red-100 transition-colors">Remind</button>
+                    <button className="badge badge-red">Remind</button>
                   </td>
                 </tr>
                 <tr>
@@ -103,7 +116,7 @@ export default function QuestionBankUploadPage() {
                   <td className="px-5 py-3.5 border-b border-slate-100 font-mono text-[var(--blue)] font-medium">BIO 2201</td>
                   <td className="px-5 py-3.5 border-b border-slate-100 text-red-500 font-medium text-[12px]"><span className="flex items-center gap-1">6 Nov <i className="lni lni-warning text-[10px]"></i></span></td>
                   <td className="px-5 py-3.5 border-b border-slate-100 text-center">
-                    <button className="bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-full text-[11px] font-semibold hover:bg-red-100 transition-colors">Remind</button>
+                    <button className="badge badge-red">Remind</button>
                   </td>
                 </tr>
                 <tr>
@@ -119,7 +132,7 @@ export default function QuestionBankUploadPage() {
           </div>
 
           <div className="p-5 pt-4">
-            <div className="text-[13.5px] font-bold text-slate-900 mb-3">Uploaded Questions — CSE 1212</div>
+            <div className="card-title mb-4">Uploaded Questions — CSE 1212</div>
             <div className="bg-[#fef2f2] border border-[#fecaca] rounded-md p-3 flex gap-3 text-[12.5px] text-[#b91c1c] items-start">
               <div className="mt-0.5 text-[#dc2626]"><i className="lni lni-warning"></i></div>
               <div>No questions uploaded yet. CW launch is blocked until at least 4 DQ questions are available.</div>

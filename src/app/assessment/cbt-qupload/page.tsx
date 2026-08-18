@@ -18,7 +18,7 @@ export default function CbtQuestionUploadPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
         
         {/* Section A */}
-        <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5 border-t-[4px] border-t-[#10b981] flex flex-col justify-between">
+        <div className="card">
           <div>
             <div className="text-[13.5px] font-bold text-[#059669] mb-1">Section A — Easy</div>
             <div className="text-[24px] font-bold text-slate-900 mb-2 tracking-tight">1 mark each</div>
@@ -29,7 +29,7 @@ export default function CbtQuestionUploadPage() {
         </div>
 
         {/* Section B */}
-        <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5 border-t-[4px] border-t-[#f59e0b] flex flex-col justify-between">
+        <div className="card">
           <div>
             <div className="text-[13.5px] font-bold text-[#d97706] mb-1">Section B — Medium</div>
             <div className="text-[24px] font-bold text-slate-900 mb-2 tracking-tight">2 marks each</div>
@@ -40,7 +40,7 @@ export default function CbtQuestionUploadPage() {
         </div>
 
         {/* Section C */}
-        <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5 border-t-[4px] border-t-[#ef4444] flex flex-col justify-between">
+        <div className="card">
           <div>
             <div className="text-[13.5px] font-bold text-[#dc2626] mb-1">Section C — Difficult</div>
             <div className="text-[24px] font-bold text-slate-900 mb-2 tracking-tight">3 marks each</div>
@@ -52,7 +52,7 @@ export default function CbtQuestionUploadPage() {
 
       </div>
 
-      <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-6">
+      <div className="card">
         
         <div className="border-2 border-dashed border-slate-300 rounded-lg p-10 text-center mb-5 cursor-pointer transition-colors hover:border-purple-400 group bg-slate-50">
           <div className="text-[32px] mb-3 text-slate-800 group-hover:text-purple-600 transition-colors"><i className="lni lni-paperclip"></i></div>

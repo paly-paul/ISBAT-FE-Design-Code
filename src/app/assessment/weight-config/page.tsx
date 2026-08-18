@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function WeightConfigPage() {
   const [model, setModel] = useState('std')
@@ -26,36 +27,41 @@ export default function WeightConfigPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         {/* Selector */}
         <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] p-5 shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff]">
-          <div className="text-[13px] font-semibold text-slate-900 mb-4">Assessment Model Selector</div>
+          <div className="card-title mb-4">Assessment Model Selector</div>
           
           <div className="flex flex-col gap-4">
             <div>
               <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Programme</label>
-              <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-                <option>— Select Programme —</option>
-                <option>BMIT – BSc Medical IT (Engineering)</option>
-                <option>BSc Computer Engineering</option>
-                <option>BMLT – BSc Med Lab Technology</option>
-                <option>BSc Computer Science</option>
-                <option>BBA – Business Administration</option>
-                <option>BSc Information Technology</option>
-                <option>MSc Computer Science</option>
-              </select>
+              <SearchSelect
+                options={[
+                  '— Select Programme —',
+                  'BMIT — BSc Medical IT (Engineering)',
+                  'BSc Computer Engineering',
+                  'BMLT — BSc Med Lab Technology',
+                  'BSc Computer Science',
+                  'BBA — Business Administration',
+                  'BSc Information Technology',
+                  'MSc Computer Science'
+                ]}
+                className="w-full"
+              />
             </div>
             
-            <div className="flex gap-4">
+            <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
                 <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Session</label>
-                <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-                  <option>2024/25 Semester 1</option>
-                </select>
+                <SearchSelect
+                  options={['2024/25 Semester 1']}
+                  className="w-full"
+                />
               </div>
               
               <div className="flex-1">
                 <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Course Unit</label>
-                <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-                  <option>CSE 1212 - Data Structures</option>
-                </select>
+                <SearchSelect
+                  options={['CSE 1212 - Data Structures']}
+                  className="w-full"
+                />
               </div>
             </div>
           </div>
@@ -63,7 +69,7 @@ export default function WeightConfigPage() {
 
         {/* Configured Programmes List */}
         <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] p-5 shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff]">
-          <div className="text-[13px] font-semibold text-slate-900 mb-4">Configured Programmes</div>
+          <div className="card-title mb-4">Configured Programmes</div>
           
           <div className="border border-slate-200 rounded-lg overflow-hidden">
             <table className="w-full text-left border-collapse" style={{ fontSize: '12px' }}>
@@ -130,7 +136,7 @@ export default function WeightConfigPage() {
 
       {/* Proration Calculator */}
       <div className="bg-white border-[1.5px] border-slate-200 rounded-[14px] p-5 shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff]">
-        <div className="text-[13px] font-semibold text-slate-900 mb-2 flex items-center gap-2">
+        <div className="card-title mb-4 flex items-center gap-2">
           <span className="text-[16px]">📐</span> Live Proration Calculator
         </div>
         
@@ -141,14 +147,19 @@ export default function WeightConfigPage() {
         <div className="flex items-end gap-4 flex-wrap">
           <div style={{ maxWidth: 160, flex: 1 }}>
             <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Model</label>
-            <select className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }} value={model} onChange={e => setModel(e.target.value)}>
-              <option value="std">Standard (15m)</option>
-              <option value="eng">Engineering (20m)</option>
-            </select>
+            <SearchSelect
+              options={[
+                { value: 'std', label: 'Standard (15m)' },
+                { value: 'eng', label: 'Engineering (20m)' }
+              ]}
+              value={model}
+              onChange={setModel}
+              className="w-full"
+            />
           </div>
           <div style={{ maxWidth: 120, flex: 1 }}>
             <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Raw Score (/25)</label>
-            <input type="number" className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600" placeholder="0–25" max={25} min={0} value={rawScore} onChange={e => setRawScore(e.target.value)} />
+            <input type="number" className="ctrl w-full" placeholder="0–25" max={25} min={0} value={rawScore} onChange={e => setRawScore(e.target.value)} />
           </div>
           <div style={{ maxWidth: 140, flex: 1 }}>
             <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Prorated Mark</label>

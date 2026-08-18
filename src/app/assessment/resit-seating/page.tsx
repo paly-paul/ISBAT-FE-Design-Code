@@ -19,7 +19,7 @@ export default function ResitSeatingPage() {
         
         {/* Module Volume by Subject */}
         <div className="w-full lg:w-1/2 bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5 flex flex-col">
-          <div className="text-[13.5px] font-bold text-slate-900 mb-4">Module Volume by Subject</div>
+          <div className="card-title mb-4">Module Volume by Subject</div>
           
           <div className="flex-1">
             <table className="w-full text-[13px] text-left">
@@ -57,20 +57,20 @@ export default function ResitSeatingPage() {
 
         {/* Venue Capacity */}
         <div className="w-full lg:w-1/2 bg-white border-[1.5px] border-slate-200 rounded-[14px] shadow-[3px_3px_8px_#c8d4e0,-3px_-3px_8px_#ffffff] p-5 flex flex-col">
-          <div className="text-[13.5px] font-bold text-slate-900 mb-4">Venue Capacity</div>
+          <div className="card-title mb-4">Venue Capacity</div>
           
           <div className="flex flex-col gap-4 flex-1 justify-center">
             <div className="flex items-center justify-between py-2 border-b border-slate-50">
               <div className="text-[13px] text-slate-700">Hall A — Computer Lab</div>
-              <div className="bg-green-50 text-green-600 border border-green-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">Cap: 30</div>
+              <div className="badge badge-green">Cap: 30</div>
             </div>
             <div className="flex items-center justify-between py-2 border-b border-slate-50">
               <div className="text-[13px] text-slate-700">Hall B — Exam Hall</div>
-              <div className="bg-green-50 text-green-600 border border-green-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">Cap: 50</div>
+              <div className="badge badge-green">Cap: 50</div>
             </div>
             <div className="flex items-center justify-between py-2 border-b border-slate-50">
               <div className="text-[13px] text-slate-700">Room 201 — Seminar</div>
-              <div className="bg-amber-50 text-amber-600 border border-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">Cap: 20</div>
+              <div className="badge badge-amber">Cap: 20</div>
             </div>
           </div>
         </div>

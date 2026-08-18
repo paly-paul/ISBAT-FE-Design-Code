@@ -1,6 +1,7 @@
 'use client'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { SearchSelect } from '@/components/SearchSelect'
 
 export default function AssessmentSchedulePage() {
   return (
@@ -22,34 +23,46 @@ export default function AssessmentSchedulePage() {
         <div className="p-4 flex gap-4 flex-wrap">
           <div className="flex-1 min-w-[200px]">
             <label className="form-label text-[var(--fs-xs)] font-bold text-g700 block mb-1">Assessment Type</label>
-            <select className="ctrl w-full text-[var(--fs-sm)]">
-              <option>Coursework (CW)</option>
-              <option>Class Test (CBT)</option>
-            </select>
+            <SearchSelect
+                options={[
+                  'Coursework (CW)',
+                  'Class Test (CBT)'
+                ]}
+                className="w-full"
+              />
           </div>
           <div className="flex-1 min-w-[200px]">
             <label className="form-label text-[var(--fs-xs)] font-bold text-g700 block mb-1">Scope</label>
-            <select className="ctrl w-full text-[var(--fs-sm)]">
-              <option>All (Campus-wide)</option>
-              <option>By Programme / Semester</option>
-              <option>Individual Subject</option>
-            </select>
+            <SearchSelect
+                options={[
+                  'All (Campus-wide)',
+                  'By Programme / Semester',
+                  'Individual Subject'
+                ]}
+                className="w-full"
+              />
           </div>
           <div className="flex-1 min-w-[200px]">
             <label className="form-label text-[var(--fs-xs)] font-bold text-g700 block mb-1">Programme</label>
-            <select className="ctrl w-full text-[var(--fs-sm)]">
-              <option>— All Programmes —</option>
-              <option>BSc Computer Science</option>
-              <option>BBA</option>
-              <option>BMIT</option>
-            </select>
+            <SearchSelect
+                options={[
+                  '— All Programmes —',
+                  'BSc Computer Science',
+                  'BBA',
+                  'BMIT'
+                ]}
+                className="w-full"
+              />
           </div>
           <div className="flex-1 min-w-[200px]">
             <label className="form-label text-[var(--fs-xs)] font-bold text-g700 block mb-1">Term</label>
-            <select className="ctrl w-full text-[var(--fs-sm)]">
-              <option>Term 1</option>
-              <option>Term 2</option>
-            </select>
+            <SearchSelect
+                options={[
+                  'Term 1',
+                  'Term 2'
+                ]}
+                className="w-full"
+              />
           </div>
         </div>
       </div>
