@@ -17,6 +17,10 @@ import { useCampuses, useCampusDropdown, useCreateCampus, useUpdateCampus, useDe
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -49,6 +53,7 @@ export default function Page() {
   function openViewModal(campus: Campus) {
     setViewingCampus(campus)
     openModal('view-campus-modal')
+    setSearch('')
   }
 
   function confirmDeleteCampus() {
@@ -72,12 +77,13 @@ export default function Page() {
   // the same code/name test as the table's own search filter below, just
   // capped to a handful of rows and ignoring the column filters so it always
   // reflects "what search alone would find".
-  const searchMatches = search.trim()
-    ? (rows as Campus[]).filter(r => `${r.campusCode} ${r.campusName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  const searchTrimmed = search.trim()
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? (rows as Campus[]).filter(r => `${r.campusCode} ${r.campusName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const filteredRows = (rows as Campus[]).filter((r: Campus) => {
-    if (search.trim() && !`${r.campusCode} ${r.campusName}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    if (searchTrimmed.length >= MIN_SEARCH_CHARS && !`${r.campusCode} ${r.campusName}`.toLowerCase().includes(searchTrimmed.toLowerCase())) return false
     return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
   })
 
@@ -122,6 +128,8 @@ export default function Page() {
                 value={search}
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.campusGuid, primary: r.campusCode, secondary: r.campusName }))}
+                minChars={MIN_SEARCH_CHARS}
+                onSelect={(res) => { const row = (rows as Campus[]).find(x => x.campusGuid === res.id); if (row) openViewModal(row) }}
               />
             </div>
           </div>

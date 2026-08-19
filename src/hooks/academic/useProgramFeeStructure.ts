@@ -26,6 +26,26 @@ export function useProgramFeeStructures(pageNumber = 1, pageSize = 1000, program
   })
 }
 
+// Server-side search for Fee Structure's search box — hits the same list
+// endpoint with the backend's own ?search= param instead of filtering the
+// already-fetched full list client-side. Kept as its own hook/query key so
+// useProgramFeeStructures() above still stays the plain unfiltered, cached
+// list — only enabled while the search box actually has a query in it, at
+// which point the page falls back to that shared unfiltered list instead of
+// issuing a redundant identical request. Not confirmed against a spec (see
+// the note on getProgramFeeStructures), so the caller re-filters client-side
+// too.
+export function useProgramFeeStructureSearch(search: string, pageSize: number) {
+  const q = search.trim()
+  return useQuery({
+    queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, 'search', q],
+    queryFn: () => getProgramFeeStructures(1, pageSize, undefined, q),
+    enabled: q.length > 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
 // Fetch-by-guid convention, same as the rest of the app's real Edit modals —
 // backs FeeStructureModal's Edit mode prefill. The header fields (feeCode,
 // calcType, lef/cef/ace, intakeGuid, etc.) come from the list row the page

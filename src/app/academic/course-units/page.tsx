@@ -22,6 +22,10 @@ import { openDocumentForViewing, downloadDocument } from '@/lib/documentViewer'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't hit the search endpoint (or open the results dropdown) until the
+// user's typed at least this many characters — same convention as
+// Intake/Skill/Repetition Tag's search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -45,6 +49,12 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingCourseUnitGuid(guid)
     openModal('cu-edit-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setViewingCourseUnitGuid(guid)
+    openModal('view-course-unit-modal')
+    setSearch('')
   }
 
   const [syllabusLoadingGuid, setSyllabusLoadingGuid] = useState<string | null>(null)
@@ -78,17 +88,31 @@ export default function Page() {
     })
   }
 
+  // Debounced so the server-side search below isn't hit on every keystroke,
+  // and held at '' (falling back to the unfiltered/paginated list) until
+  // MIN_SEARCH_CHARS is met — same convention as Intake/Skill/Repetition
+  // Tag's search boxes.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const trimmed = search.trim()
+    if (trimmed.length < MIN_SEARCH_CHARS) { setDebouncedSearch(''); return }
+    const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
+    return () => clearTimeout(t)
+  }, [search])
+
   // Real server-side pagination AND search — fetches PAGE_SIZE (10) rows at
   // a time instead of the whole table up front, refetching the next 10 only
-  // when the user actually pages forward, and `search` is a real server-side
-  // filter (get-courseunits.md), not a client-side one. Was previously a
-  // single pageSize=1000 useCourseUnits() call backing a client-side
-  // usePagination() slice, which made the initial load wait on the entire
-  // table before showing anything — and, once the real table grew past
-  // 1000 rows, silently missed anything past that cap when searching too
+  // when the user actually pages forward, and `debouncedSearch` is a real
+  // server-side filter (get-courseunits.md), not a client-side one. Was
+  // previously a single pageSize=1000 useCourseUnits() call backing a
+  // client-side usePagination() slice, which made the initial load wait on
+  // the entire table before showing anything — and, once the real table grew
+  // past 1000 rows, silently missed anything past that cap when searching too
   // (confirmed live: a freshly created unit past row 1000 of 1500 never
   // showed up in search results until this switched to server-side search).
-  const { data, isLoading } = useCourseUnits(page, PAGE_SIZE, search)
+  const { data, isLoading, isFetching } = useCourseUnits(page, PAGE_SIZE, debouncedSearch)
+  const searchTrimmed = search.trim()
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isFetching)
 
   // "All Programmes" dropdown — there's no programGuid filter on the
   // course-units endpoint itself (CourseUnit carries no programme field at
@@ -123,21 +147,21 @@ export default function Page() {
   const createCourseUnit = useCreateCourseUnit()
   const updateCourseUnit = useUpdateCourseUnit()
   const deleteCourseUnit = useDeleteCourseUnit()
-  const loading = isLoading || (usingFullList && isAllCourseUnitsLoading) || (!!programFilter && isProgramCourseUnitsLoading)
+  const loading = isLoading || searchPending || (usingFullList && isAllCourseUnitsLoading) || (!!programFilter && isProgramCourseUnitsLoading)
 
-  // Reset back to page 1 whenever the search term or programme filter
-  // changes — the previous page offset almost never lands on a valid page
-  // of the newly-filtered result set. Depends on search/programFilter
-  // directly (not usingFullList) since search now re-queries the server on
-  // every keystroke even without the programme filter active.
+  // Reset back to page 1 whenever the (debounced) search term or programme
+  // filter changes — the previous page offset almost never lands on a valid
+  // page of the newly-filtered result set. Depends on debouncedSearch (not
+  // the raw keystroke-by-keystroke search) since that's what actually
+  // changes the server query.
   useEffect(() => {
     setPage(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, programFilter])
+  }, [debouncedSearch, programFilter])
 
   const filteredRows = searchRows.filter(r =>
     Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
-    && (!search.trim() || `${r.courseUnitCode} ${r.courseUnitName}`.toLowerCase().includes(search.trim().toLowerCase()))
+    && (searchTrimmed.length < MIN_SEARCH_CHARS || `${r.courseUnitCode} ${r.courseUnitName}`.toLowerCase().includes(searchTrimmed.toLowerCase()))
     && (!programFilter || programCourseUnitGuids.has(r.courseUnitGuid))
   )
 
@@ -157,8 +181,8 @@ export default function Page() {
   const totalCount = usingFullList ? filteredRows.length : data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
-  const searchMatches = search.trim()
-    ? searchRows.filter(r => `${r.courseUnitCode} ${r.courseUnitName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? searchRows.filter(r => `${r.courseUnitCode} ${r.courseUnitName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   // Flag badges for mid/cw/ca — these are 0/1 numeric flags on the real
@@ -182,7 +206,9 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: r.courseUnitGuid, primary: r.courseUnitCode, secondary: r.courseUnitName }))}
-              loading={isAllCourseUnitsLoading}
+              loading={searchPending || (usingFullList && isAllCourseUnitsLoading)}
+              minChars={MIN_SEARCH_CHARS}
+              onSelect={(r) => openViewModal(r.id)}
             />
             {permissions.add && <button className="btn btn-primary" onClick={() => openModal('cu-new-modal')}><i className="lni lni-plus"></i> Add Course Unit</button>}
           </div>
@@ -241,12 +267,12 @@ export default function Page() {
                   : pageItems.length === 0
                     ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0) || !!programFilter} onClearFilters={() => { setFilters({}); setProgramFilter('') }} />
                     : null}
-                {pageItems.map((r) => (
+                {!loading && pageItems.map((r) => (
                   <tr key={r.courseUnitGuid}>
                     <td>
                       {(permissions.edit || permissions.delete) && (
                         <ActionMenu>
-                          <button className="btn btn-neu btn-sm" onClick={() => { setViewingCourseUnitGuid(r.courseUnitGuid); openModal('view-course-unit-modal') }}><i className="lni lni-eye"></i> View</button>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.courseUnitGuid)}><i className="lni lni-eye"></i> View</button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.courseUnitGuid)}><i className="lni lni-pencil"></i> Edit</button>}
                           {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
                         </ActionMenu>

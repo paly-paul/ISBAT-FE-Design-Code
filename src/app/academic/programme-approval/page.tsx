@@ -19,6 +19,10 @@ import { formatDate } from '@/lib/date'
 import { useStreams } from '@/hooks/config/useStreams'
 
 const PAGE_SIZE = 10
+// Don't hit the search endpoint (or open the search dropdown) until the
+// user's typed at least this many characters — same convention as the
+// other academic master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -35,9 +39,23 @@ export default function Page() {
   const [viewingProgramGuid, setViewingProgramGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ programGuid: string; progName: string } | null>(null)
 
-  const { data: approvalsData, isLoading } = useProgramApprovals(1, 1000, search)
+  // Debounced so the backend's ?search= isn't hit on every keystroke, and
+  // held at '' (falling back to the unfiltered list) until MIN_SEARCH_CHARS
+  // is met — this page already had a real server-side search wired up
+  // (get-program-master-not-approved.md), it just wasn't debounced yet.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const trimmed = search.trim()
+    if (trimmed.length < MIN_SEARCH_CHARS) { setDebouncedSearch(''); return }
+    const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const { data: approvalsData, isLoading, isFetching } = useProgramApprovals(1, 1000, debouncedSearch)
   const programs = approvalsData?.items || []
-  
+  const searchTrimmed = search.trim()
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isFetching)
+
   const updateProgramApproval = useUpdateProgramApproval()
   const deleteProgramMasterComplete = useDeleteProgramMasterComplete()
   const { data: streams = [] } = useStreams()
@@ -45,6 +63,12 @@ export default function Page() {
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  function openViewModal(guid: string) {
+    setViewingProgramGuid(guid)
+    openModal('view-prog-modal')
+    setSearch('')
+  }
 
   function handleApprove(programGuid: string, isApproved: boolean) {
     updateProgramApproval.mutate({ programGuid, isApproved }, {
@@ -94,17 +118,31 @@ export default function Page() {
   const levelFilterOpts = Array.from(new Set(rows.map(r => r.level)))
   const levelDropdownOpts = Array.from(new Set(rows.map(r => r.level.split(' ·')[0])))
 
-  const searchMatches = search.trim()
-    ? rows.filter(r => `${r.progCode} ${r.progName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  // Empty below MIN_SEARCH_CHARS, matching TableSearch's own minChars gate on
+  // when the dropdown is even allowed to open.
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? rows.filter(r => `${r.progCode} ${r.progName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const filteredRows = rows.filter(r => {
     if (levelFilter && !r.level.startsWith(levelFilter)) return false
-    if (search.trim() && !`${r.progCode} ${r.progName}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    // Re-filter client-side on top of whatever the server sent back — rows
+    // is already search-scoped via debouncedSearch, but this keeps results
+    // correct even if the backend doesn't actually honor ?search=.
+    if (searchTrimmed.length >= MIN_SEARCH_CHARS && !`${r.progCode} ${r.progName}`.toLowerCase().includes(searchTrimmed.toLowerCase())) return false
     return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   })
 
   const [page, setPage] = useState(1)
+
+  // Reset back to page 1 whenever the (debounced) search term or level
+  // filter changes — the previous page offset almost never lands on a valid
+  // page of the newly-filtered result set.
+  useEffect(() => {
+    setPage(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, levelFilter])
+
   const totalCount = filteredRows.length
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const pageItems = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -149,6 +187,9 @@ export default function Page() {
                 value={search}
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.programGuid, primary: r.progCode, secondary: r.progName }))}
+                loading={searchPending}
+                minChars={MIN_SEARCH_CHARS}
+                onSelect={(r) => openViewModal(r.id)}
               />
               <SearchSelect
                 className="w-auto text-[var(--fs-sm)]"
@@ -163,16 +204,16 @@ export default function Page() {
             <table>
               <thead><tr><th style={{ width: 48 }}></th><th>Prog. Code</th><th>Programme Name</th>{fth('Group', 'group', groupFilterOpts)}{fth('Programme Level', 'level', levelFilterOpts)}<th>Faculty → Campus</th><th>Accreditation Date</th><th>No IA</th></tr></thead>
               <tbody>
-                {isLoading
+                {(isLoading || searchPending)
                   ? <TableLoadingState colSpan={999} />
                   : filteredRows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0) || !!search || !!levelFilter} onClearFilters={() => { setFilters({}); setSearch(''); setLevelFilter('') }} />
                     : null}
-                {pageItems.map(r => (
+                {!(isLoading || searchPending) && pageItems.map(r => (
                   <tr key={r.programGuid}>
                     <td>
                       <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => { setViewingProgramGuid(r.programGuid); openModal('view-prog-modal') }}><i className="lni lni-eye"></i> View</button>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.programGuid)}><i className="lni lni-eye"></i> View</button>
                         {permissions.edit && <button className="btn btn-neu btn-sm" style={{ color: 'var(--green, #10b981)' }} onClick={() => handleApprove(r.programGuid, true)}><i className="lni lni-checkmark"></i> Approve</button>}
                         {permissions.delete && <button className="btn btn-neu btn-sm" style={{ color: 'var(--danger, #ef4444)' }} onClick={() => setDeleteTarget({ programGuid: r.programGuid, progName: r.progName })}><i className="lni lni-trash-can"></i> Delete</button>}
                       </ActionMenu>

@@ -11,11 +11,16 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewDiscountModal } from '@/components/modals/finance/NewDiscountModal'
 import { EditDiscountModal } from '@/components/modals/finance/EditDiscountModal'
+import { ViewDiscountModal } from '@/components/modals/finance/ViewDiscountModal'
 import { useDiscounts, useCreateDiscount, useUpdateDiscount, useDeleteDiscount, Discount } from '@/hooks/finance/useDiscounts'
 import { CALC_TYPE_LABELS, CALC_TYPE_VALUES } from '@/lib/api/finance/discount'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -23,6 +28,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingDiscountGuid, setEditingDiscountGuid] = useState<string | null>(null)
+  const [viewingDiscountGuid, setViewingDiscountGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Discount | null>(null)
   const [search, setSearch] = useState('')
 
@@ -41,12 +47,19 @@ export default function Page() {
     openModal('edit-discount-modal')
   }
 
+  function openViewModal(guid: string) {
+    setViewingDiscountGuid(guid)
+    openModal('view-discount-modal')
+    setSearch('')
+  }
+
+  const searchTrimmed = search.trim()
   const filteredRows = rows.filter(r =>
-    !search.trim() || `${r.discountCode} ${r.discountName}`.toLowerCase().includes(search.trim().toLowerCase())
+    searchTrimmed.length < MIN_SEARCH_CHARS || `${r.discountCode} ${r.discountName}`.toLowerCase().includes(searchTrimmed.toLowerCase())
   )
 
-  const searchMatches = search.trim()
-    ? rows.filter(r => `${r.discountCode} ${r.discountName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? rows.filter(r => `${r.discountCode} ${r.discountName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
@@ -82,6 +95,8 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: r.discountGuid, primary: r.discountCode, secondary: r.discountName }))}
+              minChars={MIN_SEARCH_CHARS}
+              onSelect={(r) => openViewModal(r.id)}
             />
           </div>
           <ScrollTable>
@@ -106,8 +121,10 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.discountGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
                       <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.discountGuid)}>
+                          <i className="lni lni-eye"></i> View
+                        </button>
                         {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.discountGuid)}>
                           <i className="lni lni-pencil"></i> Edit
                         </button>}
@@ -115,7 +132,6 @@ export default function Page() {
                           <i className="lni lni-trash-can"></i> Delete
                         </button>}
                       </ActionMenu>
-                      )}
                     </td>
                     <td className="font-mono font-bold uppercase">{r.discountCode}</td>
                     <td><strong>{r.discountName}</strong></td>
@@ -152,6 +168,14 @@ export default function Page() {
         showToast={showToast}
         discountGuid={editingDiscountGuid}
         updateDiscount={updateDiscount}
+      />
+      <ViewDiscountModal
+        isOpen={openModals.has('view-discount-modal')}
+        onClose={() => closeModal('view-discount-modal')}
+        showToast={showToast}
+        discountGuid={viewingDiscountGuid}
+        canEdit={permissions.edit}
+        onEdit={() => { closeModal('view-discount-modal'); if (viewingDiscountGuid) openEditModal(viewingDiscountGuid) }}
       />
       <Toast toast={toast} />
 

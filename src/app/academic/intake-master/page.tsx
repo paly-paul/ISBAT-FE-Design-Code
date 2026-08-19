@@ -13,11 +13,14 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { useIntakes, useCreateIntake, useUpdateIntake, useDeleteIntake, useCurrentAcademicIntake, useCurrentAdmissionIntake, Intake } from '@/hooks/academic/useIntakes'
+import { useIntakes, useIntakeSearch, useCreateIntake, useUpdateIntake, useDeleteIntake, useCurrentAcademicIntake, useCurrentAdmissionIntake, Intake } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatDate } from '@/lib/date'
 
 const PAGE_SIZE = 10
+// Don't hit the search endpoint (or open the results dropdown) until the
+// user's typed at least this many characters.
+const MIN_SEARCH_CHARS = 2
 
 // Convert the backend year into the display format used on the page.
 function formatFinancialYear(startYear: number): string {
@@ -42,6 +45,18 @@ export default function Page() {
   const [search, setSearch] = useState('')
   const [editingIntakeGuid, setEditingIntakeGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Intake | null>(null)
+
+  // Debounced so the backend's ?search= isn't hit on every keystroke — same
+  // convention as payment-console's debouncedAmount/committedSearch. Stays
+  // '' (falling back to the unfiltered list) until MIN_SEARCH_CHARS is met,
+  // so a single stray keystroke doesn't fire a request either.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const trimmed = search.trim()
+    if (trimmed.length < MIN_SEARCH_CHARS) { setDebouncedSearch(''); return }
+    const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
+    return () => clearTimeout(t)
+  }, [search])
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -75,6 +90,16 @@ export default function Page() {
   // The table reads the live intake data directly and only formats a few fields for display.
   const { data: intakes = [], isLoading } = useIntakes()
 
+  // Server-side search (contains-match against Description, Month, and
+  // IntakeCode — see useIntakeSearch) takes over from the unfiltered list
+  // above once the user has typed something; falls back to that same shared
+  // full list while the search box is empty instead of issuing a redundant
+  // identical request.
+  const { data: searchResults, isFetching: isSearching } = useIntakeSearch(debouncedSearch)
+  const baseRows = debouncedSearch ? (searchResults ?? []) : intakes
+  const searchTrimmed = search.trim()
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isSearching)
+
   // Used to build a stand-in row key (financialYear + examYear + intakes +
   // examMonth) back when we thought the backend had no real identifier for
   // an intake. The POST /api/v1/academic/intakes response confirmed there's
@@ -93,9 +118,10 @@ export default function Page() {
     return intake.academicCalendar?.[0]
   }
 
-  const filteredRows = intakes.filter(r => {
-    const q = search.trim().toLowerCase()
-    if (q && !`${displayIntakeCode(r)} ${r.description}`.toLowerCase().includes(q)) return false
+  // Text matching against Description/Month/IntakeCode already happened
+  // server-side (baseRows is search-scoped) — this only applies the column
+  // filters on top.
+  const filteredRows = baseRows.filter(r => {
     return Object.entries(filters).every(([k, v]) => {
       if (!v.length) return true
       if (k === 'finYear') return v.includes(formatFinancialYear(r.financialYear))
@@ -105,12 +131,11 @@ export default function Page() {
     })
   })
 
-  // Live preview shown in the search dropdown as the user types — same
-  // code/description test as filteredRows above, ignoring the column
-  // filters and capped to a handful of rows.
-  const searchMatches = search.trim()
-    ? intakes.filter(r => `${displayIntakeCode(r)} ${r.description}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
-    : []
+  // Live preview shown in the search dropdown as the user types — reads the
+  // same server-scoped baseRows, ignoring the column filters and capped to a
+  // handful of rows. Empty below MIN_SEARCH_CHARS, matching TableSearch's own
+  // minChars gate on when the dropdown is even allowed to open.
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? baseRows.slice(0, 8) : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
@@ -220,6 +245,9 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: r.intakeGuid, primary: displayIntakeCode(r), secondary: r.description }))}
+              loading={searchPending}
+              minChars={MIN_SEARCH_CHARS}
+              onSelect={(r) => { setEditingIntakeGuid(r.id); openModal('intake-view-modal'); setSearch('') }}
             />
             {/* <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button> */}
           </div>
@@ -227,7 +255,7 @@ export default function Page() {
             <table>
               <thead><tr><th style={{ width: 48 }}></th><th>Code</th><th>Description</th>{fth('Fin. Year', 'finYear', Array.from(new Set(intakes.map(i => formatFinancialYear(i.financialYear)))))}{/* <th>Sem Start</th><th>Term1 End</th><th>Term2 End</th> */}<th>Grievance End</th><th>Last Re-registration</th>{fth('Academic', 'academic', ['Current', '—'])}{fth('Admission', 'admission', ['Current', '—'])}</tr></thead>
               <tbody>
-                {isLoading
+                {(isLoading || searchPending)
                   ? <TableLoadingState colSpan={8} />
                   : filteredRows.length === 0
                     ? <EmptyState colSpan={8} hasFilters={!!search || Object.values(filters).some(v => v.length > 0)} onClearFilters={() => { setSearch(''); setFilters({}) }} />
@@ -263,7 +291,11 @@ export default function Page() {
                   </tr>
                 ))}
                 */}
-                {pageItems.map((r) => {
+                {/* Gated on the same loading flag as the TableLoadingState row above it
+                    — otherwise, while searchPending is true (debouncing/in flight), these
+                    still render the *previous* debouncedSearch's stale pageItems underneath
+                    the "Loading records…" row instead of being replaced by it. */}
+                {!(isLoading || searchPending) && pageItems.map((r) => {
                   // const calendar = firstCalendarEntry(r) // only used by the Sem Start / Term1 End / Term2 End columns, commented out below
                   return (
                     <tr key={r.intakeGuid} className={r.currentIntake ? 'selected-row' : ''}>

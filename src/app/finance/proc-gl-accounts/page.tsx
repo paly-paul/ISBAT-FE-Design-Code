@@ -11,11 +11,16 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewProcGlAccountModal } from '@/components/modals/finance/NewProcGlAccountModal'
 import { EditProcGlAccountModal } from '@/components/modals/finance/EditProcGlAccountModal'
+import { ViewProcGlAccountModal } from '@/components/modals/finance/ViewProcGlAccountModal'
 import { useProcGlAccounts, useCreateProcGlAccount, useUpdateProcGlAccount, useDeleteProcGlAccount, ProcGlAccount } from '@/hooks/finance/useProcGlAccounts'
 import { STATUS_LABELS, TYPE_LABELS } from '@/lib/api/finance/procGlAccount'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -23,6 +28,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingAccountGuid, setEditingAccountGuid] = useState<string | null>(null)
+  const [viewingAccountGuid, setViewingAccountGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ProcGlAccount | null>(null)
   const [search, setSearch] = useState('')
 
@@ -41,15 +47,22 @@ export default function Page() {
     openModal('edit-proc-gl-account-modal')
   }
 
+  function openViewModal(guid: string) {
+    setViewingAccountGuid(guid)
+    openModal('view-proc-gl-account-modal')
+    setSearch('')
+  }
+
   // Live preview shown in the search dropdown as the user types — matches
   // the same code/name test as the table's own search filter below, capped
   // to a handful of rows.
-  const searchMatches = search.trim()
-    ? rows.filter(r => `${r.shortCode} ${r.accName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  const searchTrimmed = search.trim()
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? rows.filter(r => `${r.shortCode} ${r.accName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const filteredRows = rows.filter(r => {
-    if (search.trim() && !`${r.shortCode} ${r.accName}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    if (searchTrimmed.length >= MIN_SEARCH_CHARS && !`${r.shortCode} ${r.accName}`.toLowerCase().includes(searchTrimmed.toLowerCase())) return false
     return true
   })
 
@@ -87,6 +100,8 @@ export default function Page() {
                 value={search}
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.procGlAccountGuid, primary: r.shortCode, secondary: r.accName }))}
+                minChars={MIN_SEARCH_CHARS}
+                onSelect={(r) => openViewModal(r.id)}
               />
             </div>
           </div>
@@ -111,16 +126,17 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.procGlAccountGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
-                        <ActionMenu>
-                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.procGlAccountGuid)}>
-                            <i className="lni lni-pencil"></i> Edit
-                          </button>}
-                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                            <i className="lni lni-trash-can"></i> Delete
-                          </button>}
-                        </ActionMenu>
-                      )}
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.procGlAccountGuid)}>
+                          <i className="lni lni-eye"></i> View
+                        </button>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.procGlAccountGuid)}>
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>}
+                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                          <i className="lni lni-trash-can"></i> Delete
+                        </button>}
+                      </ActionMenu>
                     </td>
                     <td className="font-mono font-bold">{r.shortCode}</td>
                     <td><strong>{r.accName}</strong></td>
@@ -157,6 +173,14 @@ export default function Page() {
         showToast={showToast}
         procGlAccountGuid={editingAccountGuid}
         updateProcGlAccount={updateProcGlAccount}
+      />
+      <ViewProcGlAccountModal
+        isOpen={openModals.has('view-proc-gl-account-modal')}
+        onClose={() => closeModal('view-proc-gl-account-modal')}
+        showToast={showToast}
+        procGlAccountGuid={viewingAccountGuid}
+        canEdit={permissions.edit}
+        onEdit={() => { closeModal('view-proc-gl-account-modal'); if (viewingAccountGuid) openEditModal(viewingAccountGuid) }}
       />
       <Toast toast={toast} />
 

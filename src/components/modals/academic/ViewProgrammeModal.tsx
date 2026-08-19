@@ -51,7 +51,12 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid, onEdit }: Vie
   if (isLoading || !program) {
     return (
       <div className="modal-overlay open">
-        <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
+        {/* height: auto (capped by maxHeight, overriding modal-flex's fixed
+            height: 85vh) so a short tab — Basic Details, which is nowhere
+            near 85vh of content — doesn't leave a big empty gap above the
+            footer; a genuinely tall tab (Fee Structure) still caps out and
+            scrolls inside .modal-scroll same as before. */}
+        <div className="modal modal-80 modal-flex" style={{ height: 'auto', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
           <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-eye"></i> View Programme</div>
             <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
@@ -73,7 +78,7 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid, onEdit }: Vie
 
   return (
     <div className="modal-overlay open">
-      <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
+      <div className="modal modal-80 modal-flex" style={{ height: 'auto', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-eye"></i> View Programme — <span className="font-mono">{program.programCode}</span></div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>

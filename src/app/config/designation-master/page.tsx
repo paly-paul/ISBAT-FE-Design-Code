@@ -18,6 +18,10 @@ import { useDepartments } from '@/hooks/config/useDepartments'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -55,6 +59,7 @@ export default function Page() {
   function openViewModal(designation: Designation) {
     setViewingDesignation(designation)
     openModal('view-designation-modal')
+    setSearch('')
   }
 
   function confirmDeleteDesignation() {
@@ -78,12 +83,13 @@ export default function Page() {
   // the same designation-name/department test as the table's own search
   // filter below, just capped to a handful of rows and ignoring the column
   // filters so it always reflects "what search alone would find".
-  const searchMatches = search.trim()
-    ? rows.filter(r => `${r.designationName} ${departmentNameByIntDept[r.intDept] ?? ''}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  const searchTrimmed = search.trim()
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? rows.filter(r => `${r.designationName} ${departmentNameByIntDept[r.intDept] ?? ''}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const filteredRows = rows.filter(r => {
-    if (search.trim() && !`${r.designationName} ${departmentNameByIntDept[r.intDept] ?? ''}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    if (searchTrimmed.length >= MIN_SEARCH_CHARS && !`${r.designationName} ${departmentNameByIntDept[r.intDept] ?? ''}`.toLowerCase().includes(searchTrimmed.toLowerCase())) return false
     return Object.entries(filters).every(([k, v]) => {
       if (!v.length) return true
       const cell = k === 'department' ? (departmentNameByIntDept[r.intDept] ?? '') : String((r as unknown as Record<string, unknown>)[k])
@@ -132,6 +138,8 @@ export default function Page() {
                 value={search}
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: String(r.intDesignation), primary: r.designationName, secondary: departmentNameByIntDept[r.intDept] }))}
+                minChars={MIN_SEARCH_CHARS}
+                onSelect={(res) => { const row = rows.find(x => String(x.intDesignation) === res.id); if (row) openViewModal(row) }}
               />
             </div>
           </div>

@@ -215,9 +215,26 @@ const mockIntakes: Intake[] = [
 // response though (see the Intake shape above), so there's no need for the
 // backend to filter at all — callers now find the current academic/admission
 // intake by scanning the same unfiltered list this call already returns.
-export function getIntakes(page = 1, pageSize = 10): Promise<Intake[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockIntakes)
+//
+// search is a case-insensitive contains-match against Description, Month,
+// and IntakeCode, forwarded to the backend's own ?search= param rather than
+// filtered client-side — omitted from the query string entirely when blank
+// (the spec's "omit or leave empty to return all").
+export function getIntakes(page = 1, pageSize = 10, search = ''): Promise<Intake[]> {
+  const q = search.trim()
+  if (MOCK_AUTH) {
+    if (!q) return Promise.resolve(mockIntakes)
+    const needle = q.toLowerCase()
+    return Promise.resolve(
+      mockIntakes.filter(i =>
+        i.description.toLowerCase().includes(needle) ||
+        i.month.toLowerCase().includes(needle) ||
+        String(i.intakeCode).toLowerCase().includes(needle)
+      )
+    )
+  }
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (q) params.set('search', q)
   return apiGet<IntakeListResponse | null>(`/api/v1/academic/intakes?${params.toString()}`).then(data => data?.items ?? [])
 }
 

@@ -42,12 +42,12 @@ export function ViewCourseUnitModal({ isOpen, onClose, courseUnitGuid, onEdit, c
   if (isLoading || !courseUnit) {
     return (
       <div className="modal-overlay open">
-        <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+        <div className="modal modal-lg modal-flex" onClick={e => e.stopPropagation()}>
           <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-eye"></i> View Course Unit</div>
             <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
+          <div style={{ flex: '1 1 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
             <span style={{ color: 'var(--g400)' }}>Loading course unit details?</span>
           </div>
         </div>
@@ -57,7 +57,7 @@ export function ViewCourseUnitModal({ isOpen, onClose, courseUnitGuid, onEdit, c
 
   return (
     <div className="modal-overlay open">
-      <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+      <div className="modal modal-lg modal-flex" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-eye"></i> View Course Unit &mdash; <span className="font-mono">{courseUnit.courseUnitCode}</span></div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>

@@ -12,6 +12,25 @@ export function useBatches(pageNumber: number, pageSize: number) {
   })
 }
 
+// Server-side search for Batch Management's search box — hits the same list
+// endpoint with the backend's own ?search= param instead of filtering the
+// already-fetched full list client-side. Kept as its own hook/query key so
+// useBatches() above still stays the plain unfiltered, cached list — only
+// enabled while the search box actually has a query in it, at which point
+// the page falls back to that shared unfiltered list instead of issuing a
+// redundant identical request. Not confirmed against a spec (see the note on
+// getBatches), so the caller re-filters client-side too.
+export function useBatchSearch(search: string, pageSize: number) {
+  const q = search.trim()
+  return useQuery({
+    queryKey: [...BATCHES_KEY, 'search', q],
+    queryFn: () => getBatches(1, pageSize, q),
+    enabled: q.length > 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
 export function useCreateBatch() {
   const queryClient = useQueryClient()
   return useMutation({

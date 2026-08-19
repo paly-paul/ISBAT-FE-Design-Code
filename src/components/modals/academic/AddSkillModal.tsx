@@ -4,7 +4,9 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import { MultiSelect } from '@/components/MultiSelect'
 import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useSkillMasters } from '@/hooks/config/useSkillMaster'
 import { CreateLecturerSkillInput } from '@/lib/api/users/skills'
 
 // Ascending-competence reading of the wire's bare proficiency int (1/2/3
@@ -25,28 +27,40 @@ interface AddSkillModalProps extends ModalProps {
 
 export function AddSkillModal({ isOpen, onClose, showToast, createSkill }: AddSkillModalProps) {
   const { data: employees = [] } = useEmployees()
+  const { data: skillMasterData } = useSkillMasters()
+  const skillMasters = skillMasterData?.items ?? []
   const [saved, setSaved]           = useState(false)
   const [failure, setFailure]       = useState<string | null>(null)
   const [employeeGuid, setEmployeeGuid] = useState('')
-  const [skillName, setSkillName]   = useState('')
-  const [proficiency, setProficiency] = useState('1')
-  const [approved, setApproved]     = useState(true)
+  const [skillIds, setSkillIds]     = useState<string[]>([])
+  const [proficiencyBySkill, setProficiencyBySkill] = useState<Record<string, string>>({})
   const [errors, setErrors]         = useState<Record<string, string>>({})
 
   if (!isOpen) return null
 
   const employeeOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
+  const skillOptions = skillMasters.map(s => ({ value: String(s.intSkill), label: s.skillName }))
 
   function handleClose() {
     setSaved(false); setFailure(null)
-    setEmployeeGuid(''); setSkillName(''); setProficiency('1'); setApproved(true); setErrors({})
+    setEmployeeGuid(''); setSkillIds([]); setProficiencyBySkill({}); setErrors({})
     onClose()
+  }
+
+  function handleSkillIdsChange(vals: string[]) {
+    setSkillIds(vals)
+    setProficiencyBySkill(prev => {
+      const next: Record<string, string> = {}
+      vals.forEach(v => { next[v] = prev[v] ?? '1' })
+      return next
+    })
+    if (errors.skillIds) setErrors(p => ({ ...p, skillIds: '' }))
   }
 
   function validate() {
     const e: Record<string, string> = {}
     if (!employeeGuid) e.employeeGuid = 'Faculty member is required'
-    if (!skillName.trim()) e.skillName = 'Skill / subject area is required'
+    if (skillIds.length === 0) e.skillIds = 'At least one skill / subject area is required'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -55,7 +69,7 @@ export function AddSkillModal({ isOpen, onClose, showToast, createSkill }: AddSk
     return (
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
-          <SuccessPopup title="Skill Saved!" subtitle="The skill has been added to the lecturer's profile." onClose={handleClose} />
+          <SuccessPopup title="Skill Saved!" subtitle="The skill(s) have been added to the lecturer's profile." onClose={handleClose} />
         </div>
       </div>
     )
@@ -69,6 +83,39 @@ export function AddSkillModal({ isOpen, onClose, showToast, createSkill }: AddSk
         </div>
       </div>
     )
+  }
+
+  function handleSubmit() {
+    if (!validate()) return
+    const total = skillIds.length
+    let completed = 0
+    let succeeded = 0
+    const failedNames: string[] = []
+
+    function finishIfDone() {
+      if (completed < total) return
+      if (failedNames.length === 0) {
+        setSaved(true)
+        showToast(`${succeeded} skill${succeeded !== 1 ? 's' : ''} added successfully`)
+      } else if (succeeded > 0) {
+        setSaved(true)
+        showToast(`${succeeded} added, ${failedNames.length} failed (${failedNames.join(', ')})`, 'error')
+      } else {
+        setFailure(`Failed to add: ${failedNames.join(', ')}`)
+      }
+    }
+
+    skillIds.forEach(id => {
+      const master = skillMasters.find(s => String(s.intSkill) === id)
+      const skillName = master?.skillName ?? ''
+      createSkill.mutate(
+        { employeeGuid, skillName, proficiency: Number(proficiencyBySkill[id] ?? '1'), approved: 0 },
+        {
+          onSuccess: () => { succeeded++; completed++; finishIfDone() },
+          onError: () => { failedNames.push(skillName || id); completed++; finishIfDone() },
+        },
+      )
+    })
   }
 
   return (
@@ -90,44 +137,46 @@ export function AddSkillModal({ isOpen, onClose, showToast, createSkill }: AddSk
           {errors.employeeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.employeeGuid}</p>}
         </div>
 
-        <div className="sec-divider">Skill / Subject Area</div>
-        <div className="g2 mb-3">
-          <div className="fg span2">
-            <div className="lbl">Skill Name <span className="req">*</span></div>
-            <input
-              className="ctrl" type="text" placeholder="e.g. Data Structures"
-              value={skillName}
-              onChange={e => { setSkillName(e.target.value); if (errors.skillName) setErrors(p => ({ ...p, skillName: '' })) }}
-              style={errors.skillName ? { borderColor: 'var(--red)' } : undefined}
-            />
-            {errors.skillName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.skillName}</p>}
-          </div>
-          <div className="fg">
-            <div className="lbl">Proficiency</div>
-            <SearchSelect options={PROFICIENCY_OPTIONS} value={proficiency} onChange={setProficiency} />
-          </div>
+        <div className="sec-divider">Skills / Subject Areas</div>
+        <div className="fg mb-3">
+          <div className="lbl">Skills <span className="req">*</span></div>
+          <MultiSelect
+            placeholder="— Select skills —"
+            options={skillOptions}
+            value={skillIds}
+            onChange={handleSkillIdsChange}
+          />
+          {errors.skillIds && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.skillIds}</p>}
         </div>
 
-        <label className="flex items-center gap-[7px] cursor-pointer mb-3" style={{ fontSize: 13 }}>
-          <input type="checkbox" checked={approved} onChange={e => setApproved(e.target.checked)} />
-          <span>Mark as Approved (skip Pending review)</span>
-        </label>
+        {skillIds.length > 0 && (
+          <div className="fg mb-3">
+            <div className="lbl">Proficiency per Skill</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {skillIds.map(id => {
+                const master = skillMasters.find(s => String(s.intSkill) === id)
+                return (
+                  <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ flex: 1, fontSize: 13 }}>{master?.skillName ?? id}</span>
+                    <SearchSelect
+                      style={{ width: 160 }}
+                      options={PROFICIENCY_OPTIONS}
+                      value={proficiencyBySkill[id] ?? '1'}
+                      onChange={v => setProficiencyBySkill(prev => ({ ...prev, [id]: v }))}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
           <button
             className="btn btn-primary"
             disabled={createSkill.isPending}
-            onClick={() => {
-              if (!validate()) return
-              createSkill.mutate(
-                { employeeGuid, skillName: skillName.trim(), proficiency: Number(proficiency), approved: approved ? 1 : 0 },
-                {
-                  onSuccess: () => { setSaved(true); showToast('Skill added successfully') },
-                  onError: (error: Error) => setFailure(error.message || 'Failed to add skill. Please try again.'),
-                },
-              )
-            }}
+            onClick={handleSubmit}
           >
             <i className="lni lni-checkmark"></i> {createSkill.isPending ? 'Saving…' : 'Save Skill'}
           </button>

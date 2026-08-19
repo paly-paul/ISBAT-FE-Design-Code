@@ -25,6 +25,12 @@ interface TableSearchProps {
   // typed) — shows a "Searching…" row instead of `emptyLabel`, so an
   // still-loading list doesn't briefly read as a genuine zero-match result.
   loading?: boolean
+  // Minimum trimmed-length before the dropdown opens at all — lets a caller
+  // whose search hits the backend (rather than filtering an already-loaded
+  // list) avoid popping open a "No matches" dropdown on every single
+  // keystroke. Defaults to 1 (any non-empty input opens it), matching every
+  // existing caller's behavior.
+  minChars?: number
 }
 
 // Search-by-code/name input + live "as you type" results dropdown, meant to
@@ -40,6 +46,7 @@ export function TableSearch({
   className,
   emptyLabel = 'No matches',
   loading = false,
+  minChars = 1,
 }: TableSearchProps) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -67,9 +74,9 @@ export function TableSearch({
         placeholder={placeholder}
         value={value}
         onChange={e => { onChange(e.target.value); setOpen(true) }}
-        onFocus={() => { if (value.trim()) setOpen(true) }}
+        onFocus={() => { if (value.trim().length >= minChars) setOpen(true) }}
       />
-      {open && value.trim() && (
+      {open && value.trim().length >= minChars && (
         <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-g200 rounded-lg shadow-lg z-20 max-h-56 overflow-y-auto">
           {loading
             ? <div className="p-3 text-sm text-g400 flex items-center gap-2"><i className="lni lni-reload animate-spin"></i> Searching…</div>

@@ -16,6 +16,10 @@ import { useBatchTimes, useCreateBatchTime, useUpdateBatchTime, useDeleteBatchTi
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -34,12 +38,13 @@ export default function Page() {
 
   // Live preview shown in the search dropdown as the user types — matches
   // the same code/name test as the table's own search filter below.
-  const searchMatches = search.trim()
-    ? rows.filter(r => `${r.batchTimeCode} ${r.batchTime}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  const searchTrimmed = search.trim()
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? rows.filter(r => `${r.batchTimeCode} ${r.batchTime}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const filteredRows = rows.filter(r =>
-    !search.trim() || `${r.batchTimeCode} ${r.batchTime}`.toLowerCase().includes(search.trim().toLowerCase())
+    searchTrimmed.length < MIN_SEARCH_CHARS || `${r.batchTimeCode} ${r.batchTime}`.toLowerCase().includes(searchTrimmed.toLowerCase())
   )
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
@@ -57,6 +62,7 @@ export default function Page() {
   function openViewModal(guid: string) {
     setViewingBatchTimeGuid(guid)
     openModal('view-batch-time-modal')
+    setSearch('')
   }
 
   function confirmDeleteBatchTime() {
@@ -91,6 +97,8 @@ export default function Page() {
                 value={search}
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.batchTimeGuid, primary: r.batchTimeCode, secondary: r.batchTime }))}
+                minChars={MIN_SEARCH_CHARS}
+                onSelect={(r) => openViewModal(r.id)}
               />
             </div>
           </div>

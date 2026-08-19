@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
@@ -13,11 +13,14 @@ import { usePagination } from '@/hooks/usePagination'
 import { AddSkillModal } from '@/components/modals/academic/AddSkillModal'
 import { EditLecturerSkillModal } from '@/components/modals/academic/EditLecturerSkillModal'
 import { ViewLecturerSkillModal } from '@/components/modals/academic/ViewLecturerSkillModal'
-import { useLecturerSkills, useCreateLecturerSkill, useUpdateLecturerSkill, useDeleteLecturerSkill, LecturerSkill } from '@/hooks/academic/useLecturerSkills'
+import { useLecturerSkills, useLecturerSkillSearch, useCreateLecturerSkill, useUpdateLecturerSkill, useDeleteLecturerSkill, LecturerSkill } from '@/hooks/academic/useLecturerSkills'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatDate } from '@/lib/date'
 
 const PAGE_SIZE = 10
+// Don't hit the search endpoint (or open the results dropdown) until the
+// user's typed at least this many characters.
+const MIN_SEARCH_CHARS = 2
 
 // Assumed reading of the wire's bare proficiency int — see the gotcha note
 // on LecturerSkill in lib/api/users/skills.ts.
@@ -82,6 +85,23 @@ export default function Page() {
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
   const { data: skills = [], isLoading } = useLecturerSkills()
+
+  // Debounced so the backend's ?search= isn't hit on every keystroke, and
+  // held at '' (falling back to the unfiltered list) until MIN_SEARCH_CHARS
+  // is met — same convention as Intake Master's search box.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const trimmed = search.trim()
+    if (trimmed.length < MIN_SEARCH_CHARS) { setDebouncedSearch(''); return }
+    const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const { data: searchResults, isFetching: isSearching } = useLecturerSkillSearch(debouncedSearch)
+  const baseRows = debouncedSearch ? (searchResults ?? []) : skills
+  const searchTrimmed = search.trim()
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isSearching)
+
   const createSkill = useCreateLecturerSkill()
   const updateSkill = useUpdateLecturerSkill()
   const deleteSkill  = useDeleteLecturerSkill()
@@ -89,6 +109,12 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingSkillGuid(guid)
     openModal('edit-lecturer-skill-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setEditingSkillGuid(guid)
+    openModal('view-lecturer-skill-modal')
+    setSearch('')
   }
 
   function confirmDeleteSkill() {
@@ -99,21 +125,17 @@ export default function Page() {
     })
   }
 
+  // Text matching against skill name already happened server-side (baseRows
+  // is search-scoped) — this only applies the column filters on top.
   const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return skills
-      .filter(s => !q || s.skillName.toLowerCase().includes(q) || String(s.intEmployee).includes(q))
-      .filter(s => Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((s as unknown as Record<string, unknown>)[k]))))
-  }, [skills, search, filters])
+    return baseRows.filter(s => Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((s as unknown as Record<string, unknown>)[k]))))
+  }, [baseRows, filters])
 
-  // Live preview shown in the search dropdown as the user types — same
-  // code/name test as filteredRows above, just ignoring the column filters
-  // and capped to a handful of rows.
-  const searchMatches = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return []
-    return skills.filter(s => s.skillName.toLowerCase().includes(q) || String(s.intEmployee).includes(q)).slice(0, 8)
-  }, [skills, search])
+  // Live preview shown in the search dropdown as the user types — reads the
+  // same server-scoped baseRows, ignoring the column filters and capped to a
+  // handful of rows. Empty below MIN_SEARCH_CHARS, matching TableSearch's own
+  // minChars gate on when the dropdown is even allowed to open.
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? baseRows.slice(0, 8) : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
@@ -174,6 +196,9 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(s => ({ id: s.lecturerSkillGuid, primary: s.skillName || 'Unnamed skill', secondary: `Employee #${s.intEmployee}` }))}
+              loading={searchPending}
+              minChars={MIN_SEARCH_CHARS}
+              onSelect={(r) => openViewModal(r.id)}
             />
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
@@ -190,17 +215,17 @@ export default function Page() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading
+                {(isLoading || searchPending)
                   ? <TableLoadingState colSpan={999} />
                   : filteredRows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={!!search || Object.values(filters).some(v => v.length > 0)} onClearFilters={() => { setSearch(''); setFilters({}) }} />
                     : null}
-                {pageItems.map(s => (
+                {!(isLoading || searchPending) && pageItems.map(s => (
                   <tr key={s.lecturerSkillGuid}>
                     <td>
                       {(permissions.edit || permissions.delete || true) && (
                         <ActionMenu>
-                          <button className="btn btn-neu btn-sm" onClick={() => { setEditingSkillGuid(s.lecturerSkillGuid); openModal('view-lecturer-skill-modal') }}>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(s.lecturerSkillGuid)}>
                             <i className="lni lni-eye"></i> View
                           </button>
                           {permissions.edit && (

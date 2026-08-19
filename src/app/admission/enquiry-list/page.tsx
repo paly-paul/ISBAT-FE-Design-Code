@@ -26,6 +26,10 @@ import { usePagination } from '@/hooks/usePagination'
 // heavier single fetch on every page load.
 const FETCH_SIZE = 12000
 const DISPLAY_PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 // enquiryStatusGuid resolves against the real Enquiry Status master
 // (useEnquiryStatuses) — same client-side resolution pattern as
@@ -110,15 +114,18 @@ export default function EnquiryListPage() {
     ...Array.from(new Map(rows.filter(r => r.enquirySourceGuid && r.sourceName).map(r => [r.enquirySourceGuid as string, r.sourceName as string])).entries())
       .map(([guid, name]) => ({ value: guid, label: name })),
   ]
+  const searchTrimmed = search.trim()
   const filteredRows = rows.filter(r =>
-    (!search.trim() || matchesSearch(r, search.trim().toLowerCase())) &&
+    (searchTrimmed.length < MIN_SEARCH_CHARS || matchesSearch(r, searchTrimmed.toLowerCase())) &&
     (!channel || r.enquirySourceGuid === channel) &&
     (!intakeGuid || r.intakeGuid === intakeGuid)
   )
   // Client-side pagination over the already-fetched (up to FETCH_SIZE) batch
   // — 10 rows per page for display, same pattern as Vetting Desk.
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, DISPLAY_PAGE_SIZE)
-  const searchMatches = search.trim() ? filteredRows.slice(0, 8) : []
+  // Empty below MIN_SEARCH_CHARS, matching TableSearch's own minChars gate on
+  // when the dropdown is even allowed to open.
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? filteredRows.slice(0, 8) : []
   function clearFilters() { setSearch(''); setChannel(''); setIntakeGuid(''); setPage(1) }
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
@@ -128,6 +135,7 @@ export default function EnquiryListPage() {
   function openViewModal(guid: string) {
     setViewingGuid(guid)
     openModal('enquiry-assign-modal')
+    setSearch('')
   }
 
   return (
@@ -186,6 +194,11 @@ export default function EnquiryListPage() {
               value={search}
               onChange={v => { setSearch(v); setPage(1) }}
               results={searchMatches.map(r => ({ id: r.enquiryGuid, primary: r.enquiryCode, secondary: r.studentName }))}
+              minChars={MIN_SEARCH_CHARS}
+              // View is edit-gated below (same as the row action) — a picker
+              // without edit rights just fills the search box instead, same
+              // as TableSearch's own default behavior.
+              onSelect={permissions.edit ? (r) => openViewModal(r.id) : undefined}
             />
             <SearchSelect className="w-36" options={channelOptions} value={channel} onChange={v => { setChannel(v); setPage(1) }} />
             <SearchSelect className="w-40" options={intakeOptions} value={intakeGuid} onChange={v => { setIntakeGuid(v); setPage(1) }} />

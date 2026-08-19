@@ -11,11 +11,16 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewLedgerModal } from '@/components/modals/finance/NewLedgerModal'
 import { EditLedgerModal } from '@/components/modals/finance/EditLedgerModal'
+import { ViewLedgerModal } from '@/components/modals/finance/ViewLedgerModal'
 import { useLedgers, useCreateLedger, useUpdateLedger, useDeleteLedger, Ledger } from '@/hooks/finance/useLedgers'
 import { useProcGlAccounts } from '@/hooks/finance/useProcGlAccounts'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -23,6 +28,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingLedgerGuid, setEditingLedgerGuid] = useState<string | null>(null)
+  const [viewingLedgerGuid, setViewingLedgerGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Ledger | null>(null)
   const [search, setSearch] = useState('')
 
@@ -55,12 +61,19 @@ export default function Page() {
     openModal('edit-ledger-modal')
   }
 
+  function openViewModal(guid: string) {
+    setViewingLedgerGuid(guid)
+    openModal('view-ledger-modal')
+    setSearch('')
+  }
+
+  const searchTrimmed = search.trim()
   const filteredRows = rows.filter(r =>
-    !search.trim() || `${r.ledgerCode} ${r.ledgerName}`.toLowerCase().includes(search.trim().toLowerCase())
+    searchTrimmed.length < MIN_SEARCH_CHARS || `${r.ledgerCode} ${r.ledgerName}`.toLowerCase().includes(searchTrimmed.toLowerCase())
   )
 
-  const searchMatches = search.trim()
-    ? rows.filter(r => `${r.ledgerCode} ${r.ledgerName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? rows.filter(r => `${r.ledgerCode} ${r.ledgerName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
@@ -96,6 +109,8 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: r.ledgerGuid, primary: r.ledgerCode, secondary: r.ledgerName }))}
+              minChars={MIN_SEARCH_CHARS}
+              onSelect={(r) => openViewModal(r.id)}
             />
           </div>
           <ScrollTable>
@@ -117,16 +132,17 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.ledgerGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
-                        <ActionMenu>
-                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.ledgerGuid)}>
-                            <i className="lni lni-pencil"></i> Edit
-                          </button>}
-                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                            <i className="lni lni-trash-can"></i> Delete
-                          </button>}
-                        </ActionMenu>
-                      )}
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.ledgerGuid)}>
+                          <i className="lni lni-eye"></i> View
+                        </button>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.ledgerGuid)}>
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>}
+                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                          <i className="lni lni-trash-can"></i> Delete
+                        </button>}
+                      </ActionMenu>
                     </td>
                     <td className="font-mono font-bold">{r.ledgerCode}</td>
                     <td><strong>{r.ledgerName}</strong></td>
@@ -151,6 +167,14 @@ export default function Page() {
         showToast={showToast}
         ledgerGuid={editingLedgerGuid}
         updateLedger={updateLedger}
+      />
+      <ViewLedgerModal
+        isOpen={openModals.has('view-ledger-modal')}
+        onClose={() => closeModal('view-ledger-modal')}
+        showToast={showToast}
+        ledgerGuid={viewingLedgerGuid}
+        canEdit={permissions.edit}
+        onEdit={() => { closeModal('view-ledger-modal'); if (viewingLedgerGuid) openEditModal(viewingLedgerGuid) }}
       />
       <Toast toast={toast} />
 

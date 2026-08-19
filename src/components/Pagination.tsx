@@ -24,8 +24,15 @@ export function Pagination({ page, totalPages, totalCount, itemLabel = 'results'
 
   function commitJump() {
     const n = Math.trunc(+jumpTo)
-    if (Number.isFinite(n) && n >= 1 && n <= totalPages && n !== page) onPageChange(n)
-    else setJumpTo(String(page))
+    // An out-of-range number (or a blank box) used to just get silently
+    // discarded back to whatever page you were already on — which, typed
+    // from page 1, reads as "I entered a number and it turned into 1" with
+    // no indication why. Clamp into the valid range instead, so "Go to 99"
+    // on a 5-page table lands on page 5 rather than bouncing back to page 1.
+    if (!Number.isFinite(n)) { setJumpTo(String(page)); return }
+    const clamped = Math.min(Math.max(n, 1), totalPages)
+    if (clamped !== page) onPageChange(clamped)
+    setJumpTo(String(clamped))
   }
 
   return (

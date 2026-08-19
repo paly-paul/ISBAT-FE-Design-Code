@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { useBatches, useCreateBatch, useUpdateBatch, useDeleteBatch, Batch } from '@/hooks/academic/useBatches'
+import { useBatches, useBatchSearch, useCreateBatch, useUpdateBatch, useDeleteBatch, Batch } from '@/hooks/academic/useBatches'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useStreams } from '@/hooks/config/useStreams'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
@@ -36,6 +36,10 @@ const PAGE_SIZE = 20
 // as useEmployees/useFaculties — a search box only makes sense against the
 // whole dataset, not whatever 20-row server page happens to be loaded.
 const BATCHES_LOAD_SIZE = 1000
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as Intake Master /
+// Skill Master's search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const permissions = usePagePermissions()
@@ -47,15 +51,38 @@ export default function Page() {
 
   const { data, isLoading } = useBatches(1, BATCHES_LOAD_SIZE)
   const serverTotalCount = data?.totalCount ?? 0
+
+  // Debounced so the backend's ?search= isn't hit on every keystroke, and
+  // held at '' (falling back to the unfiltered list) until MIN_SEARCH_CHARS
+  // is met — same convention as Intake/Skill/Repetition Tag's search boxes.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const trimmed = search.trim()
+    if (trimmed.length < MIN_SEARCH_CHARS) { setDebouncedSearch(''); return }
+    const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const { data: searchData, isFetching: isSearching } = useBatchSearch(debouncedSearch, BATCHES_LOAD_SIZE)
+  const searchTrimmed = search.trim()
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isSearching)
+
   // Batch has no createdAt field — bStartDate is the only temporal signal
-  // available, so "newest to oldest" sorts by that, descending.
+  // available, so "newest to oldest" sorts by that, descending. Reads from
+  // the search-scoped response once debouncedSearch is set, falling back to
+  // the plain unfiltered list otherwise.
   const sortedRows = useMemo(
-    () => [...(data?.items ?? [])].sort((a, b) => (b.bStartDate ?? '').localeCompare(a.bStartDate ?? '')),
-    [data],
+    () => [...((debouncedSearch ? searchData?.items : data?.items) ?? [])].sort((a, b) => (b.bStartDate ?? '').localeCompare(a.bStartDate ?? '')),
+    [data, searchData, debouncedSearch],
   )
+  // Re-filter client-side on top of whatever the server sent back, so
+  // results stay correct even if the backend doesn't actually honor
+  // ?search= (see the note on getBatches).
   const filteredRows = useMemo(
-    () => sortedRows.filter(r => !search || r.batchCode.toLowerCase().includes(search.toLowerCase())),
-    [sortedRows, search],
+    () => searchTrimmed.length >= MIN_SEARCH_CHARS
+      ? sortedRows.filter(r => r.batchCode.toLowerCase().includes(searchTrimmed.toLowerCase()))
+      : sortedRows,
+    [sortedRows, searchTrimmed],
   )
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
   const createBatch = useCreateBatch()
@@ -77,10 +104,10 @@ export default function Page() {
   }
 
   const searchMatches = useMemo(
-    () => search.trim()
-      ? sortedRows.filter(r => r.batchCode.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    () => searchTrimmed.length >= MIN_SEARCH_CHARS
+      ? sortedRows.filter(r => r.batchCode.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
       : [],
-    [sortedRows, search],
+    [sortedRows, searchTrimmed],
   )
 
   // Semester is still scoped per-programme (no global semester list, only
@@ -120,6 +147,12 @@ export default function Page() {
     openModal('edit-batch-modal')
   }
 
+  function openViewModal(guid: string) {
+    setEditingBatchGuid(guid)
+    openModal('view-batch-modal')
+    setSearch('')
+  }
+
   function confirmDeleteBatch() {
     if (!deleteTarget) return
     deleteBatch.mutate(deleteTarget.batchGuid, {
@@ -140,6 +173,9 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: r.batchGuid, primary: r.batchCode, secondary: programName(r.programGuid) }))}
+              loading={searchPending}
+              minChars={MIN_SEARCH_CHARS}
+              onSelect={(r) => openViewModal(r.id)}
             />
             {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-batch-modal')}><i className="lni lni-plus"></i> Create Batch</button>}
           </div>
@@ -169,17 +205,17 @@ export default function Page() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading
+                {(isLoading || searchPending)
                   ? <TableLoadingState colSpan={999} />
                   : filteredRows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={!!search} onClearFilters={() => setSearch('')} />
                     : null}
-                {pageItems.map(r => (
+                {!(isLoading || searchPending) && pageItems.map(r => (
                   <tr key={r.batchGuid}>
                     <td>
                         {(permissions.edit || permissions.delete || true) && (
                           <ActionMenu>
-                            <button className="btn btn-neu btn-sm" onClick={() => { setEditingBatchGuid(r.batchGuid); openModal('view-batch-modal') }}><i className="lni lni-eye"></i> View</button>
+                            <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.batchGuid)}><i className="lni lni-eye"></i> View</button>
                             {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.batchGuid)}><i className="lni lni-pencil"></i> Edit</button>}
                           {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
                         </ActionMenu>

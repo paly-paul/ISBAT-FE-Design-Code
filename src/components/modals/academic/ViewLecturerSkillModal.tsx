@@ -76,7 +76,7 @@ export function ViewLecturerSkillModal({ isOpen, onClose, showToast, lecturerSki
             <div className="modal-title"><i className="lni lni-eye"></i> View Skill</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
+          <div className="modal-scroll" style={{ flex: '1 1 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
             <span style={{ color: 'var(--g400)' }}>Loading skill details…</span>
           </div>
         </div>
@@ -86,13 +86,13 @@ export function ViewLecturerSkillModal({ isOpen, onClose, showToast, lecturerSki
 
   return (
     <div className="modal-overlay open" id="view-lecturer-skill-modal">
-      <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+      <div className="modal modal-lg modal-flex" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-eye"></i> View Skill</div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
-        <div style={{ padding: '20px clamp(14px, 4vw, 22px)' }}>
+        <div className="modal-scroll" style={{ padding: '20px clamp(14px, 4vw, 22px)' }}>
           <div className="view-detail-grid">
             <Field label="Faculty Member" value={skill.intEmployee ? `Employee #${skill.intEmployee}` : '—'} />
             <Field label="Skill Name" value={skillName || '—'} />

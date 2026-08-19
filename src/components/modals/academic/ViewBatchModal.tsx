@@ -86,7 +86,7 @@ export function ViewBatchModal({ isOpen, onClose, showToast, batchGuid, onEdit, 
             <div className="modal-title"><i className="lni lni-eye"></i> View Batch</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
+          <div className="modal-scroll" style={{ flex: '1 1 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
             <span style={{ color: 'var(--g400)' }}>Loading batch details…</span>
           </div>
         </div>
@@ -96,13 +96,13 @@ export function ViewBatchModal({ isOpen, onClose, showToast, batchGuid, onEdit, 
 
   return (
     <div className="modal-overlay open" id="edit-batch-modal">
-      <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+      <div className="modal modal-lg modal-flex" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-eye"></i> View Batch — <span className="font-mono">{batch.batchCode}</span></div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
-        <div style={{ padding: '20px clamp(14px, 4vw, 22px)' }}>
+        <div className="modal-scroll" style={{ padding: '20px clamp(14px, 4vw, 22px)' }}>
           <div className="view-detail-grid">
             <Field label="Programme" value={programs.find(p => p.programGuid === programGuid)?.programName || '—'} />
             <Field label="Semester" value={semesters.find(s => s.semesterGuid === semesterGuid)?.semName || '—'} />

@@ -18,6 +18,10 @@ import { useEmployees } from '@/hooks/employee/useEmployees'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -60,6 +64,7 @@ export default function Page() {
   function openViewModal(faculty: Faculty) {
     setViewingFaculty(faculty)
     openModal('view-faculty-modal')
+    setSearch('')
   }
 
   function confirmDeleteFaculty() {
@@ -82,12 +87,13 @@ export default function Page() {
   // Live preview shown in the search dropdown as the user types — matches
   // the same code/name test as the table's own search filter below, capped
   // to a handful of rows.
-  const searchMatches = search.trim()
-    ? rows.filter(r => `${r.facultyCode} ${r.facultyName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  const searchTrimmed = search.trim()
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? rows.filter(r => `${r.facultyCode} ${r.facultyName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const filteredRows = rows.filter(r => {
-    if (search.trim() && !`${r.facultyCode} ${r.facultyName}`.toLowerCase().includes(search.trim().toLowerCase())) return false
+    if (searchTrimmed.length >= MIN_SEARCH_CHARS && !`${r.facultyCode} ${r.facultyName}`.toLowerCase().includes(searchTrimmed.toLowerCase())) return false
     return Object.entries(filters).every(([k, v]) => {
       if (!v.length) return true
       const cell = k === 'deanName' ? deanDisplayName(r) : String((r as unknown as Record<string, unknown>)[k])
@@ -134,6 +140,8 @@ export default function Page() {
                 value={search}
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.facultyGuid, primary: r.facultyCode, secondary: r.facultyName }))}
+                minChars={MIN_SEARCH_CHARS}
+                onSelect={(res) => { const row = rows.find(x => x.facultyGuid === res.id); if (row) openViewModal(row) }}
               />
             </div>
           </div>

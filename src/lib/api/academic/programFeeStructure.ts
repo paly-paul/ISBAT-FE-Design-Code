@@ -75,12 +75,19 @@ interface ProgramFeeStructureListResult {
 // API Not Integrated"). programGuid is an optional filter — the page itself
 // doesn't offer a programme filter yet, but the query param is real and
 // worth exposing now rather than adding it as a second breaking change later.
-export function getProgramFeeStructures(pageNumber = 1, pageSize = 20, programGuid?: string): Promise<ProgramFeeStructureListResult> {
+// search is forwarded to the endpoint's own ?search= param (same convention
+// as getIntakes/getSkills) rather than filtered client-side — not confirmed
+// against a spec, so callers pair it with a client-side re-filter of
+// whatever comes back, keeping results correct even if the backend doesn't
+// actually recognize the param.
+export function getProgramFeeStructures(pageNumber = 1, pageSize = 20, programGuid?: string, search = ''): Promise<ProgramFeeStructureListResult> {
   if (MOCK_AUTH) {
     return Promise.resolve({ items: [], totalCount: 0, pageNumber, pageSize })
   }
   const params = new URLSearchParams({ pageNumber: String(pageNumber), pageSize: String(pageSize) })
   if (programGuid) params.set('programGuid', programGuid)
+  const q = search.trim()
+  if (q) params.set('search', q)
   return apiGet<ProgramFeeStructureListResult | null>(`/api/v1/academic/Programfee-structure?${params.toString()}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }

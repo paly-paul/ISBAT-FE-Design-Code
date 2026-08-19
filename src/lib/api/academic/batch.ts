@@ -90,12 +90,20 @@ const mockBatches: Batch[] = [
   { batchGuid: 'd7b04278-21ef-4cfa-8bee-ff336f08e344', batchCode: 'CSF26MRNA', programGuid: 'mock-program-1', semesterGuid: 'mock-semester-1', streamGuid: 'mock-stream-1', batchTimeGuid: 'mock-batchtime-1', bStartDate: '2024-02-12T00:00:00', bEndDate: '2024-06-07T00:00:00', active: 1 },
 ]
 
-// Lists batches (paginated).
-export function getBatches(pageNumber = 1, pageSize = 20): Promise<BatchListResult> {
+// Lists batches (paginated). search is forwarded to the endpoint's own
+// ?search= param (same convention as getIntakes/getSkills) rather than
+// filtered client-side — not confirmed against a spec, so callers pair it
+// with a client-side re-filter of whatever comes back, keeping results
+// correct even if the backend doesn't actually recognize the param.
+export function getBatches(pageNumber = 1, pageSize = 20, search = ''): Promise<BatchListResult> {
+  const q = search.trim()
   if (MOCK_AUTH) {
-    return Promise.resolve({ items: mockBatches, totalCount: mockBatches.length, pageNumber, pageSize })
+    const filtered = q ? mockBatches.filter(b => b.batchCode.toLowerCase().includes(q.toLowerCase())) : mockBatches
+    return Promise.resolve({ items: filtered, totalCount: filtered.length, pageNumber, pageSize })
   }
-  return apiGet<BatchListResult | null>(`/api/v1/academic/batches?pageNumber=${pageNumber}&pageSize=${pageSize}`)
+  const params = new URLSearchParams({ pageNumber: String(pageNumber), pageSize: String(pageSize) })
+  if (q) params.set('search', q)
+  return apiGet<BatchListResult | null>(`/api/v1/academic/batches?${params.toString()}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }
 
