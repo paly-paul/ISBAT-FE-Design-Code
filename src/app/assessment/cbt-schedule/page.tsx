@@ -1,7 +1,19 @@
 'use client'
 import { SearchSelect } from '@/components/SearchSelect'
+import { TableSearch } from '@/components/TableSearch'
+import DatePicker from '@/components/DatePicker'
+import { Toast } from '@/components/Toast'
+import { useState } from 'react'
 
 export default function CbtSchedulePage() {
+  const [startDate, setStartDate] = useState('')
+  const [search, setSearch] = useState('')
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
   return (
     <div className="page active">
       <div className="pg-hdr">
@@ -10,7 +22,7 @@ export default function CbtSchedulePage() {
           <div className="pg-sub">Configure class test windows · 60-minute server-timed sessions</div>
         </div>
         <div className="pg-actions">
-          <button className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium text-[12.5px] px-4 py-2 rounded-md transition-colors shadow-sm flex items-center gap-1.5">
+          <button className="btn btn-primary btn-sm flex items-center gap-1.5" onClick={() => showToast('CBT Scheduled successfully')}>
             + Schedule CBT
           </button>
         </div>
@@ -34,9 +46,16 @@ export default function CbtSchedulePage() {
             <input type="number" defaultValue="60" className="ctrl w-full" />
           </div>
 
-          <div className="flex-1">
+          <div className="flex-1 min-w-[200px]">
             <label className="text-[12.5px] font-semibold text-slate-700 block mb-1.5">Start Date & Time</label>
-            <input type="datetime-local" className="ctrl w-full" />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <DatePicker value={startDate} onChange={setStartDate} />
+              </div>
+              <div className="w-[110px]">
+                <input type="time" className="ctrl w-full" />
+              </div>
+            </div>
           </div>
 
           <div className="flex-1">
@@ -57,6 +76,7 @@ export default function CbtSchedulePage() {
         </div>
 
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }

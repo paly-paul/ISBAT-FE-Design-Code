@@ -1,10 +1,30 @@
 'use client'
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
+import { Pagination } from '@/components/Pagination'
+import { FilterTh } from '@/components/FilterTh'
+import { Toast } from '@/components/Toast'
 
 export default function RecheckHub() {
   const [assignModalOpen, setAssignModalOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [page1, setPage1] = useState(1)
+  const [page2, setPage2] = useState(1)
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleFilterSelect = (col: string, vals: string[]) => {
+    setFilters(prev => ({ ...prev, [col]: vals }))
+    setOpenFilter(null)
+  }
 
   function openAssignModal() {
     setAssignModalOpen(true)
@@ -39,7 +59,20 @@ export default function RecheckHub() {
             <div className="text-[13.5px] font-bold text-slate-900">Flagged Cases</div>
           </div>
           
-          <ScrollTable>
+          
+        <div className="card-hdr">
+          <div className="card-title">
+            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
+          </div>
+          <TableSearch
+            className="w-64"
+            placeholder="Search records..."
+            value={search}
+            onChange={setSearch}
+            results={[]}
+          />
+        </div>
+        <ScrollTable>
             <table>
               <thead>
                 <tr>
@@ -47,7 +80,16 @@ export default function RecheckHub() {
                   <th>FACULTY (HIDDEN FROM AUDITOR)</th>
                   <th>BATCH FAILURE RATE</th>
                   <th>FLAG REASON</th>
-                  <th>STATUS</th>
+                  <FilterTh 
+                    label="STATUS" 
+                    opts={['Awaiting Auditor']} 
+                    isOpen={openFilter === 'status1'} 
+                    activeFilter={filters['status1'] || []} 
+                    onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'status1' ? null : 'status1') }} 
+                    onSelect={(vals) => handleFilterSelect('status1', vals)} 
+                    onClear={() => handleFilterSelect('status1', [])} 
+                    onClose={() => setOpenFilter(null)} 
+                  />
                   <th>ACTION</th>
                 </tr>
               </thead>
@@ -72,6 +114,9 @@ export default function RecheckHub() {
               </tbody>
             </table>
           </ScrollTable>
+          <div className="p-3 border-t border-slate-100">
+            <Pagination page={page1} totalPages={1} totalCount={1} onPageChange={setPage1} />
+          </div>
         </div>
 
         <div className="card">
@@ -87,7 +132,16 @@ export default function RecheckHub() {
                   <th>ASSIGNED AUDITOR</th>
                   <th>DISPATCHED BY</th>
                   <th>DATE</th>
-                  <th>STATUS</th>
+                  <FilterTh 
+                    label="STATUS" 
+                    opts={['Resolved', 'Open']} 
+                    isOpen={openFilter === 'status2'} 
+                    activeFilter={filters['status2'] || []} 
+                    onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'status2' ? null : 'status2') }} 
+                    onSelect={(vals) => handleFilterSelect('status2', vals)} 
+                    onClear={() => handleFilterSelect('status2', [])} 
+                    onClose={() => setOpenFilter(null)} 
+                  />
                   <th>OUTCOME</th>
                 </tr>
               </thead>
@@ -111,6 +165,9 @@ export default function RecheckHub() {
               </tbody>
             </table>
           </ScrollTable>
+          <div className="p-4 border-t border-slate-100">
+            <Pagination page={page2} totalPages={1} totalCount={2} onPageChange={setPage2} />
+          </div>
         </div>
       </div>
 
@@ -156,11 +213,12 @@ export default function RecheckHub() {
 
             <div className="flex gap-2 justify-end mt-5 pt-4 border-t border-slate-200">
               <button className="btn btn-neu" onClick={closeAssignModal}>Cancel</button>
-              <button className="btn btn-danger" onClick={() => { closeAssignModal(); alert('Recheck dispatched to auditor — original faculty locked out') }}>Confirm &amp; Dispatch Recheck</button>
+              <button className="btn btn-danger" onClick={() => { closeAssignModal(); showToast('Recheck dispatched to auditor') }}>Confirm &amp; Dispatch Recheck</button>
             </div>
           </div>
         </div>
       )}
+      <Toast toast={toast} />
     </>
   )
 }

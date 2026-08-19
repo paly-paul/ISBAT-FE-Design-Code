@@ -1,6 +1,17 @@
 'use client'
+import { Toast } from '@/components/Toast'
+import { TableSearch } from '@/components/TableSearch'
+import { useState } from 'react'
 
 export default function ResitSeatingPage() {
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+  const [search, setSearch] = useState('')
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
   return (
     <div className="page active">
       <div className="pg-hdr">
@@ -9,7 +20,7 @@ export default function ResitSeatingPage() {
           <div className="pg-sub">Staggered scheduling grid · Drag-and-drop allocation · Real-time capacity indicators</div>
         </div>
         <div className="pg-actions">
-          <button className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium text-[13px] px-5 py-2.5 rounded-md transition-colors shadow-sm whitespace-nowrap">
+          <button className="btn btn-primary whitespace-nowrap" onClick={() => showToast('Seating plan published successfully')}>
             Publish Seating Plan
           </button>
         </div>
@@ -137,6 +148,7 @@ export default function ResitSeatingPage() {
           </div>
         </div>
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }

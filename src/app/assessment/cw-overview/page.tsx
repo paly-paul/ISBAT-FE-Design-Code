@@ -1,8 +1,36 @@
 'use client'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { FilterTh } from '@/components/FilterTh'
+import { Toast } from '@/components/Toast'
+import { useState, useEffect } from 'react'
 
 export default function CourseworkOverviewPage() {
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleFilterSelect = (col: string, vals: string[]) => {
+    setFilters(prev => ({ ...prev, [col]: vals }))
+    setOpenFilter(null)
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1200)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
     <div className="page active">
       <div className="pg-hdr">
@@ -11,11 +39,24 @@ export default function CourseworkOverviewPage() {
           <div className="pg-sub">Track CW status across all subjects this semester</div>
         </div>
         <div className="pg-actions">
-          <button className="btn btn-primary btn-sm"><i className="lni lni-plus"></i> Schedule CW</button>
+          <button className="btn btn-primary btn-sm" onClick={() => showToast('CW Schedule dialog opened')}><i className="lni lni-plus"></i> Schedule CW</button>
         </div>
       </div>
 
       <div className="card">
+        
+        <div className="card-hdr">
+          <div className="card-title">
+            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
+          </div>
+          <TableSearch
+            className="w-64"
+            placeholder="Search records..."
+            value={search}
+            onChange={setSearch}
+            results={[]}
+          />
+        </div>
         <ScrollTable>
           <table>
             <thead>
@@ -28,10 +69,23 @@ export default function CourseworkOverviewPage() {
                 <th>Questions</th>
                 <th>Submissions</th>
                 <th>Evaluated</th>
-                <th>Status</th>
+                <FilterTh 
+                  label="Status" 
+                  opts={['Blocked', 'Complete', 'Evaluating']} 
+                  isOpen={openFilter === 'status'} 
+                  activeFilter={filters['status'] || []} 
+                  onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'status' ? null : 'status') }} 
+                  onSelect={(vals) => handleFilterSelect('status', vals)} 
+                  onClear={() => handleFilterSelect('status', [])} 
+                  onClose={() => setOpenFilter(null)} 
+                />
               </tr>
             </thead>
             <tbody>
+              {loading ? (
+                <TableLoadingState colSpan={9} />
+              ) : (
+                <>
               <tr>
                 <td>
                   <ActionMenu>
@@ -92,10 +146,16 @@ export default function CourseworkOverviewPage() {
                 <td className="text-g700 font-mono text-[12px]">35 / 35</td>
                 <td><span className="badge badge-green">Complete</span></td>
               </tr>
+                </>
+              )}
             </tbody>
           </table>
         </ScrollTable>
+        <div className="p-4 border-t border-slate-100">
+          <Pagination page={page} totalPages={2} totalCount={18} onPageChange={setPage} />
+        </div>
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }

@@ -1,9 +1,37 @@
 'use client'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { FilterTh } from '@/components/FilterTh'
+import { Toast } from '@/components/Toast'
+import { useState, useEffect } from 'react'
 
 export default function MarkEntryUePage() {
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleFilterSelect = (col: string, vals: string[]) => {
+    setFilters(prev => ({ ...prev, [col]: vals }))
+    setOpenFilter(null)
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1200)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
     <div className="page active">
       <div className="pg-hdr">
@@ -18,7 +46,7 @@ export default function MarkEntryUePage() {
                 ]}
                 className="w-full"
               />
-          <button className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium text-[13px] px-5 py-2.5 rounded-md transition-colors shadow-sm whitespace-nowrap">
+          <button className="btn btn-primary whitespace-nowrap" onClick={() => showToast('All UE marks saved successfully')}>
             Save All
           </button>
         </div>
@@ -33,6 +61,19 @@ export default function MarkEntryUePage() {
             </div>
           </div>
         </div>
+        
+        <div className="card-hdr">
+          <div className="card-title">
+            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
+          </div>
+          <TableSearch
+            className="w-64"
+            placeholder="Search records..."
+            value={search}
+            onChange={setSearch}
+            results={[]}
+          />
+        </div>
         <ScrollTable>
           <table>
             <thead>
@@ -46,10 +87,23 @@ export default function MarkEntryUePage() {
                 <th>UE RAW<br/>(/100)</th>
                 <th>UE<br/>(/70)</th>
                 <th>UE PASS</th>
-                <th>RESULT</th>
+                <FilterTh 
+                  label="RESULT" 
+                  opts={['PASS', 'FAIL (UE)']} 
+                  isOpen={openFilter === 'result'} 
+                  activeFilter={filters['result'] || []} 
+                  onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'result' ? null : 'result') }} 
+                  onSelect={(vals) => handleFilterSelect('result', vals)} 
+                  onClear={() => handleFilterSelect('result', [])} 
+                  onClose={() => setOpenFilter(null)} 
+                />
               </tr>
             </thead>
             <tbody>
+              {loading ? (
+                <TableLoadingState colSpan={10} />
+              ) : (
+                <>
               <tr>
                 <td>
                   <ActionMenu>
@@ -134,11 +188,17 @@ export default function MarkEntryUePage() {
                 </td>
                 <td><span className="badge badge-red">FAIL<br/>(UE)</span></td>
               </tr>
+                </>
+              )}
             </tbody>
           </table>
         </ScrollTable>
         
-        <div className="p-5 pt-0">
+        <div className="p-4 border-t border-slate-100">
+          <Pagination page={page} totalPages={6} totalCount={62} onPageChange={setPage} />
+        </div>
+        
+        <div className="p-5 pt-0 mt-4">
           <div className="bg-[#fffbeb] border border-[#fde68a] rounded-md p-3 flex gap-3 text-[12.5px] text-[#b45309] items-start shadow-sm mt-4">
             <div className="mt-0.5 text-[#d97706]"><i className="lni lni-warning"></i></div>
             <div><span className="text-amber-800">David Ssemwogerere: UE score 42% is below the 50% pass threshold. Student is flagged for Resit (UE component).</span></div>
@@ -146,6 +206,7 @@ export default function MarkEntryUePage() {
         </div>
 
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }

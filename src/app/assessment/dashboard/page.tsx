@@ -1,8 +1,20 @@
 'use client'
 import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { TableSearch } from '@/components/TableSearch'
+import { Toast } from '@/components/Toast'
 
 export default function AssessmentDashboard() {
   const router = useRouter()
+  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
 
   function nav(id: string) {
     router.push('/assessment/' + id)
@@ -17,7 +29,7 @@ export default function AssessmentDashboard() {
         </div>
         <div className="flex gap-2 items-center">
           <span className="badge badge-purple">Registrar</span>
-          <button className="btn btn-neu btn-sm"><i className="lni lni-download"></i> Export Summary</button>
+          <button className="btn btn-neu btn-sm" onClick={() => showToast('Summary exported successfully')}><i className="lni lni-download"></i> Export Summary</button>
         </div>
       </div>
 
@@ -167,6 +179,7 @@ export default function AssessmentDashboard() {
               </tbody>
             </table>
           </div>
+          <Pagination page={page} totalPages={2} totalCount={12} onPageChange={setPage} />
         </div>
       </div>
 
@@ -247,6 +260,7 @@ export default function AssessmentDashboard() {
           </div>
         </div>
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }

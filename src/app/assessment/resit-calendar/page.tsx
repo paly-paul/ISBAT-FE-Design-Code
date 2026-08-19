@@ -1,8 +1,36 @@
 'use client'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { FilterTh } from '@/components/FilterTh'
+import { Toast } from '@/components/Toast'
+import { useState, useEffect } from 'react'
 
 export default function ResitCalendarPage() {
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleFilterSelect = (col: string, vals: string[]) => {
+    setFilters(prev => ({ ...prev, [col]: vals }))
+    setOpenFilter(null)
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1200)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
     <div className="page active">
       <div className="pg-hdr">
@@ -11,7 +39,7 @@ export default function ResitCalendarPage() {
           <div className="pg-sub">Define resit windows · Track applications and payment status</div>
         </div>
         <div className="pg-actions">
-          <button className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium text-[13px] px-5 py-2.5 rounded-md transition-colors shadow-sm whitespace-nowrap">
+          <button className="btn btn-primary whitespace-nowrap" onClick={() => showToast('Opening new resit window prompt')}>
             + Open Resit Window
           </button>
         </div>
@@ -96,6 +124,19 @@ export default function ResitCalendarPage() {
           </div>
         </div>
         
+        
+        <div className="card-hdr">
+          <div className="card-title">
+            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
+          </div>
+          <TableSearch
+            className="w-64"
+            placeholder="Search records..."
+            value={search}
+            onChange={setSearch}
+            results={[]}
+          />
+        </div>
         <ScrollTable>
           <table>
             <thead>
@@ -108,10 +149,23 @@ export default function ResitCalendarPage() {
                 <th>RESIT TYPE</th>
                 <th>FEE</th>
                 <th>PAYMENT</th>
-                <th>STATUS</th>
+                <FilterTh 
+                  label="STATUS" 
+                  opts={['Cleared', 'Awaiting Fee']} 
+                  isOpen={openFilter === 'status'} 
+                  activeFilter={filters['status'] || []} 
+                  onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'status' ? null : 'status') }} 
+                  onSelect={(vals) => handleFilterSelect('status', vals)} 
+                  onClear={() => handleFilterSelect('status', [])} 
+                  onClose={() => setOpenFilter(null)} 
+                />
               </tr>
             </thead>
             <tbody>
+              {loading ? (
+                <TableLoadingState colSpan={9} />
+              ) : (
+                <>
               <tr>
                 <td>
                   <ActionMenu>
@@ -142,10 +196,16 @@ export default function ResitCalendarPage() {
                 <td><span className="badge badge-amber">Pending</span></td>
                 <td><span className="badge badge-amber">Awaiting Fee</span></td>
               </tr>
+                </>
+              )}
             </tbody>
           </table>
         </ScrollTable>
+        <div className="p-4 border-t border-slate-100">
+          <Pagination page={page} totalPages={2} totalCount={23} onPageChange={setPage} />
+        </div>
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }

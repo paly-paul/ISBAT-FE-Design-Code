@@ -1,10 +1,29 @@
 'use client'
 import { useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
+import { TableSearch } from '@/components/TableSearch'
+import { Pagination } from '@/components/Pagination'
+import { FilterTh } from '@/components/FilterTh'
+import { Toast } from '@/components/Toast'
 
 export default function WeightConfigPage() {
   const [model, setModel] = useState('std')
+  const [search, setSearch] = useState('')
   const [rawScore, setRawScore] = useState('')
+  const [page, setPage] = useState(1)
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleFilterSelect = (col: string, vals: string[]) => {
+    setFilters(prev => ({ ...prev, [col]: vals }))
+    setOpenFilter(null)
+  }
 
   const raw = parseFloat(rawScore)
   const weightage = model === 'std' ? 15 : 20
@@ -20,7 +39,7 @@ export default function WeightConfigPage() {
           <div className="pg-sub">Define assessment weightage per programme type — auto-applies 30/70 or 40/60 model</div>
         </div>
         <div className="pg-actions">
-          <button className="btn btn-neu btn-sm"><i className="lni lni-download"></i> Export Config</button>
+          <button className="btn btn-neu btn-sm" onClick={() => showToast('Configuration exported')}><i className="lni lni-download"></i> Export Config</button>
         </div>
       </div>
 
@@ -76,7 +95,16 @@ export default function WeightConfigPage() {
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
                   <th className="font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200" style={{ padding: '10px 8px', fontSize: '10px' }}>PROGRAMME</th>
-                  <th className="font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200" style={{ padding: '10px 8px', fontSize: '10px' }}>MODEL</th>
+                  <FilterTh 
+                    label="MODEL" 
+                    opts={['Standard', 'Engineering']} 
+                    isOpen={openFilter === 'model'} 
+                    activeFilter={filters['model'] || []} 
+                    onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'model' ? null : 'model') }} 
+                    onSelect={(vals) => handleFilterSelect('model', vals)} 
+                    onClear={() => handleFilterSelect('model', [])} 
+                    onClose={() => setOpenFilter(null)} 
+                  />
                   <th className="font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200 text-center" style={{ padding: '10px 8px', fontSize: '10px' }}>CW</th>
                   <th className="font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200 text-center" style={{ padding: '10px 8px', fontSize: '10px' }}>CBT</th>
                   <th className="font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200 text-center" style={{ padding: '10px 8px', fontSize: '10px' }}>UE</th>
@@ -131,6 +159,7 @@ export default function WeightConfigPage() {
               </tbody>
             </table>
           </div>
+          <Pagination page={page} totalPages={3} totalCount={28} onPageChange={setPage} />
         </div>
       </div>
 
@@ -175,6 +204,7 @@ export default function WeightConfigPage() {
           </div>
         </div>
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }

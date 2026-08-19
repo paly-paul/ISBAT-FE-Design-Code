@@ -1,6 +1,16 @@
 'use client'
+import { Toast } from '@/components/Toast'
+import { TableSearch } from '@/components/TableSearch'
+import { useState } from 'react'
 
 export default function CbtQuestionUploadPage() {
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+  const [search, setSearch] = useState('')
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
   return (
     <div className="page active">
       <div className="pg-hdr">
@@ -9,7 +19,7 @@ export default function CbtQuestionUploadPage() {
           <div className="pg-sub">Upload questions per section · Section A (Easy/1m) · B (Medium/2m) · C (Difficult/3m) · Total: 50 marks</div>
         </div>
         <div className="pg-actions">
-          <button className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-slate-700 shadow-[var(--neu-sm)] hover:bg-slate-50 transition-colors flex items-center gap-1.5">
+          <button className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-slate-700 shadow-[var(--neu-sm)] hover:bg-slate-50 transition-colors flex items-center gap-1.5" onClick={() => showToast('Template downloaded')}>
             <i className="lni lni-download"></i> Download Template
           </button>
         </div>
@@ -60,11 +70,12 @@ export default function CbtQuestionUploadPage() {
           <div className="text-[12px] text-slate-500">Specify section (A/B/C) and marks per question in the template</div>
         </div>
 
-        <button className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium text-[13px] px-5 py-2.5 rounded-md transition-colors shadow-sm">
+        <button className="btn btn-primary" onClick={() => showToast('Questions imported successfully')}>
           Import Questions
         </button>
 
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }

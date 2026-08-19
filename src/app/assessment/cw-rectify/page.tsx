@@ -1,7 +1,17 @@
 'use client'
 import { SearchSelect } from '@/components/SearchSelect'
+import { TableSearch } from '@/components/TableSearch'
+import { Toast } from '@/components/Toast'
+import { useState } from 'react'
 
 export default function CwRectificationPage() {
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+  const [search, setSearch] = useState('')
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
   return (
     <div className="page active">
       <div className="pg-hdr">
@@ -53,7 +63,7 @@ export default function CwRectificationPage() {
             </div>
           </div>
           
-          <button className="bg-white border border-slate-200 rounded-lg px-4 py-2 text-[12.5px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors flex items-center gap-2">
+          <button className="bg-white border border-slate-200 rounded-lg px-4 py-2 text-[12.5px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors flex items-center gap-2" onClick={() => showToast('Submission found')}>
             <i className="lni lni-search-alt"></i> Find Submission
           </button>
         </div>
@@ -100,7 +110,7 @@ export default function CwRectificationPage() {
           <div className="text-[12.5px] text-slate-500 leading-snug mb-5 flex-1">
             For student error (wrong file uploaded). Student receives <strong className="text-slate-700">same questions</strong> as original assignment.
           </div>
-          <button className="bg-white border border-slate-200 rounded-lg px-4 py-2 text-[12.5px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors">
+          <button className="bg-white border border-slate-200 rounded-lg px-4 py-2 text-[12.5px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors" onClick={() => showToast('Coursework reopened')}>
             Reopen Coursework
           </button>
         </div>
@@ -113,7 +123,7 @@ export default function CwRectificationPage() {
           <div className="text-[12.5px] text-slate-500 leading-snug mb-5 flex-1">
             For faculty question error. Student receives <strong className="text-slate-700">new randomised questions</strong> on relaunch. Clears all prior attempt data.
           </div>
-          <button className="bg-white border border-slate-200 rounded-lg px-4 py-2 text-[12.5px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors">
+          <button className="bg-white border border-slate-200 rounded-lg px-4 py-2 text-[12.5px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors" onClick={() => showToast('Submission deleted')}>
             Delete Submission
           </button>
         </div>
@@ -126,7 +136,7 @@ export default function CwRectificationPage() {
           <div className="text-[12.5px] text-slate-500 leading-snug mb-5 flex-1">
             Routes submission back to <strong className="text-slate-700">original faculty</strong> for mark review. A pending alert is added to their dashboard. Used for routine grading variance (1–2% of cases).
           </div>
-          <button className="badge badge-green">
+          <button className="badge badge-green" onClick={() => showToast('Sent for reevaluation')}>
             Send for Reevaluation
           </button>
         </div>
@@ -139,12 +149,13 @@ export default function CwRectificationPage() {
           <div className="text-[12.5px] text-slate-500 leading-snug mb-5 flex-1">
             Bypasses original faculty entirely. Routes to <strong className="text-slate-700">independent auditor</strong>. Reserved for suspected bias or unjustified batch failures. Original evaluator identity is hidden from auditor.
           </div>
-          <button className="bg-red-50 text-red-700 border border-red-200 rounded-lg px-4 py-2 text-[12.5px] font-semibold shadow-sm hover:bg-red-100 transition-colors">
+          <button className="bg-red-50 text-red-700 border border-red-200 rounded-lg px-4 py-2 text-[12.5px] font-semibold shadow-sm hover:bg-red-100 transition-colors" onClick={() => showToast('Recheck triggered')}>
             Trigger Administrative Recheck
           </button>
         </div>
 
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }
