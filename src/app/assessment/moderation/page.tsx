@@ -1,12 +1,31 @@
 'use client'
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { ActionMenu } from '@/components/ActionMenu'
+import { Pagination } from '@/components/Pagination'
+import { FilterTh } from '@/components/FilterTh'
+import { Toast } from '@/components/Toast'
 
 export default function ModerationPage() {
   const [activeTab, setActiveTab] = useState<'ia' | 'ue'>('ia')
+  const [search, setSearch] = useState('')
   const [iaGrace, setIaGrace] = useState(0)
   const [ueGrace, setUeGrace] = useState(0)
+  const [page, setPage] = useState(1)
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleFilterSelect = (col: string, vals: string[]) => {
+    setFilters(prev => ({ ...prev, [col]: vals }))
+    setOpenFilter(null)
+  }
 
   return (
     <div className="page active">
@@ -16,7 +35,7 @@ export default function ModerationPage() {
           <div className="pg-sub">Apply grace marks · Preview eligible students · intIAMode / intUEMode columns preserved separately</div>
         </div>
         <div className="pg-actions">
-          <button className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium text-[13px] px-5 py-2.5 rounded-md transition-colors shadow-sm whitespace-nowrap">
+          <button className="btn btn-primary whitespace-nowrap" onClick={() => showToast('Results published to student portal')}>
             Publish Results
           </button>
         </div>
@@ -104,6 +123,19 @@ export default function ModerationPage() {
           </div>
         </div>
         
+        
+        <div className="card-hdr">
+          <div className="card-title">
+            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
+          </div>
+          <TableSearch
+            className="w-64"
+            placeholder="Search records..."
+            value={search}
+            onChange={setSearch}
+            results={[]}
+          />
+        </div>
         <ScrollTable>
           <table>
             <thead>
@@ -116,7 +148,16 @@ export default function ModerationPage() {
                 <th>UE (/70)</th>
                 <th>UE GRACE</th>
                 <th>UE FINAL</th>
-                <th>RESULT</th>
+                <FilterTh 
+                  label="RESULT" 
+                  opts={['PASS', 'FAIL (UE)']} 
+                  isOpen={openFilter === 'result'} 
+                  activeFilter={filters['result'] || []} 
+                  onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'result' ? null : 'result') }} 
+                  onSelect={(vals) => handleFilterSelect('result', vals)} 
+                  onClear={() => handleFilterSelect('result', [])} 
+                  onClose={() => setOpenFilter(null)} 
+                />
               </tr>
             </thead>
             <tbody>
@@ -168,8 +209,11 @@ export default function ModerationPage() {
             </tbody>
           </table>
         </ScrollTable>
+        <div className="p-4 border-t border-slate-100">
+          <Pagination page={page} totalPages={6} totalCount={62} onPageChange={setPage} />
+        </div>
       </div>
-
+      <Toast toast={toast} />
     </div>
   )
 }

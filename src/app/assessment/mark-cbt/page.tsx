@@ -1,8 +1,28 @@
 'use client'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { Toast } from '@/components/Toast'
+import { useState, useEffect } from 'react'
 
 export default function MarkEntryCbtPage() {
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1200)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
     <div className="page active">
       <div className="pg-hdr">
@@ -24,6 +44,19 @@ export default function MarkEntryCbtPage() {
             </div>
           </div>
         </div>
+        
+        <div className="card-hdr">
+          <div className="card-title">
+            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
+          </div>
+          <TableSearch
+            className="w-64"
+            placeholder="Search records..."
+            value={search}
+            onChange={setSearch}
+            results={[]}
+          />
+        </div>
         <ScrollTable>
           <table>
             <thead>
@@ -38,6 +71,10 @@ export default function MarkEntryCbtPage() {
               </tr>
             </thead>
             <tbody>
+              {loading ? (
+                <TableLoadingState colSpan={7} />
+              ) : (
+                <>
               <tr>
                 <td>
                   <ActionMenu>
@@ -67,7 +104,7 @@ export default function MarkEntryCbtPage() {
               <tr>
                 <td>
                   <ActionMenu>
-                    <button className="btn btn-neu btn-sm text-purple-700"><i className="lni lni-pencil"></i> Override</button>
+                    <button className="btn btn-neu btn-sm text-purple-700" onClick={() => showToast('Override prompt opened')}><i className="lni lni-pencil"></i> Override</button>
                   </ActionMenu>
                 </td>
                 <td className="font-mono text-slate-500 text-[12.5px]">BCS/2024/0058</td>
@@ -90,10 +127,16 @@ export default function MarkEntryCbtPage() {
                 <td className="text-slate-400">—</td>
                 <td className="text-slate-400">—</td>
               </tr>
+                </>
+              )}
             </tbody>
           </table>
         </ScrollTable>
+        <div className="p-4 border-t border-slate-100">
+          <Pagination page={page} totalPages={6} totalCount={62} onPageChange={setPage} />
+        </div>
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }

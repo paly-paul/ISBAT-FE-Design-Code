@@ -1,11 +1,30 @@
 'use client'
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
+import { Pagination } from '@/components/Pagination'
+import { FilterTh } from '@/components/FilterTh'
+import { Toast } from '@/components/Toast'
 
 export default function QpUploadVettingPage() {
   const [activeTab, setActiveTab] = useState('faculty')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleFilterSelect = (col: string, vals: string[]) => {
+    setFilters(prev => ({ ...prev, [col]: vals }))
+    setOpenFilter(null)
+  }
 
   return (
     <div className="page active">
@@ -77,7 +96,7 @@ export default function QpUploadVettingPage() {
               <div className="text-[11px] text-slate-500 mt-1">.docx / .pdf / Excel template</div>
             </div>
 
-            <button className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium text-[13px] px-5 py-2.5 rounded-md transition-colors shadow-sm">
+            <button className="btn btn-primary" onClick={() => showToast('Submitted to vetting queue')}>
               Submit to Vetting Queue
             </button>
           </div>
@@ -89,13 +108,35 @@ export default function QpUploadVettingPage() {
                 <div className="text-[13.5px] font-bold text-slate-900">My QP Status</div>
               </div>
               
-              <ScrollTable>
+              
+        <div className="card-hdr">
+          <div className="card-title">
+            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
+          </div>
+          <TableSearch
+            className="w-64"
+            placeholder="Search records..."
+            value={search}
+            onChange={setSearch}
+            results={[]}
+          />
+        </div>
+        <ScrollTable>
                 <table style={{ fontSize: '11px' }}>
                   <thead>
                     <tr>
                       <th>SUBJECT</th>
                       <th>UPLOADED</th>
-                      <th>STATUS</th>
+                      <FilterTh 
+                        label="STATUS" 
+                        opts={['Verified', 'Pending Upload']} 
+                        isOpen={openFilter === 'status'} 
+                        activeFilter={filters['status'] || []} 
+                        onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'status' ? null : 'status') }} 
+                        onSelect={(vals) => handleFilterSelect('status', vals)} 
+                        onClear={() => handleFilterSelect('status', [])} 
+                        onClose={() => setOpenFilter(null)} 
+                      />
                     </tr>
                   </thead>
                   <tbody>
@@ -112,6 +153,9 @@ export default function QpUploadVettingPage() {
                   </tbody>
                 </table>
               </ScrollTable>
+              <div className="p-3 border-t border-slate-100">
+                <Pagination page={page} totalPages={1} totalCount={2} onPageChange={setPage} />
+              </div>
             </div>
 
             <div className="bg-[#fffbeb] border border-[#fde68a] rounded-md p-3 flex gap-3 text-[12.5px] text-[#b45309] items-start mb-4 shadow-sm">
@@ -160,7 +204,7 @@ export default function QpUploadVettingPage() {
                   <td className="text-slate-800">James Ochieng</td>
                   <td className="text-slate-500 font-mono text-[12.5px]">06 Nov</td>
                   <td>
-                    <button className="bg-purple-600 hover:bg-purple-700 text-white font-medium text-[12px] px-3 py-1.5 rounded-full transition-colors shadow-sm">
+                    <button className="bg-purple-600 hover:bg-purple-700 text-white font-medium text-[12px] px-3 py-1.5 rounded-full transition-colors shadow-sm" onClick={() => showToast('Opened for review')}>
                       Open for Review
                     </button>
                   </td>
@@ -175,7 +219,7 @@ export default function QpUploadVettingPage() {
                   <td className="text-slate-800">Joseph Ayuma</td>
                   <td className="text-slate-500 font-mono text-[12.5px]">07 Nov</td>
                   <td>
-                    <button className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium text-[12px] px-3 py-1.5 rounded-full transition-colors shadow-[var(--neu-sm)]">
+                    <button className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium text-[12px] px-3 py-1.5 rounded-full transition-colors shadow-[var(--neu-sm)]" onClick={() => showToast('Opened for review')}>
                       Open for Review
                     </button>
                   </td>
@@ -183,9 +227,13 @@ export default function QpUploadVettingPage() {
               </tbody>
             </table>
           </ScrollTable>
+          <div className="p-4 border-t border-slate-100">
+            <Pagination page={page} totalPages={1} totalCount={2} onPageChange={setPage} />
+          </div>
         </div>
       )}
 
+      <Toast toast={toast} />
     </div>
   )
 }

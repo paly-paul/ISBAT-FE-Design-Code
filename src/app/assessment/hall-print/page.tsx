@@ -1,9 +1,29 @@
 'use client'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { Toast } from '@/components/Toast'
+import { useState, useEffect } from 'react'
 
 export default function HallTicketPrintPage() {
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1200)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
     <div className="page active">
       <div className="pg-hdr">
@@ -46,7 +66,7 @@ export default function HallTicketPrintPage() {
               />
           </div>
           <div className="flex justify-end">
-            <button className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium text-[13px] px-5 py-2.5 rounded-md transition-colors shadow-sm flex items-center gap-2 h-[38.5px]">
+            <button className="btn btn-primary flex items-center gap-2 h-[38.5px]" onClick={() => showToast('Printing all ready tickets...')}>
               <i className="lni lni-printer"></i> Print All (2 Ready)
             </button>
           </div>
@@ -59,6 +79,19 @@ export default function HallTicketPrintPage() {
       </div>
 
       <div className="card">
+        
+        <div className="card-hdr">
+          <div className="card-title">
+            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
+          </div>
+          <TableSearch
+            className="w-64"
+            placeholder="Search records..."
+            value={search}
+            onChange={setSearch}
+            results={[]}
+          />
+        </div>
         <ScrollTable>
           <table>
             <thead>
@@ -71,10 +104,14 @@ export default function HallTicketPrintPage() {
               </tr>
             </thead>
             <tbody>
+              {loading ? (
+                <TableLoadingState colSpan={5} />
+              ) : (
+                <>
               <tr>
                 <td>
                   <ActionMenu>
-                    <button className="btn btn-neu btn-sm"><i className="lni lni-printer"></i> Preview & Print</button>
+                    <button className="btn btn-neu btn-sm" onClick={() => showToast('Previewing ticket...')}><i className="lni lni-printer"></i> Preview & Print</button>
                   </ActionMenu>
                 </td>
                 <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0017</span></td>
@@ -85,7 +122,7 @@ export default function HallTicketPrintPage() {
               <tr>
                 <td>
                   <ActionMenu>
-                    <button className="btn btn-neu btn-sm"><i className="lni lni-printer"></i> Preview & Print</button>
+                    <button className="btn btn-neu btn-sm" onClick={() => showToast('Previewing ticket...')}><i className="lni lni-printer"></i> Preview & Print</button>
                   </ActionMenu>
                 </td>
                 <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0058</span></td>
@@ -93,11 +130,17 @@ export default function HallTicketPrintPage() {
                 <td className="text-slate-500 font-mono text-[12px]">08 Nov</td>
                 <td className="font-semibold text-slate-700">3</td>
               </tr>
+                </>
+              )}
             </tbody>
           </table>
         </ScrollTable>
+        <div className="p-4 border-t border-slate-100">
+          <Pagination page={page} totalPages={1} totalCount={2} onPageChange={setPage} />
+        </div>
       </div>
 
+      <Toast toast={toast} />
     </div>
   )
 }

@@ -1,8 +1,36 @@
 'use client'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { FilterTh } from '@/components/FilterTh'
+import { Toast } from '@/components/Toast'
+import { useState, useEffect } from 'react'
 
 export default function MarkEntryCwPage() {
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleFilterSelect = (col: string, vals: string[]) => {
+    setFilters(prev => ({ ...prev, [col]: vals }))
+    setOpenFilter(null)
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1200)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
     <div className="page active">
       <div className="pg-hdr">
@@ -17,7 +45,7 @@ export default function MarkEntryCwPage() {
                 ]}
                 className="w-full"
               />
-          <button className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium text-[13px] px-5 py-2.5 rounded-md transition-colors shadow-sm whitespace-nowrap">
+          <button className="btn btn-primary whitespace-nowrap" onClick={() => showToast('Marks saved successfully')}>
             Save All Marks
           </button>
         </div>
@@ -29,13 +57,35 @@ export default function MarkEntryCwPage() {
             Standard Model · CW Weightage: 15 marks · Proration: (raw/25)×15
           </div>
         </div>
+        
+        <div className="card-hdr">
+          <div className="card-title">
+            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
+          </div>
+          <TableSearch
+            className="w-64"
+            placeholder="Search records..."
+            value={search}
+            onChange={setSearch}
+            results={[]}
+          />
+        </div>
         <ScrollTable>
           <table>
             <thead>
               <tr>
                 <th>REG. NO.</th>
                 <th>STUDENT NAME</th>
-                <th>SUBMISSION</th>
+                <FilterTh 
+                  label="SUBMISSION" 
+                  opts={['Submitted', 'Blocked']} 
+                  isOpen={openFilter === 'submission'} 
+                  activeFilter={filters['submission'] || []} 
+                  onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'submission' ? null : 'submission') }} 
+                  onSelect={(vals) => handleFilterSelect('submission', vals)} 
+                  onClear={() => handleFilterSelect('submission', [])} 
+                  onClose={() => setOpenFilter(null)} 
+                />
                 <th>SPONSORED</th>
                 <th>FEE %</th>
                 <th>RAW (/25)</th>
@@ -44,6 +94,10 @@ export default function MarkEntryCwPage() {
               </tr>
             </thead>
             <tbody>
+              {loading ? (
+                <TableLoadingState colSpan={8} />
+              ) : (
+                <>
               <tr>
                 <td className="font-mono text-slate-500 text-[12.5px]">BCS/2024/0031</td>
                 <td className="text-slate-800">Amara Nkosi</td>
@@ -92,10 +146,16 @@ export default function MarkEntryCwPage() {
                 <td className="text-purple-700 font-bold">13.8</td>
                 <td className="text-slate-500">Sarah Mugisha</td>
               </tr>
+                </>
+              )}
             </tbody>
           </table>
         </ScrollTable>
+        <div className="p-4 border-t border-slate-100">
+          <Pagination page={page} totalPages={6} totalCount={62} onPageChange={setPage} />
+        </div>
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }

@@ -1,8 +1,36 @@
 'use client'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { FilterTh } from '@/components/FilterTh'
+import { Toast } from '@/components/Toast'
+import { useState, useEffect } from 'react'
 
 export default function ReevaluationPage() {
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleFilterSelect = (col: string, vals: string[]) => {
+    setFilters(prev => ({ ...prev, [col]: vals }))
+    setOpenFilter(null)
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1200)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
     <div className="page active">
       <div className="pg-hdr">
@@ -25,6 +53,19 @@ export default function ReevaluationPage() {
           <span className="bg-amber-100 text-amber-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-amber-200">4 pending</span>
         </div>
         
+        
+        <div className="card-hdr">
+          <div className="card-title">
+            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
+          </div>
+          <TableSearch
+            className="w-64"
+            placeholder="Search records..."
+            value={search}
+            onChange={setSearch}
+            results={[]}
+          />
+        </div>
         <ScrollTable>
           <table>
             <thead>
@@ -36,11 +77,24 @@ export default function ReevaluationPage() {
                 <th>ORIGINAL FACULTY</th>
                 <th>REQUESTED ON</th>
                 <th>TAT</th>
-                <th>STATUS</th>
+                <FilterTh 
+                  label="STATUS" 
+                  opts={['Pending Faculty', 'Overdue']} 
+                  isOpen={openFilter === 'status'} 
+                  activeFilter={filters['status'] || []} 
+                  onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'status' ? null : 'status') }} 
+                  onSelect={(vals) => handleFilterSelect('status', vals)} 
+                  onClear={() => handleFilterSelect('status', [])} 
+                  onClose={() => setOpenFilter(null)} 
+                />
                 <th className="text-right">ACTION</th>
               </tr>
             </thead>
             <tbody>
+              {loading ? (
+                <TableLoadingState colSpan={9} />
+              ) : (
+                <>
               <tr>
                 <td>
                   <ActionMenu>
@@ -64,7 +118,7 @@ export default function ReevaluationPage() {
                 </td>
                 <td><span className="badge badge-amber">Pending Faculty</span></td>
                 <td className="text-right">
-                  <button className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium text-[12px] px-3 py-1.5 rounded-md transition-colors shadow-sm whitespace-nowrap">
+                  <button className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium text-[12px] px-3 py-1.5 rounded-md transition-colors shadow-sm whitespace-nowrap" onClick={() => showToast('Reminder sent to faculty')}>
                     Remind Faculty
                   </button>
                 </td>
@@ -120,7 +174,7 @@ export default function ReevaluationPage() {
                 </td>
                 <td><span className="badge badge-red">Overdue</span></td>
                 <td className="text-right">
-                  <button className="btn btn-danger">
+                  <button className="btn btn-danger" onClick={() => showToast('Escalated to Dean')}>
                     Escalate to Dean
                   </button>
                 </td>
@@ -153,10 +207,16 @@ export default function ReevaluationPage() {
                   </button>
                 </td>
               </tr>
+                </>
+              )}
             </tbody>
           </table>
         </ScrollTable>
+        <div className="p-4 border-t border-slate-100">
+          <Pagination page={page} totalPages={1} totalCount={4} onPageChange={setPage} />
+        </div>
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }

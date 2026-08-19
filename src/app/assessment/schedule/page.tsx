@@ -1,9 +1,37 @@
 'use client'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
+import { Pagination } from '@/components/Pagination'
+import { FilterTh } from '@/components/FilterTh'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { Toast } from '@/components/Toast'
+import { useState, useEffect } from 'react'
 
 export default function AssessmentSchedulePage() {
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleFilterSelect = (col: string, vals: string[]) => {
+    setFilters(prev => ({ ...prev, [col]: vals }))
+    setOpenFilter(null)
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1200)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
     <div className="page active">
       <div className="pg-hdr">
@@ -12,7 +40,7 @@ export default function AssessmentSchedulePage() {
           <div className="pg-sub">Unified scheduler — define CW and CBT windows by scope</div>
         </div>
         <div className="pg-actions">
-          <button className="btn btn-primary btn-sm"><i className="lni lni-plus"></i> New Schedule</button>
+          <button className="btn btn-primary btn-sm" onClick={() => showToast('New schedule window opened')}><i className="lni lni-plus"></i> New Schedule</button>
         </div>
       </div>
 
@@ -71,13 +99,35 @@ export default function AssessmentSchedulePage() {
         <div className="card-hdr">
           <div className="card-title">Scheduled Assessments</div>
         </div>
+        
+        <div className="card-hdr">
+          <div className="card-title">
+            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
+          </div>
+          <TableSearch
+            className="w-64"
+            placeholder="Search records..."
+            value={search}
+            onChange={setSearch}
+            results={[]}
+          />
+        </div>
         <ScrollTable>
           <table>
             <thead>
               <tr>
                 <th style={{ width: 48 }}></th>
                 <th>Subject</th>
-                <th>Type</th>
+                <FilterTh 
+                  label="Type" 
+                  opts={['CW', 'CBT']} 
+                  isOpen={openFilter === 'type'} 
+                  activeFilter={filters['type'] || []} 
+                  onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'type' ? null : 'type') }} 
+                  onSelect={(vals) => handleFilterSelect('type', vals)} 
+                  onClear={() => handleFilterSelect('type', [])} 
+                  onClose={() => setOpenFilter(null)} 
+                />
                 <th>Programme</th>
                 <th>Start</th>
                 <th>End</th>
@@ -87,6 +137,10 @@ export default function AssessmentSchedulePage() {
               </tr>
             </thead>
             <tbody>
+              {loading ? (
+                <TableLoadingState colSpan={9} />
+              ) : (
+                <>
               <tr>
                 <td>
                   <ActionMenu>
@@ -144,10 +198,16 @@ export default function AssessmentSchedulePage() {
                 <td><span className="font-mono text-g700 font-bold">R3</span></td>
                 <td><span className="badge badge-amber">Pending</span></td>
               </tr>
+                </>
+              )}
             </tbody>
           </table>
         </ScrollTable>
+        <div className="p-4 border-t border-slate-100">
+          <Pagination page={page} totalPages={5} totalCount={42} onPageChange={setPage} />
+        </div>
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }

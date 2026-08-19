@@ -1,8 +1,36 @@
 'use client'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { ActionMenu } from '@/components/ActionMenu'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { FilterTh } from '@/components/FilterTh'
+import { Toast } from '@/components/Toast'
+import { useState, useEffect } from 'react'
 
 export default function UeSchedulePage() {
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleFilterSelect = (col: string, vals: string[]) => {
+    setFilters(prev => ({ ...prev, [col]: vals }))
+    setOpenFilter(null)
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1200)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
     <div className="page active">
       <div className="pg-hdr">
@@ -11,7 +39,7 @@ export default function UeSchedulePage() {
           <div className="pg-sub">Configure physical exam timetable · Displays on student portal (no Launch button)</div>
         </div>
         <div className="pg-actions">
-          <button className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium text-[12.5px] px-4 py-2 rounded-md transition-colors shadow-sm flex items-center gap-1.5">
+          <button className="btn btn-primary btn-sm flex items-center gap-1.5" onClick={() => showToast('UE Slot creation opened')}>
             + Add UE Slot
           </button>
         </div>
@@ -25,6 +53,19 @@ export default function UeSchedulePage() {
       </div>
 
       <div className="card">
+        
+        <div className="card-hdr">
+          <div className="card-title">
+            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
+          </div>
+          <TableSearch
+            className="w-64"
+            placeholder="Search records..."
+            value={search}
+            onChange={setSearch}
+            results={[]}
+          />
+        </div>
         <ScrollTable>
           <table>
             <thead>
@@ -37,14 +78,27 @@ export default function UeSchedulePage() {
                 <th>Time</th>
                 <th>Venue</th>
                 <th>Students</th>
-                <th>QP Status</th>
+                <FilterTh 
+                  label="QP Status" 
+                  opts={['QP Pending', 'QP Verified', 'Under Vetting']} 
+                  isOpen={openFilter === 'status'} 
+                  activeFilter={filters['status'] || []} 
+                  onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'status' ? null : 'status') }} 
+                  onSelect={(vals) => handleFilterSelect('status', vals)} 
+                  onClear={() => handleFilterSelect('status', [])} 
+                  onClose={() => setOpenFilter(null)} 
+                />
               </tr>
             </thead>
             <tbody>
+              {loading ? (
+                <TableLoadingState colSpan={9} />
+              ) : (
+                <>
               <tr>
                 <td>
                   <ActionMenu>
-                    <button className="btn btn-neu btn-sm"><i className="lni lni-pencil"></i> Edit Slot</button>
+                    <button className="btn btn-neu btn-sm" onClick={() => showToast('Slot edit dialog opened')}><i className="lni lni-pencil"></i> Edit Slot</button>
                   </ActionMenu>
                 </td>
                 <td>
@@ -113,10 +167,16 @@ export default function UeSchedulePage() {
                 <td className="text-slate-700 font-semibold">22</td>
                 <td><span className="badge badge-green">QP Verified</span></td>
               </tr>
+                </>
+              )}
             </tbody>
           </table>
         </ScrollTable>
+        <div className="p-4 border-t border-slate-100">
+          <Pagination page={page} totalPages={4} totalCount={32} onPageChange={setPage} />
+        </div>
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }

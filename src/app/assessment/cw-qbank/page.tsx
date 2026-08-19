@@ -1,7 +1,27 @@
 'use client'
 import { SearchSelect } from '@/components/SearchSelect'
+import { TableSearch } from '@/components/TableSearch'
+import { Pagination } from '@/components/Pagination'
+import { FilterTh } from '@/components/FilterTh'
+import { Toast } from '@/components/Toast'
+import { useState } from 'react'
 
 export default function QuestionBankUploadPage() {
+  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleFilterSelect = (col: string, vals: string[]) => {
+    setFilters(prev => ({ ...prev, [col]: vals }))
+    setOpenFilter(null)
+  }
   return (
     <div className="page active">
       <div className="pg-hdr">
@@ -10,7 +30,7 @@ export default function QuestionBankUploadPage() {
           <div className="pg-sub">Upload descriptive questions (DQ) via Excel template · Min. 4 questions required per subject</div>
         </div>
         <div className="pg-actions">
-          <button className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-slate-700 shadow-[var(--neu-sm)] hover:bg-slate-50 transition-colors flex items-center gap-1.5">
+          <button className="btn btn-primary" onClick={() => showToast('Template downloaded')}>
             <i className="lni lni-download"></i> Download Template
           </button>
         </div>
@@ -80,7 +100,7 @@ export default function QuestionBankUploadPage() {
             <div>System validates: minimum 4 questions per upload. Questions will be randomised — 2 drawn per student.</div>
           </div>
 
-          <button className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium text-[13px] px-4 py-2 rounded-md transition-colors shadow-sm">
+          <button className="btn btn-primary btn-sm" onClick={() => showToast('Questions imported successfully')}>
             Import Questions
           </button>
         </div>
@@ -99,7 +119,16 @@ export default function QuestionBankUploadPage() {
                   <th className="px-5 py-3 font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200" style={{ fontSize: '10px' }}>FACULTY</th>
                   <th className="px-5 py-3 font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200" style={{ fontSize: '10px' }}>SUBJECT</th>
                   <th className="px-5 py-3 font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200" style={{ fontSize: '10px' }}>DEADLINE</th>
-                  <th className="px-5 py-3 font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200 text-center" style={{ fontSize: '10px' }}>STATUS</th>
+                  <FilterTh 
+                    label="STATUS" 
+                    opts={['Overdue', 'Pending']} 
+                    isOpen={openFilter === 'status'} 
+                    activeFilter={filters['status'] || []} 
+                    onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'status' ? null : 'status') }} 
+                    onSelect={(vals) => handleFilterSelect('status', vals)} 
+                    onClear={() => handleFilterSelect('status', [])} 
+                    onClose={() => setOpenFilter(null)} 
+                  />
                 </tr>
               </thead>
               <tbody>
@@ -108,7 +137,7 @@ export default function QuestionBankUploadPage() {
                   <td className="px-5 py-3.5 border-b border-slate-100 font-mono text-[var(--blue)] font-medium">CSE 1212</td>
                   <td className="px-5 py-3.5 border-b border-slate-100 text-red-500 font-medium text-[12px]"><span className="flex items-center gap-1">5 Nov <i className="lni lni-warning text-[10px]"></i></span></td>
                   <td className="px-5 py-3.5 border-b border-slate-100 text-center">
-                    <button className="badge badge-red">Remind</button>
+                    <button className="badge badge-red" onClick={() => showToast('Reminder sent to faculty')}>Remind</button>
                   </td>
                 </tr>
                 <tr>
@@ -116,7 +145,7 @@ export default function QuestionBankUploadPage() {
                   <td className="px-5 py-3.5 border-b border-slate-100 font-mono text-[var(--blue)] font-medium">BIO 2201</td>
                   <td className="px-5 py-3.5 border-b border-slate-100 text-red-500 font-medium text-[12px]"><span className="flex items-center gap-1">6 Nov <i className="lni lni-warning text-[10px]"></i></span></td>
                   <td className="px-5 py-3.5 border-b border-slate-100 text-center">
-                    <button className="badge badge-red">Remind</button>
+                    <button className="badge badge-red" onClick={() => showToast('Reminder sent to faculty')}>Remind</button>
                   </td>
                 </tr>
                 <tr>
@@ -124,11 +153,15 @@ export default function QuestionBankUploadPage() {
                   <td className="px-5 py-3.5 border-b-0 border-slate-100 font-mono text-[var(--blue)] font-medium">ACC 3101</td>
                   <td className="px-5 py-3.5 border-b-0 border-slate-100 text-amber-500 font-medium text-[12px]">10 Nov</td>
                   <td className="px-5 py-3.5 border-b-0 border-slate-100 text-center">
-                    <button className="bg-slate-50 text-slate-600 border border-slate-200 px-3 py-1 rounded-full text-[11px] font-semibold hover:bg-slate-100 transition-colors shadow-sm">Remind</button>
+                    <button className="bg-slate-50 text-slate-600 border border-slate-200 px-3 py-1 rounded-full text-[11px] font-semibold hover:bg-slate-100 transition-colors shadow-sm" onClick={() => showToast('Reminder sent to faculty')}>Remind</button>
                   </td>
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <div className="p-4 border-b border-slate-100">
+            <Pagination page={page} totalPages={2} totalCount={12} onPageChange={setPage} />
           </div>
 
           <div className="p-5 pt-4">
@@ -141,6 +174,7 @@ export default function QuestionBankUploadPage() {
 
         </div>
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }

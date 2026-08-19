@@ -1,11 +1,30 @@
 'use client'
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
+import { Pagination } from '@/components/Pagination'
+import { FilterTh } from '@/components/FilterTh'
+import { Toast } from '@/components/Toast'
 
 export default function HallTicketIssuancePage() {
   const [term, setTerm] = useState('Term 1')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleFilterSelect = (col: string, vals: string[]) => {
+    setFilters(prev => ({ ...prev, [col]: vals }))
+    setOpenFilter(null)
+  }
 
   return (
     <div className="page active">
@@ -148,6 +167,19 @@ export default function HallTicketIssuancePage() {
         <div className="card-hdr">
           <div className="text-[13.5px] font-bold text-slate-900">Student Clearance List</div>
         </div>
+        
+        <div className="card-hdr">
+          <div className="card-title">
+            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
+          </div>
+          <TableSearch
+            className="w-64"
+            placeholder="Search records..."
+            value={search}
+            onChange={setSearch}
+            results={[]}
+          />
+        </div>
         <ScrollTable>
           <table>
             <thead>
@@ -158,14 +190,23 @@ export default function HallTicketIssuancePage() {
                 <th>Fee %</th>
                 <th>CW</th>
                 <th>CBT</th>
-                <th>Clearance</th>
+                <FilterTh 
+                  label="Clearance" 
+                  opts={['Ready', 'Fee Pending', 'CW/CBT Pending']} 
+                  isOpen={openFilter === 'clearance'} 
+                  activeFilter={filters['clearance'] || []} 
+                  onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'clearance' ? null : 'clearance') }} 
+                  onSelect={(vals) => handleFilterSelect('clearance', vals)} 
+                  onClear={() => handleFilterSelect('clearance', [])} 
+                  onClose={() => setOpenFilter(null)} 
+                />
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>
                   <ActionMenu>
-                    <button className="btn btn-neu btn-sm text-green-600"><i className="lni lni-ticket"></i> Issue Ticket</button>
+                    <button className="btn btn-neu btn-sm text-green-600" onClick={() => showToast('Hall ticket issued')}><i className="lni lni-ticket"></i> Issue Ticket</button>
                   </ActionMenu>
                 </td>
                 <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0017</span></td>
@@ -204,7 +245,7 @@ export default function HallTicketIssuancePage() {
               <tr>
                 <td>
                   <ActionMenu>
-                    <button className="btn btn-neu btn-sm text-green-600"><i className="lni lni-ticket"></i> Issue Ticket</button>
+                    <button className="btn btn-neu btn-sm text-green-600" onClick={() => showToast('Hall ticket issued')}><i className="lni lni-ticket"></i> Issue Ticket</button>
                   </ActionMenu>
                 </td>
                 <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0058</span></td>
@@ -217,8 +258,12 @@ export default function HallTicketIssuancePage() {
             </tbody>
           </table>
         </ScrollTable>
+        <div className="p-4 border-t border-slate-100">
+          <Pagination page={page} totalPages={6} totalCount={62} onPageChange={setPage} />
+        </div>
       </div>
 
+      <Toast toast={toast} />
     </div>
   )
 }

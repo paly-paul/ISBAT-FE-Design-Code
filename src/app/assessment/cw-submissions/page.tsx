@@ -1,10 +1,38 @@
 'use client'
 
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { FilterTh } from '@/components/FilterTh'
+import { Toast } from '@/components/Toast'
+import { useState, useEffect } from 'react'
 
 export default function CwSubmissionsPage() {
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const showToast = (msg: string, type: string = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleFilterSelect = (col: string, vals: string[]) => {
+    setFilters(prev => ({ ...prev, [col]: vals }))
+    setOpenFilter(null)
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1200)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
     <div className="page active">
       <div className="pg-hdr">
@@ -30,6 +58,19 @@ export default function CwSubmissionsPage() {
           <div className="text-[#64748b]">Raw entered out of 25 → prorated to 15 marks · Formula: (mark/25)×15</div>
         </div>
 
+        
+        <div className="card-hdr">
+          <div className="card-title">
+            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
+          </div>
+          <TableSearch
+            className="w-64"
+            placeholder="Search records..."
+            value={search}
+            onChange={setSearch}
+            results={[]}
+          />
+        </div>
         <ScrollTable>
           <table>
             <thead>
@@ -38,17 +79,30 @@ export default function CwSubmissionsPage() {
                 <th>Reg. No.</th>
                 <th>Student Name</th>
                 <th>Submitted</th>
-                <th>Fee Status</th>
+                <FilterTh 
+                  label="Fee Status" 
+                  opts={['Cleared', 'Blocked']} 
+                  isOpen={openFilter === 'fee'} 
+                  activeFilter={filters['fee'] || []} 
+                  onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'fee' ? null : 'fee') }} 
+                  onSelect={(vals) => handleFilterSelect('fee', vals)} 
+                  onClear={() => handleFilterSelect('fee', [])} 
+                  onClose={() => setOpenFilter(null)} 
+                />
                 <th className="text-center">Raw Mark (/25)</th>
                 <th className="text-center">Prorated (/15)</th>
                 <th>Evaluated By</th>
               </tr>
             </thead>
             <tbody>
+              {loading ? (
+                <TableLoadingState colSpan={8} />
+              ) : (
+                <>
               <tr>
                 <td>
                   <ActionMenu>
-                    <button className="btn btn-neu btn-sm"><i className="lni lni-save"></i> Save</button>
+                    <button className="btn btn-neu btn-sm" onClick={() => showToast('Mark saved successfully')}><i className="lni lni-save"></i> Save</button>
                   </ActionMenu>
                 </td>
                 <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0031</span></td>
@@ -64,7 +118,7 @@ export default function CwSubmissionsPage() {
               <tr>
                 <td>
                   <ActionMenu>
-                    <button className="btn btn-neu btn-sm"><i className="lni lni-save"></i> Save</button>
+                    <button className="btn btn-neu btn-sm" onClick={() => showToast('Mark saved successfully')}><i className="lni lni-save"></i> Save</button>
                   </ActionMenu>
                 </td>
                 <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0017</span></td>
@@ -111,10 +165,16 @@ export default function CwSubmissionsPage() {
                 <td className="text-center font-bold text-purple-700">15.0</td>
                 <td className="text-slate-500 leading-snug">Sarah<br/>Mugisha</td>
               </tr>
+                </>
+              )}
             </tbody>
           </table>
         </ScrollTable>
+        <div className="p-4 border-t border-slate-100">
+          <Pagination page={page} totalPages={6} totalCount={62} onPageChange={setPage} />
+        </div>
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }
