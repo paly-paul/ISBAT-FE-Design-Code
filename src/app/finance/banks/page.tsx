@@ -11,11 +11,16 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewBankModal } from '@/components/modals/finance/NewBankModal'
 import { EditBankModal } from '@/components/modals/finance/EditBankModal'
+import { ViewBankModal } from '@/components/modals/finance/ViewBankModal'
 import { useBanks, useCreateBank, useUpdateBank, useDeleteBank, Bank } from '@/hooks/finance/useBanks'
 import { STATUS_LABELS } from '@/lib/api/finance/procBank'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -23,6 +28,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingBankGuid, setEditingBankGuid] = useState<string | null>(null)
+  const [viewingBankGuid, setViewingBankGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Bank | null>(null)
   const [search, setSearch] = useState('')
 
@@ -41,12 +47,19 @@ export default function Page() {
     openModal('edit-bank-modal')
   }
 
+  function openViewModal(guid: string) {
+    setViewingBankGuid(guid)
+    openModal('view-bank-modal')
+    setSearch('')
+  }
+
+  const searchTrimmed = search.trim()
   const filteredRows = rows.filter(r =>
-    !search.trim() || `${r.shortCode} ${r.bankName}`.toLowerCase().includes(search.trim().toLowerCase())
+    searchTrimmed.length < MIN_SEARCH_CHARS || `${r.shortCode} ${r.bankName}`.toLowerCase().includes(searchTrimmed.toLowerCase())
   )
 
-  const searchMatches = search.trim()
-    ? rows.filter(r => `${r.shortCode} ${r.bankName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? rows.filter(r => `${r.shortCode} ${r.bankName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
@@ -82,6 +95,8 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: r.bankGuid, primary: r.shortCode, secondary: r.bankName }))}
+              minChars={MIN_SEARCH_CHARS}
+              onSelect={(r) => openViewModal(r.id)}
             />
           </div>
           <ScrollTable>
@@ -105,16 +120,17 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.bankGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
-                        <ActionMenu>
-                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.bankGuid)}>
-                            <i className="lni lni-pencil"></i> Edit
-                          </button>}
-                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                            <i className="lni lni-trash-can"></i> Delete
-                          </button>}
-                        </ActionMenu>
-                      )}
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.bankGuid)}>
+                          <i className="lni lni-eye"></i> View
+                        </button>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.bankGuid)}>
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>}
+                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                          <i className="lni lni-trash-can"></i> Delete
+                        </button>}
+                      </ActionMenu>
                     </td>
                     <td className="font-mono font-bold uppercase">{r.shortCode}</td>
                     <td><strong>{r.bankName}</strong></td>
@@ -146,6 +162,14 @@ export default function Page() {
         showToast={showToast}
         bankGuid={editingBankGuid}
         updateBank={updateBank}
+      />
+      <ViewBankModal
+        isOpen={openModals.has('view-bank-modal')}
+        onClose={() => closeModal('view-bank-modal')}
+        showToast={showToast}
+        bankGuid={viewingBankGuid}
+        canEdit={permissions.edit}
+        onEdit={() => { closeModal('view-bank-modal'); if (viewingBankGuid) openEditModal(viewingBankGuid) }}
       />
       <Toast toast={toast} />
 

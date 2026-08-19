@@ -200,27 +200,40 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
         {renderRailSlot(RAIL_DEFS[1])}
         <div className="rail-divider"></div>
         {renderRailSlot(RAIL_DEFS[2])}
+        <div className="rail-divider"></div>
         {renderRailSlot(RAIL_DEFS[3])}
+        <div className="rail-divider"></div>
         <div className="rail-item locked" data-mod="attendance">
           <span className="rail-icon"><i className="lni lni-alarm-clock"></i></span>
           <span className="rail-label">Attendance</span>
           <span className="rail-tooltip">Attendance · Coming Soon</span>
         </div>
+        <div className="rail-divider"></div>
         <div className="rail-item locked" data-mod="analytics">
           <span className="rail-icon"><i className="lni lni-bar-chart"></i></span>
           <span className="rail-label">Analytics</span>
           <span className="rail-tooltip">Analytics · Coming Soon</span>
         </div>
+        <div className="rail-divider"></div>
         {renderRailSlot(RAIL_DEFS[4])}
+        <div className="rail-divider"></div>
         {renderRailSlot(RAIL_DEFS[5])}
+        <div className="rail-divider"></div>
+        {renderRailSlot(RAIL_DEFS[6])}
         <div className="rail-spacer"></div>
+        {/* Admin (User & Role) — commented out per request, not deleted, in
+            case a real backend-driven module takes its place later. Its
+            settings-cog icon duplicated Config's own fallback icon, and
+            Config now sits right above Assessment instead of trailing all
+            the way at the bottom, so this locked placeholder no longer has
+            a clear spot to live in.
         <div className="rail-divider"></div>
         <div className="rail-item locked" data-mod="userrole">
           <span className="rail-icon"><i className="lni lni-cog"></i></span>
           <span className="rail-label">Admin</span>
           <span className="rail-tooltip">User &amp; Role · Coming Soon</span>
         </div>
-        {renderRailSlot(RAIL_DEFS[6])}
+        */}
       </div>
 
       <div className={`sb-panel-shell${panelOpen ? ' open' : ''}`}>

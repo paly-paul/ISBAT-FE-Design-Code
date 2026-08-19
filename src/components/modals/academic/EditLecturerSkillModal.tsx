@@ -5,6 +5,7 @@ import { SuccessPopup } from './SuccessPopup'
 import { FailurePopup } from './FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useSkillMasters } from '@/hooks/config/useSkillMaster'
 import { useLecturerSkill } from '@/hooks/academic/useLecturerSkills'
 import { CreateLecturerSkillInput } from '@/lib/api/users/skills'
 import { AuthError } from '@/lib/api/client'
@@ -26,6 +27,8 @@ interface EditLecturerSkillModalProps extends ModalProps {
 export function EditLecturerSkillModal({ isOpen, onClose, showToast, lecturerSkillGuid, updateSkill }: EditLecturerSkillModalProps) {
   const { data: skill, isLoading, isError, error } = useLecturerSkill(lecturerSkillGuid, isOpen)
   const { data: employees = [] } = useEmployees()
+  const { data: skillMasterData } = useSkillMasters()
+  const skillMasters = skillMasterData?.items ?? []
 
   const [saved, setSaved]           = useState(false)
   const [failure, setFailure]       = useState<string | null>(null)
@@ -51,6 +54,7 @@ export function EditLecturerSkillModal({ isOpen, onClose, showToast, lecturerSki
   if (!isOpen) return null
 
   const employeeOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
+  const skillOptions = skillMasters.map(s => ({ value: s.skillName, label: s.skillName }))
 
   function handleClose() {
     setSaved(false); setFailure(null); setErrors({})
@@ -153,11 +157,11 @@ export function EditLecturerSkillModal({ isOpen, onClose, showToast, lecturerSki
         <div className="g2 mb-3">
           <div className="fg span2">
             <div className="lbl">Skill Name <span className="req">*</span></div>
-            <input
-              className="ctrl" type="text" placeholder="e.g. Data Structures"
+            <SearchSelect
+              placeholder="— Select skill —"
+              options={skillOptions}
               value={skillName}
-              onChange={e => { setSkillName(e.target.value); clearError('skillName') }}
-              style={errors.skillName ? { borderColor: 'var(--red)' } : undefined}
+              onChange={v => { setSkillName(v); clearError('skillName') }}
             />
             {errors.skillName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.skillName}</p>}
           </div>
@@ -166,11 +170,6 @@ export function EditLecturerSkillModal({ isOpen, onClose, showToast, lecturerSki
             <SearchSelect options={PROFICIENCY_OPTIONS} value={proficiency} onChange={setProficiency} />
           </div>
         </div>
-
-        <label className="flex items-center gap-[7px] cursor-pointer mb-3" style={{ fontSize: 13 }}>
-          <input type="checkbox" checked={approved} onChange={e => setApproved(e.target.checked)} />
-          <span>Approved</span>
-        </label>
 
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>

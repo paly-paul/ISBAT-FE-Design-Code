@@ -14,6 +14,10 @@ import { PAY_TYPE_LABELS } from '@/hooks/finance/usePaymentConsole'
 import { formatDate } from '@/lib/date'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the academic
+// master pages' / payment-history's search boxes.
+const MIN_SEARCH_CHARS = 2
 
 function fmtAmount(n: number) {
   return n.toLocaleString('en-US', { maximumFractionDigits: 2 })
@@ -86,7 +90,7 @@ export default function Page() {
   // against the full 300+ row table.
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return rows
+    if (q.length < MIN_SEARCH_CHARS) return rows
     return rows.filter(r => {
       const s = studentLabel(r)
       return `${s.name} ${s.ref} ${r.advPaymentCode} ${r.receipt ?? ''}`.toLowerCase().includes(q)
@@ -94,9 +98,11 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, search, profileByApplication])
 
+  // Empty below MIN_SEARCH_CHARS, matching TableSearch's own minChars gate on
+  // when the dropdown is even allowed to open.
   const searchMatches = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return []
+    if (q.length < MIN_SEARCH_CHARS) return []
     return filteredRows.slice(0, 8).map(r => {
       const s = studentLabel(r)
       return { id: r.paymentAdvanceGuid, primary: s.name, secondary: `${s.ref} · ${r.advPaymentCode}` }
@@ -126,6 +132,7 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches}
+              minChars={MIN_SEARCH_CHARS}
             />
           </div>
           <ScrollTable>

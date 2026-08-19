@@ -21,10 +21,35 @@ const mockRepetitionTags: RepetitionTag[] = [
   { courseUnitRepetitionGuid: '5', tagCode: 'RT-CU-005', tagName: 'Credit exemption repeat for lateral entrants', intLevel: 4, levelCode: 'PGD',  levelName: 'Postgraduate Diploma' },
 ]
 
-// Fetch all repetition tags.
-export function getRepetitionTags(): Promise<RepetitionTag[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockRepetitionTags)
-  return apiGet<any>('/api/v1/academic/course-unit-repetitions').then(data => Array.isArray(data) ? data : Array.isArray(data?.courseUnitRepetitions) ? data.courseUnitRepetitions : [])
+// Fetch all repetition tags. The real endpoint is paginated
+// ({ items, totalCount, pageNumber, pageSize } — confirmed via a live
+// sample), so ask for a page large enough to cover the whole list in one
+// request, same "load it all, search/paginate client-side" convention as
+// useIntakes/useEmployees. Still tolerates a plain array or the older
+// { courseUnitRepetitions } shape in case an earlier build of the endpoint
+// is what's actually deployed.
+const REPETITION_TAGS_LOAD_SIZE = 1000
+
+// search is forwarded to the endpoint's own ?search= param (same convention
+// as getIntakes/getSkills) rather than filtered client-side — not confirmed
+// against a spec, so it's paired with a client-side re-filter wherever it's
+// used, keeping results correct even if the backend silently ignores an
+// unrecognized param.
+export function getRepetitionTags(search = ''): Promise<RepetitionTag[]> {
+  const q = search.trim()
+  if (MOCK_AUTH) {
+    if (!q) return Promise.resolve(mockRepetitionTags)
+    const needle = q.toLowerCase()
+    return Promise.resolve(mockRepetitionTags.filter(t => t.tagCode.toLowerCase().includes(needle) || t.tagName.toLowerCase().includes(needle)))
+  }
+  const params = new URLSearchParams({ page: '1', pageSize: String(REPETITION_TAGS_LOAD_SIZE) })
+  if (q) params.set('search', q)
+  return apiGet<any>(`/api/v1/academic/course-unit-repetitions?${params.toString()}`).then(data =>
+    Array.isArray(data) ? data
+      : Array.isArray(data?.items) ? data.items
+      : Array.isArray(data?.courseUnitRepetitions) ? data.courseUnitRepetitions
+      : []
+  )
 }
 
 // Payload used when creating or updating a repetition tag.

@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { FeeStructureModal } from '@/components/modals/academic/FeeStructureModal'
 import { ViewFeeStructureModal } from '@/components/modals/academic/ViewFeeStructureModal'
@@ -11,8 +11,9 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { useProgramFeeStructures, ProgramFeeStructureHeader } from '@/hooks/academic/useProgramFeeStructure'
+import { useProgramFeeStructures, useProgramFeeStructureSearch, ProgramFeeStructureHeader } from '@/hooks/academic/useProgramFeeStructure'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useProgramApprovals } from '@/hooks/academic/useProgramApproval'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -22,6 +23,10 @@ const PAGE_SIZE = 10
 // batch-management/employee-master — a search box only makes sense against
 // the whole dataset, not whatever 20-row server page happens to be loaded.
 const FEE_STRUCTURES_LOAD_SIZE = 1000
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// academic master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -37,7 +42,29 @@ export default function Page() {
   const [search, setSearch] = useState('')
 
   const { data, isLoading } = useProgramFeeStructures(1, FEE_STRUCTURES_LOAD_SIZE)
+
+  // Debounced so the backend's ?search= isn't hit on every keystroke, and
+  // held at '' (falling back to the unfiltered list) until MIN_SEARCH_CHARS
+  // is met — same convention as the other academic master pages.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const trimmed = search.trim()
+    if (trimmed.length < MIN_SEARCH_CHARS) { setDebouncedSearch(''); return }
+    const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const { data: searchData, isFetching: isSearching } = useProgramFeeStructureSearch(debouncedSearch, FEE_STRUCTURES_LOAD_SIZE)
+  const searchTrimmed = search.trim()
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isSearching)
+
   const { data: programs = [] } = useProgramMasters()
+  // GET /api/v1/academic/program-master only lists approved programmes — a
+  // fee structure can already be attached to one still pending approval
+  // (see programme-approval/page.tsx), which programmeFor() below silently
+  // showed as "—" for. Fall back to the not-approved list before giving up.
+  const { data: notApprovedData } = useProgramApprovals(1, 1000)
+  const notApprovedPrograms = notApprovedData?.items ?? []
   const { data: intakes = [] } = useIntakes()
 
   function nav(id: string) { router.push('/academic/' + id) }
@@ -45,8 +72,15 @@ export default function Page() {
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
+  function openViewModal(r: ProgramFeeStructureHeader) {
+    setViewRecord(r)
+    openModal('view-fee-structure-modal')
+    setSearch('')
+  }
+
   function programmeFor(programGuid: string) {
     return programs.find(p => p.programGuid === programGuid)
+      ?? notApprovedPrograms.find(p => p.programGuid === programGuid)
   }
   function intakeCodeFor(intakeGuid: string | null) {
     if (!intakeGuid) return '—'
@@ -65,17 +99,25 @@ export default function Page() {
   }
 
   const records = data?.items ?? []
+  const baseRecords = debouncedSearch ? (searchData?.items ?? []) : records
 
+  // Live preview shown in the search dropdown as the user types — reads the
+  // same server-scoped baseRecords, capped to a handful of rows. Empty below
+  // MIN_SEARCH_CHARS, matching TableSearch's own minChars gate on when the
+  // dropdown is even allowed to open.
   const searchMatches = useMemo(
-    () => search.trim()
-      ? records.filter(r => `${r.feeCode} ${r.feeDesc}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    () => searchTrimmed.length >= MIN_SEARCH_CHARS
+      ? baseRecords.filter(r => `${r.feeCode} ${r.feeDesc}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
       : [],
-    [records, search],
+    [baseRecords, searchTrimmed],
   )
 
+  // Re-filter client-side on top of whatever the server sent back, so
+  // results stay correct even if the backend doesn't actually honor
+  // ?search= (see the note on getProgramFeeStructures).
   const filteredRecords = useMemo(
-    () => records.filter(r => !search.trim() || `${r.feeCode} ${r.feeDesc}`.toLowerCase().includes(search.trim().toLowerCase())),
-    [records, search],
+    () => baseRecords.filter(r => searchTrimmed.length < MIN_SEARCH_CHARS || `${r.feeCode} ${r.feeDesc}`.toLowerCase().includes(searchTrimmed.toLowerCase())),
+    [baseRecords, searchTrimmed],
   )
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRecords, PAGE_SIZE)
@@ -111,6 +153,12 @@ export default function Page() {
             value={search}
             onChange={setSearch}
             results={searchMatches.map(r => ({ id: r.feeHdGuid, primary: r.feeCode, secondary: r.feeDesc }))}
+            loading={searchPending}
+            minChars={MIN_SEARCH_CHARS}
+            onSelect={(r) => {
+              const rec = baseRecords.find(x => x.feeHdGuid === r.id)
+              if (rec) openViewModal(rec)
+            }}
           />
         </div>
 
@@ -128,12 +176,12 @@ export default function Page() {
               </tr>
             </thead>
             <tbody>
-              {isLoading
+              {(isLoading || searchPending)
                 ? <TableLoadingState colSpan={999} />
                 : filteredRecords.length === 0
                   ? <EmptyState colSpan={999} hasFilters={!!search} onClearFilters={() => setSearch('')} />
                   : null}
-              {pageItems.map(r => {
+              {!(isLoading || searchPending) && pageItems.map(r => {
                 const programme = programmeFor(r.programGuid)
                 return (
                   <tr key={r.feeHdGuid}>
@@ -141,7 +189,7 @@ export default function Page() {
                       <ActionMenu>
                         <button
                           className="btn btn-neu btn-sm"
-                          onClick={() => { setViewRecord(r); openModal('view-fee-structure-modal') }}
+                          onClick={() => openViewModal(r)}
                         ><i className="lni lni-eye"></i> View</button>
                         {permissions.edit && (
                           <button

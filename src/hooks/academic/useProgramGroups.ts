@@ -18,6 +18,25 @@ export function useProgramGroups() {
   })
 }
 
+// Server-side search for Programme Group's search box — hits the same list
+// endpoint with the backend's own ?search= param instead of filtering the
+// already-fetched full list client-side. Kept as its own hook/query key so
+// useProgramGroups() above still stays the plain unfiltered, cached list —
+// only enabled while the search box actually has a query in it, at which
+// point the page falls back to that shared unfiltered list instead of
+// issuing a redundant identical request. Not confirmed against a spec (see
+// the note on getProgramGroups), so the caller re-filters client-side too.
+export function useProgramGroupSearch(search: string) {
+  const q = search.trim()
+  return useQuery({
+    queryKey: [...PROGRAM_GROUPS_KEY, 'search', q],
+    queryFn: () => getProgramGroups(1, PROGRAM_GROUPS_PAGE_SIZE, q),
+    enabled: q.length > 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
 export function useCreateProgramGroup() {
   const queryClient = useQueryClient()
   return useMutation({

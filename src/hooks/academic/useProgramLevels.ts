@@ -15,6 +15,24 @@ export function useProgramLevels() {
   })
 }
 
+// Server-side search for Programme Level's search box — hits the same list
+// endpoint with the backend's own ?search= param instead of filtering the
+// already-fetched full list client-side. Kept as its own hook/query key so
+// useProgramLevels() above still stays the plain unfiltered, cached list —
+// only enabled while the search box actually has a query in it, at which
+// point the page falls back to that shared unfiltered list instead of
+// issuing a redundant identical request.
+export function useProgramLevelSearch(search: string) {
+  const q = search.trim()
+  return useQuery({
+    queryKey: [...PROGRAM_LEVELS_KEY, 'search', q],
+    queryFn: () => getProgramLevels(q),
+    enabled: q.length > 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
 export function useCreateProgramLevel() {
   const queryClient = useQueryClient()
   return useMutation({

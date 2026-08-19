@@ -17,6 +17,10 @@ const PAGE_SIZE = 10
 // a page large enough to cover the whole list once, then filter/paginate
 // client-side, same pattern as batch-management/enquiry-followup-master.
 const FETCH_ALL_PAGE_SIZE = 1000
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 function applicantName(a: ApplicationListItem) {
   return `${a.firstName ?? ''}${a.lastName ? ` ${a.lastName}` : ''}`.trim() || '—'
@@ -56,9 +60,10 @@ export default function ApplicantsPage() {
       .includes(term)
   }
 
-  const filtered = allRows.filter(a => !search.trim() || matchesSearch(a, search.trim().toLowerCase()))
-  const searchMatches = search.trim()
-    ? allRows.filter(a => matchesSearch(a, search.trim().toLowerCase())).slice(0, 8)
+  const searchTrimmed = search.trim()
+  const filtered = allRows.filter(a => searchTrimmed.length < MIN_SEARCH_CHARS || matchesSearch(a, searchTrimmed.toLowerCase()))
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? allRows.filter(a => matchesSearch(a, searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filtered, PAGE_SIZE)
@@ -77,6 +82,8 @@ export default function ApplicantsPage() {
             value={search}
             onChange={setSearch}
             results={searchMatches.map(a => ({ id: a.applicationGuid, primary: a.appRefNo, secondary: applicantName(a) }))}
+            minChars={MIN_SEARCH_CHARS}
+            onSelect={() => router.push('/admission/registration')}
           />
           <button className="btn btn-outline" onClick={() => showToast('CSV exported successfully', 'success')}>
             <i className="lni lni-download mr-1" /> Export CSV

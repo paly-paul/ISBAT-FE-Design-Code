@@ -21,6 +21,10 @@ const PAGE_SIZE = 10
 // filter client-side across every follow-up, not just the current server
 // page — same approach as batch-management/page.tsx.
 const FETCH_ALL_PAGE_SIZE = 1000
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 function nameBadge(name: string | null, cls: string) {
   if (!name) return <span className="badge badge-grey">—</span>
@@ -55,9 +59,10 @@ export default function EnquiryFollowupMasterPage() {
       .includes(term)
   }
 
-  const filteredRows = allRows.filter(r => !search.trim() || matchesSearch(r, search.trim().toLowerCase()))
-  const searchMatches = search.trim()
-    ? allRows.filter(r => matchesSearch(r, search.trim().toLowerCase())).slice(0, 8)
+  const searchTrimmed = search.trim()
+  const filteredRows = allRows.filter(r => searchTrimmed.length < MIN_SEARCH_CHARS || matchesSearch(r, searchTrimmed.toLowerCase()))
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? allRows.filter(r => matchesSearch(r, searchTrimmed.toLowerCase())).slice(0, 8)
     : []
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
@@ -68,6 +73,7 @@ export default function EnquiryFollowupMasterPage() {
   function openViewModal(guid: string) {
     setViewingGuid(guid)
     openModal('enquiry-assign-modal')
+    setSearch('')
   }
 
   return (
@@ -103,6 +109,8 @@ export default function EnquiryFollowupMasterPage() {
             value={search}
             onChange={setSearch}
             results={searchMatches.map(r => ({ id: r.enquiryGuid, primary: r.enquiryCode, secondary: r.studentName }))}
+            minChars={MIN_SEARCH_CHARS}
+            onSelect={permissions.edit ? (r) => openViewModal(r.id) : undefined}
           />
         </div>
         <ScrollTable>

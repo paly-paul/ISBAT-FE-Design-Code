@@ -23,6 +23,26 @@ export function useCreateRepetitionTag() {
   })
 }
 
+// Server-side search for Repetition Tag's search box — hits the same list
+// endpoint with the backend's own ?search= param instead of filtering the
+// already-fetched full list client-side. Kept as its own hook/query key so
+// useRepetitionTags() above still stays the plain unfiltered, cached list —
+// only enabled while the search box actually has a query in it, at which
+// point the page falls back to that shared unfiltered list instead of
+// issuing a redundant identical request. The lib layer re-filters
+// client-side against whatever comes back too, so results stay correct even
+// if the backend doesn't actually recognize ?search=.
+export function useRepetitionTagSearch(search: string) {
+  const q = search.trim()
+  return useQuery({
+    queryKey: [...REPETITION_TAGS_KEY, 'search', q],
+    queryFn: () => getRepetitionTags(q),
+    enabled: q.length > 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
 // Fetches a single repetition tag for the Edit modal. Only enabled while
 // the modal is actually open with a guid, so it doesn't fire on every
 // render of the repetition tag table.

@@ -15,6 +15,10 @@ import { useUnitTypes, useCreateUnitType, useUpdateUnitType, useDeleteUnitType, 
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const permissions = usePagePermissions()
@@ -30,12 +34,13 @@ export default function Page() {
   const updateUnitType = useUpdateUnitType()
   const deleteUnitType = useDeleteUnitType()
 
-  const searchMatches = search.trim()
-    ? rows.filter(r => r.unitTypeName.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  const searchTrimmed = search.trim()
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? rows.filter(r => r.unitTypeName.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const filteredRows = rows.filter(r =>
-    !search.trim() || r.unitTypeName.toLowerCase().includes(search.trim().toLowerCase())
+    searchTrimmed.length < MIN_SEARCH_CHARS || r.unitTypeName.toLowerCase().includes(searchTrimmed.toLowerCase())
   )
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
@@ -52,6 +57,7 @@ export default function Page() {
   function openViewModal(guid: string) {
     setViewingUnitTypeGuid(guid)
     openModal('view-unit-type-modal')
+    setSearch('')
   }
 
   function confirmDeleteUnitType() {
@@ -86,6 +92,8 @@ export default function Page() {
                 value={search}
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.unitTypeGuid, primary: r.unitTypeName }))}
+                minChars={MIN_SEARCH_CHARS}
+                onSelect={(r) => openViewModal(r.id)}
               />
             </div>
           </div>

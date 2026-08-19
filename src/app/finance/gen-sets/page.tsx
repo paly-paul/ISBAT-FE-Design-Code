@@ -11,10 +11,15 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewGenSetModal } from '@/components/modals/finance/NewGenSetModal'
 import { EditGenSetModal } from '@/components/modals/finance/EditGenSetModal'
+import { ViewGenSetModal } from '@/components/modals/finance/ViewGenSetModal'
 import { useGenSets, useCreateGenSet, useUpdateGenSet, useDeleteGenSet, GenSet } from '@/hooks/finance/useGenSets'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -22,6 +27,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingGenSetGuid, setEditingGenSetGuid] = useState<string | null>(null)
+  const [viewingGenSetGuid, setViewingGenSetGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<GenSet | null>(null)
   const [search, setSearch] = useState('')
 
@@ -40,12 +46,19 @@ export default function Page() {
     openModal('edit-genset-modal')
   }
 
+  function openViewModal(guid: string) {
+    setViewingGenSetGuid(guid)
+    openModal('view-genset-modal')
+    setSearch('')
+  }
+
+  const searchTrimmed = search.trim()
   const filteredRows = rows.filter(r =>
-    !search.trim() || `${r.type} ${r.condition}`.toLowerCase().includes(search.trim().toLowerCase())
+    searchTrimmed.length < MIN_SEARCH_CHARS || `${r.type} ${r.condition}`.toLowerCase().includes(searchTrimmed.toLowerCase())
   )
 
-  const searchMatches = search.trim()
-    ? rows.filter(r => `${r.type} ${r.condition}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? rows.filter(r => `${r.type} ${r.condition}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
@@ -81,6 +94,8 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: r.genSetGuid, primary: r.type, secondary: r.condition }))}
+              minChars={MIN_SEARCH_CHARS}
+              onSelect={(r) => openViewModal(r.id)}
             />
           </div>
           <ScrollTable>
@@ -101,16 +116,17 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.genSetGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
-                        <ActionMenu>
-                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.genSetGuid)}>
-                            <i className="lni lni-pencil"></i> Edit
-                          </button>}
-                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                            <i className="lni lni-trash-can"></i> Delete
-                          </button>}
-                        </ActionMenu>
-                      )}
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.genSetGuid)}>
+                          <i className="lni lni-eye"></i> View
+                        </button>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.genSetGuid)}>
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>}
+                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                          <i className="lni lni-trash-can"></i> Delete
+                        </button>}
+                      </ActionMenu>
                     </td>
                     <td className="font-mono font-bold uppercase">{r.type}</td>
                     <td>{r.condition}</td>
@@ -134,6 +150,14 @@ export default function Page() {
         showToast={showToast}
         genSetGuid={editingGenSetGuid}
         updateGenSet={updateGenSet}
+      />
+      <ViewGenSetModal
+        isOpen={openModals.has('view-genset-modal')}
+        onClose={() => closeModal('view-genset-modal')}
+        showToast={showToast}
+        genSetGuid={viewingGenSetGuid}
+        canEdit={permissions.edit}
+        onEdit={() => { closeModal('view-genset-modal'); if (viewingGenSetGuid) openEditModal(viewingGenSetGuid) }}
       />
       <Toast toast={toast} />
 

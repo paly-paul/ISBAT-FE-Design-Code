@@ -14,6 +14,10 @@ import { formatDate } from '@/lib/date'
 import { ViewPaymentReceiptModal } from '@/components/modals/finance/ViewPaymentReceiptModal'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the academic
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 const FEE_TYPES = ['Admission Fee', 'Registration Fee', 'Tuition Fee', 'Semester Entry Fee', 'NCHE Fee', 'Guild Fee']
 
@@ -64,6 +68,7 @@ export default function Page() {
   function openReceipt(r: PaymentHistoryListEntry, print: boolean) {
     setReceiptEntry(r)
     setAutoPrint(print)
+    setSearch('')
   }
   function closeReceipt() {
     setReceiptEntry(null)
@@ -82,7 +87,7 @@ export default function Page() {
   // and Fee Type here only narrow the currently-loaded server page rather
   // than querying the full 100k+-row table.
   function matchesFilters(r: PaymentHistoryListEntry, q: string) {
-    const matchesSearch = !q
+    const matchesSearch = q.length < MIN_SEARCH_CHARS
       || (r.studentName ?? '').toLowerCase().includes(q)
       || (r.receiptNo ?? '').toLowerCase().includes(q)
       || (r.studentNo ?? '').toLowerCase().includes(q)
@@ -96,9 +101,11 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, search, feeType])
 
+  // Empty below MIN_SEARCH_CHARS, matching TableSearch's own minChars gate on
+  // when the dropdown is even allowed to open.
   const searchMatches = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return []
+    if (q.length < MIN_SEARCH_CHARS) return []
     return rows.filter(r => matchesFilters(r, q)).slice(0, 8)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, search])
@@ -163,6 +170,11 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: `${r.paymentGuid}-${r.feeType}`, primary: r.studentName ?? r.receiptNo, secondary: `${r.receiptNo} · ${r.studentNo ?? '—'}` }))}
+              minChars={MIN_SEARCH_CHARS}
+              onSelect={(res) => {
+                const row = rows.find(r => `${r.paymentGuid}-${r.feeType}` === res.id)
+                if (row) openReceipt(row, false)
+              }}
             />
             <SearchSelect className="w-36" options={FEE_TYPE_OPTIONS} value={feeType} onChange={setFeeType} />
             {/* Export CSV — commented out per request, not wired to a real

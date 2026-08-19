@@ -3,10 +3,9 @@ import { useState } from 'react'
 import { ModalProps } from '../types'
 import { useProgramFeeLines, ProgramFeeStructureHeader } from '@/hooks/academic/useProgramFeeStructure'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useProgramApprovals } from '@/hooks/academic/useProgramApproval'
 import { useIntakes } from '@/hooks/academic/useIntakes'
-import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
-import { useLedgers } from '@/hooks/finance/useLedgers'
 import { FailurePopup } from './FailurePopup'
 import { AuthError } from '@/lib/api/client'
 
@@ -19,9 +18,16 @@ export function ViewFeeStructureModal({ isOpen, onClose, feeStructure, onEdit }:
   const { data: feeLines = [], isLoading: feeLinesLoading, isError: feeLinesError, error: feeLinesErrorObj } = useProgramFeeLines(feeStructure?.feeHdGuid ?? null, isOpen && !!feeStructure)
 
   const { data: programs = [] } = useProgramMasters()
+  // GET /api/v1/academic/program-master only ever lists approved programmes
+  // (see programme-approval/page.tsx — a programme sits under the separate
+  // not-approved list until someone approves it). A fee structure can
+  // already be attached to a programme that's still pending approval, so a
+  // plain programs.find() against that approved-only list came back empty —
+  // "— (—)" — for one of those. Fall back to the not-approved list before
+  // giving up, same guid shape either way.
+  const { data: notApprovedData } = useProgramApprovals(1, 1000)
+  const notApprovedPrograms = notApprovedData?.items ?? []
   const { data: intakes = [] } = useIntakes()
-  const { data: financeCurrencies = [] } = useFinanceCurrencies()
-  const { data: ledgers = [] } = useLedgers()
   const { data: semesters = [] } = useSemestersForProgram(feeStructure?.programGuid ?? '', isOpen && !!feeStructure?.programGuid)
 
   const [activeSection, setActiveSection] = useState<'details' | 'discounts' | 'semesters'>('details')
@@ -43,13 +49,22 @@ export function ViewFeeStructureModal({ isOpen, onClose, feeStructure, onEdit }:
     )
   }
 
-  const programName = programs.find(p => p.programGuid === feeStructure.programGuid)?.programName || '—'
-  const programCode = programs.find(p => p.programGuid === feeStructure.programGuid)?.programCode || '—'
+  const matchedProgram = programs.find(p => p.programGuid === feeStructure.programGuid)
+    ?? notApprovedPrograms.find(p => p.programGuid === feeStructure.programGuid)
+  const programName = matchedProgram?.programName || '—'
+  const programCode = matchedProgram?.programCode || '—'
   const intakeName = intakes.find(i => i.intakeGuid === feeStructure.intakeGuid)?.description || '—'
 
   return (
     <div className="modal-overlay open" id="view-feestruct-modal">
-      <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
+      {/* height: auto (capped by maxHeight, overriding modal-flex's fixed
+          height: 85vh) so a short tab — Basic Details / Fees & Discounts,
+          nowhere near 85vh of content — doesn't leave a big empty gap above
+          the footer; a genuinely tall tab (Semester Fees with many items)
+          still caps out and scrolls inside .modal-scroll same as before.
+          Same fix as ViewProgrammeModal, which has the identical tabbed
+          structure. */}
+      <div className="modal modal-80 modal-flex" style={{ height: 'auto', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-eye"></i> View Fee Structure — <span className="font-mono">{feeStructure.feeCode}</span></div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
@@ -216,7 +231,7 @@ export function ViewFeeStructureModal({ isOpen, onClose, feeStructure, onEdit }:
                       const isOpen = feeAccordion === si
                       const items = feeLines.filter(f => f.semesterGuid === sem.semesterGuid) || []
                       const total = items.reduce((s, f) => s + (f.amount || 0), 0)
-                      const totalCurrencyCode = financeCurrencies.find(c => c.currencyGuid === items[0]?.currencyGuid)?.currencyCode ?? ''
+                      const totalCurrencyCode = items[0]?.currencyName ?? ''
 
                       return (
                         <div key={sem.semesterGuid} style={{ border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
@@ -245,18 +260,19 @@ export function ViewFeeStructureModal({ isOpen, onClose, feeStructure, onEdit }:
                                 {items.length === 0 && (
                                   <div className="text-g400 italic" style={{ fontSize: 12.5, marginBottom: 8 }}>No fee items for this semester.</div>
                                 )}
-                                {items.map((f, idx) => {
-                                  const ledgerName = ledgers.find(l => l.ledgerGuid === f.ledgerGuid)?.ledgerName || '—'
-                                  const currencyCode = financeCurrencies.find(c => c.currencyGuid === f.currencyGuid)?.currencyCode || '—'
-                                  return (
-                                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 90px 130px', gap: 6, alignItems: 'center', background: 'var(--white)', border: '1px solid var(--g200)', borderRadius: 'var(--rxs)', padding: '6px 8px', fontSize: 12.5 }}>
-                                      <div style={{ textAlign: 'center', fontWeight: 600, color: 'var(--g500)' }}>{f.ledgerNum}</div>
-                                      <div style={{ fontWeight: 500, color: 'var(--g900)' }}>{ledgerName}</div>
-                                      <div style={{ fontFamily: 'var(--font-mono)' }}>{f.amount}</div>
-                                      <div>{currencyCode}</div>
-                                    </div>
-                                  )
-                                })}
+                                {items.map((f, idx) => (
+                                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 90px 130px', gap: 6, alignItems: 'center', background: 'var(--white)', border: '1px solid var(--g200)', borderRadius: 'var(--rxs)', padding: '6px 8px', fontSize: 12.5 }}>
+                                    <div style={{ textAlign: 'center', fontWeight: 600, color: 'var(--g500)' }}>{f.ledgerNum}</div>
+                                    {/* ledgerName/currencyName come straight off the fee-line response
+                                        itself (confirmed field, see ProgramFeeLineDetail) — no need to
+                                        cross-reference the separate ledgers/financeCurrencies lists,
+                                        which don't necessarily contain every ledger/currency this
+                                        programme's fee lines reference. */}
+                                    <div style={{ fontWeight: 500, color: 'var(--g900)' }}>{f.ledgerName || '—'}</div>
+                                    <div style={{ fontFamily: 'var(--font-mono)' }}>{f.amount}</div>
+                                    <div>{f.currencyName || '—'}</div>
+                                  </div>
+                                ))}
                               </div>
                             </div>
                           </div>

@@ -6,6 +6,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { NewEmployeeModal } from '@/components/modals/employee/NewEmployeeModal'
 import { EditEmployeeModal } from '@/components/modals/employee/EditEmployeeModal'
+import { ViewEmployeeModal } from '@/components/modals/employee/ViewEmployeeModal'
 import { AssignEmployeePermissionsModal } from '@/components/modals/employee/AssignEmployeePermissionsModal'
 import { EditEmployeePermissionsModal } from '@/components/modals/employee/EditEmployeePermissionsModal'
 import { Toast } from '@/components/Toast'
@@ -19,6 +20,10 @@ import { EmployeeListItem } from '@/lib/api/employee/employee'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -34,6 +39,7 @@ export default function Page() {
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [editingEmployeeGuid, setEditingEmployeeGuid] = useState<string | null>(null)
+  const [viewingEmployeeGuid, setViewingEmployeeGuid] = useState<string | null>(null)
   const [assigningPermissionsEmployee, setAssigningPermissionsEmployee] = useState<EmployeeListItem | null>(null)
   const [editingPermissionsEmployee, setEditingPermissionsEmployee] = useState<EmployeeListItem | null>(null)
 
@@ -45,6 +51,12 @@ export default function Page() {
   function openEditModal(employeeGuid: string) {
     setEditingEmployeeGuid(employeeGuid)
     openModal('edit-employee-modal')
+  }
+
+  function openViewModal(employeeGuid: string) {
+    setViewingEmployeeGuid(employeeGuid)
+    openModal('view-employee-modal')
+    setSearch('')
   }
 
   function openAssignPermissionsModal(employee: EmployeeListItem) {
@@ -83,6 +95,7 @@ export default function Page() {
     const numB = Number(b.shortCode.split('/').pop())
     return numB - numA
   })
+  const searchTrimmed = search.trim()
   const filteredRows = sortedRows.filter(r => {
     const matchesFilters = Object.entries(filters).every(([k, v]) => {
       if (!v.length) return true
@@ -91,12 +104,16 @@ export default function Page() {
         : String((r as unknown as Record<string, unknown>)[k])
       return v.includes(cell)
     })
-    const matchesSearch = !search || r.empName.toLowerCase().includes(search.toLowerCase()) || r.shortCode.toLowerCase().includes(search.toLowerCase())
+    const matchesSearch = searchTrimmed.length < MIN_SEARCH_CHARS
+      || r.empName.toLowerCase().includes(searchTrimmed.toLowerCase())
+      || r.shortCode.toLowerCase().includes(searchTrimmed.toLowerCase())
     return matchesFilters && matchesSearch
   })
 
-  const searchMatches = search.trim()
-    ? sortedRows.filter(r => r.empName.toLowerCase().includes(search.trim().toLowerCase()) || r.shortCode.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  // Empty below MIN_SEARCH_CHARS, matching TableSearch's own minChars gate on
+  // when the dropdown is even allowed to open.
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? sortedRows.filter(r => r.empName.toLowerCase().includes(searchTrimmed.toLowerCase()) || r.shortCode.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
@@ -128,6 +145,8 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: r.employeeGuid, primary: r.shortCode, secondary: r.empName }))}
+              minChars={MIN_SEARCH_CHARS}
+              onSelect={(r) => openViewModal(r.id)}
             />
             {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-employee-modal')}><i className="lni lni-plus"></i> Add Employee</button>}
           </div>
@@ -171,8 +190,11 @@ export default function Page() {
                 {pageItems.map(r => (
                   <tr key={r.employeeGuid}>
                     <td>
-                      {(permissions.edit || canAssignPermissions) && (
+                      {(permissions.edit || canAssignPermissions || true) && (
                         <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.employeeGuid)}>
+                            <i className="lni lni-eye"></i> View
+                          </button>
                           {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.employeeGuid)}>
                             <i className="lni lni-pencil"></i> Edit
                           </button>}
@@ -203,6 +225,14 @@ export default function Page() {
         onClose={() => closeModal('edit-employee-modal')}
         showToast={showToast}
         employeeGuid={editingEmployeeGuid}
+      />
+      <ViewEmployeeModal
+        isOpen={openModals.has('view-employee-modal')}
+        onClose={() => closeModal('view-employee-modal')}
+        showToast={showToast}
+        employeeGuid={viewingEmployeeGuid}
+        canEdit={permissions.edit}
+        onEdit={() => { closeModal('view-employee-modal'); if (viewingEmployeeGuid) openEditModal(viewingEmployeeGuid) }}
       />
       <AssignEmployeePermissionsModal
         isOpen={openModals.has('assign-employee-permissions-modal')}

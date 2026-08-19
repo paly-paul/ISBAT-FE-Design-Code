@@ -14,10 +14,14 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { useCreateProgramLevel, useDeleteProgramLevel, useProgramLevels, useUpdateProgramLevel, ProgramLevel } from '@/hooks/academic/useProgramLevels'
+import { useCreateProgramLevel, useDeleteProgramLevel, useProgramLevels, useProgramLevelSearch, useUpdateProgramLevel, ProgramLevel } from '@/hooks/academic/useProgramLevels'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as Intake/Skill/
+// Batch/Repetition Tag's search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -46,20 +50,45 @@ export default function Page() {
   }, [])
 
   const { data: rows = [], isLoading } = useProgramLevels()
+
+  // Debounced so the backend's ?search= isn't hit on every keystroke, and
+  // held at '' (falling back to the unfiltered list) until MIN_SEARCH_CHARS
+  // is met — same convention as Intake/Skill/Repetition Tag's search boxes.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const trimmed = search.trim()
+    if (trimmed.length < MIN_SEARCH_CHARS) { setDebouncedSearch(''); return }
+    const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const { data: searchResults, isFetching: isSearching } = useProgramLevelSearch(debouncedSearch)
+  const baseRows = debouncedSearch ? (searchResults ?? []) : rows
+  const searchTrimmed = search.trim()
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isSearching)
+
   const createProgramLevel = useCreateProgramLevel()
   const updateProgramLevel = useUpdateProgramLevel()
   const deleteProgramLevel = useDeleteProgramLevel()
-  const filteredRows = rows.filter(r => {
-    const q = search.trim().toLowerCase()
-    if (q && !`${r.levelCode} ${r.levelName}`.toLowerCase().includes(q)) return false
+
+  // Re-filter client-side on top of whatever the server sent back (this
+  // endpoint's ?search= support was already in place before this page's
+  // search box was wired up to it, but pairing it with a client-side
+  // re-filter — same as Repetition Tag/Batch Management — keeps results
+  // correct even if it turns out not to actually filter server-side), then
+  // apply the column filters on top.
+  const filteredRows = baseRows.filter(r => {
+    if (searchTrimmed.length >= MIN_SEARCH_CHARS && !`${r.levelCode} ${r.levelName}`.toLowerCase().includes(searchTrimmed.toLowerCase())) return false
     return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
   })
 
   // Live preview shown in the search dropdown as the user types — same
   // code/name test as filteredRows above, ignoring the column filters and
-  // capped to a handful of rows.
-  const searchMatches = search.trim()
-    ? rows.filter(r => `${r.levelCode} ${r.levelName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  // capped to a handful of rows. Empty below MIN_SEARCH_CHARS, matching
+  // TableSearch's own minChars gate on when the dropdown is even allowed to
+  // open.
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? baseRows.filter(r => `${r.levelCode} ${r.levelName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
@@ -67,6 +96,12 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingProgramLevelGuid(guid)
     openModal('edit-alevel-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setViewingProgramLevelGuid(guid)
+    openModal('view-alevel-modal')
+    setSearch('')
   }
 
   function confirmDeleteProgramLevel() {
@@ -121,6 +156,9 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: r.programLevelGuid, primary: r.levelCode, secondary: r.levelName }))}
+              loading={searchPending}
+              minChars={MIN_SEARCH_CHARS}
+              onSelect={(r) => openViewModal(r.id)}
             />
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
@@ -141,16 +179,16 @@ export default function Page() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading
+                {(isLoading || searchPending)
                   ? <TableLoadingState colSpan={999} />
                   : filteredRows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={!!search || Object.values(filters).some(v => v.length > 0)} onClearFilters={() => { setSearch(''); setFilters({}) }} />
                     : null}
-                {pageItems.map((r) => (
+                {!(isLoading || searchPending) && pageItems.map((r) => (
                   <tr key={r.programLevelGuid}>
                     <td>
                       <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => { setViewingProgramLevelGuid(r.programLevelGuid); openModal('view-alevel-modal') }}>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.programLevelGuid)}>
                           <i className="lni lni-eye"></i> View
                         </button>
                         {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.programLevelGuid)}>

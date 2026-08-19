@@ -13,10 +13,14 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { useRepetitionTags, useCreateRepetitionTag, useUpdateRepetitionTag, useDeleteRepetitionTag, RepetitionTag } from '@/hooks/academic/useRepetitionTags'
+import { useRepetitionTags, useRepetitionTagSearch, useCreateRepetitionTag, useUpdateRepetitionTag, useDeleteRepetitionTag, RepetitionTag } from '@/hooks/academic/useRepetitionTags'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as Intake Master /
+// Skill Master / Batch Management's search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -43,6 +47,7 @@ export default function Page() {
   function openViewModal(guid: string) {
     setViewingRepTagGuid(guid)
     openModal('view-rep-tag-modal')
+    setSearch('')
   }
 
   function confirmDeleteRepetitionTag() {
@@ -74,21 +79,43 @@ export default function Page() {
   // ]
 
   const { data: rows = [], isLoading } = useRepetitionTags()
+
+  // Debounced so the backend's ?search= isn't hit on every keystroke, and
+  // held at '' (falling back to the unfiltered list) until MIN_SEARCH_CHARS
+  // is met — same convention as Intake/Skill Master's search boxes.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const trimmed = search.trim()
+    if (trimmed.length < MIN_SEARCH_CHARS) { setDebouncedSearch(''); return }
+    const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const { data: searchResults, isFetching: isSearching } = useRepetitionTagSearch(debouncedSearch)
+  const searchTrimmed = search.trim()
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isSearching)
+  // Re-filter client-side on top of whatever the server sent back, so
+  // results stay correct even if the backend doesn't actually honor
+  // ?search= (see the note on getRepetitionTags).
+  const baseRows = debouncedSearch
+    ? (searchResults ?? []).filter(r => `${r.tagCode} ${r.tagName}`.toLowerCase().includes(debouncedSearch.toLowerCase()))
+    : rows
+
   const createRepetitionTag = useCreateRepetitionTag()
   const updateRepetitionTag = useUpdateRepetitionTag()
   const deleteRepetitionTag = useDeleteRepetitionTag()
-  const filteredRows = rows.filter(r => {
-    const q = search.trim().toLowerCase()
-    if (q && !`${r.tagCode} ${r.tagName}`.toLowerCase().includes(q)) return false
-    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
-  })
 
-  // Live preview shown in the search dropdown as the user types — same
-  // code/name test as filteredRows above, ignoring the column filters and
-  // capped to a handful of rows.
-  const searchMatches = search.trim()
-    ? rows.filter(r => `${r.tagCode} ${r.tagName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
-    : []
+  // Text matching against code/name already happened above (baseRows is
+  // search-scoped) — this only applies the column filter on top.
+  const filteredRows = baseRows.filter(r =>
+    Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
+  )
+
+  // Live preview shown in the search dropdown as the user types — reads the
+  // same server-scoped baseRows, ignoring the column filters and capped to a
+  // handful of rows. Empty below MIN_SEARCH_CHARS, matching TableSearch's own
+  // minChars gate on when the dropdown is even allowed to open.
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? baseRows.slice(0, 8) : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
@@ -133,6 +160,9 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: r.courseUnitRepetitionGuid, primary: r.tagCode, secondary: r.tagName }))}
+              loading={searchPending}
+              minChars={MIN_SEARCH_CHARS}
+              onSelect={(r) => openViewModal(r.id)}
             />
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
@@ -146,12 +176,12 @@ export default function Page() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading
+                {(isLoading || searchPending)
                   ? <TableLoadingState colSpan={999} />
                   : filteredRows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={!!search || Object.values(filters).some(v => v.length > 0)} onClearFilters={() => { setSearch(''); setFilters({}) }} />
                     : null}
-                {pageItems.map((r) => (
+                {!(isLoading || searchPending) && pageItems.map((r) => (
                   <tr key={r.courseUnitRepetitionGuid}>
                     <td>
                       {(permissions.edit || permissions.delete) && (

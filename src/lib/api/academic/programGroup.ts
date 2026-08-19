@@ -37,10 +37,22 @@ interface ProgramGroupListResponse {
   pageSize: number
 }
 
-// Fetch the programme group list, using mock data when the mock auth flag is enabled.
-export function getProgramGroups(page = 1, pageSize = 10): Promise<ProgramGroup[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockProgramGroups)
-  return apiGet<ProgramGroupListResponse | null>(`/api/v1/academic/program-groups?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
+// Fetch the programme group list, using mock data when the mock auth flag is
+// enabled. search is forwarded to the endpoint's own ?search= param (same
+// convention as getIntakes/getSkills) rather than filtered client-side — not
+// confirmed against a spec, so callers pair it with a client-side re-filter
+// of whatever comes back, keeping results correct even if the backend
+// doesn't actually recognize the param.
+export function getProgramGroups(page = 1, pageSize = 10, search = ''): Promise<ProgramGroup[]> {
+  const q = search.trim()
+  if (MOCK_AUTH) {
+    if (!q) return Promise.resolve(mockProgramGroups)
+    const needle = q.toLowerCase()
+    return Promise.resolve(mockProgramGroups.filter(g => g.groupCode.toLowerCase().includes(needle) || g.groupName.toLowerCase().includes(needle)))
+  }
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (q) params.set('search', q)
+  return apiGet<ProgramGroupListResponse | null>(`/api/v1/academic/program-groups?${params.toString()}`).then(data => data?.items ?? [])
 }
 
 // Payload used when creating or updating a programme group.

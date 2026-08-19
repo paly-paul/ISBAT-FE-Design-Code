@@ -11,10 +11,15 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewCurrencyModal } from '@/components/modals/finance/NewCurrencyModal'
 import { EditCurrencyModal } from '@/components/modals/finance/EditCurrencyModal'
+import { ViewCurrencyModal } from '@/components/modals/finance/ViewCurrencyModal'
 import { useCurrencies, useCreateCurrency, useUpdateCurrency, useDeleteCurrency, Currency } from '@/hooks/finance/useCurrencies'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -22,6 +27,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingCurrencyGuid, setEditingCurrencyGuid] = useState<string | null>(null)
+  const [viewingCurrencyGuid, setViewingCurrencyGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Currency | null>(null)
   const [search, setSearch] = useState('')
 
@@ -40,6 +46,12 @@ export default function Page() {
     openModal('edit-currency-modal')
   }
 
+  function openViewModal(guid: string) {
+    setViewingCurrencyGuid(guid)
+    openModal('view-currency-modal')
+    setSearch('')
+  }
+
   function confirmDeleteCurrency() {
     if (!deleteTarget?.currencyGuid) return
     deleteCurrency.mutate(deleteTarget.currencyGuid, {
@@ -48,12 +60,13 @@ export default function Page() {
     })
   }
 
+  const searchTrimmed = search.trim()
   const filteredRows = rows.filter(r =>
-    !search.trim() || `${r.currencyCode} ${r.currencyName}`.toLowerCase().includes(search.trim().toLowerCase())
+    searchTrimmed.length < MIN_SEARCH_CHARS || `${r.currencyCode} ${r.currencyName}`.toLowerCase().includes(searchTrimmed.toLowerCase())
   )
 
-  const searchMatches = search.trim()
-    ? rows.filter(r => `${r.currencyCode} ${r.currencyName}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? rows.filter(r => `${r.currencyCode} ${r.currencyName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
@@ -81,6 +94,11 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: String(r.intCurrency), primary: r.currencyCode, secondary: r.currencyName }))}
+              minChars={MIN_SEARCH_CHARS}
+              onSelect={(r) => {
+                const row = rows.find(x => String(x.intCurrency) === r.id)
+                if (row?.currencyGuid) openViewModal(row.currencyGuid)
+              }}
             />
           </div>
           <ScrollTable>
@@ -102,8 +120,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.intCurrency}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
+                      {(permissions.edit || permissions.delete || true) && (
                         <ActionMenu>
+                          <button
+                            className="btn btn-neu btn-sm"
+                            disabled={!r.currencyGuid}
+                            title={r.currencyGuid ? undefined : 'This row has no currencyGuid to view by'}
+                            onClick={() => r.currencyGuid && openViewModal(r.currencyGuid)}
+                          >
+                            <i className="lni lni-eye"></i> View
+                          </button>
                           {permissions.edit && (
                             <button
                               className="btn btn-neu btn-sm"
@@ -154,6 +180,14 @@ export default function Page() {
         showToast={showToast}
         currencyGuid={editingCurrencyGuid}
         updateCurrency={updateCurrency}
+      />
+      <ViewCurrencyModal
+        isOpen={openModals.has('view-currency-modal')}
+        onClose={() => closeModal('view-currency-modal')}
+        showToast={showToast}
+        currencyGuid={viewingCurrencyGuid}
+        canEdit={permissions.edit}
+        onEdit={() => { closeModal('view-currency-modal'); if (viewingCurrencyGuid) openEditModal(viewingCurrencyGuid) }}
       />
       <Toast toast={toast} />
 

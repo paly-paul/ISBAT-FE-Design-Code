@@ -25,7 +25,10 @@ function Field({ label, value, mono, wide }: { label: string; value: React.React
   return (
     <div style={{ gridColumn: wide ? '1 / -1' : undefined }}>
       <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--g500)', marginBottom: '4px' }}>{label}</div>
-      <div className={mono ? 'font-mono' : undefined} style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{value}</div>
+      {/* Monospace renders visually larger than the app's usual sans body
+          text at the same px size — dial it down a notch so the Code field
+          doesn't read as oversized next to the other plain-text fields. */}
+      <div className={mono ? 'font-mono' : undefined} style={{ fontSize: mono ? '13px' : '14px', color: 'var(--g900)', fontWeight: 500 }}>{value}</div>
     </div>
   )
 }
@@ -54,7 +57,7 @@ export function ViewProgrammeLevelModal({ isOpen, onClose, programLevelGuid, onE
   if (isLoading || !programLevel) {
     return (
       <div className="modal-overlay open" id="view-alevel-modal">
-        <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+        <div className="modal modal-md" onClick={e => e.stopPropagation()}>
           <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-eye"></i> View Programme Level</div>
             <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
@@ -71,7 +74,7 @@ export function ViewProgrammeLevelModal({ isOpen, onClose, programLevelGuid, onE
 
   return (
     <div className="modal-overlay open" id="view-alevel-modal">
-      <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+      <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-eye"></i> View Programme Level — <span className="font-mono">{programLevel.levelCode}</span></div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>

@@ -11,11 +11,16 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { NewReceiptBookModal } from '@/components/modals/finance/NewReceiptBookModal'
 import { EditReceiptBookModal } from '@/components/modals/finance/EditReceiptBookModal'
+import { ViewReceiptBookModal } from '@/components/modals/finance/ViewReceiptBookModal'
 import { useReceiptBooks, useCreateReceiptBook, useUpdateReceiptBook, useDeleteReceiptBook, ReceiptBook } from '@/hooks/finance/useReceiptBooks'
 import { STATUS_LABELS, CATEGORY_LABELS, BOOK_CATEGORY_LABELS } from '@/lib/api/finance/receiptBook'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -23,6 +28,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingBook, setEditingBook] = useState<ReceiptBook | null>(null)
+  const [viewingBook, setViewingBook] = useState<ReceiptBook | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ReceiptBook | null>(null)
   const [search, setSearch] = useState('')
 
@@ -41,12 +47,19 @@ export default function Page() {
     openModal('edit-receipt-book-modal')
   }
 
+  function openViewModal(book: ReceiptBook) {
+    setViewingBook(book)
+    openModal('view-receipt-book-modal')
+    setSearch('')
+  }
+
+  const searchTrimmed = search.trim()
   const filteredRows = rows.filter(r =>
-    !search.trim() || `${r.bookCode} ${r.prefix ?? ''}`.toLowerCase().includes(search.trim().toLowerCase())
+    searchTrimmed.length < MIN_SEARCH_CHARS || `${r.bookCode} ${r.prefix ?? ''}`.toLowerCase().includes(searchTrimmed.toLowerCase())
   )
 
-  const searchMatches = search.trim()
-    ? rows.filter(r => `${r.bookCode} ${r.prefix ?? ''}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? rows.filter(r => `${r.bookCode} ${r.prefix ?? ''}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
@@ -82,6 +95,11 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: r.receiptBookGuid, primary: r.bookCode, secondary: r.prefix || undefined }))}
+              minChars={MIN_SEARCH_CHARS}
+              onSelect={(r) => {
+                const row = rows.find(x => x.receiptBookGuid === r.id)
+                if (row) openViewModal(row)
+              }}
             />
           </div>
           <ScrollTable>
@@ -109,16 +127,17 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.receiptBookGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
-                        <ActionMenu>
-                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
-                            <i className="lni lni-pencil"></i> Edit
-                          </button>}
-                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                            <i className="lni lni-trash-can"></i> Delete
-                          </button>}
-                        </ActionMenu>
-                      )}
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r)}>
+                          <i className="lni lni-eye"></i> View
+                        </button>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>}
+                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                          <i className="lni lni-trash-can"></i> Delete
+                        </button>}
+                      </ActionMenu>
                     </td>
                     <td className="font-mono font-bold uppercase">{r.bookCode}</td>
                     <td className="font-mono uppercase">{r.prefix || <span className="text-g400">—</span>}</td>
@@ -154,6 +173,14 @@ export default function Page() {
         showToast={showToast}
         receiptBook={editingBook}
         updateReceiptBook={updateReceiptBook}
+      />
+      <ViewReceiptBookModal
+        isOpen={openModals.has('view-receipt-book-modal')}
+        onClose={() => closeModal('view-receipt-book-modal')}
+        showToast={showToast}
+        receiptBook={viewingBook}
+        canEdit={permissions.edit}
+        onEdit={(book) => { closeModal('view-receipt-book-modal'); openEditModal(book) }}
       />
       <Toast toast={toast} />
 

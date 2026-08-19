@@ -12,6 +12,24 @@ export function useLecturerSkills() {
   })
 }
 
+// Server-side search for Skill Master's search box — hits the same list
+// endpoint with the backend's own ?search= param instead of filtering the
+// already-fetched full list client-side. Kept as its own hook/query key so
+// useLecturerSkills() above still stays the plain unfiltered, cached list —
+// only enabled while the search box actually has a query in it, at which
+// point the page falls back to that shared unfiltered list instead of
+// issuing a redundant identical request.
+export function useLecturerSkillSearch(search: string) {
+  const q = search.trim()
+  return useQuery({
+    queryKey: [...LECTURER_SKILLS_KEY, 'search', q],
+    queryFn: () => getSkills(q),
+    enabled: q.length > 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
 // Fetch-by-guid query for the Edit modal — only enabled while the modal is
 // actually open with a guid, same convention as the other real domains.
 export function useLecturerSkill(guid: string | null, enabled: boolean) {

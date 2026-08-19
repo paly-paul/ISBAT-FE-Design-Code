@@ -6,6 +6,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { NewPermissionModal } from '@/components/modals/academic/NewPermissionModal'
 import { EditPermissionModal } from '@/components/modals/academic/EditPermissionModal'
+import { ViewPermissionModal } from '@/components/modals/academic/ViewPermissionModal'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
@@ -15,6 +16,10 @@ import { usePermissionGroups, useCreatePermissionGroup, useUpdatePermissionGroup
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
   const router = useRouter()
@@ -22,6 +27,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [editingGroup, setEditingGroup] = useState<PermissionGroup | null>(null)
+  const [viewingGroup, setViewingGroup] = useState<PermissionGroup | null>(null)
   const [search, setSearch] = useState('')
 
   const { data: rows = [], isLoading } = usePermissionGroups()
@@ -31,12 +37,13 @@ export default function Page() {
 
   // Live preview shown in the search dropdown as the user types — matches
   // the same group/description test as the table's own search filter below.
-  const searchMatches = search.trim()
-    ? sortedRows.filter(r => `${r.group} ${r.description}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  const searchTrimmed = search.trim()
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? sortedRows.filter(r => `${r.group} ${r.description}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
   const filteredRows = sortedRows.filter(r =>
-    !search.trim() || `${r.group} ${r.description}`.toLowerCase().includes(search.trim().toLowerCase())
+    searchTrimmed.length < MIN_SEARCH_CHARS || `${r.group} ${r.description}`.toLowerCase().includes(searchTrimmed.toLowerCase())
   )
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
@@ -49,6 +56,12 @@ export default function Page() {
   function openEditModal(group: PermissionGroup) {
     setEditingGroup(group)
     openModal('edit-permission-modal')
+  }
+
+  function openViewModal(group: PermissionGroup) {
+    setViewingGroup(group)
+    openModal('view-permission-modal')
+    setSearch('')
   }
 
   return (
@@ -75,6 +88,8 @@ export default function Page() {
                 value={search}
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.id, primary: r.group, secondary: r.description }))}
+                minChars={MIN_SEARCH_CHARS}
+                onSelect={(res) => { const row = sortedRows.find(x => x.id === res.id); if (row) openViewModal(row) }}
               />
             </div>
           </div>
@@ -96,13 +111,16 @@ export default function Page() {
                 {pageItems.map((r) => (
                   <tr key={r.id}>
                     <td>
-                      {permissions.edit && (
-                        <ActionMenu>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r)}>
+                          <i className="lni lni-eye"></i> View
+                        </button>
+                        {permissions.edit && (
                           <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
                             <i className="lni lni-pencil"></i> Edit
                           </button>
-                        </ActionMenu>
-                      )}
+                        )}
+                      </ActionMenu>
                     </td>
                     <td><strong>{r.group}</strong></td>
                     <td className="text-g600">{r.description}</td>
@@ -126,6 +144,14 @@ export default function Page() {
         showToast={showToast}
         permissionGroup={editingGroup}
         updatePermissionGroup={updatePermissionGroup}
+      />
+      <ViewPermissionModal
+        isOpen={openModals.has('view-permission-modal')}
+        onClose={() => closeModal('view-permission-modal')}
+        showToast={showToast}
+        permissionGroup={viewingGroup}
+        canEdit={permissions.edit}
+        onEdit={() => { closeModal('view-permission-modal'); if (viewingGroup) openEditModal(viewingGroup) }}
       />
       <Toast toast={toast} />
     </>

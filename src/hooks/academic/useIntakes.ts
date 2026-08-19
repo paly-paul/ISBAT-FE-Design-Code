@@ -21,6 +21,26 @@ export function useIntakes() {
   })
 }
 
+// Server-side search for Intake Master's search box — hits the same list
+// endpoint with the backend's own ?search= param (contains-match against
+// Description, Month, and IntakeCode) instead of filtering the already-
+// fetched full list client-side. Kept as its own hook/query key rather than
+// folded into useIntakes() above, so every other page that calls useIntakes()
+// unparametrized keeps sharing that one unfiltered, cached full list — only
+// disabled while the search box is empty, at which point the page falls back
+// to that shared unfiltered list instead of issuing a redundant identical
+// request.
+export function useIntakeSearch(search: string) {
+  const q = search.trim()
+  return useQuery({
+    queryKey: [...INTAKES_KEY, 'search', q],
+    queryFn: () => getIntakes(1, INTAKES_PAGE_SIZE, q),
+    enabled: q.length > 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
 // Fetches a single intake (with its full academicCalendar detail) for the
 // Edit Intake modal. Only enabled while the modal is actually open with a
 // guid, so it doesn't fire on every render of the intake table.

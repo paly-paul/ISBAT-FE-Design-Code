@@ -43,6 +43,24 @@ export function useProgramMasters() {
   })
 }
 
+// Server-side search for Programme Master's search box — hits the same list
+// endpoint with the backend's own ?search= param instead of filtering the
+// already-fetched full list client-side. Kept as its own hook/query key so
+// useProgramMasters() above still stays the plain unfiltered, cached list —
+// only enabled while the search box actually has a query in it, at which
+// point the page falls back to that shared unfiltered list instead of
+// issuing a redundant identical request.
+export function useProgramMasterSearch(search: string) {
+  const q = search.trim()
+  return useQuery({
+    queryKey: [...PROGRAM_MASTERS_KEY, 'search', q],
+    queryFn: () => getProgramMasters(q),
+    enabled: q.length > 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
 // Per Application_Payment_Change_Requests_Final_Updated.md #7 — backs the
 // Application Payment page's Interested Programme dropdown, scoped to
 // whichever Campus is currently selected. Only enabled once a campus is
