@@ -1,87 +1,101 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
+import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { NewRoomModal } from '@/components/modals/academic/NewRoomModal'
 import { EditRoomModal } from '@/components/modals/academic/EditRoomModal'
+import { ViewRoomModal } from '@/components/modals/academic/ViewRoomModal'
 import { Toast } from '@/components/Toast'
-import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
+import { useRooms, useRoomSearch, useCreateRoom, useUpdateRoom, useDeleteRoom, Room } from '@/hooks/academic/useRooms'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
+// Don't narrow the table (or open the search dropdown) until the user's
+// typed at least this many characters — same convention as the other
+// master pages' search boxes.
+const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
-  const router = useRouter()
+  const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [filters, setFilters] = useState<Record<string, string[]>>({})
-  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [editingRoomGuid, setEditingRoomGuid] = useState<string | null>(null)
+  const [viewingRoomGuid, setViewingRoomGuid] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Room | null>(null)
   const [search, setSearch] = useState('')
 
-  function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
+  const { data: rows = [], isLoading } = useRooms()
+
+  // Debounced so the backend's confirmed ?search= (get-rooms.md) isn't hit
+  // on every keystroke, and held at '' (falling back to the unfiltered list)
+  // until MIN_SEARCH_CHARS is met — same convention as Intake/Skill's
+  // search boxes.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   useEffect(() => {
-    function closeFilter(e: MouseEvent) {
-      const target = e.target as HTMLElement
-      if (!target.closest('th')) setOpenFilter(null)
-    }
-    document.addEventListener('click', closeFilter)
-    return () => document.removeEventListener('click', closeFilter)
-  }, [])
+    const trimmed = search.trim()
+    if (trimmed.length < MIN_SEARCH_CHARS) { setDebouncedSearch(''); return }
+    const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
+    return () => clearTimeout(t)
+  }, [search])
 
-  const rows = [
-    { code: 'RM-FCT-001', description: 'Main Computing Lab',           campus: 'Main Campus — Kampala',  building: 'Block A', capacity: '40', status: 'Active'              },
-    { code: 'RM-FCT-002', description: 'Networking & Systems Lab',     campus: 'Main Campus — Kampala',  building: 'Block A', capacity: '30', status: 'Active'              },
-    { code: 'RM-FBM-001', description: 'Business Studies Lecture Hall', campus: 'Main Campus — Kampala', building: 'Block B', capacity: '80', status: 'Active'              },
-    { code: 'RM-KCC-001', description: 'City Campus Seminar Room',     campus: 'Kampala City Campus',    building: 'Floor 2', capacity: '25', status: 'Under Maintenance'   },
-    { code: 'RM-MUK-001', description: 'Mukono Lecture Theatre',       campus: 'Mukono Campus',          building: 'Main Hall', capacity: '120', status: 'Active'           },
-    { code: 'RM-FCT-003', description: 'Graphics & Multimedia Lab',    campus: 'Main Campus — Kampala',  building: 'Block C', capacity: '35', status: 'Reserved'            },
-    { code: 'RM-FEN-001', description: 'Engineering Workshop',         campus: 'Main Campus — Kampala',  building: 'Block D', capacity: '50', status: 'Inactive'            },
-  ]
+  const { data: searchResults, isFetching: isSearching } = useRoomSearch(debouncedSearch)
+  // RoomDto carries no createdDate (see get-rooms.md) to sort by, so newest-
+  // first is approximated by reversing the list the API returns — rooms are
+  // append-only (create has no reordering operation) and the backend sends
+  // them back in ascending insertion order, so the last entry is the most
+  // recently created.
+  const baseRows = [...(debouncedSearch ? (searchResults ?? []) : rows)].reverse()
+  const searchTrimmed = search.trim()
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isSearching)
 
-  const filteredRows = rows.filter(r => {
-    const q = search.trim().toLowerCase()
-    if (q && !`${r.code} ${r.description}`.toLowerCase().includes(q)) return false
-    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
-  })
+  const createRoom = useCreateRoom()
+  const updateRoom = useUpdateRoom()
+  const deleteRoom = useDeleteRoom()
 
-  // Live preview shown in the search dropdown as the user types — same
-  // code/description test as filteredRows above, capped to a handful of rows.
-  const searchMatches = search.trim()
-    ? rows.filter(r => `${r.code} ${r.description}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+  function matchesSearch(r: Room, term: string) {
+    return `${r.roomCode} ${r.location ?? ''}`.toLowerCase().includes(term)
+  }
+
+  // Live preview shown in the search dropdown as the user types — reads the
+  // same server-scoped baseRows, capped to a handful of rows. Empty below
+  // MIN_SEARCH_CHARS, matching TableSearch's own minChars gate on when the
+  // dropdown is even allowed to open.
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? baseRows.filter(r => matchesSearch(r, searchTrimmed.toLowerCase())).slice(0, 8)
     : []
+
+  // Re-filter client-side on top of whatever the server sent back, as a
+  // safety net in case `search` isn't recognized server-side.
+  const filteredRows = baseRows.filter(r => searchTrimmed.length < MIN_SEARCH_CHARS || matchesSearch(r, searchTrimmed.toLowerCase()))
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
-  function statusBadge(status: string) {
-    const map: Record<string, string> = {
-      'Active': 'badge-green',
-      'Inactive': 'badge-grey',
-      'Under Maintenance': 'badge-amber',
-      'Reserved': 'badge-blue',
-    }
-    return <span className={`badge ${map[status] ?? 'badge-grey'}`}>{status}</span>
+  function openEditModal(guid: string) {
+    setEditingRoomGuid(guid)
+    openModal('edit-room-modal')
   }
 
-  function fth(label: string, col: string, opts: string[]) {
-    return (
-      <FilterTh
-        label={label}
-        opts={opts}
-        isOpen={openFilter === col}
-        activeFilter={filters[col] ?? []}
-        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
-        onClose={() => setOpenFilter(null)}
-      />
-    )
+  function openViewModal(guid: string) {
+    setViewingRoomGuid(guid)
+    openModal('view-room-modal')
+    setSearch('')
+  }
+
+  function confirmDeleteRoom() {
+    if (!deleteTarget) return
+    deleteRoom.mutate(deleteTarget.roomGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Room deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete room', 'error'),
+    })
   }
 
   return (
@@ -90,11 +104,11 @@ export default function Page() {
         <div className="pg-hdr">
           <div>
             <div className="pg-title">Room Management</div>
-            <div className="pg-sub">Manage rooms and venues for academic scheduling · Linked to campus and building</div>
+            <div className="pg-sub">Manage rooms and venues for academic scheduling</div>
           </div>
-          <button className="btn btn-primary" onClick={() => openModal('new-room-modal')}>
+          {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-room-modal')}>
             <i className="lni lni-plus"></i> Add Room
-          </button>
+          </button>}
         </div>
         <div className="card">
           <div className="card-hdr">
@@ -104,38 +118,49 @@ export default function Page() {
             </div>
             <TableSearch
               className="w-56"
-              placeholder="Search by room code or description…"
+              placeholder="Search by room code or location…"
               value={search}
               onChange={setSearch}
-              results={searchMatches.map(r => ({ id: r.code, primary: r.code, secondary: r.description }))}
+              results={searchMatches.map(r => ({ id: r.roomGuid, primary: r.roomCode, secondary: r.location ?? '' }))}
+              loading={searchPending}
+              minChars={MIN_SEARCH_CHARS}
+              onSelect={(r) => openViewModal(r.id)}
             />
           </div>
-          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
+          <ScrollTable>
             <table>
               <thead>
                 <tr>
                   <th style={{ width: 48 }}></th>
                   <th>Room Code</th>
-                  <th>Room Description</th>
-                  {fth('Campus', 'campus', ['Main Campus — Kampala', 'Kampala City Campus', 'Mukono Campus', 'Jinja Campus', 'Online / ODL Hub'])}
-                  <th>Building</th>
+                  <th>Location</th>
                   <th>Capacity</th>
-                  {fth('Status', 'status', ['Active', 'Inactive', 'Under Maintenance', 'Reserved'])}
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={!!search || Object.values(filters).some(v => v.length > 0)} onClearFilters={() => { setSearch(''); setFilters({}) }} />
-                  : null}
-                {pageItems.map((r, i) => (
-                  <tr key={i}>
-                    <td><button className="btn btn-neu btn-sm" onClick={() => openModal('edit-room-modal')}><i className="lni lni-pencil"></i> Edit</button></td>
-                    <td className="font-mono font-bold text-b700">{r.code}</td>
-                    <td>{r.description}</td>
-                    <td>{r.campus}</td>
-                    <td>{r.building}</td>
-                    <td>{r.capacity}</td>
-                    <td>{statusBadge(r.status)}</td>
+                {(isLoading || searchPending)
+                  ? <TableLoadingState colSpan={999} />
+                  : filteredRows.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
+                    : null}
+                {!(isLoading || searchPending) && pageItems.map((r) => (
+                  <tr key={r.roomGuid}>
+                    <td>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.roomGuid)}>
+                          <i className="lni lni-eye"></i> View
+                        </button>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.roomGuid)}>
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>}
+                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                          <i className="lni lni-trash-can"></i> Delete
+                        </button>}
+                      </ActionMenu>
+                    </td>
+                    <td className="font-mono font-bold text-b700">{r.roomCode}</td>
+                    <td>{r.location || '—'}</td>
+                    <td>{r.capacity ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -144,9 +169,47 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="rooms" onPageChange={setPage} />
         </div>
       </div>
-      <NewRoomModal  isOpen={openModals.has('new-room-modal')}  onClose={() => closeModal('new-room-modal')}  showToast={showToast} />
-      <EditRoomModal isOpen={openModals.has('edit-room-modal')} onClose={() => closeModal('edit-room-modal')} showToast={showToast} />
+
+      <ViewRoomModal
+        canEdit={permissions.edit}
+        onEdit={() => { closeModal('view-room-modal'); openEditModal(viewingRoomGuid || '') }}
+        isOpen={openModals.has('view-room-modal')}
+        onClose={() => closeModal('view-room-modal')}
+        showToast={showToast}
+        roomGuid={viewingRoomGuid}
+      />
+      <NewRoomModal
+        isOpen={openModals.has('new-room-modal')}
+        onClose={() => closeModal('new-room-modal')}
+        showToast={showToast}
+        createRoom={createRoom}
+      />
+      <EditRoomModal
+        isOpen={openModals.has('edit-room-modal')}
+        onClose={() => closeModal('edit-room-modal')}
+        showToast={showToast}
+        roomGuid={editingRoomGuid}
+        updateRoom={updateRoom}
+      />
       <Toast toast={toast} />
+
+      {deleteTarget && (
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
+            <div className="perm-delete-title">Delete {deleteTarget.roomCode}?</div>
+            <div className="perm-delete-sub">
+              This will permanently delete this room. This can&apos;t be undone.
+            </div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" disabled={deleteRoom.isPending} onClick={confirmDeleteRoom}>
+                <i className="lni lni-trash-can"></i> {deleteRoom.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
