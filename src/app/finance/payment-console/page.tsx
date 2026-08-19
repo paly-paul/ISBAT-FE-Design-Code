@@ -21,22 +21,9 @@ import {
   useCreatePayment,
   PAYMENT_CATEGORY_LABELS,
   PAY_TYPE_LABELS,
+  PAY_TYPE_TO_RECEIPT_CATEGORY,
 } from '@/hooks/finance/usePaymentConsole'
 import { formatDateTime } from '@/lib/date'
-
-// Maps payType (1=Cash/2=Cheque/3=Bank/4=DemandDraft/5=Online, per
-// CreatePayment.bru) onto ReceiptBook.category (0=Cash/1=Bank/2=Online, per
-// receiptBook.ts's CATEGORY_VALUES) so the Receipt Book dropdown only offers
-// books CreatePayment will actually accept for the chosen payment method —
-// picking a mismatched pair was previously only caught after Save, via a
-// real backend validation_error ("Receipt book category does not match the
-// selected payment type."). Neither .bru spec documents this pairing
-// explicitly, so Cheque/Bank/DemandDraft are grouped under the Bank receipt
-// category as the closest reasonable read of "non-cash, non-online paper/
-// bank instrument" — flagged here as unconfirmed, not verified against a
-// spec, and worth re-checking if the backend ever rejects a book this
-// mapping considers valid.
-const PAY_TYPE_TO_RECEIPT_CATEGORY: Record<number, number> = { 1: 0, 2: 1, 3: 1, 4: 1, 5: 2 }
 
 function fmtUGX(n: number) { return n > 0 ? `UGX ${Math.round(n).toLocaleString()}` : '—' }
 
