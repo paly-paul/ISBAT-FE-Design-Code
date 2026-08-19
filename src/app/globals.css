@@ -136,6 +136,19 @@ body {
   font-weight: 800;
   font-size: 13px;
   box-shadow: 0 3px 10px rgba(37, 99, 235, .35);
+  /* Now a <button> (logo → dashboard) rather than a bare div — undo the
+     browser's default button chrome so it still reads as the same plain
+     logo mark, not a form control. */
+  border: none;
+  padding: 0;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: var(--tr);
+}
+
+.hdr-badge:hover {
+  transform: translateY(-1px) scale(1.04);
+  box-shadow: 0 5px 14px rgba(37, 99, 235, .45);
 }
 
 .hdr-body {
@@ -251,6 +264,215 @@ body {
   place-items: center;
   font-size: 11px;
   font-weight: 700;
+}
+
+/* ── HEADER BELL ── */
+.hdr-bell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: none;
+  border: 1.5px solid var(--g200);
+  color: var(--g600);
+  font-size: 16px;
+  cursor: pointer;
+  transition: var(--tr);
+  flex-shrink: 0;
+}
+
+.hdr-bell:hover {
+  background: var(--b50);
+  border-color: var(--b200);
+  color: var(--b600);
+  transform: translateY(-1px);
+}
+
+.hdr-bell.has-unread {
+  animation: hdr-bell-ring 2.5s ease-in-out infinite;
+}
+
+@keyframes hdr-bell-ring {
+  0%, 92%, 100% { transform: rotate(0) }
+  93% { transform: rotate(-12deg) }
+  94.5% { transform: rotate(10deg) }
+  96% { transform: rotate(-7deg) }
+  97.5% { transform: rotate(4deg) }
+  99% { transform: rotate(0) }
+}
+
+.hdr-bell-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f87171, var(--red));
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  border: 2px solid var(--white);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, .25);
+}
+
+/* ── HEADER BELL: hover preview dropdown ── */
+.hdr-bell-wrap {
+  position: relative;
+}
+
+.hdr-bell-dropdown {
+  position: absolute;
+  top: 100%;
+  right: -8px;
+  /* Transparent bridge so moving the mouse from the bell down into the
+     dropdown doesn't cross a dead gap and close it early — same trick as
+     the gap between .hdr-user and .profile-dropdown not needing one,
+     since that one opens on click instead of hover. */
+  padding-top: 12px;
+  width: 320px;
+  z-index: 400;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px);
+  transition: opacity .15s ease, transform .15s ease, visibility .15s;
+  pointer-events: none;
+}
+
+.hdr-bell-wrap:hover .hdr-bell-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.hdr-bell-dropdown-inner {
+  background: var(--white);
+  border: 1.5px solid var(--g200);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 28px rgba(15, 30, 61, .14);
+  overflow: hidden;
+  animation: dd-in .15s ease;
+}
+
+.hdr-bell-dropdown-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 16px;
+  border-bottom: 1.5px solid var(--g200);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--g900);
+}
+
+.hdr-bell-dropdown-empty {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--g400);
+}
+
+.hdr-bell-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--g100);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font);
+  transition: background var(--tr);
+}
+
+.hdr-bell-item:hover {
+  background: var(--g100);
+}
+
+.hdr-bell-item.unread {
+  background: var(--b50);
+}
+
+.hdr-bell-item.unread:hover {
+  background: var(--b100);
+}
+
+.hdr-bell-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hdr-bell-item-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--g800);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hdr-bell-item-time {
+  font-size: 11px;
+  color: var(--g400);
+}
+
+.hdr-bell-dropdown-viewall {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--b600);
+  font-family: var(--font);
+  transition: background var(--tr);
+}
+
+.hdr-bell-dropdown-viewall:hover {
+  background: var(--b50);
+}
+
+/* Dev/test aid, not a real product action — deliberately styled as a lower-
+   key "utility" row (dashed divider above it, muted grey rather than the
+   brand blue "View all" gets) so it doesn't read as equally important. */
+.hdr-bell-dropdown-test {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 16px;
+  background: #f8fafc;
+  border: none;
+  border-top: 1px dashed var(--g200);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--g500);
+  font-family: var(--font);
+  transition: var(--tr);
+}
+
+.hdr-bell-dropdown-test:hover {
+  background: var(--g100);
+  color: var(--g700);
 }
 
 /* ── PROFILE DROPDOWN ── */
@@ -3111,6 +3333,117 @@ th:hover .th-fi {
 }
 
 /* ═══════════════════════════════════════
+   NOTIFICATIONS — full page list
+   Same dot-plus-card language as .timeline
+   above, but text wraps (a full-page list,
+   not a dashboard preview) and each row is
+   a real clickable button with an unread
+   state.
+═══════════════════════════════════════ */
+.ntf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ntf-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--rsm);
+  border: 1.5px solid var(--g200);
+  background: var(--white);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font);
+  transition: var(--tr);
+  animation: fadeUp .35s ease both;
+}
+
+.ntf-item:hover {
+  transform: translateX(3px);
+  border-color: var(--b200);
+  box-shadow: 0 4px 14px rgba(72, 105, 197, .10);
+  background: linear-gradient(90deg, #f8faff 0%, var(--white) 60%);
+}
+
+.ntf-item.unread {
+  border-color: var(--b200);
+  background: var(--b50);
+}
+
+.ntf-item.unread:hover {
+  background: linear-gradient(90deg, var(--b50) 0%, #f8faff 100%);
+}
+
+.ntf-dot {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  transition: transform .2s ease;
+}
+
+.ntf-item:hover .ntf-dot {
+  transform: scale(1.08);
+}
+
+.ntf-dot.tone-blue   { background: linear-gradient(135deg, #dbeafe, #bfdbfe); color: var(--b700); box-shadow: 0 0 0 2px #bfdbfe, 0 4px 10px rgba(37, 99, 235, .2) }
+.ntf-dot.tone-green  { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: var(--green); box-shadow: 0 0 0 2px #a7f3d0, 0 4px 10px rgba(5, 150, 105, .22) }
+.ntf-dot.tone-amber  { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #b45309; box-shadow: 0 0 0 2px #fde68a, 0 4px 10px rgba(217, 119, 6, .25) }
+.ntf-dot.tone-red    { background: linear-gradient(135deg, #fee2e2, #fecaca); color: var(--red); box-shadow: 0 0 0 2px #fecaca, 0 4px 10px rgba(220, 38, 38, .22) }
+.ntf-dot.tone-purple { background: linear-gradient(135deg, #ede9fe, #ddd6fe); color: #6d28d9; box-shadow: 0 0 0 2px #ddd6fe, 0 4px 10px rgba(109, 40, 217, .2) }
+
+.ntf-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.ntf-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ntf-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--g900);
+  line-height: 1.35;
+}
+
+.ntf-unread-mark {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--b500);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px var(--b100);
+}
+
+.ntf-body {
+  font-size: 12.5px;
+  color: var(--g500);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+.ntf-time {
+  font-size: 11px;
+  color: var(--g400);
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 10px;
+}
+
+/* ═══════════════════════════════════════
    FEE STRUCTURE — Semester-wise
 ═══════════════════════════════════════ */
 .fee-prog-selector {
@@ -3749,6 +4082,128 @@ body:has(.modal-overlay.open) {
 
 .toast.toast-danger {
   background: var(--red)
+}
+
+/* ═══════════════════════════════════════
+   NOTIFICATION TOAST — "new notification"
+   slide-in, top-right, auto-dismiss
+═══════════════════════════════════════ */
+.ntf-toast-stack {
+  position: fixed;
+  top: calc(var(--hdr-h) + 16px);
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(360px, calc(100vw - 40px));
+  pointer-events: none;
+}
+
+.ntf-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  background: var(--white);
+  border: 1.5px solid var(--g200);
+  border-left: 3px solid var(--b500);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(15, 30, 61, .18);
+  pointer-events: auto;
+  animation-name: ntf-toast-life;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+
+/* One timeline covers slide-in, hold, and slide-out so the "stay for N
+   seconds" duration is just animation-duration (set inline from
+   NEXT_PUBLIC_NOTIFICATION_TOAST_DURATION) — no separate JS-timed removal
+   to keep in sync with the animation. The entrance overshoots slightly past
+   its resting position before settling, same spring-like feel as the
+   confirm popup's .confirm-pop-in, so it reads as "arriving" rather than
+   just appearing. */
+@keyframes ntf-toast-life {
+  0%   { transform: translateX(130%); opacity: 0 }
+  6%   { transform: translateX(-6px); opacity: 1 }
+  10%  { transform: translateX(0); opacity: 1 }
+  93%  { transform: translateX(0); opacity: 1 }
+  100% { transform: translateX(130%); opacity: 0 }
+}
+
+.ntf-toast:hover {
+  animation-play-state: paused;
+  box-shadow: 0 14px 36px rgba(15, 30, 61, .24);
+}
+
+.ntf-toast-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font);
+}
+
+.ntf-toast-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.ntf-toast-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--g900);
+  line-height: 1.35;
+}
+
+.ntf-toast-time {
+  font-size: 10.5px;
+  color: var(--g400);
+  white-space: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.ntf-toast-msg {
+  font-size: 12px;
+  color: var(--g500);
+  line-height: 1.4;
+}
+
+.ntf-toast-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: none;
+  border: none;
+  color: var(--g400);
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: var(--tr);
+}
+
+.ntf-toast-close:hover {
+  background: var(--g100);
+  color: var(--g700);
+}
+
+@media (max-width: 480px) {
+  .ntf-toast-stack {
+    right: 10px;
+    left: 10px;
+    width: auto;
+  }
 }
 
 /* ═══════════════════════════════════════
@@ -4822,6 +5277,35 @@ body:has(.modal-overlay.open) {
   color: var(--red);
   font-size: 22px;
   animation: perm-delete-shake .5s ease;
+}
+
+/* Small round warning badge for inline caution banners (e.g. the bulk
+   intake-edit "you're about to overwrite N intakes" notices) — same
+   circular-badge-plus-shake language as .perm-delete-icon above, just sized
+   down for a single-line banner instead of a full confirm card. The shake
+   is delayed slightly so it plays after the banner's own .fade-up settles,
+   rather than both firing at once. */
+.warn-badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--amber-bg);
+  border: 1.5px solid var(--amber-bd);
+  color: var(--amber);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  flex-shrink: 0;
+  /* One shake on entrance, then a soft radar-ping ring that keeps looping
+     for as long as the banner is up — the shake alone reads as a one-off
+     twitch, this keeps the eye on it without being as busy as re-shaking. */
+  animation: perm-delete-shake .5s ease .2s both, warn-badge-pulse 2.2s ease-out .7s infinite;
+}
+
+@keyframes warn-badge-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--amber) 45%, transparent) }
+  70%  { box-shadow: 0 0 0 7px color-mix(in srgb, var(--amber) 0%, transparent) }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--amber) 0%, transparent) }
 }
 
 .perm-delete-title {

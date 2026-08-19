@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthError, refreshSession } from '@/lib/auth'
 import { getSessionIdentity, setSessionIdentity, clearSessionIdentity } from '@/lib/session'
+import { NotificationToastHost } from '@/components/NotificationToastHost'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -71,6 +72,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <SessionKeepAlive />
       {children}
+      <NotificationToastHost />
     </QueryClientProvider>
   )
 }

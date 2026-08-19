@@ -229,6 +229,12 @@ export default function Page() {
     setPendingValues(prev => ({ ...prev, [pendingKey(guid, fieldKey)]: value }))
   }
 
+  // Single-row inline edit (the pencil/tick column) — commented out per
+  // request, kept here for reference rather than deleted. Bulk edit via the
+  // checkbox + top panel is unaffected. Uncomment this pair, saveRow below,
+  // rowIconBtnStyle, and the matching table column further down to restore
+  // it.
+  /*
   // Enters inline edit mode for one row: seeds its pending values (if not
   // already seeded via the checkbox flow) so the row's date cells start
   // editable and pre-filled rather than blank.
@@ -254,16 +260,20 @@ export default function Page() {
     })
     setEditingGuids(prev => { const next = new Set(prev); next.delete(row.academicCalendarGuid); return next })
   }
+  */
 
   // The tick icon: validates, then opens the confirm popup rather than
   // saving straight away. The actual PATCH (see confirmRowSave below) only
-  // fires once that popup is confirmed.
+  // fires once that popup is confirmed. Commented out along with the rest of
+  // the single-row edit UI — see the note above startEditRow.
+  /*
   function saveRow(row: AcademicCalendarBatchEntryDto) {
     const entry = buildSubmitEntry(row)
     const invalid = validateCalendarEntry(entry)
     if (invalid) { showToast(invalid, 'error'); return }
     setConfirmAction({ kind: 'row', row, entry })
   }
+  */
 
   // Runs after the confirm popup is accepted for a single-row save: PATCHes
   // just this one row through the same bulkUpdateCalendarBatch call the top
@@ -344,6 +354,9 @@ export default function Page() {
   // 'edit' (grey, ready to click), 'save' (green, has a real change to
   // submit), 'save-disabled' (muted green, editing but nothing changed
   // yet), 'cancel' (red-tinted, always available while editing).
+  // Only used by the single-row edit column's pencil/tick/cancel buttons,
+  // commented out below along with the rest of that feature.
+  /*
   function rowIconBtnStyle(variant: 'edit' | 'save' | 'save-disabled' | 'cancel'): React.CSSProperties {
     const base: React.CSSProperties = {
       width: 28, height: 28, borderRadius: 'var(--rxs)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -354,6 +367,7 @@ export default function Page() {
     if (variant === 'cancel') return { ...base, border: '1.5px solid var(--red-bd)', background: 'var(--red-bg)', color: 'var(--red)' }
     return { ...base, border: '1.5px solid var(--g200)', background: 'var(--surface)', color: 'var(--g500)' }
   }
+  */
 
   return (
     <>
@@ -362,17 +376,6 @@ export default function Page() {
           <div>
             <div className="pg-title">Bulk Intake Calendar Update</div>
             <div className="pg-sub">Update calendar dates across the current admission intake's back-fill batch · Select entries, edit values, then save</div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 12.5, color: 'var(--g400)' }}>
-              {changedSelectedRows.length} of {selectedGuids.size} selected row{selectedGuids.size === 1 ? '' : 's'} changed
-            </span>
-            <button className="btn btn-neu" onClick={resetChanges} disabled={saving}>
-              <i className="lni lni-reload"></i> Reset
-            </button>
-            <button className="btn btn-primary" onClick={handleSave} disabled={saving || changedSelectedRows.length === 0}>
-              <i className="lni lni-checkmark"></i> {saving ? 'Saving…' : `Save Changes${changedSelectedRows.length ? ` (${changedSelectedRows.length})` : ''}`}
-            </button>
           </div>
         </div>
 
@@ -404,6 +407,17 @@ export default function Page() {
               </div>
             </div>
           )}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, padding: '14px 22px', borderTop: '1px solid var(--g200)' }}>
+            <span style={{ fontSize: 12.5, color: 'var(--g400)' }}>
+              {changedSelectedRows.length} of {selectedGuids.size} selected row{selectedGuids.size === 1 ? '' : 's'} changed
+            </span>
+            <button className="btn btn-neu" onClick={resetChanges} disabled={saving}>
+              <i className="lni lni-reload"></i> Reset
+            </button>
+            <button className="btn btn-primary" onClick={handleSave} disabled={saving || changedSelectedRows.length === 0}>
+              <i className="lni lni-checkmark"></i> {saving ? 'Saving…' : `Save Changes${changedSelectedRows.length ? ` (${changedSelectedRows.length})` : ''}`}
+            </button>
+          </div>
         </div>
 
         <div className="card">
@@ -420,6 +434,19 @@ export default function Page() {
             />
           </div>
 
+          {selectedGuids.size >= 2 && (
+            // The icon and message must be the flex container's only two
+            // items — putting flex directly on a mix of bare text nodes and
+            // <strong> makes each text run its own anonymous flex item, so
+            // the sentence spreads out with huge gaps between words instead
+            // of wrapping normally. Wrapping the message in a <span> keeps
+            // it as one flex item that wraps like a normal paragraph.
+            <div className="fade-up" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 22px 16px', padding: '10px 14px', background: 'var(--amber-bg)', border: '1.5px solid var(--amber-bd)', borderRadius: 'var(--rsm)', fontSize: 12.5, color: 'var(--g700)' }}>
+              <span className="warn-badge"><i className="lni lni-warning"></i></span>
+              <span>You&apos;ve selected {selectedGuids.size} intakes — saving will overwrite the calendar dates for <strong>all</strong> selected intakes with the values shown above.</span>
+            </div>
+          )}
+
           <ScrollTable>
             <table>
               <thead>
@@ -427,7 +454,9 @@ export default function Page() {
                   <th style={{ width: 40 }}>
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }} />
                   </th>
-                  <th style={{ width: 76 }}></th>
+                  {/* Single-row inline edit (pencil/tick) column —
+                      commented out per request, kept for reference. See the
+                      note above startEditRow further up this file. */}
                   <th>Intake Code</th>
                   <th>Description</th>
                   <th>Sem</th>
@@ -438,9 +467,11 @@ export default function Page() {
               </thead>
               <tbody>
                 {isLoading
-                  ? <TableLoadingState colSpan={5 + BULK_FIELDS.length} />
+                  // 4 fixed columns now that the single-row edit column
+                  // above is commented out (was 5).
+                  ? <TableLoadingState colSpan={4 + BULK_FIELDS.length} />
                   : visibleRows.length === 0
-                    ? <EmptyState colSpan={5 + BULK_FIELDS.length} hasFilters={!!search} onClearFilters={() => setSearch('')} />
+                    ? <EmptyState colSpan={4 + BULK_FIELDS.length} hasFilters={!!search} onClearFilters={() => setSearch('')} />
                     : null}
                 {visibleRows.map(row => {
                   const selected = selectedGuids.has(row.academicCalendarGuid)
@@ -448,7 +479,8 @@ export default function Page() {
                   const rowChanged = rowHasChanges(row)
                   const changed = selected && rowChanged
                   const active = activeRow?.academicCalendarGuid === row.academicCalendarGuid
-                  const isRowSaving = rowSaving.has(row.academicCalendarGuid)
+                  // Only fed the now-commented-out single-row edit column below.
+                  // const isRowSaving = rowSaving.has(row.academicCalendarGuid)
                   return (
                     <tr key={row.academicCalendarGuid} className={changed ? 'selected-row' : ''} style={active ? { outline: '2px solid var(--b400)', outlineOffset: -2 } : undefined}>
                       <td>
@@ -459,6 +491,9 @@ export default function Page() {
                           style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }}
                         />
                       </td>
+                      {/* Single-row inline edit (pencil/tick) column —
+                          commented out per request, kept for reference. See
+                          the note above startEditRow further up this file.
                       <td>
                         {editing ? (
                           <div style={{ display: 'flex', gap: 6 }}>
@@ -498,6 +533,7 @@ export default function Page() {
                           </button>
                         )}
                       </td>
+                      */}
                       <td><span className="font-mono text-b700">{row.intakeCode}</span></td>
                       <td><strong>{row.description}</strong></td>
                       <td>{row.semCode}</td>
@@ -545,6 +581,15 @@ export default function Page() {
                     <i className="lni lni-close"></i>
                   </button>
                 </div>
+                {confirmAction.kind === 'bulk' && confirmAction.rows.length >= 2 && (
+                  // See the same note on the inline banner above the table —
+                  // the message needs to be one <span>, not bare text nodes,
+                  // or each run around <strong> becomes its own flex item.
+                  <div className="fade-up" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 20px 0', padding: '10px 14px', background: 'var(--amber-bg)', border: '1.5px solid var(--amber-bd)', borderRadius: 'var(--rsm)', fontSize: 12.5, color: 'var(--g700)' }}>
+                    <span className="warn-badge"><i className="lni lni-warning"></i></span>
+                    <span>You&apos;re about to overwrite the calendar dates for <strong>{confirmAction.rows.length} intakes</strong> at once. This can&apos;t be undone.</span>
+                  </div>
+                )}
                 <div style={{ maxHeight: '50vh', overflowY: 'auto' }}>
                   {(confirmAction.kind === 'bulk' ? confirmAction.rows : [confirmAction.row]).map((row, i) => {
                     const entry = confirmAction.kind === 'bulk' ? confirmAction.entries[i] : confirmAction.entry
