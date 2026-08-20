@@ -356,20 +356,27 @@ function PaymentPageContent() {
     if (!selectedEnquiry || appliedEnquiryGuidRef.current === selectedEnquiry.enquiryGuid) return
     appliedEnquiryGuidRef.current = selectedEnquiry.enquiryGuid
     const [firstName, ...rest] = selectedEnquiry.studentName.trim().split(/\s+/)
-    // Case/whitespace-tolerant match — Enquiry.countryCode is confirmed
-    // 2-letter ISO alpha-2 (see online-enquiry/ondesk-enquiry's hardcoded
-    // 'UG'), but the Country Master's own countryCode VALUES have never
-    // been confirmed against a real response (the mock stand-ins use
-    // 3-letter alpha-3 codes like 'UGA') — if the real master turns out to
-    // also be alpha-3, this exact-ish match still won't find anything and
-    // Country/Phone Code will silently stay unmapped, same as before. Not
-    // guessing an alpha2→alpha3 conversion table here since a wrong guess
-    // would produce a silently WRONG country rather than just an empty
-    // field — verify the real /api/v1/users/countries countryCode format
-    // and fix this properly once confirmed.
-    const matchedCountry = countries.find(
-      c => c.countryCode.trim().toLowerCase() === selectedEnquiry.countryCode.trim().toLowerCase(),
-    )
+    // Case/whitespace-tolerant match — Enquiry.countryCode used to be
+    // confirmed 2-letter ISO alpha-2 back when online/ondesk-enquiry
+    // hardcoded 'UG' on create. Those forms now send a real countryGuid
+    // instead (see EnquiryInput.countryGuid in lib/api/admission/enquiry.ts),
+    // and the read side isn't confirmed to still echo back a code for every
+    // row — confirmed nullable the hard way (a real enquiry crashed here on
+    // .trim() of an undefined countryCode). Skip the match entirely rather
+    // than crash when it's missing; the Country Master's own countryCode
+    // VALUES have also never been confirmed against a real response (mock
+    // stand-ins use 3-letter alpha-3 codes like 'UGA') — if the real master
+    // turns out to also be alpha-3, this exact-ish match still won't find
+    // anything and Country/Phone Code will silently stay unmapped, same as
+    // before. Not guessing an alpha2→alpha3 conversion table here since a
+    // wrong guess would produce a silently WRONG country rather than just an
+    // empty field — verify the real /api/v1/users/countries countryCode
+    // format and fix this properly once confirmed.
+    const matchedCountry = selectedEnquiry.countryCode
+      ? countries.find(
+          c => c.countryCode.trim().toLowerCase() === selectedEnquiry.countryCode!.trim().toLowerCase(),
+        )
+      : undefined
     setForm(prev => ({
       ...prev,
       intakeGuid: selectedEnquiry.intakeGuid || prev.intakeGuid,

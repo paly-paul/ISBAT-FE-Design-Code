@@ -17,7 +17,15 @@ export interface EnquiryInput {
   enquiryDate: string
   mobile: string
   email: string | null
-  countryCode: string
+  // Confirmed via a real validation_error ("'Request Country Guid' must not
+  // be empty.") — the create payload takes a guid here, not the plain
+  // 'UG'-style code the three enquiry forms used to hardcode. Same
+  // countryCode-string → countryGuid fix already made for Application-
+  // Payments (see the note on ApplicationPaymentInput.countryGuid in
+  // applicationPayment.ts) — sourced from the same GET /api/v1/users/countries
+  // master (useCountries()), not the Application-Filling Countries dropdown
+  // (which has no guid at all).
+  countryGuid: string
   dob: string
   remarks: string | null
   programGuid: string | null
@@ -56,7 +64,14 @@ export interface Enquiry {
   enquiryDate: string
   mobile: string
   email: string
-  countryCode: string
+  // Was typed as a guaranteed string on the assumption that create always
+  // sent the hardcoded 'UG' — now that create sends countryGuid instead
+  // (see EnquiryInput.countryGuid above), the read side isn't confirmed to
+  // still echo back a code for every row. Confirmed nullable the hard way:
+  // payment/page.tsx's matchedCountry lookup crashed on
+  // selectedEnquiry.countryCode.trim() for a real enquiry where this came
+  // back undefined.
+  countryCode: string | null
   dob: string
   remarks: string | null
   programGuid: string | null
@@ -125,7 +140,13 @@ export function createEnquiry(input: EnquiryInput): Promise<unknown> {
       enquiryDate: input.enquiryDate,
       mobile: input.mobile,
       email: input.email ?? '',
-      countryCode: input.countryCode,
+      // Mock-only stand-in — the read-side DTO's countryCode is a plain
+      // code string (confirmed on GET), but create now only takes
+      // input.countryGuid, so there's no code here to echo back without
+      // resolving it against the Country master. Not worth wiring up just
+      // for the mock list to display; only the real backend response
+      // matters for actual saves.
+      countryCode: '',
       dob: input.dob,
       remarks: input.remarks,
       programGuid: input.programGuid,

@@ -1,7 +1,7 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { useMarkNotificationRead, useNotifications } from '@/hooks/useNotifications'
+import { useMarkNotificationRead, useNotificationPush } from '@/hooks/useNotifications'
 import { notificationHref, notificationVisual, NotificationItem } from '@/lib/api/notifications'
 import { timeAgo } from '@/lib/date'
 
@@ -22,33 +22,21 @@ interface ActiveToast {
 export function NotificationToastHost() {
   const pathname = usePathname()
   const router = useRouter()
-  const { data: notifications = [] } = useNotifications()
   const markRead = useMarkNotificationRead()
 
-  const seenGuids = useRef<Set<string> | null>(null)
   const [toasts, setToasts] = useState<ActiveToast[]>([])
 
-  // Baseline "already seen" on the first successful load so the existing
-  // mock history doesn't dump a stack of toasts on mount — only genuinely
-  // new arrivals after that point trigger one.
-  useEffect(() => {
-    if (seenGuids.current || notifications.length === 0) return
-    seenGuids.current = new Set(notifications.map(n => n.notificationGuid))
-  }, [notifications])
+  // Reacts to the live hub push directly (see useNotificationsHubBridge in
+  // providers.tsx, which is what actually opens the connection/mock timer)
+  // rather than diffing a polled query — the doc is explicit that nothing
+  // here should be polled, and the pushed payload is already complete, so
+  // there's nothing to fetch before showing it.
+  const handlePush = useCallback((n: NotificationItem) => {
+    setToasts(prev => [...prev, { key: `${n.notificationGuid}-${Date.now()}`, notification: n }])
+  }, [])
+  useNotificationPush(handlePush)
 
-  useEffect(() => {
-    if (!seenGuids.current) return
-    const fresh = notifications.filter(n => !seenGuids.current!.has(n.notificationGuid))
-    if (fresh.length === 0) return
-    fresh.forEach(n => seenGuids.current!.add(n.notificationGuid))
-    setToasts(prev => [...prev, ...fresh.map(n => ({ key: `${n.notificationGuid}-${Date.now()}`, notification: n }))])
-  }, [notifications])
-
-  // No auth session on the public login screens — nothing to react to
-  // there. No automatic simulated-arrival interval anymore either (removed
-  // per request) — new toasts now only appear from a real notifications-
-  // query refetch picking up something genuinely new, e.g. via the header
-  // bell dropdown's "Simulate new notification" test button.
+  // No auth session on the public login screens — nothing to react to there.
   const isPublicRoute = pathname === '/' || pathname.startsWith('/login')
 
   function dismiss(key: string) {

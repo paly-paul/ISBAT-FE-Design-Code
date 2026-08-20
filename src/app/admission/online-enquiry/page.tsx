@@ -7,6 +7,8 @@ import { SuccessPopup } from '@/components/modals/academic/SuccessPopup'
 import { FailurePopup } from '@/components/modals/academic/FailurePopup'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useCampuses } from '@/hooks/config/useCampuses'
+import { useCountries } from '@/hooks/config/useCountries'
+import { dialCode } from '@/lib/api/academic/country'
 import { useProgramMastersByCampus } from '@/hooks/academic/useProgramMaster'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
 import { useCreateEnquiry } from '@/hooks/admission/useEnquiries'
@@ -33,10 +35,23 @@ export default function OnlineEnquiryPage() {
   const { data: intakes = [] }             = useIntakes()
   const { data: campuses = [] }            = useCampuses()
   const { data: enquirySources = [] }      = useEnquirySourceMasters()
+  const { data: countries = [] }           = useCountries()
   const createEnquiry = useCreateEnquiry()
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName]   = useState('')
+  // Split the same way Payment's own Phone field does — a cosmetic
+  // country-code dropdown (real-data counterpart of Payment's own
+  // COUNTRY_CODES, sourced from the same countries master rather than a
+  // separate hardcoded list) plus a raw-digits box. phoneCode is NOT
+  // concatenated into `mobile` on save — confirmed via a real
+  // validation_error ("Mobile number must contain 7 to 15 digits.") when it
+  // was: the backend's mobile field is plain-digits-only (no '+', and
+  // apparently no embedded dial code either), matching Payment's own
+  // confirmed "raw digits, no country prefix" contract. The dropdown here
+  // is purely so the phone number reads naturally next to the box, same as
+  // Payment's own COUNTRY_CODES comment already says about its field.
+  const [phoneCode, setPhoneCode] = useState('+256')
   const [phone, setPhone]         = useState('')
   const [email, setEmail]         = useState('')
   const [dob, setDob]             = useState('')
@@ -45,6 +60,14 @@ export default function OnlineEnquiryPage() {
   const [campusGuid, setCampusGuid]   = useState('')
   const [programGuid, setProgramGuid] = useState('')
   const [sourceGuid, setSourceGuid]   = useState('')
+  // Country used to be hardcoded to 'UG' on every create — now a real
+  // required field (POST rejects with "'Request Country Guid' must not be
+  // empty." otherwise), sourced from the same GET /api/v1/users/countries
+  // master Application-Payments and Filing already use (see the note on
+  // EnquiryInput.countryGuid in lib/api/admission/enquiry.ts). Same
+  // "SearchSelect over countryOptions, no pre-selection" convention as
+  // Filing's own Nationality field.
+  const [countryGuid, setCountryGuid] = useState('')
   const [notes, setNotes]         = useState('')
   const [errors, setErrors]       = useState<Record<string, string>>({})
 
@@ -68,6 +91,26 @@ export default function OnlineEnquiryPage() {
   const campusOptions  = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions = programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   const sourceOptions  = enquirySources.map(s => ({ value: s.enquirySourceGuid, label: s.enquirySourceName }))
+  const countryOptions = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
+  // dialCode(), not countryPrefix — see the note on dialCode in
+  // lib/api/academic/country.ts for why (countryPrefix isn't a phone
+  // prefix at all despite the name). Deduped by dial code (a handful of
+  // countries can share one, e.g. +1) — first country to claim a code wins
+  // the label, same "first match wins" convention as enquiry-list's own
+  // channelOptions dedup.
+  const phoneCodeOptions = Array.from(
+    new Map(countries.map(c => [dialCode(c), `${dialCode(c)} · ${c.countryName}`])).entries(),
+  ).map(([value, label]) => ({ value, label }))
+
+  // Selecting a Country also points the phone code at that country's own
+  // dial code — still just a UX default, freely overridable via the phone
+  // code dropdown itself afterwards.
+  function selectCountry(guid: string) {
+    setCountryGuid(guid)
+    clearError('countryGuid')
+    const match = countries.find(c => c.countryGuid === guid)
+    if (match) setPhoneCode(dialCode(match))
+  }
 
   function setCampus(v: string) { setCampusGuid(v); setProgramGuid(''); clearError('campusGuid') }
 
@@ -86,14 +129,15 @@ export default function OnlineEnquiryPage() {
     if (!intakeGuid)        e.intakeGuid = 'Please select an Intake'
     if (!campusGuid)        e.campusGuid = 'Please select a Campus'
     if (!sourceGuid)        e.sourceGuid = 'Please select an Enquiry Source'
+    if (!countryGuid)       e.countryGuid = 'Please select a Country'
     setErrors(e)
     return Object.keys(e).length === 0
   }
 
   function resetForm() {
-    setFirstName(''); setLastName(''); setPhone(''); setEmail(''); setDob('')
+    setFirstName(''); setLastName(''); setPhoneCode('+256'); setPhone(''); setEmail(''); setDob('')
     setEnquiryDate(todayAtMidnight().slice(0, 10))
-    setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setSourceGuid(''); setNotes('')
+    setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setSourceGuid(''); setCountryGuid(''); setNotes('')
     setErrors({})
   }
 
@@ -109,7 +153,7 @@ export default function OnlineEnquiryPage() {
         enquiryDate: `${enquiryDate}T00:00:00`,
         mobile: phone.trim(),
         email: email.trim() || null,
-        countryCode: 'UG',
+        countryGuid,
         dob: `${dob}T00:00:00`,
         remarks: notes.trim() || null,
         programGuid: programGuid || null,
@@ -158,7 +202,10 @@ export default function OnlineEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Phone <span className="text-clr-red">*</span></label>
-            <input className="ctrl" type="tel" inputMode="numeric" placeholder="+256 7XX XXX XXX" value={phone} onChange={e => { setPhone(sanitizePhoneInput(e.target.value)); clearError('phone') }} style={errors.phone ? { borderColor: 'var(--red)' } : undefined} />
+            <div className="flex gap-2">
+              <SearchSelect options={phoneCodeOptions} value={phoneCode} onChange={setPhoneCode} style={{ width: 108, flexShrink: 0 }} />
+              <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="7XX XXX XXX" value={phone} onChange={e => { setPhone(sanitizePhoneInput(e.target.value, false)); clearError('phone') }} style={errors.phone ? { borderColor: 'var(--red)' } : undefined} />
+            </div>
             {errors.phone && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.phone}</p>}
           </div>
           <div className="fg">
@@ -201,12 +248,17 @@ export default function OnlineEnquiryPage() {
             <SearchSelect placeholder="— select —" options={sourceOptions} value={sourceGuid} onChange={val => { setSourceGuid(val); clearError('sourceGuid') }} />
             {errors.sourceGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.sourceGuid}</p>}
           </div>
+          <div className="fg">
+            <label className="lbl">Country <span className="text-clr-red">*</span></label>
+            <SearchSelect placeholder="— select —" options={countryOptions} value={countryGuid} onChange={selectCountry} />
+            {errors.countryGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.countryGuid}</p>}
+          </div>
           {/* Preferred Study Mode had no counterpart on POST /api/v1/admissions/enquiries
               (Full-time/Weekend/Evening/ODL) — dropped rather than collecting data that
               goes nowhere. Was: <SearchSelect placeholder="— select —" options={['Full-time', 'Weekend', 'Evening', 'ODL']} /> */}
           {/* Enquiry Channel is gone too — enquirySource is hardcoded to 1 for this page
               (Online Enquiry specifically), so there's nothing left to pick here. */}
-          <div className="fg" style={{ gridColumn: 'span 2' }}>
+          <div className="fg span2">
             <label className="lbl">Enquiry Notes</label>
             <textarea className="ctrl" rows={3} placeholder="Additional notes about the enquiry..." value={notes} onChange={e => setNotes(e.target.value)} />
           </div>
