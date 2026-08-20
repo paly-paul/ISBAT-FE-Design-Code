@@ -291,19 +291,6 @@ body {
   transform: translateY(-1px);
 }
 
-.hdr-bell.has-unread {
-  animation: hdr-bell-ring 2.5s ease-in-out infinite;
-}
-
-@keyframes hdr-bell-ring {
-  0%, 92%, 100% { transform: rotate(0) }
-  93% { transform: rotate(-12deg) }
-  94.5% { transform: rotate(10deg) }
-  96% { transform: rotate(-7deg) }
-  97.5% { transform: rotate(4deg) }
-  99% { transform: rotate(0) }
-}
-
 .hdr-bell-badge {
   position: absolute;
   top: -3px;
@@ -318,8 +305,24 @@ body {
   font-weight: 700;
   line-height: 16px;
   text-align: center;
-  border: 2px solid var(--white);
   box-shadow: 0 0 0 1px rgba(239, 68, 68, .25);
+}
+
+/* Breathing/bouncing badge instead of shaking the whole bell — a soft
+   scale-up-and-lift-then-settle draws the eye to the count itself rather
+   than the icon. ease-in-out (not an overshoot/elastic curve) keeps the
+   rise and fall symmetric and smooth rather than snapping at the keyframe
+   boundaries, and the motion is compressed into the first third of a much
+   longer cycle so there's a real breathing pause at rest before it loops —
+   a continuous back-to-back bounce read as twitchy rather than calm. */
+.hdr-bell.has-unread .hdr-bell-badge {
+  animation: hdr-bell-badge-breathe 3.2s ease-in-out infinite;
+}
+
+@keyframes hdr-bell-badge-breathe {
+  0%, 55%, 100% { transform: scale(1) translateY(0) }
+  20% { transform: scale(1.18) translateY(-2px) }
+  38% { transform: scale(1) translateY(0) }
 }
 
 /* ── HEADER BELL: hover preview dropdown ── */
@@ -337,7 +340,11 @@ body {
      since that one opens on click instead of hover. */
   padding-top: 12px;
   width: 320px;
-  z-index: 400;
+  /* Above .ntf-toast-stack's z-index:9999 (globals.css) — both this and the
+     toast stack are anchored top-right, so a live toast could otherwise
+     render on top of the dropdown and swallow its clicks even though the
+     dropdown was visually "open". */
+  z-index: 10050;
   opacity: 0;
   visibility: hidden;
   transform: translateY(-6px);
@@ -485,7 +492,9 @@ body {
   border-radius: var(--radius);
   box-shadow: 0 8px 28px rgba(15, 30, 61, .14);
   min-width: 200px;
-  z-index: 400;
+  /* Same reasoning as .hdr-bell-dropdown above — sits above the toast
+     stack's z-index:9999 so a live toast can't cover it and eat clicks. */
+  z-index: 10050;
   overflow: hidden;
   animation: dd-in .15s ease;
 }
