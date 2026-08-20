@@ -27,7 +27,25 @@ export function useMarkNotificationRead() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (guid: string) => markNotificationRead(guid),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }),
+    // Optimistic update — flips isRead in the cache the instant .mutate()
+    // is called, synchronously, rather than waiting on the mutation's
+    // promise + a subsequent invalidated refetch. Both callers (Header's
+    // hover-preview rows, the notifications page's row click) navigate away
+    // right after calling mutate(), so relying on invalidate-then-refetch
+    // alone left a window where the header badge's count hadn't actually
+    // updated yet by the time the new page rendered — this closes it.
+    onMutate: async (guid: string) => {
+      await queryClient.cancelQueries({ queryKey: NOTIFICATIONS_KEY })
+      const previous = queryClient.getQueryData<NotificationItem[]>(NOTIFICATIONS_KEY)
+      queryClient.setQueryData<NotificationItem[]>(NOTIFICATIONS_KEY, old =>
+        (old ?? []).map(n => (n.notificationGuid === guid ? { ...n, isRead: true } : n)),
+      )
+      return { previous }
+    },
+    onError: (_err, _guid, context) => {
+      if (context?.previous) queryClient.setQueryData(NOTIFICATIONS_KEY, context.previous)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }),
   })
 }
 
@@ -35,7 +53,17 @@ export function useMarkAllNotificationsRead() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () => markAllNotificationsRead(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }),
+    // Same optimistic-update reasoning as useMarkNotificationRead above.
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: NOTIFICATIONS_KEY })
+      const previous = queryClient.getQueryData<NotificationItem[]>(NOTIFICATIONS_KEY)
+      queryClient.setQueryData<NotificationItem[]>(NOTIFICATIONS_KEY, old => (old ?? []).map(n => ({ ...n, isRead: true })))
+      return { previous }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(NOTIFICATIONS_KEY, context.previous)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }),
   })
 }
 
