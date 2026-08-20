@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthError, refreshSession } from '@/lib/auth'
 import { getSessionIdentity, setSessionIdentity, clearSessionIdentity } from '@/lib/session'
 import { NotificationToastHost } from '@/components/NotificationToastHost'
+import { useNotificationsHubBridge } from '@/hooks/useNotifications'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -65,12 +66,56 @@ function SessionKeepAlive() {
   return null
 }
 
+// Starts the notifications hub bridge (unread-count fetch → hub connect →
+// live updates, see useNotificationsHubBridge) once a session actually
+// exists. `enabled` is re-derived on every pathname change the same way
+// SessionKeepAlive's guard logic is, so this picks up right after login
+// (the login flow's final redirect changes pathname) — but a fresh tab
+// deep-linked straight into a protected page has no pathname change to
+// react to: the layout's own mount-time auth-check populates
+// sessionStorage identity *after* this component's first render, with no
+// further pathname change to re-trigger the check. The short self-clearing
+// poll below covers that gap without turning into a permanent interval —
+// this is polling local sessionStorage, not the network, and stops the
+// instant identity shows up (or after a few seconds regardless).
+function NotificationsBridge() {
+  const pathname = usePathname()
+  const isPublicRoute = pathname === '/' || pathname.startsWith('/login')
+  const [identityTick, setIdentityTick] = useState(0)
+  const enabled = !isPublicRoute && !!getSessionIdentity()
+
+  useEffect(() => {
+    if (enabled || isPublicRoute) return
+    let attempts = 0
+    const interval = setInterval(() => {
+      attempts++
+      if (getSessionIdentity() || attempts >= 10) {
+        clearInterval(interval)
+        setIdentityTick(t => t + 1)
+      }
+    }, 500)
+    return () => clearInterval(interval)
+    // Deliberately excludes `enabled`/`identityTick` — this effect's own
+    // job is to eventually flip them via setIdentityTick, re-running it on
+    // every value change it produces would just restart the same poll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, isPublicRoute])
+
+  // identityTick is otherwise unused — its only job is forcing a re-render
+  // so `enabled` (read fresh from sessionStorage above) gets re-evaluated.
+  void identityTick
+
+  useNotificationsHubBridge(enabled)
+  return null
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient())
 
   return (
     <QueryClientProvider client={queryClient}>
       <SessionKeepAlive />
+      <NotificationsBridge />
       {children}
       <NotificationToastHost />
     </QueryClientProvider>

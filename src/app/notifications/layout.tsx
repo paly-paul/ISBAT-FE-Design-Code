@@ -2,21 +2,27 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Header } from '@/components/Header'
+import { Sidebar, RailId } from '@/components/Sidebar'
 import { refreshSession } from '@/lib/auth'
 import { getSessionIdentity, setSessionIdentity } from '@/lib/session'
 
-// Same auth-guard boilerplate every other module layout carries (see
-// AcademicLayout) — duplicated rather than shared because each module
-// layout also owns its own Sidebar/rail state, which this page doesn't
-// have. No Sidebar here on purpose: notifications aren't scoped to one
-// module (a single feed can point at Admission, Finance, Academic, ...
-// entities), so there's no single rail this page belongs under. It reuses
-// the same fixed <Header> everything else sits under, just without the
-// rail+panel shell — see .main below for the plain, sidebar-less content
-// width this implies.
+// Same auth-guard + layout-shell boilerplate every module layout carries
+// (see AcademicLayout) — duplicated rather than shared for the same reason
+// each of those duplicates it from one another: this page owns its own
+// Sidebar/rail state too now.
+//
+// Notifications isn't itself scoped to one module (a single feed can point
+// at Admission, Finance, Academic, ... entities), so there's no rail this
+// page's own currentPage will ever match — the sidebar renders with nothing
+// highlighted, same as landing on any page outside its tree. It defaults to
+// the Academic rail so the panel isn't empty on arrival, matching the
+// header logo's own "closest thing to a home screen" reasoning (see
+// Header.tsx's hdr-badge comment).
 export default function NotificationsLayout({ children }: { children: React.ReactNode }) {
-  const [panelOpen, setPanelOpen] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(true)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
+  const [activeRail, setActiveRail] = useState<RailId>('academic')
   const [displayName, setDisplayName] = useState<string | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
@@ -60,6 +66,10 @@ export default function NotificationsLayout({ children }: { children: React.Reac
   }, [router])
 
   useEffect(() => {
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
+  useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setProfileOpen(false)
@@ -68,6 +78,14 @@ export default function NotificationsLayout({ children }: { children: React.Reac
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  function toggleCollapse(id: string) {
+    setCollapsedSections(prev => {
+      const s = new Set(prev)
+      if (s.has(id)) s.delete(id); else s.add(id)
+      return s
+    })
+  }
 
   if (!authChecked) {
     return (
@@ -96,15 +114,20 @@ export default function NotificationsLayout({ children }: { children: React.Reac
         onSignOut={() => router.push('/')}
         displayName={displayName ?? undefined}
       />
-      {/* Same 24px/28px padding as .main elsewhere (see globals.css), just
-          without the sidebar rail's margin-left offset — this page has no
-          Sidebar. The earlier version capped this at maxWidth:780 and
-          centered it, which put far more empty margin on either side than
-          every other module page uses; matching .main's own padding here
-          instead keeps it visually consistent with the rest of the app. */}
-      <main style={{ padding: 'calc(var(--hdr-h) + 24px) 28px 24px', minHeight: '100vh' }}>
-        {children}
-      </main>
+      <div className="layout">
+        <Sidebar
+          panelOpen={panelOpen}
+          setPanelOpen={setPanelOpen}
+          currentPage="notifications"
+          collapsedSections={collapsedSections}
+          toggleCollapse={toggleCollapse}
+          activeRail={activeRail}
+          setActiveRail={setActiveRail}
+        />
+        <main className={`main${panelOpen ? ' panel-open' : ''}`}>
+          {children}
+        </main>
+      </div>
     </>
   )
 }

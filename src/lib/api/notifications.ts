@@ -1,8 +1,8 @@
-// The notifications API isn't built yet — there's no lib/api file pattern to
-// follow here (no MOCK_AUTH branch, no real endpoint at all). This is
-// intentionally 100% mock data until a real GET /api/v1/.../notifications
-// (and mark-read) endpoint exists to swap in. The shape below matches the
-// sample response payload exactly as given, field for field.
+import { apiGet, apiPost } from './client'
+
+const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
+
+// Confirmed field-for-field against notification-bell.md's sample payload.
 export interface NotificationItem {
   notificationGuid: string
   typeCode: string
@@ -12,16 +12,36 @@ export interface NotificationItem {
   entityGuid: string
   // Bare route slug, same convention as the menu API's own `url` field (see
   // Sidebar.tsx's resolveHref) — resolved against its entityType's module
-  // below, not used as a path on its own.
-  pageUrl: string
+  // below, not used as a path on its own. May be null per the doc's
+  // "pageUrl may be null" business-logic note — configured per notification
+  // type server-side, so an unconfigured type sends nothing here.
+  pageUrl: string | null
   isRead: boolean
   createdDate: string
 }
 
-// Maps a notification's entityType to the module segment its pageUrl slug
-// lives under, so e.g. entityType "Enquiry" + pageUrl "enquiry-followup"
-// resolves to /admission/enquiry-followup. Falls back to 'academic' for any
-// entityType not listed here.
+// Maps a notification's entityType to a full page path, so a null pageUrl
+// (an unconfigured notification type, per the doc) still lands somewhere
+// sensible instead of crashing on `/${module}/null`. Doubles as the module
+// segment for a *non-null* pageUrl below. Falls back to the notifications
+// list itself for any entityType not listed here — better than a broken
+// route for a type this frontend has never seen.
+const FALLBACK_PAGE_FOR_ENTITY: Record<string, string> = {
+  Enquiry: '/admission/enquiry-followup',
+  Applicant: '/admission/enquiry-list',
+  Application: '/admission/enquiry-list',
+  Payment: '/finance/advanced-payments',
+  AdvancedPayment: '/finance/advanced-payments',
+  Employee: '/employee/employee-master',
+  Intake: '/academic/intake-master',
+  Room: '/academic/timetable',
+  Batch: '/academic/batch-management',
+  CourseUnit: '/academic/course-units',
+  ProgramApproval: '/academic/programme-master',
+  FeeStructure: '/academic/fee-structure',
+  Timetable: '/academic/timetable',
+}
+
 const MODULE_FOR_ENTITY: Record<string, string> = {
   Enquiry: 'admission',
   Applicant: 'admission',
@@ -39,16 +59,18 @@ const MODULE_FOR_ENTITY: Record<string, string> = {
 }
 
 export function notificationHref(n: NotificationItem): string {
+  if (!n.pageUrl) return FALLBACK_PAGE_FOR_ENTITY[n.entityType] ?? '/notifications'
   const module = MODULE_FOR_ENTITY[n.entityType] ?? 'academic'
   return `/${module}/${n.pageUrl}`
 }
 
-// typeCode isn't a confirmed closed set (the sample only shows
+// typeCode isn't a confirmed closed set (the doc's sample only shows
 // ENQUIRY_CREATED) — this maps the ones the mock data below uses, with a
 // sane default for anything else so an unrecognized future typeCode doesn't
 // break rendering, just falls back to a plain bell/info dot. Shared between
-// the notifications page and the header bell's hover preview so both read
-// the same icon/color for a given notification.
+// the notifications page and the header bell's dropdown so both read the
+// same icon/color for a given notification. Per the doc: branch on typeCode
+// only for cosmetics like this — never for click/read behavior.
 const TYPE_VISUAL: Record<string, { icon: string; tone: string }> = {
   ENQUIRY_CREATED: { icon: 'lni-user', tone: 'tone-blue' },
   PAYMENT_RECEIVED: { icon: 'lni-dollar', tone: 'tone-green' },
@@ -67,6 +89,62 @@ const DEFAULT_VISUAL = { icon: 'lni-alarm', tone: 'tone-blue' }
 export function notificationVisual(typeCode: string): { icon: string; tone: string } {
   return TYPE_VISUAL[typeCode] ?? DEFAULT_VISUAL
 }
+
+export interface NotificationListParams {
+  page?: number
+  size?: number
+  search?: string
+  unreadOnly?: boolean
+}
+
+export interface NotificationListResult {
+  items: NotificationItem[]
+  totalCount: number
+}
+
+// ─── Real endpoints ──────────────────────────────────────────────────────
+
+export function getUnreadCount(): Promise<number> {
+  if (MOCK_AUTH) return Promise.resolve(mockNotifications.filter(n => !n.isRead).length)
+  return apiGet<number | null>('/api/v1/notifications/unread-count').then(n => n ?? 0)
+}
+
+// size is clamped to 100 server-side per the doc's API table — not
+// re-enforced client-side, the backend is the source of truth for the cap.
+export function getNotifications(params: NotificationListParams = {}): Promise<NotificationListResult> {
+  const { page = 1, size = 20, search, unreadOnly } = params
+  if (MOCK_AUTH) return Promise.resolve(mockList(page, size, search, unreadOnly))
+  const qs = new URLSearchParams({ page: String(page), size: String(size) })
+  if (search?.trim()) qs.set('search', search.trim())
+  if (unreadOnly) qs.set('unreadOnly', 'true')
+  return apiGet<{ items: NotificationItem[]; totalCount: number } | null>(`/api/v1/notifications?${qs}`)
+    .then(data => data ?? { items: [], totalCount: 0 })
+}
+
+// Returns the *remaining* unread count directly — the doc is explicit that
+// the caller should set the badge from this response rather than issuing a
+// second unread-count call. A 404 (already read, or a double-click race) is
+// swallowed by the caller, not here — see useMarkNotificationRead.
+export function markNotificationRead(guid: string): Promise<number> {
+  if (MOCK_AUTH) {
+    const n = mockNotifications.find(x => x.notificationGuid === guid)
+    if (n) n.isRead = true
+    return Promise.resolve(mockNotifications.filter(x => !x.isRead).length)
+  }
+  return apiPost<number | null>(`/api/v1/notifications/${guid}/read`, {}).then(n => n ?? 0)
+}
+
+// Returns rows changed — 0 is a normal outcome (nothing was unread).
+export function markAllNotificationsRead(): Promise<number> {
+  if (MOCK_AUTH) {
+    const changed = mockNotifications.filter(n => !n.isRead).length
+    mockNotifications.forEach(n => { n.isRead = true })
+    return Promise.resolve(changed)
+  }
+  return apiPost<number | null>('/api/v1/notifications/read-all', {}).then(n => n ?? 0)
+}
+
+// ─── Mock data (MOCK_AUTH only) ─────────────────────────────────────────
 
 // Minutes-ago offsets are resolved against real wall-clock time at import,
 // not hardcoded ISO strings, so timeAgo() (src/lib/date.ts) always reads
@@ -232,33 +310,22 @@ const mockNotifications: NotificationItem[] = [
   },
 ]
 
-// Sorted newest-first — the sample doesn't confirm server-side ordering, but
-// a notification feed reading oldest-first would be unusable, so this is
-// sorted defensively on the mock side rather than assumed of a future API.
-export function getNotifications(): Promise<NotificationItem[]> {
-  return Promise.resolve(
-    [...mockNotifications].sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime()),
-  )
+function mockList(page: number, size: number, search?: string, unreadOnly?: boolean): NotificationListResult {
+  let rows = [...mockNotifications].sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime())
+  if (unreadOnly) rows = rows.filter(n => !n.isRead)
+  const term = search?.trim().toLowerCase()
+  if (term) rows = rows.filter(n => `${n.title} ${n.body}`.toLowerCase().includes(term))
+  const totalCount = rows.length
+  const start = (page - 1) * size
+  return { items: rows.slice(start, start + size), totalCount }
 }
 
-export function markNotificationRead(guid: string): Promise<boolean> {
-  const n = mockNotifications.find(x => x.notificationGuid === guid)
-  if (n) n.isRead = true
-  return Promise.resolve(true)
-}
-
-export function markAllNotificationsRead(): Promise<boolean> {
-  mockNotifications.forEach(n => { n.isRead = true })
-  return Promise.resolve(true)
-}
-
-// There's no live push feed yet (no WebSocket/SignalR, no real endpoint at
-// all — see the top-of-file note), so the "new notification just arrived"
-// slide-in toast (NotificationToastHost) has nothing to react to on its own.
-// This simulates one arriving every so often, purely so that UI is
-// demonstrable. Swap it out (and NotificationToastHost's interval that
-// calls it) for a real push subscription once the backend has one — nothing
-// else about the toast reads from here specifically.
+// Mock-only simulated live arrival — real pushes come over the SignalR hub
+// (see lib/notificationsHub.ts), which only opens a genuine connection when
+// MOCK_AUTH is false. Under mock, notificationsHub.ts calls this instead so
+// the "new notification just arrived" flow (toast, badge bump, dropdown
+// prepend) stays demoable without a backend. Not exported for direct use
+// outside that file — go through notificationsHub's subscribe API instead.
 const SIMULATED_TEMPLATES: Omit<NotificationItem, 'notificationGuid' | 'createdDate' | 'isRead'>[] = [
   { typeCode: 'ENQUIRY_CREATED', title: 'New enquiry: Gwen Stacy', body: 'Source: Instagram Campaign', entityType: 'Enquiry', entityGuid: '45b5816b-6c31-4bcb-9a1b-a4960252ef35', pageUrl: 'enquiry-followup' },
   { typeCode: 'PAYMENT_RECEIVED', title: 'Payment received: UGX 850,000', body: 'Application fee — ISB/2026/BBA/0312', entityType: 'Payment', entityGuid: '7c2e4f18-9a3b-4d5e-8f1a-2b6c8d0e4f72', pageUrl: 'payment-history' },

@@ -158,7 +158,7 @@ export default function EnquiryListPage() {
           shared .stats-row's fixed 4-column grid just for this page rather
           than touching the class every other stats-row page relies on
           staying at 4. */}
-      <div className="stats-row" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+      <div className="stats-row">
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1"><i className="lni lni-users text-b500" /><span className="text-sm text-g500">Total Enquiries</span></div>
           <p className="text-2xl font-semibold text-g900">{(counts?.totalCount ?? totalCount).toLocaleString()}</p>
@@ -182,12 +182,12 @@ export default function EnquiryListPage() {
       </div>
 
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div>
             <h2 className="text-base font-semibold text-g800">Enquiry Register</h2>
             <p className="text-xs text-g400 mt-0.5">{totalCount.toLocaleString()} total</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <TableSearch
               className="w-56"
               placeholder="Search enquiries…"

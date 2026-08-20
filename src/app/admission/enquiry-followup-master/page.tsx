@@ -101,7 +101,7 @@ export default function EnquiryFollowupMasterPage() {
       </div>
 
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <h2 className="text-base font-semibold text-g800">Follow-up Register</h2>
           <TableSearch
             className="w-56"

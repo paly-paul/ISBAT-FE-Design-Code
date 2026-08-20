@@ -334,10 +334,6 @@ body {
   position: absolute;
   top: 100%;
   right: -8px;
-  /* Transparent bridge so moving the mouse from the bell down into the
-     dropdown doesn't cross a dead gap and close it early — same trick as
-     the gap between .hdr-user and .profile-dropdown not needing one,
-     since that one opens on click instead of hover. */
   padding-top: 12px;
   width: 320px;
   /* Above .ntf-toast-stack's z-index:9999 (globals.css) — both this and the
@@ -345,18 +341,6 @@ body {
      render on top of the dropdown and swallow its clicks even though the
      dropdown was visually "open". */
   z-index: 10050;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-6px);
-  transition: opacity .15s ease, transform .15s ease, visibility .15s;
-  pointer-events: none;
-}
-
-.hdr-bell-wrap:hover .hdr-bell-dropdown {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
-  pointer-events: auto;
 }
 
 .hdr-bell-dropdown-inner {
@@ -365,7 +349,36 @@ body {
   border-radius: var(--radius);
   box-shadow: 0 8px 28px rgba(15, 30, 61, .14);
   overflow: hidden;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
   animation: dd-in .15s ease;
+}
+
+.hdr-bell-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1.5px solid var(--g200);
+  color: var(--g400);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.hdr-bell-search .ctrl {
+  flex: 1;
+}
+
+/* Wraps the item rows (or the loading/empty state) between the fixed search
+   box above and the load-more/view-all/test buttons below, so a long list
+   scrolls in place instead of growing the dropdown past the viewport —
+   min-height:0 is what lets a flex child actually shrink enough to scroll
+   rather than forcing the whole flex column taller. */
+.hdr-bell-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .hdr-bell-dropdown-hdr {
@@ -1238,6 +1251,34 @@ body {
   margin-bottom: 24px
 }
 
+/* Enquiry List's 5-card summary row (Total/Converted/Pending/ODL/Closed) —
+   was an inline gridTemplateColumns:'repeat(5,1fr)' on the page, which beat
+   .stats-row's own 900px/600px responsive rules outright (inline style
+   always wins over a class media query) and left 5 equal columns squeezed
+   at every width. Scoped here instead so it degrades in step with the rest
+   of the app's breakpoints. */
+#page-enquiry-list .stats-row {
+  grid-template-columns: repeat(5, 1fr)
+}
+
+@media(max-width:900px) {
+  #page-enquiry-list .stats-row {
+    grid-template-columns: repeat(3, 1fr)
+  }
+}
+
+@media(max-width:600px) {
+  #page-enquiry-list .stats-row {
+    grid-template-columns: repeat(2, 1fr)
+  }
+}
+
+@media(max-width:420px) {
+  #page-enquiry-list .stats-row {
+    grid-template-columns: 1fr
+  }
+}
+
 .stat-card {
   background: var(--white);
   border: 1.5px solid var(--g200);
@@ -2102,6 +2143,36 @@ textarea.ctrl {
   #page-filing .g2,
   #page-filing .g3 {
     grid-template-columns: 1fr
+  }
+}
+
+/* Online Enquiry, Kiosk Enquiry, and On-Desk Enquiry forms keep their
+   2-column field grid equally split all the way down to 600px, overriding
+   the app-wide 900px collapse-to-1-column — only stack to a single
+   label-over-field column below 600px. */
+@media(max-width:900px) {
+  #page-online-enquiry .g2,
+  #page-kiosk-enquiry .g2,
+  #page-ondesk-enquiry .g2 {
+    grid-template-columns: 1fr 1fr
+  }
+}
+
+@media(max-width:600px) {
+  #page-online-enquiry .g2,
+  #page-kiosk-enquiry .g2,
+  #page-ondesk-enquiry .g2 {
+    grid-template-columns: 1fr
+  }
+
+  /* .fg.span2's "grid-column: span 2" (globals.css .fg.span2 rule) would
+     otherwise force an implicit second column onto the single-column grid
+     above just to satisfy the Enquiry Notes field's span — pulling every
+     other row back into two columns along with it. */
+  #page-online-enquiry .fg.span2,
+  #page-kiosk-enquiry .fg.span2,
+  #page-ondesk-enquiry .fg.span2 {
+    grid-column: span 1
   }
 }
 

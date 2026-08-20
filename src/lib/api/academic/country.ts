@@ -60,6 +60,21 @@ export interface Country {
 
 export type CountryInput = Omit<Country, 'countryGuid'>
 
+// Confirmed via a real GET /api/v1/users/countries response (44 countries):
+// despite the name, countryPrefix is NOT a dialing prefix — it's a mixed bag
+// of 2-3 letter abbreviations ("UG", "ZM", "CBN", "IND", "US", ...), no two
+// countries formatted the same way, useless for a phone country-code
+// dropdown. countryCode is the real dialing code instead — every single
+// value in that response matches the real ITU code (Uganda "256", Kenya
+// "254", India "91", ...), the only oddity being the US/Russia rows padded
+// to 3 digits ("001"/"007") for column alignment rather than an actual
+// 3-digit code. Strips that padding back to the real code; used by the
+// admission enquiry forms' phone-code dropdown (online/kiosk/ondesk-enquiry)
+// instead of countryPrefix.
+export function dialCode(country: Pick<Country, 'countryCode'>): string {
+  return `+${country.countryCode.replace(/^0+(?=\d)/, '')}`
+}
+
 interface CountryListResponse {
   items: Country[]
   totalCount: number
