@@ -15,7 +15,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useEmployees, useEmployeeSearch } from '@/hooks/employee/useEmployees'
 import { EmployeeListItem } from '@/lib/api/employee/employee'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -89,32 +89,45 @@ export default function Page() {
 
   // Use the live API list and refresh it after create/update actions.
   const { data: rows = [], isLoading } = useEmployees()
+
+  // Debounced so the backend's ?search= isn't hit on every keystroke, and
+  // held at '' (falling back to the unfiltered list) until MIN_SEARCH_CHARS
+  // is met — same convention as Skill/Batch/Intake Master's search boxes.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const trimmed = search.trim()
+    if (trimmed.length < MIN_SEARCH_CHARS) { setDebouncedSearch(''); return }
+    const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const { data: searchResults, isFetching: isSearching } = useEmployeeSearch(debouncedSearch)
+  const baseRows = debouncedSearch ? (searchResults ?? []) : rows
+  const searchTrimmed = search.trim()
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isSearching)
+
   // Sort newest first by the numeric short-code suffix, which is the best available proxy for creation order.
-  const sortedRows = [...rows].sort((a, b) => {
+  const sortedRows = [...baseRows].sort((a, b) => {
     const numA = Number(a.shortCode.split('/').pop())
     const numB = Number(b.shortCode.split('/').pop())
     return numB - numA
   })
-  const searchTrimmed = search.trim()
-  const filteredRows = sortedRows.filter(r => {
-    const matchesFilters = Object.entries(filters).every(([k, v]) => {
-      if (!v.length) return true
-      const cell = k === 'sex' ? (r.sex === 1 ? 'Male' : 'Female')
-        : k === 'status' ? (r.isApproved ? 'Approved' : 'Pending')
-        : String((r as unknown as Record<string, unknown>)[k])
-      return v.includes(cell)
-    })
-    const matchesSearch = searchTrimmed.length < MIN_SEARCH_CHARS
-      || r.empName.toLowerCase().includes(searchTrimmed.toLowerCase())
-      || r.shortCode.toLowerCase().includes(searchTrimmed.toLowerCase())
-    return matchesFilters && matchesSearch
-  })
 
-  // Empty below MIN_SEARCH_CHARS, matching TableSearch's own minChars gate on
-  // when the dropdown is even allowed to open.
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? sortedRows.filter(r => r.empName.toLowerCase().includes(searchTrimmed.toLowerCase()) || r.shortCode.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
-    : []
+  // Name/code matching already happened server-side (sortedRows is
+  // search-scoped) — this only applies the column filters on top.
+  const filteredRows = sortedRows.filter(r => Object.entries(filters).every(([k, v]) => {
+    if (!v.length) return true
+    const cell = k === 'sex' ? (r.sex === 1 ? 'Male' : 'Female')
+      : k === 'status' ? (r.isApproved ? 'Approved' : 'Pending')
+      : String((r as unknown as Record<string, unknown>)[k])
+    return v.includes(cell)
+  }))
+
+  // Live preview shown in the search dropdown as the user types — reads the
+  // same server-scoped sortedRows, capped to a handful of rows. Empty below
+  // MIN_SEARCH_CHARS, matching TableSearch's own minChars gate on when the
+  // dropdown is even allowed to open.
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? sortedRows.slice(0, 8) : []
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
@@ -145,6 +158,7 @@ export default function Page() {
               value={search}
               onChange={setSearch}
               results={searchMatches.map(r => ({ id: r.employeeGuid, primary: r.shortCode, secondary: r.empName }))}
+              loading={searchPending}
               minChars={MIN_SEARCH_CHARS}
               onSelect={(r) => openViewModal(r.id)}
             />
@@ -168,7 +182,7 @@ export default function Page() {
               */}
               <thead><tr><th style={{ width: 48 }}></th><th>Short Code</th><th>Name</th>{fth('Sex', 'sex', ['Male', 'Female'])}{fth('Status', 'status', ['Approved', 'Pending'])}</tr></thead>
               <tbody>
-                {isLoading
+                {(isLoading || searchPending)
                   ? <TableLoadingState colSpan={999} />
                   : filteredRows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0) || !!search} onClearFilters={() => { setFilters({}); setSearch('') }} />
@@ -187,7 +201,7 @@ export default function Page() {
                   </tr>
                 ))}
                 */}
-                {pageItems.map(r => (
+                {!(isLoading || searchPending) && pageItems.map(r => (
                   <tr key={r.employeeGuid}>
                     <td>
                       {(permissions.edit || canAssignPermissions || true) && (

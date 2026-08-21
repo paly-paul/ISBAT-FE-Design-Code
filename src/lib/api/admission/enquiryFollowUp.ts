@@ -39,11 +39,22 @@ const mockEnquiryFollowUps: EnquiryFollowUpListItem[] = [
   },
 ]
 
-export function getEnquiryFollowUps(page = 1, pageSize = 10): Promise<EnquiryFollowUpListResult> {
+// search is forwarded to the endpoint's own ?search= param — confirmed live
+// against the real backend (search=<name substring> narrows totalCount from
+// 826 down to an exact match; a nonsense query returns totalCount: 0), same
+// convention as getEmployees/getSkills/getBatches.
+export function getEnquiryFollowUps(page = 1, pageSize = 10, search = ''): Promise<EnquiryFollowUpListResult> {
   if (MOCK_AUTH) {
-    return Promise.resolve({ items: mockEnquiryFollowUps, totalCount: mockEnquiryFollowUps.length, pageNumber: page, pageSize })
+    const q = search.trim().toLowerCase()
+    const items = q
+      ? mockEnquiryFollowUps.filter(r => `${r.enquiryCode} ${r.studentName}`.toLowerCase().includes(q))
+      : mockEnquiryFollowUps
+    return Promise.resolve({ items, totalCount: items.length, pageNumber: page, pageSize })
   }
-  return apiGet<EnquiryFollowUpListResult | null>(`/api/v1/admissions/enquiry-followups?page=${page}&pageSize=${pageSize}`)
+  const q = search.trim()
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (q) params.set('search', q)
+  return apiGet<EnquiryFollowUpListResult | null>(`/api/v1/admissions/enquiry-followups?${params}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 

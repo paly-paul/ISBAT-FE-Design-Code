@@ -40,7 +40,7 @@ export function ViewLecturerSkillModal({ isOpen, onClose, showToast, lecturerSki
 
   useEffect(() => {
     if (!isOpen || !skill) return
-    setEmployeeGuid('')
+    setEmployeeGuid(skill.employeeGuid || '')
     setSkillName(skill.skillName)
     setProficiency(String(skill.proficiency || 1))
     setApproved(skill.approvalStatus === 'Approved')
@@ -94,7 +94,7 @@ export function ViewLecturerSkillModal({ isOpen, onClose, showToast, lecturerSki
 
         <div className="modal-scroll" style={{ padding: '20px clamp(14px, 4vw, 22px)' }}>
           <div className="view-detail-grid">
-            <Field label="Faculty Member" value={skill.intEmployee ? `Employee #${skill.intEmployee}` : '—'} />
+            <Field label="Faculty Member" value={employeeOptions.find(o => o.value === employeeGuid)?.label ?? employeeGuid ?? '—'} />
             <Field label="Skill Name" value={skillName || '—'} />
             <Field label="Proficiency" value={PROFICIENCY_OPTIONS.find(p => p.value === proficiency)?.label || '—'} />
             <Field label="Status" value={approved ? <span className="badge badge-green">Approved</span> : <span className="badge badge-neu">Not Approved</span>} />

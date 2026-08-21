@@ -8,7 +8,7 @@ import { SkillMaster, SkillMasterInput } from '@/lib/api/academic/skillMaster'
 interface EditSkillModalProps extends ModalProps {
   skill: SkillMaster | null
   updateSkill: {
-    mutate: (variables: { intSkill: number; input: SkillMasterInput }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
+    mutate: (variables: { skillGuid: string; input: SkillMasterInput }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
     isPending: boolean
   }
 }
@@ -43,7 +43,7 @@ export function EditSkillModal({ isOpen, onClose, showToast, skill, updateSkill 
   function handleSubmit() {
     if (!skill || !validate()) return
     updateSkill.mutate(
-      { intSkill: skill.intSkill, input: { skillName } },
+      { skillGuid: skill.skillGuid, input: { skillName } },
       {
         onSuccess: () => { setSaved(true); showToast('Skill updated successfully') },
         onError: (error: Error) => setFailure(error.message || 'Failed to update skill. Please try again.'),

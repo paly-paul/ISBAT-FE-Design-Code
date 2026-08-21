@@ -13,9 +13,11 @@ import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
 import { useInterestLevels } from '@/hooks/admission/useInterestLevels'
 
 interface NewFollowUpLogModalProps extends ModalProps {
-  // The enquiries visible on the currently-loaded page — there's no
-  // confirmed search endpoint to back a full 11k+-row picker, so this only
-  // offers whatever's already on screen.
+  // Capped at 1000, fetched by the page only while this modal is open — the
+  // real ?search= endpoint (see getEnquiryFollowUps) is confirmed to work,
+  // but SearchSelect below only takes a static option list, not a live
+  // server-search callback, so it isn't wired through here. Revisit if the
+  // real enquiry count ever grows past this cap.
   enquiries: EnquiryFollowUpListItem[]
   createFollowUp: {
     mutate: (input: EnquiryFollowUpInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
