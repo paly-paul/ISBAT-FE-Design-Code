@@ -16,12 +16,16 @@ interface StudentLookupProps {
 // isbat_student_module.html mockup's .lookup-shell, but backed by the real
 // student list (useStudents) instead of a hardcoded sample. Typing searches
 // live (same real ?searchTerm= endpoint as Student Master's own search box);
-// "Load Student" takes the top match.
+// "Load Student" takes the top match — same "just click, no typing required"
+// behavior as the mockup's loadXfer()/loadProfileSample(), which defaulted
+// straight to its one sample student when the box was left empty. Here an
+// empty box falls back to the plain unfiltered student list instead, so a
+// bare click still loads a real record.
 export function StudentLookup({ onLoad, onClear, loaded, placeholder, hint }: StudentLookupProps) {
   const [term, setTerm] = useState('')
   const trimmed = term.trim()
   const { data, isFetching } = useStudents(1, 8, { searchTerm: trimmed || undefined })
-  const matches = trimmed ? (data?.items ?? []) : []
+  const matches = data?.items ?? []
 
   function handleLoad() {
     if (matches.length === 0) return
@@ -47,7 +51,7 @@ export function StudentLookup({ onLoad, onClear, loaded, placeholder, hint }: St
             placeholder={placeholder ?? 'Student ID, name, or registration number…'}
           />
         </div>
-        <button className="btn btn-primary" onClick={handleLoad} disabled={matches.length === 0 && !isFetching}>
+        <button className="btn btn-primary" onClick={handleLoad}>
           <i className="lni lni-user"></i> Load Student
         </button>
         {loaded && <button className="btn btn-neu" onClick={handleClear}><i className="lni lni-close"></i> Clear</button>}

@@ -27,7 +27,7 @@ export default function Page() {
   const [student, setStudent] = useState<StudentDto | null>(null)
   const [semester, setSemester] = useState('All Semesters')
   const { data } = useStudents(1, 8, { searchTerm: term.trim() || undefined })
-  const matches = term.trim() ? (data?.items ?? []) : []
+  const matches = data?.items ?? []
 
   return (
     <div className="page active">
@@ -48,7 +48,7 @@ export default function Page() {
             value={semester}
             onChange={setSemester}
           />
-          <button className="btn btn-primary btn-sm" disabled={matches.length === 0} onClick={() => setStudent(matches[0])}>Load</button>
+          <button className="btn btn-primary btn-sm" onClick={() => matches[0] && setStudent(matches[0])}>Load</button>
         </div>
         {term.trim() && matches.length > 0 && !student && (
           <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 8 }}>{matches.length} match{matches.length !== 1 ? 'es' : ''} — top result: {matches[0].studentName} ({matches[0].studentNum})</div>

@@ -30,6 +30,13 @@ function initials(name: string) {
 function isValidEmail(v: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) }
 function isValidPhone(v: string) { return /^\+\d[\d\s]{6,14}$/.test(v.trim()) }
 
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+function formatValidUntil(monthValue: string) {
+  const [y, m] = monthValue.split('-').map(Number)
+  if (!y || !m) return ''
+  return `${MONTHS[m - 1]} ${y}`
+}
+
 export default function Page() {
   const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
@@ -51,7 +58,8 @@ export default function Page() {
   const [barcode, setBarcode] = useState('')
   const [stuEmail, setStuEmail] = useState('')
   const [stuPhone, setStuPhone] = useState('')
-  const [parEmail, setParEmail] = useState('parent.email@gmail.com')
+  const [parEmail, setParEmail] = useState('parent.sarah@gmail.com')
+  const [validUntil, setValidUntil] = useState('2027-12')
   const [parPhone, setParPhone] = useState('+256 772 987 654')
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
 
@@ -60,14 +68,21 @@ export default function Page() {
   useEffect(() => {
     if (!student) return
     const parts = student.studentName.trim().split(/\s+/)
+    const derivedEmail = `${student.studentNum.toLowerCase().replace(/[^a-z0-9]/g, '.')}@isbat.ac.ug`
     setFirstName(parts[0] ?? '')
     setLastName(parts.slice(1).join(' '))
-    setStuEmail(`${student.studentNum.toLowerCase().replace(/[^a-z0-9]/g, '.')}@isbat.ac.ug`)
-    setEmail(`${student.studentNum.toLowerCase().replace(/[^a-z0-9]/g, '.')}@isbat.ac.ug`)
+    setStuEmail(derivedEmail)
+    setEmail(derivedEmail)
     setStuPhone('+256 701 234 567')
     setPhone('+256 701 234 567')
+    // Same seed audit log as the mockup — illustrative dispatch/update
+    // history, not real events (there's no backend for this workflow at
+    // all), just re-pointed at whichever student is actually loaded.
     setAuditLog([
-      { id: 1, action: 'Student credentials dispatched via Email', detail: `To: parent.email@gmail.com · Admin: Registrar`, dot: 'email' },
+      { id: 1, action: 'Student credentials dispatched via Email', detail: `To: ${derivedEmail} · Admin: Registrar · Aug 19, 2026 10:33 AM`, dot: 'email' },
+      { id: 2, action: 'Parent credentials dispatched via WhatsApp', detail: 'To: +256 772 987 654 · Admin: Registrar · Aug 15, 2026 2:10 PM', dot: 'whatsapp' },
+      { id: 3, action: 'Student email address updated', detail: `Old: ${parts[0]?.toLowerCase() ?? 'student'}.n@gmail.com → New: ${derivedEmail} · Admin: IT Admin · Jul 2, 2026`, dot: 'update' },
+      { id: 4, action: 'Parent credentials dispatched via Email', detail: 'To: parent.sarah@gmail.com · Admin: Registrar · Jan 20, 2024 9:00 AM', dot: 'email' },
     ])
     setTab('info')
   }, [student])
@@ -213,6 +228,7 @@ export default function Page() {
                         <div className="fg"><label className="lbl">Name on Card</label><input className="ctrl" value={student.studentName} readOnly /></div>
                         <div className="fg"><label className="lbl">Student ID</label><input className="ctrl" value={student.studentNum} readOnly /></div>
                         <div className="fg"><label className="lbl">Programme</label><input className="ctrl" value={student.programName || '—'} readOnly /></div>
+                        <div className="fg"><label className="lbl">Valid Until</label><input className="ctrl" type="month" value={validUntil} onChange={e => setValidUntil(e.target.value)} /></div>
                       </div>
                     </div>
                   </div>
@@ -221,8 +237,12 @@ export default function Page() {
                     <div className="fg">
                       <label className="lbl">Physical Barcode <span className="req">*</span></label>
                       <input className="ctrl" placeholder="Scan or enter barcode…" value={barcode} onChange={e => setBarcode(e.target.value)} />
-                      <div style={{ fontSize: 12, marginTop: 5, color: !barcode ? 'var(--g400)' : barcode.length < 6 ? 'var(--g400)' : barcode.startsWith('ISBT') ? 'var(--green)' : 'var(--red)', fontWeight: barcode ? 700 : 400 }}>
-                        {!barcode ? 'Enter a barcode to validate' : barcode.length < 6 ? 'Keep typing…' : barcode.startsWith('ISBT') ? '✓ Barcode available' : '✗ Invalid — use ISBT prefix'}
+                      <div style={{ fontSize: 12, marginTop: 5, color: !barcode ? 'var(--g400)' : barcode.length < 6 ? 'var(--g400)' : barcode === 'ISBT00142' ? 'var(--amber)' : barcode.startsWith('ISBT') ? 'var(--green)' : 'var(--red)', fontWeight: barcode ? 700 : 400 }}>
+                        {!barcode ? 'Enter a barcode to validate'
+                          : barcode.length < 6 ? 'Keep typing…'
+                          : barcode === 'ISBT00142' ? '⚠ Already assigned to this student'
+                          : barcode.startsWith('ISBT') ? '✓ Barcode available'
+                          : '✗ Invalid — use ISBT prefix'}
                       </div>
                     </div>
                     <div className="fg">
@@ -248,7 +268,7 @@ export default function Page() {
                       <div className="id-name">{student.studentName}</div>
                       <div className="id-prog">{student.programName || '—'} · {student.semesterName || '—'}</div>
                       <div className="id-num">{student.studentNum}</div>
-                      <div className="id-bar">||||| |||| ||||| |||| ||||<br />{student.studentRegNo}</div>
+                      <div className="id-bar">||||| |||| ||||| |||| ||||<br />{student.studentRegNo} · VALID UNTIL {formatValidUntil(validUntil)}</div>
                     </div>
                     <div className="flex gap-2" style={{ justifyContent: 'center', marginTop: 12 }}>
                       <button className="btn btn-neu btn-sm"><i className="lni lni-download"></i> Download</button>
@@ -258,7 +278,8 @@ export default function Page() {
                   <div className="card">
                     <div className="card-hdr"><div className="card-title"><i className="lni lni-alarm-clock"></i> Card History</div></div>
                     <div className="timeline">
-                      <div className="tl-item"><div className="tl-dot done"><i className="lni lni-checkmark"></i></div><div><div className="tl-label">No ID card issued yet</div><div className="tl-meta">Save &amp; Sync to issue the first card</div></div></div>
+                      <div className="tl-item"><div className="tl-dot done"><i className="lni lni-checkmark"></i></div><div><div className="tl-label">Card #00142 Issued</div><div className="tl-meta">Jan 20, 2024 · ID Officer · Barcode: ISBT00142</div></div></div>
+                      <div className="tl-item"><div className="tl-dot cur"><i className="lni lni-reload"></i></div><div><div className="tl-label">Photo Updated</div><div className="tl-meta">Mar 5, 2024 · Student Services</div></div></div>
                     </div>
                   </div>
                 </div>

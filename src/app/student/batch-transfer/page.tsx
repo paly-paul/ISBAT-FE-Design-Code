@@ -23,9 +23,9 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [student, setStudent] = useState<StudentDto | null>(null)
   const [transferType, setTransferType] = useState<'batch' | 'intake'>('batch')
-  const [targetBatch, setTargetBatch] = useState('')
+  const [targetBatch, setTargetBatch] = useState(TARGET_BATCHES[0].value)
   const [discount, setDiscount] = useState(0)
-  const [reason, setReason] = useState('')
+  const [reason, setReason] = useState(REASONS[0])
   const [remarks, setRemarks] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
 
@@ -33,7 +33,7 @@ export default function Page() {
 
   function handleLoad(s: StudentDto) { setStudent(s); showToast(`${s.studentName} loaded`, 'ok') }
   function handleClear() {
-    setStudent(null); setTargetBatch(''); setDiscount(0); setReason(''); setRemarks('')
+    setStudent(null); setTargetBatch(TARGET_BATCHES[0].value); setDiscount(0); setReason(REASONS[0]); setRemarks('')
   }
 
   const target = TARGET_BATCHES.find(b => b.value === targetBatch)
@@ -130,7 +130,7 @@ export default function Page() {
                   </div>
                   <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                     <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                    <button className="btn btn-primary" disabled={!targetBatch || !reason || !remarks} onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Execute Transfer</button>
+                    <button className="btn btn-primary" onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Execute Transfer</button>
                   </div>
                 </div>
               </div>
@@ -170,7 +170,7 @@ export default function Page() {
                 <div className="card">
                   <div className="card-hdr"><div className="card-title"><i className="lni lni-alarm-clock"></i> Transfer History</div></div>
                   <div className="timeline">
-                    <div className="tl-item"><div className="tl-dot done"><i className="lni lni-checkmark"></i></div><div><div className="tl-label">Enrolled — {student.batchCode || 'current batch'}</div><div className="tl-meta">Initial assignment</div></div></div>
+                    <div className="tl-item"><div className="tl-dot done"><i className="lni lni-checkmark"></i></div><div><div className="tl-label">Enrolled — {student.batchCode || 'current batch'}</div><div className="tl-meta">Initial assignment · Jan 15, 2024</div></div></div>
                     <div className="tl-item"><div className="tl-dot cur"><i className="lni lni-transfer"></i></div><div><div className="tl-label">Current — {student.batchCode || '—'}</div><div className="tl-meta">No transfers on record</div></div></div>
                   </div>
                 </div>
