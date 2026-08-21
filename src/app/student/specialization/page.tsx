@@ -36,9 +36,8 @@ export default function Page() {
   function openAdd(kind: 'spec' | 'discount') { setAddOpen(kind); setName(''); setPct(0) }
 
   function saveAdd() {
-    if (!name.trim()) return
     if (addOpen === 'discount') {
-      setDiscounts(prev => [...prev, { id: Date.now(), name: name.trim(), pct, badge: 'badge-grey', appliesTo: 'Final tuition installment' }])
+      setDiscounts(prev => [...prev, { id: Date.now(), name: name.trim() || 'Untitled Discount', pct, badge: 'badge-grey', appliesTo: 'Final tuition installment' }])
     }
     showToast(addOpen === 'spec' ? 'Specialization added' : 'Discount added', 'ok')
     setAddOpen(null)
@@ -92,7 +91,7 @@ export default function Page() {
                 <div className="fg"><label className="lbl">% Off <span className="req">*</span></label><input className="ctrl" type="number" min={0} max={100} value={pct} onChange={e => setPct(Number(e.target.value))} /></div>
               )}
             </div>
-            <div className="modal-footer"><button className="btn btn-neu" onClick={() => setAddOpen(null)}>Cancel</button><button className="btn btn-primary" disabled={!name.trim()} onClick={saveAdd}>Save</button></div>
+            <div className="modal-footer"><button className="btn btn-neu" onClick={() => setAddOpen(null)}>Cancel</button><button className="btn btn-primary" onClick={saveAdd}>Save</button></div>
           </div>
         </div>
       )}

@@ -97,7 +97,7 @@ export default function Page() {
             <div className="info-box" style={{ marginBottom: 14 }}><i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12 }}>Use <code>{'{student_name}'}</code>, <code>{'{balance}'}</code>, <code>{'{semester}'}</code> for personalised messages.</div></div>
             <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
               <button className="btn btn-neu">Preview</button>
-              <button className="btn btn-primary" disabled={!subject.trim() || !body.trim()} onClick={() => showToast(`Message sent to ${recipientCount} students`, 'ok')}><i className="lni lni-envelope"></i> Send to {recipientCount} Students</button>
+              <button className="btn btn-primary" onClick={() => showToast(`Message sent to ${recipientCount} students`, 'ok')}><i className="lni lni-envelope"></i> Send to {recipientCount} Students</button>
             </div>
           </div>
         </div>

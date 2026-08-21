@@ -19,16 +19,16 @@ const REASONS = ['Dropout Rejoin', 'Deferment — Medical', 'Deferment — Job /
 export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [student, setStudent] = useState<StudentDto | null>(null)
-  const [targetIntake, setTargetIntake] = useState('')
-  const [targetBatch, setTargetBatch] = useState('')
-  const [reason, setReason] = useState('')
+  const [targetIntake, setTargetIntake] = useState(TARGET_INTAKES[0].value)
+  const [targetBatch, setTargetBatch] = useState('BSc.IT-2025A · Day')
+  const [reason, setReason] = useState(REASONS[0])
   const [discount, setDiscount] = useState(0)
   const [remarks, setRemarks] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function handleLoad(s: StudentDto) { setStudent(s); showToast(`${s.studentName} loaded`, 'ok') }
-  function handleClear() { setStudent(null); setTargetIntake(''); setTargetBatch(''); setReason(''); setDiscount(0); setRemarks('') }
+  function handleClear() { setStudent(null); setTargetIntake(TARGET_INTAKES[0].value); setTargetBatch('BSc.IT-2025A · Day'); setReason(REASONS[0]); setDiscount(0); setRemarks('') }
 
   const target = TARGET_INTAKES.find(i => i.value === targetIntake)
 
@@ -97,7 +97,7 @@ export default function Page() {
                 <div className="fg"><label className="lbl">Mandatory Remarks <span className="req">*</span></label><textarea className="ctrl" rows={3} placeholder="Detail the circumstances leading to this intake shift…" value={remarks} onChange={e => setRemarks(e.target.value)} /></div>
                 <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                   <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                  <button className="btn btn-primary" disabled={!targetIntake || !targetBatch || !reason || !remarks} onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Execute Intake Transfer</button>
+                  <button className="btn btn-primary" onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Execute Intake Transfer</button>
                 </div>
               </div>
               <div>
@@ -121,7 +121,7 @@ export default function Page() {
                 <div className="card">
                   <div className="card-hdr"><div className="card-title"><i className="lni lni-alarm-clock"></i> Intake History</div></div>
                   <div className="timeline">
-                    <div className="tl-item"><div className="tl-dot done"><i className="lni lni-checkmark"></i></div><div><div className="tl-label">Spring 2024 (20241)</div><div className="tl-meta">Initial intake at registration</div></div></div>
+                    <div className="tl-item"><div className="tl-dot done"><i className="lni lni-checkmark"></i></div><div><div className="tl-label">Spring 2024 (20241)</div><div className="tl-meta">Initial intake at registration · Jan 2024</div></div></div>
                     <div className="tl-item"><div className="tl-dot cur"><i className="lni lni-calendar"></i></div><div><div className="tl-label">Current — Spring 2024</div><div className="tl-meta">No intake transfers on record</div></div></div>
                   </div>
                 </div>

@@ -38,8 +38,8 @@ export default function Page() {
   function openAdd(target: Target) { setAddTarget(target); setName(''); setNote('') }
 
   function saveCategory() {
-    if (!name.trim() || !addTarget) return
-    const row: CategoryRow = { id: Date.now(), name: name.trim(), note: note.trim() }
+    if (!addTarget) return
+    const row: CategoryRow = { id: Date.now(), name: name.trim() || 'Untitled Category', note: note.trim() }
     if (addTarget === 'service') setServiceCats(prev => [...prev, row])
     else setStudentCats(prev => [...prev, row])
     showToast('Category added', 'ok')
@@ -112,7 +112,7 @@ export default function Page() {
               <div className="fg"><label className="lbl">Name <span className="req">*</span></label><input className="ctrl" placeholder="Category name" value={name} onChange={e => setName(e.target.value)} /></div>
               <div className="fg"><label className="lbl">{addTarget === 'service' ? 'Routes To' : 'Fee Impact'}</label><input className="ctrl" placeholder={addTarget === 'service' ? 'e.g. Finance Team' : 'e.g. Local fee structure'} value={note} onChange={e => setNote(e.target.value)} /></div>
             </div>
-            <div className="modal-footer"><button className="btn btn-neu" onClick={() => setAddTarget(null)}>Cancel</button><button className="btn btn-primary" disabled={!name.trim()} onClick={saveCategory}>Save</button></div>
+            <div className="modal-footer"><button className="btn btn-neu" onClick={() => setAddTarget(null)}>Cancel</button><button className="btn btn-primary" onClick={saveCategory}>Save</button></div>
           </div>
         </div>
       )}

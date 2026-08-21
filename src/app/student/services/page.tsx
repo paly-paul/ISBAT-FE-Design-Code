@@ -26,6 +26,11 @@ const TICKETS: Ticket[] = [
 
 const CATEGORY_BADGE: Record<Ticket['category'], string> = { Finance: 'badge-red', Assessment: 'badge-blue', Academic: 'badge-cyan', Infrastructure: 'badge-grey' }
 
+// The mockup's own university-wide aggregate figures — deliberately not
+// derived from TICKETS below, which is only the 4 example rows the mockup
+// actually renders, a representative subset rather than the full queue.
+const STATS = { open: 4, inProgress: 7, closedThisMonth: 23, avgResolutionDays: '1.8d' }
+
 export default function Page() {
   const [category, setCategory] = useState('All Categories')
   const [status, setStatus] = useState('All Statuses')
@@ -65,10 +70,10 @@ export default function Page() {
         </div>
 
         <div className="stats-row">
-          <div className="stat-card [--b700:var(--red)] [--b400:#f87171]"><div className="stat-lbl">Open</div><div className="stat-num" style={{ color: 'var(--red)' }}>{TICKETS.filter(t => t.status === 'Open').length}</div><div className="stat-sub dn">Needs response</div></div>
-          <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]"><div className="stat-lbl">In Progress</div><div className="stat-num" style={{ color: 'var(--amber)' }}>{TICKETS.filter(t => t.status === 'In Progress').length}</div><div className="stat-sub warn">Being handled</div></div>
-          <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Closed This Month</div><div className="stat-num" style={{ color: 'var(--green)' }}>23</div><div className="stat-sub up">↑ 5 vs last month</div></div>
-          <div className="stat-card"><div className="stat-lbl">Avg Resolution</div><div className="stat-num" style={{ color: 'var(--b700)' }}>1.8d</div><div className="stat-sub">days to close</div></div>
+          <div className="stat-card [--b700:var(--red)] [--b400:#f87171]"><div className="stat-lbl">Open</div><div className="stat-num" style={{ color: 'var(--red)' }}>{STATS.open}</div><div className="stat-sub dn">Needs response</div></div>
+          <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]"><div className="stat-lbl">In Progress</div><div className="stat-num" style={{ color: 'var(--amber)' }}>{STATS.inProgress}</div><div className="stat-sub warn">Being handled</div></div>
+          <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Closed This Month</div><div className="stat-num" style={{ color: 'var(--green)' }}>{STATS.closedThisMonth}</div><div className="stat-sub up">↑ 5 vs last month</div></div>
+          <div className="stat-card"><div className="stat-lbl">Avg Resolution</div><div className="stat-num" style={{ color: 'var(--b700)' }}>{STATS.avgResolutionDays}</div><div className="stat-sub">days to close</div></div>
         </div>
 
         <ScrollTable>
@@ -116,7 +121,7 @@ export default function Page() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-neu" onClick={() => setActiveTicket(null)}>Cancel</button>
-              <button className="btn btn-primary" disabled={!response.trim()} onClick={() => { showToast('Response sent', 'ok'); setActiveTicket(null) }}><i className="lni lni-envelope"></i> Send Response</button>
+              <button className="btn btn-primary" onClick={() => { showToast('Response sent', 'ok'); setActiveTicket(null) }}><i className="lni lni-envelope"></i> Send Response</button>
             </div>
           </div>
         </div>

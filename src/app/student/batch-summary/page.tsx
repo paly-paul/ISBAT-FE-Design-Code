@@ -3,7 +3,13 @@ import { useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 
 // Ported from isbat_student_module.html's Batch Summary page. No backend
-// contract exists for this per-batch status breakdown — mock data only.
+// contract exists for this per-batch status breakdown — mock data only. The
+// stat tiles are the mockup's own university-wide aggregate figures (8
+// batches, 247 students total) — deliberately not derived from BATCHES
+// below, which is only the 3 example cards the mockup actually renders, a
+// representative subset rather than the full batch list.
+const STATS = { totalBatches: 8, totalStudents: 247, fullBatches: 3, avgBatchSize: 31 }
+
 const BATCHES = [
   { name: 'BSc.IT-2024A · BSc. Information Technology', sub: 'Spring 2024 · Day Mode · Sem 3 current', total: 52, active: 42, ytr: 5, ytc: 2, dropout: 3 },
   { name: 'BBA-2024A · Bachelor of Business Admin.', sub: 'Spring 2024 · Day Mode · Sem 3 current', total: 48, active: 38, ytr: 6, ytc: 1, dropout: 3 },
@@ -29,10 +35,10 @@ export default function Page() {
       </div>
 
       <div className="stats-row">
-        <div className="stat-card"><div className="stat-lbl">Total Batches</div><div className="stat-num" style={{ color: 'var(--b700)' }}>{BATCHES.length}</div><div className="stat-sub">Active this intake</div></div>
-        <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Students</div><div className="stat-num" style={{ color: 'var(--green)' }}>{BATCHES.reduce((s, b) => s + b.total, 0)}</div><div className="stat-sub up">Across all batches</div></div>
-        <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]"><div className="stat-lbl">Full Batches</div><div className="stat-num" style={{ color: 'var(--amber)' }}>0</div><div className="stat-sub warn">At capacity</div></div>
-        <div className="stat-card"><div className="stat-lbl">Avg Batch Size</div><div className="stat-num">{Math.round(BATCHES.reduce((s, b) => s + b.total, 0) / BATCHES.length)}</div><div className="stat-sub">students / batch</div></div>
+        <div className="stat-card"><div className="stat-lbl">Total Batches</div><div className="stat-num" style={{ color: 'var(--b700)' }}>{STATS.totalBatches}</div><div className="stat-sub">Active this intake</div></div>
+        <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Students</div><div className="stat-num" style={{ color: 'var(--green)' }}>{STATS.totalStudents}</div><div className="stat-sub up">Across all batches</div></div>
+        <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]"><div className="stat-lbl">Full Batches</div><div className="stat-num" style={{ color: 'var(--amber)' }}>{STATS.fullBatches}</div><div className="stat-sub warn">At capacity</div></div>
+        <div className="stat-card"><div className="stat-lbl">Avg Batch Size</div><div className="stat-num">{STATS.avgBatchSize}</div><div className="stat-sub">students / batch</div></div>
       </div>
 
       {BATCHES.map(b => (

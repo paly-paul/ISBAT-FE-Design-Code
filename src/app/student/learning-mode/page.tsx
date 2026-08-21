@@ -15,12 +15,12 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [student, setStudent] = useState<StudentDto | null>(null)
   const [mode, setMode] = useState<'campus' | 'odl'>('campus')
-  const [reason, setReason] = useState('')
+  const [reason, setReason] = useState(REASONS[0])
   const [remarks, setRemarks] = useState('')
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function handleLoad(s: StudentDto) { setStudent(s); showToast(`${s.studentName} loaded`, 'ok') }
-  function handleClear() { setStudent(null); setMode('campus'); setReason(''); setRemarks('') }
+  function handleClear() { setStudent(null); setMode('campus'); setReason(REASONS[0]); setRemarks('') }
 
   return (
     <>
@@ -73,7 +73,7 @@ export default function Page() {
                 <div className="fg"><label className="lbl">Remarks <span className="req">*</span></label><textarea className="ctrl" rows={3} placeholder="Explain the reason for mode change…" value={remarks} onChange={e => setRemarks(e.target.value)} /></div>
                 <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                   <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                  <button className="btn btn-primary" disabled={!reason || !remarks} onClick={() => showToast('Learning mode updated', 'ok')}><i className="lni lni-checkmark"></i> Apply Mode Change</button>
+                  <button className="btn btn-primary" onClick={() => showToast('Learning mode updated', 'ok')}><i className="lni lni-checkmark"></i> Apply Mode Change</button>
                 </div>
               </div>
               <div className="card">
@@ -102,7 +102,7 @@ export default function Page() {
                 <div className="card" style={{ marginTop: 16, marginBottom: 0 }}>
                   <div className="card-hdr" style={{ marginBottom: 10 }}><div className="card-title"><i className="lni lni-alarm-clock"></i> Mode History</div></div>
                   <div className="timeline">
-                    <div className="tl-item"><div className="tl-dot done"><i className="lni lni-checkmark"></i></div><div><div className="tl-label">Campus-Based — Enrolled</div><div className="tl-meta">Initial mode at registration</div></div></div>
+                    <div className="tl-item"><div className="tl-dot done"><i className="lni lni-checkmark"></i></div><div><div className="tl-label">Campus-Based — Enrolled</div><div className="tl-meta">Jan 2024 · Initial mode at registration</div></div></div>
                   </div>
                 </div>
               </div>

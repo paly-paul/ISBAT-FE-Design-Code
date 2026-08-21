@@ -27,7 +27,7 @@ const CREDIT_ROWS = [
 export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [student, setStudent] = useState<StudentDto | null>(null)
-  const [targetProg, setTargetProg] = useState('')
+  const [targetProg, setTargetProg] = useState(TARGET_PROGRAMMES[0].value)
   const [effectiveFrom, setEffectiveFrom] = useState('Semester 3 (Current)')
   const [boardRef, setBoardRef] = useState('')
   const [remarks, setRemarks] = useState('')
@@ -35,7 +35,7 @@ export default function Page() {
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function handleLoad(s: StudentDto) { setStudent(s); showToast(`${s.studentName} loaded`, 'ok') }
-  function handleClear() { setStudent(null); setTargetProg(''); setBoardRef(''); setRemarks('') }
+  function handleClear() { setStudent(null); setTargetProg(TARGET_PROGRAMMES[0].value); setBoardRef(''); setRemarks('') }
 
   const target = TARGET_PROGRAMMES.find(p => p.value === targetProg)
   const transferable = CREDIT_ROWS.filter(r => r.status === 'ok').length
@@ -97,7 +97,7 @@ export default function Page() {
                 <div className="fg"><label className="lbl">Remarks <span className="req">*</span></label><textarea className="ctrl" rows={3} placeholder="Reason for programme transfer…" value={remarks} onChange={e => setRemarks(e.target.value)} /></div>
                 <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                   <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                  <button className="btn btn-primary" disabled={!targetProg || !boardRef || !remarks} onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Execute Transfer</button>
+                  <button className="btn btn-primary" onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Execute Transfer</button>
                 </div>
               </div>
               <div className="card">

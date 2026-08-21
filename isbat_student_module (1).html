@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>ISBAT University ERP – Student Module</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://cdn.lineicons.com/4.0/lineicons.css" rel="stylesheet">
+<style>
+:root{
+  --white:#ffffff;--bg:#f0f4f8;--surface:#f8fafc;
+  --g100:#f1f5f9;--g200:#e2e8f0;--g300:#cbd5e1;
+  --g400:#94a3b8;--g500:#64748b;--g700:#334155;--g900:#0f172a;
+  --b50:#eff6ff;--b100:#dbeafe;--b200:#bfdbfe;--b500:#3b82f6;
+  --b600:#4e7adb;--b700:#4869c5;--b800:#2d448f;
+  --green:#059669;--green-bg:#d1fae5;--green-bd:#a7f3d0;
+  --amber:#d97706;--amber-bg:#fef3c7;--amber-bd:#fde68a;
+  --red:#dc2626;--red-bg:#fee2e2;--red-bd:#fca5a5;
+  --cyan:#0284c7;--cyan-bg:#e0f2fe;--cyan-bd:#bae6fd;
+  --purple:#7c3aed;--purple-bg:#ede9fe;--purple-bd:#c4b5fd;
+  --purple-dark:#5b21b6;--purple-light:#8b5cf6;
+  --neu-out:6px 6px 16px #c8d4e0,-6px -6px 16px #ffffff;
+  --neu-sm:3px 3px 8px #c8d4e0,-3px -3px 8px #ffffff;
+  --radius:14px;--rsm:10px;--rxs:7px;
+  --font:"Inter",-apple-system,sans-serif;
+  --tr:.22s cubic-bezier(.4,0,.2,1);
+  --rail-w:66px;--panel-w:228px;--hdr-h:58px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--g900);min-height:100vh;overflow-x:hidden}
+.hdr{position:fixed;top:0;left:0;right:0;z-index:300;height:var(--hdr-h);background:var(--white);border-bottom:1px solid var(--g200);box-shadow:0 1px 10px rgba(37,99,235,.07);display:flex;align-items:center;}
+.hdr-brand{width:var(--rail-w);flex-shrink:0;display:flex;align-items:center;justify-content:center;height:100%;border-right:1px solid var(--g200);background:#f8fafc;}
+.hdr-badge{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--b800),var(--b500));display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px;box-shadow:0 3px 10px rgba(37,99,235,.35);}
+.hdr-body{flex:1;display:flex;align-items:center;justify-content:space-between;padding:0 24px;}
+.hdr-title{font-size:15px;font-weight:700;color:var(--g900)}
+.hdr-sub{font-size:10.5px;color:var(--g400);margin-top:1px}
+.hdr-right{display:flex;align-items:center;gap:14px}
+.hdr-module-pill{display:flex;align-items:center;gap:7px;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;background:var(--purple-bg);color:var(--purple-dark);border:1.5px solid var(--purple-bd);}
+.hdr-intake{background:var(--b50);border:1.5px solid var(--b200);border-radius:20px;padding:5px 13px;font-size:12px;font-weight:600;color:var(--b700);}
+.hdr-user{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--g500)}
+.hdr-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--purple-dark),var(--purple-light));color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;}
+.layout{display:flex;padding-top:var(--hdr-h);min-height:100vh;}
+.sidebar{position:fixed;top:var(--hdr-h);left:0;height:calc(100vh - var(--hdr-h));display:flex;z-index:200;}
+.sb-rail{width:var(--rail-w);flex-shrink:0;background:#f8fafc;border-right:1px solid var(--g200);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:2px;overflow:visible;}
+.rail-divider{width:32px;height:1px;background:var(--g200);margin:6px auto;flex-shrink:0;}
+.rail-spacer{flex:1}
+.rail-item{position:relative;width:52px;height:52px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;border:1.5px solid transparent;transition:background var(--tr);flex-shrink:0;}
+.rail-item:hover:not(.locked):not(.active){background:rgba(255,255,255,.7);box-shadow:0 4px 14px rgba(15,23,42,.08);}
+.rail-item.active{background:var(--purple-dark);border-color:var(--purple-dark);}
+.rail-item.active .rail-icon{color:#fff}
+.rail-item.locked{opacity:.35;cursor:not-allowed;}
+.rail-icon{font-size:22px;color:var(--purple-dark);transition:color var(--tr);display:flex;align-items:center;justify-content:center;}
+.rail-tooltip{position:absolute;left:calc(100% + 14px);top:50%;transform:translateY(-50%) translateX(-6px);background:rgba(15,23,42,.92);color:#f8fafc;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .18s,transform .18s;z-index:999;}
+.rail-tooltip::before{content:"";position:absolute;right:100%;top:50%;transform:translateY(-50%);border:6px solid transparent;border-right-color:rgba(15,23,42,.92);}
+.rail-item:hover .rail-tooltip{opacity:1;transform:translateY(-50%) translateX(0)}
+.sb-panel-shell{width:0;overflow:hidden;background:var(--white);border-right:1px solid var(--g200);transition:width .25s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;height:100%;}
+.sb-panel-shell.open{width:var(--panel-w)}
+.sb-panel{display:none;flex-direction:column;width:var(--panel-w);height:100%;overflow-y:auto;overflow-x:hidden;padding-bottom:16px;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent;}
+.sb-panel::-webkit-scrollbar{width:3px}.sb-panel::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:2px}
+.sb-panel.active{display:flex}
+.sb-panel-hdr{padding:18px 16px 12px;border-bottom:1px solid var(--g200);flex-shrink:0;}
+.sb-panel-hdr-name{font-size:15px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:var(--purple-dark);display:flex;align-items:center;gap:9px;}
+.sb-group-hdr{display:flex;align-items:center;padding:9px 14px 7px;cursor:pointer;user-select:none;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#4a536a;}
+.sb-group-hdr>span:first-child{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sb-chevron{font-size:9px;opacity:.6;transition:transform .2s;display:inline-block;}
+.sb-collapse.closed .sb-chevron{transform:rotate(-90deg)}
+.sb-collapse-body{overflow:hidden;max-height:600px;opacity:1;transition:max-height .28s ease,opacity .2s ease;}
+.sb-collapse.closed .sb-collapse-body{max-height:0;opacity:0}
+.sb-item{display:flex;align-items:center;gap:9px;padding:8px 14px;margin:1px 8px;cursor:pointer;font-size:13px;font-weight:500;color:var(--g500);border-radius:8px;border-left:2px solid transparent;transition:background var(--tr),color var(--tr),border-color var(--tr);white-space:nowrap;overflow:hidden;}
+.sb-item:hover{background:rgba(255,255,255,.7);color:var(--g900);}
+.sb-item.active{background:var(--purple-bg);border-color:var(--purple-bd);color:var(--purple-dark);font-weight:600;}
+.sb-icon{font-size:14px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.75;}
+.sb-item.active .sb-icon{opacity:1}
+.sb-badge{margin-left:auto;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:10px;background:rgba(124,58,237,.2);color:#a78bfa;}
+.sb-badge.warn{background:rgba(245,158,11,.2);color:#fbbf24}
+.sb-panel-footer{margin-top:auto;padding:10px 14px;border-top:1px solid var(--g200);font-size:10px;color:#94a3b8;flex-shrink:0;}
+.main{flex:1;margin-left:var(--rail-w);padding:24px 28px;min-width:0;transition:margin-left .25s cubic-bezier(.4,0,.2,1);}
+.main.panel-open{margin-left:calc(var(--rail-w) + var(--panel-w))}
+.page{display:none}.page.active{display:block}
+.pg-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:12px}
+.pg-title{font-size:21px;font-weight:800;color:var(--g900);letter-spacing:-0.02em}
+.pg-sub{font-size:12.5px;color:var(--g400);margin-top:3px}
+.card{background:var(--white);border:1.5px solid var(--g200);border-radius:var(--radius);padding:20px;box-shadow:var(--neu-out);margin-bottom:18px}
+.card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px}
+.card-title{font-size:14px;font-weight:700;color:var(--g900);display:flex;align-items:center;gap:7px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.fg{margin-bottom:14px}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.stat-card{background:var(--white);border:1.5px solid var(--g200);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--neu-out);position:relative;overflow:hidden;}
+.stat-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--sa,var(--purple-dark)),var(--sb,var(--purple-light)));border-radius:var(--radius) var(--radius) 0 0;}
+.stat-num{font-size:26px;font-weight:800;color:var(--g900);margin-top:4px;letter-spacing:-0.025em}
+.stat-lbl{font-size:11.5px;color:var(--g500);font-weight:500;margin-top:3px}
+.stat-sub{font-size:11px;margin-top:7px;font-weight:600}
+.stat-sub.up{color:var(--green)}.stat-sub.warn{color:var(--amber)}.stat-sub.dn{color:var(--red)}
+.lbl{font-size:12px;font-weight:600;color:var(--g700);margin-bottom:5px;display:block}
+.req{color:var(--red)}
+.ctrl{width:100%;padding:9px 12px;border:1.5px solid var(--g300);border-radius:var(--rxs);font-size:13px;font-family:var(--font);color:var(--g900);background:var(--white);transition:var(--tr);}
+.ctrl:focus{outline:none;border-color:var(--purple);box-shadow:0 0 0 3px rgba(124,58,237,.12)}
+select.ctrl{cursor:pointer}
+textarea.ctrl{resize:vertical;min-height:80px}
+.ctrl[readonly]{background:var(--surface);color:var(--g500);cursor:default}
+.inp-wrap{position:relative}
+.inp-wrap .ctrl{padding-left:34px}
+.inp-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none;color:var(--g400);}
+.field-hint{font-size:11px;margin-top:4px}
+.field-hint.ok{color:var(--green)}.field-hint.err{color:var(--red)}
+.ctrl.ok{border-color:var(--green)}.ctrl.err{border-color:var(--red)}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 18px;border-radius:var(--rxs);font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer;border:none;transition:var(--tr);}
+.btn-primary{background:linear-gradient(135deg,var(--b700),var(--b500));color:#fff;box-shadow:0 3px 10px rgba(37,99,235,.28);}
+.btn-primary:hover{opacity:.9}
+.btn-purple{background:linear-gradient(135deg,var(--purple-dark),var(--purple-light));color:#fff;box-shadow:0 3px 10px rgba(124,58,237,.28);}
+.btn-purple:hover{opacity:.9}
+.btn-success{background:linear-gradient(135deg,#047857,var(--green));color:#fff;}
+.btn-danger{background:linear-gradient(135deg,#b91c1c,var(--red));color:#fff;}
+.btn-neu{background:var(--white);border:1.5px solid var(--g200);color:var(--g700);box-shadow:var(--neu-sm);}
+.btn-neu:hover{border-color:var(--purple-bd);color:var(--purple-dark);}
+.btn-sm{padding:6px 13px;font-size:12px}
+.btn-lg{padding:11px 26px;font-size:14px}
+.btn-icon{width:34px;height:34px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--rxs);cursor:pointer;border:1.5px solid var(--g200);background:var(--white);color:var(--g500);transition:var(--tr);}
+.btn-icon:hover{border-color:var(--purple-bd);color:var(--purple-dark);}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.badge-blue{background:var(--b100);color:var(--b800);border:1px solid var(--b200)}
+.badge-green{background:var(--green-bg);color:#065f46;border:1px solid var(--green-bd)}
+.badge-amber{background:var(--amber-bg);color:#92400e;border:1px solid var(--amber-bd)}
+.badge-red{background:var(--red-bg);color:#991b1b;border:1px solid var(--red-bd)}
+.badge-grey{background:var(--g100);color:var(--g500);border:1px solid var(--g200)}
+.badge-purple{background:var(--purple-bg);color:var(--purple-dark);border:1px solid var(--purple-bd)}
+.badge-cyan{background:var(--cyan-bg);color:#0c4a6e;border:1px solid var(--cyan-bd)}
+.bdot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.tbl-wrap{border-radius:var(--rsm);border:1.5px solid var(--g200);overflow:hidden;box-shadow:var(--neu-sm)}
+table{width:100%;border-collapse:collapse}
+thead tr{background:linear-gradient(135deg,var(--purple-dark),var(--purple))}
+th{padding:11px 14px;text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.9)}
+td{padding:12px 14px;font-size:13px;color:var(--g700);border-bottom:1px solid var(--g100);background:var(--white)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--purple-bg)}
+tr.flagged td{background:#fffbeb}
+.info-box{background:var(--b50);border:1.5px solid var(--b200);border-radius:var(--rxs);padding:12px 14px;font-size:13px;display:flex;align-items:flex-start;gap:8px}
+.warn-box{background:var(--amber-bg);border:1.5px solid var(--amber-bd);border-radius:var(--rxs);padding:12px 14px;font-size:13px;display:flex;align-items:flex-start;gap:8px}
+.danger-box{background:var(--red-bg);border:1.5px solid var(--red-bd);border-radius:var(--rxs);padding:12px 14px;font-size:13px;display:flex;align-items:flex-start;gap:8px}
+.success-box{background:var(--green-bg);border:1.5px solid var(--green-bd);border-radius:var(--rxs);padding:12px 14px;font-size:13px;display:flex;align-items:flex-start;gap:8px}
+.purple-box{background:var(--purple-bg);border:1.5px solid var(--purple-bd);border-radius:var(--rxs);padding:12px 14px;font-size:13px;display:flex;align-items:flex-start;gap:8px}
+.modal-overlay{position:fixed;inset:0;background:rgba(15,30,61,.55);backdrop-filter:blur(4px);z-index:500;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--white);border-radius:var(--radius);box-shadow:0 20px 60px rgba(15,30,61,.25);width:100%;max-height:90vh;overflow-y:auto}
+.modal-sm{max-width:420px}.modal-md{max-width:580px}.modal-lg{max-width:760px}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1.5px solid var(--g200)}
+.modal-title{font-size:15px;font-weight:700;color:var(--g900)}
+.modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--g400);padding:2px 6px;border-radius:5px;}
+.modal-close:hover{background:var(--g100);color:var(--g700)}
+.modal>div:not(.modal-hdr):not(.modal-footer){padding:18px 22px}
+.modal-footer{padding:14px 22px;border-top:1.5px solid var(--g200);display:flex;gap:10px;justify-content:flex-end}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--g900);color:#fff;padding:12px 20px;border-radius:var(--rsm);font-size:13px;font-weight:500;box-shadow:0 6px 24px rgba(0,0,0,.25);z-index:9999;transform:translateY(80px);opacity:0;transition:.3s cubic-bezier(.4,0,.2,1);pointer-events:none;max-width:380px}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.t-warn{background:var(--amber)}.toast.t-ok{background:var(--green)}.toast.t-err{background:var(--red)}
+.flex{display:flex}.gap-2{gap:8px}.gap-3{gap:12px}.ml-auto{margin-left:auto}
+.mt-2{margin-top:8px}.mt-3{margin-top:12px}.mt-4{margin-top:16px}
+.text-green{color:var(--green)}.text-red{color:var(--red)}.text-purple{color:var(--purple-dark)}.text-amber{color:var(--amber)}.text-muted{color:var(--g500)}
+.tgl-group{display:inline-flex;background:var(--g100);border-radius:var(--rxs);padding:3px;gap:3px;border:1.5px solid var(--g200)}
+.tgl-btn{padding:6px 14px;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--g500);background:transparent;border:none;font-family:var(--font);transition:var(--tr);}
+.tgl-btn:hover{color:var(--g900)}
+.tgl-on{background:var(--white);color:var(--purple-dark);box-shadow:var(--neu-sm)}
+/* LOOKUP */
+.lookup-shell{background:linear-gradient(135deg,#f5f3ff,var(--white));border:2px solid var(--purple-bd);border-radius:var(--radius);padding:18px 22px;margin-bottom:20px;box-shadow:var(--neu-out);}
+.lookup-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--purple-dark);margin-bottom:10px;display:flex;align-items:center;gap:7px;}
+.lookup-row{display:flex;gap:10px;align-items:center;}
+.lookup-wrap{position:relative;flex:1}
+.lookup-inp{width:100%;padding:11px 16px 11px 42px;border:1.5px solid var(--purple-bd);border-radius:var(--rsm);font-size:14px;font-family:var(--font);color:var(--g900);background:var(--white);transition:var(--tr);}
+.lookup-inp:focus{outline:none;border-color:var(--purple-dark);box-shadow:0 0 0 3px rgba(124,58,237,.12)}
+.lookup-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:16px;color:var(--purple-light);}
+.lookup-hint{font-size:11.5px;color:var(--g500);margin-top:8px;display:flex;align-items:center;gap:6px}
+/* BANNER */
+.stu-banner{background:var(--white);border:1.5px solid var(--g200);border-radius:var(--radius);overflow:hidden;margin-bottom:20px;box-shadow:var(--neu-out);}
+.stu-banner-top{background:linear-gradient(135deg,var(--purple-dark),var(--purple));padding:16px 20px;display:flex;align-items:center;gap:16px;}
+.stu-av{width:52px;height:52px;border-radius:12px;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800;color:#fff;flex-shrink:0;}
+.stu-banner-name{color:#fff;font-size:17px;font-weight:800}
+.stu-banner-id{color:rgba(255,255,255,.75);font-size:12px;margin-top:2px}
+.stu-banner-pills{display:flex;gap:7px;margin-top:8px;flex-wrap:wrap;}
+.stu-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:700;background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.3);}
+.stu-meta-row{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--g200);}
+.stu-meta-item{padding:12px 16px;border-right:1px solid var(--g200);}
+.stu-meta-item:last-child{border-right:none}
+.stu-meta-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--g500)}
+.stu-meta-val{font-size:13px;font-weight:700;color:var(--g900);margin-top:3px}
+/* PROFILE TABS */
+.ptabs{display:flex;gap:2px;border-bottom:2px solid var(--g200);margin-bottom:22px;}
+.ptab{padding:10px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--g400);cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-2px;font-family:var(--font);transition:var(--tr);display:flex;align-items:center;gap:6px;}
+.ptab:hover{color:var(--g700)}
+.ptab.active{color:var(--purple-dark);border-color:var(--purple-dark)}
+.ptab-pane{display:none}.ptab-pane.active{display:block}
+/* QUICK ACTIONS */
+.quick-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;}
+.qa-btn{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 10px;border-radius:var(--rsm);border:1.5px solid var(--g200);background:var(--white);cursor:pointer;transition:var(--tr);box-shadow:var(--neu-sm);}
+.qa-btn:hover{border-color:var(--purple-bd);background:var(--purple-bg);transform:translateY(-2px);}
+.qa-icon{width:42px;height:42px;border-radius:10px;background:var(--purple-bg);display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--purple-dark);transition:var(--tr);}
+.qa-btn:hover .qa-icon{background:var(--purple-dark);color:#fff;}
+.qa-lbl{font-size:12px;font-weight:700;color:var(--g700);text-align:center;line-height:1.3}
+.qa-sub{font-size:10.5px;color:var(--g400);text-align:center}
+/* ID CARD */
+.id-preview{background:linear-gradient(135deg,#1e1b4b,#312e81);border-radius:14px;padding:20px;color:#fff;position:relative;overflow:hidden;min-height:185px;}
+.id-preview::before{content:"";position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.06);}
+.id-logo{font-size:10px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:12px;}
+.id-photo{width:56px;height:56px;border-radius:10px;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;font-size:20px;color:rgba(255,255,255,.6);margin-bottom:10px;overflow:hidden;position:relative;}
+.id-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;}
+.id-name{font-size:14px;font-weight:800;margin-bottom:3px}
+.id-prog{font-size:11px;color:rgba(255,255,255,.7);margin-bottom:9px}
+.id-num{font-family:monospace;font-size:12px;background:rgba(255,255,255,.12);padding:5px 9px;border-radius:5px;letter-spacing:.08em;display:inline-block;}
+.id-bar{margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,.15);font-family:monospace;font-size:9px;color:rgba(255,255,255,.5);letter-spacing:.1em}
+.photo-zone{width:110px;height:110px;border-radius:12px;border:2px dashed var(--purple-bd);background:var(--purple-bg);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;transition:var(--tr);}
+.photo-zone:hover{border-color:var(--purple-dark);background:#e5e1fc}
+.photo-zone i{font-size:24px;color:var(--purple-light)}
+.photo-zone span{font-size:10px;font-weight:600;color:var(--purple-light);margin-top:5px;text-transform:uppercase}
+/* CHECKLIST */
+.chklist{display:flex;flex-direction:column;gap:7px}
+.chk{display:flex;align-items:center;gap:9px;padding:9px 13px;border-radius:var(--rxs);background:var(--surface);border:1.5px solid var(--g200);font-size:12.5px;}
+.chk.pass{border-color:var(--green-bd);background:var(--green-bg)}
+.chk.fail{border-color:var(--red-bd);background:var(--red-bg)}
+.chk.pend{border-color:var(--amber-bd)}
+.chk-icon{font-size:15px;flex-shrink:0}.chk-text{flex:1;font-weight:500}.chk-status{font-size:10.5px;font-weight:700}
+.chk.pass .chk-status{color:var(--green)}.chk.fail .chk-status{color:var(--red)}.chk.pend .chk-status{color:var(--amber)}
+/* DISPATCH */
+.dcard{border:1.5px solid var(--g200);border-radius:var(--rsm);overflow:hidden;margin-bottom:14px;}
+.dcard-hdr{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--g200);}
+.dcard-hdr.stu{background:linear-gradient(135deg,var(--purple-dark),var(--purple));}
+.dcard-hdr.par{background:linear-gradient(135deg,#065f46,var(--green));}
+.dcard-title{font-size:13px;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;}
+.dcard-id{font-size:11px;color:rgba(255,255,255,.75);font-family:monospace;background:rgba(255,255,255,.15);padding:3px 8px;border-radius:5px;}
+.dcard-body{padding:16px;}
+.dcard-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.dcard-actions{display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--g100);}
+/* AUDIT */
+.audit-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--g100);font-size:12.5px;}
+.audit-row:last-child{border-bottom:none}
+.audit-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+.audit-dot.email{background:var(--b500)}.audit-dot.whatsapp{background:var(--green)}.audit-dot.update{background:var(--purple)}
+.audit-action{font-weight:600;color:var(--g900)}
+.audit-detail{color:var(--g500);font-size:11.5px;margin-top:2px}
+/* BASELINE */
+.baseline{background:var(--surface);border:2px solid var(--purple-bd);border-radius:var(--rsm);padding:16px;margin-bottom:20px;}
+.baseline-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--purple-dark);margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+.baseline-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.b-item{padding:10px 12px;background:var(--white);border-radius:var(--rxs);border:1.5px solid var(--g200);}
+.b-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--g500)}
+.b-val{font-size:13px;font-weight:700;color:var(--g900);margin-top:3px}
+/* RADIO CARD */
+.rcard{border:1.5px solid var(--g200);border-radius:var(--rsm);padding:14px 16px;cursor:pointer;transition:var(--tr);display:flex;align-items:flex-start;gap:12px;background:var(--white);margin-bottom:8px;}
+.rcard:hover{border-color:var(--purple-bd);}
+.rcard.sel{border-color:var(--purple-dark);background:var(--purple-bg);box-shadow:0 0 0 2px rgba(91,33,182,.12);}
+.rcard input{accent-color:var(--purple-dark);margin-top:3px;flex-shrink:0;}
+.rcard-lbl{font-size:13px;font-weight:700;color:var(--g900)}
+.rcard-sub{font-size:11.5px;color:var(--g500);margin-top:3px;line-height:1.5}
+/* DELTA */
+.delta{background:linear-gradient(180deg,#f5f3ff,var(--white));border:1.5px solid var(--purple-bd);border-radius:var(--rsm);padding:16px;margin-top:16px;}
+.delta-hdr{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--purple-dark);margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+.delta-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px dashed var(--g200);font-size:13px;}
+.delta-row:last-child{border-bottom:none}
+.delta-lbl{color:var(--g500);font-weight:500}.delta-val{font-weight:700;color:var(--g900)}
+.delta-val.changed{color:var(--amber)}.delta-val.pos{color:var(--red)}.delta-val.neg{color:var(--green)}
+.delta-total{display:flex;justify-content:space-between;font-size:14px;font-weight:800;border-top:2px solid var(--purple-bd);margin-top:8px;padding-top:10px;}
+/* INTEGRITY */
+.integ{border-radius:var(--rsm);border:1.5px solid var(--g200);overflow:hidden;margin-top:16px;}
+.integ-hdr{background:linear-gradient(135deg,var(--purple-dark),var(--purple));padding:10px 14px;font-size:12px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.06em}
+.integ-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--g100);background:var(--white);font-size:13px;}
+.integ-row:last-child{border-bottom:none}
+.integ-icon{font-size:15px;flex-shrink:0}.integ-txt{flex:1}.integ-status{font-size:11px;font-weight:700}
+/* CREDIT */
+.credit-matrix{border-radius:var(--rsm);border:1.5px solid var(--g200);overflow:hidden;margin-top:12px;}
+.cr-row{display:grid;grid-template-columns:80px 1fr auto;align-items:center;padding:10px 14px;border-bottom:1px solid var(--g100);background:var(--white);font-size:13px;gap:12px;}
+.cr-row:last-child{border-bottom:none}
+.cr-row:hover{background:var(--purple-bg)}
+.cr-code{font-family:monospace;font-size:11px;font-weight:800;color:var(--b700);padding:2px 7px;background:var(--b50);border-radius:4px;border:1px solid var(--b200);}
+.cr-status{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.cr-ok{background:var(--green-bg);color:#065f46;border:1px solid var(--green-bd)}
+.cr-no{background:var(--red-bg);color:#991b1b;border:1px solid var(--red-bd)}
+.cr-new{background:var(--amber-bg);color:#92400e;border:1px solid var(--amber-bd)}
+/* MODE */
+.mode-card{border:2px solid var(--g200);border-radius:var(--rsm);padding:18px;cursor:pointer;transition:var(--tr);background:var(--white);display:flex;align-items:center;gap:14px;margin-bottom:10px;}
+.mode-card:hover{border-color:var(--purple-bd);}
+.mode-card.sel{border-color:var(--purple-dark);background:var(--purple-bg);}
+.mode-icon{width:48px;height:48px;border-radius:12px;background:var(--purple-bg);display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--purple-dark);flex-shrink:0;transition:var(--tr);}
+.mode-card.sel .mode-icon{background:var(--purple-dark);color:#fff;}
+.mode-lbl{font-size:14px;font-weight:700;color:var(--g900)}
+.mode-sub{font-size:12px;color:var(--g500);margin-top:3px;line-height:1.5}
+/* TIMELINE */
+.timeline{display:flex;flex-direction:column;gap:8px;position:relative;}
+.timeline::before{content:"";position:absolute;left:17px;top:18px;bottom:18px;width:2px;background:linear-gradient(180deg,var(--purple-bd),var(--g100));border-radius:2px;z-index:0;}
+.tl-item{display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border-radius:var(--rxs);background:var(--white);border:1.5px solid var(--g100);position:relative;z-index:1;transition:border-color var(--tr);}
+.tl-item:hover{border-color:var(--purple-bd);}
+.tl-dot{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;background:var(--g100);color:var(--g500);border:2px solid var(--white);box-shadow:0 0 0 2px var(--g200);}
+.tl-dot.pur{background:var(--purple-bg);color:var(--purple-dark);box-shadow:0 0 0 2px var(--purple-bd);}
+.tl-dot.done{background:var(--green-bg);color:var(--green);box-shadow:0 0 0 2px var(--green-bd);}
+.tl-label{font-size:13px;font-weight:700;color:var(--g900);margin-bottom:2px}
+.tl-meta{font-size:11.5px;color:var(--g500)}
+/* DIR ROW */
+.dir-row{display:grid;grid-template-columns:40px 1fr 160px 120px 110px 80px;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--g100);background:var(--white);cursor:pointer;transition:background var(--tr);}
+.dir-row:hover{background:var(--purple-bg)}
+.dir-row:last-child{border-bottom:none}
+.dir-row.hdr{background:linear-gradient(135deg,var(--purple-dark),var(--purple));cursor:default;}
+.dir-row.hdr:hover{background:linear-gradient(135deg,var(--purple-dark),var(--purple));}
+.dir-hdr{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.9)}
+.stu-av-sm{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--purple-dark),var(--purple-light));color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;}
+.stu-name{font-size:13.5px;font-weight:700;color:var(--g900)}
+.stu-sub{font-size:11px;color:var(--g500);margin-top:1px}
+/* BATCH */
+.batch-card{border:1.5px solid var(--g200);border-radius:var(--rsm);overflow:hidden;margin-bottom:12px;background:var(--white);box-shadow:var(--neu-sm);}
+.batch-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:linear-gradient(135deg,var(--purple-dark),var(--purple));color:#fff;}
+.batch-hdr-name{font-size:14px;font-weight:700}
+.batch-hdr-cnt{font-size:12px;background:rgba(255,255,255,.2);padding:3px 10px;border-radius:10px;font-weight:700;}
+.batch-body{display:grid;grid-template-columns:repeat(4,1fr);}
+.batch-stat{padding:12px 14px;border-right:1px solid var(--g100);}
+.batch-stat:last-child{border-right:none}
+.batch-num{font-size:20px;font-weight:800;color:var(--g900)}
+.batch-lbl{font-size:10.5px;color:var(--g500);font-weight:600;margin-top:2px}
+/* MASTER */
+.mrow{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:14px;padding:11px 14px;border-bottom:1px solid var(--g100);font-size:13px;}
+.mrow:last-child{border-bottom:none}
+.mrow:hover{background:var(--purple-bg)}
+/* FILTER */
+.fbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:14px 16px;background:var(--surface);border:1.5px solid var(--g200);border-radius:var(--rsm);margin-bottom:16px;}
+/* EMPTY */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;text-align:center;padding:40px 20px;}
+.empty-icon{font-size:48px;color:var(--purple-bd);margin-bottom:16px}
+.empty-title{font-size:17px;font-weight:800;color:var(--g700);margin-bottom:8px}
+.empty-sub{font-size:13px;color:var(--g400);max-width:360px;line-height:1.65}
+@media(max-width:900px){
+  .sb-rail{display:none}.main{margin-left:0!important}
+  .g2,.g3,.baseline-grid,.dcard-grid{grid-template-columns:1fr}
+  .stats-row,.quick-actions{grid-template-columns:1fr 1fr}
+  .stu-meta-row{grid-template-columns:1fr 1fr}
+  .dir-row{grid-template-columns:40px 1fr 110px 80px}
+}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--g300);border-radius:3px}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <div class="hdr-brand"><div class="hdr-badge">IU</div></div>
+  <div class="hdr-body">
+    <div><div class="hdr-title">ISBAT University ERP</div><div class="hdr-sub">Enterprise Resource Planning · Spring 2026</div></div>
+    <div class="hdr-right">
+      <div class="hdr-module-pill"><i class="lni lni-users"></i> Student Module</div>
+      <div class="hdr-intake">Spring 2026 (20261)</div>
+      <div class="hdr-user"><div class="hdr-avatar">SR</div><span>Student Registrar</span></div>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<div class="sidebar">
+  <div class="sb-rail">
+    <div class="rail-item active" data-mod="student" onclick="switchModule('student')">
+      <span class="rail-icon"><i class="lni lni-users"></i></span>
+      <span class="rail-tooltip">Student Module</span>
+    </div>
+    <div class="rail-divider"></div>
+    <div class="rail-item locked"><span class="rail-icon"><i class="lni lni-clipboard"></i></span><span class="rail-tooltip">Admission</span></div>
+    <div class="rail-item locked"><span class="rail-icon"><i class="lni lni-dollar"></i></span><span class="rail-tooltip">Finance</span></div>
+    <div class="rail-item locked"><span class="rail-icon"><i class="lni lni-pencil-alt"></i></span><span class="rail-tooltip">Assessment</span></div>
+    <div class="rail-spacer"></div>
+    <div class="rail-divider"></div>
+    <div class="rail-item locked"><span class="rail-icon"><i class="lni lni-cog"></i></span><span class="rail-tooltip">User &amp; Role</span></div>
+  </div>
+
+  <div class="sb-panel-shell open" id="sb-panel-shell">
+    <div class="sb-panel active" id="panel-student">
+      <div class="sb-panel-hdr"><div class="sb-panel-hdr-name"><i class="lni lni-users"></i> Student</div></div>
+
+      <div class="sb-collapse open" id="sc-ov">
+        <div class="sb-group-hdr" onclick="toggleCollapse('sc-ov')"><span>Overview</span><span class="sb-chevron">▾</span></div>
+        <div class="sb-collapse-body">
+          <div class="sb-item active" onclick="nav('dashboard')"><span class="sb-icon"><i class="lni lni-dashboard"></i></span>Dashboard</div>
+        </div>
+      </div>
+
+      <div class="sb-collapse open" id="sc-stu">
+        <div class="sb-group-hdr" onclick="toggleCollapse('sc-stu')"><span>Students</span><span class="sb-chevron">▾</span></div>
+        <div class="sb-collapse-body">
+          <div class="sb-item" onclick="nav('directory')"><span class="sb-icon"><i class="lni lni-users"></i></span>Student Directory<span class="sb-badge">247</span></div>
+          <div class="sb-item" onclick="nav('batch-summary')"><span class="sb-icon"><i class="lni lni-grid-alt"></i></span>Batch Summary</div>
+          <div class="sb-item" onclick="nav('statement')"><span class="sb-icon"><i class="lni lni-files"></i></span>Student Statement</div>
+        </div>
+      </div>
+
+      <div class="sb-collapse open" id="sc-ops">
+        <div class="sb-group-hdr" onclick="toggleCollapse('sc-ops')"><span>Operations</span><span class="sb-chevron">▾</span></div>
+        <div class="sb-collapse-body">
+          <div class="sb-item" onclick="nav('profile')"><span class="sb-icon"><i class="lni lni-user"></i></span>Student Profile</div>
+          <div class="sb-item" onclick="nav('batch-transfer')"><span class="sb-icon"><i class="lni lni-transfer"></i></span>Batch Transfer</div>
+          <div class="sb-item" onclick="nav('prog-transfer')"><span class="sb-icon"><i class="lni lni-graduation"></i></span>Programme Transfer</div>
+          <div class="sb-item" onclick="nav('learning-mode')"><span class="sb-icon"><i class="lni lni-display"></i></span>Learning Mode</div>
+          <div class="sb-item" onclick="nav('intake-transfer')"><span class="sb-icon"><i class="lni lni-calendar"></i></span>Intake Transfer</div>
+        </div>
+      </div>
+
+      <div class="sb-collapse open" id="sc-svc">
+        <div class="sb-group-hdr" onclick="toggleCollapse('sc-svc')"><span>Services</span><span class="sb-chevron">▾</span></div>
+        <div class="sb-collapse-body">
+          <div class="sb-item" onclick="nav('services')"><span class="sb-icon"><i class="lni lni-ticket"></i></span>Student Services<span class="sb-badge warn">4</span></div>
+        </div>
+      </div>
+
+      <div class="sb-collapse open" id="sc-com">
+        <div class="sb-group-hdr" onclick="toggleCollapse('sc-com')"><span>Communications</span><span class="sb-chevron">▾</span></div>
+        <div class="sb-collapse-body">
+          <div class="sb-item" onclick="nav('communications')"><span class="sb-icon"><i class="lni lni-envelope"></i></span>Send Communication</div>
+        </div>
+      </div>
+
+      <div class="sb-collapse open" id="sc-set">
+        <div class="sb-group-hdr" onclick="toggleCollapse('sc-set')"><span>Settings</span><span class="sb-chevron">▾</span></div>
+        <div class="sb-collapse-body">
+          <div class="sb-item" onclick="nav('masters')"><span class="sb-icon"><i class="lni lni-list"></i></span>Category Masters</div>
+          <div class="sb-item" onclick="nav('specialization')"><span class="sb-icon"><i class="lni lni-graduation"></i></span>Specialization</div>
+        </div>
+      </div>
+
+      <div class="sb-panel-footer">S10 · Student Microservice · v2.0</div>
+    </div>
+  </div>
+</div>
+
+<main class="main panel-open" id="main-content">
+
+<!-- DASHBOARD -->
+<div class="page active" id="page-dashboard">
+  <div class="pg-hdr">
+    <div><div class="pg-title">Student Dashboard</div><div class="pg-sub">Spring 2026 · Real-time overview</div></div>
+    <div class="flex gap-2"><button class="btn btn-neu btn-sm"><i class="lni lni-download"></i> Export</button><button class="btn btn-purple" onclick="nav('directory')"><i class="lni lni-users"></i> Directory</button></div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card" style="--sa:#5b21b6;--sb:#8b5cf6"><div class="stat-lbl">Total Students</div><div class="stat-num" style="color:var(--purple-dark)">247</div><div class="stat-sub up">↑ 23 this intake</div></div>
+    <div class="stat-card" style="--sa:#059669;--sb:#34d399"><div class="stat-lbl">Active / Registered</div><div class="stat-num" style="color:var(--green)">198</div><div class="stat-sub up">80.2% of cohort</div></div>
+    <div class="stat-card" style="--sa:#d97706;--sb:#fbbf24"><div class="stat-lbl">Yet to Register</div><div class="stat-num" style="color:var(--amber)">28</div><div class="stat-sub warn">Needs follow-up</div></div>
+    <div class="stat-card" style="--sa:#dc2626;--sb:#f87171"><div class="stat-lbl">Dropout</div><div class="stat-num" style="color:var(--red)">12</div><div class="stat-sub dn">↑ 3 this semester</div></div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <div class="card-hdr"><div class="card-title"><i class="lni lni-bar-chart"></i> Status Breakdown</div><span class="badge badge-purple">Spring 2026</span></div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:12px"><div style="width:120px;font-size:12px;font-weight:600;color:var(--g700);text-align:right">Registered</div><div style="flex:1;height:26px;background:var(--g100);border-radius:6px;overflow:hidden"><div style="height:100%;width:80%;background:linear-gradient(90deg,var(--purple-dark),var(--purple));border-radius:6px;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;color:#fff;font-size:12px;font-weight:700">198</div></div><div style="width:36px;font-size:12px;color:var(--g500);font-weight:600">80%</div></div>
+        <div style="display:flex;align-items:center;gap:12px"><div style="width:120px;font-size:12px;font-weight:600;color:var(--g700);text-align:right">Yet to Register</div><div style="flex:1;height:26px;background:var(--g100);border-radius:6px;overflow:hidden"><div style="height:100%;width:11%;background:linear-gradient(90deg,#b45309,var(--amber));border-radius:6px;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;color:#fff;font-size:12px;font-weight:700;min-width:40px">28</div></div><div style="width:36px;font-size:12px;color:var(--g500);font-weight:600">11%</div></div>
+        <div style="display:flex;align-items:center;gap:12px"><div style="width:120px;font-size:12px;font-weight:600;color:var(--g700);text-align:right">Yet to Clear</div><div style="flex:1;height:26px;background:var(--g100);border-radius:6px;overflow:hidden"><div style="height:100%;width:4%;background:linear-gradient(90deg,#0c4a6e,var(--cyan));border-radius:6px;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;color:#fff;font-size:12px;font-weight:700;min-width:40px">9</div></div><div style="width:36px;font-size:12px;color:var(--g500);font-weight:600">4%</div></div>
+        <div style="display:flex;align-items:center;gap:12px"><div style="width:120px;font-size:12px;font-weight:600;color:var(--g700);text-align:right">Dropout</div><div style="flex:1;height:26px;background:var(--g100);border-radius:6px;overflow:hidden"><div style="height:100%;width:5%;background:linear-gradient(90deg,#b91c1c,var(--red));border-radius:6px;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;color:#fff;font-size:12px;font-weight:700;min-width:40px">12</div></div><div style="width:36px;font-size:12px;color:var(--g500);font-weight:600">5%</div></div>
+      </div>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--g100);display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="padding:10px 12px;background:var(--surface);border-radius:var(--rxs);border:1px solid var(--g200)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--g500)">Sponsored</div><div style="font-size:18px;font-weight:800;color:var(--g900);margin-top:3px">34</div><div style="font-size:11px;color:var(--green);font-weight:600">HESFB, Watoto, DIT</div></div>
+        <div style="padding:10px 12px;background:var(--surface);border-radius:var(--rxs);border:1px solid var(--g200)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--g500)">International</div><div style="font-size:18px;font-weight:800;color:var(--g900);margin-top:3px">41</div><div style="font-size:11px;color:var(--b700);font-weight:600">Kenya, Congo, Rwanda</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div class="card-title"><i class="lni lni-alarm-clock"></i> Recent Activity</div><span class="badge badge-purple">Today</span></div>
+      <div class="timeline">
+        <div class="tl-item"><div class="tl-dot pur"><i class="lni lni-transfer"></i></div><div><div class="tl-label">Batch Transfer — John Mukasa</div><div class="tl-meta">BSc.IT-2024A → BSc.IT-2025A · 09:42 AM</div></div></div>
+        <div class="tl-item"><div class="tl-dot pur"><i class="lni lni-graduation"></i></div><div><div class="tl-label">Programme Transfer — Aisha Nalwoga</div><div class="tl-meta">BBA → BSc.IT · Academic Registrar · 08:15 AM</div></div></div>
+        <div class="tl-item"><div class="tl-dot done"><i class="lni lni-checkmark"></i></div><div><div class="tl-label">ID Card Printed — 3 Students</div><div class="tl-meta">BSc.IT Sem 1 batch · Yesterday 3:30 PM</div></div></div>
+        <div class="tl-item"><div class="tl-dot pur"><i class="lni lni-envelope"></i></div><div><div class="tl-label">Bulk Email — YTR Reminder</div><div class="tl-meta">28 students · Yesterday 10:00 AM</div></div></div>
+        <div class="tl-item"><div class="tl-dot"><i class="lni lni-ticket"></i></div><div><div class="tl-label">New Service Ticket — Fee Dispute</div><div class="tl-meta">STU-2024-089 · Finance · 2 days ago</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-hdr"><div class="card-title"><i class="lni lni-graduation"></i> Students by Programme</div><button class="btn btn-neu btn-sm" onclick="nav('directory')">View All →</button></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Programme</th><th>Total</th><th>Active</th><th>YTR</th><th>YTC</th><th>Dropout</th><th>Sponsored</th><th>Intl</th></tr></thead>
+      <tbody>
+        <tr><td><strong>BSc. Information Technology</strong></td><td>89</td><td><span class="badge badge-green">74</span></td><td>8</td><td>3</td><td>4</td><td>12</td><td>18</td></tr>
+        <tr><td><strong>Bachelor of Business Admin.</strong></td><td>76</td><td><span class="badge badge-green">62</span></td><td>9</td><td>2</td><td>3</td><td>10</td><td>14</td></tr>
+        <tr><td><strong>BSc. Accounting &amp; Finance</strong></td><td>54</td><td><span class="badge badge-green">44</span></td><td>6</td><td>1</td><td>3</td><td>8</td><td>7</td></tr>
+        <tr><td><strong>MBA</strong></td><td>28</td><td><span class="badge badge-green">18</span></td><td>5</td><td>3</td><td>2</td><td>4</td><td>2</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- STUDENT DIRECTORY -->
+<div class="page" id="page-directory">
+  <div class="pg-hdr">
+    <div><div class="pg-title">Student Directory</div><div class="pg-sub">247 students · Click a row to open the student profile</div></div>
+    <div class="flex gap-2"><button class="btn btn-neu btn-sm"><i class="lni lni-download"></i> Export</button><button class="btn btn-neu btn-sm"><i class="lni lni-printer"></i> Print</button></div>
+  </div>
+  <div class="fbar">
+    <div style="position:relative;flex:2;min-width:200px"><i class="lni lni-search-alt" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--g400);font-size:14px"></i><input class="ctrl" style="padding-left:34px" placeholder="Search name, ID, email..."></div>
+    <select class="ctrl" style="max-width:155px"><option>All Statuses</option><option>Registered</option><option>Yet to Register</option><option>Yet to Clear</option><option>Dropout</option></select>
+    <select class="ctrl" style="max-width:155px"><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>BSc. Accounting</option><option>MBA</option></select>
+    <select class="ctrl" style="max-width:140px"><option>All Batches</option><option>BSc.IT-2024A</option><option>BSc.IT-2025A</option><option>BBA-2024A</option></select>
+    <select class="ctrl" style="max-width:120px"><option>All Genders</option><option>Male</option><option>Female</option></select>
+    <select class="ctrl" style="max-width:150px"><option>All Sponsorships</option><option>HESFB</option><option>Watoto</option><option>Self-Sponsored</option></select>
+  </div>
+  <div class="tbl-wrap">
+    <div class="dir-row hdr"><div class="dir-hdr">#</div><div class="dir-hdr">Student</div><div class="dir-hdr">Programme / Batch</div><div class="dir-hdr">Semester</div><div class="dir-hdr">Status</div><div class="dir-hdr">Action</div></div>
+    <div class="dir-row" onclick="openProfile('STU-2024-001','Sarah Namutebi','BSc. IT','BSc.IT-2024A','Semester 3','active','Local','Self','Campus')">
+      <div class="stu-av-sm">SN</div>
+      <div><div class="stu-name">Sarah Namutebi</div><div class="stu-sub">STU-2024-001 · sarah.n@isbat.ac.ug</div></div>
+      <div><div style="font-size:13px;font-weight:600">BSc. IT</div><div style="font-size:11px;color:var(--g500)">BSc.IT-2024A</div></div>
+      <div style="font-size:13px;font-weight:600">Semester 3</div>
+      <div><span class="badge badge-green"><span class="bdot"></span> Active</span></div>
+      <div><button class="btn btn-neu btn-sm">Profile</button></div>
+    </div>
+    <div class="dir-row" onclick="openProfile('STU-2024-002','John Mukasa','BSc. IT','BSc.IT-2024A','Semester 3','active','Local','Self','Campus')">
+      <div class="stu-av-sm" style="background:linear-gradient(135deg,#047857,var(--green))">JM</div>
+      <div><div class="stu-name">John Mukasa</div><div class="stu-sub">STU-2024-002 · john.m@isbat.ac.ug</div></div>
+      <div><div style="font-size:13px;font-weight:600">BSc. IT</div><div style="font-size:11px;color:var(--g500)">BSc.IT-2024A</div></div>
+      <div style="font-size:13px;font-weight:600">Semester 3</div>
+      <div><span class="badge badge-green"><span class="bdot"></span> Active</span></div>
+      <div><button class="btn btn-neu btn-sm">Profile</button></div>
+    </div>
+    <div class="dir-row" onclick="openProfile('STU-2024-015','Aisha Nalwoga','BBA','BBA-2024A','Semester 2','ytr','Local','Self','Campus')">
+      <div class="stu-av-sm" style="background:linear-gradient(135deg,#b45309,var(--amber))">AN</div>
+      <div><div class="stu-name">Aisha Nalwoga</div><div class="stu-sub">STU-2024-015 · aisha.n@isbat.ac.ug</div></div>
+      <div><div style="font-size:13px;font-weight:600">BBA</div><div style="font-size:11px;color:var(--g500)">BBA-2024A</div></div>
+      <div style="font-size:13px;font-weight:600">Semester 2</div>
+      <div><span class="badge badge-amber"><span class="bdot"></span> YTR</span></div>
+      <div><button class="btn btn-neu btn-sm">Profile</button></div>
+    </div>
+    <div class="dir-row" onclick="openProfile('STU-2024-031','David Okello','BSc. IT','BSc.IT-2024A','Semester 1','dropout','Local','Self','Campus')">
+      <div class="stu-av-sm" style="background:linear-gradient(135deg,#b91c1c,var(--red))">DO</div>
+      <div><div class="stu-name">David Okello</div><div class="stu-sub">STU-2024-031 · david.o@isbat.ac.ug</div></div>
+      <div><div style="font-size:13px;font-weight:600">BSc. IT</div><div style="font-size:11px;color:var(--g500)">BSc.IT-2024A</div></div>
+      <div style="font-size:13px;font-weight:600">Semester 1</div>
+      <div><span class="badge badge-red"><span class="bdot"></span> Dropout</span></div>
+      <div><button class="btn btn-neu btn-sm">Profile</button></div>
+    </div>
+    <div class="dir-row" onclick="openProfile('STU-2024-044','Grace Atim','MBA','MBA-2024A','Semester 2','ytc','Local','HESFB','Campus')">
+      <div class="stu-av-sm" style="background:linear-gradient(135deg,#0c4a6e,var(--cyan))">GA</div>
+      <div><div class="stu-name">Grace Atim</div><div class="stu-sub">STU-2024-044 · grace.a@isbat.ac.ug</div></div>
+      <div><div style="font-size:13px;font-weight:600">MBA</div><div style="font-size:11px;color:var(--g500)">MBA-2024A</div></div>
+      <div style="font-size:13px;font-weight:600">Semester 2</div>
+      <div><span class="badge badge-cyan"><span class="bdot"></span> Yet to Clear</span></div>
+      <div><button class="btn btn-neu btn-sm">Profile</button></div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;font-size:13px;color:var(--g500)">
+    <span>Showing 5 of 247 students</span>
+    <div class="flex gap-2"><button class="btn btn-neu btn-sm">← Prev</button><button class="btn btn-neu btn-sm">Next →</button></div>
+  </div>
+</div>
+
+<!-- STUDENT PROFILE -->
+<div class="page" id="page-profile">
+  <div class="pg-hdr"><div><div class="pg-title">Student Profile</div><div class="pg-sub">Search a student or navigate from the Directory to view and edit their profile</div></div></div>
+  <div class="lookup-shell">
+    <div class="lookup-label"><i class="lni lni-search-alt"></i> Student Lookup</div>
+    <div class="lookup-row">
+      <div class="lookup-wrap"><i class="lni lni-search-alt lookup-icon"></i><input class="lookup-inp" id="profile-search" placeholder="Student ID, name, or registration number..."></div>
+      <button class="btn btn-purple" onclick="loadProfileSample()"><i class="lni lni-user"></i> Load Student</button>
+      <button class="btn btn-neu" onclick="clearProfile()"><i class="lni lni-close"></i> Clear</button>
+    </div>
+    <div class="lookup-hint"><i class="lni lni-information" style="color:var(--purple-light)"></i> Click a student row in the Directory to open their profile directly with all tabs pre-loaded.</div>
+  </div>
+  <div class="empty" id="profile-empty"><div class="empty-icon"><i class="lni lni-user"></i></div><div class="empty-title">No Student Selected</div><div class="empty-sub">Search above or navigate from the Student Directory. All tabs load simultaneously once a student is found.</div></div>
+  <div id="profile-loaded" style="display:none">
+    <div class="stu-banner">
+      <div class="stu-banner-top">
+        <div class="stu-av" id="p-avatar">SN</div>
+        <div style="flex:1;min-width:0">
+          <div class="stu-banner-name" id="p-name">Sarah Namutebi</div>
+          <div class="stu-banner-id" id="p-sid">STU-2024-001 · ISBAT/2024/001</div>
+          <div class="stu-banner-pills" id="p-pills"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:7px;align-items:flex-end">
+          <div class="flex gap-2">
+            <button class="btn btn-neu btn-sm" style="background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.3);color:#fff" onclick="goTo('batch-transfer')"><i class="lni lni-transfer"></i> Batch Transfer</button>
+            <button class="btn btn-neu btn-sm" style="background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.3);color:#fff" onclick="goTo('prog-transfer')"><i class="lni lni-graduation"></i> Prog. Transfer</button>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-neu btn-sm" style="background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.3);color:#fff" onclick="goTo('learning-mode')"><i class="lni lni-display"></i> Learning Mode</button>
+            <button class="btn btn-neu btn-sm" style="background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.3);color:#fff" onclick="goTo('intake-transfer')"><i class="lni lni-calendar"></i> Intake Transfer</button>
+          </div>
+        </div>
+      </div>
+      <div class="stu-meta-row">
+        <div class="stu-meta-item"><div class="stu-meta-lbl">Fee Structure</div><div class="stu-meta-val" id="p-fee">Local</div></div>
+        <div class="stu-meta-item"><div class="stu-meta-lbl">Sponsor</div><div class="stu-meta-val" id="p-sponsor">Self</div></div>
+        <div class="stu-meta-item"><div class="stu-meta-lbl">Learning Mode</div><div class="stu-meta-val" id="p-mode">Campus</div></div>
+        <div class="stu-meta-item"><div class="stu-meta-lbl">Registration No.</div><div class="stu-meta-val">ISBAT/2024/001</div></div>
+        <div class="stu-meta-item"><div class="stu-meta-lbl">Enrolled</div><div class="stu-meta-val">Jan 2024</div></div>
+      </div>
+    </div>
+    <div class="ptabs">
+      <button class="ptab active" onclick="switchPTab('info',this)"><i class="lni lni-user"></i> Profile Info</button>
+      <button class="ptab" onclick="switchPTab('idcard',this)"><i class="lni lni-credit-cards"></i> ID Card</button>
+      <button class="ptab" onclick="switchPTab('comms',this)"><i class="lni lni-envelope"></i> Communication &amp; Access</button>
+    </div>
+    <!-- TAB: PROFILE INFO -->
+    <div class="ptab-pane active" id="ptab-info">
+      <div class="card">
+        <div class="card-hdr"><div class="card-title"><i class="lni lni-pencil-alt"></i> Personal Information</div><span class="badge badge-grey">Editable</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+          <div class="fg"><label class="lbl">First Name <span class="req">*</span></label><input class="ctrl" value="Sarah"></div>
+          <div class="fg"><label class="lbl">Middle Name</label><input class="ctrl" value=""></div>
+          <div class="fg"><label class="lbl">Last Name <span class="req">*</span></label><input class="ctrl" value="Namutebi"></div>
+          <div class="fg"><label class="lbl">Gender <span class="req">*</span></label><select class="ctrl"><option>Female</option><option>Male</option><option>Other</option></select></div>
+          <div class="fg"><label class="lbl">Date of Birth</label><input class="ctrl" type="date" value="2001-04-12"></div>
+          <div class="fg"><label class="lbl">Nationality</label><select class="ctrl"><option>Ugandan</option><option>Kenyan</option><option>Congolese</option><option>Rwandan</option><option>Other</option></select></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="card-title"><i class="lni lni-graduation"></i> Academic Details</div><span class="badge badge-grey">Read-only</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+          <div class="fg"><label class="lbl">Student ID</label><input class="ctrl" value="STU-2024-001" readonly></div>
+          <div class="fg"><label class="lbl">Registration No.</label><input class="ctrl" value="ISBAT/2024/001" readonly></div>
+          <div class="fg"><label class="lbl">Admission Type</label><input class="ctrl" value="Regular" readonly></div>
+          <div class="fg"><label class="lbl">Programme</label><input class="ctrl" value="BSc. Information Technology" readonly></div>
+          <div class="fg"><label class="lbl">Current Batch</label><input class="ctrl" value="BSc.IT-2024A" readonly></div>
+          <div class="fg"><label class="lbl">Current Semester</label><input class="ctrl" value="Semester 3" readonly></div>
+          <div class="fg"><label class="lbl">Fee Structure</label><input class="ctrl" value="Local" readonly></div>
+          <div class="fg"><label class="lbl">Sponsorship</label><input class="ctrl" value="Self-Sponsored" readonly></div>
+          <div class="fg"><label class="lbl">Status</label><input class="ctrl" value="Active" readonly style="color:var(--green);font-weight:700"></div>
+        </div>
+        <div class="info-box"><i class="lni lni-information" style="color:var(--b700);font-size:15px;flex-shrink:0"></i><div style="font-size:12px">To change Batch, Programme, Learning Mode, or Intake — use the quick-action buttons in the banner above or navigate via the Operations section in the sidebar.</div></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="card-title"><i class="lni lni-home"></i> Contact &amp; Address</div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+          <div class="fg"><label class="lbl">Primary Email <span class="req">*</span></label><input class="ctrl" value="sarah.namutebi@isbat.ac.ug"></div>
+          <div class="fg"><label class="lbl">Personal Email</label><input class="ctrl" value="sarah.n@gmail.com"></div>
+          <div class="fg"><label class="lbl">Mobile / WhatsApp <span class="req">*</span></label><input class="ctrl" value="+256 701 234 567"></div>
+          <div class="fg" style="grid-column:span 2"><label class="lbl">Physical Address</label><input class="ctrl" value="Plot 24, Kireka Road, Kampala"></div>
+          <div class="fg"><label class="lbl">District</label><input class="ctrl" value="Kampala"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-bottom:20px">
+        <button class="btn btn-neu">Discard</button>
+        <button class="btn btn-purple" onclick="toast('Profile saved','ok')"><i class="lni lni-save"></i> Save Profile</button>
+      </div>
+    </div>
+    <!-- TAB: ID CARD -->
+    <div class="ptab-pane" id="ptab-idcard">
+      <div class="g2">
+        <div>
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-hdr"><div class="card-title"><i class="lni lni-image"></i> Photo &amp; Card Details</div></div>
+            <div style="display:flex;gap:20px;align-items:flex-start">
+              <div>
+                <label class="lbl">Photo</label>
+                <div class="photo-zone" onclick="document.getElementById('photo-input').click()">
+                  <input type="file" id="photo-input" accept="image/*" onchange="handlePhoto(this)" style="display:none">
+                  <i class="lni lni-image"></i><span>Upload</span>
+                </div>
+                <div style="font-size:10.5px;color:var(--g500);margin-top:6px;text-align:center">JPG/PNG · Max 2MB</div>
+              </div>
+              <div style="flex:1">
+                <div class="fg"><label class="lbl">Name on Card</label><input class="ctrl" value="Sarah Namutebi"></div>
+                <div class="fg"><label class="lbl">Student ID</label><input class="ctrl" value="STU-2024-001" readonly></div>
+                <div class="fg"><label class="lbl">Programme</label><input class="ctrl" value="BSc. Information Technology"></div>
+                <div class="fg"><label class="lbl">Valid Until</label><input class="ctrl" type="month" value="2027-12"></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-hdr"><div class="card-title"><i class="lni lni-link"></i> Barcode &amp; ESSL Access</div></div>
+            <div class="fg">
+              <label class="lbl">Physical Barcode <span class="req">*</span></label>
+              <div style="position:relative"><i class="lni lni-link" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--g400)"></i><input class="ctrl" style="padding-left:34px" placeholder="Scan or enter barcode..." oninput="validateBarcode(this.value)"></div>
+              <div id="barcode-status" style="font-size:12px;margin-top:5px;color:var(--g400)">Enter a barcode to validate</div>
+            </div>
+            <div class="fg">
+              <label class="lbl">ESSL Device Registration</label>
+              <div class="chklist">
+                <div class="chk pass"><i class="lni lni-checkmark-circle chk-icon" style="color:var(--green)"></i><span class="chk-text">Device F22-01 · Main Gate</span><span class="chk-status">Enrolled</span></div>
+                <div class="chk pend"><i class="lni lni-alarm-clock chk-icon" style="color:var(--amber)"></i><span class="chk-text">Device F22-02 · Library</span><span class="chk-status">Pending</span></div>
+                <div class="chk fail"><i class="lni lni-close chk-icon" style="color:var(--red)"></i><span class="chk-text">Device F22-03 · Lab Block</span><span class="chk-status">Not Enrolled</span></div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button class="btn btn-neu btn-sm"><i class="lni lni-reload"></i> Sync Devices</button>
+              <button class="btn btn-purple btn-sm" onclick="toast('ID card saved and synced','ok')"><i class="lni lni-save"></i> Save &amp; Sync</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-hdr"><div class="card-title"><i class="lni lni-eye"></i> Live Card Preview</div><span class="badge badge-purple">Preview</span></div>
+            <div class="id-preview">
+              <div class="id-logo">ISBAT UNIVERSITY · KAMPALA</div>
+              <div class="id-photo" id="id-photo-wrap"><i class="lni lni-user"></i><img id="id-card-img" style="display:none"></div>
+              <div class="id-name">Sarah Namutebi</div>
+              <div class="id-prog">BSc. Information Technology · Sem 3</div>
+              <div class="id-num">STU-2024-001</div>
+              <div class="id-bar">||||| |||| ||||| |||| ||||<br>ISBAT/2024/001 · VALID UNTIL DEC 2027</div>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:center;margin-top:12px">
+              <button class="btn btn-neu btn-sm"><i class="lni lni-download"></i> Download</button>
+              <button class="btn btn-primary btn-sm"><i class="lni lni-printer"></i> Print</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-hdr"><div class="card-title"><i class="lni lni-alarm-clock"></i> Card History</div></div>
+            <div class="timeline">
+              <div class="tl-item"><div class="tl-dot done"><i class="lni lni-checkmark"></i></div><div><div class="tl-label">Card #00142 Issued</div><div class="tl-meta">Jan 20, 2024 · ID Officer · Barcode: ISBT00142</div></div></div>
+              <div class="tl-item"><div class="tl-dot pur"><i class="lni lni-reload"></i></div><div><div class="tl-label">Photo Updated</div><div class="tl-meta">Mar 5, 2024 · Student Services</div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- TAB: COMMUNICATION & ACCESS -->
+    <div class="ptab-pane" id="ptab-comms">
+      <div class="dcard">
+        <div class="dcard-hdr stu">
+          <div class="dcard-title"><i class="lni lni-user"></i> Student Profile</div>
+          <div class="flex gap-2" style="align-items:center"><span style="font-size:11px;color:rgba(255,255,255,.7)">Login ID:</span><span class="dcard-id">STU-2024-001</span></div>
+        </div>
+        <div class="dcard-body">
+          <div class="dcard-grid">
+            <div class="fg">
+              <label class="lbl">Student Email <span class="req">*</span></label>
+              <div style="position:relative"><i class="lni lni-envelope" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--g400)"></i><input class="ctrl" style="padding-left:34px" id="stu-email" value="sarah.namutebi@isbat.ac.ug" oninput="valEmail('stu-email','stu-email-hint')"></div>
+              <div class="field-hint ok" id="stu-email-hint">✓ Valid email format</div>
+            </div>
+            <div class="fg">
+              <label class="lbl">WhatsApp / Mobile <span class="req">*</span></label>
+              <div style="position:relative"><i class="lni lni-phone" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--g400)"></i><input class="ctrl" style="padding-left:34px" id="stu-phone" value="+256 701 234 567" oninput="valPhone('stu-phone','stu-phone-hint')"></div>
+              <div class="field-hint ok" id="stu-phone-hint">✓ Valid international format</div>
+            </div>
+          </div>
+          <div class="dcard-actions">
+            <button class="btn btn-purple btn-sm" onclick="dispatch('student','email')"><i class="lni lni-envelope"></i> Send Credentials via Email</button>
+            <button class="btn btn-success btn-sm" onclick="dispatch('student','whatsapp')"><i class="lni lni-whatsapp"></i> Send via WhatsApp</button>
+            <button class="btn btn-neu btn-sm ml-auto" onclick="toast('Student contact saved','ok')"><i class="lni lni-save"></i> Save</button>
+          </div>
+        </div>
+      </div>
+      <div class="dcard">
+        <div class="dcard-hdr par">
+          <div class="dcard-title"><i class="lni lni-users"></i> Parent / Guardian Profile</div>
+          <div class="flex gap-2" style="align-items:center"><span style="font-size:11px;color:rgba(255,255,255,.7)">Auto-generated Login ID:</span><span class="dcard-id" id="parent-lid">STU-2024-001_P</span></div>
+        </div>
+        <div class="dcard-body">
+          <div class="purple-box" style="margin-bottom:14px;background:#f0fdf4;border-color:var(--green-bd)">
+            <i class="lni lni-information" style="color:var(--green);font-size:15px;flex-shrink:0;margin-top:1px"></i>
+            <div style="font-size:12px">Parent login ID is auto-generated by appending <code style="background:rgba(0,0,0,.06);padding:1px 5px;border-radius:3px">_P</code> to the Student ID (e.g. <strong>STU-2024-001_P</strong>). A separate password token is generated on first credential dispatch.</div>
+          </div>
+          <div class="dcard-grid">
+            <div class="fg">
+              <label class="lbl">Parent Email <span class="req">*</span></label>
+              <div style="position:relative"><i class="lni lni-envelope" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--g400)"></i><input class="ctrl" style="padding-left:34px" id="par-email" value="parent.sarah@gmail.com" oninput="valEmail('par-email','par-email-hint')"></div>
+              <div class="field-hint ok" id="par-email-hint">✓ Valid email format</div>
+            </div>
+            <div class="fg">
+              <label class="lbl">Parent WhatsApp / Mobile <span class="req">*</span></label>
+              <div style="position:relative"><i class="lni lni-phone" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--g400)"></i><input class="ctrl" style="padding-left:34px" id="par-phone" value="+256 772 987 654" oninput="valPhone('par-phone','par-phone-hint')"></div>
+              <div class="field-hint ok" id="par-phone-hint">✓ Valid international format</div>
+            </div>
+          </div>
+          <div class="dcard-actions">
+            <button class="btn btn-purple btn-sm" onclick="dispatch('parent','email')"><i class="lni lni-envelope"></i> Send Parent Credentials via Email</button>
+            <button class="btn btn-success btn-sm" onclick="dispatch('parent','whatsapp')"><i class="lni lni-whatsapp"></i> Send Parent via WhatsApp</button>
+            <button class="btn btn-neu btn-sm ml-auto" onclick="toast('Parent contact saved','ok')"><i class="lni lni-save"></i> Save</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="card-title"><i class="lni lni-shield"></i> Security &amp; Dispatch Audit Log</div><span class="badge badge-grey">Last 10 events</span></div>
+        <div id="audit-log">
+          <div class="audit-row"><div class="audit-dot email"></div><div><div class="audit-action">Student credentials dispatched via Email</div><div class="audit-detail">To: sarah.namutebi@isbat.ac.ug · Admin: Registrar · Aug 19, 2026 10:33 AM</div></div></div>
+          <div class="audit-row"><div class="audit-dot whatsapp"></div><div><div class="audit-action">Parent credentials dispatched via WhatsApp</div><div class="audit-detail">To: +256 772 987 654 · Admin: Registrar · Aug 15, 2026 2:10 PM</div></div></div>
+          <div class="audit-row"><div class="audit-dot update"></div><div><div class="audit-action">Student email address updated</div><div class="audit-detail">Old: sarah.n@gmail.com → New: sarah.namutebi@isbat.ac.ug · Admin: IT Admin · Jul 2, 2026</div></div></div>
+          <div class="audit-row"><div class="audit-dot email"></div><div><div class="audit-action">Parent credentials dispatched via Email</div><div class="audit-detail">To: parent.sarah@gmail.com · Admin: Registrar · Jan 20, 2024 9:00 AM</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BATCH TRANSFER -->
+<div class="page" id="page-batch-transfer">
+  <div class="pg-hdr"><div><div class="pg-title">Batch Transfer</div><div class="pg-sub">Reassign a student to a different batch or shift their intake period</div></div></div>
+  <div class="lookup-shell">
+    <div class="lookup-label"><i class="lni lni-search-alt"></i> Student Lookup</div>
+    <div class="lookup-row">
+      <div class="lookup-wrap"><i class="lni lni-search-alt lookup-icon"></i><input class="lookup-inp" id="bt-search" placeholder="Student ID, name, or registration number..."></div>
+      <button class="btn btn-purple" onclick="loadXfer('bt')"><i class="lni lni-user"></i> Load Student</button>
+      <button class="btn btn-neu" onclick="clearXfer('bt')"><i class="lni lni-close"></i> Clear</button>
+    </div>
+  </div>
+  <div class="empty" id="bt-empty"><div class="empty-icon"><i class="lni lni-transfer"></i></div><div class="empty-title">No Student Loaded</div><div class="empty-sub">Search for a student to load their baseline profile before making transfer changes.</div></div>
+  <div id="bt-loaded" style="display:none">
+    <div class="warn-box" style="margin-bottom:16px"><i class="lni lni-warning" style="color:var(--amber);font-size:16px;flex-shrink:0;margin-top:1px"></i><div><strong>Finance Team Restricted.</strong> Batch changes rewrite the student's unbilled ledger. Only Finance/Accounts staff on the campus network may execute this action.</div></div>
+    <div class="baseline">
+      <div class="baseline-lbl"><i class="lni lni-shield"></i> Active Baseline Profile (Read-Only)</div>
+      <div class="baseline-grid">
+        <div class="b-item"><div class="b-lbl">Student ID</div><div class="b-val" id="bt-sid">STU-2024-001</div></div>
+        <div class="b-item"><div class="b-lbl">Name</div><div class="b-val" id="bt-name">Sarah Namutebi</div></div>
+        <div class="b-item"><div class="b-lbl">Campus</div><div class="b-val">Main Campus</div></div>
+        <div class="b-item"><div class="b-lbl">Current Batch</div><div class="b-val" style="color:var(--purple-dark);font-family:monospace" id="bt-batch">BSc.IT-2024A</div></div>
+        <div class="b-item"><div class="b-lbl">Semester</div><div class="b-val">Semester 3</div></div>
+        <div class="b-item"><div class="b-lbl">Fee Structure</div><div class="b-val">Local · $750/sem</div></div>
+      </div>
+    </div>
+    <div class="g2">
+      <div>
+        <div class="card">
+          <div class="card-hdr"><div class="card-title"><i class="lni lni-transfer"></i> Transfer Parameters</div></div>
+          <div class="fg">
+            <label class="lbl">Transfer Type <span class="req">*</span></label>
+            <label class="rcard sel" id="rc-batch" onclick="selType('batch')"><input type="radio" name="bt-type" value="batch" checked><div><div class="rcard-lbl">Batch / Schedule Transfer</div><div class="rcard-sub">Move within the same programme — e.g. Day to Evening schedule. Rewrites unbilled ledger to destination batch fee template.</div></div></label>
+            <label class="rcard" id="rc-intake" onclick="selType('intake')"><input type="radio" name="bt-type" value="intake"><div><div class="rcard-lbl">Intake / Period Shift</div><div class="rcard-sub">Move to a different intake cohort — e.g. Spring 2024 → Spring 2025. Used for dropouts rejoining or deferrals.</div></div></label>
+          </div>
+          <div class="fg"><label class="lbl">Target Batch <span class="req">*</span></label>
+            <select class="ctrl" onchange="prevFee(this.value)">
+              <option value="">— Select destination batch —</option>
+              <option value="BSc.IT-2024B">BSc.IT-2024B · Evening · Spring 2024</option>
+              <option value="BSc.IT-2025A">BSc.IT-2025A · Day · Spring 2025</option>
+              <option value="BSc.IT-2025B">BSc.IT-2025B · Evening · Spring 2025</option>
+              <option value="BSc.IT-2026A">BSc.IT-2026A · Day · Spring 2026</option>
+            </select>
+          </div>
+          <div class="fg" id="fee-model-row" style="display:none">
+            <label class="lbl">Destination Fee Model (Auto-Selected)</label>
+            <input class="ctrl" id="fee-model-val" readonly style="font-family:monospace;color:var(--purple-dark);font-weight:700">
+          </div>
+          <div class="fg">
+            <label class="lbl">Discount Override (0–100%) <span class="req">*</span></label>
+            <div class="flex gap-2" style="align-items:center">
+              <input class="ctrl" type="number" min="0" max="100" value="0" style="max-width:100px" oninput="updDiscount(this.value)" id="disc-val">
+              <span style="font-size:13px;font-weight:600;color:var(--g700)">% — Finance role required for &gt;0%</span>
+            </div>
+            <div id="disc-warn" style="display:none" class="warn-box mt-2"><i class="lni lni-warning" style="color:var(--amber);font-size:14px;flex-shrink:0"></i><div style="font-size:12px">Discount override above 0% requires Finance Manager approval. An approval request will be auto-logged.</div></div>
+          </div>
+          <div class="fg"><label class="lbl">Reason <span class="req">*</span></label><select class="ctrl"><option value="">— Select reason —</option><option>Dropout Rejoin</option><option>Deferment</option><option>Job / Relocation</option><option>Medical</option><option>Schedule Preference</option><option>Administrative Correction</option></select></div>
+          <div class="fg"><label class="lbl">Mandatory Remarks <span class="req">*</span></label><textarea class="ctrl" rows="3" placeholder="Describe the reason. Required and will be logged permanently."></textarea></div>
+          <div class="fg">
+            <label class="lbl">Supporting Document</label>
+            <div style="border:2px dashed var(--g300);border-radius:var(--rxs);padding:16px;text-align:center;cursor:pointer;background:var(--surface)"><i class="lni lni-upload" style="font-size:20px;color:var(--g400)"></i><div style="font-size:12px;color:var(--g500);margin-top:6px">Drop file or click to upload (PDF · max 5MB)</div></div>
+          </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button class="btn btn-neu" onclick="clearXfer('bt')">Cancel</button>
+            <button class="btn btn-purple" onclick="openModal('modal-bt-confirm')"><i class="lni lni-checkmark"></i> Execute Transfer</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-hdr"><div class="card-title"><i class="lni lni-dollar"></i> Financial Impact Preview</div></div>
+          <div id="fee-prev-empty" style="text-align:center;padding:28px 0;color:var(--g400);font-size:13px"><i class="lni lni-dollar" style="font-size:28px;display:block;margin-bottom:8px"></i>Select a target batch to preview fee changes</div>
+          <div id="fee-prev-content" style="display:none">
+            <div class="delta">
+              <div class="delta-hdr"><i class="lni lni-dollar"></i> Tuition Fee Comparison</div>
+              <div class="delta-row"><span class="delta-lbl">Current batch rate</span><span class="delta-val">$750 / semester</span></div>
+              <div class="delta-row"><span class="delta-lbl">Destination batch rate</span><span class="delta-val changed" id="dest-fee">—</span></div>
+              <div class="delta-row"><span class="delta-lbl">Discount applied</span><span class="delta-val" id="disc-display">0%</span></div>
+              <div class="delta-row"><span class="delta-lbl">Outstanding balance</span><span class="delta-val" style="color:var(--amber)">$450</span></div>
+              <div class="delta-total"><span>Net adjustment</span><span id="net-adj" style="color:var(--red)">+$30 / semester</span></div>
+            </div>
+            <div class="danger-box mt-3"><i class="lni lni-warning" style="color:var(--red);font-size:15px;flex-shrink:0;margin-top:1px"></i><div style="font-size:12px"><strong>Ledger purge:</strong> Executing will delete all pending unbilled tokens for Semester 3 onwards and recalculate using the destination fee template.</div></div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-hdr"><div class="card-title"><i class="lni lni-shield"></i> Structural Integrity Check</div></div>
+          <div id="integ-empty" style="text-align:center;padding:20px 0;color:var(--g400);font-size:13px">Select a batch to run checks</div>
+          <div id="integ-content" style="display:none">
+            <div class="integ">
+              <div class="integ-hdr">Validation Results</div>
+              <div class="integ-row"><i class="lni lni-checkmark-circle integ-icon" style="color:var(--green)"></i><span class="integ-txt">Target batch is active and accepting transfers</span><span class="integ-status" style="color:var(--green)">Pass</span></div>
+              <div class="integ-row"><i class="lni lni-checkmark-circle integ-icon" style="color:var(--green)"></i><span class="integ-txt">Batch capacity available (32/50 enrolled)</span><span class="integ-status" style="color:var(--green)">Pass</span></div>
+              <div class="integ-row"><i class="lni lni-warning integ-icon" style="color:var(--amber)"></i><span class="integ-txt">Outstanding balance of $450 detected</span><span class="integ-status" style="color:var(--amber)">Warning</span></div>
+              <div class="integ-row"><i class="lni lni-checkmark-circle integ-icon" style="color:var(--green)"></i><span class="integ-txt">Programme matches destination batch</span><span class="integ-status" style="color:var(--green)">Pass</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hdr"><div class="card-title"><i class="lni lni-alarm-clock"></i> Transfer History</div></div>
+          <div class="timeline">
+            <div class="tl-item"><div class="tl-dot done"><i class="lni lni-checkmark"></i></div><div><div class="tl-label">Enrolled — BSc.IT-2024A</div><div class="tl-meta">Initial assignment · Jan 15, 2024</div></div></div>
+            <div class="tl-item"><div class="tl-dot pur"><i class="lni lni-transfer"></i></div><div><div class="tl-label">Current — BSc.IT-2024A</div><div class="tl-meta">No transfers on record</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PROGRAMME TRANSFER -->
+<div class="page" id="page-prog-transfer">
+  <div class="pg-hdr"><div><div class="pg-title">Programme Transfer</div><div class="pg-sub">Move a student to a different academic programme with automatic credit mapping</div></div></div>
+  <div class="lookup-shell">
+    <div class="lookup-label"><i class="lni lni-search-alt"></i> Student Lookup</div>
+    <div class="lookup-row">
+      <div class="lookup-wrap"><i class="lni lni-search-alt lookup-icon"></i><input class="lookup-inp" id="pt-search" placeholder="Student ID, name, or registration number..."></div>
+      <button class="btn btn-purple" onclick="loadXfer('pt')"><i class="lni lni-user"></i> Load Student</button>
+      <button class="btn btn-neu" onclick="clearXfer('pt')"><i class="lni lni-close"></i> Clear</button>
+    </div>
+  </div>
+  <div class="empty" id="pt-empty"><div class="empty-icon"><i class="lni lni-graduation"></i></div><div class="empty-title">No Student Loaded</div><div class="empty-sub">Search for a student to compute credit mappings and programme eligibility before executing a transfer.</div></div>
+  <div id="pt-loaded" style="display:none">
+    <div class="info-box" style="margin-bottom:16px"><i class="lni lni-information" style="color:var(--b700);font-size:16px;flex-shrink:0;margin-top:1px"></i><div><strong>Academic Registrar Access.</strong> Transfers require board approval. The previous programme track is archived as read-only — no history is deleted.</div></div>
+    <div class="baseline">
+      <div class="baseline-lbl"><i class="lni lni-shield"></i> Current Programme (Read-Only)</div>
+      <div class="baseline-grid">
+        <div class="b-item"><div class="b-lbl">Student</div><div class="b-val" id="pt-name">Sarah Namutebi</div></div>
+        <div class="b-item"><div class="b-lbl">Programme</div><div class="b-val">BSc. IT</div></div>
+        <div class="b-item"><div class="b-lbl">Semesters Done</div><div class="b-val">2 of 6</div></div>
+        <div class="b-item"><div class="b-lbl">Credits Earned</div><div class="b-val" style="color:var(--green)">28 credits</div></div>
+        <div class="b-item"><div class="b-lbl">Current Batch</div><div class="b-val" style="font-family:monospace;color:var(--purple-dark)">BSc.IT-2024A</div></div>
+        <div class="b-item"><div class="b-lbl">Fee Structure</div><div class="b-val">Local · $750/sem</div></div>
+      </div>
+    </div>
+    <div class="g2">
+      <div class="card">
+        <div class="card-hdr"><div class="card-title"><i class="lni lni-transfer"></i> Transfer Parameters</div></div>
+        <div class="fg"><label class="lbl">Target Programme <span class="req">*</span></label>
+          <select class="ctrl" onchange="compCredits(this.value)">
+            <option value="">— Select target programme —</option>
+            <option value="BBA">Bachelor of Business Administration</option>
+            <option value="BSc.AF">BSc. Accounting &amp; Finance</option>
+            <option value="MBA">Master of Business Administration</option>
+          </select>
+        </div>
+        <div class="fg"><label class="lbl">Effective From <span class="req">*</span></label><select class="ctrl"><option>Semester 3 (Current)</option><option>Semester 4 (Next)</option></select></div>
+        <div class="fg"><label class="lbl">Board Approval Reference <span class="req">*</span></label><input class="ctrl" placeholder="e.g. ISBAT/BOARD/2026/041"></div>
+        <div class="fg"><label class="lbl">Remarks <span class="req">*</span></label><textarea class="ctrl" rows="3" placeholder="Reason for programme transfer..."></textarea></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-neu" onclick="clearXfer('pt')">Cancel</button>
+          <button class="btn btn-primary" onclick="openModal('modal-pt-confirm')"><i class="lni lni-checkmark"></i> Execute Transfer</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="card-title"><i class="lni lni-book"></i> Credit Transfer Matrix</div><span class="badge badge-grey" id="credit-badge">Select programme</span></div>
+        <div id="credit-empty" style="text-align:center;padding:32px 0;color:var(--g400);font-size:13px"><i class="lni lni-book" style="font-size:28px;display:block;margin-bottom:8px"></i>Select a target programme to compute credits</div>
+        <div id="credit-content" style="display:none">
+          <div class="flex gap-2" style="margin-bottom:12px;flex-wrap:wrap">
+            <span class="badge badge-green"><i class="lni lni-checkmark"></i> 18 transferable</span>
+            <span class="badge badge-red"><i class="lni lni-close"></i> 10 excluded</span>
+          </div>
+          <div class="credit-matrix">
+            <div style="background:linear-gradient(135deg,var(--purple-dark),var(--purple));padding:10px 14px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.06em">BSc.IT → Target Programme</span><span style="font-size:11px;color:rgba(255,255,255,.7)">2 semesters</span></div>
+            <div class="cr-row"><div class="cr-code">IT101</div><div style="font-weight:600;color:var(--g700)">Intro to Programming<div style="font-size:11px;color:var(--g500);font-weight:400">Elective — transferable</div></div><span class="cr-status cr-ok"><i class="lni lni-checkmark"></i> Transfer</span></div>
+            <div class="cr-row"><div class="cr-code">IT102</div><div style="font-weight:600;color:var(--g700)">Computer Organisation<div style="font-size:11px;color:var(--g500);font-weight:400">Not applicable</div></div><span class="cr-status cr-no"><i class="lni lni-close"></i> Excluded</span></div>
+            <div class="cr-row"><div class="cr-code">IT103</div><div style="font-weight:600;color:var(--g700)">Engineering Maths I<div style="font-size:11px;color:var(--g500);font-weight:400">Not applicable</div></div><span class="cr-status cr-no"><i class="lni lni-close"></i> Excluded</span></div>
+            <div class="cr-row"><div class="cr-code">IT104</div><div style="font-weight:600;color:var(--g700)">Programming Lab<div style="font-size:11px;color:var(--g500);font-weight:400">Elective — transferable</div></div><span class="cr-status cr-ok"><i class="lni lni-checkmark"></i> Transfer</span></div>
+            <div class="cr-row"><div class="cr-code">NEW01</div><div style="font-weight:600;color:var(--g700)">Core unit (new programme)<div style="font-size:11px;color:var(--g500);font-weight:400">Must register fresh</div></div><span class="cr-status cr-new"><i class="lni lni-plus"></i> New Enrolment</span></div>
+          </div>
+          <div class="delta" style="margin-top:14px">
+            <div class="delta-hdr"><i class="lni lni-book"></i> Credit Summary</div>
+            <div class="delta-row"><span class="delta-lbl">Credits earned (BSc.IT)</span><span class="delta-val">28 credits</span></div>
+            <div class="delta-row"><span class="delta-lbl">Transferable</span><span class="delta-val neg">18 credits</span></div>
+            <div class="delta-row"><span class="delta-lbl">Excluded</span><span class="delta-val pos">10 credits</span></div>
+            <div class="delta-total"><span>Entry point in target</span><span style="color:var(--purple-dark)">Semester 2</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LEARNING MODE -->
+<div class="page" id="page-learning-mode">
+  <div class="pg-hdr"><div><div class="pg-title">Learning Mode</div><div class="pg-sub">Switch a student between Campus-Based and Online / ODL modes</div></div></div>
+  <div class="lookup-shell">
+    <div class="lookup-label"><i class="lni lni-search-alt"></i> Student Lookup</div>
+    <div class="lookup-row">
+      <div class="lookup-wrap"><i class="lni lni-search-alt lookup-icon"></i><input class="lookup-inp" id="lm-search" placeholder="Student ID, name, or registration number..."></div>
+      <button class="btn btn-purple" onclick="loadXfer('lm')"><i class="lni lni-user"></i> Load Student</button>
+      <button class="btn btn-neu" onclick="clearXfer('lm')"><i class="lni lni-close"></i> Clear</button>
+    </div>
+  </div>
+  <div class="empty" id="lm-empty"><div class="empty-icon"><i class="lni lni-display"></i></div><div class="empty-title">No Student Loaded</div><div class="empty-sub">Search for a student to view their current learning mode and switch between Campus-Based and Online/ODL.</div></div>
+  <div id="lm-loaded" style="display:none">
+    <div class="baseline">
+      <div class="baseline-lbl"><i class="lni lni-shield"></i> Current Enrollment (Read-Only)</div>
+      <div class="baseline-grid">
+        <div class="b-item"><div class="b-lbl">Student</div><div class="b-val" id="lm-name">Sarah Namutebi</div></div>
+        <div class="b-item"><div class="b-lbl">Current Mode</div><div class="b-val" style="color:var(--green)">Campus-Based</div></div>
+        <div class="b-item"><div class="b-lbl">Campus</div><div class="b-val">Main Campus</div></div>
+      </div>
+    </div>
+    <div class="g2">
+      <div class="card">
+        <div class="card-hdr"><div class="card-title"><i class="lni lni-display"></i> Select New Learning Mode</div></div>
+        <div class="mode-card sel" id="mc-campus" onclick="selMode('campus')">
+          <div class="mode-icon"><i class="lni lni-home"></i></div>
+          <div><div class="mode-lbl">Campus-Based</div><div class="mode-sub">Student attends physical classes. Full access to campus facilities, labs, library, and biometric attendance.</div></div>
+        </div>
+        <div class="mode-card" id="mc-odl" onclick="selMode('odl')">
+          <div class="mode-icon"><i class="lni lni-display"></i></div>
+          <div><div class="mode-lbl">Online / ODL</div><div class="mode-sub">Student learns remotely via digital platforms. Physical campus access suspended. LMS fully unlocked.</div></div>
+        </div>
+        <div class="fg" id="campus-field" style="margin-top:6px"><label class="lbl">Campus Location</label><select class="ctrl"><option>Main Campus · Kampala</option><option>City Campus · Kampala CBD</option></select></div>
+        <div class="fg" id="odl-field" style="display:none;margin-top:6px"><label class="lbl">Online Campus Region</label><select class="ctrl"><option>Uganda (Online)</option><option>Kenya (Online)</option><option>Rwanda (Online)</option><option>International (Online)</option></select></div>
+        <div class="fg"><label class="lbl">Effective From <span class="req">*</span></label><select class="ctrl"><option>Immediately</option><option>Next Semester</option></select></div>
+        <div class="fg"><label class="lbl">Reason <span class="req">*</span></label><select class="ctrl"><option value="">— Select reason —</option><option>Job Relocation</option><option>Medical</option><option>Personal Preference</option><option>Administrative</option></select></div>
+        <div class="fg"><label class="lbl">Remarks <span class="req">*</span></label><textarea class="ctrl" rows="3" placeholder="Explain the reason for mode change..."></textarea></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-neu" onclick="clearXfer('lm')">Cancel</button>
+          <button class="btn btn-purple" onclick="toast('Learning mode updated','ok')"><i class="lni lni-checkmark"></i> Apply Mode Change</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="card-title"><i class="lni lni-information"></i> Impact Preview</div></div>
+        <div id="impact-campus">
+          <div class="success-box" style="margin-bottom:12px"><i class="lni lni-checkmark-circle" style="color:var(--green);font-size:15px;flex-shrink:0"></i><div style="font-size:12px"><strong>Campus-Based active.</strong> Student has full physical access.</div></div>
+          <div class="chklist">
+            <div class="chk pass"><i class="lni lni-checkmark-circle chk-icon" style="color:var(--green)"></i><span class="chk-text">Physical class attendance — Enabled</span><span class="chk-status">Active</span></div>
+            <div class="chk pass"><i class="lni lni-checkmark-circle chk-icon" style="color:var(--green)"></i><span class="chk-text">Biometric tracking — Enabled</span><span class="chk-status">Active</span></div>
+            <div class="chk pass"><i class="lni lni-checkmark-circle chk-icon" style="color:var(--green)"></i><span class="chk-text">Lab &amp; Library access — Enabled</span><span class="chk-status">Active</span></div>
+            <div class="chk pass"><i class="lni lni-checkmark-circle chk-icon" style="color:var(--green)"></i><span class="chk-text">LMS / Online portal — Enabled</span><span class="chk-status">Active</span></div>
+          </div>
+        </div>
+        <div id="impact-odl" style="display:none">
+          <div class="warn-box" style="margin-bottom:12px"><i class="lni lni-warning" style="color:var(--amber);font-size:15px;flex-shrink:0"></i><div style="font-size:12px"><strong>Switching to Online/ODL.</strong> Physical campus access will be suspended on save.</div></div>
+          <div class="chklist">
+            <div class="chk fail"><i class="lni lni-close chk-icon" style="color:var(--red)"></i><span class="chk-text">Physical attendance — Disabled</span><span class="chk-status">Suspended</span></div>
+            <div class="chk fail"><i class="lni lni-close chk-icon" style="color:var(--red)"></i><span class="chk-text">Biometric tracking — Disabled</span><span class="chk-status">Suspended</span></div>
+            <div class="chk fail"><i class="lni lni-close chk-icon" style="color:var(--red)"></i><span class="chk-text">Lab &amp; Library — Revoked</span><span class="chk-status">Revoked</span></div>
+            <div class="chk pass"><i class="lni lni-checkmark-circle chk-icon" style="color:var(--green)"></i><span class="chk-text">LMS / Online portal — Fully unlocked</span><span class="chk-status">Unlocked</span></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px;margin-bottom:0">
+          <div class="card-hdr" style="margin-bottom:10px"><div class="card-title"><i class="lni lni-alarm-clock"></i> Mode History</div></div>
+          <div class="timeline">
+            <div class="tl-item"><div class="tl-dot done"><i class="lni lni-checkmark"></i></div><div><div class="tl-label">Campus-Based — Enrolled</div><div class="tl-meta">Jan 2024 · Initial mode at registration</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- INTAKE TRANSFER -->
+<div class="page" id="page-intake-transfer">
+  <div class="pg-hdr"><div><div class="pg-title">Intake Transfer</div><div class="pg-sub">Move a student to a different intake cohort — deferrals, rejoins, and period shifts</div></div></div>
+  <div class="lookup-shell">
+    <div class="lookup-label"><i class="lni lni-search-alt"></i> Student Lookup</div>
+    <div class="lookup-row">
+      <div class="lookup-wrap"><i class="lni lni-search-alt lookup-icon"></i><input class="lookup-inp" id="it-search" placeholder="Student ID, name, or registration number..."></div>
+      <button class="btn btn-purple" onclick="loadXfer('it')"><i class="lni lni-user"></i> Load Student</button>
+      <button class="btn btn-neu" onclick="clearXfer('it')"><i class="lni lni-close"></i> Clear</button>
+    </div>
+  </div>
+  <div class="empty" id="it-empty"><div class="empty-icon"><i class="lni lni-calendar"></i></div><div class="empty-title">No Student Loaded</div><div class="empty-sub">Search for a student to shift their enrollment intake period.</div></div>
+  <div id="it-loaded" style="display:none">
+    <div class="baseline">
+      <div class="baseline-lbl"><i class="lni lni-shield"></i> Current Intake (Read-Only)</div>
+      <div class="baseline-grid">
+        <div class="b-item"><div class="b-lbl">Student</div><div class="b-val" id="it-name">Sarah Namutebi</div></div>
+        <div class="b-item"><div class="b-lbl">Current Intake</div><div class="b-val">Spring 2024 (20241)</div></div>
+        <div class="b-item"><div class="b-lbl">Current Batch</div><div class="b-val" style="font-family:monospace;color:var(--purple-dark)">BSc.IT-2024A</div></div>
+        <div class="b-item"><div class="b-lbl">Semester</div><div class="b-val">Semester 3</div></div>
+        <div class="b-item"><div class="b-lbl">Fee Structure</div><div class="b-val">Local · $750/sem</div></div>
+        <div class="b-item"><div class="b-lbl">Status</div><div class="b-val" style="color:var(--green)">Active</div></div>
+      </div>
+    </div>
+    <div class="g2">
+      <div class="card">
+        <div class="card-hdr"><div class="card-title"><i class="lni lni-calendar"></i> Intake Transfer Parameters</div></div>
+        <div class="fg"><label class="lbl">Target Intake Period <span class="req">*</span></label>
+          <select class="ctrl" onchange="prevIntake(this.value)">
+            <option value="">— Select target intake —</option>
+            <option value="20251">Spring 2025 (20251)</option>
+            <option value="20252">Fall 2025 (20252)</option>
+            <option value="20261">Spring 2026 (20261)</option>
+          </select>
+        </div>
+        <div class="fg" id="it-batch-row" style="display:none"><label class="lbl">Assign to Batch in Target Intake <span class="req">*</span></label><select class="ctrl"><option value="">— Select batch —</option><option>BSc.IT-2025A · Day</option><option>BSc.IT-2025B · Evening</option></select></div>
+        <div class="fg"><label class="lbl">Transfer Reason <span class="req">*</span></label><select class="ctrl"><option value="">— Select reason —</option><option>Dropout Rejoin</option><option>Deferment — Medical</option><option>Deferment — Job / Relocation</option><option>Deferment — Personal</option><option>Administrative Correction</option></select></div>
+        <div class="fg">
+          <label class="lbl">Discount Override (%)</label>
+          <input class="ctrl" type="number" min="0" max="100" value="0" style="max-width:100px" placeholder="0">
+          <div style="font-size:11.5px;color:var(--g500);margin-top:4px">0 = no discount. Finance role required for any discount.</div>
+        </div>
+        <div class="fg"><label class="lbl">Mandatory Remarks <span class="req">*</span></label><textarea class="ctrl" rows="3" placeholder="Detail the circumstances leading to this intake shift..."></textarea></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-neu" onclick="clearXfer('it')">Cancel</button>
+          <button class="btn btn-purple" onclick="openModal('modal-it-confirm')"><i class="lni lni-checkmark"></i> Execute Intake Transfer</button>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-hdr"><div class="card-title"><i class="lni lni-dollar"></i> Fee Re-mapping Preview</div></div>
+          <div id="it-prev-empty" style="text-align:center;padding:28px 0;color:var(--g400);font-size:13px"><i class="lni lni-calendar" style="font-size:28px;display:block;margin-bottom:8px"></i>Select a target intake to preview fee re-mapping</div>
+          <div id="it-prev-content" style="display:none">
+            <div class="delta">
+              <div class="delta-hdr"><i class="lni lni-dollar"></i> Intake Fee Comparison</div>
+              <div class="delta-row"><span class="delta-lbl">Current intake fee</span><span class="delta-val">$750 / semester</span></div>
+              <div class="delta-row"><span class="delta-lbl">Target intake fee</span><span class="delta-val changed">$780 / semester</span></div>
+              <div class="delta-row"><span class="delta-lbl">Outstanding balance</span><span class="delta-val" style="color:var(--amber)">$450 (carries over)</span></div>
+              <div class="delta-total"><span>Effective from</span><span style="color:var(--purple-dark)">Target Semester 1</span></div>
+            </div>
+            <div class="danger-box mt-3"><i class="lni lni-warning" style="color:var(--red);font-size:15px;flex-shrink:0;margin-top:1px"></i><div style="font-size:12px"><strong>Ledger purge:</strong> All unbilled future tokens will be recalculated using the target intake fee template. Outstanding balance carries over.</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hdr"><div class="card-title"><i class="lni lni-alarm-clock"></i> Intake History</div></div>
+          <div class="timeline">
+            <div class="tl-item"><div class="tl-dot done"><i class="lni lni-checkmark"></i></div><div><div class="tl-label">Spring 2024 (20241)</div><div class="tl-meta">Initial intake at registration · Jan 2024</div></div></div>
+            <div class="tl-item"><div class="tl-dot pur"><i class="lni lni-calendar"></i></div><div><div class="tl-label">Current — Spring 2024</div><div class="tl-meta">No intake transfers on record</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STATEMENT -->
+<div class="page" id="page-statement">
+  <div class="pg-hdr"><div><div class="pg-title">Student Statement</div><div class="pg-sub">Fee ledger and payment history per student</div></div><div class="flex gap-2"><button class="btn btn-neu btn-sm"><i class="lni lni-printer"></i> Print</button><button class="btn btn-neu btn-sm"><i class="lni lni-download"></i> PDF</button></div></div>
+  <div class="card" style="margin-bottom:16px"><div class="flex gap-2"><div style="position:relative;flex:1"><i class="lni lni-search-alt" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--g400)"></i><input class="ctrl" style="padding-left:34px" value="Sarah Namutebi — STU-2024-001" placeholder="Search student..."></div><select class="ctrl" style="max-width:200px"><option>All Semesters</option><option>Semester 3</option><option>Semester 2</option><option>Semester 1</option></select><button class="btn btn-purple btn-sm">Load</button></div></div>
+  <div class="stats-row">
+    <div class="stat-card" style="--sa:#5b21b6;--sb:#8b5cf6"><div class="stat-lbl">Total Billed</div><div class="stat-num" style="color:var(--purple-dark)">$2,800</div><div class="stat-sub">3 semesters</div></div>
+    <div class="stat-card" style="--sa:#059669;--sb:#34d399"><div class="stat-lbl">Total Paid</div><div class="stat-num" style="color:var(--green)">$2,350</div><div class="stat-sub up">84% clearance</div></div>
+    <div class="stat-card" style="--sa:#dc2626;--sb:#f87171"><div class="stat-lbl">Outstanding</div><div class="stat-num" style="color:var(--red)">$450</div><div class="stat-sub warn">Semester 3</div></div>
+    <div class="stat-card" style="--sa:#d97706;--sb:#fbbf24"><div class="stat-lbl">Fee Clearance</div><div class="stat-num" style="color:var(--amber)">84%</div><div class="stat-sub warn">Below 100%</div></div>
+  </div>
+  <div class="card">
+    <div class="card-hdr"><div class="card-title"><i class="lni lni-files"></i> Ledger — Sarah Namutebi</div><span class="badge badge-amber">$450 Outstanding</span></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Date</th><th>Description</th><th>Semester</th><th>Billed</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Jan 15, 2024</td><td>Admission Fee</td><td>Sem 1</td><td>50,000 UGX</td><td>50,000 UGX</td><td>0</td><td><span class="badge badge-green">Cleared</span></td></tr>
+        <tr><td>Jan 15, 2024</td><td>Registration Fee</td><td>Sem 1</td><td>$250</td><td>$250</td><td>0</td><td><span class="badge badge-green">Cleared</span></td></tr>
+        <tr><td>Jan 20, 2024</td><td>Tuition — Semester 1</td><td>Sem 1</td><td>$750</td><td>$750</td><td>0</td><td><span class="badge badge-green">Cleared</span></td></tr>
+        <tr><td>Jun 10, 2024</td><td>Semester Entry Fee</td><td>Sem 2</td><td>$200</td><td>$200</td><td>0</td><td><span class="badge badge-green">Cleared</span></td></tr>
+        <tr><td>Jun 15, 2024</td><td>Tuition — Semester 2</td><td>Sem 2</td><td>$750</td><td>$750</td><td>0</td><td><span class="badge badge-green">Cleared</span></td></tr>
+        <tr><td>Jan 8, 2025</td><td>Semester Entry Fee</td><td>Sem 3</td><td>$200</td><td>$200</td><td>0</td><td><span class="badge badge-green">Cleared</span></td></tr>
+        <tr class="flagged"><td>Jan 10, 2025</td><td>Tuition — Semester 3</td><td>Sem 3</td><td>$750</td><td>$300</td><td><strong style="color:var(--red)">$450</strong></td><td><span class="badge badge-amber">Partial</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- BATCH SUMMARY -->
+<div class="page" id="page-batch-summary">
+  <div class="pg-hdr"><div><div class="pg-title">Batch Summary</div><div class="pg-sub">Student counts and status breakdown by batch</div></div><div class="flex gap-2"><select class="ctrl" style="max-width:200px"><option>Spring 2026</option><option>Fall 2025</option><option>Spring 2025</option></select><button class="btn btn-neu btn-sm"><i class="lni lni-download"></i> Export</button></div></div>
+  <div class="stats-row">
+    <div class="stat-card" style="--sa:#5b21b6;--sb:#8b5cf6"><div class="stat-lbl">Total Batches</div><div class="stat-num" style="color:var(--purple-dark)">8</div><div class="stat-sub">Active this intake</div></div>
+    <div class="stat-card" style="--sa:#059669;--sb:#34d399"><div class="stat-lbl">Total Students</div><div class="stat-num" style="color:var(--green)">247</div><div class="stat-sub up">Across all batches</div></div>
+    <div class="stat-card" style="--sa:#d97706;--sb:#fbbf24"><div class="stat-lbl">Full Batches</div><div class="stat-num" style="color:var(--amber)">3</div><div class="stat-sub warn">At capacity</div></div>
+    <div class="stat-card" style="--sa:#334155;--sb:#64748b"><div class="stat-lbl">Avg Batch Size</div><div class="stat-num">31</div><div class="stat-sub">students / batch</div></div>
+  </div>
+  <div class="batch-card"><div class="batch-hdr"><div><div class="batch-hdr-name">BSc.IT-2024A · BSc. Information Technology</div><div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px">Spring 2024 · Day Mode · Sem 3 current</div></div><span class="batch-hdr-cnt">52 students</span></div><div class="batch-body"><div class="batch-stat"><div class="batch-num" style="color:var(--green)">42</div><div class="batch-lbl">Active</div></div><div class="batch-stat"><div class="batch-num" style="color:var(--amber)">5</div><div class="batch-lbl">YTR</div></div><div class="batch-stat"><div class="batch-num" style="color:var(--cyan)">2</div><div class="batch-lbl">YTC</div></div><div class="batch-stat"><div class="batch-num" style="color:var(--red)">3</div><div class="batch-lbl">Dropout</div></div></div></div>
+  <div class="batch-card"><div class="batch-hdr"><div><div class="batch-hdr-name">BBA-2024A · Bachelor of Business Admin.</div><div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px">Spring 2024 · Day Mode · Sem 3 current</div></div><span class="batch-hdr-cnt">48 students</span></div><div class="batch-body"><div class="batch-stat"><div class="batch-num" style="color:var(--green)">38</div><div class="batch-lbl">Active</div></div><div class="batch-stat"><div class="batch-num" style="color:var(--amber)">6</div><div class="batch-lbl">YTR</div></div><div class="batch-stat"><div class="batch-num" style="color:var(--cyan)">1</div><div class="batch-lbl">YTC</div></div><div class="batch-stat"><div class="batch-num" style="color:var(--red)">3</div><div class="batch-lbl">Dropout</div></div></div></div>
+  <div class="batch-card"><div class="batch-hdr"><div><div class="batch-hdr-name">BSc.IT-2025A · BSc. Information Technology</div><div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px">Spring 2025 · Day Mode · Sem 1 current</div></div><span class="batch-hdr-cnt">37 students</span></div><div class="batch-body"><div class="batch-stat"><div class="batch-num" style="color:var(--green)">34</div><div class="batch-lbl">Active</div></div><div class="batch-stat"><div class="batch-num" style="color:var(--amber)">2</div><div class="batch-lbl">YTR</div></div><div class="batch-stat"><div class="batch-num">0</div><div class="batch-lbl">YTC</div></div><div class="batch-stat"><div class="batch-num" style="color:var(--red)">1</div><div class="batch-lbl">Dropout</div></div></div></div>
+</div>
+
+<!-- SERVICES -->
+<div class="page" id="page-services">
+  <div class="pg-hdr"><div><div class="pg-title">Student Services</div><div class="pg-sub">Tickets raised by students — respond and close</div></div><div class="flex gap-2"><select class="ctrl" style="max-width:150px"><option>All Categories</option><option>Finance</option><option>Assessment</option><option>Academic</option><option>Infrastructure</option></select><select class="ctrl" style="max-width:140px"><option>All Statuses</option><option>Open</option><option>In Progress</option><option>Closed</option></select></div></div>
+  <div class="stats-row">
+    <div class="stat-card" style="--sa:#dc2626;--sb:#f87171"><div class="stat-lbl">Open</div><div class="stat-num" style="color:var(--red)">4</div><div class="stat-sub dn">Needs response</div></div>
+    <div class="stat-card" style="--sa:#d97706;--sb:#fbbf24"><div class="stat-lbl">In Progress</div><div class="stat-num" style="color:var(--amber)">7</div><div class="stat-sub warn">Being handled</div></div>
+    <div class="stat-card" style="--sa:#059669;--sb:#34d399"><div class="stat-lbl">Closed This Month</div><div class="stat-num" style="color:var(--green)">23</div><div class="stat-sub up">↑ 5 vs last month</div></div>
+    <div class="stat-card" style="--sa:#5b21b6;--sb:#8b5cf6"><div class="stat-lbl">Avg Resolution</div><div class="stat-num" style="color:var(--purple-dark)">1.8d</div><div class="stat-sub">days to close</div></div>
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Ticket ID</th><th>Student</th><th>Category</th><th>Subject</th><th>Status</th><th>Raised</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr><td><span style="font-family:monospace;font-weight:700;color:var(--purple-dark)">TKT-001</span></td><td><div style="font-weight:600">Sarah Namutebi</div><div style="font-size:11px;color:var(--g500)">STU-2024-001</div></td><td><span class="badge badge-red">Finance</span></td><td>Payment receipt not generated</td><td><span class="badge badge-red"><span class="bdot"></span> Open</span></td><td style="color:var(--g500);font-size:12px">2 hrs ago</td><td><button class="btn btn-purple btn-sm" onclick="openModal('modal-ticket')">Respond</button></td></tr>
+      <tr><td><span style="font-family:monospace;font-weight:700;color:var(--purple-dark)">TKT-002</span></td><td><div style="font-weight:600">John Mukasa</div><div style="font-size:11px;color:var(--g500)">STU-2024-002</div></td><td><span class="badge badge-blue">Assessment</span></td><td>CW marks not reflecting</td><td><span class="badge badge-amber"><span class="bdot"></span> In Progress</span></td><td style="color:var(--g500);font-size:12px">1 day ago</td><td><button class="btn btn-neu btn-sm" onclick="openModal('modal-ticket')">View</button></td></tr>
+      <tr><td><span style="font-family:monospace;font-weight:700;color:var(--purple-dark)">TKT-003</span></td><td><div style="font-weight:600">Aisha Nalwoga</div><div style="font-size:11px;color:var(--g500)">STU-2024-015</div></td><td><span class="badge badge-purple">Academic</span></td><td>Timetable clash Sem 3</td><td><span class="badge badge-red"><span class="bdot"></span> Open</span></td><td style="color:var(--g500);font-size:12px">2 days ago</td><td><button class="btn btn-purple btn-sm" onclick="openModal('modal-ticket')">Respond</button></td></tr>
+      <tr><td><span style="font-family:monospace;font-weight:700;color:var(--purple-dark)">TKT-004</span></td><td><div style="font-weight:600">David Okello</div><div style="font-size:11px;color:var(--g500)">STU-2024-031</div></td><td><span class="badge badge-grey">Infrastructure</span></td><td>Lab PC not working — Block C</td><td><span class="badge badge-green"><span class="bdot"></span> Closed</span></td><td style="color:var(--g500);font-size:12px">3 days ago</td><td><button class="btn btn-neu btn-sm">View</button></td></tr>
+    </tbody>
+  </table></div>
+</div>
+
+<!-- COMMUNICATIONS -->
+<div class="page" id="page-communications">
+  <div class="pg-hdr"><div><div class="pg-title">Send Communication</div><div class="pg-sub">Bulk email or WhatsApp to filtered student groups</div></div></div>
+  <div class="g2">
+    <div class="card">
+      <div class="card-hdr"><div class="card-title"><i class="lni lni-target-customer"></i> Recipient Targeting</div></div>
+      <div class="fg"><label class="lbl">Channel</label><div class="tgl-group"><button class="tgl-btn tgl-on">Email</button><button class="tgl-btn" onclick="tglSwitch(this)">WhatsApp</button><button class="tgl-btn" onclick="tglSwitch(this)">Both</button></div></div>
+      <div class="fg"><label class="lbl">Filter by Status</label><select class="ctrl"><option>All Students</option><option>Yet to Register</option><option>Yet to Clear</option><option>Dropout</option><option>Active</option></select></div>
+      <div class="fg"><label class="lbl">Filter by Programme</label><select class="ctrl"><option>All Programmes</option><option>BSc. IT</option><option>BBA</option><option>BSc. Accounting</option><option>MBA</option></select></div>
+      <div class="fg"><label class="lbl">Filter by Batch</label><select class="ctrl"><option>All Batches</option><option>BSc.IT-2024A</option><option>BBA-2024A</option><option>BSc.IT-2025A</option></select></div>
+      <div class="fg"><label class="lbl">Filter by Sponsorship</label><select class="ctrl"><option>All</option><option>HESFB</option><option>Watoto</option><option>Self-Sponsored</option></select></div>
+      <div style="padding:12px 14px;background:var(--purple-bg);border-radius:var(--rxs);border:1.5px solid var(--purple-bd);display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;font-weight:600;color:var(--purple-dark)">Recipients matching filters:</span><span style="font-size:18px;font-weight:800;color:var(--purple-dark)">28 students</span></div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div class="card-title"><i class="lni lni-envelope"></i> Message Composition</div></div>
+      <div class="fg"><label class="lbl">Subject <span class="req">*</span></label><input class="ctrl" placeholder="e.g. Reminder: Outstanding Fee Balance — Spring 2026"></div>
+      <div class="fg"><label class="lbl">Template</label><select class="ctrl" onchange="toast('Template loaded','ok')"><option>— Custom message —</option><option>Fee Payment Reminder</option><option>Registration Deadline</option><option>Academic Warning</option><option>Welcome New Student</option></select></div>
+      <div class="fg"><label class="lbl">Message Body <span class="req">*</span></label><textarea class="ctrl" rows="7" placeholder="Dear {student_name},&#10;&#10;Variables: {student_name}, {balance}, {semester}, {deadline}"></textarea></div>
+      <div class="info-box" style="margin-bottom:14px"><i class="lni lni-information" style="color:var(--b700);font-size:15px;flex-shrink:0"></i><div style="font-size:12px">Use <code>{student_name}</code>, <code>{balance}</code>, <code>{semester}</code> for personalised messages.</div></div>
+      <div class="flex gap-2" style="justify-content:flex-end"><button class="btn btn-neu">Preview</button><button class="btn btn-purple" onclick="toast('Message sent to 28 students','ok')"><i class="lni lni-envelope"></i> Send to 28 Students</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- MASTERS -->
+<div class="page" id="page-masters">
+  <div class="pg-hdr"><div><div class="pg-title">Category Masters</div><div class="pg-sub">Service and Student Category configuration</div></div></div>
+  <div class="g2">
+    <div class="card">
+      <div class="card-hdr"><div class="card-title"><i class="lni lni-ticket"></i> Service Category Master</div><button class="btn btn-purple btn-sm" onclick="openModal('modal-add-cat')"><i class="lni lni-plus"></i> Add</button></div>
+      <div class="tbl-wrap">
+        <div class="mrow" style="background:linear-gradient(135deg,var(--purple-dark),var(--purple))"><span style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.9)">Category</span><span style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.9)">Routes To</span><span></span></div>
+        <div class="mrow"><span style="font-weight:600">Finance</span><span style="color:var(--g500);font-size:12px">Finance Team</span><div class="flex gap-2"><button class="btn-icon"><i class="lni lni-pencil-alt"></i></button><button class="btn-icon" style="color:var(--red)"><i class="lni lni-trash-can"></i></button></div></div>
+        <div class="mrow"><span style="font-weight:600">Assessment</span><span style="color:var(--g500);font-size:12px">Exam Office</span><div class="flex gap-2"><button class="btn-icon"><i class="lni lni-pencil-alt"></i></button><button class="btn-icon" style="color:var(--red)"><i class="lni lni-trash-can"></i></button></div></div>
+        <div class="mrow"><span style="font-weight:600">Academic</span><span style="color:var(--g500);font-size:12px">Academic Registrar</span><div class="flex gap-2"><button class="btn-icon"><i class="lni lni-pencil-alt"></i></button><button class="btn-icon" style="color:var(--red)"><i class="lni lni-trash-can"></i></button></div></div>
+        <div class="mrow"><span style="font-weight:600">Infrastructure</span><span style="color:var(--g500);font-size:12px">Facilities Team</span><div class="flex gap-2"><button class="btn-icon"><i class="lni lni-pencil-alt"></i></button><button class="btn-icon" style="color:var(--red)"><i class="lni lni-trash-can"></i></button></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div class="card-title"><i class="lni lni-users"></i> Student Category Master</div><button class="btn btn-purple btn-sm" onclick="openModal('modal-add-cat')"><i class="lni lni-plus"></i> Add</button></div>
+      <div class="tbl-wrap">
+        <div class="mrow" style="background:linear-gradient(135deg,var(--purple-dark),var(--purple))"><span style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.9)">Category</span><span style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.9)">Fee Impact</span><span></span></div>
+        <div class="mrow"><span style="font-weight:600">Local Student</span><span style="color:var(--g500);font-size:12px">Local fee structure</span><div class="flex gap-2"><button class="btn-icon"><i class="lni lni-pencil-alt"></i></button><button class="btn-icon" style="color:var(--red)"><i class="lni lni-trash-can"></i></button></div></div>
+        <div class="mrow"><span style="font-weight:600">International</span><span style="color:var(--g500);font-size:12px">Int'l fee structure</span><div class="flex gap-2"><button class="btn-icon"><i class="lni lni-pencil-alt"></i></button><button class="btn-icon" style="color:var(--red)"><i class="lni lni-trash-can"></i></button></div></div>
+        <div class="mrow"><span style="font-weight:600">Sponsored (HESFB)</span><span style="color:var(--g500);font-size:12px">Bypasses fee checks</span><div class="flex gap-2"><button class="btn-icon"><i class="lni lni-pencil-alt"></i></button><button class="btn-icon" style="color:var(--red)"><i class="lni lni-trash-can"></i></button></div></div>
+        <div class="mrow"><span style="font-weight:600">Refugee</span><span style="color:var(--g500);font-size:12px">Special discount</span><div class="flex gap-2"><button class="btn-icon"><i class="lni lni-pencil-alt"></i></button><button class="btn-icon" style="color:var(--red)"><i class="lni lni-trash-can"></i></button></div></div>
+        <div class="mrow"><span style="font-weight:600">UCAM</span><span style="color:var(--g500);font-size:12px">Partner institution</span><div class="flex gap-2"><button class="btn-icon"><i class="lni lni-pencil-alt"></i></button><button class="btn-icon" style="color:var(--red)"><i class="lni lni-trash-can"></i></button></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SPECIALIZATION -->
+<div class="page" id="page-specialization">
+  <div class="pg-hdr"><div><div class="pg-title">Specialization Management</div><div class="pg-sub">Manage student specializations and discount assignments</div></div><button class="btn btn-purple" onclick="openModal('modal-add-cat')"><i class="lni lni-plus"></i> Add Specialization</button></div>
+  <div class="g2">
+    <div class="card">
+      <div class="card-hdr"><div class="card-title"><i class="lni lni-graduation"></i> Specializations</div></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Specialization</th><th>Programme</th><th>Students</th><th></th></tr></thead>
+        <tbody>
+          <tr><td><strong>Software Engineering</strong></td><td>BSc. IT</td><td>34</td><td><button class="btn btn-neu btn-sm">Edit</button></td></tr>
+          <tr><td><strong>Network &amp; Security</strong></td><td>BSc. IT</td><td>22</td><td><button class="btn btn-neu btn-sm">Edit</button></td></tr>
+          <tr><td><strong>Finance Track</strong></td><td>MBA</td><td>14</td><td><button class="btn btn-neu btn-sm">Edit</button></td></tr>
+          <tr><td><strong>HR Management</strong></td><td>BBA</td><td>18</td><td><button class="btn btn-neu btn-sm">Edit</button></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div class="card-title"><i class="lni lni-tag"></i> Discount Management</div><button class="btn btn-purple btn-sm" onclick="openModal('modal-add-cat')"><i class="lni lni-plus"></i> Add</button></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Discount Type</th><th>% Off</th><th>Applies To</th><th></th></tr></thead>
+        <tbody>
+          <tr><td><strong>Early Bird</strong></td><td><span class="badge badge-green">10%</span></td><td>Final tuition installment</td><td><button class="btn btn-neu btn-sm">Edit</button></td></tr>
+          <tr><td><strong>Sibling</strong></td><td><span class="badge badge-blue">5%</span></td><td>Final tuition installment</td><td><button class="btn btn-neu btn-sm">Edit</button></td></tr>
+          <tr><td><strong>Staff Child</strong></td><td><span class="badge badge-purple">25%</span></td><td>Final tuition installment</td><td><button class="btn btn-neu btn-sm">Edit</button></td></tr>
+        </tbody>
+      </table></div>
+      <div class="info-box mt-3"><i class="lni lni-information" style="color:var(--b700);font-size:15px;flex-shrink:0"></i><div style="font-size:12px">Discounts apply only to the <strong>final tuition installment</strong> of a semester — not to registration, admission, or entry fees.</div></div>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modal-bt-confirm">
+  <div class="modal modal-md">
+    <div class="modal-hdr"><div class="modal-title"><i class="lni lni-warning" style="color:var(--red)"></i> Confirm Batch Transfer</div><button class="modal-close" onclick="closeModal('modal-bt-confirm')">✕</button></div>
+    <div>
+      <div class="danger-box" style="margin-bottom:16px"><i class="lni lni-warning" style="color:var(--red);font-size:16px;flex-shrink:0"></i><div><strong>Ledger purge will occur.</strong> All pending unbilled tokens for Semester 3 onwards will be deleted and recalculated using the destination batch fee template. This cannot be undone.</div></div>
+      <div style="font-size:13px;color:var(--g700);display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;gap:12px"><span style="font-weight:600;width:120px;color:var(--g500)">Student</span><span>Sarah Namutebi — STU-2024-001</span></div>
+        <div style="display:flex;gap:12px"><span style="font-weight:600;width:120px;color:var(--g500)">From batch</span><span style="font-family:monospace">BSc.IT-2024A</span></div>
+        <div style="display:flex;gap:12px"><span style="font-weight:600;width:120px;color:var(--g500)">To batch</span><span style="font-family:monospace;color:var(--purple-dark)">BSc.IT-2025A</span></div>
+        <div style="display:flex;gap:12px"><span style="font-weight:600;width:120px;color:var(--g500)">Fee change</span><span style="color:var(--amber)">$750 → $780 / semester</span></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-neu" onclick="closeModal('modal-bt-confirm')">Cancel</button><button class="btn btn-danger" onclick="toast('Batch transfer executed','ok');closeModal('modal-bt-confirm')"><i class="lni lni-checkmark"></i> Confirm &amp; Execute</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-pt-confirm">
+  <div class="modal modal-md">
+    <div class="modal-hdr"><div class="modal-title"><i class="lni lni-warning" style="color:var(--amber)"></i> Confirm Programme Transfer</div><button class="modal-close" onclick="closeModal('modal-pt-confirm')">✕</button></div>
+    <div>
+      <div class="warn-box" style="margin-bottom:16px"><i class="lni lni-warning" style="color:var(--amber);font-size:16px;flex-shrink:0"></i><div><strong>Current programme track will be archived.</strong> BSc. IT records will be preserved as read-only. The student will be registered fresh in the target programme from the effective semester.</div></div>
+      <div style="font-size:13px;color:var(--g700);display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;gap:12px"><span style="font-weight:600;width:140px;color:var(--g500)">Student</span><span>Sarah Namutebi</span></div>
+        <div style="display:flex;gap:12px"><span style="font-weight:600;width:140px;color:var(--g500)">From programme</span><span>BSc. IT</span></div>
+        <div style="display:flex;gap:12px"><span style="font-weight:600;width:140px;color:var(--g500)">To programme</span><span style="color:var(--purple-dark);font-weight:700">BBA</span></div>
+        <div style="display:flex;gap:12px"><span style="font-weight:600;width:140px;color:var(--g500)">Credits transferred</span><span style="color:var(--green)">18 of 28</span></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-neu" onclick="closeModal('modal-pt-confirm')">Cancel</button><button class="btn btn-primary" onclick="toast('Programme transfer executed','ok');closeModal('modal-pt-confirm')"><i class="lni lni-checkmark"></i> Confirm &amp; Execute</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-it-confirm">
+  <div class="modal modal-md">
+    <div class="modal-hdr"><div class="modal-title"><i class="lni lni-warning" style="color:var(--red)"></i> Confirm Intake Transfer</div><button class="modal-close" onclick="closeModal('modal-it-confirm')">✕</button></div>
+    <div>
+      <div class="danger-box" style="margin-bottom:16px"><i class="lni lni-warning" style="color:var(--red);font-size:16px;flex-shrink:0"></i><div><strong>Ledger purge will occur.</strong> All pending unbilled tokens will be recalculated against the target intake fee template. Outstanding balance of $450 carries over.</div></div>
+      <div style="font-size:13px;color:var(--g700);display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;gap:12px"><span style="font-weight:600;width:140px;color:var(--g500)">Student</span><span>Sarah Namutebi</span></div>
+        <div style="display:flex;gap:12px"><span style="font-weight:600;width:140px;color:var(--g500)">From intake</span><span>Spring 2024 (20241)</span></div>
+        <div style="display:flex;gap:12px"><span style="font-weight:600;width:140px;color:var(--g500)">To intake</span><span style="color:var(--purple-dark);font-weight:700">Spring 2025 (20251)</span></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-neu" onclick="closeModal('modal-it-confirm')">Cancel</button><button class="btn btn-danger" onclick="toast('Intake transfer executed','ok');closeModal('modal-it-confirm')"><i class="lni lni-checkmark"></i> Confirm &amp; Execute</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-ticket">
+  <div class="modal modal-lg">
+    <div class="modal-hdr"><div class="modal-title"><i class="lni lni-ticket" style="color:var(--purple-dark)"></i> Ticket Response — TKT-001</div><button class="modal-close" onclick="closeModal('modal-ticket')">✕</button></div>
+    <div>
+      <div style="background:var(--surface);border-radius:var(--rsm);padding:14px 16px;margin-bottom:16px;border:1.5px solid var(--g200)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px"><div><div style="font-weight:700;color:var(--g900)">Payment receipt not generated</div><div style="font-size:12px;color:var(--g500);margin-top:3px">Sarah Namutebi · STU-2024-001 · Finance · 2 hours ago</div></div><span class="badge badge-red">Open</span></div>
+        <div style="margin-top:12px;font-size:13px;color:var(--g700);line-height:1.6">Payment of $300 made via bank transfer (ref: ABSA-2025-0110-4421) on Jan 10, 2025 — receipt not generated and balance not updated.</div>
+      </div>
+      <div class="fg"><label class="lbl">Response <span class="req">*</span></label><textarea class="ctrl" rows="4" placeholder="Type your response..."></textarea></div>
+      <div class="fg"><label class="lbl">Update Status</label><select class="ctrl"><option>In Progress</option><option>Pending Student</option><option>Resolved — Close Ticket</option></select></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-neu" onclick="closeModal('modal-ticket')">Cancel</button><button class="btn btn-purple" onclick="toast('Response sent','ok');closeModal('modal-ticket')"><i class="lni lni-envelope"></i> Send Response</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-add-cat">
+  <div class="modal modal-sm">
+    <div class="modal-hdr"><div class="modal-title">Add Category</div><button class="modal-close" onclick="closeModal('modal-add-cat')">✕</button></div>
+    <div><div class="fg"><label class="lbl">Name <span class="req">*</span></label><input class="ctrl" placeholder="Category name"></div><div class="fg"><label class="lbl">Routes To</label><input class="ctrl" placeholder="e.g. Finance Team"></div></div>
+    <div class="modal-footer"><button class="btn btn-neu" onclick="closeModal('modal-add-cat')">Cancel</button><button class="btn btn-purple" onclick="toast('Category added','ok');closeModal('modal-add-cat')">Save</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast-el"></div>
+
+<script>
+var activeModule = 'student';
+var panelOpen = true;
+var currentPage = 'dashboard';
+var activeStudent = null;
+
+function nav(id) {
+  var target = document.getElementById('page-' + id);
+  if (!target) { toast('Page not yet implemented.', 'warn'); return; }
+  document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+  target.classList.add('active');
+  document.querySelectorAll('.sb-item').forEach(function(s) {
+    s.classList.remove('active');
+    var oc = s.getAttribute('onclick') || '';
+    if (oc.indexOf("nav('" + id + "')") !== -1) s.classList.add('active');
+  });
+  currentPage = id;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function switchModule(mod) {
+  var shell = document.getElementById('sb-panel-shell');
+  var main = document.getElementById('main-content');
+  if (activeModule === mod) {
+    panelOpen = !panelOpen;
+    shell.classList.toggle('open', panelOpen);
+    main.classList.toggle('panel-open', panelOpen);
+    return;
+  }
+  activeModule = mod;
+  panelOpen = true;
+  document.querySelectorAll('.rail-item').forEach(function(r) { r.classList.remove('active'); });
+  var ri = document.querySelector('.rail-item[data-mod="' + mod + '"]');
+  if (ri) ri.classList.add('active');
+  shell.classList.add('open');
+  main.classList.add('panel-open');
+}
+
+function toggleCollapse(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.toggle('closed');
+}
+
+function openModal(id) { var el = document.getElementById(id); if (el) el.classList.add('open'); }
+function closeModal(id) { var el = document.getElementById(id); if (el) el.classList.remove('open'); }
+
+function toast(msg, type) {
+  var el = document.getElementById('toast-el');
+  el.textContent = msg;
+  el.className = 'toast';
+  if (type === 'warn') el.classList.add('t-warn');
+  if (type === 'ok') el.classList.add('t-ok');
+  if (type === 'err') el.classList.add('t-err');
+  el.classList.add('show');
+  setTimeout(function() { el.classList.remove('show'); }, 3200);
+}
+
+function tglSwitch(btn) {
+  btn.closest('.tgl-group').querySelectorAll('.tgl-btn').forEach(function(b) { b.classList.remove('tgl-on'); });
+  btn.classList.add('tgl-on');
+}
+
+/* ── DIRECTORY → PROFILE ── */
+function openProfile(id, name, prog, batch, sem, status, fee, sponsor, mode) {
+  activeStudent = { id: id, name: name, prog: prog, batch: batch, sem: sem, status: status, fee: fee, sponsor: sponsor, mode: mode };
+  populateProfile(activeStudent);
+  nav('profile');
+}
+
+/* ── PROFILE ── */
+function loadProfileSample() {
+  var inp = document.getElementById('profile-search');
+  if (!inp.value.trim()) inp.value = 'Sarah Namutebi — STU-2024-001';
+  activeStudent = { id: 'STU-2024-001', name: 'Sarah Namutebi', prog: 'BSc. IT', batch: 'BSc.IT-2024A', sem: 'Semester 3', status: 'active', fee: 'Local', sponsor: 'Self', mode: 'Campus' };
+  populateProfile(activeStudent);
+}
+
+function populateProfile(stu) {
+  var initials = stu.name.split(' ').map(function(w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+  document.getElementById('p-avatar').textContent = initials;
+  document.getElementById('p-name').textContent = stu.name;
+  document.getElementById('p-sid').textContent = stu.id + ' · ISBAT/2024/001';
+  var slbl = { active: '✓ Active', ytr: '⚠ YTR', ytc: '⚠ Yet to Clear', dropout: '✗ Dropout' };
+  document.getElementById('p-pills').innerHTML =
+    '<span class="stu-pill">' + (slbl[stu.status] || 'Active') + '</span>' +
+    '<span class="stu-pill"><i class="lni lni-graduation"></i> ' + stu.prog + '</span>' +
+    '<span class="stu-pill"><i class="lni lni-grid-alt"></i> ' + stu.batch + '</span>' +
+    '<span class="stu-pill"><i class="lni lni-calendar"></i> ' + stu.sem + '</span>' +
+    '<span class="stu-pill"><i class="lni lni-display"></i> ' + stu.mode + '</span>';
+  document.getElementById('p-fee').textContent = stu.fee;
+  document.getElementById('p-sponsor').textContent = stu.sponsor;
+  document.getElementById('p-mode').textContent = stu.mode;
+  document.getElementById('parent-lid').textContent = stu.id + '_P';
+  document.getElementById('profile-empty').style.display = 'none';
+  document.getElementById('profile-loaded').style.display = 'block';
+  toast(stu.name + ' profile loaded', 'ok');
+}
+
+function clearProfile() {
+  document.getElementById('profile-search').value = '';
+  document.getElementById('profile-empty').style.display = 'flex';
+  document.getElementById('profile-loaded').style.display = 'none';
+  activeStudent = null;
+}
+
+function switchPTab(tab, btn) {
+  document.querySelectorAll('.ptab').forEach(function(t) { t.classList.remove('active'); });
+  btn.classList.add('active');
+  document.querySelectorAll('.ptab-pane').forEach(function(p) { p.classList.remove('active'); });
+  var pane = document.getElementById('ptab-' + tab);
+  if (pane) pane.classList.add('active');
+}
+
+/* ── QUICK NAV FROM PROFILE ── */
+function goTo(page) {
+  if (!activeStudent) { toast('No student loaded in profile', 'warn'); return; }
+  preloadXfer(page, activeStudent);
+  nav(page);
+}
+
+function preloadXfer(page, stu) {
+  var map = { 'batch-transfer': 'bt', 'prog-transfer': 'pt', 'learning-mode': 'lm', 'intake-transfer': 'it' };
+  var px = map[page];
+  if (!px) return;
+  var inp = document.getElementById(px + '-search');
+  if (inp) inp.value = stu.name + ' — ' + stu.id;
+  showXfer(px, stu);
+}
+
+/* ── TRANSFER PAGES ── */
+function loadXfer(px) {
+  var inp = document.getElementById(px + '-search');
+  if (!inp.value.trim()) inp.value = 'Sarah Namutebi — STU-2024-001';
+  var stu = activeStudent || { id: 'STU-2024-001', name: 'Sarah Namutebi', prog: 'BSc. IT', batch: 'BSc.IT-2024A', sem: 'Semester 3', status: 'active', fee: 'Local', sponsor: 'Self', mode: 'Campus' };
+  activeStudent = stu;
+  showXfer(px, stu);
+}
+
+function showXfer(px, stu) {
+  var emEl = document.getElementById(px + '-empty');
+  var ldEl = document.getElementById(px + '-loaded');
+  if (emEl) emEl.style.display = 'none';
+  if (ldEl) ldEl.style.display = 'block';
+  // Update name fields in baseline
+  var nameEl = document.getElementById(px + '-name');
+  if (nameEl) nameEl.textContent = stu.name;
+  var sidEl = document.getElementById(px + '-sid');
+  if (sidEl) sidEl.textContent = stu.id;
+  var batchEl = document.getElementById(px + '-batch');
+  if (batchEl) batchEl.textContent = stu.batch;
+  toast(stu.name + ' loaded', 'ok');
+}
+
+function clearXfer(px) {
+  var inp = document.getElementById(px + '-search');
+  if (inp) inp.value = '';
+  document.getElementById(px + '-empty').style.display = 'flex';
+  document.getElementById(px + '-loaded').style.display = 'none';
+  if (px === 'bt') { resetBT(); }
+  if (px === 'it') { resetIT(); }
+}
+
+/* ── BATCH TRANSFER ── */
+function selType(t) {
+  document.getElementById('rc-batch').classList.toggle('sel', t === 'batch');
+  document.getElementById('rc-intake').classList.toggle('sel', t === 'intake');
+  document.getElementById('rc-batch').querySelector('input').checked = (t === 'batch');
+  document.getElementById('rc-intake').querySelector('input').checked = (t === 'intake');
+}
+
+function prevFee(val) {
+  var fmr = document.getElementById('fee-model-row');
+  var fmv = document.getElementById('fee-model-val');
+  var fpe = document.getElementById('fee-prev-empty');
+  var fpc = document.getElementById('fee-prev-content');
+  var ie = document.getElementById('integ-empty');
+  var ic = document.getElementById('integ-content');
+  var df = document.getElementById('dest-fee');
+  var feeMap = { 'BSc.IT-2024B': '$750', 'BSc.IT-2025A': '$780', 'BSc.IT-2025B': '$780', 'BSc.IT-2026A': '$800' };
+  var modelMap = { 'BSc.IT-2024B': 'BSC.IT.EV.24.LCL', 'BSc.IT-2025A': 'BSC.IT.DA.25.LCL', 'BSc.IT-2025B': 'BSC.IT.EV.25.LCL', 'BSc.IT-2026A': 'BSC.IT.DA.26.LCL' };
+  if (!val) { resetBT(); return; }
+  if (fmr) fmr.style.display = 'block';
+  if (fmv) fmv.value = modelMap[val] || 'BSC.IT.XX.LCL';
+  if (fpe) fpe.style.display = 'none';
+  if (fpc) fpc.style.display = 'block';
+  if (df) df.textContent = (feeMap[val] || '$780') + ' / semester';
+  if (ie) ie.style.display = 'none';
+  if (ic) ic.style.display = 'block';
+}
+
+function resetBT() {
+  var ids = ['fee-model-row', 'fee-prev-content', 'integ-content'];
+  ids.forEach(function(i) { var el = document.getElementById(i); if (el) el.style.display = 'none'; });
+  var shows = ['fee-prev-empty', 'integ-empty'];
+  shows.forEach(function(i) { var el = document.getElementById(i); if (el) el.style.display = 'block'; });
+}
+
+function updDiscount(val) {
+  var dw = document.getElementById('disc-warn');
+  var dd = document.getElementById('disc-display');
+  if (dd) dd.textContent = val + '%';
+  if (dw) dw.style.display = (parseFloat(val) > 0) ? 'flex' : 'none';
+}
+
+/* ── PROGRAMME TRANSFER ── */
+function compCredits(prog) {
+  var ce = document.getElementById('credit-empty');
+  var cc = document.getElementById('credit-content');
+  var cb = document.getElementById('credit-badge');
+  if (!prog) {
+    if (ce) ce.style.display = 'block';
+    if (cc) cc.style.display = 'none';
+    if (cb) { cb.textContent = 'Select programme'; cb.className = 'badge badge-grey'; }
+    return;
+  }
+  if (ce) ce.style.display = 'none';
+  if (cc) cc.style.display = 'block';
+  if (cb) { cb.textContent = '18 transferable / 10 excluded'; cb.className = 'badge badge-purple'; }
+}
+
+/* ── LEARNING MODE ── */
+function selMode(m) {
+  document.getElementById('mc-campus').classList.toggle('sel', m === 'campus');
+  document.getElementById('mc-odl').classList.toggle('sel', m === 'odl');
+  document.getElementById('campus-field').style.display = (m === 'campus') ? 'block' : 'none';
+  document.getElementById('odl-field').style.display = (m === 'odl') ? 'block' : 'none';
+  document.getElementById('impact-campus').style.display = (m === 'campus') ? 'block' : 'none';
+  document.getElementById('impact-odl').style.display = (m === 'odl') ? 'block' : 'none';
+}
+
+/* ── INTAKE TRANSFER ── */
+function prevIntake(val) {
+  var ie = document.getElementById('it-prev-empty');
+  var ic = document.getElementById('it-prev-content');
+  var br = document.getElementById('it-batch-row');
+  if (!val) { resetIT(); return; }
+  if (ie) ie.style.display = 'none';
+  if (ic) ic.style.display = 'block';
+  if (br) br.style.display = 'block';
+}
+
+function resetIT() {
+  var ie = document.getElementById('it-prev-empty');
+  var ic = document.getElementById('it-prev-content');
+  var br = document.getElementById('it-batch-row');
+  if (ie) ie.style.display = 'block';
+  if (ic) ic.style.display = 'none';
+  if (br) br.style.display = 'none';
+}
+
+/* ── COMM DISPATCH ── */
+function dispatch(who, channel) {
+  var clbl = channel === 'email' ? 'Email' : 'WhatsApp';
+  var wlbl = who === 'student' ? 'Student' : 'Parent';
+  toast(wlbl + ' credentials dispatched via ' + clbl, 'ok');
+  var log = document.getElementById('audit-log');
+  if (log) {
+    var d = new Date();
+    var ts = d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    var row = document.createElement('div');
+    row.className = 'audit-row';
+    row.innerHTML = '<div class="audit-dot ' + channel + '"></div><div><div class="audit-action">' + wlbl + ' credentials dispatched via ' + clbl + '</div><div class="audit-detail">Admin: Student Registrar · ' + ts + '</div></div>';
+    log.insertBefore(row, log.firstChild);
+  }
+}
+
+/* ── VALIDATION ── */
+function valEmail(inp, hint) {
+  var val = document.getElementById(inp).value;
+  var ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+  var h = document.getElementById(hint);
+  var i = document.getElementById(inp);
+  h.className = 'field-hint ' + (ok ? 'ok' : 'err');
+  h.textContent = ok ? '✓ Valid email format' : '✗ Invalid email format';
+  i.className = 'ctrl ' + (ok ? 'ok' : 'err');
+}
+
+function valPhone(inp, hint) {
+  var val = document.getElementById(inp).value;
+  var ok = /^\+\d[\d\s]{6,14}$/.test(val.trim());
+  var h = document.getElementById(hint);
+  var i = document.getElementById(inp);
+  h.className = 'field-hint ' + (ok ? 'ok' : 'err');
+  h.textContent = ok ? '✓ Valid international format' : '✗ Use format e.g. +256 701 234 567';
+  i.className = 'ctrl ' + (ok ? 'ok' : 'err');
+}
+
+function validateBarcode(val) {
+  var s = document.getElementById('barcode-status');
+  if (!s) return;
+  if (!val) { s.textContent = 'Enter a barcode to validate'; s.style.color = 'var(--g400)'; return; }
+  if (val.length < 6) { s.textContent = 'Keep typing...'; s.style.color = 'var(--g400)'; return; }
+  if (val === 'ISBT00142') { s.innerHTML = '<span style="color:var(--amber);font-weight:700">⚠ Already assigned to this student</span>'; return; }
+  if (val.startsWith('ISBT')) { s.innerHTML = '<span style="color:var(--green);font-weight:700">✓ Barcode available</span>'; }
+  else { s.innerHTML = '<span style="color:var(--red);font-weight:700">✗ Invalid — use ISBT prefix</span>'; }
+}
+
+/* ── PHOTO UPLOAD ── */
+function handlePhoto(input) {
+  if (!input.files || !input.files[0]) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = document.getElementById('id-card-img');
+    if (img) { img.src = e.target.result; img.style.display = 'block'; }
+    var icon = document.querySelector('#id-photo-wrap .lni-user');
+    if (icon) icon.style.display = 'none';
+    toast('Photo uploaded', 'ok');
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+/* ── INIT ── */
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) overlay.classList.remove('open');
+    });
+  });
+  switchModule('student');
+});
+</script>
+</body>
+</html>
