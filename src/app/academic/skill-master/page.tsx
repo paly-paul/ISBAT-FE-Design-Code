@@ -14,6 +14,7 @@ import { AddSkillModal } from '@/components/modals/academic/AddSkillModal'
 import { EditLecturerSkillModal } from '@/components/modals/academic/EditLecturerSkillModal'
 import { ViewLecturerSkillModal } from '@/components/modals/academic/ViewLecturerSkillModal'
 import { useLecturerSkills, useLecturerSkillSearch, useCreateLecturerSkill, useUpdateLecturerSkill, useDeleteLecturerSkill, LecturerSkill } from '@/hooks/academic/useLecturerSkills'
+import { useEmployees } from '@/hooks/employee/useEmployees'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatDate } from '@/lib/date'
 
@@ -38,10 +39,11 @@ function approvalBadge(status: string) {
    fictional per-lecturer rows (faculty, eligible subjects, current load,
    check-ins, completion status) that have no equivalent in the real
    GET /api/v1/users/skills response, which is a flat list of individual
-   skill entries keyed by a raw intEmployee with no name/faculty attached.
-   The lecturer/dean role switcher also relied on matching a mock "current
-   user" by name — there's no real endpoint here to resolve "who am I" against
-   an intEmployee, so that demo device was dropped along with it.
+   skill entries (now resolved to a name via employeeGuid — see
+   employeeLabel below — but still no faculty/eligible-subjects/load
+   concept). The lecturer/dean role switcher also relied on matching a mock
+   "current user" by name — there's no real endpoint here to resolve "who am
+   I" against an employeeGuid, so that demo device was dropped along with it.
 
 type Role = 'lecturer' | 'dean'
 type ApprovalStatus = 'Approved' | 'Pending' | 'Rejected' | 'Details Requested'
@@ -85,6 +87,12 @@ export default function Page() {
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
   const { data: skills = [], isLoading } = useLecturerSkills()
+  const { data: employees = [] } = useEmployees()
+  const employeeNameByGuid = useMemo(
+    () => new Map(employees.map(e => [e.employeeGuid, `${e.empName} (${e.shortCode})`])),
+    [employees],
+  )
+  function employeeLabel(guid: string) { return employeeNameByGuid.get(guid) ?? guid }
 
   // Debounced so the backend's ?search= isn't hit on every keystroke, and
   // held at '' (falling back to the unfiltered list) until MIN_SEARCH_CHARS
@@ -98,7 +106,11 @@ export default function Page() {
   }, [search])
 
   const { data: searchResults, isFetching: isSearching } = useLecturerSkillSearch(debouncedSearch)
-  const baseRows = debouncedSearch ? (searchResults ?? []) : skills
+  // Newest first. There's no date field on LecturerSkill to sort by — the
+  // API returns rows in creation order (oldest first, per a real sample),
+  // so reversing it is the only way to get newest-first without a backend
+  // change.
+  const baseRows = [...(debouncedSearch ? (searchResults ?? []) : skills)].reverse()
   const searchTrimmed = search.trim()
   const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isSearching)
 
@@ -143,7 +155,7 @@ export default function Page() {
     total: skills.length,
     approved: skills.filter(s => s.approvalStatus === 'Approved').length,
     pending: skills.filter(s => s.approvalStatus === 'Pending').length,
-    employees: new Set(skills.map(s => s.intEmployee)).size,
+    employees: new Set(skills.map(s => s.employeeGuid)).size,
   }), [skills])
 
   function fth(label: string, col: string, opts: string[]) {
@@ -175,11 +187,6 @@ export default function Page() {
           </div>
         </div>
 
-        {/* <div className="info-box mb-[18px]">
-          <i className="lni lni-information"></i>
-          <span>Employee is shown as a raw ID — the skills list only returns <code>intEmployee</code>, with no name or faculty attached and no confirmed way to resolve it against the real Employee master.</span>
-        </div> */}
-
         <div className="g4 mb-[18px]">
           <div className="stat-card"><div className="stat-lbl">Total Skills Logged</div><div className="stat-num">{stats.total}</div><div className="stat-sub up">Across all employees</div></div>
           <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Approved</div><div className="stat-num text-green">{stats.approved}</div><div className="stat-sub up">Ready for allocation</div></div>
@@ -195,7 +202,7 @@ export default function Page() {
               placeholder="Search skill or employee ID…"
               value={search}
               onChange={setSearch}
-              results={searchMatches.map(s => ({ id: s.lecturerSkillGuid, primary: s.skillName || 'Unnamed skill', secondary: `Employee #${s.intEmployee}` }))}
+              results={searchMatches.map(s => ({ id: s.lecturerSkillGuid, primary: s.skillName || 'Unnamed skill', secondary: employeeLabel(s.employeeGuid) }))}
               loading={searchPending}
               minChars={MIN_SEARCH_CHARS}
               onSelect={(r) => openViewModal(r.id)}
@@ -241,7 +248,7 @@ export default function Page() {
                         </ActionMenu>
                       )}
                     </td>
-                    <td className="font-mono text-blue">Employee #{s.intEmployee}</td>
+                    <td className="text-blue">{employeeLabel(s.employeeGuid)}</td>
                     <td><strong>{s.skillName || <span className="text-muted">— Unnamed —</span>}</strong></td>
                     <td><span className="pill pill-blue">{PROFICIENCY_LABELS[s.proficiency] ?? `Level ${s.proficiency}`}</span></td>
                     <td>{approvalBadge(s.approvalStatus)}</td>

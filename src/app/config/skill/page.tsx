@@ -66,7 +66,7 @@ export default function Page() {
 
   function confirmDeleteSkill() {
     if (!deleteTarget) return
-    deleteSkill.mutate(deleteTarget.intSkill, {
+    deleteSkill.mutate(deleteTarget.skillGuid, {
       onSuccess: () => { setDeleteTarget(null); showToast('Skill deleted successfully') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete skill', 'error'),
     })
@@ -95,9 +95,9 @@ export default function Page() {
                 placeholder="Search by code or name…"
                 value={search}
                 onChange={setSearch}
-                results={searchMatches.map(r => ({ id: String(r.intSkill), primary: r.skillName }))}
+                results={searchMatches.map(r => ({ id: r.skillGuid, primary: r.skillName }))}
                 minChars={MIN_SEARCH_CHARS}
-                onSelect={(res) => { const row = rows.find(x => String(x.intSkill) === res.id); if (row) openViewModal(row) }}
+                onSelect={(res) => { const row = rows.find(x => x.skillGuid === res.id); if (row) openViewModal(row) }}
               />
             </div>
           </div>
@@ -116,7 +116,7 @@ export default function Page() {
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
                 {pageItems.map((r) => (
-                  <tr key={r.intSkill}>
+                  <tr key={r.skillGuid}>
                     <td>
                       {(true) && (
                         <ActionMenu>

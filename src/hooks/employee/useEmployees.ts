@@ -32,6 +32,25 @@ export function useEmployees(enabled = true) {
   })
 }
 
+// Server-side search for Employee Master's search box — hits the same list
+// endpoint with the backend's own ?search= param (confirmed live, see the
+// note on getEmployees) instead of filtering the already-fetched full list
+// client-side. Kept as its own hook/query key so useEmployees() above still
+// stays the plain unfiltered, cached list — used by every other call site
+// (dropdown pickers etc.) — only enabled while the search box actually has a
+// query in it, at which point the page falls back to that shared unfiltered
+// list instead of issuing a redundant identical request.
+export function useEmployeeSearch(search: string) {
+  const q = search.trim()
+  return useQuery({
+    queryKey: [...EMPLOYEES_KEY, 'search', q],
+    queryFn: () => getEmployees(1, EMPLOYEES_PAGE_SIZE, q),
+    enabled: q.length > 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
 export function useEmployee(id: string | null) {
   return useQuery({
     queryKey: [...EMPLOYEES_KEY, id],

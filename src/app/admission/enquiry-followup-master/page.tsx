@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -9,18 +9,12 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignModal'
 import { NewFollowUpLogModal } from '@/components/modals/admission/NewFollowUpLogModal'
-import { useEnquiryFollowUps, useCreateEnquiryFollowUp } from '@/hooks/admission/useEnquiryFollowUps'
+import { useEnquiryFollowUps, useEnquiryFollowUpsCount, useCreateEnquiryFollowUp } from '@/hooks/admission/useEnquiryFollowUps'
 import { useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
-import { usePagination } from '@/hooks/usePagination'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
-// Fetched once at a size large enough to cover the whole list (917 rows in
-// the sample data, per useEnquiryFollowUps.ts) so the search box below can
-// filter client-side across every follow-up, not just the current server
-// page — same approach as batch-management/page.tsx.
-const FETCH_ALL_PAGE_SIZE = 1000
 // Don't narrow the table (or open the search dropdown) until the user's
 // typed at least this many characters — same convention as the other
 // master pages' search boxes.
@@ -37,10 +31,52 @@ export default function EnquiryFollowupMasterPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [viewingGuid, setViewingGuid] = useState<string | null>(null)
 
-  const { data, isLoading } = useEnquiryFollowUps(1, FETCH_ALL_PAGE_SIZE)
-  const allRows = data?.items ?? []
+  function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+  function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
+  function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
+
+  // Debounced so the backend's ?search= isn't hit on every keystroke, and
+  // held at '' (falling back to the unfiltered/paginated list) until
+  // MIN_SEARCH_CHARS is met — same convention as Skill/Batch/Employee
+  // Master's search boxes.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const trimmed = search.trim()
+    if (trimmed.length < MIN_SEARCH_CHARS) { setDebouncedSearch(''); return }
+    const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Real server-side pagination AND search — fetches PAGE_SIZE (10) rows at
+  // a time instead of the whole table up front, and debouncedSearch is a
+  // real server-side filter (confirmed live, see the note on
+  // getEnquiryFollowUps), not a client-side one. Was previously a single
+  // pageSize=1000 fetch of the whole table backing a client-side
+  // usePagination() slice + text filter — same class of "silently misses
+  // rows past the cap once the table outgrows it" issue useCourseUnits hit
+  // at 1000-of-1500 rows (826 rows in the sample here, already close).
+  const { data, isLoading, isFetching } = useEnquiryFollowUps(page, PAGE_SIZE, debouncedSearch)
+  const rows = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const searchTrimmed = search.trim()
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isFetching)
+
+  // Reset back to page 1 whenever the (debounced) search term changes — the
+  // previous page offset almost never lands on a valid page of the newly-
+  // filtered result set.
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch])
+
+  // Decoupled from the table's own (now paginated) rows and the search box
+  // above — pageSize=1 so it doesn't pull real row data, just totalCount for
+  // the stat tile.
+  const { data: countData } = useEnquiryFollowUpsCount()
+
   const updateEnquiry = useUpdateEnquiry()
   const createFollowUp = useCreateEnquiryFollowUp()
 
@@ -53,22 +89,25 @@ export default function EnquiryFollowupMasterPage() {
     return programs.find(p => p.programGuid === row.programGuid)?.programName ?? '—'
   }
 
-  function matchesSearch(r: typeof allRows[number], term: string) {
-    return `${r.enquiryCode} ${r.studentName} ${resolveProgramName(r)} ${r.enquiryStatusName ?? ''} ${r.followUpStatusName ?? ''} ${r.enquirySourceName ?? ''}`
-      .toLowerCase()
-      .includes(term)
-  }
+  const pageItems = rows
 
-  const searchTrimmed = search.trim()
-  const filteredRows = allRows.filter(r => searchTrimmed.length < MIN_SEARCH_CHARS || matchesSearch(r, searchTrimmed.toLowerCase()))
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? allRows.filter(r => matchesSearch(r, searchTrimmed.toLowerCase())).slice(0, 8)
-    : []
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+  // Live preview shown in the search dropdown as the user types — reads the
+  // same server-scoped rows, capped to a handful. Empty below
+  // MIN_SEARCH_CHARS, matching TableSearch's own minChars gate on when the
+  // dropdown is even allowed to open.
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? rows.slice(0, 8) : []
 
-  function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
-  function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
-  function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
+  // "Add Follow-up" needs a full enquiry picker to search across — the main
+  // table above is now paginated 10-at-a-time and can't supply that. Fetched
+  // separately (capped at 1000, only while the modal is actually open) since
+  // SearchSelect (the picker's underlying component) only takes a static
+  // option list, not a live server-search callback — same "capped, no async
+  // picker" trade-off useAllCourseUnits documents for CourseUnitModal. The
+  // real ?search= endpoint (see getEnquiryFollowUps) isn't wired into this
+  // picker for that reason, even though it's confirmed to exist now.
+  const followUpModalOpen = openModals.has('new-followup-log-modal')
+  const { data: pickerData } = useEnquiryFollowUps(1, 1000, '', followUpModalOpen)
+  const pickerEnquiries = pickerData?.items ?? []
 
   function openViewModal(guid: string) {
     setViewingGuid(guid)
@@ -96,7 +135,7 @@ export default function EnquiryFollowupMasterPage() {
       <div className="stats-row">
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1"><i className="lni lni-users text-b500" /><span className="text-sm text-g500">Total Follow-ups</span></div>
-          <p className="text-2xl font-semibold text-g900">{allRows.length.toLocaleString()}</p>
+          <p className="text-2xl font-semibold text-g900">{(countData?.totalCount ?? 0).toLocaleString()}</p>
         </div>
       </div>
 
@@ -109,6 +148,7 @@ export default function EnquiryFollowupMasterPage() {
             value={search}
             onChange={setSearch}
             results={searchMatches.map(r => ({ id: r.enquiryGuid, primary: r.enquiryCode, secondary: r.studentName }))}
+            loading={searchPending}
             minChars={MIN_SEARCH_CHARS}
             onSelect={permissions.edit ? (r) => openViewModal(r.id) : undefined}
           />
@@ -117,12 +157,12 @@ export default function EnquiryFollowupMasterPage() {
           <table>
             <thead><tr><th style={{ width: 48 }}></th><th>Enq. Ref</th><th>Student Name</th><th>Programme Interest</th><th>Enquiry Status</th><th>Follow-up Status</th><th>Source</th><th>Next Follow-up</th></tr></thead>
             <tbody>
-              {isLoading
+              {(isLoading || searchPending)
                 ? <TableLoadingState colSpan={999} />
-                : filteredRows.length === 0
+                : pageItems.length === 0
                   ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
                   : null}
-              {pageItems.map(r => (
+              {!(isLoading || searchPending) && pageItems.map(r => (
                 <tr key={r.enquiryGuid}>
                   <td>
                     <ActionMenu>
@@ -172,7 +212,7 @@ export default function EnquiryFollowupMasterPage() {
         isOpen={openModals.has('new-followup-log-modal')}
         onClose={() => closeModal('new-followup-log-modal')}
         showToast={showToast}
-        enquiries={allRows}
+        enquiries={pickerEnquiries}
         createFollowUp={createFollowUp}
       />
       <Toast toast={toast} />

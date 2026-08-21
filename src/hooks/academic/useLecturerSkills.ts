@@ -40,6 +40,8 @@ export function useLecturerSkill(guid: string | null, enabled: boolean) {
   })
 }
 
+// mutationFn resolves to an array — one call now creates a skill entry per
+// guid in input.skillGuids (see CreateLecturerSkillInput).
 export function useCreateLecturerSkill() {
   const queryClient = useQueryClient()
   return useMutation({

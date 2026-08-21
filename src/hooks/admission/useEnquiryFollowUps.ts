@@ -1,14 +1,37 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, keepPreviousData } from '@tanstack/react-query'
 import { createEnquiryFollowUp, EnquiryFollowUpInput, EnquiryFollowUpListItem, getEnquiryFollowUps, getEnquiryFollowUpsByAdvisor } from '@/lib/api/admission/enquiryFollowUp'
 
 const ENQUIRY_FOLLOW_UPS_KEY = ['enquiryFollowUps']
 const ENQUIRY_FOLLOW_UPS_BY_ADVISOR_KEY = ['enquiryFollowUpsByAdvisor']
 
-// Real (paginated) — 917 rows in the sample data.
-export function useEnquiryFollowUps(page: number, pageSize: number) {
+// Real server-side pagination AND search — search is forwarded to the
+// endpoint's own confirmed ?search= param (see the note on
+// getEnquiryFollowUps), not applied client-side, so results stay correct no
+// matter how large the real table gets. Was previously a single
+// pageSize=1000 fetch of the whole table backing a client-side
+// usePagination() slice + client-side text filter — same class of "silently
+// misses rows past the cap once the table outgrows it" issue useCourseUnits
+// hit at 1000-of-1500 rows (826 rows in the sample here, already close).
+// keepPreviousData avoids a loading flash between pages/searches by leaving
+// the previous result on screen while the next one is in flight.
+export function useEnquiryFollowUps(page: number, pageSize: number, search = '', enabled = true) {
   return useQuery({
-    queryKey: [...ENQUIRY_FOLLOW_UPS_KEY, page, pageSize],
-    queryFn: () => getEnquiryFollowUps(page, pageSize),
+    queryKey: [...ENQUIRY_FOLLOW_UPS_KEY, page, pageSize, search],
+    queryFn: () => getEnquiryFollowUps(page, pageSize, search),
+    placeholderData: keepPreviousData,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}
+
+// Cheap unfiltered count for the "Total Follow-ups" stat tile — pageSize=1
+// so it doesn't pull real row data, just totalCount, and stays decoupled
+// from whatever the search box above is currently scoped to.
+export function useEnquiryFollowUpsCount() {
+  return useQuery({
+    queryKey: [...ENQUIRY_FOLLOW_UPS_KEY, 'count'],
+    queryFn: () => getEnquiryFollowUps(1, 1),
     staleTime: Infinity,
     gcTime: Infinity,
   })

@@ -92,9 +92,19 @@ function composeEmpName(surname: string, firstName: string, otherName: string | 
 // response), so page/pageSize must be sent explicitly or the table only ever
 // sees the first page no matter what the client-side Pagination component
 // does on top of it. Same convention as getFaculties/getEmployees siblings.
-export function getEmployees(page = 1, pageSize = 10): Promise<EmployeeListItem[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockEmployees)
-  return apiGet<EmployeeListResponse | null>(`/api/v1/users/employees?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
+// search is forwarded to the endpoint's own ?search= param — confirmed live
+// against the real backend (search=<name substring> narrows totalCount from
+// 229 down to an exact match; a nonsense query returns totalCount: 0), same
+// convention as getSkills/getBatches/getIntakes.
+export function getEmployees(page = 1, pageSize = 10, search = ''): Promise<EmployeeListItem[]> {
+  if (MOCK_AUTH) {
+    const q = search.trim().toLowerCase()
+    return Promise.resolve(q ? mockEmployees.filter(e => e.empName.toLowerCase().includes(q) || e.shortCode.toLowerCase().includes(q)) : mockEmployees)
+  }
+  const q = search.trim()
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (q) params.set('search', q)
+  return apiGet<EmployeeListResponse | null>(`/api/v1/users/employees?${params}`).then(data => data?.items ?? [])
 }
 
 // Fetch the full employee record for the edit form.

@@ -6458,3 +6458,1049 @@ body {
     border-radius: 8px;
   }
 }
+
+/* ═══════════════════════════════════════
+   STUDENT OPERATIONS (mockup port)
+   Ported from isbat_student_module.html — Profile, Batch/Programme/Intake
+   Transfer, Learning Mode, Statement, Batch Summary, Services,
+   Communications, Category Masters, Specialization Management. Recolored to
+   the app's standard blue accent (--b700/--b500/--b50/--b200) — the mockup's
+   own purple was a one-off module identity that doesn't match how every
+   other module (rail/sidebar active states, .btn-primary, modal-hdr-blue)
+   uses a single blue accent throughout, not a per-module color.
+═══════════════════════════════════════ */
+
+/* Full-block empty state (not table-scoped — see EmptyState.tsx's own
+   .tbl-empty-* for the <tbody>-only equivalent). Used by the Student
+   Lookup pages before a student is loaded. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.empty-icon {
+  font-size: 42px;
+  color: var(--b200);
+  margin-bottom: 16px;
+}
+
+.empty-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--g700);
+  margin-bottom: 8px;
+}
+
+.empty-sub {
+  font-size: 13px;
+  color: var(--g400);
+  max-width: 360px;
+  line-height: 1.65;
+}
+
+/* Purple variant of the existing .info-box/.warn-box/.danger-box/
+   .success-box family (see INFO / STATUS BOXES section) — same shape, no
+   dedicated purple one existed yet. */
+.purple-box {
+  background: var(--b50);
+  border: 1.5px solid var(--b200);
+  border-radius: var(--rxs);
+  padding: 12px 14px;
+  font-size: 13px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* Inline field validation hint (email/phone format checks) */
+.field-hint {
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.field-hint.ok {
+  color: var(--green);
+}
+
+.field-hint.err {
+  color: var(--red);
+}
+
+/* Student lookup — search box used across Profile/Transfer pages */
+.lookup-shell {
+  background: linear-gradient(135deg, var(--b50) 0%, var(--white) 100%);
+  border: 2px solid var(--b200);
+  border-radius: var(--radius);
+  padding: 18px 22px;
+  margin-bottom: 20px;
+  box-shadow: var(--neu-out);
+}
+
+.lookup-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--b700);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.lookup-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.lookup-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+}
+
+.lookup-inp {
+  width: 100%;
+  padding: 11px 16px 11px 42px;
+  border: 1.5px solid var(--b200);
+  border-radius: var(--rsm);
+  font-size: 14px;
+  font-family: var(--font-sans, inherit);
+  color: var(--g900);
+  background: var(--white);
+  transition: var(--tr);
+}
+
+.lookup-inp:focus {
+  outline: none;
+  border-color: var(--b700);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, .12);
+}
+
+.lookup-icon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
+  color: var(--b700);
+}
+
+.lookup-hint {
+  font-size: 11.5px;
+  color: var(--g500);
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Student banner — profile header card */
+.stu-banner {
+  background: var(--white);
+  border: 1.5px solid var(--g200);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 20px;
+  box-shadow: var(--neu-out);
+}
+
+.stu-banner-top {
+  background: linear-gradient(135deg, var(--b700), var(--b500));
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.stu-av {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .2);
+  border: 2px solid rgba(255, 255, 255, .4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.stu-banner-name {
+  color: #fff;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.stu-banner-id {
+  color: rgba(255, 255, 255, .75);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.stu-banner-pills {
+  display: flex;
+  gap: 7px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.stu-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, .18);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .3);
+}
+
+.stu-meta-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border-top: 1px solid var(--g200);
+}
+
+.stu-meta-item {
+  padding: 12px 16px;
+  border-right: 1px solid var(--g200);
+}
+
+.stu-meta-item:last-child {
+  border-right: none;
+}
+
+.stu-meta-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--g500);
+}
+
+.stu-meta-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--g900);
+  margin-top: 3px;
+}
+
+/* Profile tabs */
+.ptabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 2px solid var(--g200);
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+
+.ptab {
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--g400);
+  cursor: pointer;
+  border-bottom: 2.5px solid transparent;
+  margin-bottom: -2px;
+  font-family: inherit;
+  transition: var(--tr);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ptab:hover {
+  color: var(--g700);
+}
+
+.ptab.active {
+  color: var(--b700);
+  border-color: var(--b700);
+}
+
+/* Dispatch cards — student/parent credential dispatch */
+.dcard {
+  border: 1.5px solid var(--g200);
+  border-radius: var(--rsm);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.dcard-hdr {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--g200);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dcard-hdr.stu {
+  background: linear-gradient(135deg, var(--b700), var(--b500));
+}
+
+.dcard-hdr.par {
+  background: linear-gradient(135deg, #065f46, var(--green));
+}
+
+.dcard-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dcard-id {
+  font-size: 11px;
+  color: rgba(255, 255, 255, .75);
+  font-family: monospace;
+  background: rgba(255, 255, 255, .15);
+  padding: 3px 8px;
+  border-radius: 5px;
+}
+
+.dcard-body {
+  padding: 16px;
+}
+
+.dcard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.dcard-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--g100);
+}
+
+/* Audit log */
+.audit-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--g100);
+  font-size: 12.5px;
+}
+
+.audit-row:last-child {
+  border-bottom: none;
+}
+
+.audit-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.audit-dot.email {
+  background: var(--b500);
+}
+
+.audit-dot.whatsapp {
+  background: var(--green);
+}
+
+.audit-dot.update {
+  background: var(--b700);
+}
+
+.audit-action {
+  font-weight: 600;
+  color: var(--g900);
+}
+
+.audit-detail {
+  color: var(--g500);
+  font-size: 11.5px;
+  margin-top: 2px;
+}
+
+/* Baseline (read-only) profile panel — used on transfer pages */
+.baseline {
+  background: var(--surface);
+  border: 2px solid var(--b200);
+  border-radius: var(--rsm);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.baseline-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--b700);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.baseline-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.b-item {
+  padding: 10px 12px;
+  background: var(--white);
+  border-radius: var(--rxs);
+  border: 1.5px solid var(--g200);
+}
+
+.b-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--g500);
+}
+
+.b-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--g900);
+  margin-top: 3px;
+}
+
+/* Radio card — transfer type / option selection */
+.rcard {
+  border: 1.5px solid var(--g200);
+  border-radius: var(--rsm);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: var(--tr);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--white);
+  margin-bottom: 8px;
+}
+
+.rcard:hover {
+  border-color: var(--b200);
+}
+
+.rcard.sel {
+  border-color: var(--b700);
+  background: var(--b50);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, .12);
+}
+
+.rcard input {
+  accent-color: var(--b700);
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.rcard-lbl {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--g900);
+}
+
+.rcard-sub {
+  font-size: 11.5px;
+  color: var(--g500);
+  margin-top: 3px;
+  line-height: 1.5;
+}
+
+/* Delta comparison panel — fee/credit before-after */
+.delta {
+  background: linear-gradient(180deg, var(--b50) 0%, var(--white) 100%);
+  border: 1.5px solid var(--b200);
+  border-radius: var(--rsm);
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.delta-hdr {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--b700);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.delta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--g200);
+  font-size: 13px;
+}
+
+.delta-row:last-child {
+  border-bottom: none;
+}
+
+.delta-lbl {
+  color: var(--g500);
+  font-weight: 500;
+}
+
+.delta-val {
+  font-weight: 700;
+  color: var(--g900);
+}
+
+.delta-val.changed {
+  color: var(--amber);
+}
+
+.delta-val.pos {
+  color: var(--red);
+}
+
+.delta-val.neg {
+  color: var(--green);
+}
+
+.delta-total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  font-weight: 800;
+  border-top: 2px solid var(--b200);
+  margin-top: 8px;
+  padding-top: 10px;
+}
+
+/* Structural integrity check list */
+.integ {
+  border-radius: var(--rsm);
+  border: 1.5px solid var(--g200);
+  overflow: hidden;
+  margin-top: 16px;
+}
+
+.integ-hdr {
+  background: linear-gradient(135deg, var(--b700), var(--b500));
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.integ-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--g100);
+  background: var(--white);
+  font-size: 13px;
+}
+
+.integ-row:last-child {
+  border-bottom: none;
+}
+
+.integ-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.integ-txt {
+  flex: 1;
+}
+
+.integ-status {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Credit transfer matrix — programme transfer */
+.credit-matrix {
+  border-radius: var(--rsm);
+  border: 1.5px solid var(--g200);
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+.credit-matrix-hdr {
+  background: linear-gradient(135deg, var(--b700), var(--b500));
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cr-row {
+  display: grid;
+  grid-template-columns: 80px 1fr auto;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--g100);
+  background: var(--white);
+  font-size: 13px;
+  gap: 12px;
+}
+
+.cr-row:last-child {
+  border-bottom: none;
+}
+
+.cr-row:hover {
+  background: var(--b50);
+}
+
+.cr-code {
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--b700);
+  padding: 2px 7px;
+  background: var(--b50);
+  border-radius: 4px;
+  border: 1px solid var(--b200);
+}
+
+.cr-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cr-ok {
+  background: var(--green-bg);
+  color: #065f46;
+  border: 1px solid var(--green-bd);
+}
+
+.cr-no {
+  background: var(--red-bg);
+  color: #991b1b;
+  border: 1px solid var(--red-bd);
+}
+
+.cr-new {
+  background: var(--amber-bg);
+  color: #92400e;
+  border: 1px solid var(--amber-bd);
+}
+
+/* Learning mode selection cards */
+.mode-card {
+  border: 2px solid var(--g200);
+  border-radius: var(--rsm);
+  padding: 18px;
+  cursor: pointer;
+  transition: var(--tr);
+  background: var(--white);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.mode-card:hover {
+  border-color: var(--b200);
+}
+
+.mode-card.sel {
+  border-color: var(--b700);
+  background: var(--b50);
+}
+
+.mode-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--b50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: var(--b700);
+  flex-shrink: 0;
+  transition: var(--tr);
+}
+
+.mode-card.sel .mode-icon {
+  background: var(--b700);
+  color: #fff;
+}
+
+.mode-lbl {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--g900);
+}
+
+.mode-sub {
+  font-size: 12px;
+  color: var(--g500);
+  margin-top: 3px;
+  line-height: 1.5;
+}
+
+/* Checklist — ESSL enrolment / mode impact preview */
+.chklist {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.chk {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 13px;
+  border-radius: var(--rxs);
+  background: var(--surface);
+  border: 1.5px solid var(--g200);
+  font-size: 12.5px;
+}
+
+.chk.pass {
+  border-color: var(--green-bd);
+  background: var(--green-bg);
+}
+
+.chk.fail {
+  border-color: var(--red-bd);
+  background: var(--red-bg);
+}
+
+.chk.pend {
+  border-color: var(--amber-bd);
+}
+
+.chk-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.chk-text {
+  flex: 1;
+  font-weight: 500;
+}
+
+.chk-status {
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.chk.pass .chk-status {
+  color: var(--green);
+}
+
+.chk.fail .chk-status {
+  color: var(--red);
+}
+
+.chk.pend .chk-status {
+  color: var(--amber);
+}
+
+/* ID card preview + photo upload */
+.id-preview {
+  background: linear-gradient(135deg, #1e1b4b, #312e81);
+  border-radius: 14px;
+  padding: 20px;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+  min-height: 185px;
+}
+
+.id-preview::before {
+  content: '';
+  position: absolute;
+  top: -30px;
+  right: -30px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .06);
+}
+
+.id-logo {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .7);
+  margin-bottom: 12px;
+}
+
+.id-photo {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .15);
+  border: 2px solid rgba(255, 255, 255, .3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: rgba(255, 255, 255, .6);
+  margin-bottom: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.id-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.id-name {
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 3px;
+}
+
+.id-prog {
+  font-size: 11px;
+  color: rgba(255, 255, 255, .7);
+  margin-bottom: 9px;
+}
+
+.id-num {
+  font-family: monospace;
+  font-size: 12px;
+  background: rgba(255, 255, 255, .12);
+  padding: 5px 9px;
+  border-radius: 5px;
+  letter-spacing: .08em;
+  display: inline-block;
+}
+
+.id-bar {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(255, 255, 255, .15);
+  font-family: monospace;
+  font-size: 9px;
+  color: rgba(255, 255, 255, .5);
+  letter-spacing: .1em;
+}
+
+.photo-zone {
+  width: 110px;
+  height: 110px;
+  border-radius: 12px;
+  border: 2px dashed var(--b200);
+  background: var(--b50);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: var(--tr);
+}
+
+.photo-zone:hover {
+  border-color: var(--b700);
+  background: #dbeafe;
+}
+
+.photo-zone i {
+  font-size: 24px;
+  color: var(--b700);
+}
+
+.photo-zone span {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--b700);
+  margin-top: 5px;
+  text-transform: uppercase;
+}
+
+/* Batch summary cards */
+.batch-card {
+  border: 1.5px solid var(--g200);
+  border-radius: var(--rsm);
+  overflow: hidden;
+  margin-bottom: 12px;
+  background: var(--white);
+  box-shadow: var(--neu-sm);
+}
+
+.batch-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, var(--b700), var(--b500));
+  color: #fff;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.batch-hdr-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.batch-hdr-sub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, .7);
+  margin-top: 2px;
+}
+
+.batch-hdr-cnt {
+  font-size: 12px;
+  background: rgba(255, 255, 255, .2);
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.batch-body {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.batch-stat {
+  padding: 12px 14px;
+  border-right: 1px solid var(--g100);
+}
+
+.batch-stat:last-child {
+  border-right: none;
+}
+
+.batch-num {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--g900);
+}
+
+.batch-lbl {
+  font-size: 10.5px;
+  color: var(--g500);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* Quick actions grid */
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.qa-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 10px;
+  border-radius: var(--rsm);
+  border: 1.5px solid var(--g200);
+  background: var(--white);
+  cursor: pointer;
+  transition: var(--tr);
+  box-shadow: var(--neu-sm);
+}
+
+.qa-btn:hover {
+  border-color: var(--b200);
+  background: var(--b50);
+  transform: translateY(-2px);
+}
+
+.qa-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: var(--b50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  color: var(--b700);
+  transition: var(--tr);
+}
+
+.qa-btn:hover .qa-icon {
+  background: var(--b700);
+  color: #fff;
+}
+
+.qa-lbl {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--g700);
+  text-align: center;
+  line-height: 1.3;
+}
+
+.qa-sub {
+  font-size: 10.5px;
+  color: var(--g400);
+  text-align: center;
+}
+
+/* Purple timeline dot variant — extends the existing .tl-dot (see TIMELINE
+   section above) with an "in progress" purple state the mockup uses
+   alongside the existing .done/.pending ones. */
+.tl-dot.cur {
+  background: var(--b50);
+  color: var(--b700);
+  box-shadow: 0 0 0 2px var(--b200), 0 4px 10px rgba(37, 99, 235, .22);
+}
+
+@media (max-width: 900px) {
+  .baseline-grid,
+  .dcard-grid,
+  .quick-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .stu-meta-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .batch-body {
+    grid-template-columns: 1fr 1fr;
+  }
+}

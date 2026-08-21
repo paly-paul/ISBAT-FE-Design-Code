@@ -33,27 +33,24 @@ export function AddSkillModal({ isOpen, onClose, showToast, createSkill }: AddSk
   const [failure, setFailure]       = useState<string | null>(null)
   const [employeeGuid, setEmployeeGuid] = useState('')
   const [skillIds, setSkillIds]     = useState<string[]>([])
-  const [proficiencyBySkill, setProficiencyBySkill] = useState<Record<string, string>>({})
+  // One shared proficiency for the whole batch — confirmed real payload is
+  // { employeeGuid, skillGuids, proficiency }, not a per-skill proficiency.
+  const [proficiency, setProficiency] = useState('1')
   const [errors, setErrors]         = useState<Record<string, string>>({})
 
   if (!isOpen) return null
 
   const employeeOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
-  const skillOptions = skillMasters.map(s => ({ value: String(s.intSkill), label: s.skillName }))
+  const skillOptions = skillMasters.map(s => ({ value: s.skillGuid, label: s.skillName }))
 
   function handleClose() {
     setSaved(false); setFailure(null)
-    setEmployeeGuid(''); setSkillIds([]); setProficiencyBySkill({}); setErrors({})
+    setEmployeeGuid(''); setSkillIds([]); setProficiency('1'); setErrors({})
     onClose()
   }
 
   function handleSkillIdsChange(vals: string[]) {
     setSkillIds(vals)
-    setProficiencyBySkill(prev => {
-      const next: Record<string, string> = {}
-      vals.forEach(v => { next[v] = prev[v] ?? '1' })
-      return next
-    })
     if (errors.skillIds) setErrors(p => ({ ...p, skillIds: '' }))
   }
 
@@ -87,35 +84,16 @@ export function AddSkillModal({ isOpen, onClose, showToast, createSkill }: AddSk
 
   function handleSubmit() {
     if (!validate()) return
-    const total = skillIds.length
-    let completed = 0
-    let succeeded = 0
-    const failedNames: string[] = []
-
-    function finishIfDone() {
-      if (completed < total) return
-      if (failedNames.length === 0) {
-        setSaved(true)
-        showToast(`${succeeded} skill${succeeded !== 1 ? 's' : ''} added successfully`)
-      } else if (succeeded > 0) {
-        setSaved(true)
-        showToast(`${succeeded} added, ${failedNames.length} failed (${failedNames.join(', ')})`, 'error')
-      } else {
-        setFailure(`Failed to add: ${failedNames.join(', ')}`)
-      }
-    }
-
-    skillIds.forEach(id => {
-      const master = skillMasters.find(s => String(s.intSkill) === id)
-      const skillName = master?.skillName ?? ''
-      createSkill.mutate(
-        { employeeGuid, skillName, proficiency: Number(proficiencyBySkill[id] ?? '1'), approved: 0 },
-        {
-          onSuccess: () => { succeeded++; completed++; finishIfDone() },
-          onError: () => { failedNames.push(skillName || id); completed++; finishIfDone() },
+    createSkill.mutate(
+      { employeeGuid, skillGuids: skillIds, proficiency: Number(proficiency) },
+      {
+        onSuccess: () => {
+          setSaved(true)
+          showToast(`${skillIds.length} skill${skillIds.length !== 1 ? 's' : ''} added successfully`)
         },
-      )
-    })
+        onError: (error: Error) => setFailure(error.message || 'Failed to add skill(s). Please try again.'),
+      },
+    )
   }
 
   return (
@@ -151,23 +129,16 @@ export function AddSkillModal({ isOpen, onClose, showToast, createSkill }: AddSk
 
         {skillIds.length > 0 && (
           <div className="fg mb-3">
-            <div className="lbl">Proficiency per Skill</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {skillIds.map(id => {
-                const master = skillMasters.find(s => String(s.intSkill) === id)
-                return (
-                  <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ flex: 1, fontSize: 13 }}>{master?.skillName ?? id}</span>
-                    <SearchSelect
-                      style={{ width: 160 }}
-                      options={PROFICIENCY_OPTIONS}
-                      value={proficiencyBySkill[id] ?? '1'}
-                      onChange={v => setProficiencyBySkill(prev => ({ ...prev, [id]: v }))}
-                    />
-                  </div>
-                )
-              })}
+            <div className="lbl">Proficiency</div>
+            <div style={{ fontSize: 12, color: 'var(--g400)', marginBottom: 6 }}>
+              Applies to all {skillIds.length} selected skill{skillIds.length !== 1 ? 's' : ''}.
             </div>
+            <SearchSelect
+              style={{ width: 160 }}
+              options={PROFICIENCY_OPTIONS}
+              value={proficiency}
+              onChange={setProficiency}
+            />
           </div>
         )}
 

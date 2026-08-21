@@ -33,28 +33,27 @@ export function EditLecturerSkillModal({ isOpen, onClose, showToast, lecturerSki
   const [saved, setSaved]           = useState(false)
   const [failure, setFailure]       = useState<string | null>(null)
   const [employeeGuid, setEmployeeGuid] = useState('')
-  const [skillName, setSkillName]   = useState('')
+  // The real skill catalog guid — sent as the single entry in skillGuids.
+  const [skillId, setSkillId]       = useState('')
   const [proficiency, setProficiency] = useState('1')
-  const [approved, setApproved]     = useState(true)
   const [errors, setErrors]         = useState<Record<string, string>>({})
 
-  // Prefill everything the response actually carries. employeeGuid is
-  // deliberately left blank — GetByGuid only returns intEmployee, with no
-  // guid to reverse it into, so whoever this skill belongs to must be
-  // re-selected on every edit (same limitation as batch.ts's Stream field).
+  // GetByGuid now returns a real employeeGuid, so it prefills directly.
+  // skillId still has to be resolved indirectly — GetByGuid returns
+  // skillName, not skillGuid, so it's matched back against the master list.
   useEffect(() => {
     if (!isOpen || !skill) return
-    setEmployeeGuid('')
-    setSkillName(skill.skillName)
+    setEmployeeGuid(skill.employeeGuid || '')
+    const master = skillMasters.find(s => s.skillName === skill.skillName)
+    setSkillId(master ? master.skillGuid : '')
     setProficiency(String(skill.proficiency || 1))
-    setApproved(skill.approvalStatus === 'Approved')
     setErrors({})
-  }, [isOpen, skill])
+  }, [isOpen, skill, skillMasters])
 
   if (!isOpen) return null
 
   const employeeOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
-  const skillOptions = skillMasters.map(s => ({ value: s.skillName, label: s.skillName }))
+  const skillOptions = skillMasters.map(s => ({ value: s.skillGuid, label: s.skillName }))
 
   function handleClose() {
     setSaved(false); setFailure(null); setErrors({})
@@ -68,7 +67,7 @@ export function EditLecturerSkillModal({ isOpen, onClose, showToast, lecturerSki
   function validate() {
     const e: Record<string, string> = {}
     if (!employeeGuid) e.employeeGuid = 'Faculty member is required'
-    if (!skillName.trim()) e.skillName = 'Skill / subject area is required'
+    if (!skillId) e.skillId = 'Skill / subject area is required'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -76,7 +75,7 @@ export function EditLecturerSkillModal({ isOpen, onClose, showToast, lecturerSki
   function handleSubmit() {
     if (!lecturerSkillGuid || !validate()) return
     updateSkill.mutate(
-      { guid: lecturerSkillGuid, input: { employeeGuid, skillName: skillName.trim(), proficiency: Number(proficiency), approved: approved ? 1 : 0 } },
+      { guid: lecturerSkillGuid, input: { employeeGuid, skillGuids: [skillId], proficiency: Number(proficiency) } },
       {
         onSuccess: () => { setSaved(true); showToast('Skill updated successfully') },
         onError: (error: Error) => setFailure(error.message || 'Failed to update skill. Please try again.'),
@@ -160,10 +159,10 @@ export function EditLecturerSkillModal({ isOpen, onClose, showToast, lecturerSki
             <SearchSelect
               placeholder="— Select skill —"
               options={skillOptions}
-              value={skillName}
-              onChange={v => { setSkillName(v); clearError('skillName') }}
+              value={skillId}
+              onChange={v => { setSkillId(v); clearError('skillId') }}
             />
-            {errors.skillName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.skillName}</p>}
+            {errors.skillId && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.skillId}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Proficiency</div>

@@ -58,6 +58,31 @@ const FINANCE_PAYMENT_SECTIONS: MenuNode[] = [
   ]),
 ]
 
+// Shared between mockMenu below and the real-menu merge in getMenu() (see
+// mergeStudentSections) — same "no backend permission model for this
+// workflow yet" situation as Finance's Payment Collection above. Ported
+// from isbat_student_module.html; Dashboard and Student Directory were
+// skipped (Student Master already covers the directory role).
+const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
+  section('Operations', [
+    leaf('Student Profile', 'user', '/student/profile'),
+    leaf('Batch Transfer', 'transfer', '/student/batch-transfer'),
+    leaf('Programme Transfer', 'graduation', '/student/prog-transfer'),
+    leaf('Learning Mode', 'display', '/student/learning-mode'),
+    leaf('Intake Transfer', 'calendar', '/student/intake-transfer'),
+  ]),
+  section('Services', [
+    leaf('Student Services', 'ticket', '/student/services'),
+  ]),
+  section('Communications', [
+    leaf('Send Communication', 'envelope', '/student/communications'),
+  ]),
+  section('Settings', [
+    leaf('Category Masters', 'list', '/student/masters'),
+    leaf('Specialization Management', 'graduation', '/student/specialization'),
+  ]),
+]
+
 const ASSESSMENT_SECTIONS: MenuNode[] = [
   section('Overview', [
     leaf('Assessment Dashboard', 'dashboard', '/assessment/dashboard'),
@@ -181,7 +206,10 @@ const mockMenu: MenuNode[] = [
   module_('Student', 'user', [
     section('Student Records', [
       leaf('Student Master', 'graduation', '/student/student-master'),
+      leaf('Batch Summary', 'grid-alt', '/student/batch-summary'),
+      leaf('Student Statement', 'files', '/student/statement'),
     ]),
+    ...STUDENT_OPERATIONS_SECTIONS,
   ]),
   module_('Employee', 'briefcase', [
     section('Employee Records', [
@@ -256,6 +284,53 @@ function mergeFinanceSections(menu: MenuNode[]): MenuNode[] {
   // Finance panel (see its position in mockMenu above), not trail behind
   // whatever real sections the backend already returns.
   merged[financeIdx] = { ...financeModule, children: [...missingSections, ...financeModule.children] }
+  return merged
+}
+
+// TEMPORARY: same situation as mergeFinanceSections above — the real
+// /me/menu response's Student module only has "Student Records" (Student
+// Master), so the Operations/Services/Communications/Settings sections built
+// from isbat_student_module.html are forced in per-section until the backend
+// registers them for real.
+function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
+  const studentIdx = menu.findIndex(n => n.name === 'Student')
+  if (studentIdx === -1) {
+    return [...menu, module_('Student', 'user', [
+      section('Student Records', [
+        leaf('Batch Summary', 'grid-alt', '/student/batch-summary'),
+        leaf('Student Statement', 'files', '/student/statement'),
+      ]),
+      ...STUDENT_OPERATIONS_SECTIONS,
+    ])]
+  }
+
+  let studentModule = menu[studentIdx]
+
+  // Batch Summary / Student Statement extend the existing "Student Records"
+  // section rather than getting their own section.
+  const recordsIdx = studentModule.children.findIndex(c => c.name === 'Student Records')
+  if (recordsIdx !== -1) {
+    const recordsSection = studentModule.children[recordsIdx]
+    const existingLeaves = new Set(recordsSection.children.map(l => l.name))
+    const missingLeaves = [
+      leaf('Batch Summary', 'grid-alt', '/student/batch-summary'),
+      leaf('Student Statement', 'files', '/student/statement'),
+    ].filter(l => !existingLeaves.has(l.name))
+    if (missingLeaves.length > 0) {
+      const children = [...studentModule.children]
+      children[recordsIdx] = { ...recordsSection, children: [...recordsSection.children, ...missingLeaves] }
+      studentModule = { ...studentModule, children }
+    }
+  }
+
+  const existingSections = new Set(studentModule.children.map(c => c.name))
+  const missingSections = STUDENT_OPERATIONS_SECTIONS.filter(s => !existingSections.has(s.name))
+  const finalModule = missingSections.length === 0
+    ? studentModule
+    : { ...studentModule, children: [...studentModule.children, ...missingSections] }
+
+  const merged = [...menu]
+  merged[studentIdx] = finalModule
   return merged
 }
 
@@ -345,7 +420,8 @@ export function getMenu(): Promise<MenuResult> {
       const withEmployee = menu.some(n => n.name === 'Employee') ? menu : [...menu, HARDCODED_EMPLOYEE_MODULE]
       const withAssessment = withEmployee.some(n => n.name === 'Assessment') ? withEmployee : [...withEmployee, HARDCODED_ASSESSMENT_MODULE]
       const withFinance  = mergeFinanceSections(withAssessment)
-      const withBulkEdit = ensureBulkIntakeEdit(withFinance)
+      const withStudent  = mergeStudentSections(withFinance)
+      const withBulkEdit = ensureBulkIntakeEdit(withStudent)
       const finalMenu = ensureProgrammeApproval(withBulkEdit)
       return { menu: finalMenu, isFallback: false }
     })

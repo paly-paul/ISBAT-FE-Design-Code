@@ -35,7 +35,7 @@ export function useCreateSkillMaster() {
 export function useUpdateSkillMaster() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ intSkill, input }: { intSkill: number; input: SkillMasterInput }) => updateSkillMaster(intSkill, input),
+    mutationFn: ({ skillGuid, input }: { skillGuid: string; input: SkillMasterInput }) => updateSkillMaster(skillGuid, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: SKILL_MASTERS_KEY }),
   })
 }
@@ -43,7 +43,7 @@ export function useUpdateSkillMaster() {
 export function useDeleteSkillMaster() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (intSkill: number) => deleteSkillMaster(intSkill),
+    mutationFn: (skillGuid: string) => deleteSkillMaster(skillGuid),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: SKILL_MASTERS_KEY }),
   })
 }
