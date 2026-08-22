@@ -4,9 +4,8 @@ import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
-import { NewFacultyModal } from '@/components/modals/academic/NewFacultyModal'
-import { EditFacultyModal } from '@/components/modals/academic/EditFacultyModal'
-import { ViewFacultyModal } from '@/components/modals/academic/ViewFacultyModal'
+import { FacultyFormModal } from '@/components/modals/config/FacultyFormModal'
+import { ViewFacultyModal } from '@/components/modals/config/ViewFacultyModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -191,17 +190,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="faculties" onPageChange={setPage} />
         </div>
       </div>
-      <NewFacultyModal
+      <FacultyFormModal
+        mode="new"
         isOpen={openModals.has('new-faculty-modal')}
         onClose={() => closeModal('new-faculty-modal')}
         showToast={showToast}
+        faculty={null}
         createFaculty={createFaculty}
+        updateFaculty={updateFaculty}
       />
-      <EditFacultyModal
+      <FacultyFormModal
+        mode="edit"
         isOpen={openModals.has('edit-faculty-modal')}
         onClose={() => closeModal('edit-faculty-modal')}
         showToast={showToast}
         faculty={editingFaculty}
+        createFaculty={createFaculty}
         updateFaculty={updateFaculty}
       />
       <ViewFacultyModal

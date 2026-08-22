@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Breadcrumb } from '@/components/Breadcrumb'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
-import { ProgrammeGroupModal } from '@/components/modals/academic/ProgrammeGroupModal'
-import { EditProgrammeGroupModal } from '@/components/modals/academic/EditProgrammeGroupModal'
+import { ProgrammeGroupFormModal } from '@/components/modals/academic/ProgrammeGroupFormModal'
 import { ViewProgrammeGroupModal } from '@/components/modals/academic/ViewProgrammeGroupModal'
 import { Toast } from '@/components/Toast'
 import { TableSearch } from '@/components/TableSearch'
@@ -221,17 +220,22 @@ export default function Page() {
         showToast={showToast}
         programGroupGuid={viewingProgramGroupGuid}
       />
-      <ProgrammeGroupModal
+      <ProgrammeGroupFormModal
+        mode="new"
         isOpen={openModals.has('new-proggroup-modal')}
         onClose={() => closeModal('new-proggroup-modal')}
         showToast={showToast}
+        programGroupGuid={null}
         createProgramGroup={createProgramGroup}
+        updateProgramGroup={updateProgramGroup}
       />
-      <EditProgrammeGroupModal
+      <ProgrammeGroupFormModal
+        mode="edit"
         isOpen={openModals.has('edit-proggroup-modal')}
         onClose={() => closeModal('edit-proggroup-modal')}
         showToast={showToast}
         programGroupGuid={editingProgramGroupGuid}
+        createProgramGroup={createProgramGroup}
         updateProgramGroup={updateProgramGroup}
       />
       <Toast toast={toast} />

@@ -3,7 +3,7 @@ import { ModalProps } from '../types'
 import { useProgramLevel } from '@/hooks/academic/useProgramLevels'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { AuthError } from '@/lib/api/client'
-import { FailurePopup } from './FailurePopup'
+import { FailurePopup } from '../shared/FailurePopup'
 
 interface ViewProgrammeLevelModalProps extends ModalProps {
   programLevelGuid: string | null
@@ -14,13 +14,9 @@ interface ViewProgrammeLevelModalProps extends ModalProps {
   canEdit?: boolean
 }
 
-// A single label/value pair within the grid below — plain text, same
-// bare-field style as ViewIntakeModal's Basic Details section, no card
-// container or icon around each value. `wide` spans the field to the grid's
-// last column line (not a fixed "span 2"/"span 3") so a lone trailing field
-// — like Currency here, the 7th field in a 3-col grid — fills the rest of
-// its row instead of leaving a dangling empty cell, at any column count the
-// responsive .view-detail-grid breakpoints land on.
+// A single label/value pair within the grid below, same bare-field style as ViewIntakeModal.
+// `wide` spans to the grid's last column line so a lone trailing field (Currency here) fills
+// its row instead of leaving a dangling empty cell, at whatever column count the breakpoint lands on.
 function Field({ label, value, mono, wide }: { label: string; value: React.ReactNode; mono?: boolean; wide?: boolean }) {
   return (
     <div style={{ gridColumn: wide ? '1 / -1' : undefined }}>

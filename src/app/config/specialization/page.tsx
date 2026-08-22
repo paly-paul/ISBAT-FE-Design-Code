@@ -9,9 +9,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewStreamModal } from '@/components/modals/academic/NewStreamModal'
-import { EditStreamModal } from '@/components/modals/academic/EditStreamModal'
-import { ViewStreamModal } from '@/components/modals/academic/ViewStreamModal'
+import { StreamFormModal } from '@/components/modals/config/StreamFormModal'
+import { ViewStreamModal } from '@/components/modals/config/ViewStreamModal'
 import { useStreams, useCreateStream, useUpdateStream, useDeleteStream, Stream } from '@/hooks/config/useStreams'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -140,17 +139,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="specializations" onPageChange={setPage} />
         </div>
       </div>
-      <NewStreamModal
+      <StreamFormModal
+        mode="new"
         isOpen={openModals.has('new-stream-modal')}
         onClose={() => closeModal('new-stream-modal')}
         showToast={showToast}
+        streamGuid={null}
         createStream={createStream}
+        updateStream={updateStream}
       />
-      <EditStreamModal
+      <StreamFormModal
+        mode="edit"
         isOpen={openModals.has('edit-stream-modal')}
         onClose={() => closeModal('edit-stream-modal')}
         showToast={showToast}
         streamGuid={editingStreamGuid}
+        createStream={createStream}
         updateStream={updateStream}
       />
       <ViewStreamModal

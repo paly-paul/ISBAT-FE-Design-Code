@@ -6,7 +6,7 @@ import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useProgramApprovals } from '@/hooks/academic/useProgramApproval'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
-import { FailurePopup } from './FailurePopup'
+import { FailurePopup } from '../shared/FailurePopup'
 import { AuthError } from '@/lib/api/client'
 
 interface ViewFeeStructureModalProps extends ModalProps {

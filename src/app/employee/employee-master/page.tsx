@@ -4,11 +4,9 @@ import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
-import { NewEmployeeModal } from '@/components/modals/employee/NewEmployeeModal'
-import { EditEmployeeModal } from '@/components/modals/employee/EditEmployeeModal'
+import { EmployeeFormModal } from '@/components/modals/employee/EmployeeFormModal'
 import { ViewEmployeeModal } from '@/components/modals/employee/ViewEmployeeModal'
-import { AssignEmployeePermissionsModal } from '@/components/modals/employee/AssignEmployeePermissionsModal'
-import { EditEmployeePermissionsModal } from '@/components/modals/employee/EditEmployeePermissionsModal'
+import { EmployeePermissionsFormModal } from '@/components/modals/employee/EmployeePermissionsFormModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
@@ -233,8 +231,15 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="employees" onPageChange={setPage} />
         </div>
       </div>
-      <NewEmployeeModal isOpen={openModals.has('new-employee-modal')} onClose={() => closeModal('new-employee-modal')} showToast={showToast} />
-      <EditEmployeeModal
+      <EmployeeFormModal
+        mode="new"
+        isOpen={openModals.has('new-employee-modal')}
+        onClose={() => closeModal('new-employee-modal')}
+        showToast={showToast}
+        employeeGuid={null}
+      />
+      <EmployeeFormModal
+        mode="edit"
         isOpen={openModals.has('edit-employee-modal')}
         onClose={() => closeModal('edit-employee-modal')}
         showToast={showToast}
@@ -248,13 +253,15 @@ export default function Page() {
         canEdit={permissions.edit}
         onEdit={() => { closeModal('view-employee-modal'); if (viewingEmployeeGuid) openEditModal(viewingEmployeeGuid) }}
       />
-      <AssignEmployeePermissionsModal
+      <EmployeePermissionsFormModal
+        mode="new"
         isOpen={openModals.has('assign-employee-permissions-modal')}
         onClose={() => closeModal('assign-employee-permissions-modal')}
         showToast={showToast}
         employee={assigningPermissionsEmployee}
       />
-      <EditEmployeePermissionsModal
+      <EmployeePermissionsFormModal
+        mode="edit"
         isOpen={openModals.has('edit-employee-permissions-modal')}
         onClose={() => closeModal('edit-employee-permissions-modal')}
         showToast={showToast}

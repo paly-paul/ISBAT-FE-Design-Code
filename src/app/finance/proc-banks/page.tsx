@@ -9,8 +9,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewProcBankModal } from '@/components/modals/finance/NewProcBankModal'
-import { EditProcBankModal } from '@/components/modals/finance/EditProcBankModal'
+import { ProcBankFormModal } from '@/components/modals/finance/ProcBankFormModal'
 import { ViewProcBankModal } from '@/components/modals/finance/ViewProcBankModal'
 import { useProcBanks, useCreateProcBank, useUpdateProcBank, useDeleteProcBank, ProcBank } from '@/hooks/finance/useProcBanks'
 import { STATUS_LABELS } from '@/lib/api/finance/procBank'
@@ -165,17 +164,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="procurement banks" onPageChange={setPage} />
         </div>
       </div>
-      <NewProcBankModal
+      <ProcBankFormModal
+        mode="new"
         isOpen={openModals.has('new-proc-bank-modal')}
         onClose={() => closeModal('new-proc-bank-modal')}
         showToast={showToast}
+        procBankGuid={null}
         createProcBank={createProcBank}
+        updateProcBank={updateProcBank}
       />
-      <EditProcBankModal
+      <ProcBankFormModal
+        mode="edit"
         isOpen={openModals.has('edit-proc-bank-modal')}
         onClose={() => closeModal('edit-proc-bank-modal')}
         showToast={showToast}
         procBankGuid={editingBankGuid}
+        createProcBank={createProcBank}
         updateProcBank={updateProcBank}
       />
       <ViewProcBankModal

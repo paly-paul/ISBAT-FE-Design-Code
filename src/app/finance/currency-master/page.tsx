@@ -9,8 +9,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewCurrencyModal } from '@/components/modals/finance/NewCurrencyModal'
-import { EditCurrencyModal } from '@/components/modals/finance/EditCurrencyModal'
+import { CurrencyFormModal } from '@/components/modals/finance/CurrencyFormModal'
 import { ViewCurrencyModal } from '@/components/modals/finance/ViewCurrencyModal'
 import { useCurrencies, useCreateCurrency, useUpdateCurrency, useDeleteCurrency, Currency } from '@/hooks/finance/useCurrencies'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -168,17 +167,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="currencies" onPageChange={setPage} />
         </div>
       </div>
-      <NewCurrencyModal
+      <CurrencyFormModal
+        mode="new"
         isOpen={openModals.has('new-currency-modal')}
         onClose={() => closeModal('new-currency-modal')}
         showToast={showToast}
+        currencyGuid={null}
         createCurrency={createCurrency}
+        updateCurrency={updateCurrency}
       />
-      <EditCurrencyModal
+      <CurrencyFormModal
+        mode="edit"
         isOpen={openModals.has('edit-currency-modal')}
         onClose={() => closeModal('edit-currency-modal')}
         showToast={showToast}
         currencyGuid={editingCurrencyGuid}
+        createCurrency={createCurrency}
         updateCurrency={updateCurrency}
       />
       <ViewCurrencyModal

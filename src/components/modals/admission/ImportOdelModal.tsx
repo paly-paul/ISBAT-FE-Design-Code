@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { ScrollTable } from '@/components/ScrollTable'
-import { SuccessPopup } from '../academic/SuccessPopup'
+import { SuccessPopup } from '../shared/SuccessPopup'
 
 const ODEL_RECORDS = [
   { ref: 'ODL-2026-0014', name: 'Ssebulime Patrick', date: '09/05/2026', phone: '+256 703 444 555', email: 'patrick.s@outlook.com', programme: 'MBA Business Admin (ODL)', campus: 'Distance · Intake 20261' },

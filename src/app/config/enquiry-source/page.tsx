@@ -9,9 +9,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewEnquirySourceModal } from '@/components/modals/academic/NewEnquirySourceModal'
-import { EditEnquirySourceModal } from '@/components/modals/academic/EditEnquirySourceModal'
-import { ViewEnquirySourceModal } from '@/components/modals/academic/ViewEnquirySourceModal'
+import { EnquirySourceFormModal } from '@/components/modals/config/EnquirySourceFormModal'
+import { ViewEnquirySourceModal } from '@/components/modals/config/ViewEnquirySourceModal'
 import { useEnquirySources, useCreateEnquirySource, useUpdateEnquirySource, useDeleteEnquirySource, EnquirySource } from '@/hooks/admission/useEnquirySources'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -140,17 +139,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="enquiry sources" onPageChange={setPage} />
         </div>
       </div>
-      <NewEnquirySourceModal
+      <EnquirySourceFormModal
+        mode="new"
         isOpen={openModals.has('new-enquiry-source-modal')}
         onClose={() => closeModal('new-enquiry-source-modal')}
         showToast={showToast}
+        isbatSourceGuid={null}
         createEnquirySource={createEnquirySource}
+        updateEnquirySource={updateEnquirySource}
       />
-      <EditEnquirySourceModal
+      <EnquirySourceFormModal
+        mode="edit"
         isOpen={openModals.has('edit-enquiry-source-modal')}
         onClose={() => closeModal('edit-enquiry-source-modal')}
         showToast={showToast}
         isbatSourceGuid={editingSourceGuid}
+        createEnquirySource={createEnquirySource}
         updateEnquirySource={updateEnquirySource}
       />
       <ViewEnquirySourceModal

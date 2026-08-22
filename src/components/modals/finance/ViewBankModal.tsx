@@ -3,7 +3,7 @@ import { ModalProps } from '../types'
 import { useBank } from '@/hooks/finance/useBanks'
 import { STATUS_LABELS } from '@/lib/api/finance/procBank'
 import { AuthError } from '@/lib/api/client'
-import { FailurePopup } from '../academic/FailurePopup'
+import { FailurePopup } from '../shared/FailurePopup'
 
 interface ViewBankModalProps extends ModalProps {
   bankGuid: string | null

@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
-import { NewIntakeModal } from '@/components/modals/academic/NewIntakeModal'
-import { EditIntakeModal } from '@/components/modals/academic/EditIntakeModal'
+import { IntakeFormModal } from '@/components/modals/academic/IntakeFormModal'
 import { ViewIntakeModal } from '@/components/modals/academic/ViewIntakeModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
@@ -327,17 +326,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="intakes" onPageChange={setPage} />
         </div>
       </div>
-      <NewIntakeModal
+      <IntakeFormModal
+        mode="new"
         isOpen={openModals.has('new-intake-modal')}
         onClose={() => closeModal('new-intake-modal')}
         showToast={showToast}
+        intakeGuid={null}
         createIntake={createIntake}
+        updateIntake={updateIntake}
       />
-      <EditIntakeModal
+      <IntakeFormModal
+        mode="edit"
         isOpen={openModals.has('intake-edit-modal')}
         onClose={() => closeModal('intake-edit-modal')}
         showToast={showToast}
         intakeGuid={editingIntakeGuid}
+        createIntake={createIntake}
         updateIntake={updateIntake}
       />
       <ViewIntakeModal

@@ -9,9 +9,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewEnquiryStatusModal } from '@/components/modals/academic/NewEnquiryStatusModal'
-import { EditEnquiryStatusModal } from '@/components/modals/academic/EditEnquiryStatusModal'
-import { ViewEnquiryStatusModal } from '@/components/modals/academic/ViewEnquiryStatusModal'
+import { EnquiryStatusFormModal } from '@/components/modals/config/EnquiryStatusFormModal'
+import { ViewEnquiryStatusModal } from '@/components/modals/config/ViewEnquiryStatusModal'
 import { useEnquiryStatuses, useCreateEnquiryStatus, useUpdateEnquiryStatus, useDeleteEnquiryStatus, EnquiryStatus } from '@/hooks/config/useEnquiryStatuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -142,17 +141,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="enquiry statuses" onPageChange={setPage} />
         </div>
       </div>
-      <NewEnquiryStatusModal
+      <EnquiryStatusFormModal
+        mode="new"
         isOpen={openModals.has('new-enquiry-status-modal')}
         onClose={() => closeModal('new-enquiry-status-modal')}
         showToast={showToast}
+        enquiryStatusGuid={null}
         createEnquiryStatus={createEnquiryStatus}
+        updateEnquiryStatus={updateEnquiryStatus}
       />
-      <EditEnquiryStatusModal
+      <EnquiryStatusFormModal
+        mode="edit"
         isOpen={openModals.has('edit-enquiry-status-modal')}
         onClose={() => closeModal('edit-enquiry-status-modal')}
         showToast={showToast}
         enquiryStatusGuid={editingEnquiryStatusGuid}
+        createEnquiryStatus={createEnquiryStatus}
         updateEnquiryStatus={updateEnquiryStatus}
       />
       <ViewEnquiryStatusModal

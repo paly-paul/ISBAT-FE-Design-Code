@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { ModalProps } from '../types'
-import { FailurePopup } from './FailurePopup'
+import { FailurePopup } from '../shared/FailurePopup'
 import { AuthError } from '@/lib/api/client'
 import { useCourseUnit } from '@/hooks/academic/useCourseUnits'
 import { openDocumentForViewing } from '@/lib/documentViewer'

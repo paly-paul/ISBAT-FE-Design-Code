@@ -2,7 +2,7 @@
 import { ModalProps } from '../types'
 import { useCurrency } from '@/hooks/finance/useCurrencies'
 import { AuthError } from '@/lib/api/client'
-import { FailurePopup } from '../academic/FailurePopup'
+import { FailurePopup } from '../shared/FailurePopup'
 
 interface ViewCurrencyModalProps extends ModalProps {
   currencyGuid: string | null

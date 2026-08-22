@@ -3,7 +3,7 @@ import { ModalProps } from '../types'
 import { useLedger, Ledger } from '@/hooks/finance/useLedgers'
 import { useProcGlAccounts } from '@/hooks/finance/useProcGlAccounts'
 import { AuthError } from '@/lib/api/client'
-import { FailurePopup } from '../academic/FailurePopup'
+import { FailurePopup } from '../shared/FailurePopup'
 
 interface ViewLedgerModalProps extends ModalProps {
   ledgerGuid: string | null

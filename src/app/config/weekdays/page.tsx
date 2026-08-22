@@ -9,9 +9,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewWeekdayModal } from '@/components/modals/academic/NewWeekdayModal'
-import { EditWeekdayModal } from '@/components/modals/academic/EditWeekdayModal'
-import { ViewWeekdayModal } from '@/components/modals/academic/ViewWeekdayModal'
+import { WeekdayFormModal } from '@/components/modals/config/WeekdayFormModal'
+import { ViewWeekdayModal } from '@/components/modals/config/ViewWeekdayModal'
 import { useWeekdays, useCreateWeekday, useUpdateWeekday, useDeleteWeekday, Weekday } from '@/hooks/config/useWeekdays'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -140,17 +139,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="weekdays" onPageChange={setPage} />
         </div>
       </div>
-      <NewWeekdayModal
+      <WeekdayFormModal
+        mode="new"
         isOpen={openModals.has('new-weekday-modal')}
         onClose={() => closeModal('new-weekday-modal')}
         showToast={showToast}
+        weekDayGuid={null}
         createWeekday={createWeekday}
+        updateWeekday={updateWeekday}
       />
-      <EditWeekdayModal
+      <WeekdayFormModal
+        mode="edit"
         isOpen={openModals.has('edit-weekday-modal')}
         onClose={() => closeModal('edit-weekday-modal')}
         showToast={showToast}
         weekDayGuid={editingWeekdayGuid}
+        createWeekday={createWeekday}
         updateWeekday={updateWeekday}
       />
       <ViewWeekdayModal

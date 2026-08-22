@@ -10,9 +10,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewDesignationModal } from '@/components/modals/academic/NewDesignationModal'
-import { EditDesignationModal } from '@/components/modals/academic/EditDesignationModal'
-import { ViewDesignationModal } from '@/components/modals/academic/ViewDesignationModal'
+import { DesignationFormModal } from '@/components/modals/config/DesignationFormModal'
+import { ViewDesignationModal } from '@/components/modals/config/ViewDesignationModal'
 import { useDesignations, useCreateDesignation, useUpdateDesignation, useDeleteDesignation, Designation } from '@/hooks/config/useDesignations'
 import { useDepartments } from '@/hooks/config/useDepartments'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -207,17 +206,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="designations" onPageChange={setPage} />
         </div>
       </div>
-      <NewDesignationModal
+      <DesignationFormModal
+        mode="new"
         isOpen={openModals.has('new-designation-modal')}
         onClose={() => closeModal('new-designation-modal')}
         showToast={showToast}
+        designation={null}
         createDesignation={createDesignation}
+        updateDesignation={updateDesignation}
       />
-      <EditDesignationModal
+      <DesignationFormModal
+        mode="edit"
         isOpen={openModals.has('edit-designation-modal')}
         onClose={() => closeModal('edit-designation-modal')}
         showToast={showToast}
         designation={editingDesignation}
+        createDesignation={createDesignation}
         updateDesignation={updateDesignation}
       />
       <ViewDesignationModal

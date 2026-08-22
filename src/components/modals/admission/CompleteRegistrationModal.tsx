@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
-import { FailurePopup } from '../academic/FailurePopup'
+import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { applicantProfileHref } from '@/lib/applicantProfileLink'
 import { useRegistrationDetail, useRegistrationTypes, useRegisterStudent, RegisterStudentResponse } from '@/hooks/admission/useRegistrarDesk'

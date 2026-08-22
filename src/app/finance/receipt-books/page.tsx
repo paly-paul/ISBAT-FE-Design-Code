@@ -9,8 +9,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewReceiptBookModal } from '@/components/modals/finance/NewReceiptBookModal'
-import { EditReceiptBookModal } from '@/components/modals/finance/EditReceiptBookModal'
+import { ReceiptBookFormModal } from '@/components/modals/finance/ReceiptBookFormModal'
 import { ViewReceiptBookModal } from '@/components/modals/finance/ViewReceiptBookModal'
 import { useReceiptBooks, useCreateReceiptBook, useUpdateReceiptBook, useDeleteReceiptBook, ReceiptBook } from '@/hooks/finance/useReceiptBooks'
 import { STATUS_LABELS, CATEGORY_LABELS, BOOK_CATEGORY_LABELS } from '@/lib/api/finance/receiptBook'
@@ -161,17 +160,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="receipt books" onPageChange={setPage} />
         </div>
       </div>
-      <NewReceiptBookModal
+      <ReceiptBookFormModal
+        mode="new"
         isOpen={openModals.has('new-receipt-book-modal')}
         onClose={() => closeModal('new-receipt-book-modal')}
         showToast={showToast}
+        receiptBook={null}
         createReceiptBook={createReceiptBook}
+        updateReceiptBook={updateReceiptBook}
       />
-      <EditReceiptBookModal
+      <ReceiptBookFormModal
+        mode="edit"
         isOpen={openModals.has('edit-receipt-book-modal')}
         onClose={() => closeModal('edit-receipt-book-modal')}
         showToast={showToast}
         receiptBook={editingBook}
+        createReceiptBook={createReceiptBook}
         updateReceiptBook={updateReceiptBook}
       />
       <ViewReceiptBookModal

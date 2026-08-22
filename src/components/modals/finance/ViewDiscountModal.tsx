@@ -3,7 +3,7 @@ import { ModalProps } from '../types'
 import { useDiscount } from '@/hooks/finance/useDiscounts'
 import { CALC_TYPE_LABELS, CALC_TYPE_VALUES } from '@/lib/api/finance/discount'
 import { AuthError } from '@/lib/api/client'
-import { FailurePopup } from '../academic/FailurePopup'
+import { FailurePopup } from '../shared/FailurePopup'
 
 interface ViewDiscountModalProps extends ModalProps {
   discountGuid: string | null

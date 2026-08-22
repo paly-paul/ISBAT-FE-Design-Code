@@ -14,8 +14,8 @@ export interface Ledger {
   // documented sample response only shows this field, not a guid).
   intGlAccount: number | null
   // Not confirmed present on GetByGuid/List — the abbreviated backend docs
-  // only show intGlAccount above. EditLedgerModal prefills its GL Account
-  // picker from this field when present; when it's undefined/null but
+  // only show intGlAccount above. LedgerFormModal (edit mode) prefills its GL
+  // Account picker from this field when present; when it's undefined/null but
   // intGlAccount isn't, there's no way to know which GL account is actually
   // linked, and the modal warns that saving will detach it.
   procGlAccountGuid?: string | null
@@ -69,9 +69,10 @@ export function getLedgerById(guid: string): Promise<Ledger> {
   return apiGet<Ledger>(`/api/v1/finance/ledgers/${guid}`)
 }
 
-// Same payload shape as create (see LedgerInput above). EditLedgerModal
-// always sends procGlAccountGuid: null (see the TODO on Ledger.intGlAccount)
-// since it has no way to know the ledger's existing GL account link.
+// Same payload shape as create (see LedgerInput above). LedgerFormModal
+// (edit mode) always sends procGlAccountGuid: null (see the TODO on
+// Ledger.intGlAccount) since it has no way to know the ledger's existing GL
+// account link.
 export function updateLedger(guid: string, input: LedgerInput): Promise<Ledger> {
   if (MOCK_AUTH) {
     const existing = mockLedgers.find(l => l.ledgerGuid === guid)
