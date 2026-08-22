@@ -3,8 +3,7 @@ import { useState, useEffect } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
-import { NewRoomModal } from '@/components/modals/academic/NewRoomModal'
-import { EditRoomModal } from '@/components/modals/academic/EditRoomModal'
+import { RoomFormModal } from '@/components/modals/academic/RoomFormModal'
 import { ViewRoomModal } from '@/components/modals/academic/ViewRoomModal'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
@@ -178,17 +177,22 @@ export default function Page() {
         showToast={showToast}
         roomGuid={viewingRoomGuid}
       />
-      <NewRoomModal
+      <RoomFormModal
+        mode="new"
         isOpen={openModals.has('new-room-modal')}
         onClose={() => closeModal('new-room-modal')}
         showToast={showToast}
+        roomGuid={null}
         createRoom={createRoom}
+        updateRoom={updateRoom}
       />
-      <EditRoomModal
+      <RoomFormModal
+        mode="edit"
         isOpen={openModals.has('edit-room-modal')}
         onClose={() => closeModal('edit-room-modal')}
         showToast={showToast}
         roomGuid={editingRoomGuid}
+        createRoom={createRoom}
         updateRoom={updateRoom}
       />
       <Toast toast={toast} />

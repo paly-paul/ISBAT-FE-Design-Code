@@ -9,9 +9,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewInterestLevelModal } from '@/components/modals/academic/NewInterestLevelModal'
-import { EditInterestLevelModal } from '@/components/modals/academic/EditInterestLevelModal'
-import { ViewInterestLevelModal } from '@/components/modals/academic/ViewInterestLevelModal'
+import { InterestLevelFormModal } from '@/components/modals/config/InterestLevelFormModal'
+import { ViewInterestLevelModal } from '@/components/modals/config/ViewInterestLevelModal'
 import { useInterestLevels, useCreateInterestLevel, useUpdateInterestLevel, useDeleteInterestLevel, InterestLevel } from '@/hooks/admission/useInterestLevels'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -138,17 +137,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="interest levels" onPageChange={setPage} />
         </div>
       </div>
-      <NewInterestLevelModal
+      <InterestLevelFormModal
+        mode="new"
         isOpen={openModals.has('new-interest-level-modal')}
         onClose={() => closeModal('new-interest-level-modal')}
         showToast={showToast}
+        interestLevelGuid={null}
         createInterestLevel={createInterestLevel}
+        updateInterestLevel={updateInterestLevel}
       />
-      <EditInterestLevelModal
+      <InterestLevelFormModal
+        mode="edit"
         isOpen={openModals.has('edit-interest-level-modal')}
         onClose={() => closeModal('edit-interest-level-modal')}
         showToast={showToast}
         interestLevelGuid={editingLevelGuid}
+        createInterestLevel={createInterestLevel}
         updateInterestLevel={updateInterestLevel}
       />
       <ViewInterestLevelModal

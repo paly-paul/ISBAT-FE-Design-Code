@@ -10,8 +10,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { AddSkillModal } from '@/components/modals/academic/AddSkillModal'
-import { EditLecturerSkillModal } from '@/components/modals/academic/EditLecturerSkillModal'
+import { LecturerSkillFormModal } from '@/components/modals/academic/LecturerSkillFormModal'
 import { ViewLecturerSkillModal } from '@/components/modals/academic/ViewLecturerSkillModal'
 import { useLecturerSkills, useLecturerSkillSearch, useCreateLecturerSkill, useUpdateLecturerSkill, useDeleteLecturerSkill, LecturerSkill } from '@/hooks/academic/useLecturerSkills'
 import { useEmployees } from '@/hooks/employee/useEmployees'
@@ -263,17 +262,22 @@ export default function Page() {
         </div>
       </div>
 
-      <AddSkillModal
+      <LecturerSkillFormModal
+        mode="new"
         isOpen={openModals.has('add-skill-modal')}
         onClose={() => closeModal('add-skill-modal')}
         showToast={showToast}
+        lecturerSkillGuid={null}
         createSkill={createSkill}
+        updateSkill={updateSkill}
       />
-      <EditLecturerSkillModal
+      <LecturerSkillFormModal
+        mode="edit"
         isOpen={openModals.has('edit-lecturer-skill-modal')}
         onClose={() => closeModal('edit-lecturer-skill-modal')}
         showToast={showToast}
         lecturerSkillGuid={editingSkillGuid}
+        createSkill={createSkill}
         updateSkill={updateSkill}
       />
       <ViewLecturerSkillModal canEdit={permissions.edit} onEdit={() => { closeModal('view-lecturer-skill-modal'); openEditModal(editingSkillGuid || '') }}

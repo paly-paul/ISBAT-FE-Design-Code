@@ -2,7 +2,7 @@
 import { ModalProps } from '../types'
 import { useCooperate } from '@/hooks/finance/useCooperates'
 import { AuthError } from '@/lib/api/client'
-import { FailurePopup } from '../academic/FailurePopup'
+import { FailurePopup } from '../shared/FailurePopup'
 
 interface ViewCooperateModalProps extends ModalProps {
   cooperateGuid: string | null

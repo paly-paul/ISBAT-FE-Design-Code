@@ -10,9 +10,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewCountryModal } from '@/components/modals/academic/NewCountryModal'
-import { EditCountryModal } from '@/components/modals/academic/EditCountryModal'
-import { ViewCountryModal } from '@/components/modals/academic/ViewCountryModal'
+import { CountryFormModal } from '@/components/modals/config/CountryFormModal'
+import { ViewCountryModal } from '@/components/modals/config/ViewCountryModal'
 import { useCountries, useCreateCountry, useUpdateCountry, useDeleteCountry, Country } from '@/hooks/config/useCountries'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -219,17 +218,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="countries" onPageChange={setPage} />
         </div>
       </div>
-      <NewCountryModal
+      <CountryFormModal
+        mode="new"
         isOpen={openModals.has('new-country-modal')}
         onClose={() => closeModal('new-country-modal')}
         showToast={showToast}
+        country={null}
         createCountry={createCountry}
+        updateCountry={updateCountry}
       />
-      <EditCountryModal
+      <CountryFormModal
+        mode="edit"
         isOpen={openModals.has('edit-country-modal')}
         onClose={() => closeModal('edit-country-modal')}
         showToast={showToast}
         country={editingCountry}
+        createCountry={createCountry}
         updateCountry={updateCountry}
       />
       <ViewCountryModal

@@ -9,9 +9,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewFollowUpStatusModal } from '@/components/modals/academic/NewFollowUpStatusModal'
-import { EditFollowUpStatusModal } from '@/components/modals/academic/EditFollowUpStatusModal'
-import { ViewFollowUpStatusModal } from '@/components/modals/academic/ViewFollowUpStatusModal'
+import { FollowUpStatusFormModal } from '@/components/modals/config/FollowUpStatusFormModal'
+import { ViewFollowUpStatusModal } from '@/components/modals/config/ViewFollowUpStatusModal'
 import { useFollowUpStatuses, useCreateFollowUpStatus, useUpdateFollowUpStatus, useDeleteFollowUpStatus, FollowUpStatus } from '@/hooks/config/useFollowUpStatuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -147,17 +146,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="followup statuses" onPageChange={setPage} />
         </div>
       </div>
-      <NewFollowUpStatusModal
+      <FollowUpStatusFormModal
+        mode="new"
         isOpen={openModals.has('new-followup-status-modal')}
         onClose={() => closeModal('new-followup-status-modal')}
         showToast={showToast}
+        followUpStatusGuid={null}
         createFollowUpStatus={createFollowUpStatus}
+        updateFollowUpStatus={updateFollowUpStatus}
       />
-      <EditFollowUpStatusModal
+      <FollowUpStatusFormModal
+        mode="edit"
         isOpen={openModals.has('edit-followup-status-modal')}
         onClose={() => closeModal('edit-followup-status-modal')}
         showToast={showToast}
         followUpStatusGuid={editingFollowUpStatusGuid}
+        createFollowUpStatus={createFollowUpStatus}
         updateFollowUpStatus={updateFollowUpStatus}
       />
       <ViewFollowUpStatusModal

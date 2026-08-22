@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { ModalProps } from '../types'
-import { SuccessPopup } from '../academic/SuccessPopup'
+import { SuccessPopup } from '../shared/SuccessPopup'
 import { SearchSelect } from '@/components/SearchSelect'
 
 export interface FollowupRecord {

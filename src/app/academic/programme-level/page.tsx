@@ -5,8 +5,7 @@ import { Breadcrumb } from '@/components/Breadcrumb'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
-import { ProgrammeLevelModal } from '@/components/modals/academic/ProgrammeLevelModal'
-import { EditProgrammeLevelModal } from '@/components/modals/academic/EditProgrammeLevelModal'
+import { ProgrammeLevelFormModal } from '@/components/modals/academic/ProgrammeLevelFormModal'
 import { ViewProgrammeLevelModal } from '@/components/modals/academic/ViewProgrammeLevelModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
@@ -233,17 +232,22 @@ export default function Page() {
           if (viewingProgramLevelGuid) openEditModal(viewingProgramLevelGuid)
         }}
       />
-      <ProgrammeLevelModal
+      <ProgrammeLevelFormModal
+        mode="new"
         isOpen={openModals.has('new-alevel-modal')}
         onClose={() => closeModal('new-alevel-modal')}
         showToast={showToast}
+        programLevelGuid={null}
         createProgramLevel={createProgramLevel}
+        updateProgramLevel={updateProgramLevel}
       />
-      <EditProgrammeLevelModal
+      <ProgrammeLevelFormModal
+        mode="edit"
         isOpen={openModals.has('edit-alevel-modal')}
         onClose={() => closeModal('edit-alevel-modal')}
         showToast={showToast}
         programLevelGuid={editingProgramLevelGuid}
+        createProgramLevel={createProgramLevel}
         updateProgramLevel={updateProgramLevel}
       />
       <Toast toast={toast} />

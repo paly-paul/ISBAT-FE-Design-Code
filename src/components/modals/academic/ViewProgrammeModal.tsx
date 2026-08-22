@@ -9,7 +9,7 @@ import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useLedgers } from '@/hooks/finance/useLedgers'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { AuthError } from '@/lib/api/client'
-import { FailurePopup } from './FailurePopup'
+import { FailurePopup } from '../shared/FailurePopup'
 import { formatDate } from '@/lib/date'
 
 interface ViewProgrammeModalProps extends ModalProps {

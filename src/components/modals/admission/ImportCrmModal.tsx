@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { ScrollTable } from '@/components/ScrollTable'
-import { SuccessPopup } from '../academic/SuccessPopup'
+import { SuccessPopup } from '../shared/SuccessPopup'
 
 const CRM_LEADS = [
   { ref: 'CRM-2026-4521', name: 'Kamya Brian Sse', date: '09/05/2026', agent: 'Jane Nalule',  phone: '+256 772 456 789', email: 'kamyabrian@gmail.com', programme: 'BSc. Computer Science', campus: 'Kampala · Intake 20261', mode: 'Day',     status: 'Hot Lead' },

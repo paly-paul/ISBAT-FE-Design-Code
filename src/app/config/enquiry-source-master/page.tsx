@@ -8,9 +8,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewEnquirySourceMasterModal } from '@/components/modals/academic/NewEnquirySourceMasterModal'
-import { EditEnquirySourceMasterModal } from '@/components/modals/academic/EditEnquirySourceMasterModal'
-import { ViewEnquirySourceMasterModal } from '@/components/modals/academic/ViewEnquirySourceMasterModal'
+import { EnquirySourceMasterFormModal } from '@/components/modals/config/EnquirySourceMasterFormModal'
+import { ViewEnquirySourceMasterModal } from '@/components/modals/config/ViewEnquirySourceMasterModal'
 import { useEnquirySourceMasters, useCreateEnquirySourceMaster, useUpdateEnquirySourceMaster, useDeleteEnquirySourceMaster, EnquirySourceMaster } from '@/hooks/admission/useEnquirySourceMasters'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -142,17 +141,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="enquiry sources" onPageChange={setPage} />
         </div>
       </div>
-      <NewEnquirySourceMasterModal
+      <EnquirySourceMasterFormModal
+        mode="new"
         isOpen={openModals.has('new-enquiry-source-master-modal')}
         onClose={() => closeModal('new-enquiry-source-master-modal')}
         showToast={showToast}
+        enquirySourceGuid={null}
         createEnquirySourceMaster={createEnquirySourceMaster}
+        updateEnquirySourceMaster={updateEnquirySourceMaster}
       />
-      <EditEnquirySourceMasterModal
+      <EnquirySourceMasterFormModal
+        mode="edit"
         isOpen={openModals.has('edit-enquiry-source-master-modal')}
         onClose={() => closeModal('edit-enquiry-source-master-modal')}
         showToast={showToast}
         enquirySourceGuid={editingSourceGuid}
+        createEnquirySourceMaster={createEnquirySourceMaster}
         updateEnquirySourceMaster={updateEnquirySourceMaster}
       />
       <ViewEnquirySourceMasterModal

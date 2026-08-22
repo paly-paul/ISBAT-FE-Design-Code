@@ -17,9 +17,9 @@ function Field({ label, value, mono, wide }: { label: string; value: React.React
   )
 }
 
-// No GetByGuid endpoint exists for receipt books (see EditReceiptBookModal's
+// No GetByGuid endpoint exists for receipt books (see ReceiptBookFormModal's
 // own note) — this reads straight off the row the page already has in its
-// list, same as Edit does, rather than fetching fresh.
+// list, same as Edit mode does, rather than fetching fresh.
 export function ViewReceiptBookModal({ isOpen, onClose, receiptBook, onEdit, canEdit }: ViewReceiptBookModalProps) {
   if (!isOpen || !receiptBook) return null
 

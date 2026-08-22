@@ -9,8 +9,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewGenSetModal } from '@/components/modals/finance/NewGenSetModal'
-import { EditGenSetModal } from '@/components/modals/finance/EditGenSetModal'
+import { GenSetFormModal } from '@/components/modals/finance/GenSetFormModal'
 import { ViewGenSetModal } from '@/components/modals/finance/ViewGenSetModal'
 import { useGenSets, useCreateGenSet, useUpdateGenSet, useDeleteGenSet, GenSet } from '@/hooks/finance/useGenSets'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -138,17 +137,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="general settings" onPageChange={setPage} />
         </div>
       </div>
-      <NewGenSetModal
+      <GenSetFormModal
+        mode="new"
         isOpen={openModals.has('new-genset-modal')}
         onClose={() => closeModal('new-genset-modal')}
         showToast={showToast}
+        genSetGuid={null}
         createGenSet={createGenSet}
+        updateGenSet={updateGenSet}
       />
-      <EditGenSetModal
+      <GenSetFormModal
+        mode="edit"
         isOpen={openModals.has('edit-genset-modal')}
         onClose={() => closeModal('edit-genset-modal')}
         showToast={showToast}
         genSetGuid={editingGenSetGuid}
+        createGenSet={createGenSet}
         updateGenSet={updateGenSet}
       />
       <ViewGenSetModal

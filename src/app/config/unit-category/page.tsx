@@ -8,9 +8,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewUnitCategoryModal } from '@/components/modals/academic/NewUnitCategoryModal'
-import { EditUnitCategoryModal } from '@/components/modals/academic/EditUnitCategoryModal'
-import { ViewUnitCategoryModal } from '@/components/modals/academic/ViewUnitCategoryModal'
+import { UnitCategoryFormModal } from '@/components/modals/config/UnitCategoryFormModal'
+import { ViewUnitCategoryModal } from '@/components/modals/config/ViewUnitCategoryModal'
 import { useUnitCategories, useCreateUnitCategory, useUpdateUnitCategory, useDeleteUnitCategory, UnitCategory } from '@/hooks/config/useUnitCategories'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -135,17 +134,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="unit categories" onPageChange={setPage} />
         </div>
       </div>
-      <NewUnitCategoryModal
+      <UnitCategoryFormModal
+        mode="new"
         isOpen={openModals.has('new-unit-category-modal')}
         onClose={() => closeModal('new-unit-category-modal')}
         showToast={showToast}
+        unitCatGuid={null}
         createUnitCategory={createUnitCategory}
+        updateUnitCategory={updateUnitCategory}
       />
-      <EditUnitCategoryModal
+      <UnitCategoryFormModal
+        mode="edit"
         isOpen={openModals.has('edit-unit-category-modal')}
         onClose={() => closeModal('edit-unit-category-modal')}
         showToast={showToast}
         unitCatGuid={editingUnitCatGuid}
+        createUnitCategory={createUnitCategory}
         updateUnitCategory={updateUnitCategory}
       />
       <ViewUnitCategoryModal

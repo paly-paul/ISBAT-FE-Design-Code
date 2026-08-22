@@ -4,8 +4,7 @@ import { useQueries } from '@tanstack/react-query'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
-import { NewBatchModal } from '@/components/modals/academic/NewBatchModal'
-import { EditBatchModal } from '@/components/modals/academic/EditBatchModal'
+import { BatchFormModal } from '@/components/modals/academic/BatchFormModal'
 import { ViewBatchModal } from '@/components/modals/academic/ViewBatchModal'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
@@ -238,12 +237,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="batches" onPageChange={setPage} />
         </div>
       </div>
-      <NewBatchModal isOpen={openModals.has('new-batch-modal')} onClose={() => closeModal('new-batch-modal')} showToast={showToast} createBatch={createBatch} />
-      <EditBatchModal
+      <BatchFormModal
+        mode="new"
+        isOpen={openModals.has('new-batch-modal')}
+        onClose={() => closeModal('new-batch-modal')}
+        showToast={showToast}
+        batchGuid={null}
+        createBatch={createBatch}
+        updateBatch={updateBatch}
+      />
+      <BatchFormModal
+        mode="edit"
         isOpen={openModals.has('edit-batch-modal')}
         onClose={() => closeModal('edit-batch-modal')}
         showToast={showToast}
         batchGuid={editingBatchGuid}
+        createBatch={createBatch}
         updateBatch={updateBatch}
       />
       <ViewBatchModal canEdit={permissions.edit} onEdit={() => { closeModal('view-batch-modal'); openEditModal(editingBatchGuid || '') }}

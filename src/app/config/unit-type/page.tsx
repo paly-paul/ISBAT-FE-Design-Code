@@ -8,9 +8,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewUnitTypeModal } from '@/components/modals/academic/NewUnitTypeModal'
-import { EditUnitTypeModal } from '@/components/modals/academic/EditUnitTypeModal'
-import { ViewUnitTypeModal } from '@/components/modals/academic/ViewUnitTypeModal'
+import { UnitTypeFormModal } from '@/components/modals/config/UnitTypeFormModal'
+import { ViewUnitTypeModal } from '@/components/modals/config/ViewUnitTypeModal'
 import { useUnitTypes, useCreateUnitType, useUpdateUnitType, useDeleteUnitType, UnitType } from '@/hooks/config/useUnitTypes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -135,17 +134,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="unit types" onPageChange={setPage} />
         </div>
       </div>
-      <NewUnitTypeModal
+      <UnitTypeFormModal
+        mode="new"
         isOpen={openModals.has('new-unit-type-modal')}
         onClose={() => closeModal('new-unit-type-modal')}
         showToast={showToast}
+        unitTypeGuid={null}
         createUnitType={createUnitType}
+        updateUnitType={updateUnitType}
       />
-      <EditUnitTypeModal
+      <UnitTypeFormModal
+        mode="edit"
         isOpen={openModals.has('edit-unit-type-modal')}
         onClose={() => closeModal('edit-unit-type-modal')}
         showToast={showToast}
         unitTypeGuid={editingUnitTypeGuid}
+        createUnitType={createUnitType}
         updateUnitType={updateUnitType}
       />
       <ViewUnitTypeModal

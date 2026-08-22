@@ -3,7 +3,7 @@ import { ModalProps } from '../types'
 import { useProgramGroup } from '@/hooks/academic/useProgramGroups'
 import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
 import { AuthError } from '@/lib/api/client'
-import { FailurePopup } from './FailurePopup'
+import { FailurePopup } from '../shared/FailurePopup'
 
 interface ViewProgrammeGroupModalProps extends ModalProps {
   programGroupGuid: string | null

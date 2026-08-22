@@ -1,12 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { ModalProps } from '../types'
-import { SuccessPopup } from './SuccessPopup'
-import { FailurePopup } from './FailurePopup'
-import { SearchSelect } from '@/components/SearchSelect'
+import { FailurePopup } from '../shared/FailurePopup'
 import { AuthError } from '@/lib/api/client'
-import { CreateIntakeInput } from '@/lib/api/academic/intake'
-import { useIntake, useUpdateIntake } from '@/hooks/academic/useIntakes'
+import { useIntake } from '@/hooks/academic/useIntakes'
 
 // Default duration used until the calendar dates are available.
 const DEFAULT_SEMESTER_WEEKS = 15

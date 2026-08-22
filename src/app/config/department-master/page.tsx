@@ -10,9 +10,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewDepartmentModal } from '@/components/modals/academic/NewDepartmentModal'
-import { EditDepartmentModal } from '@/components/modals/academic/EditDepartmentModal'
-import { ViewDepartmentModal } from '@/components/modals/academic/ViewDepartmentModal'
+import { DepartmentFormModal } from '@/components/modals/config/DepartmentFormModal'
+import { ViewDepartmentModal } from '@/components/modals/config/ViewDepartmentModal'
 import { useDepartments, useCreateDepartment, useUpdateDepartment, useDeleteDepartment, Department } from '@/hooks/config/useDepartments'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -205,17 +204,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="departments" onPageChange={setPage} />
         </div>
       </div>
-      <NewDepartmentModal
+      <DepartmentFormModal
+        mode="new"
         isOpen={openModals.has('new-dept-modal')}
         onClose={() => closeModal('new-dept-modal')}
         showToast={showToast}
+        department={null}
         createDepartment={createDepartment}
+        updateDepartment={updateDepartment}
       />
-      <EditDepartmentModal
+      <DepartmentFormModal
+        mode="edit"
         isOpen={openModals.has('edit-dept-modal')}
         onClose={() => closeModal('edit-dept-modal')}
         showToast={showToast}
         department={editingDepartment}
+        createDepartment={createDepartment}
         updateDepartment={updateDepartment}
       />
       <ViewDepartmentModal

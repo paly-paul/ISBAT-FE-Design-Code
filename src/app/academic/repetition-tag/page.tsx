@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
-import { NewRepTagModal } from '@/components/modals/academic/NewRepTagModal'
-import { EditRepTagModal } from '@/components/modals/academic/EditRepTagModal'
+import { RepTagFormModal } from '@/components/modals/academic/RepTagFormModal'
 import { ViewRepTagModal } from '@/components/modals/academic/ViewRepTagModal'
 import { Toast } from '@/components/Toast'
 import { FilterTh } from '@/components/FilterTh'
@@ -213,12 +212,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="repetition tags" onPageChange={setPage} />
         </div>
       </div>
-      <NewRepTagModal isOpen={openModals.has('new-rep-tag-modal')} onClose={() => closeModal('new-rep-tag-modal')} showToast={showToast} createRepetitionTag={createRepetitionTag} />
-      <EditRepTagModal
+      <RepTagFormModal
+        mode="new"
+        isOpen={openModals.has('new-rep-tag-modal')}
+        onClose={() => closeModal('new-rep-tag-modal')}
+        showToast={showToast}
+        courseUnitRepetitionGuid={null}
+        createRepetitionTag={createRepetitionTag}
+        updateRepetitionTag={updateRepetitionTag}
+      />
+      <RepTagFormModal
+        mode="edit"
         isOpen={openModals.has('edit-rep-tag-modal')}
         onClose={() => closeModal('edit-rep-tag-modal')}
         showToast={showToast}
         courseUnitRepetitionGuid={editingRepTagGuid}
+        createRepetitionTag={createRepetitionTag}
         updateRepetitionTag={updateRepetitionTag}
       />
       <ViewRepTagModal canEdit={permissions.edit} onEdit={() => { closeModal('view-rep-tag-modal'); openEditModal(viewingRepTagGuid || '') }}

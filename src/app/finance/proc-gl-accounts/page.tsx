@@ -9,8 +9,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewProcGlAccountModal } from '@/components/modals/finance/NewProcGlAccountModal'
-import { EditProcGlAccountModal } from '@/components/modals/finance/EditProcGlAccountModal'
+import { ProcGlAccountFormModal } from '@/components/modals/finance/ProcGlAccountFormModal'
 import { ViewProcGlAccountModal } from '@/components/modals/finance/ViewProcGlAccountModal'
 import { useProcGlAccounts, useCreateProcGlAccount, useUpdateProcGlAccount, useDeleteProcGlAccount, ProcGlAccount } from '@/hooks/finance/useProcGlAccounts'
 import { STATUS_LABELS, TYPE_LABELS } from '@/lib/api/finance/procGlAccount'
@@ -161,17 +160,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="GL accounts" onPageChange={setPage} />
         </div>
       </div>
-      <NewProcGlAccountModal
+      <ProcGlAccountFormModal
+        mode="new"
         isOpen={openModals.has('new-proc-gl-account-modal')}
         onClose={() => closeModal('new-proc-gl-account-modal')}
         showToast={showToast}
+        procGlAccountGuid={null}
         createProcGlAccount={createProcGlAccount}
+        updateProcGlAccount={updateProcGlAccount}
       />
-      <EditProcGlAccountModal
+      <ProcGlAccountFormModal
+        mode="edit"
         isOpen={openModals.has('edit-proc-gl-account-modal')}
         onClose={() => closeModal('edit-proc-gl-account-modal')}
         showToast={showToast}
         procGlAccountGuid={editingAccountGuid}
+        createProcGlAccount={createProcGlAccount}
         updateProcGlAccount={updateProcGlAccount}
       />
       <ViewProcGlAccountModal

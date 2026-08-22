@@ -1,8 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { ModalProps } from '../types'
-import { SuccessPopup } from '../academic/SuccessPopup'
-import { FailurePopup } from '../academic/FailurePopup'
+import { SuccessPopup } from '../shared/SuccessPopup'
+import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { VetApplicationInput } from '@/lib/api/admission/vetting'
 

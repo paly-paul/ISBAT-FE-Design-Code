@@ -4,7 +4,7 @@ import { useProcBank } from '@/hooks/finance/useProcBanks'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { STATUS_LABELS } from '@/lib/api/finance/procBank'
 import { AuthError } from '@/lib/api/client'
-import { FailurePopup } from '../academic/FailurePopup'
+import { FailurePopup } from '../shared/FailurePopup'
 
 interface ViewProcBankModalProps extends ModalProps {
   procBankGuid: string | null

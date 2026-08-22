@@ -9,8 +9,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewBankModal } from '@/components/modals/finance/NewBankModal'
-import { EditBankModal } from '@/components/modals/finance/EditBankModal'
+import { BankFormModal } from '@/components/modals/finance/BankFormModal'
 import { ViewBankModal } from '@/components/modals/finance/ViewBankModal'
 import { useBanks, useCreateBank, useUpdateBank, useDeleteBank, Bank } from '@/hooks/finance/useBanks'
 import { STATUS_LABELS } from '@/lib/api/finance/procBank'
@@ -150,17 +149,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="banks" onPageChange={setPage} />
         </div>
       </div>
-      <NewBankModal
+      <BankFormModal
+        mode="new"
         isOpen={openModals.has('new-bank-modal')}
         onClose={() => closeModal('new-bank-modal')}
         showToast={showToast}
+        bankGuid={null}
         createBank={createBank}
+        updateBank={updateBank}
       />
-      <EditBankModal
+      <BankFormModal
+        mode="edit"
         isOpen={openModals.has('edit-bank-modal')}
         onClose={() => closeModal('edit-bank-modal')}
         showToast={showToast}
         bankGuid={editingBankGuid}
+        createBank={createBank}
         updateBank={updateBank}
       />
       <ViewBankModal

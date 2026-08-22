@@ -9,8 +9,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewLedgerModal } from '@/components/modals/finance/NewLedgerModal'
-import { EditLedgerModal } from '@/components/modals/finance/EditLedgerModal'
+import { LedgerFormModal } from '@/components/modals/finance/LedgerFormModal'
 import { ViewLedgerModal } from '@/components/modals/finance/ViewLedgerModal'
 import { useLedgers, useCreateLedger, useUpdateLedger, useDeleteLedger, Ledger } from '@/hooks/finance/useLedgers'
 import { useProcGlAccounts } from '@/hooks/finance/useProcGlAccounts'
@@ -155,17 +154,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="ledgers" onPageChange={setPage} />
         </div>
       </div>
-      <NewLedgerModal
+      <LedgerFormModal
+        mode="new"
         isOpen={openModals.has('new-ledger-modal')}
         onClose={() => closeModal('new-ledger-modal')}
         showToast={showToast}
+        ledgerGuid={null}
         createLedger={createLedger}
+        updateLedger={updateLedger}
       />
-      <EditLedgerModal
+      <LedgerFormModal
+        mode="edit"
         isOpen={openModals.has('edit-ledger-modal')}
         onClose={() => closeModal('edit-ledger-modal')}
         showToast={showToast}
         ledgerGuid={editingLedgerGuid}
+        createLedger={createLedger}
         updateLedger={updateLedger}
       />
       <ViewLedgerModal

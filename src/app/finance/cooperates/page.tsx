@@ -9,8 +9,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewCooperateModal } from '@/components/modals/finance/NewCooperateModal'
-import { EditCooperateModal } from '@/components/modals/finance/EditCooperateModal'
+import { CooperateFormModal } from '@/components/modals/finance/CooperateFormModal'
 import { ViewCooperateModal } from '@/components/modals/finance/ViewCooperateModal'
 import { useCooperates, useCreateCooperate, useUpdateCooperate, useDeleteCooperate, Cooperate } from '@/hooks/finance/useCooperates'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -138,17 +137,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="cooperates" onPageChange={setPage} />
         </div>
       </div>
-      <NewCooperateModal
+      <CooperateFormModal
+        mode="new"
         isOpen={openModals.has('new-cooperate-modal')}
         onClose={() => closeModal('new-cooperate-modal')}
         showToast={showToast}
+        cooperateGuid={null}
         createCooperate={createCooperate}
+        updateCooperate={updateCooperate}
       />
-      <EditCooperateModal
+      <CooperateFormModal
+        mode="edit"
         isOpen={openModals.has('edit-cooperate-modal')}
         onClose={() => closeModal('edit-cooperate-modal')}
         showToast={showToast}
         cooperateGuid={editingCooperateGuid}
+        createCooperate={createCooperate}
         updateCooperate={updateCooperate}
       />
       <ViewCooperateModal

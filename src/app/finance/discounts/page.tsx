@@ -9,8 +9,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewDiscountModal } from '@/components/modals/finance/NewDiscountModal'
-import { EditDiscountModal } from '@/components/modals/finance/EditDiscountModal'
+import { DiscountFormModal } from '@/components/modals/finance/DiscountFormModal'
 import { ViewDiscountModal } from '@/components/modals/finance/ViewDiscountModal'
 import { useDiscounts, useCreateDiscount, useUpdateDiscount, useDeleteDiscount, Discount } from '@/hooks/finance/useDiscounts'
 import { CALC_TYPE_LABELS, CALC_TYPE_VALUES } from '@/lib/api/finance/discount'
@@ -156,17 +155,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="discounts" onPageChange={setPage} />
         </div>
       </div>
-      <NewDiscountModal
+      <DiscountFormModal
+        mode="new"
         isOpen={openModals.has('new-discount-modal')}
         onClose={() => closeModal('new-discount-modal')}
         showToast={showToast}
+        discountGuid={null}
         createDiscount={createDiscount}
+        updateDiscount={updateDiscount}
       />
-      <EditDiscountModal
+      <DiscountFormModal
+        mode="edit"
         isOpen={openModals.has('edit-discount-modal')}
         onClose={() => closeModal('edit-discount-modal')}
         showToast={showToast}
         discountGuid={editingDiscountGuid}
+        createDiscount={createDiscount}
         updateDiscount={updateDiscount}
       />
       <ViewDiscountModal

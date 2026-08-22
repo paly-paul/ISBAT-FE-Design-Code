@@ -4,9 +4,8 @@ import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
-import { NewPermissionModal } from '@/components/modals/academic/NewPermissionModal'
-import { EditPermissionModal } from '@/components/modals/academic/EditPermissionModal'
-import { ViewPermissionModal } from '@/components/modals/academic/ViewPermissionModal'
+import { PermissionFormModal } from '@/components/modals/config/PermissionFormModal'
+import { ViewPermissionModal } from '@/components/modals/config/ViewPermissionModal'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
@@ -132,17 +131,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="permission groups" onPageChange={setPage} />
         </div>
       </div>
-      <NewPermissionModal
+      <PermissionFormModal
+        mode="new"
         isOpen={openModals.has('new-permission-modal')}
         onClose={() => closeModal('new-permission-modal')}
         showToast={showToast}
+        permissionGroup={null}
         createPermissionGroup={createPermissionGroup}
+        updatePermissionGroup={updatePermissionGroup}
       />
-      <EditPermissionModal
+      <PermissionFormModal
+        mode="edit"
         isOpen={openModals.has('edit-permission-modal')}
         onClose={() => closeModal('edit-permission-modal')}
         showToast={showToast}
         permissionGroup={editingGroup}
+        createPermissionGroup={createPermissionGroup}
         updatePermissionGroup={updatePermissionGroup}
       />
       <ViewPermissionModal

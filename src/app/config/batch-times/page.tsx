@@ -9,9 +9,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewBatchTimeModal } from '@/components/modals/academic/NewBatchTimeModal'
-import { EditBatchTimeModal } from '@/components/modals/academic/EditBatchTimeModal'
-import { ViewBatchTimeModal } from '@/components/modals/academic/ViewBatchTimeModal'
+import { BatchTimeFormModal } from '@/components/modals/config/BatchTimeFormModal'
+import { ViewBatchTimeModal } from '@/components/modals/config/ViewBatchTimeModal'
 import { useBatchTimes, useCreateBatchTime, useUpdateBatchTime, useDeleteBatchTime, BatchTime } from '@/hooks/config/useBatchTimes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -142,17 +141,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="batch times" onPageChange={setPage} />
         </div>
       </div>
-      <NewBatchTimeModal
+      <BatchTimeFormModal
+        mode="new"
         isOpen={openModals.has('new-batch-time-modal')}
         onClose={() => closeModal('new-batch-time-modal')}
         showToast={showToast}
+        batchTimeGuid={null}
         createBatchTime={createBatchTime}
+        updateBatchTime={updateBatchTime}
       />
-      <EditBatchTimeModal
+      <BatchTimeFormModal
+        mode="edit"
         isOpen={openModals.has('edit-batch-time-modal')}
         onClose={() => closeModal('edit-batch-time-modal')}
         showToast={showToast}
         batchTimeGuid={editingBatchTimeGuid}
+        createBatchTime={createBatchTime}
         updateBatchTime={updateBatchTime}
       />
       <ViewBatchTimeModal

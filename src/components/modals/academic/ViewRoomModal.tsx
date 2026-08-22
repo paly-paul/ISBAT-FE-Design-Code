@@ -2,7 +2,7 @@
 import { ModalProps } from '../types'
 import { useRoom } from '@/hooks/academic/useRooms'
 import { AuthError } from '@/lib/api/client'
-import { FailurePopup } from './FailurePopup'
+import { FailurePopup } from '../shared/FailurePopup'
 
 interface ViewRoomModalProps extends ModalProps {
   roomGuid: string | null

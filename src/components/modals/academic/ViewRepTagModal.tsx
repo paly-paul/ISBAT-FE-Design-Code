@@ -4,7 +4,7 @@ import { ModalProps } from '../types'
 import { useRepetitionTag } from '@/hooks/academic/useRepetitionTags'
 import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
 import { AuthError } from '@/lib/api/client'
-import { FailurePopup } from './FailurePopup'
+import { FailurePopup } from '../shared/FailurePopup'
 
 interface ViewRepTagModalProps extends ModalProps {
   courseUnitRepetitionGuid: string | null

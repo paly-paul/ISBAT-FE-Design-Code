@@ -10,9 +10,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewCampusModal } from '@/components/modals/academic/NewCampusModal'
-import { EditCampusModal } from '@/components/modals/academic/EditCampusModal'
-import { ViewCampusModal } from '@/components/modals/academic/ViewCampusModal'
+import { CampusFormModal } from '@/components/modals/config/CampusFormModal'
+import { ViewCampusModal } from '@/components/modals/config/ViewCampusModal'
 import { useCampuses, useCampusDropdown, useCreateCampus, useUpdateCampus, useDeleteCampus, Campus } from '@/hooks/config/useCampuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -199,17 +198,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="campuses" onPageChange={setPage} />
         </div>
       </div>
-      <NewCampusModal
+      <CampusFormModal
+        mode="new"
         isOpen={openModals.has('new-campus-modal')}
         onClose={() => closeModal('new-campus-modal')}
         showToast={showToast}
+        campus={null}
         createCampus={createCampus}
+        updateCampus={updateCampus}
       />
-      <EditCampusModal
+      <CampusFormModal
+        mode="edit"
         isOpen={openModals.has('edit-campus-modal')}
         onClose={() => closeModal('edit-campus-modal')}
         showToast={showToast}
         campus={editingCampus}
+        createCampus={createCampus}
         updateCampus={updateCampus}
       />
       <ViewCampusModal

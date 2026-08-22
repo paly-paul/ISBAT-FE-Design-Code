@@ -76,8 +76,8 @@ export function getCurrencies(page = 1, pageSize = 10): Promise<Currency[]> {
 
 // Confirmed real — a live sample response returned currencyGuid populated
 // (previously only an optimistic, unconfirmed field on this type). Backs
-// EditCurrencyModal's fetch-by-guid prefill, same convention every other
-// real master's Edit modal already follows.
+// CurrencyFormModal's (edit mode) fetch-by-guid prefill, same convention
+// every other real master's Edit modal already follows.
 export function getCurrencyById(guid: string): Promise<Currency> {
   if (MOCK_AUTH) {
     const existing = mockCurrencies.find(c => c.currencyGuid === guid)

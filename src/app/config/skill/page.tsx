@@ -9,9 +9,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewSkillModal } from '@/components/modals/academic/NewSkillModal'
-import { EditSkillModal } from '@/components/modals/academic/EditSkillModal'
-import { ViewSkillModal } from '@/components/modals/academic/ViewSkillModal'
+import { SkillFormModal } from '@/components/modals/config/SkillFormModal'
+import { ViewSkillModal } from '@/components/modals/config/ViewSkillModal'
 import { useSkillMasters, useCreateSkillMaster, useUpdateSkillMaster, useDeleteSkillMaster, SkillMaster } from '@/hooks/config/useSkillMaster'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -145,17 +144,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="skills" onPageChange={setPage} />
         </div>
       </div>
-      <NewSkillModal
+      <SkillFormModal
+        mode="new"
         isOpen={openModals.has('new-skill-modal')}
         onClose={() => closeModal('new-skill-modal')}
         showToast={showToast}
+        skill={null}
         createSkill={createSkill}
+        updateSkill={updateSkill}
       />
-      <EditSkillModal
+      <SkillFormModal
+        mode="edit"
         isOpen={openModals.has('edit-skill-modal')}
         onClose={() => closeModal('edit-skill-modal')}
         showToast={showToast}
         skill={editingSkill}
+        createSkill={createSkill}
         updateSkill={updateSkill}
       />
       <ViewSkillModal

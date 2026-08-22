@@ -5,8 +5,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
-import { CourseUnitModal } from '@/components/modals/academic/CourseUnitModal'
-import { EditCourseUnitModal } from '@/components/modals/academic/EditCourseUnitModal'
+import { CourseUnitFormModal } from '@/components/modals/academic/CourseUnitFormModal'
 import { ViewCourseUnitModal } from '@/components/modals/academic/ViewCourseUnitModal'
 import { ElectiveSelectModal } from '@/components/modals/academic/ElectiveSelectModal'
 import { Toast } from '@/components/Toast'
@@ -321,12 +320,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="course units" onPageChange={setPage} />
         </div>
       </div>
-      <CourseUnitModal     isOpen={openModals.has('cu-new-modal')}  onClose={() => closeModal('cu-new-modal')}  showToast={showToast} createCourseUnit={createCourseUnit} />
-      <EditCourseUnitModal
+      <CourseUnitFormModal
+        mode="new"
+        isOpen={openModals.has('cu-new-modal')}
+        onClose={() => closeModal('cu-new-modal')}
+        showToast={showToast}
+        courseUnitGuid={null}
+        createCourseUnit={createCourseUnit}
+        updateCourseUnit={updateCourseUnit}
+      />
+      <CourseUnitFormModal
+        mode="edit"
         isOpen={openModals.has('cu-edit-modal')}
         onClose={() => closeModal('cu-edit-modal')}
         showToast={showToast}
         courseUnitGuid={editingCourseUnitGuid}
+        createCourseUnit={createCourseUnit}
         updateCourseUnit={updateCourseUnit}
       />
       <ViewCourseUnitModal

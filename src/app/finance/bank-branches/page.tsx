@@ -9,8 +9,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { NewBankBranchModal } from '@/components/modals/finance/NewBankBranchModal'
-import { EditBankBranchModal } from '@/components/modals/finance/EditBankBranchModal'
+import { BankBranchFormModal } from '@/components/modals/finance/BankBranchFormModal'
 import { ViewBankBranchModal } from '@/components/modals/finance/ViewBankBranchModal'
 import { useBankBranches, useCreateBankBranch, useUpdateBankBranch, useDeleteBankBranch, BankBranch } from '@/hooks/finance/useBankBranches'
 import { useBanks } from '@/hooks/finance/useBanks'
@@ -156,17 +155,22 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="bank branches" onPageChange={setPage} />
         </div>
       </div>
-      <NewBankBranchModal
+      <BankBranchFormModal
+        mode="new"
         isOpen={openModals.has('new-bank-branch-modal')}
         onClose={() => closeModal('new-bank-branch-modal')}
         showToast={showToast}
+        bankBranchGuid={null}
         createBankBranch={createBankBranch}
+        updateBankBranch={updateBankBranch}
       />
-      <EditBankBranchModal
+      <BankBranchFormModal
+        mode="edit"
         isOpen={openModals.has('edit-bank-branch-modal')}
         onClose={() => closeModal('edit-bank-branch-modal')}
         showToast={showToast}
         bankBranchGuid={editingBranchGuid}
+        createBankBranch={createBankBranch}
         updateBankBranch={updateBankBranch}
       />
       <ViewBankBranchModal

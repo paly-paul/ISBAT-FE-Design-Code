@@ -2,7 +2,7 @@
 import { ModalProps } from '../types'
 import { useGenSet } from '@/hooks/finance/useGenSets'
 import { AuthError } from '@/lib/api/client'
-import { FailurePopup } from '../academic/FailurePopup'
+import { FailurePopup } from '../shared/FailurePopup'
 
 interface ViewGenSetModalProps extends ModalProps {
   genSetGuid: string | null
