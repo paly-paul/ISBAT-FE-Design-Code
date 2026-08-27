@@ -28,12 +28,11 @@ export function useIaCreationSemesters(programGuid: string | null) {
   })
 }
 
-/** Fetches the IA structure grid (triggered by Refresh button) */
+/** Fetches the IA structure grid (triggered by Refresh button or auto-fetch) */
 export function useIaCreationStructure(
   programGuid: string | null,
   semesterGuid: string | null,
-  intakeGuid: string | null,
-  enabled: boolean
+  intakeGuid: string | null
 ) {
   return useQuery({
     queryKey: [...IA_STRUCTURE_KEY, programGuid, semesterGuid, intakeGuid],
@@ -43,7 +42,7 @@ export function useIaCreationStructure(
         semesterGuid as string,
         intakeGuid as string
       ),
-    enabled: enabled && !!programGuid && !!semesterGuid && !!intakeGuid,
+    enabled: !!programGuid && !!semesterGuid && !!intakeGuid,
   })
 }
 

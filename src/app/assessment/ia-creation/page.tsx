@@ -21,7 +21,7 @@ export default function IaCreationPage() {
   const [selectedSemesterGuid, setSelectedSemesterGuid] = useState<string>('')
 
   // ── Controls ─────────────────────────────────────
-  const [refreshEnabled, setRefreshEnabled] = useState(false)
+  // Auto-fetches now when all 3 selections are present
 
   // ── Data fetching ─────────────────────────────────
   const { data: initData, isLoading: initLoading } = useIaCreationInit()
@@ -30,11 +30,11 @@ export default function IaCreationPage() {
     data: structureRows,
     isLoading: structureLoading,
     error: structureError,
+    refetch: refetchStructure,
   } = useIaCreationStructure(
     selectedProgramGuid || null,
     selectedSemesterGuid || null,
-    selectedIntakeGuid || null,
-    refreshEnabled
+    selectedIntakeGuid || null
   )
   const createMut = useCreateIaStructure()
 
@@ -55,7 +55,6 @@ export default function IaCreationPage() {
   function handleProgramChange(guid: string) {
     setSelectedProgramGuid(guid)
     setSelectedSemesterGuid('')
-    setRefreshEnabled(false)
   }
 
   function handleRefresh() {
@@ -63,7 +62,7 @@ export default function IaCreationPage() {
       showToast('Please select Programme, Semester, and Academic Session first.', 'error')
       return
     }
-    setRefreshEnabled(true)
+    refetchStructure()
   }
 
   async function handleCreate() {
@@ -77,8 +76,9 @@ export default function IaCreationPage() {
         semesterGuid: selectedSemesterGuid,
         intakeGuid: selectedIntakeGuid,
       })
-      // API returns fresh structure — refresh the grid
-      setRefreshEnabled(true)
+      // React Query automatically refetches since params didn't change,
+      // but we can forcefully refetch or invalidate to be safe.
+      refetchStructure()
       showToast('IA Structure created successfully.', 'success')
     } catch (err: any) {
       const status = err?.status ?? err?.response?.status
@@ -133,7 +133,7 @@ export default function IaCreationPage() {
             <SearchSelect
               placeholder="— Select Session —"
               value={selectedIntakeGuid}
-              onChange={val => { setSelectedIntakeGuid(val); setRefreshEnabled(false) }}
+              onChange={val => setSelectedIntakeGuid(val)}
               disabled={initLoading}
               options={(initData?.intakes ?? []).map(i => ({
                 value: i.intakeGuid,
@@ -163,7 +163,7 @@ export default function IaCreationPage() {
             <SearchSelect
               placeholder={!selectedProgramGuid ? '— Select Programme first —' : '— Select Semester —'}
               value={selectedSemesterGuid}
-              onChange={val => { setSelectedSemesterGuid(val); setRefreshEnabled(false) }}
+              onChange={val => setSelectedSemesterGuid(val)}
               disabled={!selectedProgramGuid || semLoading}
               options={(semesters ?? []).map(s => ({
                 value: s.semesterGuid,
@@ -248,12 +248,12 @@ export default function IaCreationPage() {
               <tbody>
                 {structureLoading ? (
                   <TableLoadingState colSpan={8} />
-                ) : !refreshEnabled ? (
+                ) : !canRefresh ? (
                   <tr>
                     <td colSpan={8}>
                       <div className="flex flex-col items-center justify-center py-10 gap-2 text-center text-g400">
-                        <i className="lni lni-reload text-2xl" />
-                        <span className="text-sm">Select Programme, Semester &amp; Session, then click <strong>Refresh</strong></span>
+                        <i className="lni lni-pointer text-2xl" />
+                        <span className="text-sm">Select Programme, Semester &amp; Session to view structure</span>
                       </div>
                     </td>
                   </tr>
