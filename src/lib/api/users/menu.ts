@@ -472,7 +472,6 @@ function ensureProgrammeApproval(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
-<<<<<<< HEAD
 // TEMPORARY: same reasoning as ensureProgrammeApproval above — the real
 // Employee module (when the backend does return one) has no permission
 // entry for this page yet, so it would otherwise be missing even though
@@ -509,7 +508,9 @@ function ensureEmployeeApprovals(menu: MenuNode[]): MenuNode[] {
 
   const mergedMenu = [...menu]
   mergedMenu[empIdx] = mergedEmp
-=======
+  return mergedMenu
+}
+
 function ensureAssessmentMaster(menu: MenuNode[]): MenuNode[] {
   const assessIdx = menu.findIndex(n => n.name === 'Assessment')
   if (assessIdx === -1) return menu
@@ -570,7 +571,6 @@ function ensureResitMaster(menu: MenuNode[]): MenuNode[] {
 
   const mergedMenu = [...menu]
   mergedMenu[assessIdx] = mergedAssess
->>>>>>> origin
   return mergedMenu
 }
 
@@ -585,14 +585,10 @@ export function getMenu(): Promise<MenuResult> {
       const withFinance  = mergeFinanceSections(withAssessment)
       const withStudent  = mergeStudentSections(withFinance)
       const withBulkEdit = ensureBulkIntakeEdit(withStudent)
-<<<<<<< HEAD
       const withConfig = mergeConfigSections(withBulkEdit)
-      const finalMenu = ensureProgrammeApproval(withConfig)
-=======
-      const withProgApp = ensureProgrammeApproval(withBulkEdit)
+      const withProgApp = ensureProgrammeApproval(withConfig)
       const withAssMaster = ensureAssessmentMaster(withProgApp)
       const finalMenu = ensureResitMaster(withAssMaster)
->>>>>>> origin
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: mockMenu, isFallback: true }))
