@@ -37,7 +37,13 @@ interface TransferHistoryRow {
   newBatch: string
   newSemester: string
 }
-const TRANSFER_HISTORY: TransferHistoryRow[] = []
+// Illustrative only — no GET history endpoint exists for this anywhere (see
+// docs/STUDENT_MODULE_API_INTEGRATION_STATUS.md), so these rows aren't tied
+// to whichever student is actually loaded above.
+const TRANSFER_HISTORY: TransferHistoryRow[] = [
+  { transferCode: 'PTX-2025-0014', transferDate: '12 Jan 2025', oldProgramme: 'BSc. Information Technology', oldBatch: 'BSC.IT-2023B', oldSemester: 'Semester 4', newProgramme: 'BSc. Computer Science', newBatch: 'BSC.CS-2024A', newSemester: 'Semester 4' },
+  { transferCode: 'PTX-2024-0027', transferDate: '03 Jul 2024', oldProgramme: 'Bachelor of Business Admin.', oldBatch: 'BBA-2023B', oldSemester: 'Semester 2', newProgramme: 'BSc. Accounting & Finance', newBatch: 'BSC.AF-2024A', newSemester: 'Semester 1' },
+]
 
 // calcType is documented ("1" = Amount, "2" = Percentage) on the
 // student-discounts assign/update endpoints; StudentDetailDto carries the
