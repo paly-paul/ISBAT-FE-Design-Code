@@ -122,15 +122,17 @@ export default function ExamRulesPage() {
                 <th style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. A<br/>Type</th>
                 <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. B<br/>Max Qns</th>
                 <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. B<br/>Marks/Qn</th>
+                <th style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. B<br/>Type</th>
                 <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. C<br/>Max Qns</th>
                 <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. C<br/>Marks/Qn</th>
+                <th style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. C<br/>Type</th>
               </tr>
             </thead>
             <tbody>
               {loading
-                ? <TableLoadingState colSpan={10} />
+                ? <TableLoadingState colSpan={12} />
                 : pageItems.length === 0
-                  ? <EmptyState colSpan={10} hasFilters={!!search} onClearFilters={() => setSearch('')} />
+                  ? <EmptyState colSpan={12} hasFilters={!!search} onClearFilters={() => setSearch('')} />
                   : null}
               {pageItems.map(r => {
                 const secA = r.sections?.[0] || (r as any).sectionA
@@ -165,8 +167,10 @@ export default function ExamRulesPage() {
                     <td>{getTypeLabel(secA?.type)}</td>
                     <td className="text-right">{secB?.attemptQuestions || 0}</td>
                     <td className="text-right">{secB?.mark || 0}</td>
+                    <td>{getTypeLabel(secB?.type)}</td>
                     <td className="text-right">{secC?.attemptQuestions || 0}</td>
                     <td className="text-right">{secC?.mark || 0}</td>
+                    <td>{getTypeLabel(secC?.type)}</td>
                   </tr>
                 )
               })}
