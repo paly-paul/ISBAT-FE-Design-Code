@@ -83,6 +83,35 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
   ]),
 ]
 
+const CONFIG_SECTIONS: MenuNode[] = [
+  section('Organization', [
+    leaf('Faculty Master', 'library', '/config/faculty-master'),
+    leaf('Department Master', 'briefcase', '/config/department-master'),
+    leaf('Designation Master', 'tag', '/config/designation-master'),
+    leaf('Campus Master', 'home', '/config/campus-master'),
+    leaf('Country Master', 'world', '/config/country-master'),
+  ]),
+  section('Academic Setup', [
+    leaf('Specialization', 'certificate', '/config/specialization'),
+    leaf('Skill Master', 'bulb', '/config/skill'),
+    leaf('Unit Type Master', 'tag', '/config/unit-type'),
+    leaf('Unit Category Master', 'tag', '/config/unit-category'),
+    leaf('Weekdays', 'calendar', '/config/weekdays'),
+    leaf('Batch Times', 'timer', '/config/batch-times'),
+  ]),
+  section('Admissions', [
+    leaf('Enquiry Status', 'flag', '/config/enquiry-status'),
+    leaf('Isbat Enquiry Source', 'compass', '/config/enquiry-source'),
+    leaf('Enquiry Source', 'volume', '/config/enquiry-source-master'),
+    leaf('Followup Status', 'phone', '/config/followup-status'),
+    leaf('Followup Mode', 'comments', '/config/followup-mode'),
+    leaf('Interest Level', 'signal', '/config/interest-level'),
+  ]),
+  section('Access Control', [
+    leaf('Permission Master', 'lock', '/config/permission-master'),
+  ]),
+]
+
 const ASSESSMENT_SECTIONS: MenuNode[] = [
   section('Overview', [
     leaf('Assessment Dashboard', 'dashboard', '/assessment/dashboard'),
@@ -214,6 +243,7 @@ const mockMenu: MenuNode[] = [
   module_('Employee', 'briefcase', [
     section('Employee Records', [
       leaf('Employee Master', 'user', '/employee/employee-master'),
+      leaf('Employee Approvals', 'checkmark-circle', '/employee/employee-approve'),
     ]),
   ]),
   module_('Config', 'cog', [
@@ -334,6 +364,32 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
   return merged
 }
 
+function mergeConfigSections(menu: MenuNode[]): MenuNode[] {
+  const configIdx = menu.findIndex(n => n.name === 'Config')
+  if (configIdx === -1) return [...menu, module_('Config', 'cog', CONFIG_SECTIONS)]
+
+  const configModule = menu[configIdx]
+  const children = [...configModule.children]
+  for (const configSection of CONFIG_SECTIONS) {
+    const sectionIdx = children.findIndex(sectionNode => sectionNode.name === configSection.name)
+    if (sectionIdx === -1) {
+      children.push(configSection)
+      continue
+    }
+
+    const existingSection = children[sectionIdx]
+    const existingNames = new Set(existingSection.children.map(item => item.name))
+    const missingItems = configSection.children.filter(item => !existingNames.has(item.name))
+    if (missingItems.length > 0) {
+      children[sectionIdx] = { ...existingSection, children: [...existingSection.children, ...missingItems] }
+    }
+  }
+
+  const mergedMenu = [...menu]
+  mergedMenu[configIdx] = { ...configModule, children }
+  return mergedMenu
+}
+
 export interface MenuResult {
   menu: MenuNode[]
   isFallback: boolean
@@ -412,17 +468,58 @@ function ensureProgrammeApproval(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+// TEMPORARY: same reasoning as ensureProgrammeApproval above — the real
+// Employee module (when the backend does return one) has no permission
+// entry for this page yet, so it would otherwise be missing even though
+// HARDCODED_EMPLOYEE_MODULE only fires when the whole module is absent.
+// Runs after that merge, so it patches whichever "Employee" module ended up
+// in the menu — real or hardcoded — and is a no-op the moment the backend
+// starts returning the leaf itself.
+function ensureEmployeeApprovals(menu: MenuNode[]): MenuNode[] {
+  const empIdx = menu.findIndex(n => n.name === 'Employee')
+  if (empIdx === -1) return menu
+
+  const empModule = menu[empIdx]
+  const recordsIdx = empModule.children.findIndex(c => c.name === 'Employee Records')
+  if (recordsIdx === -1) return menu
+
+  const recordsSection = empModule.children[recordsIdx]
+  if (recordsSection.children.some(l => l.name === 'Employee Approvals')) return menu
+
+  const children = [...recordsSection.children]
+  const masterIdx = children.findIndex(l => l.name === 'Employee Master')
+  const approvalsLeaf = leaf('Employee Approvals', 'checkmark-circle', '/employee/employee-approve')
+
+  if (masterIdx !== -1) {
+    children.splice(masterIdx + 1, 0, approvalsLeaf)
+  } else {
+    children.push(approvalsLeaf)
+  }
+
+  const mergedSection = { ...recordsSection, children }
+
+  const mergedEmp = { ...empModule }
+  mergedEmp.children = [...empModule.children]
+  mergedEmp.children[recordsIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[empIdx] = mergedEmp
+  return mergedMenu
+}
+
 export function getMenu(): Promise<MenuResult> {
   if (MOCK_AUTH) return Promise.resolve({ menu: mockMenu, isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
     .then(data => {
       const menu = data ?? []
       const withEmployee = menu.some(n => n.name === 'Employee') ? menu : [...menu, HARDCODED_EMPLOYEE_MODULE]
-      const withAssessment = withEmployee.some(n => n.name === 'Assessment') ? withEmployee : [...withEmployee, HARDCODED_ASSESSMENT_MODULE]
+      const withApprovals = ensureEmployeeApprovals(withEmployee)
+      const withAssessment = withApprovals.some(n => n.name === 'Assessment') ? withApprovals : [...withApprovals, HARDCODED_ASSESSMENT_MODULE]
       const withFinance  = mergeFinanceSections(withAssessment)
       const withStudent  = mergeStudentSections(withFinance)
       const withBulkEdit = ensureBulkIntakeEdit(withStudent)
-      const finalMenu = ensureProgrammeApproval(withBulkEdit)
+      const withConfig = mergeConfigSections(withBulkEdit)
+      const finalMenu = ensureProgrammeApproval(withConfig)
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: mockMenu, isFallback: true }))

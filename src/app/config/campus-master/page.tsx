@@ -21,9 +21,21 @@ const PAGE_SIZE = 10
 // master pages' search boxes.
 const MIN_SEARCH_CHARS = 2
 
+// TEMPORARY BOOTSTRAP OVERRIDE: after a DB reset there is no permission
+// group yet, so /me/menu correctly comes back with add:false/edit:false for
+// this page - nobody has been granted the right to create one yet. Force
+// both on here, same convention as src/app/config/permission-master/page.tsx
+// and the "TEMPORARY" overrides in src/lib/api/users/menu.ts. Remove once
+// real permission groups exist and normal /me/menu-driven gating can take
+// back over.
+const BOOTSTRAP_FORCE_PERMISSIONS = true
+
 export default function Page() {
   const router = useRouter()
-  const permissions = usePagePermissions()
+  const realPermissions = usePagePermissions()
+  const permissions = BOOTSTRAP_FORCE_PERMISSIONS
+    ? { ...realPermissions, add: true, edit: true }
+    : realPermissions
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters]       = useState<Record<string, string[]>>({})

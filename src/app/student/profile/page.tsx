@@ -6,14 +6,24 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { useStudent } from '@/hooks/student/useStudents'
 import { StudentDto } from '@/lib/api/student/student'
+import { useIdCard, useIssueOrRenewIdCard, useUpdateIdCardDates, getIdCardQrImageUrl, currentCardIssue } from '@/hooks/student/useIdCards'
+import { useSponsorDetails, useSponsorCategories, useAssignSponsorCategory } from '@/hooks/student/useSponsor'
+
+const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 // Ported from isbat_student_module.html's Student Profile page. Identity/
 // academic fields (name, programme, semester, batch, status) come from the
 // real GET /api/v1/students/:guid (useStudent) once a student is loaded via
-// StudentLookup. Fee structure/sponsorship/learning mode, the ID card/ESSL
-// state, and the communication dispatch audit log have no backend contract
-// at all — page-local mock state only, same "UI-first prototype" convention
-// as Finance's Payment Collection pages.
+// StudentLookup. The ID Card tab is now wired to the real students/id-cards/*
+// endpoints (see students/id-cards/*.md), and the Sponsor field to
+// students/sponsor-assignment; the discount fields already ride along on
+// useStudent's response, so they're just displayed, not re-fetched. Fee
+// structure/learning mode display and the communication dispatch audit log
+// still have no backend contract — page-local mock state only, same
+// "UI-first prototype" convention as Finance's Payment Collection pages.
+// The old barcode/ESSL-device and photo-upload UI had no backing endpoint at
+// all (id-cards has no such fields) — commented out below rather than
+// removed, in favour of the real QR-image endpoint.
 const PROFICIENCY_TABS = [
   { id: 'info', label: 'Profile Info', icon: 'lni-user' },
   { id: 'idcard', label: 'ID Card', icon: 'lni-credit-cards' },
@@ -31,10 +41,22 @@ function isValidEmail(v: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) }
 function isValidPhone(v: string) { return /^\+\d[\d\s]{6,14}$/.test(v.trim()) }
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
-function formatValidUntil(monthValue: string) {
-  const [y, m] = monthValue.split('-').map(Number)
+// Formats a yyyy-mm-dd date input value for the card preview's "VALID UNTIL"
+// line — real expiryDate from the id-cards API, not the old single-month mock.
+function formatValidUntil(dateValue: string) {
+  if (!dateValue) return '—'
+  const [y, m] = dateValue.split('-').map(Number)
   if (!y || !m) return ''
   return `${MONTHS[m - 1]} ${y}`
+}
+
+// calcType is documented ("1" = Amount, "2" = Percentage) on the
+// student-discounts assign/update endpoints; StudentDetailDto carries the
+// same field for whatever discount is already resolved onto the student.
+function formatDiscount(detail: { discountStatus: string | null; calcType: string | null; amtPer: number | null } | undefined) {
+  if (!detail?.discountStatus || detail.discountStatus === 'Cancelled' || detail.discountStatus === 'CancelledImmediate') return 'None'
+  const kind = detail.calcType === '2' ? '%' : detail.calcType === '1' ? 'Amt' : ''
+  return detail.amtPer != null ? `${detail.amtPer}${kind}` : detail.discountStatus
 }
 
 export default function Page() {
@@ -45,6 +67,27 @@ export default function Page() {
 
   const { data: detail } = useStudent(student?.studentGuid ?? null, !!student)
 
+  // Real ID-card record — GET /students/id-cards/{studentGuid}. Resolves to
+  // null when the student has no card yet (404 not_found is the common case,
+  // not an error — see getIdCardDetails).
+  const { data: card } = useIdCard(student?.studentGuid ?? null, !!student)
+  const issueOrRenewIdCard = useIssueOrRenewIdCard()
+  const updateIdCardDates = useUpdateIdCardDates(student?.studentGuid ?? null)
+
+  // Real sponsor assignment — GET .../sponsor-details, resolves to null when
+  // unassigned. `error` here is NOT "no assignment" (that's a null `data`,
+  // handled server-side as 404) — a real 401 has been observed live
+  // (2026-08-25): "You are not authorized to view sponsor details for
+  // students in this campus", despite the docs saying no fine-grained
+  // permission exists. Surfaced as "Restricted" below rather than silently
+  // reading as "Unassigned", which would misleadingly invite editing.
+  const { data: sponsorDetail, error: sponsorError } = useSponsorDetails(student?.studentGuid ?? null, !!student)
+  const sponsorRestricted = !!sponsorError
+  const { data: sponsorCategoriesPage } = useSponsorCategories()
+  const assignSponsorCategory = useAssignSponsorCategory()
+  const [editingSponsor, setEditingSponsor] = useState(false)
+  const [sponsorChoice, setSponsorChoice] = useState('')
+
   // Personal-info edit form — seeded from the loaded record, editable but
   // not wired to any save endpoint (none confirmed for this workflow).
   const [firstName, setFirstName] = useState('')
@@ -53,15 +96,45 @@ export default function Page() {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
 
-  // ID card + communications mock state.
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
-  const [barcode, setBarcode] = useState('')
+  // ID-card date fields — seeded from the real card record below (or left
+  // blank for a first-time issue); joiningDate/expiryDate are the only
+  // fields the backend actually stores (see students/id-cards/*.md).
+  const [joiningDate, setJoiningDate] = useState('')
+  const [expiryDate, setExpiryDate] = useState('')
+  const [cardRemarks, setCardRemarks] = useState('')
+
+  // Communications mock state — no backend contract for this workflow.
   const [stuEmail, setStuEmail] = useState('')
   const [stuPhone, setStuPhone] = useState('')
   const [parEmail, setParEmail] = useState('parent.sarah@gmail.com')
-  const [validUntil, setValidUntil] = useState('2027-12')
   const [parPhone, setParPhone] = useState('+256 772 987 654')
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
+
+  // Old barcode/ESSL/photo-upload state — no backend contract (the id-cards
+  // API has no such fields). Commented out rather than removed; re-enable if
+  // a real endpoint shows up for these later.
+  // const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  // const [barcode, setBarcode] = useState('')
+
+  // The most recent cardHistory entry is the "current" card — there's no
+  // separate current-card field on the real response (see idCards.ts).
+  const currentCard = currentCardIssue(card)
+
+  useEffect(() => {
+    if (currentCard) {
+      setJoiningDate(currentCard.joiningDate?.slice(0, 10) ?? '')
+      setExpiryDate(currentCard.expiryDate?.slice(0, 10) ?? '')
+    } else {
+      setJoiningDate('')
+      setExpiryDate('')
+      setCardRemarks('')
+    }
+  }, [currentCard])
+
+  useEffect(() => {
+    setSponsorChoice(sponsorDetail?.sponsorCategoryGuid ?? '')
+    setEditingSponsor(false)
+  }, [sponsorDetail])
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -100,12 +173,45 @@ export default function Page() {
     ])
   }
 
-  function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => { setPhotoUrl(ev.target?.result as string); showToast('Photo uploaded', 'ok') }
-    reader.readAsDataURL(file)
+  // Photo upload had no backing field on the real id-cards API — commented
+  // out along with its JSX rather than removed (see the state comment above).
+  // function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
+  //   const file = e.target.files?.[0]
+  //   if (!file) return
+  //   const reader = new FileReader()
+  //   reader.onload = ev => { setPhotoUrl(ev.target?.result as string); showToast('Photo uploaded', 'ok') }
+  //   reader.readAsDataURL(file)
+  // }
+
+  function handleSaveCard() {
+    if (!student) return
+    if (currentCard) {
+      updateIdCardDates.mutate(
+        { cardIssueId: currentCard.cardIssueId, payload: { joiningDate, expiryDate } },
+        { onSuccess: () => showToast('Card dates updated', 'ok'), onError: () => showToast('Could not update card dates', 'err') },
+      )
+    } else {
+      issueOrRenewIdCard.mutate(
+        { studentGuid: student.studentGuid, joiningDate: joiningDate || null, expiryDate: expiryDate || null, remarks: cardRemarks || null, isRenewal: false },
+        { onSuccess: () => showToast('ID card issued', 'ok'), onError: () => showToast('Could not issue ID card', 'err') },
+      )
+    }
+  }
+
+  function handleRenewCard() {
+    if (!student) return
+    issueOrRenewIdCard.mutate(
+      { studentGuid: student.studentGuid, joiningDate: joiningDate || null, expiryDate: expiryDate || null, remarks: cardRemarks || null, isRenewal: true },
+      { onSuccess: () => showToast('Card renewed', 'ok'), onError: () => showToast('Could not renew card', 'err') },
+    )
+  }
+
+  function handleSaveSponsor() {
+    if (!student || !sponsorChoice) return
+    assignSponsorCategory.mutate(
+      { studentGuid: student.studentGuid, sponsorCategoryGuid: sponsorChoice },
+      { onSuccess: () => showToast('Sponsor category updated', 'ok'), onError: () => showToast('Could not update sponsor category', 'err') },
+    )
   }
 
   return (
@@ -158,8 +264,35 @@ export default function Page() {
                 </div>
               </div>
               <div className="stu-meta-row">
+                {/* Fee Structure / Learning Mode still have no backend contract — left as
+                    illustrative placeholders, same as before. */}
                 <div className="stu-meta-item"><div className="stu-meta-lbl">Fee Structure</div><div className="stu-meta-val">Local</div></div>
-                <div className="stu-meta-item"><div className="stu-meta-lbl">Sponsor</div><div className="stu-meta-val">Self</div></div>
+                <div className="stu-meta-item">
+                  <div className="stu-meta-lbl">Sponsor</div>
+                  {sponsorRestricted ? (
+                    <div className="stu-meta-val" title="You are not authorized to view sponsor details for students in this campus">
+                      Restricted
+                    </div>
+                  ) : editingSponsor ? (
+                    <div className="flex gap-2" style={{ alignItems: 'center' }}>
+                      <SearchSelect
+                        options={(sponsorCategoriesPage?.items ?? []).map(c => c.category)}
+                        value={(sponsorCategoriesPage?.items ?? []).find(c => c.sponsorCategoryGuid === sponsorChoice)?.category ?? ''}
+                        onChange={label => {
+                          const found = sponsorCategoriesPage?.items.find(c => c.category === label)
+                          setSponsorChoice(found?.sponsorCategoryGuid ?? '')
+                        }}
+                      />
+                      <button className="btn-icon" title="Save" onClick={handleSaveSponsor}><i className="lni lni-checkmark"></i></button>
+                      <button className="btn-icon" title="Cancel" onClick={() => setEditingSponsor(false)}><i className="lni lni-close"></i></button>
+                    </div>
+                  ) : (
+                    <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={() => setEditingSponsor(true)} title="Click to change sponsor category">
+                      {sponsorDetail?.category ?? 'Unassigned'} <i className="lni lni-pencil-alt" style={{ fontSize: 10 }}></i>
+                    </div>
+                  )}
+                </div>
+                <div className="stu-meta-item"><div className="stu-meta-lbl">Discount</div><div className="stu-meta-val">{formatDiscount(detail)}</div></div>
                 <div className="stu-meta-item"><div className="stu-meta-lbl">Learning Mode</div><div className="stu-meta-val">Campus</div></div>
                 <div className="stu-meta-item"><div className="stu-meta-lbl">Registration No.</div><div className="stu-meta-val">{student.studentRegNo}</div></div>
                 <div className="stu-meta-item"><div className="stu-meta-lbl">Status</div><div className="stu-meta-val">{detail?.regStatusName || '—'}</div></div>
@@ -214,38 +347,61 @@ export default function Page() {
               <div className="g2">
                 <div>
                   <div className="card" style={{ marginBottom: 16 }}>
-                    <div className="card-hdr"><div className="card-title"><i className="lni lni-image"></i> Photo &amp; Card Details</div></div>
-                    <div className="flex" style={{ gap: 20, alignItems: 'flex-start' }}>
-                      <div>
-                        <label className="lbl">Photo</label>
-                        <label className="photo-zone">
-                          <input type="file" accept="image/*" onChange={handlePhoto} style={{ display: 'none' }} />
-                          <i className="lni lni-image"></i><span>Upload</span>
-                        </label>
-                        <div style={{ fontSize: 10.5, color: 'var(--g500)', marginTop: 6, textAlign: 'center' }}>JPG/PNG · Max 2MB</div>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div className="fg"><label className="lbl">Name on Card</label><input className="ctrl" value={student.studentName} readOnly /></div>
-                        <div className="fg"><label className="lbl">Student ID</label><input className="ctrl" value={student.studentNum} readOnly /></div>
-                        <div className="fg"><label className="lbl">Programme</label><input className="ctrl" value={student.programName || '—'} readOnly /></div>
-                        <div className="fg"><label className="lbl">Valid Until</label><input className="ctrl" type="month" value={validUntil} onChange={e => setValidUntil(e.target.value)} /></div>
-                      </div>
+                    <div className="card-hdr">
+                      <div className="card-title"><i className="lni lni-credit-cards"></i> Card Details</div>
+                      <span className={`badge ${currentCard ? 'badge-green' : 'badge-grey'}`}>{currentCard ? 'Issued' : 'Not issued yet'}</span>
+                    </div>
+                    {/* Photo upload had no field on the real id-cards API (issue/renew
+                        only takes studentGuid/joiningDate/expiryDate/remarks/isRenewal)
+                        — commented out rather than removed. The preview below falls
+                        back to a placeholder icon with no photo, same as always. */}
+                    {/* <div>
+                      <label className="lbl">Photo</label>
+                      <label className="photo-zone">
+                        <input type="file" accept="image/*" onChange={handlePhoto} style={{ display: 'none' }} />
+                        <i className="lni lni-image"></i><span>Upload</span>
+                      </label>
+                      <div style={{ fontSize: 10.5, color: 'var(--g500)', marginTop: 6, textAlign: 'center' }}>JPG/PNG · Max 2MB</div>
+                    </div> */}
+                    <div className="fg"><label className="lbl">Name on Card</label><input className="ctrl" value={student.studentName} readOnly /></div>
+                    <div className="fg"><label className="lbl">Student ID</label><input className="ctrl" value={student.studentNum} readOnly /></div>
+                    <div className="fg"><label className="lbl">Programme</label><input className="ctrl" value={student.programName || '—'} readOnly /></div>
+                    <div className="g2">
+                      <div className="fg"><label className="lbl">Joining Date</label><input className="ctrl" type="date" value={joiningDate} onChange={e => setJoiningDate(e.target.value)} /></div>
+                      <div className="fg"><label className="lbl">Expiry Date</label><input className="ctrl" type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} /></div>
+                    </div>
+                    {!currentCard && (
+                      <div className="fg"><label className="lbl">Remarks</label><textarea className="ctrl" rows={2} value={cardRemarks} onChange={e => setCardRemarks(e.target.value)} placeholder="Optional — only recorded on first issue" /></div>
+                    )}
+                    <div className="flex gap-2" style={{ marginTop: 8 }}>
+                      {currentCard ? (
+                        <>
+                          <button className="btn btn-neu btn-sm" onClick={handleRenewCard} disabled={issueOrRenewIdCard.isPending}><i className="lni lni-reload"></i> Renew</button>
+                          <button className="btn btn-primary btn-sm" onClick={handleSaveCard} disabled={updateIdCardDates.isPending}><i className="lni lni-save"></i> Save Dates</button>
+                        </>
+                      ) : (
+                        <button className="btn btn-primary btn-sm" onClick={handleSaveCard} disabled={issueOrRenewIdCard.isPending}><i className="lni lni-save"></i> Issue Card</button>
+                      )}
                     </div>
                   </div>
                   <div className="card">
-                    <div className="card-hdr"><div className="card-title"><i className="lni lni-link"></i> Barcode &amp; ESSL Access</div></div>
-                    <div className="fg">
-                      <label className="lbl">Physical Barcode <span className="req">*</span></label>
-                      <input className="ctrl" placeholder="Scan or enter barcode…" value={barcode} onChange={e => setBarcode(e.target.value)} />
-                      <div style={{ fontSize: 12, marginTop: 5, color: !barcode ? 'var(--g400)' : barcode.length < 6 ? 'var(--g400)' : barcode === 'ISBT00142' ? 'var(--amber)' : barcode.startsWith('ISBT') ? 'var(--green)' : 'var(--red)', fontWeight: barcode ? 700 : 400 }}>
-                        {!barcode ? 'Enter a barcode to validate'
-                          : barcode.length < 6 ? 'Keep typing…'
-                          : barcode === 'ISBT00142' ? '⚠ Already assigned to this student'
-                          : barcode.startsWith('ISBT') ? '✓ Barcode available'
-                          : '✗ Invalid — use ISBT prefix'}
+                    <div className="card-hdr"><div className="card-title"><i className="lni lni-qr-code"></i> QR Verification</div></div>
+                    {/* Replaces the old free-text "Physical Barcode" + ESSL device list —
+                        neither had a backing field on the real API. The QR endpoint
+                        (GET /students/id-cards/{studentGuid}/qr-image) just encodes the
+                        bare studentGuid, unsigned — it's not a substitute for the ESSL
+                        device workflow, only for the barcode's own verification role. */}
+                    {MOCK_AUTH ? (
+                      <div className="empty" style={{ padding: 20 }}>
+                        <div className="empty-sub">QR preview needs a live backend — not available in mock mode.</div>
                       </div>
-                    </div>
-                    <div className="fg">
+                    ) : (
+                      <div style={{ textAlign: 'center' }}>
+                        <img src={getIdCardQrImageUrl(student.studentGuid)} alt="ID card QR code" style={{ width: 160, height: 160 }} />
+                        <div style={{ fontSize: 11, color: 'var(--g500)', marginTop: 6 }}>Scans to this student's GUID — verify via the scan-result endpoint, not the image alone.</div>
+                      </div>
+                    )}
+                    {/* <div className="fg">
                       <label className="lbl">ESSL Device Registration</label>
                       <div className="chklist">
                         <div className="chk pass"><i className="lni lni-checkmark-circle chk-icon" style={{ color: 'var(--green)' }}></i><span className="chk-text">Device F22-01 · Main Gate</span><span className="chk-status">Enrolled</span></div>
@@ -255,8 +411,7 @@ export default function Page() {
                     </div>
                     <div className="flex gap-2" style={{ marginTop: 8 }}>
                       <button className="btn btn-neu btn-sm"><i className="lni lni-reload"></i> Sync Devices</button>
-                      <button className="btn btn-primary btn-sm" onClick={() => showToast('ID card saved and synced', 'ok')}><i className="lni lni-save"></i> Save &amp; Sync</button>
-                    </div>
+                    </div> */}
                   </div>
                 </div>
                 <div>
@@ -264,11 +419,11 @@ export default function Page() {
                     <div className="card-hdr"><div className="card-title"><i className="lni lni-eye"></i> Live Card Preview</div><span className="badge badge-blue">Preview</span></div>
                     <div className="id-preview">
                       <div className="id-logo">ISBAT UNIVERSITY · KAMPALA</div>
-                      <div className="id-photo">{photoUrl ? <img src={photoUrl} alt="" /> : <i className="lni lni-user"></i>}</div>
+                      <div className="id-photo"><i className="lni lni-user"></i></div>
                       <div className="id-name">{student.studentName}</div>
                       <div className="id-prog">{student.programName || '—'} · {student.semesterName || '—'}</div>
                       <div className="id-num">{student.studentNum}</div>
-                      <div className="id-bar">||||| |||| ||||| |||| ||||<br />{student.studentRegNo} · VALID UNTIL {formatValidUntil(validUntil)}</div>
+                      <div className="id-bar">||||| |||| ||||| |||| ||||<br />{student.studentRegNo} · VALID UNTIL {formatValidUntil(expiryDate)}</div>
                     </div>
                     <div className="flex gap-2" style={{ justifyContent: 'center', marginTop: 12 }}>
                       <button className="btn btn-neu btn-sm"><i className="lni lni-download"></i> Download</button>
@@ -277,10 +432,23 @@ export default function Page() {
                   </div>
                   <div className="card">
                     <div className="card-hdr"><div className="card-title"><i className="lni lni-alarm-clock"></i> Card History</div></div>
-                    <div className="timeline">
-                      <div className="tl-item"><div className="tl-dot done"><i className="lni lni-checkmark"></i></div><div><div className="tl-label">Card #00142 Issued</div><div className="tl-meta">Jan 20, 2024 · ID Officer · Barcode: ISBT00142</div></div></div>
-                      <div className="tl-item"><div className="tl-dot cur"><i className="lni lni-reload"></i></div><div><div className="tl-label">Photo Updated</div><div className="tl-meta">Mar 5, 2024 · Student Services</div></div></div>
-                    </div>
+                    {!card || card.cardHistory.length === 0 ? (
+                      <div className="empty" style={{ padding: 20 }}>
+                        <div className="empty-sub">No card issued yet.</div>
+                      </div>
+                    ) : (
+                      <div className="timeline">
+                        {card.cardHistory.map((h, i) => (
+                          <div className="tl-item" key={h.cardIssueId}>
+                            <div className={`tl-dot ${i === card.cardHistory.length - 1 ? 'cur' : 'done'}`}><i className={`lni ${h.isRenewal ? 'lni-reload' : 'lni-checkmark'}`}></i></div>
+                            <div>
+                              <div className="tl-label">{h.isRenewal ? 'Card Renewed' : 'Card Issued'}{h.issueCode ? ` · ${h.issueCode}` : ''}</div>
+                              <div className="tl-meta">{h.joiningDate?.slice(0, 10) || '—'} → {h.expiryDate?.slice(0, 10) || '—'}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
