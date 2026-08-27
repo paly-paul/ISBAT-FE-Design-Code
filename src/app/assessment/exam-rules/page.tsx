@@ -115,43 +115,61 @@ export default function ExamRulesPage() {
             <thead>
               <tr>
                 <th style={{ width: 48 }}></th>
-                <th>Rule Code</th>
-                <th>Rule Name</th>
-                <th>Sections</th>
-                <th className="text-right">Total Marks</th>
-                <th>Status</th>
+                <th>Code</th>
+                <th>Name</th>
+                <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. A<br/>Max Qns</th>
+                <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. A<br/>Marks/Qn</th>
+                <th style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. A<br/>Type</th>
+                <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. B<br/>Max Qns</th>
+                <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. B<br/>Marks/Qn</th>
+                <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. C<br/>Max Qns</th>
+                <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. C<br/>Marks/Qn</th>
               </tr>
             </thead>
             <tbody>
               {loading
-                ? <TableLoadingState colSpan={6} />
+                ? <TableLoadingState colSpan={10} />
                 : pageItems.length === 0
-                  ? <EmptyState colSpan={6} hasFilters={!!search} onClearFilters={() => setSearch('')} />
+                  ? <EmptyState colSpan={10} hasFilters={!!search} onClearFilters={() => setSearch('')} />
                   : null}
-              {pageItems.map(r => (
-                <tr key={r.examRuleGuid}>
-                  <td>
-                    <ActionMenu>
-                      <button className="btn btn-neu btn-sm" onClick={() => handleView(r.examRuleGuid)}>
-                        <i className="lni lni-eye" /> View
-                      </button>
-                      <button className="btn btn-neu btn-sm" onClick={() => handleEdit(r.examRuleGuid)}>
-                        <i className="lni lni-pencil" /> Edit
-                      </button>
-                      <button className="btn btn-neu btn-sm text-clr-red" onClick={() => setDeleteTarget({ guid: r.examRuleGuid, name: r.ruleName || '' })}>
-                        <i className="lni lni-trash-can" /> Delete
-                      </button>
-                    </ActionMenu>
-                  </td>
-                  <td className="font-mono text-sm">{r.ruleCode}</td>
-                  <td className="font-medium">{r.ruleName}</td>
-                  <td>{countSections(r)}</td>
-                  <td className="text-right font-mono">{r.totalMark}</td>
-                  <td>
-                    {r.status === 2 ? <span className="badge badge-green">Active</span> : <span className="badge badge-red">Inactive</span>}
-                  </td>
-                </tr>
-              ))}
+              {pageItems.map(r => {
+                const secA = r.sections?.[0] || (r as any).sectionA
+                const secB = r.sections?.[1] || (r as any).sectionB
+                const secC = r.sections?.[2] || (r as any).sectionC
+                
+                const getTypeLabel = (t: number | null | undefined) => {
+                  if (t === 1) return 'MCQ'
+                  if (t === 2) return 'DQ'
+                  return ''
+                }
+
+                return (
+                  <tr key={r.examRuleGuid}>
+                    <td>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => handleView(r.examRuleGuid)}>
+                          <i className="lni lni-eye" /> View
+                        </button>
+                        <button className="btn btn-neu btn-sm" onClick={() => handleEdit(r.examRuleGuid)}>
+                          <i className="lni lni-pencil" /> Edit
+                        </button>
+                        <button className="btn btn-neu btn-sm text-clr-red" onClick={() => setDeleteTarget({ guid: r.examRuleGuid, name: r.ruleName || '' })}>
+                          <i className="lni lni-trash-can" /> Delete
+                        </button>
+                      </ActionMenu>
+                    </td>
+                    <td className="font-mono text-sm">{r.ruleCode}</td>
+                    <td className="font-medium">{r.ruleName}</td>
+                    <td className="text-right">{secA?.attemptQuestions || 0}</td>
+                    <td className="text-right">{secA?.mark || 0}</td>
+                    <td>{getTypeLabel(secA?.type)}</td>
+                    <td className="text-right">{secB?.attemptQuestions || 0}</td>
+                    <td className="text-right">{secB?.mark || 0}</td>
+                    <td className="text-right">{secC?.attemptQuestions || 0}</td>
+                    <td className="text-right">{secC?.mark || 0}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </ScrollTable>
