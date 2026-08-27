@@ -122,6 +122,7 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Question FAQs', 'comments', '/assessment/question-faqs'),
     leaf('Weight Configuration', 'cog', '/assessment/weight-config'),
     leaf('Assessment Schedule', 'calendar', '/assessment/schedule'),
+    leaf('IA Creation', 'graduation', '/assessment/ia-creation'),
   ]),
   section('Coursework (CW)', [
     leaf('CW Overview', 'folder', '/assessment/cw-overview'),
@@ -523,8 +524,9 @@ function ensureAssessmentMaster(menu: MenuNode[]): MenuNode[] {
   const hasAssMaster = structSection.children.some(l => l.name === 'Assessment Master')
   const hasExamRules = structSection.children.some(l => l.name === 'Exam Rules Master')
   const hasFaqs = structSection.children.some(l => l.name === 'Question FAQs')
+  const hasIaCreation = structSection.children.some(l => l.name === 'IA Creation')
   
-  if (hasAssMaster && hasExamRules && hasFaqs) return menu
+  if (hasAssMaster && hasExamRules && hasFaqs && hasIaCreation) return menu
 
   const children = [...structSection.children]
   
@@ -539,6 +541,16 @@ function ensureAssessmentMaster(menu: MenuNode[]): MenuNode[] {
 
   if (!hasExamRules) children.unshift(leaf('Exam Rules Master', 'files', '/assessment/exam-rules'))
   if (!hasAssMaster) children.unshift(leaf('Assessment Master', 'list', '/assessment/assessment-master'))
+  
+  // IA Creation — inject after Assessment Schedule if present, otherwise at end
+  if (!hasIaCreation) {
+    const scheduleIdx = children.findIndex(l => l.name === 'Assessment Schedule')
+    if (scheduleIdx !== -1) {
+      children.splice(scheduleIdx + 1, 0, leaf('IA Creation', 'graduation', '/assessment/ia-creation'))
+    } else {
+      children.push(leaf('IA Creation', 'graduation', '/assessment/ia-creation'))
+    }
+  }
 
   const mergedSection = { ...structSection, children }
 

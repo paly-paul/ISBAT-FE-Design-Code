@@ -122,8 +122,10 @@ export default function ExamRulesPage() {
                 <th>Name</th>
                 {Array.from({ length: maxSectionsCount }).flatMap((_, i) => {
                   const secChar = String.fromCharCode(65 + i)
+                  // Add a light left border for visual separation of sections
+                  const borderClass = "border-l border-slate-200"
                   return [
-                    <th key={`sec-${secChar}-max`} className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. {secChar}<br/>Max Qns</th>,
+                    <th key={`sec-${secChar}-max`} className={`text-right ${borderClass}`} style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. {secChar}<br/>Max Qns</th>,
                     <th key={`sec-${secChar}-mark`} className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. {secChar}<br/>Marks/Qn</th>,
                     <th key={`sec-${secChar}-type`} style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. {secChar}<br/>Type</th>
                   ]
@@ -163,8 +165,9 @@ export default function ExamRulesPage() {
                     {Array.from({ length: maxSectionsCount }).flatMap((_, i) => {
                       const sec = r.sections?.[i] || (i === 0 ? (r as any).sectionA : i === 1 ? (r as any).sectionB : i === 2 ? (r as any).sectionC : undefined)
                       const secChar = String.fromCharCode(65 + i)
+                      const borderClass = "border-l border-slate-200"
                       return [
-                        <td key={`val-${secChar}-max`} className="text-right">{sec?.attemptQuestions || 0}</td>,
+                        <td key={`val-${secChar}-max`} className={`text-right ${borderClass}`}>{sec?.attemptQuestions || 0}</td>,
                         <td key={`val-${secChar}-mark`} className="text-right">{sec?.mark || 0}</td>,
                         <td key={`val-${secChar}-type`}>{getTypeLabel(sec?.type)}</td>
                       ]
