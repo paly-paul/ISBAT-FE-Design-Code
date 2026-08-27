@@ -94,6 +94,7 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
       return
     }
     setError('')
+    setDisplay(toDisplay(ymd))
     onChange(ymd)
     setOpen(false)
   }
@@ -124,9 +125,9 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
         return
       }
       setError('')
-      onChange(ymd)
+      if (value !== ymd) onChange(ymd)
     } else if (!text) {
-      onChange('')
+      if (value !== '') onChange('')
     }
   }
 
@@ -201,7 +202,7 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
               month name (up to "September") and a 4-digit year in full. */}
           <div style={{ padding: 8, width: 228 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 4 }}>
-              <button type="button" className="btn btn-neu btn-sm" onClick={prevMonth} style={{ padding: '3px 6px' }}>{'<'}</button>
+              <button type="button" className="btn btn-neu btn-sm" onMouseDown={e => e.preventDefault()} onClick={prevMonth} style={{ padding: '3px 6px' }}>{'<'}</button>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <div style={{ width: 106 }}>
                   {/* No `placeholder` here — month/year always have a real
@@ -226,7 +227,7 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
                   />
                 </div>
               </div>
-              <button type="button" className="btn btn-neu btn-sm" onClick={nextMonth} style={{ padding: '3px 6px' }}>{'>'}</button>
+              <button type="button" className="btn btn-neu btn-sm" onMouseDown={e => e.preventDefault()} onClick={nextMonth} style={{ padding: '3px 6px' }}>{'>'}</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, textAlign: 'center', marginBottom: 4, color: '#666', fontSize: 10.5 }}>
               {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => <div key={d}>{d}</div>)}
@@ -243,6 +244,7 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
                   <button
                     key={i}
                     type="button"
+                    onMouseDown={e => e.preventDefault()}
                     onClick={() => { if (!disabled) pick(cell as number) }}
                     disabled={disabled}
                     aria-disabled={disabled}

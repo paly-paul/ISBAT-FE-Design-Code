@@ -1,6 +1,7 @@
 'use client'
 import { Dispatch, SetStateAction, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useMenu } from '@/hooks/users/useMenu'
 import { MenuNode } from '@/lib/api/users/menu'
 
@@ -71,6 +72,7 @@ function idFromUrl(url: string): string {
 }
 
 export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {
+  const router = useRouter()
   const { data, isLoading, isError, refetch } = useMenu()
   const menu = data?.menu
   const isFallback = data?.isFallback ?? false
@@ -142,6 +144,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
     } else {
       setActiveRail(rail)
       setPanelOpen(true)
+      router.push(`/${rail}`)
     }
   }
 

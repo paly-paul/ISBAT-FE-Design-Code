@@ -88,6 +88,9 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Assessment Dashboard', 'dashboard', '/assessment/dashboard'),
   ]),
   section('Assessment Structure', [
+    leaf('Assessment Master', 'list', '/assessment/assessment-master'),
+    leaf('Exam Rules Master', 'files', '/assessment/exam-rules'),
+    leaf('Question FAQs', 'comments', '/assessment/question-faqs'),
     leaf('Weight Configuration', 'cog', '/assessment/weight-config'),
     leaf('Assessment Schedule', 'calendar', '/assessment/schedule'),
   ]),
@@ -116,6 +119,7 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Result & Moderation', 'bar-chart', '/assessment/moderation'),
   ]),
   section('Resit & Disputes', [
+    leaf('Resit Master', 'cogs', '/assessment/resit-configs'),
     leaf('Resit Calendar', 'calendar', '/assessment/resit-calendar'),
     leaf('Resit Seating Allocator', 'users', '/assessment/resit-seating'),
     leaf('CW Reevaluation', 'reload', '/assessment/reeval'),
@@ -412,6 +416,69 @@ function ensureProgrammeApproval(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+function ensureAssessmentMaster(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const structIdx = assessModule.children.findIndex(c => c.name === 'Assessment Structure')
+  if (structIdx === -1) return menu
+
+  const structSection = assessModule.children[structIdx]
+  const hasAssMaster = structSection.children.some(l => l.name === 'Assessment Master')
+  const hasExamRules = structSection.children.some(l => l.name === 'Exam Rules Master')
+  const hasFaqs = structSection.children.some(l => l.name === 'Question FAQs')
+  
+  if (hasAssMaster && hasExamRules && hasFaqs) return menu
+
+  const children = [...structSection.children]
+  
+  if (!hasFaqs) {
+    const examRuleIdx = children.findIndex(l => l.name === 'Exam Rules Master')
+    if (examRuleIdx !== -1) {
+      children.splice(examRuleIdx + 1, 0, leaf('Question FAQs', 'comments', '/assessment/question-faqs'))
+    } else {
+      children.unshift(leaf('Question FAQs', 'comments', '/assessment/question-faqs'))
+    }
+  }
+
+  if (!hasExamRules) children.unshift(leaf('Exam Rules Master', 'files', '/assessment/exam-rules'))
+  if (!hasAssMaster) children.unshift(leaf('Assessment Master', 'list', '/assessment/assessment-master'))
+
+  const mergedSection = { ...structSection, children }
+
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[structIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
+function ensureResitMaster(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const resitIdx = assessModule.children.findIndex(c => c.name === 'Resit & Disputes')
+  if (resitIdx === -1) return menu
+
+  const resitSection = assessModule.children[resitIdx]
+  if (resitSection.children.some(l => l.name === 'Resit Master')) return menu
+
+  const children = [leaf('Resit Master', 'cogs', '/assessment/resit-configs'), ...resitSection.children]
+  
+  const mergedSection = { ...resitSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[resitIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
 export function getMenu(): Promise<MenuResult> {
   if (MOCK_AUTH) return Promise.resolve({ menu: mockMenu, isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
@@ -422,7 +489,9 @@ export function getMenu(): Promise<MenuResult> {
       const withFinance  = mergeFinanceSections(withAssessment)
       const withStudent  = mergeStudentSections(withFinance)
       const withBulkEdit = ensureBulkIntakeEdit(withStudent)
-      const finalMenu = ensureProgrammeApproval(withBulkEdit)
+      const withProgApp = ensureProgrammeApproval(withBulkEdit)
+      const withAssMaster = ensureAssessmentMaster(withProgApp)
+      const finalMenu = ensureResitMaster(withAssMaster)
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: mockMenu, isFallback: true }))
