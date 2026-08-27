@@ -3,11 +3,13 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
+import { ActionMenu } from '@/components/ActionMenu'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { useStudent } from '@/hooks/student/useStudents'
 import { StudentDto } from '@/lib/api/student/student'
 import { useIdCard, useIssueOrRenewIdCard, useUpdateIdCardDates, getIdCardQrImageUrl, currentCardIssue } from '@/hooks/student/useIdCards'
 import { useSponsorDetails, useSponsorCategories, useAssignSponsorCategory } from '@/hooks/student/useSponsor'
+import { formatDate } from '@/lib/date'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -23,7 +25,12 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 // "UI-first prototype" convention as Finance's Payment Collection pages.
 // The old barcode/ESSL-device and photo-upload UI had no backing endpoint at
 // all (id-cards has no such fields) — commented out below rather than
-// removed, in favour of the real QR-image endpoint.
+// removed, in favour of the real QR-image endpoint. The Live Card Preview
+// now also carries the full printed-card field set (card no./print date,
+// batch, joining/expiry, embedded QR) instead of just name/programme/regno —
+// Batch Time and Nationality have no field on any student/id-card response
+// yet, shown as placeholders. Card History (the issue/renewal timeline) has
+// been dropped from this tab entirely, per request.
 const PROFICIENCY_TABS = [
   { id: 'info', label: 'Profile Info', icon: 'lni-user' },
   { id: 'idcard', label: 'ID Card', icon: 'lni-credit-cards' },
@@ -39,16 +46,6 @@ function initials(name: string) {
 
 function isValidEmail(v: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) }
 function isValidPhone(v: string) { return /^\+\d[\d\s]{6,14}$/.test(v.trim()) }
-
-const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
-// Formats a yyyy-mm-dd date input value for the card preview's "VALID UNTIL"
-// line — real expiryDate from the id-cards API, not the old single-month mock.
-function formatValidUntil(dateValue: string) {
-  if (!dateValue) return '—'
-  const [y, m] = dateValue.split('-').map(Number)
-  if (!y || !m) return ''
-  return `${MONTHS[m - 1]} ${y}`
-}
 
 // calcType is documented ("1" = Amount, "2" = Percentage) on the
 // student-discounts assign/update endpoints; StudentDetailDto carries the
@@ -252,16 +249,16 @@ export default function Page() {
                     <span className="stu-pill"><i className="lni lni-display"></i> Campus</span>
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 7, alignItems: 'flex-end' }}>
-                  <div className="flex gap-2">
-                    <button className="btn btn-neu btn-sm" style={{ background: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.3)', color: '#fff' }} onClick={() => router.push('/student/batch-transfer')}><i className="lni lni-transfer"></i> Batch Transfer</button>
-                    <button className="btn btn-neu btn-sm" style={{ background: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.3)', color: '#fff' }} onClick={() => router.push('/student/prog-transfer')}><i className="lni lni-graduation"></i> Prog. Transfer</button>
-                  </div>
-                  <div className="flex gap-2">
-                    <button className="btn btn-neu btn-sm" style={{ background: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.3)', color: '#fff' }} onClick={() => router.push('/student/learning-mode')}><i className="lni lni-display"></i> Learning Mode</button>
-                    <button className="btn btn-neu btn-sm" style={{ background: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.3)', color: '#fff' }} onClick={() => router.push('/student/intake-transfer')}><i className="lni lni-calendar"></i> Intake Transfer</button>
-                  </div>
-                </div>
+                {/* Batch/Programme Transfer, Learning Mode, Intake Transfer — tucked
+                    behind a single three-dot menu instead of four always-visible
+                    buttons, same ActionMenu component the table rows elsewhere in
+                    this app use for their own row actions. */}
+                <ActionMenu tooltip="Student Actions">
+                  <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/batch-transfer')}><i className="lni lni-transfer"></i> Batch Transfer</button>
+                  <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/prog-transfer')}><i className="lni lni-graduation"></i> Prog. Transfer</button>
+                  <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/learning-mode')}><i className="lni lni-display"></i> Learning Mode</button>
+                  <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/intake-transfer')}><i className="lni lni-calendar"></i> Intake Transfer</button>
+                </ActionMenu>
               </div>
               <div className="stu-meta-row">
                 {/* Fee Structure / Learning Mode still have no backend contract — left as
@@ -415,40 +412,48 @@ export default function Page() {
                   </div>
                 </div>
                 <div>
-                  <div className="card" style={{ marginBottom: 16 }}>
+                  <div className="card">
                     <div className="card-hdr"><div className="card-title"><i className="lni lni-eye"></i> Live Card Preview</div><span className="badge badge-blue">Preview</span></div>
                     <div className="id-preview">
                       <div className="id-logo">ISBAT UNIVERSITY · KAMPALA</div>
-                      <div className="id-photo"><i className="lni lni-user"></i></div>
-                      <div className="id-name">{student.studentName}</div>
-                      <div className="id-prog">{student.programName || '—'} · {student.semesterName || '—'}</div>
-                      <div className="id-num">{student.studentNum}</div>
-                      <div className="id-bar">||||| |||| ||||| |||| ||||<br />{student.studentRegNo} · VALID UNTIL {formatValidUntil(expiryDate)}</div>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                        <div className="id-photo"><i className="lni lni-user"></i></div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="id-name">{student.studentName}</div>
+                          <div className="id-prog">{student.programName || '—'} · {student.semesterName || '—'}</div>
+                          <div className="id-num">{student.studentRegNo}</div>
+                        </div>
+                        {/* QR box needs a white backing plate — the code itself is dark-on-
+                            transparent PNG and won't scan against the card's dark gradient. */}
+                        <div style={{ background: '#fff', borderRadius: 8, padding: 4, flexShrink: 0, width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {MOCK_AUTH ? (
+                            <i className="lni lni-qr-code" style={{ color: '#1e1b4b', fontSize: 26 }}></i>
+                          ) : (
+                            <img src={getIdCardQrImageUrl(student.studentGuid)} alt="ID card QR code" style={{ width: '100%', height: '100%', display: 'block' }} />
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 10px', marginTop: 12, fontSize: 10.5 }}>
+                        <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Card No.</span> {currentCard?.issueCode || '—'}</div>
+                        <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Batch</span> {student.batchCode || '—'}</div>
+                        {/* Batch Time / Nationality have no field anywhere on the wire yet
+                            (not on StudentDto/StudentDetailDto, not on the id-cards DTO) —
+                            shown as placeholders rather than invented, same "flag the gap"
+                            convention as the commented-out photo-upload/ESSL UI above. */}
+                        <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Batch Time</span> —</div>
+                        <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Nationality</span> —</div>
+                        <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Joining</span> {joiningDate ? formatDate(joiningDate) : '—'}</div>
+                        <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Expiry</span> {expiryDate ? formatDate(expiryDate) : '—'}</div>
+                      </div>
+                      <div className="id-bar" style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'inherit', letterSpacing: 'normal', textTransform: 'none' }}>
+                        <span>REG NO {student.studentRegNo}</span>
+                        <span>PRINTED {currentCard?.issueDate ? formatDate(currentCard.issueDate) : '—'}</span>
+                      </div>
                     </div>
                     <div className="flex gap-2" style={{ justifyContent: 'center', marginTop: 12 }}>
                       <button className="btn btn-neu btn-sm"><i className="lni lni-download"></i> Download</button>
                       <button className="btn btn-primary btn-sm"><i className="lni lni-printer"></i> Print</button>
                     </div>
-                  </div>
-                  <div className="card">
-                    <div className="card-hdr"><div className="card-title"><i className="lni lni-alarm-clock"></i> Card History</div></div>
-                    {!card || card.cardHistory.length === 0 ? (
-                      <div className="empty" style={{ padding: 20 }}>
-                        <div className="empty-sub">No card issued yet.</div>
-                      </div>
-                    ) : (
-                      <div className="timeline">
-                        {card.cardHistory.map((h, i) => (
-                          <div className="tl-item" key={h.cardIssueId}>
-                            <div className={`tl-dot ${i === card.cardHistory.length - 1 ? 'cur' : 'done'}`}><i className={`lni ${h.isRenewal ? 'lni-reload' : 'lni-checkmark'}`}></i></div>
-                            <div>
-                              <div className="tl-label">{h.isRenewal ? 'Card Renewed' : 'Card Issued'}{h.issueCode ? ` · ${h.issueCode}` : ''}</div>
-                              <div className="tl-meta">{h.joiningDate?.slice(0, 10) || '—'} → {h.expiryDate?.slice(0, 10) || '—'}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>

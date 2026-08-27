@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { assignEmployeePermissionGroups, createEmployee, CreateEmployeeInput, Employee, EmployeeListItem, getEmployee, getEmployeePermissionGroups, getEmployees, updateEmployee } from '@/lib/api/employee/employee'
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { approveEmployee, assignEmployeePermissionGroups, createEmployee, CreateEmployeeInput, Employee, EmployeeListItem, EmployeeListResponse, getEmployee, getEmployeePermissionGroups, getEmployees, getPendingEmployees, updateEmployee } from '@/lib/api/employee/employee'
 import { MENU_KEY } from '@/hooks/users/useMenu'
 
 const EMPLOYEES_KEY = ['employees']
@@ -51,6 +51,20 @@ export function useEmployeeSearch(search: string) {
   })
 }
 
+// Server-side paginated + isApproved-filtered list for Employee Approvals'
+// own table — separate query key from EMPLOYEES_KEY's plain list/search
+// (pageNumber/pageSize instead of a flat array) but still prefixed with it,
+// so useCreateEmployee's invalidateQueries({ queryKey: EMPLOYEES_KEY })
+// below matches this by prefix too and a newly created (pending) employee
+// shows up here without an extra invalidation.
+export function usePendingEmployees(pageNumber = 1, pageSize = 10) {
+  return useQuery({
+    queryKey: [...EMPLOYEES_KEY, 'pending', pageNumber, pageSize],
+    queryFn: () => getPendingEmployees(pageNumber, pageSize),
+    placeholderData: keepPreviousData,
+  })
+}
+
 export function useEmployee(id: string | null) {
   return useQuery({
     queryKey: [...EMPLOYEES_KEY, id],
@@ -76,6 +90,18 @@ export function useUpdateEmployee() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: CreateEmployeeInput }) => updateEmployee(id, input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY }),
+  })
+}
+
+// Employee Approvals' Approve action — invalidates both the pending list
+// (so the approved row drops off the current page/count) and the plain
+// employee list (so Employee Master's own table picks up isApproved: true
+// without a hard reload), same invalidation pair as useUpdateEmployee.
+export function useApproveEmployee() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (employeeGuid: string) => approveEmployee(employeeGuid),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY }),
   })
 }
@@ -109,4 +135,4 @@ export function useAssignEmployeePermissionGroups() {
   })
 }
 
-export type { Employee, EmployeeListItem, CreateEmployeeInput }
+export type { Employee, EmployeeListItem, EmployeeListResponse, CreateEmployeeInput }

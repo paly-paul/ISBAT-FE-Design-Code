@@ -2,9 +2,17 @@
 import { useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
+import { ScrollTable } from '@/components/ScrollTable'
+import { EmptyState } from '@/components/EmptyState'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
 import { StudentDto } from '@/lib/api/student/student'
+
+// Batch transfer records — no backend contract for this workflow, so the
+// grid always starts empty (matching the previous timeline's "No transfers
+// on record" default) rather than fabricating example rows.
+interface TransferHistoryRow { transferCode: string; transferDate: string; oldBatch: string; newBatch: string }
+const TRANSFER_HISTORY: TransferHistoryRow[] = []
 
 // Ported from isbat_student_module.html's Batch Transfer page. Student
 // identity comes from the real student list (StudentLookup); the batch
@@ -63,11 +71,16 @@ export default function Page() {
             <BaselinePanel
               label="Active Baseline Profile (Read-Only)"
               items={[
-                { label: 'Student ID', value: student.studentNum },
-                { label: 'Name', value: student.studentName },
+                { label: 'Student Name', value: student.studentName },
+                { label: 'Student Reg No.', value: student.studentRegNo },
                 { label: 'Programme', value: student.programName || '—' },
-                { label: 'Current Batch', value: student.batchCode || '—', accent: true },
+                // Campus/Intake have no field on StudentDto/StudentDetailDto yet —
+                // shown as placeholders, same "Campus" pill already used as a
+                // stand-in on the Student Profile banner (see student/profile).
+                { label: 'Campus', value: '—' },
                 { label: 'Semester', value: student.semesterName || '—' },
+                { label: 'Current Batch', value: student.batchCode || '—', accent: true },
+                { label: 'Intake', value: '—' },
                 { label: 'Fee Structure', value: 'Local · $750/sem' },
               ]}
             />
@@ -169,10 +182,23 @@ export default function Page() {
                 </div>
                 <div className="card">
                   <div className="card-hdr"><div className="card-title"><i className="lni lni-alarm-clock"></i> Transfer History</div></div>
-                  <div className="timeline">
-                    <div className="tl-item"><div className="tl-dot done"><i className="lni lni-checkmark"></i></div><div><div className="tl-label">Enrolled — {student.batchCode || 'current batch'}</div><div className="tl-meta">Initial assignment · Jan 15, 2024</div></div></div>
-                    <div className="tl-item"><div className="tl-dot cur"><i className="lni lni-transfer"></i></div><div><div className="tl-label">Current — {student.batchCode || '—'}</div><div className="tl-meta">No transfers on record</div></div></div>
-                  </div>
+                  <ScrollTable>
+                    <table>
+                      <thead><tr><th>Transfer Code</th><th>Transfer Date</th><th>Old Batch</th><th>New Batch</th></tr></thead>
+                      <tbody>
+                        {TRANSFER_HISTORY.length === 0
+                          ? <EmptyState colSpan={4} title="No transfers on record" subtitle="This student hasn't been moved between batches yet." />
+                          : TRANSFER_HISTORY.map(r => (
+                            <tr key={r.transferCode}>
+                              <td className="font-mono text-blue">{r.transferCode}</td>
+                              <td>{r.transferDate}</td>
+                              <td>{r.oldBatch}</td>
+                              <td>{r.newBatch}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </ScrollTable>
                 </div>
               </div>
             </div>

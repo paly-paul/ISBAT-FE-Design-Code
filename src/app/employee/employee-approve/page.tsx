@@ -6,8 +6,7 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { Toast } from '@/components/Toast'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
-import { usePagination } from '@/hooks/usePagination'
-import { useEmployees } from '@/hooks/employee/useEmployees'
+import { usePendingEmployees, useApproveEmployee } from '@/hooks/employee/useEmployees'
 
 const PAGE_SIZE = 10
 
@@ -15,14 +14,13 @@ interface ConfirmTarget { employeeGuid: string; name: string }
 interface SuccessInfo { title: string; subtitle: string }
 
 // Employee Approvals — a trimmed-down view over Employee Master's own list
-// (see employee-master/page.tsx), scoped to isApproved === false, with a
-// single Approve action per row instead of the full View/Edit/Assign
-// ActionMenu. There is no confirmed approve endpoint yet (updateEmployee
-// needs the full CreateEmployeeInput payload, which this lightweight list
-// row doesn't carry — see employee.ts), so approving here is local-only:
-// it just drops the row out of the pending view, same "UI-first prototype"
-// convention as the rest of the app. Wire this to a real approve endpoint
-// once one exists instead of useUpdateEmployee's full-payload update.
+// (see employee-master/page.tsx), scoped server-side via usePendingEmployees'
+// own ?isApproved=false + pageNumber/pageSize (getPendingEmployees in
+// employee.ts), with a single Approve action per row instead of the full
+// View/Edit/Assign ActionMenu. Approve hits its own dedicated endpoint
+// (useApproveEmployee → POST /employees/:employeeGuid/approve) rather than
+// useUpdateEmployee, which needs the full CreateEmployeeInput payload this
+// lightweight list row doesn't carry.
 //
 // The confirm step reuses bulk-intake-edit's confirm-popup markup/classes
 // (confirm-modal-overlay/confirm-modal-pop, modal-hdr-blue) instead of a
@@ -32,23 +30,25 @@ interface SuccessInfo { title: string; subtitle: string }
 // as bulk-intake-edit / the academic module's Edit/New modals) instead of
 // just closing outright.
 export default function Page() {
-  const { data: rows = [], isLoading } = useEmployees()
+  const [page, setPage] = useState(1)
+  const { data, isLoading } = usePendingEmployees(page, PAGE_SIZE)
+  const approveEmployee = useApproveEmployee()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [approvedGuids, setApprovedGuids] = useState<Set<string>>(new Set())
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null)
   const [successInfo, setSuccessInfo] = useState<SuccessInfo | null>(null)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  const pendingRows = rows.filter(r => !r.isApproved && !approvedGuids.has(r.employeeGuid))
-
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(pendingRows, PAGE_SIZE)
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const pageItems = data?.items ?? []
 
   function confirmApprove() {
     if (!confirmTarget) return
-    setApprovedGuids(prev => new Set(prev).add(confirmTarget.employeeGuid))
-    showToast(`${confirmTarget.name} approved`, 'ok')
-    setSuccessInfo({ title: 'Employee Approved!', subtitle: `${confirmTarget.name} now has access as an active employee.` })
+    approveEmployee.mutate(confirmTarget.employeeGuid, {
+      onSuccess: () => setSuccessInfo({ title: 'Employee Approved!', subtitle: `${confirmTarget.name} now has access as an active employee.` }),
+      onError: (error: Error) => showToast(error.message || 'Failed to approve employee', 'error'),
+    })
   }
 
   function closeSuccess() {
@@ -114,8 +114,8 @@ export default function Page() {
                 </div>
                 <div className="modal-footer">
                   <button className="btn btn-neu" onClick={() => setConfirmTarget(null)}>Cancel</button>
-                  <button className="btn btn-primary" onClick={confirmApprove}>
-                    <i className="lni lni-checkmark"></i> Confirm &amp; Approve
+                  <button className="btn btn-primary" disabled={approveEmployee.isPending} onClick={confirmApprove}>
+                    <i className="lni lni-checkmark"></i> {approveEmployee.isPending ? 'Approving…' : 'Confirm & Approve'}
                   </button>
                 </div>
               </>

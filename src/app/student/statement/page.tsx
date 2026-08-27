@@ -9,18 +9,38 @@ import { StudentDto } from '@/lib/api/student/student'
 // Ported from isbat_student_module.html's Student Statement page. Student
 // identity comes from the real student list; the fee ledger itself has no
 // backend contract for this workflow — mock rows only.
-const LEDGER_ROWS = [
-  { date: 'Jan 15, 2024', desc: 'Admission Fee', sem: 'Sem 1', billed: '50,000 UGX', paid: '50,000 UGX', balance: '0', status: 'Cleared' as const },
-  { date: 'Jan 15, 2024', desc: 'Registration Fee', sem: 'Sem 1', billed: '$250', paid: '$250', balance: '0', status: 'Cleared' as const },
-  { date: 'Jan 20, 2024', desc: 'Tuition — Semester 1', sem: 'Sem 1', billed: '$750', paid: '$750', balance: '0', status: 'Cleared' as const },
-  { date: 'Jun 10, 2024', desc: 'Semester Entry Fee', sem: 'Sem 2', billed: '$200', paid: '$200', balance: '0', status: 'Cleared' as const },
-  { date: 'Jun 15, 2024', desc: 'Tuition — Semester 2', sem: 'Sem 2', billed: '$750', paid: '$750', balance: '0', status: 'Cleared' as const },
-  { date: 'Jan 8, 2025', desc: 'Semester Entry Fee', sem: 'Sem 3', billed: '$200', paid: '$200', balance: '0', status: 'Cleared' as const },
-  { date: 'Jan 10, 2025', desc: 'Tuition — Semester 3', sem: 'Sem 3', billed: '$750', paid: '$300', balance: '$450', status: 'Partial' as const, flagged: true },
+interface LedgerRow {
+  paymentDate: string
+  receiptNo: string
+  semester: string
+  ledgerName: string
+  actualAmount: number
+  currency: 'USD' | 'UGX'
+  paidAmount: number
+  balance: number
+}
+
+const LEDGER_ROWS: LedgerRow[] = [
+  { paymentDate: '15 Jan 2024', receiptNo: 'RCT-2024-00142', semester: 'Semester 1', ledgerName: 'Admission Fee',          actualAmount: 50000, currency: 'UGX', paidAmount: 50000, balance: 0 },
+  { paymentDate: '15 Jan 2024', receiptNo: 'RCT-2024-00143', semester: 'Semester 1', ledgerName: 'Registration Fee',       actualAmount: 250,   currency: 'USD', paidAmount: 250,   balance: 0 },
+  { paymentDate: '20 Jan 2024', receiptNo: 'RCT-2024-00151', semester: 'Semester 1', ledgerName: 'Tuition — Semester 1',   actualAmount: 750,   currency: 'USD', paidAmount: 750,   balance: 0 },
+  { paymentDate: '10 Jun 2024', receiptNo: 'RCT-2024-00289', semester: 'Semester 2', ledgerName: 'Semester Entry Fee',     actualAmount: 200,   currency: 'USD', paidAmount: 200,   balance: 0 },
+  { paymentDate: '15 Jun 2024', receiptNo: 'RCT-2024-00291', semester: 'Semester 2', ledgerName: 'Tuition — Semester 2',   actualAmount: 750,   currency: 'USD', paidAmount: 750,   balance: 0 },
+  { paymentDate: '08 Jan 2025', receiptNo: 'RCT-2025-00034', semester: 'Semester 3', ledgerName: 'Semester Entry Fee',     actualAmount: 200,   currency: 'USD', paidAmount: 200,   balance: 0 },
+  { paymentDate: '10 Jan 2025', receiptNo: 'RCT-2025-00041', semester: 'Semester 3', ledgerName: 'Tuition — Semester 3',   actualAmount: 750,   currency: 'USD', paidAmount: 300,   balance: 450 },
 ]
 
-function statusBadge(status: 'Cleared' | 'Partial') {
-  return status === 'Cleared' ? <span className="badge badge-green">Cleared</span> : <span className="badge badge-amber">Partial</span>
+// Sums one field across rows, grouped by currency, formatted as "USD 1,234 +
+// UGX 50,000" — same idea as finance/student-statements' totalOutstanding,
+// since ledger rows here mix USD and UGX and can't be added together as one
+// number.
+function sumByCurrency(rows: LedgerRow[], field: 'actualAmount' | 'paidAmount' | 'balance'): string {
+  const parts: string[] = []
+  for (const currency of ['USD', 'UGX'] as const) {
+    const total = rows.filter(r => r.currency === currency).reduce((sum, r) => sum + r[field], 0)
+    if (total > 0) parts.push(`${currency} ${total.toLocaleString()}`)
+  }
+  return parts.join(' + ') || '—'
 }
 
 export default function Page() {
@@ -29,6 +49,8 @@ export default function Page() {
   const [semester, setSemester] = useState('All Semesters')
   const { data, isFetching } = useStudents(1, 8, { searchTerm: term.trim() || undefined })
   const matches = data?.items ?? []
+
+  const filteredRows = LEDGER_ROWS.filter(r => semester === 'All Semesters' || r.semester === semester)
 
   function handleSelect(guid: string) {
     const found = matches.find(m => m.studentGuid === guid)
@@ -71,23 +93,38 @@ export default function Page() {
         </div>
       ) : (
         <>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }} className="text-xs">
+              <div><span className="text-muted">Reg No: </span><span className="font-bold font-mono text-blue">{student.studentRegNo}</span></div>
+              <div><span className="text-muted">Student Name: </span><span className="font-bold">{student.studentName}</span></div>
+              <div><span className="text-muted">Batch: </span><span className="font-bold">{student.batchCode || '—'}</span></div>
+              <div><span className="text-muted">Programme: </span><span className="font-bold">{student.programName || '—'}</span></div>
+              <div><span className="text-muted">Semester: </span><span className="font-bold">{student.semesterName || '—'}</span></div>
+            </div>
+          </div>
+
           <div className="stats-row">
-            <div className="stat-card"><div className="stat-lbl">Total Billed</div><div className="stat-num" style={{ color: 'var(--b700)' }}>$2,800</div><div className="stat-sub">3 semesters</div></div>
-            <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Paid</div><div className="stat-num" style={{ color: 'var(--green)' }}>$2,350</div><div className="stat-sub up">84% clearance</div></div>
-            <div className="stat-card [--b700:var(--red)] [--b400:#f87171]"><div className="stat-lbl">Outstanding</div><div className="stat-num" style={{ color: 'var(--red)' }}>$450</div><div className="stat-sub warn">Semester 3</div></div>
-            <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]"><div className="stat-lbl">Fee Clearance</div><div className="stat-num" style={{ color: 'var(--amber)' }}>84%</div><div className="stat-sub warn">Below 100%</div></div>
+            <div className="stat-card"><div className="stat-lbl">Total Actual</div><div className="stat-num" style={{ color: 'var(--b700)' }}>{sumByCurrency(filteredRows, 'actualAmount')}</div><div className="stat-sub">{filteredRows.length} entries</div></div>
+            <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Paid</div><div className="stat-num" style={{ color: 'var(--green)' }}>{sumByCurrency(filteredRows, 'paidAmount')}</div><div className="stat-sub up">Across all entries</div></div>
+            <div className="stat-card [--b700:var(--red)] [--b400:#f87171]"><div className="stat-lbl">Outstanding</div><div className="stat-num" style={{ color: 'var(--red)' }}>{sumByCurrency(filteredRows, 'balance')}</div><div className="stat-sub warn">Balance due</div></div>
           </div>
           <div className="card">
-            <div className="card-hdr"><div className="card-title"><i className="lni lni-files"></i> Ledger — {student.studentName}</div><span className="badge badge-amber">$450 Outstanding</span></div>
+            <div className="card-hdr"><div className="card-title"><i className="lni lni-files"></i> Ledger — {student.studentName}</div><span className="badge badge-amber">{sumByCurrency(filteredRows, 'balance')} Outstanding</span></div>
             <ScrollTable>
               <table>
-              <thead><tr><th>Date</th><th>Description</th><th>Semester</th><th>Billed</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead>
+              <thead><tr><th style={{ width: 56 }}>Sl. No</th><th>Payment Date</th><th>Receipt</th><th>Semester</th><th>Ledger Name</th><th>Actual Amount</th><th>Currency</th><th>Paid Amount</th><th>Balance</th></tr></thead>
               <tbody>
-                {LEDGER_ROWS.filter(r => semester === 'All Semesters' || r.sem === semester.replace('Semester ', 'Sem ')).map((r, i) => (
-                  <tr key={i} className={r.flagged ? 'flagged' : undefined}>
-                    <td>{r.date}</td><td>{r.desc}</td><td>{r.sem}</td><td>{r.billed}</td><td>{r.paid}</td>
-                    <td>{r.balance === '0' ? '0' : <strong style={{ color: 'var(--red)' }}>{r.balance}</strong>}</td>
-                    <td>{statusBadge(r.status)}</td>
+                {filteredRows.map((r, i) => (
+                  <tr key={r.receiptNo} className={r.balance > 0 ? 'flagged' : undefined}>
+                    <td className="text-g500">{i + 1}</td>
+                    <td>{r.paymentDate}</td>
+                    <td className="font-mono text-blue">{r.receiptNo}</td>
+                    <td>{r.semester}</td>
+                    <td>{r.ledgerName}</td>
+                    <td>{r.actualAmount.toLocaleString()}</td>
+                    <td>{r.currency}</td>
+                    <td>{r.paidAmount.toLocaleString()}</td>
+                    <td>{r.balance === 0 ? '0' : <strong style={{ color: 'var(--red)' }}>{r.balance.toLocaleString()}</strong>}</td>
                   </tr>
                 ))}
               </tbody>
