@@ -7,9 +7,19 @@ against the dev backend (`erp-dev-alb-...`) via a scripted Playwright pass logge
 in as a real staff account. Anywhere this doc says "confirmed live," that means an
 actual request/response was captured, not just read from the docs.
 
+**Update — 2026-08-27:** Batch Transfer (`/student/batch-transfer`) was wired to
+`students/resume/{guid}/candidate,resume` (see §1 and §3 below). This pass was
+*not* re-verified live against the dev backend the way the original 2026-08-25
+audit was — no fresh Playwright/staff-login pass was run, so those two rows are
+marked "wired, not yet confirmed live" rather than "confirmed live." Student
+Statement's ledger grid and Programme Transfer's New Batch/New Semester/New Fee
+Structure dropdowns were also revisited this pass and confirmed to still have
+no real endpoint anywhere in this folder — they remain mock, noted where
+relevant below rather than re-listing every unchanged page.
+
 ---
 
-## 1. Integrated — 12 of 38 documented endpoints
+## 1. Integrated — 14 of 38 documented endpoints
 
 | Endpoint | API ID | Page(s) | Notes |
 |---|---|---|---|
@@ -25,10 +35,12 @@ actual request/response was captured, not just read from the docs.
 | `POST /api/v1/students/sponsor-categories` | `sponsor-categories.create` | Category Masters → Add | Confirmed live, 201 |
 | `PUT /api/v1/students/sponsor-categories/{guid}` | `sponsor-categories.update` | Category Masters → Edit | Confirmed live, 200 |
 | `DELETE /api/v1/students/sponsor-categories/{guid}` | `sponsor-categories.delete` | Category Masters → Delete | Confirmed live, 200 |
+| `GET /api/v1/students/resume/{guid}/candidate` | `student-resuming.get-candidate` | Batch Transfer (New Semester / New Batch / New Fee Head dropdowns) | Wired, not yet confirmed live — see §3 for why this endpoint backs a page called "Batch Transfer" |
+| `POST /api/v1/students/resume/{guid}/resume` | `student-resuming.resume` | Batch Transfer (Execute Transfer) | Wired, not yet confirmed live — see §3 |
 
 ---
 
-## 2. Pending — 26 of 38 endpoints
+## 2. Pending — 24 of 38 endpoints
 
 Grouped by why, not by folder — the reason varies a lot per group.
 
@@ -65,10 +77,10 @@ Grouped by why, not by folder — the reason varies a lot per group.
 | `GET /students/dropout-rejoin` (list) | |
 | `GET /students/dropout-rejoin/{guid}/candidate` | |
 | `POST /students/dropout-rejoin/{guid}/rejoin` | |
-| `GET /students/resume/{guid}/candidate` | |
-| `POST /students/resume/{guid}/resume` | |
 
-Worth flagging: unlike every other doc in this folder (all of which say *"no page docs reference this yet"*), these five already list **expected frontend routes** — `/students/dropout-rejoin`, `/students/dropout-rejoin/{studentGuid}`, `/students/resume/{studentGuid}`. None of those routes exist in the frontend yet. Read as: the backend is ready and expecting these pages to be built, not documenting something already live. Building these means two new pages plus new sidebar entries, with real conditional logic worth implementing carefully — `canRejoin` eligibility filtering, rejoin's semester restricted to current/current+1 vs. resume's unrestricted semester choice, and resume's fee-clearance gate that can reject the whole action server-side.
+Worth flagging: unlike every other doc in this folder (all of which say *"no page docs reference this yet"*), these three already list an **expected frontend route** — `/students/dropout-rejoin`, `/students/dropout-rejoin/{studentGuid}`. Neither exists in the frontend yet. Read as: the backend is ready and expecting this page to be built, not documenting something already live. Building it means a new page plus a new sidebar entry, with real conditional logic worth implementing carefully — `canRejoin` eligibility filtering, and rejoin's semester restricted to current/current+1 (narrower than resume's unrestricted choice, see §1/§3).
+
+The sibling `resume/{guid}/candidate,resume` pair that used to sit in this table has moved to §1 — it now backs the existing Batch Transfer page (`/student/batch-transfer`) rather than a dedicated Student Resuming screen. See §3 for why, and what that means for the audit trail.
 
 ---
 
@@ -85,6 +97,12 @@ Docs describe it as a "nullable byte flag." Live response returns the string `"Y
 ### `GET /students/sponsor-assignment/{guid}/sponsor-details` returns a real 401, contradicting its own docs
 The docs say "no fine-grained permission beyond being an authenticated user," but the endpoint returned a live `401` on every real student tested, with the message *"You are not authorized to view sponsor details for students in this campus."* This reads as an intentional campus-scoped authorization check that exists on the backend but isn't documented. Frontend now surfaces this as "Restricted" (distinct from "no assignment," which is a `404`) rather than silently misreading it as unassigned — but worth confirming with whoever owns this endpoint whether that 401 is intended for every account, or specific to test accounts used so far.
 
+### `students/resume/*` now backs Batch Transfer, not a dedicated Student Resuming page — audit trail implication
+There is no endpoint anywhere in this folder literally called "batch transfer." Batch Transfer (`/student/batch-transfer`) has been wired to `GET/POST /students/resume/{guid}/candidate,resume` — documented as the "Student Resuming" workflow — because it's the only endpoint that moves *any* student's semester/batch/fee in one call (`dropout-rejoin`'s sibling endpoint only works for `REGSTATUS = 3` students, too narrow). This was a deliberate reuse, not a misread of the docs. Two consequences worth backend awareness:
+- Every transfer executed through this page will write a `T_STUDENT_RESUME` audit row with `REMARKS = 'Resuming Student'` — there is no distinct "batch transfer" event type server-side, so the audit trail won't visually distinguish an actual resuming student from a routine Day↔Evening batch move made through this page.
+- Discount Override, Reason, and Supporting Document — fields the page's UI still shows — are **not** part of this endpoint's payload (`studentGuid` + `newSemesterGuid` + `newBatchGuid` + `newFeeGuid` only) and are not submitted anywhere; they're currently commented out in the page's JSX pending a decision on whether they need a real field to attach to.
+- The page's own Transfer History grid (Transfer Code / Transfer Date / Old Batch / New Batch) has no backing data — there's no GET history endpoint for either `resume` or `dropout-rejoin` anywhere in this folder, so it always renders empty.
+
 ### Route moves already handled, noted for completeness
 Two endpoints moved paths on 2026-08-24 (both already updated on the frontend, no longer an issue):
 - `studentsponsorassignment/...` → `students/sponsor-assignment/...`
@@ -94,4 +112,6 @@ Two endpoints moved paths on 2026-08-24 (both already updated on the frontend, n
 
 ## 4. Summary
 
-**12 endpoints integrated**, all confirmed working live except the sponsor-details 401 above. **26 pending**, split roughly: 4 with no clear frontend need yet, 1 blocked on a mock page getting rebuilt, 2 redundant, 10 needing new-but-buildable UI (smallest: Discount management on Profile), and 5 brand-new (Dropout Rejoin + Student Resuming) that the backend's own docs suggest are the next expected build.
+**14 endpoints integrated** — the original 12, all confirmed working live except the sponsor-details 401 above, plus `students/resume/{guid}/candidate,resume` (wired into Batch Transfer this pass, not yet re-verified live — see the 2026-08-27 update note up top and §3's audit-trail caveat). **24 pending**, split roughly: 4 with no clear frontend need yet, 1 blocked on a mock page getting rebuilt, 2 redundant, 10 needing new-but-buildable UI (smallest: Discount management on Profile), and 3 brand-new (Dropout Rejoin) that the backend's own docs suggest are the next expected build now that Resume has a frontend home.
+
+Still fully mock, unchanged this pass: Student Statement's ledger grid (no ledger/statement endpoint exists anywhere in `students/` — that's finance-service territory), Batch Transfer's Discount Override/Reason/Supporting Document and its Transfer History grid (see §3), and Programme Transfer's New Batch/New Semester/New Fee Structure dropdowns (New Programme itself is real, via the academic module's Programme Master catalog — outside this folder's scope but worth noting since it's a real integration).
