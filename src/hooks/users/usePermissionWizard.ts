@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { usePermissionCatalog, moduleLabel, CatalogPage, CatalogPermission } from './usePermissionCatalog'
+import { usePermissionCatalog, moduleLabel, CatalogModule, CatalogPage, CatalogPermission } from './usePermissionCatalog'
+
+// Stable fallback so `catalog` keeps the same reference across renders while
+// the query is loading/disabled — a fresh `[]` literal in the destructuring
+// default below would otherwise be a NEW array every render, which cascades
+// through permissionsByModule/moduleByPermissionId's useMemos (keyed on
+// `catalog`'s identity) and gave PermissionFormModal's seed effect a new
+// `moduleByPermissionId` reference every render, re-firing it in a loop
+// (setGroupName/setBlocks → re-render → new [] → re-fire…) until React threw
+// "Maximum update depth exceeded".
+const EMPTY_CATALOG: CatalogModule[] = []
 
 export interface ModuleBlock {
   module: string
@@ -30,12 +40,7 @@ function blocksFromPermissionIds(permissionIds: number[], moduleByPermissionId: 
 // likely to trip the refresh/401 race documented in src/lib/api/client.ts
 // and log the user out. See PROJECT_STRUCTURE.md's client.ts notes.
 export function usePermissionWizard(enabled = true) {
-  // Plain `[]` here (not a separately-declared `any[]`-typed constant) so
-  // TypeScript contextually types the default against usePermissionCatalog's
-  // real return type — an explicitly any[]-typed fallback was widening
-  // `catalog` itself to `any`, which cascaded into "Parameter 'sm' implicitly
-  // has an 'any' type" below and failed the build under strict/noImplicitAny.
-  const { data: catalog = [] } = usePermissionCatalog(enabled)
+  const { data: catalog = EMPTY_CATALOG } = usePermissionCatalog(enabled)
 
   // Merge permissions from catalog entries that share the same module.
   const permissionsByModule = useMemo(() => {

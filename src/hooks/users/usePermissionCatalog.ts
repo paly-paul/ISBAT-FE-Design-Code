@@ -18,10 +18,17 @@ export function usePermissionCatalog(enabled = true) {
   })
 }
 
+// Matches the 7 real app modules/rail icons in MENU_ROUTES_REFERENCE.md —
+// updated alongside permissionCatalog.ts's switch away from the old
+// System/Academics/Administration 3-bucket scheme.
 const MODULE_ICONS: Record<string, string> = {
-  System: 'cog',
-  Academics: 'graduation',
-  Administration: 'briefcase',
+  Admission: 'clipboard',
+  Academic: 'graduation',
+  Finance: 'dollar',
+  Student: 'user',
+  Employee: 'briefcase',
+  Config: 'cog',
+  Assessment: 'pencil-alt',
 }
 
 export function moduleIcon(mainModule: string): string {

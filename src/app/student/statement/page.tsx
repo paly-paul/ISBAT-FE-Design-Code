@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { SearchSelect } from '@/components/SearchSelect'
+import { TableSearch } from '@/components/TableSearch'
 import { useStudents } from '@/hooks/student/useStudents'
 import { StudentDto } from '@/lib/api/student/student'
 
@@ -26,8 +27,13 @@ export default function Page() {
   const [term, setTerm] = useState('')
   const [student, setStudent] = useState<StudentDto | null>(null)
   const [semester, setSemester] = useState('All Semesters')
-  const { data } = useStudents(1, 8, { searchTerm: term.trim() || undefined })
+  const { data, isFetching } = useStudents(1, 8, { searchTerm: term.trim() || undefined })
   const matches = data?.items ?? []
+
+  function handleSelect(guid: string) {
+    const found = matches.find(m => m.studentGuid === guid)
+    if (found) setStudent(found)
+  }
 
   return (
     <div className="page active">
@@ -38,28 +44,30 @@ export default function Page() {
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="flex gap-2">
-          <div style={{ position: 'relative', flex: 1 }}>
-            <i className="lni lni-search-alt" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: 'var(--g400)' }}></i>
-            <input className="ctrl" style={{ paddingLeft: 34 }} value={term} onChange={e => setTerm(e.target.value)} placeholder="Search student…" />
-          </div>
+          <TableSearch
+            className="flex-1"
+            value={term}
+            onChange={setTerm}
+            placeholder="Search student…"
+            loading={isFetching}
+            emptyLabel="No students found"
+            results={matches.map(m => ({ id: m.studentGuid, primary: m.studentName, secondary: `${m.studentNum} · ${m.studentRegNo}` }))}
+            onSelect={r => handleSelect(r.id)}
+          />
           <SearchSelect
             style={{ width: 200 }}
             options={['All Semesters', 'Semester 3', 'Semester 2', 'Semester 1']}
             value={semester}
             onChange={setSemester}
           />
-          <button className="btn btn-primary btn-sm" onClick={() => matches[0] && setStudent(matches[0])}>Load</button>
         </div>
-        {term.trim() && matches.length > 0 && !student && (
-          <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 8 }}>{matches.length} match{matches.length !== 1 ? 'es' : ''} — top result: {matches[0].studentName} ({matches[0].studentNum})</div>
-        )}
       </div>
 
       {!student ? (
         <div className="empty">
           <div className="empty-icon"><i className="lni lni-files"></i></div>
           <div className="empty-title">No Student Loaded</div>
-          <div className="empty-sub">Search for a student above and click Load to view their fee ledger.</div>
+          <div className="empty-sub">Search for a student above and pick them from the results to view their fee ledger.</div>
         </div>
       ) : (
         <>

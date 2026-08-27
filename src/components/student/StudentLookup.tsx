@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { TableSearch } from '@/components/TableSearch'
 import { useStudents } from '@/hooks/student/useStudents'
 import { StudentDto } from '@/lib/api/student/student'
 
@@ -15,21 +16,26 @@ interface StudentLookupProps {
 // Transfer, Learning Mode, and Intake Transfer — ported from the
 // isbat_student_module.html mockup's .lookup-shell, but backed by the real
 // student list (useStudents) instead of a hardcoded sample. Typing searches
-// live (same real ?searchTerm= endpoint as Student Master's own search box);
-// "Load Student" takes the top match — same "just click, no typing required"
-// behavior as the mockup's loadXfer()/loadProfileSample(), which defaulted
-// straight to its one sample student when the box was left empty. Here an
-// empty box falls back to the plain unfiltered student list instead, so a
-// bare click still loads a real record.
+// live (same real ?searchTerm= endpoint as Student Master's own search box)
+// and shows the matches in an actual dropdown (TableSearch, same widget
+// Permission Master/Enquiry List etc. use) — picking a row loads that exact
+// student directly.
+//
+// There used to also be a "Load Student" button that loaded matches[0] (the
+// top search result) regardless of which row you'd actually picked from the
+// dropdown — clicking it after selecting a different row silently swapped in
+// whatever currently ranks first for the typed term, which read as "random"
+// data getting loaded. Removed rather than fixed in place, same call as
+// Statement's search bar: the dropdown selection is the only load path now.
 export function StudentLookup({ onLoad, onClear, loaded, placeholder, hint }: StudentLookupProps) {
   const [term, setTerm] = useState('')
   const trimmed = term.trim()
   const { data, isFetching } = useStudents(1, 8, { searchTerm: trimmed || undefined })
   const matches = data?.items ?? []
 
-  function handleLoad() {
-    if (matches.length === 0) return
-    onLoad(matches[0])
+  function handleSelect(id: string) {
+    const found = matches.find(m => m.studentGuid === id)
+    if (found) onLoad(found)
   }
 
   function handleClear() {
@@ -41,27 +47,18 @@ export function StudentLookup({ onLoad, onClear, loaded, placeholder, hint }: St
     <div className="lookup-shell">
       <div className="lookup-label"><i className="lni lni-search-alt"></i> Student Lookup</div>
       <div className="lookup-row">
-        <div className="lookup-wrap">
-          <i className="lni lni-search-alt lookup-icon"></i>
-          <input
-            className="lookup-inp"
-            value={term}
-            onChange={e => setTerm(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleLoad() }}
-            placeholder={placeholder ?? 'Student ID, name, or registration number…'}
-          />
-        </div>
-        <button className="btn btn-primary" onClick={handleLoad}>
-          <i className="lni lni-user"></i> Load Student
-        </button>
+        <TableSearch
+          className="flex-1"
+          value={term}
+          onChange={setTerm}
+          placeholder={placeholder ?? 'Student ID, name, or registration number…'}
+          loading={isFetching}
+          emptyLabel="No students found"
+          results={matches.map(m => ({ id: m.studentGuid, primary: m.studentName, secondary: `${m.studentNum} · ${m.studentRegNo}` }))}
+          onSelect={r => handleSelect(r.id)}
+        />
         {loaded && <button className="btn btn-neu" onClick={handleClear}><i className="lni lni-close"></i> Clear</button>}
       </div>
-      {trimmed && matches.length > 0 && (
-        <div className="lookup-hint"><i className="lni lni-checkmark-circle" style={{ color: 'var(--green)' }}></i> {matches.length} match{matches.length !== 1 ? 'es' : ''} — top result: {matches[0].studentName} ({matches[0].studentNum})</div>
-      )}
-      {trimmed && !isFetching && matches.length === 0 && (
-        <div className="lookup-hint"><i className="lni lni-warning" style={{ color: 'var(--amber)' }}></i> No students found for &quot;{trimmed}&quot;</div>
-      )}
       {hint && !trimmed && <div className="lookup-hint"><i className="lni lni-information" style={{ color: 'var(--b700)' }}></i> {hint}</div>}
     </div>
   )

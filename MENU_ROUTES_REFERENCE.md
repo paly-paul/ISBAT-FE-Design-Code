@@ -2,9 +2,17 @@
 
 Companion doc for the permission-driven sidebar menu API (`GET` response with
 `{ name, icon, url, permissions, children }` nodes). Below is the same JSON
-shape, with `icon` and `url` filled in for every node — regenerated directly
-from the live `src/components/Sidebar.tsx` (the single source of truth for
-what the sidebar actually renders), one top-level module per rail.
+shape, with `icon` and `url` filled in for every node — cross-checked against
+the merged/final tree built in `src/lib/api/users/menu.ts` (mockMenu plus its
+`ensureBulkIntakeEdit` / `ensureProgrammeApproval` / `mergeFinanceSections` /
+`mergeStudentSections` merge functions), the actual `page.tsx` routes on disk
+under `src/app/*`, and `src/components/Sidebar.tsx` (the single source of
+truth for what the sidebar actually renders) for rail ordering/icons. One
+top-level module per rail. Each leaf's `permissions` field reflects the real
+`permissions.xxx` gating found in that page's own code (via
+`usePagePermissions()`), not a placeholder — see
+`docs/PAGE_PERMISSIONS_ACTIONS.md` for the full per-action breakdown this
+doc doesn't attempt to capture.
 
 ## Icon format
 
@@ -21,7 +29,11 @@ not just the LineIcons name — copy it as-is into the `icon` field.
 ## `url` format
 
 Full path from the app root (e.g. `/config/faculty-master`), not a bare
-slug.
+slug. Note `Sidebar.tsx` itself resolves a *bare* slug from the real
+`/me/menu` response against the current rail (`resolveHref`) — the full
+paths below are what this doc and `mockMenu` use, and are equally valid
+since `resolveHref` passes an already-absolute path (starting with `/`)
+through unchanged.
 
 ---
 
@@ -44,42 +56,42 @@ slug.
           "name": "Online Enquiry",
           "icon": "lni lni-display",
           "url": "/admission/online-enquiry",
-          "permissions": {},
+          "permissions": { "add": true },
           "children": []
         },
         {
           "name": "Self-Service Kiosk",
           "icon": "lni lni-tab",
           "url": "/admission/kiosk-enquiry",
-          "permissions": {},
+          "permissions": { "add": true },
           "children": []
         },
         {
           "name": "On-Desk Enquiry",
           "icon": "lni lni-pencil-alt",
           "url": "/admission/ondesk-enquiry",
-          "permissions": {},
+          "permissions": { "add": true },
           "children": []
         },
         {
           "name": "Enquiry List",
           "icon": "lni lni-folder",
           "url": "/admission/enquiry-list",
-          "permissions": {},
+          "permissions": { "add": true, "edit": true },
           "children": []
         },
         {
           "name": "Enquiry Followup Master",
           "icon": "lni lni-calendar",
           "url": "/admission/enquiry-followup-master",
-          "permissions": {},
+          "permissions": { "add": true, "edit": true },
           "children": []
         },
         {
           "name": "Enquiry Followup",
           "icon": "lni lni-phone",
           "url": "/admission/enquiry-followup",
-          "permissions": {},
+          "permissions": { "edit": true },
           "children": []
         }
       ]
@@ -101,14 +113,14 @@ slug.
           "name": "Application Payment",
           "icon": "lni lni-credit-cards",
           "url": "/admission/payment",
-          "permissions": {},
+          "permissions": { "add": true },
           "children": []
         },
         {
           "name": "Application Filing",
           "icon": "lni lni-pencil-alt",
           "url": "/admission/filing",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true },
           "children": []
         },
         {
@@ -163,6 +175,12 @@ slug.
 > `Receipts` and `Reports` are real sidebar links with **no page behind them
 > yet** — they'll 404 until built. Keep `url: null` until then.
 
+> Application Filing's `delete` gate is scoped to removing a *saved
+> qualification row* mid-form (`permissions.delete` on
+> `handleDeleteQualRow`), not the application record itself — `add` covers
+> saving qualification rows, the general info step, the photo upload, and
+> final submission.
+
 ---
 
 ## Academic
@@ -203,24 +221,31 @@ slug.
           "children": []
         },
         {
+          "name": "Bulk Intake Edit",
+          "icon": "lni lni-layers",
+          "url": "/academic/bulk-intake-edit",
+          "permissions": {},
+          "children": []
+        },
+        {
           "name": "Skill Management",
           "icon": "lni lni-bulb",
           "url": "/academic/skill-master",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Batch Management",
           "icon": "lni lni-users",
           "url": "/academic/batch-management",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Room Management",
           "icon": "lni lni-home",
           "url": "/academic/room-management",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
@@ -242,7 +267,7 @@ slug.
           "name": "Repetition Tag",
           "icon": "lni lni-reload",
           "url": "/academic/repetition-tag",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
@@ -282,10 +307,17 @@ slug.
           "children": []
         },
         {
+          "name": "Programme Approval",
+          "icon": "lni lni-check-box",
+          "url": "/academic/programme-approval",
+          "permissions": { "delete": true, "edit": true },
+          "children": []
+        },
+        {
           "name": "Fee Structure",
           "icon": "lni lni-dollar",
           "url": "/academic/fee-structure",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         }
       ]
@@ -351,11 +383,20 @@ slug.
 > Lecturer Master was a placeholder that was never actually implemented and
 > has been dropped.
 
+> `Programme Approval`'s `edit` gate actually controls an **Approve** button
+> (`handleApprove`), not a field-edit form — there is no `add` action on this
+> page (it's an approval queue over records created in Programme Master), so
+> `add` is intentionally omitted rather than set `false`.
+
+> Several pages above (`Skill Management`, `Batch Management`, `Room
+> Management`, `Repetition Tag`, `Programme Group`, `Fee Structure`) were
+> previously listed with `permissions: {}` in this doc — corrected here after
+> re-reading each `page.tsx`; all six do gate Add/Edit/Delete via
+> `usePagePermissions()`, they just weren't reflected accurately before.
+
 ---
 
 ## Finance
-
-New module/rail — had no entry in the previous version of this doc.
 
 ```json
 {
@@ -364,6 +405,78 @@ New module/rail — had no entry in the previous version of this doc.
   "url": null,
   "permissions": null,
   "children": [
+    {
+      "name": "Payment Collection",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Dashboard",
+          "icon": "lni lni-dashboard",
+          "url": "/finance/dashboard",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Payment Console",
+          "icon": "lni lni-credit-cards",
+          "url": "/finance/payment-console",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Payment History",
+          "icon": "lni lni-bar-chart",
+          "url": "/finance/payment-history",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Ledger Adjustments",
+          "icon": "lni lni-lock",
+          "url": "/finance/ledger-adjustments",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Exchange Rates",
+          "icon": "lni lni-world",
+          "url": "/finance/exchange-rates",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Advanced Payments",
+          "icon": "lni lni-wallet",
+          "url": "/finance/advanced-payments",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Reports & Statements",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Financial Reports",
+          "icon": "lni lni-bar-chart",
+          "url": "/finance/financial-reports",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Student Statements",
+          "icon": "lni lni-files",
+          "url": "/finance/student-statements",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    },
     {
       "name": "Finance Core",
       "icon": null,
@@ -374,42 +487,42 @@ New module/rail — had no entry in the previous version of this doc.
           "name": "Cooperates",
           "icon": "lni lni-handshake",
           "url": "/finance/cooperates",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Discounts",
           "icon": "lni lni-tag",
           "url": "/finance/discounts",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Ledgers",
           "icon": "lni lni-book",
           "url": "/finance/ledgers",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Currency Master",
           "icon": "lni lni-dollar",
           "url": "/finance/currency-master",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Receipt Books",
           "icon": "lni lni-ticket",
           "url": "/finance/receipt-books",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "General Settings",
           "icon": "lni lni-cog",
           "url": "/finance/gen-sets",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         }
       ]
@@ -424,28 +537,28 @@ New module/rail — had no entry in the previous version of this doc.
           "name": "Banks",
           "icon": "lni lni-coin",
           "url": "/finance/banks",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Bank Branches",
           "icon": "lni lni-map-marker",
           "url": "/finance/bank-branches",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Proc Banks",
           "icon": "lni lni-wallet",
           "url": "/finance/proc-banks",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Proc GL Accounts",
           "icon": "lni lni-calculator",
           "url": "/finance/proc-gl-accounts",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         }
       ]
@@ -454,11 +567,19 @@ New module/rail — had no entry in the previous version of this doc.
 }
 ```
 
+> `Payment Collection` and `Reports & Statements` are new sections, ported
+> from `isbat_student_module.html`'s sibling Finance mockup — all 8 pages are
+> mock/static (no backend permission entries exist for this workflow yet),
+> forced into the real menu tree by `mergeFinanceSections()` in `menu.ts`.
+> None of the 8 gate on `permissions.xxx` in code, hence `{}` throughout.
+
+> `Finance Core` and `Banking` were previously listed with `permissions: {}`
+> in this doc — corrected here; all 10 pages do gate Add/Edit/Delete via
+> `usePagePermissions()`.
+
 ---
 
 ## Student
-
-New module/rail — had no entry in the previous version of this doc.
 
 ```json
 {
@@ -479,12 +600,129 @@ New module/rail — had no entry in the previous version of this doc.
           "url": "/student/student-master",
           "permissions": {},
           "children": []
+        },
+        {
+          "name": "Batch Summary",
+          "icon": "lni lni-grid-alt",
+          "url": "/student/batch-summary",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Student Statement",
+          "icon": "lni lni-files",
+          "url": "/student/statement",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Operations",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Student Profile",
+          "icon": "lni lni-user",
+          "url": "/student/profile",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Batch Transfer",
+          "icon": "lni lni-transfer",
+          "url": "/student/batch-transfer",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Programme Transfer",
+          "icon": "lni lni-graduation",
+          "url": "/student/prog-transfer",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Learning Mode",
+          "icon": "lni lni-display",
+          "url": "/student/learning-mode",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Intake Transfer",
+          "icon": "lni lni-calendar",
+          "url": "/student/intake-transfer",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Services",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Student Services",
+          "icon": "lni lni-ticket",
+          "url": "/student/services",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Communications",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Send Communication",
+          "icon": "lni lni-envelope",
+          "url": "/student/communications",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Settings",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Category Masters",
+          "icon": "lni lni-list",
+          "url": "/student/masters",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Specialization Management",
+          "icon": "lni lni-graduation",
+          "url": "/student/specialization",
+          "permissions": {},
+          "children": []
         }
       ]
     }
   ]
 }
 ```
+
+> `Operations`, `Services`, `Communications` and `Settings` are new sections,
+> ported from `isbat_student_module.html` — all mock/static (no backend
+> permission entries exist for this workflow yet), forced into the real menu
+> tree by `mergeStudentSections()` in `menu.ts`. `Batch Summary` and `Student
+> Statement` extend the existing `Student Records` section rather than
+> getting their own. None of these 9 pages gate on `permissions.xxx` in code
+> (all `{}`) — this is the least permission-aware module in the app today.
 
 ---
 
@@ -507,7 +745,7 @@ New module/rail — had no entry in the previous version of this doc.
           "name": "Employee Master",
           "icon": "lni lni-user",
           "url": "/employee/employee-master",
-          "permissions": { "add": true, "approve": true, "delete": true, "edit": true, "get": true },
+          "permissions": { "add": true, "assign": true, "edit": true, "get": true },
           "children": []
         }
       ]
@@ -515,6 +753,13 @@ New module/rail — had no entry in the previous version of this doc.
   ]
 }
 ```
+
+> Corrected from a previous `"approve"` key — the code's actual custom flag
+> is `permissions.assign` (`const canAssignPermissions = permissions.assign
+> ?? permissions.edit`, gating the row's "Assign Permissions" / "Edit
+> Permissions" actions). There is no `delete` action on this page at all
+> (employees can't be deleted from the UI today), so `delete` is omitted
+> rather than set `false`.
 
 ---
 
@@ -547,28 +792,28 @@ Previously scattered under "Academics" (Faculty Master only) and
           "name": "Department Master",
           "icon": "lni lni-briefcase",
           "url": "/config/department-master",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Designation Master",
           "icon": "lni lni-tag",
           "url": "/config/designation-master",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Campus Master",
           "icon": "lni lni-home",
           "url": "/config/campus-master",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Country Master",
           "icon": "lni lni-world",
           "url": "/config/country-master",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         }
       ]
@@ -583,42 +828,42 @@ Previously scattered under "Academics" (Faculty Master only) and
           "name": "Specialization",
           "icon": "lni lni-certificate",
           "url": "/config/specialization",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Skill Master",
           "icon": "lni lni-bulb",
           "url": "/config/skill",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Unit Type Master",
           "icon": "lni lni-tag",
           "url": "/config/unit-type",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Unit Category Master",
           "icon": "lni lni-tag",
           "url": "/config/unit-category",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Weekdays",
           "icon": "lni lni-calendar",
           "url": "/config/weekdays",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Batch Times",
           "icon": "lni lni-timer",
           "url": "/config/batch-times",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         }
       ]
@@ -633,42 +878,42 @@ Previously scattered under "Academics" (Faculty Master only) and
           "name": "Enquiry Status",
           "icon": "lni lni-flag",
           "url": "/config/enquiry-status",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Isbat Enquiry Source",
           "icon": "lni lni-compass",
           "url": "/config/enquiry-source",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Enquiry Source",
           "icon": "lni lni-volume",
           "url": "/config/enquiry-source-master",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Followup Status",
           "icon": "lni lni-phone",
           "url": "/config/followup-status",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Followup Mode",
           "icon": "lni lni-comments",
           "url": "/config/followup-mode",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
         {
           "name": "Interest Level",
           "icon": "lni lni-signal",
           "url": "/config/interest-level",
-          "permissions": {},
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         }
       ]
@@ -683,7 +928,7 @@ Previously scattered under "Academics" (Faculty Master only) and
           "name": "Permission Master",
           "icon": "lni lni-lock",
           "url": "/config/permission-master",
-          "permissions": { "add": true, "assign": true, "delete": true, "edit": true, "get": true },
+          "permissions": { "add": true, "edit": true, "get": true },
           "children": []
         }
       ]
@@ -697,23 +942,323 @@ Previously scattered under "Academics" (Faculty Master only) and
 > different backend resources** with their own guid spaces — not a typo,
 > don't merge them.
 
+> Every master under `Organization`, `Academic Setup` and `Admissions` was
+> previously listed with `permissions: {}` in this doc except Faculty
+> Master — corrected here after re-reading each `page.tsx`; all of them gate
+> Add/Edit/Delete via `usePagePermissions()`, identically to Faculty Master.
+> `Permission Master` is corrected from a previous `{ add, assign, delete,
+> edit, get }` set — the code only gates `add` and `edit` (no `assign`, no
+> `delete` action exists on this page at all).
+
+---
+
+## Assessment
+
+New module/rail — had no entry in the previous version of this doc. Mirrors
+`ASSESSMENT_SECTIONS` in `menu.ts`. None of its 21 pages gate on
+`permissions.xxx` in code yet (all `{}`) — it's the newest module in the app.
+
+```json
+{
+  "name": "Assessment",
+  "icon": "lni lni-pencil-alt",
+  "url": null,
+  "permissions": null,
+  "children": [
+    {
+      "name": "Overview",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Assessment Dashboard",
+          "icon": "lni lni-dashboard",
+          "url": "/assessment/dashboard",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Assessment Structure",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Weight Configuration",
+          "icon": "lni lni-cog",
+          "url": "/assessment/weight-config",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Assessment Schedule",
+          "icon": "lni lni-calendar",
+          "url": "/assessment/schedule",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Coursework (CW)",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "CW Overview",
+          "icon": "lni lni-folder",
+          "url": "/assessment/cw-overview",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Question Bank Upload",
+          "icon": "lni lni-upload",
+          "url": "/assessment/cw-qbank",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "CW Submissions",
+          "icon": "lni lni-files",
+          "url": "/assessment/cw-submissions",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "CW Rectification",
+          "icon": "lni lni-reload",
+          "url": "/assessment/cw-rectify",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Class Test (CBT)",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "CBT Overview",
+          "icon": "lni lni-folder",
+          "url": "/assessment/cbt-overview",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "CBT Schedule",
+          "icon": "lni lni-calendar",
+          "url": "/assessment/cbt-schedule",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "CBT Question Upload",
+          "icon": "lni lni-upload",
+          "url": "/assessment/cbt-qupload",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "CBT Monitor",
+          "icon": "lni lni-display",
+          "url": "/assessment/cbt-monitor",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "University Exam (UE)",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "UE Schedule",
+          "icon": "lni lni-calendar",
+          "url": "/assessment/ue-schedule",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "QP Upload & Vetting",
+          "icon": "lni lni-upload",
+          "url": "/assessment/qp-vetting",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Hall Ticket Issuance",
+          "icon": "lni lni-ticket",
+          "url": "/assessment/hall-ticket",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Hall Ticket Print",
+          "icon": "lni lni-printer",
+          "url": "/assessment/hall-print",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Mark Entry & Results",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Mark Entry — CW",
+          "icon": "lni lni-pencil-alt",
+          "url": "/assessment/mark-cw",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Mark Entry — CBT",
+          "icon": "lni lni-pencil-alt",
+          "url": "/assessment/mark-cbt",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Mark Entry — UE",
+          "icon": "lni lni-pencil-alt",
+          "url": "/assessment/mark-ue",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Result & Moderation",
+          "icon": "lni lni-bar-chart",
+          "url": "/assessment/moderation",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Resit & Disputes",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Resit Calendar",
+          "icon": "lni lni-calendar",
+          "url": "/assessment/resit-calendar",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Resit Seating Allocator",
+          "icon": "lni lni-users",
+          "url": "/assessment/resit-seating",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "CW Reevaluation",
+          "icon": "lni lni-reload",
+          "url": "/assessment/reeval",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "CW Recheck Hub",
+          "icon": "lni lni-search-alt",
+          "url": "/assessment/recheck",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Pending QP Upload",
+          "icon": "lni lni-folder",
+          "url": "/assessment/rpt-pending-qp",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Faculty Summary",
+          "icon": "lni lni-users",
+          "url": "/assessment/rpt-faculty",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## Pages with no sidebar/menu entry yet
+
+These `page.tsx` routes exist on disk and work — they're just not reachable
+from any menu node in `menu.ts` today, so the backend doesn't need to model
+menu permissions for them yet. Most are reached only via an in-app button/nav
+call rather than the sidebar; a couple (`enquiry-form`) appear to be dead
+routes with no inbound navigation left in the codebase at all.
+
+| Page | Route | Notes |
+|---|---|---|
+| Applicant Profile | `/admission/applicant-profile` | Read-only profile view opened from `VettingReviewModal` / `CompleteRegistrationModal` via `applicantProfileHref()` — never a sidebar link. |
+| Enquiry Form | `/admission/enquiry-form` | Standalone enquiry form; `enquiry-list` opens a modal (`enquiry-form-modal`) instead. No other page links here — appears orphaned. |
+| Allocation | `/academic/allocation` | Reached via Skill Management's "Proceed to Allocation" button (`nav('allocation')`), not the sidebar. |
+| Academic Access Gate | `/academic/access-gate` | Cross-module reference page (fee-payment access rules); not linked from the sidebar or any button found. |
+| Class Test (legacy) | `/academic/class-test` | Superseded by the Assessment module's CBT pages (`/assessment/cbt-*`); no inbound nav found. |
+| Coursework (legacy) | `/academic/coursework` | Superseded by the Assessment module's CW pages (`/assessment/cw-*`); no inbound nav found. |
+| Fee Clearance | `/academic/fee-clearance` | Standalone "Check Clearance" utility page; no inbound nav found. |
+| Grievance Management | `/academic/grievance` | Placeholder — "Module Not Yet Defined" per the page's own copy; no inbound nav. |
+| Qualification Equating | `/academic/qual-equating` | Standalone equating-request page; no inbound nav found. |
+| Results | `/academic/results` | Placeholder — page states this functionality is "owned by the Assessment Module" and pending a KT session. |
+| University Exam (legacy) | `/academic/university-exam` | Superseded by the Assessment module's UE pages (`/assessment/ue-*`); no inbound nav found. |
+| ODeL Student Preview | `/academic/odel-student-preview` | Reached via `nav('acad-dashboard')`/back-link only; not linked *to* from anywhere found — appears to be a preview/demo page. |
+
 ---
 
 ## Planned / not yet implemented (rail-level, still `locked` in the UI)
 
 These correspond to greyed-out, non-clickable rail icons in `Sidebar.tsx` —
 no routes exist for them yet. Listed here for awareness, not as menu nodes
-to return from the API today.
+to return from the API today. (Assessment previously appeared here in an
+earlier draft of this doc — it now has a real rail slot and 21 working
+pages, so it's been moved into the module list above and removed from this
+table. The "Admin / User & Role" placeholder that used to sit here has been
+commented out of `Sidebar.tsx` entirely, not just hidden, so it's dropped
+from this table too — it may come back if a real backend-driven module
+takes its place.)
 
 | Item | Rail icon |
 |---|---|
 | Attendance | `lni lni-alarm-clock` |
 | Analytics | `lni lni-bar-chart` |
-| Admin / User & Role (would house Roles, Menu, Audit Log) | `lni lni-cog` |
 
 ---
 
 ## Rail (top-level module) icons
+
+Listed in the actual left-to-right/top-to-bottom order rendered in
+`Sidebar.tsx` (the two locked placeholders above sit between Student and
+Employee in that render order).
 
 | Rail | Icon class |
 |---|---|
@@ -721,5 +1266,8 @@ to return from the API today.
 | Academic | `lni lni-graduation` |
 | Finance | `lni lni-dollar` |
 | Student | `lni lni-user` |
+| *(Attendance — locked placeholder)* | `lni lni-alarm-clock` |
+| *(Analytics — locked placeholder)* | `lni lni-bar-chart` |
 | Employee | `lni lni-briefcase` |
+| Assessment | `lni lni-pencil-alt` |
 | Config | `lni lni-cog` |

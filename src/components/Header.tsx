@@ -207,6 +207,13 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
                 </div>
                 <div className="profile-dropdown-divider" />
                 <button
+                  className="profile-dropdown-link"
+                  onClick={() => { setProfileOpen(false); router.push('/profile') }}
+                >
+                  <i className="lni lni-user"></i> Profile
+                </button>
+                <div className="profile-dropdown-divider" />
+                <button
                   className="profile-dropdown-signout"
                   onClick={handleSignOut}
                   disabled={signingOut}
