@@ -14,7 +14,7 @@ export interface EmployeeListItem {
   isApproved: boolean
 }
 
-interface EmployeeListResponse {
+export interface EmployeeListResponse {
   items: EmployeeListItem[]
   totalCount: number
   pageNumber: number
@@ -105,6 +105,23 @@ export function getEmployees(page = 1, pageSize = 10, search = ''): Promise<Empl
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (q) params.set('search', q)
   return apiGet<EmployeeListResponse | null>(`/api/v1/users/employees?${params}`).then(data => data?.items ?? [])
+}
+
+// Fetch the employee list scoped to pending approvals, for Employee
+// Approvals' own list (see employee-approve/page.tsx) — hits the same list
+// endpoint as getEmployees but with the server's own ?isApproved=false
+// filter and real pageNumber/pageSize pagination, instead of loading
+// getEmployees' full 1000-row cache and filtering/paginating client-side.
+// Confirmed query shape: ?pageNumber=1&pageSize=10&isApproved=false.
+export function getPendingEmployees(pageNumber = 1, pageSize = 10): Promise<EmployeeListResponse> {
+  if (MOCK_AUTH) {
+    const pending = mockEmployees.filter(e => !e.isApproved)
+    const items = pending.slice((pageNumber - 1) * pageSize, pageNumber * pageSize)
+    return Promise.resolve({ items, totalCount: pending.length, pageNumber, pageSize })
+  }
+  const params = new URLSearchParams({ pageNumber: String(pageNumber), pageSize: String(pageSize), isApproved: 'false' })
+  return apiGet<EmployeeListResponse | null>(`/api/v1/users/employees?${params}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }
 
 // Fetch the full employee record for the edit form.
@@ -251,4 +268,18 @@ export function updateEmployee(id: string, input: CreateEmployeeInput): Promise<
     return Promise.resolve(employee)
   }
   return apiPut<Employee>(`/api/v1/users/employees/${id}`, input)
+}
+
+// Approve a pending employee — Employee Approvals' own Approve action (see
+// employee-approve/page.tsx). Separate from updateEmployee since this
+// dedicated endpoint doesn't need the full CreateEmployeeInput payload the
+// generic update route requires.
+export function approveEmployee(employeeGuid: string): Promise<void> {
+  if (MOCK_AUTH) {
+    const listItem = mockEmployees.find(e => e.employeeGuid === employeeGuid)
+    if (!listItem) return Promise.reject(new Error('Employee not found'))
+    listItem.isApproved = true
+    return Promise.resolve()
+  }
+  return apiPost<void>(`/api/v1/users/employees/${employeeGuid}/approve`, {})
 }

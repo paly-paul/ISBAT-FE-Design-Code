@@ -1,29 +1,49 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
+import { ScrollTable } from '@/components/ScrollTable'
+import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
+import { useCampusDropdown } from '@/hooks/config/useCampuses'
+import { useBatchSummary } from '@/hooks/academic/useBatchSummary'
 
-// Ported from isbat_student_module.html's Batch Summary page. No backend
-// contract exists for this per-batch status breakdown — mock data only. The
-// stat tiles are the mockup's own university-wide aggregate figures (8
-// batches, 247 students total) — deliberately not derived from BATCHES
-// below, which is only the 3 example cards the mockup actually renders, a
-// representative subset rather than the full batch list.
+// Ported from isbat_student_module.html's Batch Summary page. Campus
+// dropdown loads from GET /academic/campus/dropdown on mount
+// (useCampusDropdown, same source Campus Master/Faculty Master use). The
+// grid itself comes from GET /academic/batch-summary — no campusGuid for the
+// unfiltered "All Campuses" view, ?campusGuid={guid} once one's selected —
+// see getBatchSummary in lib/api/academic/batchSummary.ts for the field-name
+// caveat (names aren't confirmed against a real response yet).
 const STATS = { totalBatches: 8, totalStudents: 247, fullBatches: 3, avgBatchSize: 31 }
 
-const BATCHES = [
-  { name: 'BSc.IT-2024A · BSc. Information Technology', sub: 'Spring 2024 · Day Mode · Sem 3 current', total: 52, active: 42, ytr: 5, ytc: 2, dropout: 3 },
-  { name: 'BBA-2024A · Bachelor of Business Admin.', sub: 'Spring 2024 · Day Mode · Sem 3 current', total: 48, active: 38, ytr: 6, ytc: 1, dropout: 3 },
-  { name: 'BSc.IT-2025A · BSc. Information Technology', sub: 'Spring 2025 · Day Mode · Sem 1 current', total: 37, active: 34, ytr: 2, ytc: 0, dropout: 1 },
-]
+const PAGE_SIZE = 10
 
 export default function Page() {
   const [intake, setIntake] = useState('Spring 2026')
+  const [campusGuid, setCampusGuid] = useState('')
+  const { data: campuses = [] } = useCampusDropdown()
+  const { data: rows = [], isLoading } = useBatchSummary(campusGuid || null)
+
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
+
+  // Land back on page 1 whenever the campus filter changes — the previous
+  // page offset almost never lands on a valid page of the newly-filtered set.
+  useEffect(() => { setPage(1) }, [campusGuid, setPage])
 
   return (
     <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Batch Summary</div><div className="pg-sub">Student counts and status breakdown by batch</div></div>
         <div className="flex gap-2">
+          <SearchSelect
+            style={{ width: 200 }}
+            placeholder="All Campuses"
+            options={campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))}
+            value={campusGuid}
+            onChange={setCampusGuid}
+          />
           <SearchSelect
             style={{ width: 200 }}
             options={['Spring 2026', 'Fall 2025', 'Spring 2025']}
@@ -41,20 +61,42 @@ export default function Page() {
         <div className="stat-card"><div className="stat-lbl">Avg Batch Size</div><div className="stat-num">{STATS.avgBatchSize}</div><div className="stat-sub">students / batch</div></div>
       </div>
 
-      {BATCHES.map(b => (
-        <div className="batch-card" key={b.name}>
-          <div className="batch-hdr">
-            <div><div className="batch-hdr-name">{b.name}</div><div className="batch-hdr-sub">{b.sub}</div></div>
-            <span className="batch-hdr-cnt">{b.total} students</span>
-          </div>
-          <div className="batch-body">
-            <div className="batch-stat"><div className="batch-num" style={{ color: 'var(--green)' }}>{b.active}</div><div className="batch-lbl">Active</div></div>
-            <div className="batch-stat"><div className="batch-num" style={{ color: 'var(--amber)' }}>{b.ytr}</div><div className="batch-lbl">YTR</div></div>
-            <div className="batch-stat"><div className="batch-num" style={{ color: 'var(--cyan)' }}>{b.ytc}</div><div className="batch-lbl">YTC</div></div>
-            <div className="batch-stat"><div className="batch-num" style={{ color: 'var(--red)' }}>{b.dropout}</div><div className="batch-lbl">Dropout</div></div>
-          </div>
+      <div className="card">
+        <div className="card-hdr">
+          <div className="card-title"><span className="ctitle-icon"><i className="lni lni-users"></i></span> Batches{campusGuid ? ` · ${campuses.find(c => c.campusGuid === campusGuid)?.campusName ?? ''}` : ''}</div>
         </div>
-      ))}
+        <ScrollTable>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 56 }}>Sl. No</th>
+                <th>Batch</th>
+                <th>Programme</th>
+                <th>Semester</th>
+                <th>Faculty</th>
+                <th>Head Count</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading
+                ? <TableLoadingState colSpan={6} />
+                : pageItems.length === 0
+                  ? <EmptyState colSpan={6} hasFilters={!!campusGuid} onClearFilters={() => setCampusGuid('')} />
+                  : pageItems.map((r, i) => (
+                    <tr key={r.batchGuid}>
+                      <td className="text-g500">{(page - 1) * PAGE_SIZE + i + 1}</td>
+                      <td><span className="font-bold font-mono text-blue">{r.batchCode}</span></td>
+                      <td>{r.programName}</td>
+                      <td>{r.semesterName}</td>
+                      <td>{r.facultyName}</td>
+                      <td>{r.headCount}</td>
+                    </tr>
+                  ))}
+            </tbody>
+          </table>
+        </ScrollTable>
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="batches" onPageChange={setPage} />
+      </div>
     </div>
   )
 }
