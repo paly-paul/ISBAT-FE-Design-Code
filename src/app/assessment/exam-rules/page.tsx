@@ -34,6 +34,9 @@ export default function ExamRulesPage() {
   // Client-side pagination over the fetched batch
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, DISPLAY_PAGE_SIZE)
 
+  // Dynamically calculate max sections across current page items to generate columns (minimum 3: A, B, C)
+  const maxSectionsCount = Math.max(3, ...pageItems.map(r => r.sections?.length || 0))
+
   function showToast(msg: string, type = '') {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3500)
@@ -117,28 +120,23 @@ export default function ExamRulesPage() {
                 <th style={{ width: 48 }}></th>
                 <th>Code</th>
                 <th>Name</th>
-                <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. A<br/>Max Qns</th>
-                <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. A<br/>Marks/Qn</th>
-                <th style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. A<br/>Type</th>
-                <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. B<br/>Max Qns</th>
-                <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. B<br/>Marks/Qn</th>
-                <th style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. B<br/>Type</th>
-                <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. C<br/>Max Qns</th>
-                <th className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. C<br/>Marks/Qn</th>
-                <th style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. C<br/>Type</th>
+                {Array.from({ length: maxSectionsCount }).flatMap((_, i) => {
+                  const secChar = String.fromCharCode(65 + i)
+                  return [
+                    <th key={`sec-${secChar}-max`} className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. {secChar}<br/>Max Qns</th>,
+                    <th key={`sec-${secChar}-mark`} className="text-right" style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. {secChar}<br/>Marks/Qn</th>,
+                    <th key={`sec-${secChar}-type`} style={{ whiteSpace: 'normal', minWidth: 100 }}>Sec. {secChar}<br/>Type</th>
+                  ]
+                })}
               </tr>
             </thead>
             <tbody>
               {loading
-                ? <TableLoadingState colSpan={12} />
+                ? <TableLoadingState colSpan={3 + (maxSectionsCount * 3)} />
                 : pageItems.length === 0
-                  ? <EmptyState colSpan={12} hasFilters={!!search} onClearFilters={() => setSearch('')} />
+                  ? <EmptyState colSpan={3 + (maxSectionsCount * 3)} hasFilters={!!search} onClearFilters={() => setSearch('')} />
                   : null}
               {pageItems.map(r => {
-                const secA = r.sections?.[0] || (r as any).sectionA
-                const secB = r.sections?.[1] || (r as any).sectionB
-                const secC = r.sections?.[2] || (r as any).sectionC
-                
                 const getTypeLabel = (t: number | null | undefined) => {
                   if (t === 1) return 'MCQ'
                   if (t === 2) return 'DQ'
@@ -162,15 +160,15 @@ export default function ExamRulesPage() {
                     </td>
                     <td className="font-mono text-sm">{r.ruleCode}</td>
                     <td className="font-medium">{r.ruleName}</td>
-                    <td className="text-right">{secA?.attemptQuestions || 0}</td>
-                    <td className="text-right">{secA?.mark || 0}</td>
-                    <td>{getTypeLabel(secA?.type)}</td>
-                    <td className="text-right">{secB?.attemptQuestions || 0}</td>
-                    <td className="text-right">{secB?.mark || 0}</td>
-                    <td>{getTypeLabel(secB?.type)}</td>
-                    <td className="text-right">{secC?.attemptQuestions || 0}</td>
-                    <td className="text-right">{secC?.mark || 0}</td>
-                    <td>{getTypeLabel(secC?.type)}</td>
+                    {Array.from({ length: maxSectionsCount }).flatMap((_, i) => {
+                      const sec = r.sections?.[i] || (i === 0 ? (r as any).sectionA : i === 1 ? (r as any).sectionB : i === 2 ? (r as any).sectionC : undefined)
+                      const secChar = String.fromCharCode(65 + i)
+                      return [
+                        <td key={`val-${secChar}-max`} className="text-right">{sec?.attemptQuestions || 0}</td>,
+                        <td key={`val-${secChar}-mark`} className="text-right">{sec?.mark || 0}</td>,
+                        <td key={`val-${secChar}-type`}>{getTypeLabel(sec?.type)}</td>
+                      ]
+                    })}
                   </tr>
                 )
               })}
