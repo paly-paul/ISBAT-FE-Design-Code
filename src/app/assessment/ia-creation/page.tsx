@@ -200,31 +200,30 @@ export default function IaCreationPage() {
         {!is404 && (
           <ScrollTable>
             <table>
-              <thead>
-                <tr>
-                  <th className="w-12 text-center"></th>
-                  <th>Unit Code</th>
-                  <th>Unit Name</th>
-                  <th className="text-right border-l border-slate-200" style={{ whiteSpace: 'normal', minWidth: 90 }}>
-                    Course Work<br />
-                    <span className="text-xs font-normal opacity-70">Max 15</span>
-                  </th>
-                  <th className="text-right" style={{ minWidth: 90 }}>CW Start</th>
-                  <th className="text-right" style={{ minWidth: 90 }}>CW End</th>
-                  <th className="text-right border-l border-slate-200" style={{ whiteSpace: 'normal', minWidth: 90 }}>
-                    Class Test<br />
-                    <span className="text-xs font-normal opacity-70">Max 15</span>
-                  </th>
-                  <th className="text-right" style={{ minWidth: 90 }}>CT Start</th>
-                  <th className="text-right" style={{ minWidth: 90 }}>CT End</th>
-                  <th className="text-right border-l border-slate-200" style={{ whiteSpace: 'normal', minWidth: 90 }}>
-                    Uni. Exam<br />
-                    <span className="text-xs font-normal opacity-70">Max 70</span>
-                  </th>
-                  <th className="text-right" style={{ minWidth: 90 }}>Exam Start</th>
-                  <th className="text-right" style={{ minWidth: 90 }}>Exam End</th>
-                </tr>
-              </thead>
+              {canRefresh && structureRows && structureRows.length > 0 && (
+                <thead>
+                  <tr>
+                    <th className="w-12 text-center"></th>
+                    <th>Unit Code</th>
+                    <th>Unit Name</th>
+                    <th className="text-right border-l border-slate-200" style={{ minWidth: 90 }}>
+                      Course Work
+                    </th>
+                    <th className="text-right" style={{ minWidth: 90 }}>CW Start</th>
+                    <th className="text-right" style={{ minWidth: 90 }}>CW End</th>
+                    <th className="text-right border-l border-slate-200" style={{ minWidth: 90 }}>
+                      Class Test
+                    </th>
+                    <th className="text-right" style={{ minWidth: 90 }}>CT Start</th>
+                    <th className="text-right" style={{ minWidth: 90 }}>CT End</th>
+                    <th className="text-right border-l border-slate-200" style={{ minWidth: 90 }}>
+                      Uni. Exam
+                    </th>
+                    <th className="text-right" style={{ minWidth: 90 }}>Exam Start</th>
+                    <th className="text-right" style={{ minWidth: 90 }}>Exam End</th>
+                  </tr>
+                </thead>
+              )}
               <tbody>
                 {structureLoading ? (
                   <TableLoadingState colSpan={12} />
@@ -241,7 +240,7 @@ export default function IaCreationPage() {
                   <EmptyState
                     colSpan={12}
                     hasFilters={false}
-                    onClearFilters={() => {}}
+                    onClearFilters={() => { }}
                     subtitle="No structure created yet. Click Create Structure to generate it."
                   />
                 ) : (
@@ -249,13 +248,13 @@ export default function IaCreationPage() {
                     <tr key={row.internalAssessmentGuid}>
                       <td className="text-center">
                         <ActionMenu>
-                          <button 
+                          <button
                             className="btn btn-neu btn-sm flex items-center justify-start gap-1.5 w-full"
                             onClick={() => setViewingRow(row)}
                           >
                             <i className="lni lni-eye" /> View
                           </button>
-                          
+
                           {row.classTestGuid && (
                             <Link
                               href={`/assessment/cbt-schedule?testGuid=${row.classTestGuid}&progName=${encodeURIComponent(

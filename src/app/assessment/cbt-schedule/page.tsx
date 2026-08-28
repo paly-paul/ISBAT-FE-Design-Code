@@ -130,11 +130,31 @@ function CbtScheduleContent() {
 
   if (!testGuid) {
     return (
-      <div className="page active p-10 text-center">
-        <h2 className="text-xl font-semibold text-g800 mb-2">Invalid Access</h2>
-        <p className="text-g500 mb-4">You must select a Class Test from the Assessment Structure page.</p>
-        <Link href="/assessment/ia-creation" className="btn btn-primary">
-          Go to Assessment Structure
+      <div className="page active relative overflow-hidden flex flex-col items-center justify-center min-h-[80vh] text-center px-4">
+        {/* Background Decorative Elements */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-50/60 rounded-full blur-3xl -z-10 pointer-events-none"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-blue-100/50 rounded-full blur-2xl -z-10 pointer-events-none"></div>
+
+        {/* Content */}
+        <div className="text-blue-500 mb-8 relative flex items-center justify-center">
+          <div className="absolute inset-0 bg-blue-200 rounded-full blur-lg opacity-50 animate-pulse"></div>
+          <i className="lni lni-calendar relative text-7xl drop-shadow-sm"></i>
+        </div>
+        
+        <h2 className="text-2xl font-bold text-slate-900 tracking-tight mb-4 text-center">
+          Direct Access <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Restricted</span>
+        </h2>
+        
+        <p className="text-slate-500 max-w-lg mx-auto text-center text-base leading-relaxed mb-10">
+          CBT scheduling is linked to specific Class Tests. Please return to the <strong>Assessment Structure</strong> to select the test you wish to schedule.
+        </p>
+
+        <Link 
+          href="/assessment/ia-creation" 
+          className="group relative inline-flex items-center justify-center gap-3 bg-slate-900 text-white px-8 py-3.5 rounded-full font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:bg-slate-800 transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.2)] hover:-translate-y-0.5 overflow-hidden"
+        >
+          <i className="lni lni-arrow-left transition-transform group-hover:-translate-x-1"></i>
+          Return to Assessment Structure
         </Link>
       </div>
     )
