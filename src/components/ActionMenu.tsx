@@ -8,10 +8,10 @@ interface ActionMenuProps {
 }
 
 export function ActionMenu({ children, tooltip = 'Actions' }: ActionMenuProps) {
-  const [open, setOpen]       = useState(false)
+  const [open, setOpen] = useState(false)
   const [showTip, setShowTip] = useState(false)
-  const [pos, setPos]         = useState({ top: 0, left: 0 })
-  const [tipPos, setTipPos]   = useState({ top: 0, left: 0 })
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const [tipPos, setTipPos] = useState({ top: 0, left: 0 })
   const triggerRef = useRef<HTMLButtonElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
