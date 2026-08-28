@@ -1,16 +1,25 @@
 'use client'
 import { useState } from 'react'
+import Link from 'next/link'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { SearchSelect } from '@/components/SearchSelect'
+import { ActionMenu } from '@/components/ActionMenu'
+import { IaStructureViewModal } from './_components/IaStructureViewModal'
+import { type IaStructureRowDto } from '@/lib/api/assessment/iaCreation'
 import {
   useIaCreationInit,
   useIaCreationSemesters,
   useIaCreationStructure,
   useCreateIaStructure,
 } from '@/hooks/assessment/useIaCreation'
+
+function formatDate(dateString: string | null) {
+  if (!dateString) return <span className="text-g300">—</span>
+  return <span>{new Date(dateString).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: '2-digit' })}</span>
+}
 
 export default function IaCreationPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
@@ -20,8 +29,8 @@ export default function IaCreationPage() {
   const [selectedProgramGuid, setSelectedProgramGuid] = useState<string>('')
   const [selectedSemesterGuid, setSelectedSemesterGuid] = useState<string>('')
 
-  // ── Controls ─────────────────────────────────────
-  // Auto-fetches now when all 3 selections are present
+  // ── Modal State ─────────────────────────────────
+  const [viewingRow, setViewingRow] = useState<IaStructureRowDto | null>(null)
 
   // ── Data fetching ─────────────────────────────────
   const { data: initData, isLoading: initLoading } = useIaCreationInit()
@@ -38,14 +47,7 @@ export default function IaCreationPage() {
   )
   const createMut = useCreateIaStructure()
 
-  // Set default intake when init loads
-  const handleInitLoaded = (intakeGuid: string) => {
-    if (!selectedIntakeGuid) setSelectedIntakeGuid(intakeGuid)
-  }
-  if (initData && !selectedIntakeGuid) {
-    const current = initData.intakes.find(i => i.currentIntake)
-    if (current) handleInitLoaded(current.intakeGuid)
-  }
+
 
   function showToast(msg: string, type = '') {
     setToast({ msg, type })
@@ -71,13 +73,11 @@ export default function IaCreationPage() {
       return
     }
     try {
-      const result = await createMut.mutateAsync({
+      await createMut.mutateAsync({
         programGuid: selectedProgramGuid,
         semesterGuid: selectedSemesterGuid,
         intakeGuid: selectedIntakeGuid,
       })
-      // React Query automatically refetches since params didn't change,
-      // but we can forcefully refetch or invalidate to be safe.
       refetchStructure()
       showToast('IA Structure created successfully.', 'success')
     } catch (err: any) {
@@ -202,55 +202,35 @@ export default function IaCreationPage() {
             <table>
               <thead>
                 <tr>
+                  <th className="w-12 text-center"></th>
                   <th>Unit Code</th>
                   <th>Unit Name</th>
-                  <th
-                    className="text-right border-l border-slate-200"
-                    style={{ whiteSpace: 'normal', minWidth: 90 }}
-                  >
+                  <th className="text-right border-l border-slate-200" style={{ whiteSpace: 'normal', minWidth: 90 }}>
                     Course Work<br />
                     <span className="text-xs font-normal opacity-70">Max 15</span>
                   </th>
-                  <th
-                    className="text-right"
-                    style={{ whiteSpace: 'normal', minWidth: 120 }}
-                  >
-                    CW Start
-                  </th>
-                  <th
-                    className="text-right border-l border-slate-200"
-                    style={{ whiteSpace: 'normal', minWidth: 90 }}
-                  >
+                  <th className="text-right" style={{ minWidth: 90 }}>CW Start</th>
+                  <th className="text-right" style={{ minWidth: 90 }}>CW End</th>
+                  <th className="text-right border-l border-slate-200" style={{ whiteSpace: 'normal', minWidth: 90 }}>
                     Class Test<br />
                     <span className="text-xs font-normal opacity-70">Max 15</span>
                   </th>
-                  <th
-                    className="text-right"
-                    style={{ whiteSpace: 'normal', minWidth: 120 }}
-                  >
-                    CT Start
-                  </th>
-                  <th
-                    className="text-right border-l border-slate-200"
-                    style={{ whiteSpace: 'normal', minWidth: 90 }}
-                  >
+                  <th className="text-right" style={{ minWidth: 90 }}>CT Start</th>
+                  <th className="text-right" style={{ minWidth: 90 }}>CT End</th>
+                  <th className="text-right border-l border-slate-200" style={{ whiteSpace: 'normal', minWidth: 90 }}>
                     Uni. Exam<br />
                     <span className="text-xs font-normal opacity-70">Max 70</span>
                   </th>
-                  <th
-                    className="text-right"
-                    style={{ whiteSpace: 'normal', minWidth: 120 }}
-                  >
-                    Exam Date
-                  </th>
+                  <th className="text-right" style={{ minWidth: 90 }}>Exam Start</th>
+                  <th className="text-right" style={{ minWidth: 90 }}>Exam End</th>
                 </tr>
               </thead>
               <tbody>
                 {structureLoading ? (
-                  <TableLoadingState colSpan={8} />
+                  <TableLoadingState colSpan={12} />
                 ) : !canRefresh ? (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={12}>
                       <div className="flex flex-col items-center justify-center py-10 gap-2 text-center text-g400">
                         <i className="lni lni-pointer text-2xl" />
                         <span className="text-sm">Select Programme, Semester &amp; Session to view structure</span>
@@ -259,7 +239,7 @@ export default function IaCreationPage() {
                   </tr>
                 ) : structureRows?.length === 0 ? (
                   <EmptyState
-                    colSpan={8}
+                    colSpan={12}
                     hasFilters={false}
                     onClearFilters={() => {}}
                     subtitle="No structure created yet. Click Create Structure to generate it."
@@ -267,6 +247,29 @@ export default function IaCreationPage() {
                 ) : (
                   structureRows?.map(row => (
                     <tr key={row.internalAssessmentGuid}>
+                      <td className="text-center">
+                        <ActionMenu>
+                          <button 
+                            className="btn btn-neu btn-sm flex items-center justify-start gap-1.5 w-full"
+                            onClick={() => setViewingRow(row)}
+                          >
+                            <i className="lni lni-eye" /> View
+                          </button>
+                          
+                          {row.classTestGuid && (
+                            <Link
+                              href={`/assessment/cbt-schedule?testGuid=${row.classTestGuid}&progName=${encodeURIComponent(
+                                initData?.programs.find(p => p.programGuid === selectedProgramGuid)?.programName || ''
+                              )}&semName=${encodeURIComponent(
+                                semesters?.find(s => s.semesterGuid === selectedSemesterGuid)?.semName || ''
+                              )}&unitCode=${encodeURIComponent(row.unitCode ?? '')}&unitName=${encodeURIComponent(row.unitName ?? '')}`}
+                              className="btn btn-neu btn-sm flex items-center justify-start gap-1.5 w-full mt-1"
+                            >
+                              <i className="lni lni-pencil" /> Edit Schedule
+                            </Link>
+                          )}
+                        </ActionMenu>
+                      </td>
                       <td className="font-mono text-sm">{row.unitCode ?? '—'}</td>
                       <td className="font-medium">{row.unitName ?? '—'}</td>
 
@@ -278,24 +281,39 @@ export default function IaCreationPage() {
                           <span className="text-g400 text-xs">—</span>
                         )}
                       </td>
-                      <td className="text-right text-xs text-g500">
-                        {row.courseworkStartDateTime
-                          ? new Date(row.courseworkStartDateTime).toLocaleDateString()
-                          : <span className="text-g300">Not scheduled</span>}
+                      <td className="text-right text-[11px] font-mono text-g600 leading-tight">
+                        {formatDate(row.courseworkStartDateTime)}
+                      </td>
+                      <td className="text-right text-[11px] font-mono text-g600 leading-tight">
+                        {formatDate(row.courseworkEndDateTime)}
                       </td>
 
                       {/* Class Test */}
                       <td className="text-right border-l border-slate-100">
                         {row.classTestGuid ? (
-                          <span className="badge badge-blue">{row.classTestMaxMark}</span>
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="badge badge-blue">{row.classTestMaxMark}</span>
+                            <Link
+                              href={`/assessment/cbt-schedule?testGuid=${row.classTestGuid}&progName=${encodeURIComponent(
+                                initData?.programs.find(p => p.programGuid === selectedProgramGuid)?.programName || ''
+                              )}&semName=${encodeURIComponent(
+                                semesters?.find(s => s.semesterGuid === selectedSemesterGuid)?.semName || ''
+                              )}&unitCode=${encodeURIComponent(row.unitCode ?? '')}&unitName=${encodeURIComponent(row.unitName ?? '')}`}
+                              className="text-g400 hover:text-blue-600 transition-colors"
+                              title="Schedule CBT"
+                            >
+                              <i className="lni lni-calendar text-lg" />
+                            </Link>
+                          </div>
                         ) : (
                           <span className="text-g400 text-xs">—</span>
                         )}
                       </td>
-                      <td className="text-right text-xs text-g500">
-                        {row.classTestStartDateTime
-                          ? new Date(row.classTestStartDateTime).toLocaleDateString()
-                          : <span className="text-g300">Not scheduled</span>}
+                      <td className="text-right text-[11px] font-mono text-g600 leading-tight">
+                        {formatDate(row.classTestStartDateTime)}
+                      </td>
+                      <td className="text-right text-[11px] font-mono text-g600 leading-tight">
+                        {formatDate(row.classTestEndDateTime)}
                       </td>
 
                       {/* University Exam */}
@@ -306,10 +324,11 @@ export default function IaCreationPage() {
                           <span className="text-g400 text-xs">—</span>
                         )}
                       </td>
-                      <td className="text-right text-xs text-g500">
-                        {row.examDate
-                          ? new Date(row.examDate).toLocaleDateString()
-                          : <span className="text-g300">Not scheduled</span>}
+                      <td className="text-right text-[11px] font-mono text-g600 leading-tight">
+                        {formatDate(row.examDate && row.examStartTime ? `${row.examDate}T${row.examStartTime}` : null)}
+                      </td>
+                      <td className="text-right text-[11px] font-mono text-g600 leading-tight">
+                        {formatDate(row.examDate && row.examEndTime ? `${row.examDate}T${row.examEndTime}` : null)}
                       </td>
                     </tr>
                   ))
@@ -321,6 +340,15 @@ export default function IaCreationPage() {
       </div>
 
       <Toast toast={toast} />
+
+      {viewingRow && (
+        <IaStructureViewModal
+          row={viewingRow}
+          progName={initData?.programs.find(p => p.programGuid === selectedProgramGuid)?.programName || ''}
+          semName={semesters?.find(s => s.semesterGuid === selectedSemesterGuid)?.semName || ''}
+          onClose={() => setViewingRow(null)}
+        />
+      )}
     </div>
   )
 }
