@@ -363,6 +363,31 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
     }
   }
 
+  // Settings needs the same "leaf-level fixup, not just fill-in-if-missing"
+  // treatment as Student Records above — the real backend still registers
+  // this section with the old single "Category Masters" leaf (see
+  // permissionCatalog.ts's 'View Category Master' permission, not yet split
+  // on the backend either), so the whole-section-missing check below would
+  // never touch it and the sidebar would keep showing the pre-split link
+  // forever. Swap that one leaf for the two real pages it became, in place,
+  // rather than appending duplicates alongside it.
+  const settingsIdx = studentModule.children.findIndex(c => c.name === 'Settings')
+  if (settingsIdx !== -1) {
+    const settingsSection = studentModule.children[settingsIdx]
+    const withoutOldCategoryMasters = settingsSection.children.filter(l => l.name !== 'Category Masters')
+    const existingSettingsLeaves = new Set(withoutOldCategoryMasters.map(l => l.name))
+    const missingSettingsLeaves = [
+      leaf('Student Category Master', 'users', '/student/student-category-master'),
+      leaf('Service Category Master', 'list', '/student/service-category-master'),
+      leaf('Specialization Management', 'graduation', '/student/specialization'),
+    ].filter(l => !existingSettingsLeaves.has(l.name))
+    if (withoutOldCategoryMasters.length !== settingsSection.children.length || missingSettingsLeaves.length > 0) {
+      const children = [...studentModule.children]
+      children[settingsIdx] = { ...settingsSection, children: [...withoutOldCategoryMasters, ...missingSettingsLeaves] }
+      studentModule = { ...studentModule, children }
+    }
+  }
+
   const existingSections = new Set(studentModule.children.map(c => c.name))
   const missingSections = STUDENT_OPERATIONS_SECTIONS.filter(s => !existingSections.has(s.name))
   const finalModule = missingSections.length === 0
