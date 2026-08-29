@@ -18,8 +18,11 @@ function todayYmd() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 
-function applicantName(a: { firstName: string | null; lastName: string | null }) {
-  return `${a.firstName ?? ''}${a.lastName ? ` ${a.lastName}` : ''}`.trim() || '—'
+// Search results come from FinanceStudentSearchDto (PaymentConsoleStudentSearch.bru)
+// — no lastName, just a pre-combined studentName (or firstName alone for an
+// application that isn't a student yet). Same helper as payment-console/page.tsx.
+function applicantName(a: { studentName: string | null; firstName: string | null }) {
+  return a.studentName || a.firstName || '—'
 }
 
 interface DepositResult {

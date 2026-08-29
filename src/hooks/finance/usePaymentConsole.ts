@@ -23,10 +23,14 @@ export function useSearchStudents(searchTerm: string, pageNumber: number, pageSi
   })
 }
 
-export function useStudentProfile(applicationGuid: string | null, enabled: boolean) {
+// studentGuid is optional (see getStudentProfile) — pass it when the caller
+// already has one (e.g. straight off a searchStudents() hit) so the backend
+// can resolve full student fields instead of falling back to
+// application-only ones.
+export function useStudentProfile(applicationGuid: string | null, enabled: boolean, studentGuid?: string | null) {
   return useQuery({
-    queryKey: [...PAYMENT_CONSOLE_KEY, 'profile', applicationGuid],
-    queryFn: () => getStudentProfile(applicationGuid as string),
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'profile', applicationGuid, studentGuid],
+    queryFn: () => getStudentProfile(applicationGuid as string, studentGuid),
     enabled: enabled && !!applicationGuid,
   })
 }

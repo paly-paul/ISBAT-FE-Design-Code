@@ -78,7 +78,12 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
     leaf('Send Communication', 'envelope', '/student/communications'),
   ]),
   section('Settings', [
-    leaf('Category Masters', 'list', '/student/masters'),
+    // Split from a single combined "Category Masters" page into two —
+    // Student Category Master (real sponsor-categories CRUD) and Service
+    // Category Master (mock ticketing categories) are unrelated resources
+    // that happened to share a page.
+    leaf('Student Category Master', 'users', '/student/student-category-master'),
+    leaf('Service Category Master', 'list', '/student/service-category-master'),
     leaf('Specialization Management', 'graduation', '/student/specialization'),
   ]),
 ]
