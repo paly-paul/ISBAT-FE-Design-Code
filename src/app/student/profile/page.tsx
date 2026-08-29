@@ -9,6 +9,10 @@ import { useStudent } from '@/hooks/student/useStudents'
 import { StudentDto } from '@/lib/api/student/student'
 import { useIdCard, useIssueOrRenewIdCard, useUpdateIdCardDates, getIdCardQrImageUrl, currentCardIssue } from '@/hooks/student/useIdCards'
 import { useSponsorDetails, useSponsorCategories, useAssignSponsorCategory } from '@/hooks/student/useSponsor'
+import { useStudentRefugeeDetails, useAssignRefugeeStatus, useRemoveRefugeeStatus } from '@/hooks/student/useRefugee'
+import { useStudentDiscount, useAssignStudentDiscount, useUpdateStudentDiscount, useCancelStudentDiscount } from '@/hooks/student/useStudentDiscount'
+import { useDiscounts } from '@/hooks/finance/useDiscounts'
+import { CALC_TYPE_VALUES } from '@/lib/api/finance/discount'
 import { formatDate } from '@/lib/date'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
@@ -18,10 +22,15 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 // real GET /api/v1/students/:guid (useStudent) once a student is loaded via
 // StudentLookup. The ID Card tab is now wired to the real students/id-cards/*
 // endpoints (see students/id-cards/*.md), and the Sponsor field to
-// students/sponsor-assignment; the discount fields already ride along on
-// useStudent's response, so they're just displayed, not re-fetched. Fee
-// structure/learning mode display and the communication dispatch audit log
-// still have no backend contract — page-local mock state only, same
+// students/sponsor-assignment. Discount is now wired to the real
+// students/{guid}/discount assign/update/cancel endpoints (students/
+// student-discounts/*.md) via a management modal — the StudentDetailDto
+// discount fields are still used for the read-only summary badge shown
+// before that modal is opened, since useStudent already carries them.
+// Refugee status is wired to students/refugee/*.md the same way, via its
+// own assign/remove modal (assign is multipart — a document is mandatory).
+// Fee structure/learning mode display and the communication dispatch audit
+// log still have no backend contract — page-local mock state only, same
 // "UI-first prototype" convention as Finance's Payment Collection pages.
 // The old barcode/ESSL-device and photo-upload UI had no backing endpoint at
 // all (id-cards has no such fields) — commented out below rather than
@@ -85,6 +94,32 @@ export default function Page() {
   const [editingSponsor, setEditingSponsor] = useState(false)
   const [sponsorChoice, setSponsorChoice] = useState('')
 
+  // Real refugee-status record — GET /students/refugee/{guid}, resolves to
+  // null when the student has no record yet (404 not_found is the common
+  // case, not an error — see getStudentRefugeeDetails).
+  const { data: refugeeDetail } = useStudentRefugeeDetails(student?.studentGuid ?? null, !!student)
+  const assignRefugeeStatus = useAssignRefugeeStatus()
+  const removeRefugeeStatus = useRemoveRefugeeStatus()
+  const [refugeeModalOpen, setRefugeeModalOpen] = useState(false)
+  const [refugeeCountryCode, setRefugeeCountryCode] = useState('')
+  const [refugeeIdInput, setRefugeeIdInput] = useState('')
+  const [refugeeDocFile, setRefugeeDocFile] = useState<File | null>(null)
+
+  // Real discount assignment — GET /students/{guid}/discount, resolves to
+  // null when unassigned (see getStudentDiscount). Finance's own discount
+  // catalogue (useDiscounts) backs the "which discount" picker in the
+  // management modal.
+  const { data: discountDetail } = useStudentDiscount(student?.studentGuid ?? null, !!student)
+  const { data: discountCatalogue = [] } = useDiscounts()
+  const assignStudentDiscount = useAssignStudentDiscount()
+  const updateStudentDiscount = useUpdateStudentDiscount()
+  const cancelStudentDiscount = useCancelStudentDiscount()
+  const [discountModalOpen, setDiscountModalOpen] = useState(false)
+  const [discountChoice, setDiscountChoice] = useState('')
+  const [discountCalcType, setDiscountCalcType] = useState<'Amount' | 'Percentage'>('Percentage')
+  const [discountAmtPer, setDiscountAmtPer] = useState('')
+  const [discountRemarks, setDiscountRemarks] = useState('')
+
   // Personal-info edit form — seeded from the loaded record, editable but
   // not wired to any save endpoint (none confirmed for this workflow).
   const [firstName, setFirstName] = useState('')
@@ -132,6 +167,31 @@ export default function Page() {
     setSponsorChoice(sponsorDetail?.sponsorCategoryGuid ?? '')
     setEditingSponsor(false)
   }, [sponsorDetail])
+
+  // Seed the discount modal's fields whenever it's (re)opened — either from
+  // the existing assignment's terms, or discount-catalogue/50% defaults for
+  // a fresh assignment.
+  useEffect(() => {
+    if (!discountModalOpen) return
+    if (discountDetail) {
+      setDiscountChoice(discountDetail.discountGuid)
+      setDiscountCalcType(discountDetail.calcType === CALC_TYPE_VALUES.Amount ? 'Amount' : 'Percentage')
+      setDiscountAmtPer(discountDetail.amtPer != null ? String(discountDetail.amtPer) : '')
+      setDiscountRemarks(discountDetail.remarks ?? '')
+    } else {
+      setDiscountChoice(discountCatalogue[0]?.discountGuid ?? '')
+      setDiscountCalcType('Percentage')
+      setDiscountAmtPer('')
+      setDiscountRemarks('')
+    }
+  }, [discountModalOpen, discountDetail, discountCatalogue])
+
+  useEffect(() => {
+    if (!refugeeModalOpen) return
+    setRefugeeCountryCode('')
+    setRefugeeIdInput('')
+    setRefugeeDocFile(null)
+  }, [refugeeModalOpen])
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -208,6 +268,73 @@ export default function Page() {
     assignSponsorCategory.mutate(
       { studentGuid: student.studentGuid, sponsorCategoryGuid: sponsorChoice },
       { onSuccess: () => showToast('Sponsor category updated', 'ok'), onError: () => showToast('Could not update sponsor category', 'err') },
+    )
+  }
+
+  function handleAssignRefugee() {
+    if (!student) return
+    const countryCode = Number(refugeeCountryCode)
+    if (!countryCode || countryCode <= 0) { showToast('Enter a valid country code.', 'warn'); return }
+    if (!refugeeIdInput.trim()) { showToast('Refugee ID is required.', 'warn'); return }
+    if (refugeeIdInput.trim().length > 20) { showToast('Refugee ID must be 20 characters or fewer.', 'warn'); return }
+    if (!refugeeDocFile) { showToast('A supporting document is required.', 'warn'); return }
+    assignRefugeeStatus.mutate(
+      { studentGuid: student.studentGuid, intCountryCode: countryCode, refugeeId: refugeeIdInput.trim(), document: refugeeDocFile },
+      {
+        onSuccess: () => { showToast('Refugee status granted', 'ok'); setRefugeeModalOpen(false) },
+        onError: (error: Error) => showToast(error.message || 'Could not assign refugee status', 'err'),
+      },
+    )
+  }
+
+  function handleRemoveRefugee() {
+    if (!student) return
+    removeRefugeeStatus.mutate(student.studentGuid, {
+      onSuccess: () => showToast('Refugee status removed', 'ok'),
+      onError: (error: Error) => showToast(error.message || 'Could not remove refugee status', 'err'),
+    })
+  }
+
+  function handleSaveDiscount() {
+    if (!student) return
+    const amtPer = discountAmtPer.trim() ? Number(discountAmtPer) : null
+    if (amtPer != null && amtPer <= 0) { showToast('Amount/percentage must be greater than 0.', 'warn'); return }
+    if (amtPer != null && discountCalcType === 'Percentage' && amtPer > 100) { showToast('Percentage cannot be more than 100.', 'warn'); return }
+
+    if (discountDetail) {
+      updateStudentDiscount.mutate(
+        { studentGuid: student.studentGuid, payload: { calcType: CALC_TYPE_VALUES[discountCalcType], amtPer, remarks: discountRemarks.trim() || null } },
+        { onSuccess: () => { showToast('Discount updated', 'ok'); setDiscountModalOpen(false) }, onError: (error: Error) => showToast(error.message || 'Could not update discount', 'err') },
+      )
+    } else {
+      if (!discountChoice) { showToast('Please select a discount.', 'warn'); return }
+      assignStudentDiscount.mutate(
+        {
+          studentGuid: student.studentGuid,
+          payload: {
+            discountGuid: discountChoice,
+            calcType: CALC_TYPE_VALUES[discountCalcType],
+            amtPer,
+            // No program-scoped semester list is available here to pick
+            // from (see studentDiscount.ts) — defaults to the student's own
+            // current semester rather than an invented dropdown.
+            effectiveFromSemesterGuid: detail?.currentSemesterGuid ?? null,
+            remarks: discountRemarks.trim() || null,
+          },
+        },
+        { onSuccess: () => { showToast('Discount assigned', 'ok'); setDiscountModalOpen(false) }, onError: (error: Error) => showToast(error.message || 'Could not assign discount', 'err') },
+      )
+    }
+  }
+
+  function handleCancelDiscount(includeCurrentSemester: boolean) {
+    if (!student) return
+    cancelStudentDiscount.mutate(
+      { studentGuid: student.studentGuid, includeCurrentSemester },
+      {
+        onSuccess: () => { showToast('Discount cancelled', 'ok'); setDiscountModalOpen(false) },
+        onError: (error: Error) => showToast(error.message || 'Could not cancel discount', 'err'),
+      },
     )
   }
 
@@ -289,7 +416,26 @@ export default function Page() {
                     </div>
                   )}
                 </div>
-                <div className="stu-meta-item"><div className="stu-meta-lbl">Discount</div><div className="stu-meta-val">{formatDiscount(detail)}</div></div>
+                <div className="stu-meta-item">
+                  <div className="stu-meta-lbl">Discount</div>
+                  <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={() => setDiscountModalOpen(true)} title="Click to manage this student's discount">
+                    {discountDetail ? formatDiscount({ discountStatus: discountDetail.discountStatus, calcType: discountDetail.calcType != null ? String(discountDetail.calcType) : null, amtPer: discountDetail.amtPer }) : formatDiscount(detail)}
+                    {' '}<i className="lni lni-pencil-alt" style={{ fontSize: 10 }}></i>
+                  </div>
+                </div>
+                <div className="stu-meta-item">
+                  <div className="stu-meta-lbl">Refugee Status</div>
+                  {refugeeDetail ? (
+                    <div className="flex gap-2" style={{ alignItems: 'center' }}>
+                      <span className="stu-meta-val">Refugee · ID {refugeeDetail.refugeeId}</span>
+                      <button className="btn-icon" title="Remove refugee status" onClick={handleRemoveRefugee} disabled={removeRefugeeStatus.isPending}><i className="lni lni-close"></i></button>
+                    </div>
+                  ) : (
+                    <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={() => setRefugeeModalOpen(true)} title="Click to grant refugee status">
+                      Not a refugee <i className="lni lni-pencil-alt" style={{ fontSize: 10 }}></i>
+                    </div>
+                  )}
+                </div>
                 <div className="stu-meta-item"><div className="stu-meta-lbl">Learning Mode</div><div className="stu-meta-val">Campus</div></div>
                 <div className="stu-meta-item"><div className="stu-meta-lbl">Registration No.</div><div className="stu-meta-val">{student.studentRegNo}</div></div>
                 <div className="stu-meta-item"><div className="stu-meta-lbl">Status</div><div className="stu-meta-val">{detail?.regStatusName || '—'}</div></div>
@@ -529,6 +675,76 @@ export default function Page() {
           </>
         )}
       </div>
+
+      {refugeeModalOpen && student && (
+        <div className="modal-overlay open" onClick={() => setRefugeeModalOpen(false)}>
+          <div className="modal modal-md" onClick={e => e.stopPropagation()}>
+            <div className="modal-hdr"><div className="modal-title"><i className="lni lni-shield"></i> Grant Refugee Status</div><button className="modal-close" onClick={() => setRefugeeModalOpen(false)}>✕</button></div>
+            <div>
+              <div className="fg"><label className="lbl">Student</label><input className="ctrl" readOnly value={student.studentName} /></div>
+              <div className="fg">
+                <label className="lbl">Country Code <span className="req">*</span></label>
+                <input className="ctrl" type="number" min={1} value={refugeeCountryCode} onChange={e => setRefugeeCountryCode(e.target.value)} placeholder="Legacy numeric country code" />
+                <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4 }}>No lookup source exists for this legacy code yet — enter the numeric value directly.</div>
+              </div>
+              <div className="fg"><label className="lbl">Refugee ID <span className="req">*</span></label><input className="ctrl" maxLength={20} value={refugeeIdInput} onChange={e => setRefugeeIdInput(e.target.value)} placeholder="Refugee document/registration number" /></div>
+              <div className="fg">
+                <label className="lbl">Supporting Document <span className="req">*</span></label>
+                <input className="ctrl" type="file" onChange={e => setRefugeeDocFile(e.target.files?.[0] ?? null)} />
+                <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4 }}>Required — the request is rejected without it.</div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-neu" onClick={() => setRefugeeModalOpen(false)} disabled={assignRefugeeStatus.isPending}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleAssignRefugee} disabled={assignRefugeeStatus.isPending}><i className="lni lni-checkmark"></i> {assignRefugeeStatus.isPending ? 'Saving…' : 'Grant Status'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {discountModalOpen && student && (
+        <div className="modal-overlay open" onClick={() => setDiscountModalOpen(false)}>
+          <div className="modal modal-md" onClick={e => e.stopPropagation()}>
+            <div className="modal-hdr"><div className="modal-title"><i className="lni lni-tag"></i> Manage Discount</div><button className="modal-close" onClick={() => setDiscountModalOpen(false)}>✕</button></div>
+            <div>
+              {!discountDetail && (
+                <div className="fg">
+                  <label className="lbl">Discount <span className="req">*</span></label>
+                  <SearchSelect
+                    placeholder="— Select discount —"
+                    options={discountCatalogue.map(d => ({ value: d.discountGuid, label: `${d.discountCode} — ${d.discountName}` }))}
+                    value={discountChoice}
+                    onChange={setDiscountChoice}
+                  />
+                </div>
+              )}
+              <div className="g2">
+                <div className="fg"><label className="lbl">Calculation Type</label><SearchSelect options={['Amount', 'Percentage']} value={discountCalcType} onChange={v => setDiscountCalcType(v as 'Amount' | 'Percentage')} /></div>
+                <div className="fg"><label className="lbl">{discountCalcType === 'Percentage' ? 'Percentage (%)' : 'Amount'}</label><input className="ctrl" type="number" min={0} value={discountAmtPer} onChange={e => setDiscountAmtPer(e.target.value)} placeholder="Leave blank to inherit from the discount" /></div>
+              </div>
+              <div className="fg"><label className="lbl">Remarks</label><textarea className="ctrl" rows={2} maxLength={500} value={discountRemarks} onChange={e => setDiscountRemarks(e.target.value)} /></div>
+              {discountDetail && (
+                <div className="info-box"><i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12 }}>The discount and its effective-from semester can&apos;t be changed here — cancel this assignment and assign again to change either.</div></div>
+              )}
+            </div>
+            <div className="modal-footer" style={{ justifyContent: discountDetail ? 'space-between' : 'flex-end' }}>
+              {discountDetail && (
+                <div className="flex gap-2">
+                  <button className="btn btn-neu btn-sm" onClick={() => handleCancelDiscount(false)} disabled={cancelStudentDiscount.isPending}>Cancel (from next semester)</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleCancelDiscount(true)} disabled={cancelStudentDiscount.isPending}>Cancel Immediately</button>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button className="btn btn-neu" onClick={() => setDiscountModalOpen(false)}>Close</button>
+                <button className="btn btn-primary" onClick={handleSaveDiscount} disabled={assignStudentDiscount.isPending || updateStudentDiscount.isPending}>
+                  <i className="lni lni-checkmark"></i> {assignStudentDiscount.isPending || updateStudentDiscount.isPending ? 'Saving…' : discountDetail ? 'Update Terms' : 'Assign Discount'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Toast toast={toast} />
     </>
   )

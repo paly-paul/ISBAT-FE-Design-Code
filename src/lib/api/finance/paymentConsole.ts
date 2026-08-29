@@ -8,18 +8,21 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 // intentionally not wired here yet; /finance/payment-console's "Record
 // Payment" step still fabricates its receipt locally.
 
-// Confirmed via SearchStudents.bru — keyed by applicationGuid/appRefNo, the
-// same identity model as /admission/applicants' ApplicationListItem. There
-// is no separate "student number" concept anywhere in this API.
+// Confirmed via PaymentConsoleStudentSearch.bru — FinanceStudentSearchDto.
+// Replaces the earlier ApplicationSummary shape (applicationGuid/appRefNo/
+// firstName/lastName/phone/emailId/programGuid/action) that matched the
+// Finance-side proxy endpoint this used to call: this DTO has no lastName/
+// programGuid/action, but carries studentGuid and a pre-combined studentName
+// up front — no separate profile fetch needed just to learn the display
+// name or (for an already-enrolled applicant) the studentGuid.
 export interface ApplicationSummary {
   applicationGuid: string
-  appRefNo: string
+  studentGuid: string | null
+  studentName: string | null
   firstName: string | null
-  lastName: string | null
-  phone: string | null
+  appRefNo: string
   emailId: string | null
-  programGuid: string | null
-  action: number | null
+  phone: string | null
 }
 
 interface ApplicationSummaryListResponse {
@@ -231,25 +234,44 @@ const mockOutstandingLedgers: Record<string, OutstandingLedger[]> = {}
 const mockPaymentHistory: Record<string, PaymentHistoryEntry[]> = {}
 let mockPaymentSeq = 1
 
+// Points straight at the Admissions module's own endpoint per
+// PaymentConsoleStudentSearch.bru — the endpoint actually meant for this
+// picker, per the backend team. Not the same route as PaymentSearch.bru's
+// plain "/payment-search" (get-payment-search.md's ../admission/
+// application-filling/payment-search) — that one is a more general
+// "applications eligible for payment" search with a different response DTO
+// (ApplicationSummary's old firstName/lastName/programGuid/action shape);
+// this "/payment-console/search" route is explicitly documented as "for use
+// in the Finance Payment Console student picker" and returns
+// FinanceStudentSearchDto instead (see ApplicationSummary above).
 export function searchStudents(searchTerm: string, pageNumber = 1, pageSize = 20): Promise<ApplicationSummaryListResponse> {
   if (MOCK_AUTH) {
     const items = searchTerm.trim()
-      ? mockApplicationSummaries.filter(a => `${a.appRefNo} ${a.firstName} ${a.lastName} ${a.emailId} ${a.phone}`.toLowerCase().includes(searchTerm.toLowerCase()))
+      ? mockApplicationSummaries.filter(a => `${a.appRefNo} ${a.firstName} ${a.studentName} ${a.emailId} ${a.phone}`.toLowerCase().includes(searchTerm.toLowerCase()))
       : mockApplicationSummaries
     return Promise.resolve({ items, totalCount: items.length, pageNumber, pageSize })
   }
   return apiGet<ApplicationSummaryListResponse | null>(
-    `/api/v1/finance/payment-console/search?searchTerm=${encodeURIComponent(searchTerm)}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
+    `/api/v1/admissions/application-filling/payment-console/search?searchTerm=${encodeURIComponent(searchTerm)}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
   ).then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }
 
-export function getStudentProfile(applicationGuid: string): Promise<StudentProfile> {
+// PaymentConsoleStudentProfile.bru — same path already confirmed last turn,
+// now also confirmed to take an optional `studentGuid` query param: "omit
+// it for an application that hasn't registered as a student yet (no
+// StudentGuid exists until the first semester fee is paid); the response
+// then falls back to application-only fields." searchStudents() above now
+// returns studentGuid directly on each search hit, so callers can pass it
+// straight through here instead of only learning it after the profile
+// itself has already loaded.
+export function getStudentProfile(applicationGuid: string, studentGuid?: string | null): Promise<StudentProfile> {
   if (MOCK_AUTH) {
     const existing = mockStudentProfiles[applicationGuid]
     if (!existing) return Promise.reject(new Error('Application not found'))
     return Promise.resolve(existing)
   }
-  return apiGet<StudentProfile>(`/api/v1/finance/payment-console/student-profile/${applicationGuid}`)
+  const query = studentGuid ? `?studentGuid=${encodeURIComponent(studentGuid)}` : ''
+  return apiGet<StudentProfile>(`/api/v1/admissions/application-filling/payment-console/student-profile/${applicationGuid}${query}`)
 }
 
 // studentGuid is optional per get-outstanding-ledgers.md, but supplying it

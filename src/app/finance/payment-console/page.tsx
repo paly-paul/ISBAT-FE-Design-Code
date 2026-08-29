@@ -31,6 +31,13 @@ function applicantName(a: { firstName: string | null; lastName: string | null })
   return `${a.firstName ?? ''}${a.lastName ? ` ${a.lastName}` : ''}`.trim() || '—'
 }
 
+// Search results come from FinanceStudentSearchDto (PaymentConsoleStudentSearch.bru)
+// now, which has no lastName — it carries a pre-combined studentName instead,
+// falling back to firstName alone for an application that isn't a student yet.
+function searchResultName(a: { studentName: string | null; firstName: string | null }) {
+  return a.studentName || a.firstName || '—'
+}
+
 function initialsFor(name: string) {
   const parts = name.trim().split(/\s+/)
   return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '—'
@@ -68,14 +75,21 @@ export default function PaymentConsolePage() {
   const [committedSearch, setCommittedSearch] = useState('')
   // Drives the results dropdown's visibility, separately from whether it
   // has matches — clicking into the box shows it (listing everything if
-  // the box is still empty; GetSearchStudents.md: an omitted/blank
-  // searchTerm lists all applications), clicking away or picking a result
+  // the box is still empty; PaymentConsoleStudentSearch.bru: searchTerm is
+  // optional, omit to browse all), clicking away or picking a result
   // hides it again. searchBoxRef scopes the click-outside check to the
   // search field + dropdown, same pattern as ActionMenu.tsx's trigger/
   // dropdown refs.
   const [searchFocused, setSearchFocused] = useState(false)
   const searchBoxRef = useRef<HTMLDivElement>(null)
   const [selectedApplicationGuid, setSelectedApplicationGuid] = useState<string | null>(null)
+  // studentGuid straight off the search hit (PaymentConsoleStudentSearch.bru
+  // returns it directly) — passed into useStudentProfile below so the first
+  // profile fetch already resolves full student fields instead of falling
+  // back to application-only ones. Distinct from the `studentGuid` derived
+  // from the loaded profile further down, which stays the source of truth
+  // for every query after the profile has actually loaded.
+  const [selectedStudentGuidHint, setSelectedStudentGuidHint] = useState<string | null>(null)
   const [showDetails, setShowDetails] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
 
@@ -119,15 +133,15 @@ export default function PaymentConsolePage() {
   }, [searchFocused])
 
   // isError kept separate from the [] fallback on purpose — same reasoning
-  // as usePaymentHistory below: a failed search (a 401, a downstream
-  // "Could not retrieve applications from the admissions service." per
-  // get-search-students.md, or a validation_error from a sub-2-char term
-  // since every keystroke is sent through committedSearch) must not render
-  // as the same "No matching applications found" a genuinely empty result
-  // gets, or a real error goes unnoticed as "this student doesn't exist".
-  // Matches SearchStudentsQueryValidator's "min 2 chars, only when
-  // non-blank" rule (get-search-students.md) — don't fire a request the
-  // backend will just 400 on while the user is still mid-keystroke. An
+  // as usePaymentHistory below: a failed search (a 401, or any other
+  // downstream failure) must not render as the same "No matching
+  // applications found" a genuinely empty result gets, or a real error goes
+  // unnoticed as "this student doesn't exist". The 2-char floor below is
+  // this page's own client-side guard, not a backend rule any more —
+  // PaymentConsoleStudentSearch.bru documents no validator on this endpoint
+  // (a single-char term is accepted), unlike the older Finance-proxy route
+  // this used to call. Kept anyway so a request isn't fired on every
+  // keystroke while the user is still mid-word. An
   // empty committedSearch is allowed too, but only once the box has focus
   // (searchFocused) — that's the "list everything" case for clicking into
   // an empty box, not something to fetch on mount before the user has
@@ -144,7 +158,7 @@ export default function PaymentConsolePage() {
   // returned, confirmed live) silently renders nothing once isLoading flips
   // false, leaving the whole "select a student" action look like it did
   // nothing rather than showing why.
-  const { data: profile, isLoading: isProfileLoading, isError: isProfileError, error: profileError } = useStudentProfile(selectedApplicationGuid, !!selectedApplicationGuid)
+  const { data: profile, isLoading: isProfileLoading, isError: isProfileError, error: profileError } = useStudentProfile(selectedApplicationGuid, !!selectedApplicationGuid, selectedStudentGuidHint)
   // profile.studentGuid — confirmed via a real live student-profile
   // response, not documented in the spec's own sample — is the studentGuid
   // outstanding-ledgers/payable-ledgers/createPayment all optionally
@@ -223,8 +237,9 @@ export default function PaymentConsolePage() {
     setReceipt(null)
   }
 
-  function selectStudent(applicationGuid: string, name: string) {
+  function selectStudent(applicationGuid: string, name: string, studentGuidHint: string | null) {
     setSelectedApplicationGuid(applicationGuid)
+    setSelectedStudentGuidHint(studentGuidHint)
     setSearch(name)
     setCommittedSearch('')
     setSearchFocused(false)
@@ -282,6 +297,7 @@ export default function PaymentConsolePage() {
 
   function handleClear() {
     setSelectedApplicationGuid(null)
+    setSelectedStudentGuidHint(null)
     setSearch('')
     setCommittedSearch('')
     resetPaymentForm()
@@ -374,7 +390,7 @@ export default function PaymentConsolePage() {
                 </div>
 
                 {/* Dropdown: opens on focus (empty box lists every application,
-                    per GetSearchStudents.md's "omit searchTerm to list all"),
+                    per PaymentConsoleStudentSearch.bru's "omit searchTerm to browse all"),
                     closes on outside click via the searchBoxRef effect above
                     or on picking a result. Floats over the page below the
                     input row rather than pushing content down, since "list
@@ -403,9 +419,9 @@ export default function PaymentConsolePage() {
                       <div
                         key={a.applicationGuid}
                         className="cursor-pointer px-3 py-2 hover:bg-b50 border-b border-g100 last:border-b-0"
-                        onClick={() => selectStudent(a.applicationGuid, applicantName(a))}
+                        onClick={() => selectStudent(a.applicationGuid, searchResultName(a), a.studentGuid)}
                       >
-                        <div className="font-bold">{applicantName(a)}</div>
+                        <div className="font-bold">{searchResultName(a)}</div>
                         <div className="text-g500" style={{ fontSize: 11 }}>{a.appRefNo} · {a.phone ?? '—'} · {a.emailId ?? '—'}</div>
                       </div>
                     ))}
