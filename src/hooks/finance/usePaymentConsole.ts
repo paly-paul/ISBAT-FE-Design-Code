@@ -75,6 +75,15 @@ export function usePayableLedgers(params: PayableLedgersParams | null, enabled: 
     queryKey: [...PAYMENT_CONSOLE_KEY, 'payable-ledgers', params],
     queryFn: () => getPayableLedgers(params as PayableLedgersParams),
     enabled: enabled && !!params,
+    // The global QueryClient (providers.tsx) defaults to 3 retries with
+    // exponential backoff, meant for transient network/5xx failures. A 400
+    // here (confirmed live: "Today's exchange rate has not been entered for
+    // the payment date") is a permanent validation error that will keep
+    // failing identically on retry — left at the default, the cashier saw
+    // "Calculating allocation…" for 7+ seconds before isPreviewError ever
+    // flipped, since react-query stays in a fetching state through every
+    // retry attempt.
+    retry: false,
   })
 }
 
