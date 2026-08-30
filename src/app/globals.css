@@ -2197,24 +2197,31 @@ textarea.ctrl {
   }
 }
 
-/* Payment Console's outer Left-form/Right-preview split had the same
-   overflow bug as #page-payment's own .g2 above, and for the same reason:
-   plain .g2 (grid-template-columns: 1fr 1fr, no explicit min) leaves each
-   grid item's minimum width at the browser default (auto), which — just
-   like a flex child — can't shrink below its content's natural minimum
-   width. Step 2's ledger/history tables and Step 3's form easily exceed
-   half the page at anything under ~1500px, so instead of the column
-   shrinking, it overflowed and visually bled into the Allocation Preview
-   column next to it (confirmed live at 1300px and 1198px widths — this is
-   NOT gated behind the 1024px breakpoint below; it happens well above it).
-   minmax(0, 1fr) sets each track's floor to 0, so the column shrinks and
-   lets ScrollTable's own horizontal scroll do its job instead. */
-#page-payment-console > .g2 {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)
+/* Payment Console's three-column Payment-Method / Fee-Details / Allocation
+   body had the same overflow bug as #page-payment's own .g2 above, and for
+   the same reason: plain .g3 (grid-template-columns: 1fr 1fr 1fr, no
+   explicit min) leaves each grid item's minimum width at the browser
+   default (auto), which — just like a flex child — can't shrink below its
+   content's natural minimum width. Step 2's ledger/history tables and Step
+   3's form easily exceed a third of the page at anything under ~1500px, so
+   instead of the column shrinking, it overflowed and visually bled into the
+   column next to it (confirmed live at 1300px and 1198px widths on the old
+   two-column layout — this is NOT gated behind the 1024px breakpoint below;
+   it happens well above it). minmax(0, 1fr) sets each track's floor to 0,
+   so the column shrinks and lets ScrollTable's own horizontal scroll do its
+   job instead. */
+#page-payment-console > .g3 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)
 }
 
-@media(max-width:1024px) {
-  #page-payment-console > .g2 {
+@media(max-width:1440px) {
+  #page-payment-console > .g3 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)
+  }
+}
+
+@media(max-width:900px) {
+  #page-payment-console > .g3 {
     grid-template-columns: 1fr
   }
 }

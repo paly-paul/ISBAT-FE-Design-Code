@@ -98,16 +98,22 @@ export interface StudentProfile {
 // has no "priority" or fee-category concept at all — GetAllOutstandingLedgers
 // (not wired here) is what covers the other/NCHE/guild categories.
 //
-// GUID-keyed (ledgerGuid/currencyGuid), not int-keyed — a correction from an
-// earlier version of this file that keyed rows by intLedger/intCurrency per
-// a since-superseded .bru sample. Don't reintroduce the int fields; the spec
-// doc is explicit that the DTO carries GUIDs.
+// GUID-keyed (ledgerGuid/currencyGuid) per the .md spec, but a real live
+// response (an application with no studentGuid yet, billed across its full
+// remaining programme — 4 semesters, several repeating ledgerNames like
+// "Tuition Fee") carried none of ledgerGuid/semesterGuid/currencyGuid at
+// all, only semesterName — so all three GUIDs are kept but marked optional
+// rather than assumed always-present, and semesterName is added since it's
+// the only thing that disambiguates same-named ledger rows across semesters
+// when no studentGuid narrows the billed range (see getOutstandingLedgers'
+// own studentGuid comment below).
 export interface OutstandingLedger {
-  ledgerGuid: string | null
-  semesterGuid: string | null
+  ledgerGuid?: string | null
+  semesterGuid?: string | null
+  semesterName: string | null
   ledgerName: string
   ledgerNum: number | null
-  currencyGuid: string | null
+  currencyGuid?: string | null
   currencyName: string
   ledgerAmount: number
   paidAmount: number
@@ -187,6 +193,12 @@ export interface PaymentInput {
   payType: number
   procBankGuid: string | null
   remarks: string | null
+  // The student is behind on results — POST .../payments (per the Payment
+  // Console flow doc) 409s with code `reregistration_required` the first
+  // time, carrying an explanation to show the cashier in a confirm dialog.
+  // Resubmitting the identical body with this flipped to true overrides
+  // that check. Always sent (false on the first attempt), never omitted.
+  confirmOverride: boolean
 }
 
 export interface PaymentResult {
@@ -195,6 +207,11 @@ export interface PaymentResult {
   receipt: string
   balance: number
   advanceMessage: string | null
+  // Surfaced alongside advanceMessage as a notice, not an error, per the
+  // Payment Console flow doc — the reregistration warning the 409 above
+  // would have blocked on, now just informational since confirmOverride
+  // already cleared it.
+  reRegistrationWarning: string | null
 }
 
 export const PAYMENT_CATEGORY_LABELS: Record<number, string> = {
@@ -214,19 +231,19 @@ export const PAY_TYPE_LABELS: Record<number, string> = {
 }
 
 // Maps payType (1=Cash/2=Cheque/3=Bank/4=DemandDraft/5=Online, per
-// CreatePayment.bru) onto ReceiptBook.category (0=Cash/1=Bank/2=Online, per
+// CreatePayment.bru) onto ReceiptBook.category (0=Cash/1=Bank, per
 // receiptBook.ts's CATEGORY_VALUES) so a Receipt Book dropdown only offers
 // books the backend will actually accept for the chosen payment method —
 // picking a mismatched pair is otherwise only caught after Save, via a real
 // backend validation_error ("Receipt book category does not match the
-// selected payment type."). Neither .bru spec documents this pairing
-// explicitly, so Cheque/Bank/DemandDraft are grouped under the Bank receipt
-// category as the closest reasonable read of "non-cash, non-online paper/
-// bank instrument" — flagged as unconfirmed, not verified against a spec.
+// selected payment type."). Confirmed via the Payment Console flow doc:
+// "category=0 (Cash) for payType: 1, category=1 (Bank) otherwise" — every
+// non-cash payType, Online included, takes the Bank category; there is no
+// separate Online receipt-book category for this endpoint.
 // Shared by both CreatePayment (payment-console/page.tsx) and
 // CreateAdvanceDeposit (NewAdvanceDepositModal.tsx) — the same receipt book
 // master applies to both.
-export const PAY_TYPE_TO_RECEIPT_CATEGORY: Record<number, number> = { 1: 0, 2: 1, 3: 1, 4: 1, 5: 2 }
+export const PAY_TYPE_TO_RECEIPT_CATEGORY: Record<number, number> = { 1: 0, 2: 1, 3: 1, 4: 1, 5: 1 }
 
 const mockApplicationSummaries: ApplicationSummary[] = []
 const mockStudentProfiles: Record<string, StudentProfile> = {}
@@ -383,6 +400,7 @@ export function createPayment(input: PaymentInput): Promise<PaymentResult> {
       receipt: `RCP-MOCK-${Date.now()}`,
       balance: 0,
       advanceMessage: null,
+      reRegistrationWarning: null,
     }
     return Promise.resolve(result)
   }
