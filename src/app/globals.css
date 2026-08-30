@@ -2226,6 +2226,19 @@ textarea.ctrl {
   }
 }
 
+/* Same overflow-safety floor as the .g3 override above, for the 2-column
+   layout the page falls back to when Column 3 (Allocation Preview/Receipt)
+   has nothing to show — see the g3/g2 className note in page.tsx. */
+#page-payment-console > .g2 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)
+}
+
+@media(max-width:900px) {
+  #page-payment-console > .g2 {
+    grid-template-columns: 1fr
+  }
+}
+
 .amt-display {
   display: flex;
   align-items: center;
@@ -2998,6 +3011,17 @@ tr.selected-row td:first-child {
 /* Don't sticky first column in import-preview tables (no action column) */
 .import-preview table th:first-child,
 .import-preview table td:first-child {
+  position: static;
+  box-shadow: none
+}
+
+/* Same opt-out, generic name — for any ScrollTable whose first column is
+   plain data (e.g. "Ledger", "Date") rather than an actions/checkbox
+   column, where the sticky-left behavior above has no purpose and just
+   traps horizontal scroll under the label column. Pass className="no-
+   sticky-col" to <ScrollTable>. */
+.no-sticky-col table th:first-child,
+.no-sticky-col table td:first-child {
   position: static;
   box-shadow: none
 }
