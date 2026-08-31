@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
+import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { useServiceCategories, useCreateServiceCategory, useUpdateServiceCategory, useDeleteServiceCategory } from '@/hooks/student/useServiceCategories'
 import { ServiceCategoryDto } from '@/lib/api/student/serviceCategories'
@@ -66,10 +67,10 @@ export default function Page() {
                   <tr key={c.serviceCategoryGuid}>
                     <td><strong>{c.categoryName}</strong></td>
                     <td>
-                      <div className="flex gap-2">
-                        <button className="btn-icon" onClick={() => openEditService(c)}><i className="lni lni-pencil-alt"></i></button>
-                        <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => removeServiceCategory(c.serviceCategoryGuid)}><i className="lni lni-trash-can"></i></button>
-                      </div>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openEditService(c)}><i className="lni lni-pencil-alt"></i> Edit</button>
+                        <button className="btn btn-neu btn-sm" style={{ color: 'var(--red)' }} onClick={() => removeServiceCategory(c.serviceCategoryGuid)}><i className="lni lni-trash-can"></i> Delete</button>
+                      </ActionMenu>
                     </td>
                   </tr>
                 ))}

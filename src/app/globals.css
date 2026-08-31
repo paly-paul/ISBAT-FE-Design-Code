@@ -2240,7 +2240,7 @@ textarea.ctrl {
   }
 }
 
-@media(max-width:900px) {
+@media(max-width:1200px) {
   #page-payment-console > .g3 {
     grid-template-columns: 1fr
   }
@@ -2253,7 +2253,7 @@ textarea.ctrl {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)
 }
 
-@media(max-width:900px) {
+@media(max-width:1200px) {
   #page-payment-console > .g2 {
     grid-template-columns: 1fr
   }
@@ -2287,7 +2287,7 @@ textarea.ctrl {
   }
 }
 
-@media(max-width:900px) {
+@media(max-width:1200px) {
   #page-payment-console > .pc-body {
     grid-template-columns: 1fr
   }
