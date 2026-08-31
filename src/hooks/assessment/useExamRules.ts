@@ -10,10 +10,11 @@ import {
 
 const EXAM_RULES_KEY = ['exam-rules']
 
-export function useExamRules(page: number, pageSize: number, search: string = '') {
+export function useExamRules(page: number, pageSize: number, search: string = '', enabled: boolean = true) {
   return useQuery({
     queryKey: [...EXAM_RULES_KEY, page, pageSize, search],
     queryFn: () => getExamRules(page, pageSize, search),
+    enabled,
   })
 }
 

@@ -8,6 +8,8 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ActionMenu } from '@/components/ActionMenu'
 import { IaStructureViewModal } from './_components/IaStructureViewModal'
+import { CwScheduleModal } from './_components/CwScheduleModal'
+import { CbtScheduleModal } from './_components/CbtScheduleModal'
 import { type IaStructureRowDto } from '@/lib/api/assessment/iaCreation'
 import {
   useIaCreationInit,
@@ -31,6 +33,8 @@ export default function IaCreationPage() {
 
   // ── Modal State ─────────────────────────────────
   const [viewingRow, setViewingRow] = useState<IaStructureRowDto | null>(null)
+  const [selectedCwGuid, setSelectedCwGuid] = useState<string | null>(null)
+  const [selectedCbtData, setSelectedCbtData] = useState<{ testGuid: string, unitCode: string, unitName: string } | null>(null)
 
   // ── Data fetching ─────────────────────────────────
   const { data: initData, isLoading: initLoading } = useIaCreationInit()
@@ -254,19 +258,6 @@ export default function IaCreationPage() {
                           >
                             <i className="lni lni-eye" /> View
                           </button>
-
-                          {row.classTestGuid && (
-                            <Link
-                              href={`/assessment/cbt-schedule?testGuid=${row.classTestGuid}&progName=${encodeURIComponent(
-                                initData?.programs.find(p => p.programGuid === selectedProgramGuid)?.programName || ''
-                              )}&semName=${encodeURIComponent(
-                                semesters?.find(s => s.semesterGuid === selectedSemesterGuid)?.semName || ''
-                              )}&unitCode=${encodeURIComponent(row.unitCode ?? '')}&unitName=${encodeURIComponent(row.unitName ?? '')}`}
-                              className="btn btn-neu btn-sm flex items-center justify-start gap-1.5 w-full mt-1"
-                            >
-                              <i className="lni lni-pencil" /> Edit Schedule
-                            </Link>
-                          )}
                         </ActionMenu>
                       </td>
                       <td className="font-mono text-sm">{row.unitCode ?? '—'}</td>
@@ -275,7 +266,16 @@ export default function IaCreationPage() {
                       {/* Course Work */}
                       <td className="text-right border-l border-slate-100">
                         {row.courseworkGuid ? (
-                          <span className="badge badge-green">{row.courseworkMaxMark}</span>
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="badge badge-green">{row.courseworkMaxMark}</span>
+                            <button
+                              onClick={() => setSelectedCwGuid(row.courseworkGuid)}
+                              className="text-g400 hover:text-green-600 transition-colors"
+                              title="Schedule Coursework"
+                            >
+                              <i className="lni lni-calendar text-lg" />
+                            </button>
+                          </div>
                         ) : (
                           <span className="text-g400 text-xs">—</span>
                         )}
@@ -292,17 +292,17 @@ export default function IaCreationPage() {
                         {row.classTestGuid ? (
                           <div className="flex items-center justify-end gap-2">
                             <span className="badge badge-blue">{row.classTestMaxMark}</span>
-                            <Link
-                              href={`/assessment/cbt-schedule?testGuid=${row.classTestGuid}&progName=${encodeURIComponent(
-                                initData?.programs.find(p => p.programGuid === selectedProgramGuid)?.programName || ''
-                              )}&semName=${encodeURIComponent(
-                                semesters?.find(s => s.semesterGuid === selectedSemesterGuid)?.semName || ''
-                              )}&unitCode=${encodeURIComponent(row.unitCode ?? '')}&unitName=${encodeURIComponent(row.unitName ?? '')}`}
+                            <button
+                              onClick={() => setSelectedCbtData({
+                                testGuid: row.classTestGuid!,
+                                unitCode: row.unitCode ?? '',
+                                unitName: row.unitName ?? ''
+                              })}
                               className="text-g400 hover:text-blue-600 transition-colors"
                               title="Schedule CBT"
                             >
                               <i className="lni lni-calendar text-lg" />
-                            </Link>
+                            </button>
                           </div>
                         ) : (
                           <span className="text-g400 text-xs">—</span>
@@ -346,8 +346,28 @@ export default function IaCreationPage() {
           progName={initData?.programs.find(p => p.programGuid === selectedProgramGuid)?.programName || ''}
           semName={semesters?.find(s => s.semesterGuid === selectedSemesterGuid)?.semName || ''}
           onClose={() => setViewingRow(null)}
+          onEditCw={(guid) => setSelectedCwGuid(guid)}
+          onEditCt={(guid) => setSelectedCbtData({
+            testGuid: guid,
+            unitCode: viewingRow.unitCode ?? '',
+            unitName: viewingRow.unitName ?? ''
+          })}
         />
       )}
+
+      <CwScheduleModal
+        isOpen={!!selectedCwGuid}
+        onClose={() => setSelectedCwGuid(null)}
+        courseworkGuid={selectedCwGuid}
+      />
+
+      <CbtScheduleModal
+        isOpen={!!selectedCbtData}
+        onClose={() => setSelectedCbtData(null)}
+        testGuid={selectedCbtData?.testGuid || null}
+        unitCode={selectedCbtData?.unitCode || ''}
+        unitName={selectedCbtData?.unitName || ''}
+      />
     </div>
   )
 }
