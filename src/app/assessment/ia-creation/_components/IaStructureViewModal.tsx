@@ -4,19 +4,23 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { IaStructureRowDto } from '@/lib/api/assessment/iaCreation'
 import { useIaTestSchedule } from '@/hooks/assessment/useIaTestSchedule'
+import { useIaCwSchedule } from '@/hooks/assessment/useIaCwSchedule'
 
 interface Props {
   row: IaStructureRowDto | null
   progName: string
   semName: string
   onClose: () => void
+  onEditCw?: (courseworkGuid: string) => void
+  onEditCt?: (classTestGuid: string) => void
 }
 
-export function IaStructureViewModal({ row, progName, semName, onClose }: Props) {
+export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw, onEditCt }: Props) {
   const [activeTab, setActiveTab] = useState<'CW' | 'CT' | 'UE'>('CT')
   
-  // We only fetch CT details because CW and UE aren't implemented in the backend yet.
+  // Fetch details for CT and CW
   const { data: ctSchedule, isLoading: ctLoading } = useIaTestSchedule(row?.classTestGuid || null)
+  const { data: cwSchedule, isLoading: cwLoading } = useIaCwSchedule(row?.courseworkGuid || null)
 
   if (!row) return null
 
@@ -29,11 +33,7 @@ export function IaStructureViewModal({ row, progName, semName, onClose }: Props)
     })
   }
 
-  // Get the edit link for the active tab
-  let editLink = ''
-  if (activeTab === 'CT' && row.classTestGuid) {
-    editLink = `/assessment/cbt-schedule?testGuid=${row.classTestGuid}&progName=${encodeURIComponent(progName)}&semName=${encodeURIComponent(semName)}&unitCode=${encodeURIComponent(row.unitCode ?? '')}&unitName=${encodeURIComponent(row.unitName ?? '')}`
-  }
+  // No editLink needed anymore, we use callbacks
 
   return (
     <div className="modal-overlay open" onClick={onClose}>
@@ -82,18 +82,48 @@ export function IaStructureViewModal({ row, progName, semName, onClose }: Props)
 
             {activeTab === 'CW' && (
               <>
-                <div>
-                  <div className="text-[12.5px] font-medium text-g500 mb-1">Max Mark</div>
-                  <div className="text-[14.5px] text-g900">{row.courseworkMaxMark ?? '—'}</div>
-                </div>
-                <div>
-                  <div className="text-[12.5px] font-medium text-g500 mb-1">Start Date & Time</div>
-                  <div className="text-[14.5px] text-g900">{formatDate(row.courseworkStartDateTime)}</div>
-                </div>
-                <div>
-                  <div className="text-[12.5px] font-medium text-g500 mb-1">End Date & Time</div>
-                  <div className="text-[14.5px] text-g900">{formatDate(row.courseworkEndDateTime)}</div>
-                </div>
+                {cwLoading ? (
+                  <div className="col-span-3 py-8 text-center text-g500">Loading Course Work details...</div>
+                ) : cwSchedule ? (
+                  <>
+                    <div>
+                      <div className="text-[12.5px] font-medium text-g500 mb-1">Max Mark</div>
+                      <div className="text-[14.5px] text-g900">{cwSchedule.maxMark ?? '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[12.5px] font-medium text-g500 mb-1">Start Date & Time</div>
+                      <div className="text-[14.5px] text-g900">{formatDate(cwSchedule.scheduledStartDateTime)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[12.5px] font-medium text-g500 mb-1">End Date & Time</div>
+                      <div className="text-[14.5px] text-g900">{formatDate(cwSchedule.scheduledEndDateTime)}</div>
+                    </div>
+
+                    <div>
+                      <div className="text-[12.5px] font-medium text-g500 mb-1">Duration</div>
+                      <div className="text-[14.5px] text-g900">—</div>
+                    </div>
+                    <div>
+                      <div className="text-[12.5px] font-medium text-g500 mb-1">Test Type</div>
+                      <div className="text-[14.5px] text-g900">{cwSchedule.courseworkType === 1 ? 'Offline' : 'Online'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[12.5px] font-medium text-g500 mb-1">Publish Status</div>
+                      <div className="text-[14.5px] text-g900">
+                        {cwSchedule.publishStatus === 1 ? 'Published' : 'Unpublished'}
+                      </div>
+                    </div>
+
+                    <div className="col-span-3">
+                      <div className="text-[12.5px] font-medium text-g500 mb-1">Exam Rule</div>
+                      <div className="text-[14.5px] text-g900">
+                        {cwSchedule.examRuleCode ? `${cwSchedule.examRuleCode} — ${cwSchedule.examRuleName}` : 'No rule linked'}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="col-span-3 py-8 text-center text-g500 italic">No detailed schedule found for this Course Work.</div>
+                )}
               </>
             )}
 
@@ -158,6 +188,24 @@ export function IaStructureViewModal({ row, progName, semName, onClose }: Props)
                   <div className="text-[12.5px] font-medium text-g500 mb-1">End Date & Time</div>
                   <div className="text-[14.5px] text-g900">{formatDate(row.examDate && row.examEndTime ? `${row.examDate}T${row.examEndTime}` : null)}</div>
                 </div>
+
+                <div>
+                  <div className="text-[12.5px] font-medium text-g500 mb-1">Duration</div>
+                  <div className="text-[14.5px] text-g900">—</div>
+                </div>
+                <div>
+                  <div className="text-[12.5px] font-medium text-g500 mb-1">Test Type</div>
+                  <div className="text-[14.5px] text-g900">—</div>
+                </div>
+                <div>
+                  <div className="text-[12.5px] font-medium text-g500 mb-1">Publish Status</div>
+                  <div className="text-[14.5px] text-g900">—</div>
+                </div>
+
+                <div className="col-span-3">
+                  <div className="text-[12.5px] font-medium text-g500 mb-1">Exam Rule</div>
+                  <div className="text-[14.5px] text-g900">—</div>
+                </div>
               </>
             )}
             
@@ -166,10 +214,14 @@ export function IaStructureViewModal({ row, progName, semName, onClose }: Props)
 
         {/* Footer */}
         <div className="p-5 flex justify-end gap-3" style={{ borderTop: 'none' }}>
-          {editLink ? (
-            <Link href={editLink} className="btn btn-primary" style={{ padding: '8px 20px', borderRadius: '6px' }}>
+          {activeTab === 'CT' && row.classTestGuid ? (
+            <button className="btn btn-primary" style={{ padding: '8px 20px', borderRadius: '6px' }} onClick={() => { onClose(); onEditCt?.(row.classTestGuid!); }}>
               Edit
-            </Link>
+            </button>
+          ) : activeTab === 'CW' && row.courseworkGuid ? (
+            <button className="btn btn-primary" style={{ padding: '8px 20px', borderRadius: '6px' }} onClick={() => { onClose(); onEditCw?.(row.courseworkGuid!); }}>
+              Edit
+            </button>
           ) : (
             <button className="btn btn-primary opacity-50 cursor-not-allowed" style={{ padding: '8px 20px', borderRadius: '6px' }} title={`${activeTab} editing not implemented yet`}>
               Edit

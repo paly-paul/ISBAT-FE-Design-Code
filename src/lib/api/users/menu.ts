@@ -137,7 +137,6 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
   ]),
   section('Class Test (CBT)', [
     leaf('CBT Overview', 'folder', '/assessment/cbt-overview'),
-    leaf('CBT Schedule', 'calendar', '/assessment/cbt-schedule'),
     leaf('CBT Question Upload', 'upload', '/assessment/cbt-qupload'),
     leaf('CBT Monitor', 'display', '/assessment/cbt-monitor'),
   ]),
@@ -314,9 +313,9 @@ function mergeFinanceSections(menu: MenuNode[]): MenuNode[] {
   const financeIdx = menu.findIndex(n => n.name === 'Finance')
   if (financeIdx === -1) return [...menu, module_('Finance', 'dollar', FINANCE_PAYMENT_SECTIONS)]
 
-  const financeModule   = menu[financeIdx]
+  const financeModule = menu[financeIdx]
   const existingSections = new Set(financeModule.children.map(c => c.name))
-  const missingSections   = FINANCE_PAYMENT_SECTIONS.filter(s => !existingSections.has(s.name))
+  const missingSections = FINANCE_PAYMENT_SECTIONS.filter(s => !existingSections.has(s.name))
   if (missingSections.length === 0) return menu
 
   const merged = [...menu]
@@ -482,15 +481,15 @@ function ensureProgrammeApproval(menu: MenuNode[]): MenuNode[] {
 
   const children = [...progMasterSection.children]
   const pmNodeIdx = children.findIndex(l => l.name === 'Programme Master')
-  
+
   if (pmNodeIdx !== -1) {
     children.splice(pmNodeIdx + 1, 0, leaf('Programme Approval', 'check-box', '/academic/programme-approval'))
   } else {
     children.push(leaf('Programme Approval', 'check-box', '/academic/programme-approval'))
   }
 
-  const mergedSection = { 
-    ...progMasterSection, 
+  const mergedSection = {
+    ...progMasterSection,
     children
   }
 
@@ -555,11 +554,11 @@ function ensureAssessmentMaster(menu: MenuNode[]): MenuNode[] {
   const hasExamRules = structSection.children.some(l => l.name === 'Exam Rules Master')
   const hasFaqs = structSection.children.some(l => l.name === 'Question FAQs')
   const hasIaCreation = structSection.children.some(l => l.name === 'IA Creation')
-  
+
   if (hasAssMaster && hasExamRules && hasFaqs && hasIaCreation) return menu
 
   const children = [...structSection.children]
-  
+
   if (!hasFaqs) {
     const examRuleIdx = children.findIndex(l => l.name === 'Exam Rules Master')
     if (examRuleIdx !== -1) {
@@ -571,7 +570,7 @@ function ensureAssessmentMaster(menu: MenuNode[]): MenuNode[] {
 
   if (!hasExamRules) children.unshift(leaf('Exam Rules Master', 'files', '/assessment/exam-rules'))
   if (!hasAssMaster) children.unshift(leaf('Assessment Master', 'list', '/assessment/assessment-master'))
-  
+
   // IA Creation — inject after Assessment Schedule if present, otherwise at end
   if (!hasIaCreation) {
     const scheduleIdx = children.findIndex(l => l.name === 'Assessment Schedule')
@@ -605,7 +604,7 @@ function ensureResitMaster(menu: MenuNode[]): MenuNode[] {
   if (resitSection.children.some(l => l.name === 'Resit Master')) return menu
 
   const children = [leaf('Resit Master', 'cogs', '/assessment/resit-configs'), ...resitSection.children]
-  
+
   const mergedSection = { ...resitSection, children }
   const mergedAssess = { ...assessModule }
   mergedAssess.children = [...assessModule.children]
@@ -624,8 +623,8 @@ export function getMenu(): Promise<MenuResult> {
       const withEmployee = menu.some(n => n.name === 'Employee') ? menu : [...menu, HARDCODED_EMPLOYEE_MODULE]
       const withApprovals = ensureEmployeeApprovals(withEmployee)
       const withAssessment = withApprovals.some(n => n.name === 'Assessment') ? withApprovals : [...withApprovals, HARDCODED_ASSESSMENT_MODULE]
-      const withFinance  = mergeFinanceSections(withAssessment)
-      const withStudent  = mergeStudentSections(withFinance)
+      const withFinance = mergeFinanceSections(withAssessment)
+      const withStudent = mergeStudentSections(withFinance)
       const withBulkEdit = ensureBulkIntakeEdit(withStudent)
       const withConfig = mergeConfigSections(withBulkEdit)
       const withProgApp = ensureProgrammeApproval(withConfig)

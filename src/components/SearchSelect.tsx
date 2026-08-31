@@ -35,7 +35,7 @@ export function SearchSelect({
   )
   const [open, setOpen]     = useState(false)
   const [search, setSearch] = useState('')
-  const [pos, setPos]       = useState({ top: 0, left: 0, width: 0 })
+  const [pos, setPos]       = useState<{ top?: number, bottom?: number, left: number, width: number, maxHeight: number }>({ top: 0, left: 0, width: 0, maxHeight: 200 })
 
   const triggerRef = useRef<HTMLButtonElement>(null)
   const dropRef    = useRef<HTMLDivElement>(null)
@@ -48,11 +48,31 @@ export function SearchSelect({
     ? normalised.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
     : normalised
 
-  function openDrop() {
-    if (triggerRef.current) {
-      const r = triggerRef.current.getBoundingClientRect()
-      setPos({ top: r.bottom + 4, left: r.left, width: r.width })
+  function calcPos() {
+    if (!triggerRef.current) return
+    const r = triggerRef.current.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - r.bottom - 10
+    const spaceAbove = r.top - 10
+    
+    if (spaceBelow < 200 && spaceAbove > spaceBelow) {
+      setPos({ 
+        bottom: window.innerHeight - r.top + 4, 
+        left: r.left, 
+        width: r.width, 
+        maxHeight: Math.min(spaceAbove - 40, 300) // -40 for search input
+      })
+    } else {
+      setPos({ 
+        top: r.bottom + 4, 
+        left: r.left, 
+        width: r.width, 
+        maxHeight: Math.min(spaceBelow - 40, 300)
+      })
     }
+  }
+
+  function openDrop() {
+    calcPos()
     setOpen(true)
   }
 
@@ -69,9 +89,7 @@ export function SearchSelect({
         setOpen(false)
     }
     function updatePos() {
-      if (!triggerRef.current) return
-      const r = triggerRef.current.getBoundingClientRect()
-      setPos({ top: r.bottom + 4, left: r.left, width: r.width })
+      calcPos()
     }
     function onScroll() { requestAnimationFrame(updatePos) }
     const observer = new IntersectionObserver(
@@ -149,7 +167,7 @@ export function SearchSelect({
           // here plus `.ss-drop`'s `overflow: hidden` was silently cutting
           // "Diploma in Networking" off mid-word rather than wrapping or
           // ellipsizing it.
-          style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.width, width: 'max-content', maxWidth: Math.max(pos.width, 360), zIndex: 9999 }}
+          style={{ position: 'fixed', top: pos.top, bottom: pos.bottom, left: pos.left, minWidth: pos.width, width: 'max-content', maxWidth: Math.max(pos.width, 360), zIndex: 9999 }}
         >
           <div className="ss-search">
             <input
@@ -163,7 +181,7 @@ export function SearchSelect({
               onClick={e => e.stopPropagation()}
             />
           </div>
-          <div className="ss-opts">
+          <div className="ss-opts" style={{ maxHeight: pos.maxHeight }}>
             {visible.length === 0
               ? <div className="ss-no-match">No matches</div>
               : visible.map(o => (
