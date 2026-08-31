@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
@@ -16,7 +16,21 @@ import { useBatchSummary } from '@/hooks/academic/useBatchSummary'
 // unfiltered "All Campuses" view, ?campusGuid={guid} once one's selected —
 // see getBatchSummary in lib/api/academic/batchSummary.ts for the field-name
 // caveat (names aren't confirmed against a real response yet).
-const STATS = { totalBatches: 8, totalStudents: 247, fullBatches: 3, avgBatchSize: 31 }
+//
+// The top stat tiles used to be a hardcoded STATS constant; Total
+// Batches/Total Students/Avg Batch Size are all derivable from the same
+// `rows` this page already fetches, so they're computed live below instead
+// (see statsFromRows). "Full Batches" was dropped rather than faked — there
+// is no capacity/maxSize field anywhere in BatchSummaryItem, so "at
+// capacity" isn't something this endpoint can answer.
+function statsFromRows(rows: { headCount: number }[]) {
+  const totalStudents = rows.reduce((sum, r) => sum + r.headCount, 0)
+  return {
+    totalBatches: rows.length,
+    totalStudents,
+    avgBatchSize: rows.length ? Math.round(totalStudents / rows.length) : 0,
+  }
+}
 
 const PAGE_SIZE = 10
 
@@ -25,6 +39,7 @@ export default function Page() {
   const [campusGuid, setCampusGuid] = useState('')
   const { data: campuses = [] } = useCampusDropdown()
   const { data: rows = [], isLoading } = useBatchSummary(campusGuid || null)
+  const stats = useMemo(() => statsFromRows(rows), [rows])
 
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
 
@@ -33,7 +48,7 @@ export default function Page() {
   useEffect(() => { setPage(1) }, [campusGuid, setPage])
 
   return (
-    <div className="page active">
+    <div className="page active" id="page-batch-summary">
       <div className="pg-hdr">
         <div><div className="pg-title">Batch Summary</div><div className="pg-sub">Student counts and status breakdown by batch</div></div>
         <div className="flex gap-2">
@@ -55,10 +70,9 @@ export default function Page() {
       </div>
 
       <div className="stats-row">
-        <div className="stat-card"><div className="stat-lbl">Total Batches</div><div className="stat-num" style={{ color: 'var(--b700)' }}>{STATS.totalBatches}</div><div className="stat-sub">Active this intake</div></div>
-        <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Students</div><div className="stat-num" style={{ color: 'var(--green)' }}>{STATS.totalStudents}</div><div className="stat-sub up">Across all batches</div></div>
-        <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]"><div className="stat-lbl">Full Batches</div><div className="stat-num" style={{ color: 'var(--amber)' }}>{STATS.fullBatches}</div><div className="stat-sub warn">At capacity</div></div>
-        <div className="stat-card"><div className="stat-lbl">Avg Batch Size</div><div className="stat-num">{STATS.avgBatchSize}</div><div className="stat-sub">students / batch</div></div>
+        <div className="stat-card"><div className="stat-lbl">Total Batches</div><div className="stat-num" style={{ color: 'var(--b700)' }}>{stats.totalBatches}</div><div className="stat-sub">{campusGuid ? 'At this campus' : 'Active this intake'}</div></div>
+        <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Students</div><div className="stat-num" style={{ color: 'var(--green)' }}>{stats.totalStudents}</div><div className="stat-sub up">Across all batches</div></div>
+        <div className="stat-card"><div className="stat-lbl">Avg Batch Size</div><div className="stat-num">{stats.avgBatchSize}</div><div className="stat-sub">students / batch</div></div>
       </div>
 
       <div className="card">
@@ -83,7 +97,13 @@ export default function Page() {
                 : pageItems.length === 0
                   ? <EmptyState colSpan={6} hasFilters={!!campusGuid} onClearFilters={() => setCampusGuid('')} />
                   : pageItems.map((r, i) => (
-                    <tr key={r.batchGuid}>
+                    // batchGuid alone isn't a safe key — the real endpoint's
+                    // field names aren't confirmed yet (see file header) and
+                    // a live response has been seen leaving it blank/
+                    // duplicated across rows; the absolute row index (page-
+                    // qualified, matching the Sl. No column) is always
+                    // unique regardless of what the guid comes back as.
+                    <tr key={`${r.batchGuid || 'row'}-${(page - 1) * PAGE_SIZE + i}`}>
                       <td className="text-g500">{(page - 1) * PAGE_SIZE + i + 1}</td>
                       <td><span className="font-bold font-mono text-blue">{r.batchCode}</span></td>
                       <td>{r.programName}</td>

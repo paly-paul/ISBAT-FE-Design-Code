@@ -38,6 +38,30 @@ export interface StudentDetailDto extends StudentDto {
   regSemesterGuid: string | null
   currentSemesterGuid: string | null
   aptechCe: boolean | null
+  // Fields confirmed on a real GET /api/v1/students/:guid response
+  // (2026-08-31) that don't exist on the shape above at all — the response
+  // that day carried none of the iStatus/regStatusName/discount fields
+  // above, only these, under different names than the list DTO's own
+  // (regNo not studentRegNo, batch not batchCode, etc.). Both sets are kept
+  // — optional here rather than replacing the fields above outright, since
+  // Profile and Programme Transfer already read the older fields and there
+  // is no confirmation the backend won't return either shape depending on
+  // route/version. The Student Profile *view modal* is the one place wired
+  // to prefer these.
+  regNo?: string | null
+  batch?: string | null
+  semester?: string | null
+  programme?: string | null
+  faculty?: string | null
+  campus?: string | null
+  email?: string | null
+  phone?: string | null
+  nationalityGuid?: string | null
+  nationality?: string | null
+  nationalityCode?: string | null
+  gender?: string | null
+  sponsor?: string | null
+  learningMode?: string | null
 }
 
 export interface PagedResult<T> {
@@ -84,6 +108,10 @@ export function getStudentByGuid(guid: string): Promise<StudentDetailDto> {
       discountGuid: null, calcType: null, amtPer: null, intSem: null,
       discountStatus: null, discountEffectiveFromSemesterGuid: null, discountCancelledAtSemesterGuid: null,
       intType: 1, regSemesterGuid: null, currentSemesterGuid: null, aptechCe: null,
+      regNo: found.studentRegNo, batch: found.batchCode, semester: found.semesterName, programme: found.programName,
+      faculty: 'Faculty of Computing', campus: 'ISBAT University - Main Campus',
+      email: 'student@example.com', phone: '+256700000000',
+      nationalityGuid: null, nationality: 'Ugandan', nationalityCode: 'UG', gender: 'Female', sponsor: null, learningMode: 'Campus Mode',
     })
   }
   return apiGet<StudentDetailDto>(`/api/v1/students/${guid}`)

@@ -2,19 +2,36 @@
 import { ModalProps } from '../types'
 import { useStudent } from '@/hooks/student/useStudents'
 
-function fmtDate(iso: string | null): string {
-  if (!iso) return '—'
-  return iso.slice(0, 10)
-}
-
 interface Props extends ModalProps {
   studentGuid: string | null
 }
 
+// Field mapping confirmed against a real GET /api/v1/students/:guid
+// response (2026-08-31) — a flatter shape than StudentDetailDto's original
+// fields (regNo not studentRegNo, batch not batchCode, programme not
+// programName, plus faculty/campus/email/phone/nationality*/gender/sponsor/
+// learningMode, none of which existed on the DTO before). That response
+// carried none of the old iStatus/regStatusName/discount fields, so the old
+// "Registration & Academic Status" section (raw status codes + discount
+// breakdown) had nothing left to show and is replaced with a Contact &
+// Personal section reflecting what the endpoint actually returns. The old
+// fields are kept on the type (see student.ts) for Profile/Programme
+// Transfer, which still read them — this modal just doesn't rely on them.
 export function StudentProfileModal({ isOpen, onClose, studentGuid }: Props) {
   const { data: student, isLoading, isError } = useStudent(studentGuid, isOpen)
 
   if (!isOpen || !studentGuid) return null
+
+  const name = student?.studentName || '—'
+  const regNo = student?.regNo ?? student?.studentRegNo ?? '—'
+  const programme = student?.programme ?? student?.programName ?? '—'
+  const semester = student?.semester ?? student?.semesterName ?? '—'
+  const batch = student?.batch ?? student?.batchCode ?? '—'
+  // nationality/nationalityCode have both come back null on a real response
+  // that still carried a nationalityGuid — no lookup exists anywhere in this
+  // app to resolve that guid to a name, so it's shown raw as a last resort
+  // rather than silently reading as "—" when there's actually a value.
+  const nationality = student?.nationality ?? student?.nationalityCode ?? student?.nationalityGuid ?? '—'
 
   return (
     <div className="modal-overlay open">
@@ -35,44 +52,37 @@ export function StudentProfileModal({ isOpen, onClose, studentGuid }: Props) {
               <div className="card mb-6">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center justify-center rounded-full font-bold text-white shrink-0" style={{ width: 64, height: 64, background: 'var(--b500)', fontSize: 22 }}>
-                    {(student.studentName.trim()[0] ?? '—').toUpperCase()}
+                    {(name?.trim()[0] ?? '—').toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-lg text-g900">{student.studentName}</div>
-                    <div className="text-sm text-g500">{student.programName || '—'} &middot; {student.semesterName || '—'}</div>
+                    <div className="font-semibold text-lg text-g900">{name}</div>
+                    <div className="text-sm text-g500">{programme} &middot; {semester}</div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <span className="badge badge-blue font-mono">{student.studentNum}</span>
-                    {/* studActive reads as an active/inactive flag by naming
-                        convention only — not confirmed against docs. */}
-                    <span className={`badge ${student.studActive === 1 ? 'badge-green' : 'badge-grey'}`}>{student.studActive === 1 ? 'Active' : 'Inactive'}</span>
+                    <span className="badge badge-blue font-mono">{regNo}</span>
+                    {student.gender && <span className="badge badge-grey">{student.gender}</span>}
                   </div>
                 </div>
               </div>
 
               <div className="sec-divider">Student Information</div>
               <div className="g3 mb-4">
-                <div className="fg"><label className="lbl">Student No.</label><input className="ctrl font-mono" readOnly value={student.studentNum} /></div>
-                <div className="fg"><label className="lbl">Registration No.</label><input className="ctrl font-mono" readOnly value={student.studentRegNo} /></div>
-                <div className="fg"><label className="lbl">Registration Status</label><input className="ctrl" readOnly value={student.regStatusName || '—'} /></div>
-                <div className="fg"><label className="lbl">Programme</label><input className="ctrl" readOnly value={student.programName || '—'} /></div>
-                <div className="fg"><label className="lbl">Semester</label><input className="ctrl" readOnly value={student.semesterName || '—'} /></div>
-                <div className="fg"><label className="lbl">Batch</label><input className="ctrl" readOnly value={student.batchCode || '—'} /></div>
+                <div className="fg"><label className="lbl">Registration No.</label><input className="ctrl font-mono" readOnly value={regNo} /></div>
+                <div className="fg"><label className="lbl">Programme</label><input className="ctrl" readOnly value={programme} /></div>
+                <div className="fg"><label className="lbl">Semester</label><input className="ctrl" readOnly value={semester} /></div>
+                <div className="fg"><label className="lbl">Batch</label><input className="ctrl" readOnly value={batch} /></div>
+                <div className="fg"><label className="lbl">Faculty</label><input className="ctrl" readOnly value={student.faculty || '—'} /></div>
+                <div className="fg"><label className="lbl">Campus</label><input className="ctrl" readOnly value={student.campus || '—'} /></div>
               </div>
 
-              {/* Everything below is confirmed on the wire but largely
-                  unglossed (no label mapping documented for iStatus/intType/
-                  discount fields) — shown raw rather than guessed. */}
-              <div className="sec-divider">Registration &amp; Academic Status</div>
+              <div className="sec-divider">Contact &amp; Personal</div>
               <div className="g3">
-                <div className="fg"><label className="lbl">Registration Date</label><input className="ctrl" readOnly value={fmtDate(student.regDate)} /></div>
-                <div className="fg"><label className="lbl">Status Code (iStatus)</label><input className="ctrl" readOnly value={String(student.iStatus)} /></div>
-                <div className="fg"><label className="lbl">Type Code (intType)</label><input className="ctrl" readOnly value={student.intType != null ? String(student.intType) : '—'} /></div>
-                <div className="fg"><label className="lbl">Semester Count (intSem)</label><input className="ctrl" readOnly value={student.intSem != null ? String(student.intSem) : '—'} /></div>
-                <div className="fg"><label className="lbl">Aptech Credit Exemption</label><input className="ctrl" readOnly value={student.aptechCe == null ? '—' : student.aptechCe ? 'Yes' : 'No'} /></div>
-                <div className="fg"><label className="lbl">Discount Status</label><input className="ctrl" readOnly value={student.discountStatus || '—'} /></div>
-                <div className="fg"><label className="lbl">Discount Calc. Type</label><input className="ctrl" readOnly value={student.calcType || '—'} /></div>
-                <div className="fg"><label className="lbl">Discount Amount / %</label><input className="ctrl" readOnly value={student.amtPer != null ? String(student.amtPer) : '—'} /></div>
+                <div className="fg"><label className="lbl">Email</label><input className="ctrl" readOnly value={student.email || '—'} /></div>
+                <div className="fg"><label className="lbl">Phone</label><input className="ctrl" readOnly value={student.phone || '—'} /></div>
+                <div className="fg"><label className="lbl">Nationality</label><input className="ctrl" readOnly value={nationality} /></div>
+                <div className="fg"><label className="lbl">Gender</label><input className="ctrl" readOnly value={student.gender || '—'} /></div>
+                <div className="fg"><label className="lbl">Sponsor</label><input className="ctrl" readOnly value={student.sponsor || '—'} /></div>
+                <div className="fg"><label className="lbl">Learning Mode</label><input className="ctrl" readOnly value={student.learningMode || '—'} /></div>
               </div>
             </>
           )}

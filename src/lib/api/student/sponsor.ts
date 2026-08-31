@@ -37,10 +37,8 @@ export interface SponsorCategoryRequest {
   mandatoryFeeCheck?: number | null
 }
 
-// GET /students/sponsor-assignment/{studentGuid}/sponsor-details response
-// shape — same fields as a sponsor-category list item, per the docs. Route
-// moved here from /studentsponsorassignment/… on 2026-08-24 (the old prefix
-// wasn't covered by any gateway route and 404'd through it).
+// GET /studentsponsorassignment/{studentGuid}/sponsor-details response shape
+// — same fields as a sponsor-category list item, per the docs.
 export type SponsorDetailsDto = SponsorCategoryDto
 
 const mockCategories: SponsorCategoryDto[] = [
@@ -100,7 +98,12 @@ export function getSponsorDetails(studentGuid: string): Promise<SponsorDetailsDt
     const cat = mockCategories.find(c => c.sponsorCategoryGuid === guid)
     return Promise.resolve(cat ?? null)
   }
-  return apiGet<SponsorDetailsDto>(`/api/v1/students/sponsor-assignment/${studentGuid}/sponsor-details`).catch(err => {
+  // Route is /api/v1/studentsponsorassignment/... — its own top-level
+  // segment, not nested under /students/sponsor-assignment/ — confirmed
+  // against students/student-sponsor-assignment/get-sponsor-details.md
+  // (2026-08-2x). The old /students/sponsor-assignment/... path would 404
+  // outside mock mode.
+  return apiGet<SponsorDetailsDto>(`/api/v1/studentsponsorassignment/${studentGuid}/sponsor-details`).catch(err => {
     if (err instanceof AuthError && err.code === 'not_found') return null
     throw err
   })
@@ -111,5 +114,5 @@ export function assignSponsorCategory(studentGuid: string, sponsorCategoryGuid: 
     mockAssignments[studentGuid] = sponsorCategoryGuid
     return Promise.resolve({ studentGuid, sponsorCategoryGuid })
   }
-  return apiPost(`/api/v1/students/sponsor-assignment/${studentGuid}/sponsor-assignment`, { sponsorCategoryGuid })
+  return apiPost(`/api/v1/studentsponsorassignment/${studentGuid}/sponsor-assignment`, { sponsorCategoryGuid })
 }

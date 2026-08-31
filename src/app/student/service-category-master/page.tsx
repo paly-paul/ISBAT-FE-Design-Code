@@ -2,42 +2,50 @@
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { Toast } from '@/components/Toast'
+import { useServiceCategories, useCreateServiceCategory, useUpdateServiceCategory, useDeleteServiceCategory } from '@/hooks/student/useServiceCategories'
+import { ServiceCategoryDto } from '@/lib/api/student/serviceCategories'
 
 // Split out of the old combined "Category Masters" page (student/masters/)
 // per request — this half owns Service Category Master only (the ticketing
-// workflow's categories). Still has no backend contract at all — page-local
-// mock state, unchanged from the combined page.
-interface CategoryRow { id: number; name: string; note: string }
-
-const INITIAL_SERVICE_CATEGORIES: CategoryRow[] = [
-  { id: 1, name: 'Finance', note: 'Finance Team' },
-  { id: 2, name: 'Assessment', note: 'Exam Office' },
-  { id: 3, name: 'Academic', note: 'Academic Registrar' },
-  { id: 4, name: 'Infrastructure', note: 'Facilities Team' },
-]
-
+// workflow's categories). Wired to the real students/service-categories CRUD
+// API (see students/service-categories/*.md). The real record is just
+// { serviceCategoryGuid, categoryName } — there's no "Routes To" free-text
+// note field on the backend, so that mock-only column/input was dropped
+// rather than faked.
 export default function Page() {
-  const [serviceCats, setServiceCats] = useState(INITIAL_SERVICE_CATEGORIES)
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
 
-  const [addServiceOpen, setAddServiceOpen] = useState(false)
+  const { data: serviceCatsPage, isLoading: serviceCatsLoading } = useServiceCategories()
+  const serviceCats = serviceCatsPage?.items ?? []
+  const createServiceCategory = useCreateServiceCategory()
+  const updateServiceCategory = useUpdateServiceCategory()
+  const deleteServiceCategory = useDeleteServiceCategory()
+
+  const [serviceCatModal, setServiceCatModal] = useState<{ mode: 'add' | 'edit'; row?: ServiceCategoryDto } | null>(null)
   const [serviceName, setServiceName] = useState('')
-  const [serviceNote, setServiceNote] = useState('')
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  function openAddService() { setAddServiceOpen(true); setServiceName(''); setServiceNote('') }
+  function openAddService() { setServiceCatModal({ mode: 'add' }); setServiceName('') }
+  function openEditService(row: ServiceCategoryDto) { setServiceCatModal({ mode: 'edit', row }); setServiceName(row.categoryName ?? '') }
 
   function saveServiceCategory() {
-    const row: CategoryRow = { id: Date.now(), name: serviceName.trim() || 'Untitled Category', note: serviceNote.trim() }
-    setServiceCats(prev => [...prev, row])
-    showToast('Category added', 'ok')
-    setAddServiceOpen(false)
+    if (!serviceCatModal) return
+    const categoryName = serviceName.trim().slice(0, 100)
+    if (!categoryName) { showToast('Category name is required', 'err'); return }
+    const onDone = {
+      onSuccess: () => { showToast(serviceCatModal.mode === 'add' ? 'Category added' : 'Category updated', 'ok'); setServiceCatModal(null) },
+      onError: () => showToast('Could not save category — name may already be in use', 'err'),
+    }
+    if (serviceCatModal.mode === 'add') createServiceCategory.mutate({ categoryName }, onDone)
+    else updateServiceCategory.mutate({ guid: serviceCatModal.row!.serviceCategoryGuid, payload: { categoryName } }, onDone)
   }
 
-  function removeServiceCategory(id: number) {
-    setServiceCats(prev => prev.filter(c => c.id !== id))
-    showToast('Category removed', 'ok')
+  function removeServiceCategory(guid: string) {
+    deleteServiceCategory.mutate(guid, {
+      onSuccess: () => showToast('Category removed', 'ok'),
+      onError: () => showToast('Could not remove category', 'err'),
+    })
   }
 
   return (
@@ -48,16 +56,19 @@ export default function Page() {
           <div className="card-hdr"><div className="card-title"><i className="lni lni-ticket"></i> Service Category Master</div><button className="btn btn-primary btn-sm" onClick={openAddService}><i className="lni lni-plus"></i> Add</button></div>
           <ScrollTable>
             <table>
-              <thead><tr><th>Category</th><th>Routes To</th><th style={{ width: 90 }}></th></tr></thead>
+              <thead><tr><th>Category</th><th style={{ width: 90 }}></th></tr></thead>
               <tbody>
-                {serviceCats.map(c => (
-                  <tr key={c.id}>
-                    <td><strong>{c.name}</strong></td>
-                    <td className="text-muted">{c.note}</td>
+                {serviceCatsLoading ? (
+                  <tr><td colSpan={2} className="text-muted">Loading…</td></tr>
+                ) : serviceCats.length === 0 ? (
+                  <tr><td colSpan={2} className="text-muted">No categories yet</td></tr>
+                ) : serviceCats.map(c => (
+                  <tr key={c.serviceCategoryGuid}>
+                    <td><strong>{c.categoryName}</strong></td>
                     <td>
                       <div className="flex gap-2">
-                        <button className="btn-icon"><i className="lni lni-pencil-alt"></i></button>
-                        <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => removeServiceCategory(c.id)}><i className="lni lni-trash-can"></i></button>
+                        <button className="btn-icon" onClick={() => openEditService(c)}><i className="lni lni-pencil-alt"></i></button>
+                        <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => removeServiceCategory(c.serviceCategoryGuid)}><i className="lni lni-trash-can"></i></button>
                       </div>
                     </td>
                   </tr>
@@ -68,15 +79,14 @@ export default function Page() {
         </div>
       </div>
 
-      {addServiceOpen && (
-        <div className="modal-overlay open" onClick={() => setAddServiceOpen(false)}>
+      {serviceCatModal && (
+        <div className="modal-overlay open" onClick={() => setServiceCatModal(null)}>
           <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
-            <div className="modal-hdr"><div className="modal-title">Add Category</div><button className="modal-close" onClick={() => setAddServiceOpen(false)}>✕</button></div>
+            <div className="modal-hdr"><div className="modal-title">{serviceCatModal.mode === 'add' ? 'Add' : 'Edit'} Category</div><button className="modal-close" onClick={() => setServiceCatModal(null)}>✕</button></div>
             <div>
-              <div className="fg"><label className="lbl">Name <span className="req">*</span></label><input className="ctrl" placeholder="Category name" value={serviceName} onChange={e => setServiceName(e.target.value)} /></div>
-              <div className="fg"><label className="lbl">Routes To</label><input className="ctrl" placeholder="e.g. Finance Team" value={serviceNote} onChange={e => setServiceNote(e.target.value)} /></div>
+              <div className="fg"><label className="lbl">Name <span className="req">*</span></label><input className="ctrl" placeholder="Category name" maxLength={100} value={serviceName} onChange={e => setServiceName(e.target.value)} /></div>
             </div>
-            <div className="modal-footer"><button className="btn btn-neu" onClick={() => setAddServiceOpen(false)}>Cancel</button><button className="btn btn-primary" onClick={saveServiceCategory}>Save</button></div>
+            <div className="modal-footer"><button className="btn btn-neu" onClick={() => setServiceCatModal(null)}>Cancel</button><button className="btn btn-primary" onClick={saveServiceCategory}>Save</button></div>
           </div>
         </div>
       )}
