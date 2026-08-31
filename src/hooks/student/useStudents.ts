@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { StudentListFilters, getStudentByGuid, getStudents } from '@/lib/api/student/student'
 
 const STUDENTS_LIST_KEY = ['students-list']
@@ -8,6 +8,26 @@ export function useStudents(page: number, pageSize: number, filters?: StudentLis
   return useQuery({
     queryKey: [...STUDENTS_LIST_KEY, page, pageSize, filters?.searchTerm ?? ''],
     queryFn: () => getStudents(page, pageSize, filters),
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
+// Infinite-scroll variant for a search dropdown — each additional page is
+// appended rather than replacing the list, and getNextPageParam stops
+// offering a next page once pageNumber*pageSize has reached totalCount.
+// Kept as its own hook rather than a mode on useStudents above since a
+// paginated table (page/setPage, Pagination component) and an
+// append-as-you-scroll dropdown want fundamentally different query shapes.
+export function useStudentsInfinite(searchTerm: string, pageSize: number) {
+  return useInfiniteQuery({
+    queryKey: [...STUDENTS_LIST_KEY, 'infinite', pageSize, searchTerm],
+    queryFn: ({ pageParam }) => getStudents(pageParam, pageSize, { searchTerm: searchTerm || undefined }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const fetched = allPages.reduce((sum, p) => sum + p.items.length, 0)
+      return fetched < lastPage.totalCount ? allPages.length + 1 : undefined
+    },
     staleTime: Infinity,
     gcTime: Infinity,
   })

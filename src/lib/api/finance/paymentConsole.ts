@@ -313,6 +313,47 @@ export function getOutstandingLedgers(applicationGuid: string, studentGuid?: str
     })
 }
 
+// Confirmed via get-all-outstanding-ledgers.md — everything the student
+// owes across all four fee categories (tuition/other/NCHE/guild) in one
+// flat list, each row tagged with `category`. Unlike getOutstandingLedgers
+// above (tuition-only, semester-scoped, takes an optional studentGuid),
+// this endpoint takes no studentGuid at all and isn't semester-scoped —
+// it's the "whole picture" the doc says feeds a not-yet-built unified
+// payment screen. Used here just to show a real what's-owed figure on the
+// Other/NCHE/Guild tabs, whose own payment-entry forms stay mock (no
+// documented single-category submit endpoint for them yet).
+export interface AllOutstandingItem {
+  category: number
+  ledgerGuid: string | null
+  ledgerName: string | null
+  semesterGuid: string | null
+  semesterName: string | null
+  semCode: number | null
+  description: string
+  currencyGuid: string | null
+  currencyCode: string | null
+  currencyName: string | null
+  outstanding: number
+}
+
+export function getAllOutstandingLedgers(applicationGuid: string): Promise<AllOutstandingItem[]> {
+  if (MOCK_AUTH) return Promise.resolve([])
+  return apiGet<AllOutstandingItem[] | null>(`/api/v1/finance/payment-console/outstanding-all/${applicationGuid}`)
+    .then(data => data ?? [])
+    // Same "genuinely-empty-result-as-404" behavior as getOutstandingLedgers
+    // above — confirmed by the doc's own error table: 404 `not_found`
+    // covers both "Application not found." and "No outstanding fees
+    // found." (the latter meaning nothing owed at all, not a real error).
+    // Distinguishing those two would need reading the error message text,
+    // which the doc doesn't give a machine-checkable code for — treating
+    // both as "nothing owed" is the safer default (an unknown application
+    // would already have failed earlier, at student-profile load).
+    .catch(err => {
+      if (err instanceof AuthError && err.code === 'not_found') return []
+      throw err
+    })
+}
+
 export function getPaymentHistory(applicationGuid: string): Promise<PaymentHistoryEntry[]> {
   if (MOCK_AUTH) return Promise.resolve(mockPaymentHistory[applicationGuid] ?? [])
   return apiGet<PaymentHistoryEntry[] | null>(`/api/v1/finance/payment-console/payment-history/${applicationGuid}`)
@@ -443,4 +484,102 @@ export function createAdvanceDeposit(input: AdvanceDepositInput): Promise<Advanc
     return Promise.resolve(result)
   }
   return apiPost<AdvanceDepositResult>('/api/v1/finance/payment-console/advance-deposit', input)
+}
+
+// Confirmed via payment-nche/payment-guild/payment-other .md docs (payment/
+// folder at repo root). Structurally near-identical to each other — no
+// currency, no receipt book, no bank, no receipt claimed; the amount must
+// be an exact multiple of a fixed per-semester rate configured in GenSets,
+// enforced server-side (the client has no way to know that rate ahead of
+// time, so this is left for the 400 to report, not pre-validated here).
+// The only payload difference is the free-text reference field: NCHE takes
+// pnrNumber, Guild takes bankDeposit.
+export interface PaymentNcheInput {
+  applicationGuid: string
+  studentGuid: string | null
+  amount: number
+  payDate: string
+  pnrNumber: string | null
+  remarks: string | null
+}
+
+export interface PaymentNcheResult {
+  paymentNcheGuid: string
+  amount: number
+  // What's still owed on NCHE after this payment (rate × semesterCount,
+  // minus what's now paid) — there is no receipt field, none is issued.
+  remainingBalance: number
+}
+
+export function createPaymentNche(input: PaymentNcheInput): Promise<PaymentNcheResult> {
+  if (MOCK_AUTH) {
+    return Promise.resolve({ paymentNcheGuid: `mock-nche-${mockPaymentSeq++}`, amount: input.amount, remainingBalance: 0 })
+  }
+  return apiPost<PaymentNcheResult>('/api/v1/finance/payment-console/payment-nche', input)
+}
+
+export interface PaymentGuildInput {
+  applicationGuid: string
+  studentGuid: string | null
+  amount: number
+  payDate: string
+  bankDeposit: string | null
+}
+
+export interface PaymentGuildResult {
+  paymentGuildGuid: string
+  amount: number
+  remainingBalance: number
+}
+
+export function createPaymentGuild(input: PaymentGuildInput): Promise<PaymentGuildResult> {
+  if (MOCK_AUTH) {
+    return Promise.resolve({ paymentGuildGuid: `mock-guild-${mockPaymentSeq++}`, amount: input.amount, remainingBalance: 0 })
+  }
+  return apiPost<PaymentGuildResult>('/api/v1/finance/payment-console/payment-guild', input)
+}
+
+// Confirmed via payment-other.md — NOT wired up to the Other Payment tab
+// yet. ledgerOthersGuid must come from GET /payment-console/ledger-others
+// (referenced in that doc but its own spec hasn't been provided), so the
+// tab still uses a static label list with no real GUIDs behind it — wiring
+// this call today would send garbage into ledgerOthersGuid and 404
+// ("Ledger not found."). Left here as ready-to-use scaffolding, matching
+// the request/response shape exactly, once that picker has a real source.
+export interface PaymentOtherInput {
+  applicationGuid: string
+  studentGuid: string | null
+  ledgerOthersGuid: string
+  amount: number
+  currencyGuid: string
+  payDate: string
+  payType: number
+  remarks: string | null
+  // Cash/bank mode (paymentAdvanceGuid null): receiptBookGuid required,
+  // procBankGuid required too unless payType is Cash. Advance mode
+  // (paymentAdvanceGuid set): both left null — no receipt is claimed, the
+  // money was already receipted when the advance was deposited.
+  receiptBookGuid: string | null
+  procBankGuid: string | null
+  paymentAdvanceGuid: string | null
+}
+
+export interface PaymentOtherResult {
+  paymentOtherGuid: string
+  paymentCode: string
+  // null in advance mode — no receipt is claimed there.
+  receipt: string | null
+  amount: number
+}
+
+export function createPaymentOther(input: PaymentOtherInput): Promise<PaymentOtherResult> {
+  if (MOCK_AUTH) {
+    return Promise.resolve({
+      paymentOtherGuid: `mock-other-${mockPaymentSeq}`,
+      paymentCode: `OTH-MOCK-${mockPaymentSeq++}`,
+      receipt: input.paymentAdvanceGuid ? null : `RCP-MOCK-${Date.now()}`,
+      amount: input.amount,
+    })
+  }
+  return apiPost<PaymentOtherResult>('/api/v1/finance/payment-console/payment-other', input)
 }

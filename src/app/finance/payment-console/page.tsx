@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
+import { PaymentHistoryModal } from '@/components/modals/finance/PaymentHistoryModal'
 import DatePicker from '@/components/DatePicker'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
@@ -16,17 +17,54 @@ import {
   useSearchStudents,
   useStudentProfile,
   useOutstandingLedgers,
+  useAllOutstandingLedgers,
   usePaymentHistory,
   usePayableLedgers,
   useCreatePayment,
-  PAYMENT_CATEGORY_LABELS,
+  useCreatePaymentNche,
+  useCreatePaymentGuild,
   PAY_TYPE_LABELS,
   PAY_TYPE_TO_RECEIPT_CATEGORY,
+  AllOutstandingItem,
 } from '@/hooks/finance/usePaymentConsole'
 import { formatDateTime } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
 
 function fmtUGX(n: number) { return n > 0 ? `UGX ${Math.round(n).toLocaleString()}` : '—' }
+
+// Real "what's owed" table for the Other/NCHE/Guild tabs, sourced from
+// GET .../outstanding-all (get-all-outstanding-ledgers.md) filtered by
+// category client-side. ledgerGuid/semesterName/currency are null for
+// NCHE/Guild rows per that doc (not ledger-based); rendered defensively
+// with '—' fallbacks since the doc doesn't confirm the same for Other.
+function OutstandingCategoryTable({ items, isLoading, isError }: { items: AllOutstandingItem[]; isLoading: boolean; isError: boolean }) {
+  if (isLoading) return <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading outstanding balance…</div>
+  if (isError) return <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load the outstanding balance.</div>
+  if (items.length === 0) return <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Fully settled — nothing outstanding in this category.</div>
+  const total = items.reduce((sum, it) => sum + it.outstanding, 0)
+  return (
+    <>
+      <ScrollTable className="no-sticky-col">
+        <table>
+          <thead><tr><th>Description</th><th>Semester</th><th>Outstanding</th></tr></thead>
+          <tbody>
+            {items.map((it, i) => (
+              <tr key={`${it.ledgerGuid ?? it.description}-${i}`}>
+                <td>{it.description}</td>
+                <td>{it.semesterName ?? '—'}</td>
+                <td className="text-amber font-bold">{it.currencyCode ? `${it.currencyCode} ` : ''}{it.outstanding.toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </ScrollTable>
+      <div className="mt-[10px] p-3 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100 flex justify-between items-center">
+        <span className="text-muted" style={{ fontSize: 12 }}>Total Outstanding</span>
+        <span className="font-bold text-blue">{total.toLocaleString()}</span>
+      </div>
+    </>
+  )
+}
 
 function applicantName(a: { firstName: string | null; lastName: string | null }) {
   return `${a.firstName ?? ''}${a.lastName ? ` ${a.lastName}` : ''}`.trim() || '—'
@@ -122,9 +160,13 @@ export default function PaymentConsolePage() {
   // from the loaded profile further down, which stays the source of truth
   // for every query after the profile has actually loaded.
   const [selectedStudentGuidHint, setSelectedStudentGuidHint] = useState<string | null>(null)
+  // Also doubles as PaymentHistoryModal's open flag — its own button lives
+  // in the Student Profile Details card-hdr, not here; usePaymentHistory
+  // below stays enabled-on-demand the same way the old inline accordion
+  // had it (only fetches once the cashier actually wants to see it).
   const [showHistory, setShowHistory] = useState(false)
-  // Outstanding ledger table (Step 2) — same collapsible-accordion pattern
-  // as Payment History below it. Defaults open since it's the primary
+  // Outstanding ledger table (Step 2) — its own collapsible accordion,
+  // unrelated to showHistory above. Defaults open since it's the primary
   // "what's owed" view a cashier lands on, unlike history which is a
   // secondary lookup.
   const [showOutstanding, setShowOutstanding] = useState(true)
@@ -134,36 +176,33 @@ export default function PaymentConsolePage() {
   // payment form (selectStudent's resetPaymentForm call).
   const [activePayTab, setActivePayTab] = useState<PayCategory>('tuition')
 
-  // NCHE tab — UI-first mock per the reference screen (legacy ISMS
-  // frmTrnPaymentNCH-A.aspx), same "hard-coded mock data" pattern the rest
-  // of this app follows (CLAUDE.md) since there's no documented NCHE
-  // endpoint yet (payment-console-page.md covers Tuition only). Local
-  // component state only — nothing here survives a page refresh or is sent
-  // anywhere; it exists purely so the tab's layout/interactions can be
-  // reviewed ahead of the real API.
-  const [nchePaidSemesters, setNchePaidSemesters] = useState<Set<string>>(new Set())
-  const [nchePayments, setNchePayments] = useState<{ id: string; semesterGuid: string; payDate: string; prn: string; amount: string; remarks: string }[]>([])
-  const [ncheEditingId, setNcheEditingId] = useState<string | null>(null)
-  const [ncheSemesterGuid, setNcheSemesterGuid] = useState('')
+  // NCHE tab — wired to the real POST .../payment-nche (payment/post-
+  // payment-nche.md). No currency/receipt-book/bank/semester in that
+  // payload — the amount is validated server-side against a fixed
+  // per-semester rate this client has no way to know ahead of time, so
+  // it's left for the 400 to report. nchePayments is a local session log
+  // of what was actually submitted this visit (append-only — a real,
+  // committed payment can't be edited or deleted from here), not mock
+  // data; ncheEditingId from an earlier draft of this tab is gone along
+  // with edit/delete, for the same reason.
+  const [nchePayments, setNchePayments] = useState<{ id: string; payDate: string; pnrNumber: string; amount: number; remarks: string | null; remainingBalance: number }[]>([])
   const [nchePayDate, setNchePayDate] = useState(todayYmd)
   const [nchePrn, setNchePrn] = useState('')
   const [ncheAmount, setNcheAmount] = useState('')
   const [ncheRemarks, setNcheRemarks] = useState('')
-  const [ncheSearch, setNcheSearch] = useState('')
 
-  // Guild tab — same UI-first mock treatment as NCHE above, laid out after
-  // the matching legacy reference screen (frmTrnPaymentGUILD.aspx). Same
-  // shape as the NCHE state, except the identifying field is a bank deposit
-  // slip number rather than a PRN, and there's no Remarks field on this
-  // legacy form.
-  const [guildPaidSemesters, setGuildPaidSemesters] = useState<Set<string>>(new Set())
-  const [guildPayments, setGuildPayments] = useState<{ id: string; semesterGuid: string; payDate: string; slipNo: string; amount: string }[]>([])
-  const [guildEditingId, setGuildEditingId] = useState<string | null>(null)
-  const [guildSemesterGuid, setGuildSemesterGuid] = useState('')
+  // Guild tab — wired to the real POST .../payment-guild (payment/post-
+  // payment-guild.md), structurally identical to NCHE above: no currency/
+  // receipt-book/bank/semester/remarks in that payload, amount validated
+  // server-side as a whole multiple of a per-semester rate. The only
+  // payload difference from NCHE is the free-text reference field —
+  // bankDeposit here where NCHE has pnrNumber. guildPayments is a local
+  // session log of what was actually submitted, same reasoning as
+  // nchePayments above (no edit/delete on a real, committed payment).
+  const [guildPayments, setGuildPayments] = useState<{ id: string; payDate: string; bankDeposit: string; amount: number; remainingBalance: number }[]>([])
   const [guildPayDate, setGuildPayDate] = useState(todayYmd)
   const [guildSlipNo, setGuildSlipNo] = useState('')
   const [guildAmount, setGuildAmount] = useState('')
-  const [guildSearch, setGuildSearch] = useState('')
 
   // Other Payment tab — same UI-first mock treatment as NCHE/Guild above,
   // laid out after the matching legacy reference screen
@@ -266,6 +305,15 @@ export default function PaymentConsolePage() {
   // override).
   const studentGuid = profile?.studentGuid ?? selectedStudentGuidHint ?? null
   const { data: ledgers = [], isLoading: isLedgersLoading } = useOutstandingLedgers(selectedApplicationGuid, !!selectedApplicationGuid, studentGuid)
+  // All four categories in one call (get-all-outstanding-ledgers.md) — used
+  // to show a real outstanding figure on the Other/NCHE/Guild tabs, whose
+  // own payment-entry forms stay mock (no documented single-category
+  // submit endpoint for them). isError surfaced explicitly, same reasoning
+  // as the other queries on this page.
+  const { data: allOutstanding = [], isLoading: isAllOutstandingLoading, isError: isAllOutstandingError } = useAllOutstandingLedgers(selectedApplicationGuid, !!selectedApplicationGuid)
+  const otherOutstanding = allOutstanding.filter(i => i.category === 2)
+  const ncheOutstanding = allOutstanding.filter(i => i.category === 3)
+  const guildOutstanding = allOutstanding.filter(i => i.category === 4)
   // isError kept separate from the [] fallback on purpose — a failed fetch
   // (confirmed live: this endpoint can 500 with server_error for some
   // applications) must not render the same "No payment history" message as
@@ -328,6 +376,8 @@ export default function PaymentConsolePage() {
   const { data: payableLedgers, isFetching: isPreviewLoading, isError: isPreviewError, error: previewError } = usePayableLedgers(payableLedgersParams, !!payableLedgersParams)
 
   const createPayment = useCreatePayment()
+  const createPaymentNche = useCreatePaymentNche()
+  const createPaymentGuild = useCreatePaymentGuild()
 
   function handleSearchClick() {
     const term = search.trim()
@@ -349,117 +399,60 @@ export default function PaymentConsolePage() {
   }
 
   function resetNcheForm() {
-    setNcheEditingId(null)
-    setNcheSemesterGuid('')
     setNchePayDate(todayYmd())
     setNchePrn('')
     setNcheAmount('')
     setNcheRemarks('')
   }
 
-  // Mock-only add/update — see nchePayments' own declaration comment above.
-  // Editing an existing row loads it back into the form (ncheEdit below);
-  // saving here replaces it in place instead of appending a duplicate.
-  function ncheSaveEntry() {
-    if (!ncheSemesterGuid) { showToast('Please select a semester.', 'warn'); return }
-    if (!nchePrn.trim()) { showToast('Please enter a PRN number.', 'warn'); return }
+  function ncheSubmit() {
+    if (!selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
     const amt = parseFloat(ncheAmount)
     if (!ncheAmount.trim() || isNaN(amt) || amt <= 0) { showToast('Amount must be greater than 0.', 'warn'); return }
     if (!nchePayDate) { showToast('Please select a date.', 'warn'); return }
 
-    if (ncheEditingId) {
-      setNchePayments(prev => prev.map(p => p.id === ncheEditingId
-        ? { ...p, semesterGuid: ncheSemesterGuid, payDate: nchePayDate, prn: nchePrn.trim(), amount: ncheAmount, remarks: ncheRemarks.trim() }
-        : p))
-      showToast('NCHE payment updated.', 'success')
-    } else {
-      setNchePayments(prev => [...prev, {
-        id: `nche-${Date.now()}`, semesterGuid: ncheSemesterGuid, payDate: nchePayDate,
-        prn: nchePrn.trim(), amount: ncheAmount, remarks: ncheRemarks.trim(),
-      }])
-      showToast('NCHE payment recorded.', 'success')
-    }
-    setNchePaidSemesters(prev => new Set(prev).add(ncheSemesterGuid))
-    resetNcheForm()
-  }
-
-  function ncheEdit(id: string) {
-    const entry = nchePayments.find(p => p.id === id)
-    if (!entry) return
-    setNcheEditingId(entry.id)
-    setNcheSemesterGuid(entry.semesterGuid)
-    setNchePayDate(entry.payDate)
-    setNchePrn(entry.prn)
-    setNcheAmount(entry.amount)
-    setNcheRemarks(entry.remarks)
-  }
-
-  function ncheDelete(id: string) {
-    const entry = nchePayments.find(p => p.id === id)
-    if (!entry) return
-    const remaining = nchePayments.filter(p => p.id !== id)
-    setNchePayments(remaining)
-    // Only clear the semester's Paid status if this was the last payment
-    // against it — another entry for the same semester keeps it Paid.
-    if (!remaining.some(p => p.semesterGuid === entry.semesterGuid)) {
-      setNchePaidSemesters(prev => { const s = new Set(prev); s.delete(entry.semesterGuid); return s })
-    }
-    if (ncheEditingId === id) resetNcheForm()
-    showToast('NCHE payment removed.', 'warn')
+    createPaymentNche.mutate(
+      { applicationGuid: selectedApplicationGuid, studentGuid, amount: amt, payDate: nchePayDate, pnrNumber: nchePrn.trim() || null, remarks: ncheRemarks.trim() || null },
+      {
+        onSuccess: result => {
+          setNchePayments(prev => [...prev, {
+            id: result.paymentNcheGuid, payDate: nchePayDate, pnrNumber: nchePrn.trim(),
+            amount: result.amount, remarks: ncheRemarks.trim() || null, remainingBalance: result.remainingBalance,
+          }])
+          showToast(`NCHE payment recorded. Remaining balance: ${result.remainingBalance.toLocaleString()}.`, 'success')
+          resetNcheForm()
+        },
+        onError: (error: Error) => showToast(error.message || 'Failed to record NCHE payment. Please try again.', 'error'),
+      },
+    )
   }
 
   function resetGuildForm() {
-    setGuildEditingId(null)
-    setGuildSemesterGuid('')
     setGuildPayDate(todayYmd())
     setGuildSlipNo('')
     setGuildAmount('')
   }
 
-  // Mock-only add/update — same pattern as ncheSaveEntry above.
-  function guildSaveEntry() {
-    if (!guildSemesterGuid) { showToast('Please select a semester.', 'warn'); return }
-    if (!guildSlipNo.trim()) { showToast('Please enter a bank deposit slip number.', 'warn'); return }
+  function guildSubmit() {
+    if (!selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
     const amt = parseFloat(guildAmount)
     if (!guildAmount.trim() || isNaN(amt) || amt <= 0) { showToast('Amount must be greater than 0.', 'warn'); return }
     if (!guildPayDate) { showToast('Please select a date.', 'warn'); return }
 
-    if (guildEditingId) {
-      setGuildPayments(prev => prev.map(p => p.id === guildEditingId
-        ? { ...p, semesterGuid: guildSemesterGuid, payDate: guildPayDate, slipNo: guildSlipNo.trim(), amount: guildAmount }
-        : p))
-      showToast('Guild payment updated.', 'success')
-    } else {
-      setGuildPayments(prev => [...prev, {
-        id: `guild-${Date.now()}`, semesterGuid: guildSemesterGuid, payDate: guildPayDate,
-        slipNo: guildSlipNo.trim(), amount: guildAmount,
-      }])
-      showToast('Guild payment recorded.', 'success')
-    }
-    setGuildPaidSemesters(prev => new Set(prev).add(guildSemesterGuid))
-    resetGuildForm()
-  }
-
-  function guildEdit(id: string) {
-    const entry = guildPayments.find(p => p.id === id)
-    if (!entry) return
-    setGuildEditingId(entry.id)
-    setGuildSemesterGuid(entry.semesterGuid)
-    setGuildPayDate(entry.payDate)
-    setGuildSlipNo(entry.slipNo)
-    setGuildAmount(entry.amount)
-  }
-
-  function guildDelete(id: string) {
-    const entry = guildPayments.find(p => p.id === id)
-    if (!entry) return
-    const remaining = guildPayments.filter(p => p.id !== id)
-    setGuildPayments(remaining)
-    if (!remaining.some(p => p.semesterGuid === entry.semesterGuid)) {
-      setGuildPaidSemesters(prev => { const s = new Set(prev); s.delete(entry.semesterGuid); return s })
-    }
-    if (guildEditingId === id) resetGuildForm()
-    showToast('Guild payment removed.', 'warn')
+    createPaymentGuild.mutate(
+      { applicationGuid: selectedApplicationGuid, studentGuid, amount: amt, payDate: guildPayDate, bankDeposit: guildSlipNo.trim() || null },
+      {
+        onSuccess: result => {
+          setGuildPayments(prev => [...prev, {
+            id: result.paymentGuildGuid, payDate: guildPayDate, bankDeposit: guildSlipNo.trim(),
+            amount: result.amount, remainingBalance: result.remainingBalance,
+          }])
+          showToast(`Guild payment recorded. Remaining balance: ${result.remainingBalance.toLocaleString()}.`, 'success')
+          resetGuildForm()
+        },
+        onError: (error: Error) => showToast(error.message || 'Failed to record Guild payment. Please try again.', 'error'),
+      },
+    )
   }
 
   function resetOtherForm() {
@@ -508,10 +501,8 @@ export default function PaymentConsolePage() {
     setShowOutstanding(true)
     setActivePayTab('tuition')
     resetPaymentForm()
-    setNchePaidSemesters(new Set())
     setNchePayments([])
     resetNcheForm()
-    setGuildPaidSemesters(new Set())
     setGuildPayments([])
     resetGuildForm()
     setOtherPayments([])
@@ -599,10 +590,8 @@ export default function PaymentConsolePage() {
     setShowHistory(false)
     setShowOutstanding(true)
     setActivePayTab('tuition')
-    setNchePaidSemesters(new Set())
     setNchePayments([])
     resetNcheForm()
-    setGuildPaidSemesters(new Set())
     setGuildPayments([])
     resetGuildForm()
     setOtherPayments([])
@@ -736,6 +725,12 @@ export default function PaymentConsolePage() {
           <div className="card">
             <div className="card-hdr">
               <div className="card-title"><span className="ctitle-icon"><i className="lni lni-user"></i></span> Student Profile Details</div>
+              {/* Moved here from Step 2's own inline accordion — reachable
+                  the moment a student is picked, not just after scrolling
+                  into Column 2. Opens PaymentHistoryModal below. */}
+              <button className="btn btn-neu btn-sm" onClick={() => setShowHistory(true)}>
+                <i className="lni lni-folder"></i> Payment History
+              </button>
             </div>
             <div className="flex items-center gap-4 mb-3">
               <div className="w-11 h-11 rounded-full flex-shrink-0 grid place-items-center text-white font-extrabold" style={{ background: 'linear-gradient(135deg,var(--b700),var(--b500))', fontSize: 15 }}>
@@ -836,19 +831,27 @@ export default function PaymentConsolePage() {
               </div>
             )}
 
-            {/* Other Payment tab — UI-first mock laid out after the legacy
+            {/* Other Payment tab — outstanding balance is real (GET
+                .../outstanding-all, filtered to category 2), per the
+                flow-doc mapping. The payment-entry form below and its
+                payment log stay a UI-first mock laid out after the legacy
                 ISMS reference screen (frmTrnPaymentOther.aspx): a ledger
                 picker, a payment-entry form (with an Advance Payment
                 toggle and bank-account gating matching Step 3's own), and
                 a flat, append-only payment log (no edit/delete, per the
-                reference screen's own "Paid Fee Details" table). All local
-                state — see otherPayments' declaration comment above. */}
+                reference screen's own "Paid Fee Details" table) — no
+                documented single-category Other-payment submit endpoint
+                exists yet. */}
             {activePayTab === 'other' && (
               <div className="card">
                 <div className="card-hdr">
                   <div className="card-title"><span className="ctitle-icon"><i className="lni lni-wallet"></i></span> Other Payment</div>
-                  <span className="badge badge-grey">Mock UI · no live data</span>
+                  <span className="badge badge-blue">Outstanding: live</span>
                 </div>
+
+                <OutstandingCategoryTable items={otherOutstanding} isLoading={isAllOutstandingLoading} isError={isAllOutstandingError} />
+
+                <div className="sec-divider" style={{ marginTop: 0 }}>Payment Detail <span className="badge badge-grey" style={{ marginLeft: 6, fontSize: 9.5 }}>Mock UI · no live data</span></div>
 
                 <div className="fg mb-[14px]">
                   <div className="lbl">Ledger <span className="req">*</span></div>
@@ -940,58 +943,34 @@ export default function PaymentConsolePage() {
               </div>
             )}
 
-            {/* NCHE tab — UI-first mock laid out after the legacy ISMS
-                reference screen (frmTrnPaymentNCH-A.aspx): a per-semester
-                Paid/Due status grid, a payment-entry form, and a payment
-                history table with edit/delete. All local state — see
-                nchePayments' declaration comment above. */}
+            {/* NCHE tab — fully wired to real endpoints: outstanding
+                balance from GET .../outstanding-all (filtered to category
+                3), payment submit from POST .../payment-nche
+                (payment/post-payment-nche.md). No currency/receipt-book/
+                bank/semester field — that payload doesn't take one; the
+                amount is validated server-side as a whole multiple of a
+                per-semester rate this client can't know ahead of time, so
+                a mismatched amount surfaces as the backend's own 400.
+                nchePayments below is a local session log of what was
+                actually submitted, not mock data — see its declaration
+                comment above for why there's no edit/delete. */}
             {activePayTab === 'nche' && (
               <div className="card">
                 <div className="card-hdr">
                   <div className="card-title"><span className="ctitle-icon"><i className="lni lni-certificate"></i></span> NCHE Payments</div>
-                  <span className="badge badge-grey">Mock UI · no live data</span>
+                  <span className="badge badge-blue">Outstanding: live</span>
                 </div>
 
-                {semesters.length === 0 ? (
-                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No semesters found for this programme.</div>
-                ) : (
-                  <ScrollTable className="no-sticky-col">
-                    <table>
-                      <thead><tr><th>Sr</th><th>Semester</th><th>Status</th></tr></thead>
-                      <tbody>
-                        {semesters.map((s, i) => (
-                          <tr key={s.semesterGuid}>
-                            <td>{i + 1}</td>
-                            <td>{s.semName}</td>
-                            <td>
-                              {nchePaidSemesters.has(s.semesterGuid)
-                                ? <span className="badge badge-green">Paid</span>
-                                : <span className="badge badge-amber">Due</span>}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </ScrollTable>
-                )}
+                <OutstandingCategoryTable items={ncheOutstanding} isLoading={isAllOutstandingLoading} isError={isAllOutstandingError} />
 
                 <div className="sec-divider">Payment Detail</div>
 
-                <div className="fg mb-[14px]">
-                  <div className="lbl">Semester <span className="req">*</span></div>
-                  <SearchSelect
-                    placeholder="— Select Semester —"
-                    options={semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))}
-                    value={ncheSemesterGuid}
-                    onChange={setNcheSemesterGuid}
-                  />
-                </div>
                 <div className="fg mb-[14px]">
                   <div className="lbl">Date <span className="req">*</span></div>
                   <DatePicker value={nchePayDate} onChange={setNchePayDate} />
                 </div>
                 <div className="fg mb-[14px]">
-                  <div className="lbl">PRN Number <span className="req">*</span></div>
+                  <div className="lbl">PRN Number</div>
                   <input className="ctrl" type="text" placeholder="e.g. 2200874017969" value={nchePrn} onChange={e => setNchePrn(e.target.value)} />
                 </div>
                 <div className="fg mb-[14px]">
@@ -1003,46 +982,28 @@ export default function PaymentConsolePage() {
                   <input className="ctrl" type="text" placeholder="Optional notes" value={ncheRemarks} onChange={e => setNcheRemarks(e.target.value)} />
                 </div>
 
-                <div className="flex gap-[10px] justify-between items-center mb-5">
-                  {ncheEditingId
-                    ? <button className="btn btn-neu" onClick={resetNcheForm}><i className="lni lni-close"></i> Cancel Edit</button>
-                    : <span />}
-                  <button className="btn btn-primary" onClick={ncheSaveEntry}>
-                    <i className="lni lni-save"></i> {ncheEditingId ? 'Update Payment' : 'Add Payment'}
+                <div className="flex justify-end mb-5">
+                  <button className="btn btn-primary" disabled={createPaymentNche.isPending} onClick={ncheSubmit}>
+                    <i className="lni lni-save"></i> {createPaymentNche.isPending ? 'Saving…' : 'Add Payment'}
                   </button>
                 </div>
 
-                <div className="fg mb-[10px]">
-                  <div className="inp-wrap">
-                    <span className="inp-icon"><i className="lni lni-search-alt"></i></span>
-                    <input className="ctrl" type="text" placeholder="Search by PRN number…" value={ncheSearch} onChange={e => setNcheSearch(e.target.value)} />
-                  </div>
-                </div>
-
                 {nchePayments.length === 0 ? (
-                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No NCHE payments recorded yet.</div>
+                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No NCHE payments recorded this visit.</div>
                 ) : (
                   <ScrollTable className="no-sticky-col">
                     <table>
-                      <thead><tr><th>#</th><th>Payment Date</th><th>PRN Number</th><th>Amount</th><th>Remarks</th><th></th></tr></thead>
+                      <thead><tr><th>Payment Date</th><th>PRN Number</th><th>Amount</th><th>Remarks</th><th>Balance After</th></tr></thead>
                       <tbody>
-                        {nchePayments
-                          .filter(p => !ncheSearch.trim() || p.prn.toLowerCase().includes(ncheSearch.trim().toLowerCase()))
-                          .map((p, i) => (
-                            <tr key={p.id}>
-                              <td>{i + 1}</td>
-                              <td>{p.payDate}</td>
-                              <td className="font-mono">{p.prn}</td>
-                              <td className="text-green font-bold">{parseFloat(p.amount).toLocaleString()}</td>
-                              <td>{p.remarks || '—'}</td>
-                              <td>
-                                <div className="flex gap-1">
-                                  <button className="btn btn-neu btn-sm" onClick={() => ncheEdit(p.id)}><i className="lni lni-pencil"></i></button>
-                                  <button className="btn btn-neu btn-sm" onClick={() => ncheDelete(p.id)}><i className="lni lni-trash-can"></i></button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
+                        {nchePayments.map(p => (
+                          <tr key={p.id}>
+                            <td>{p.payDate}</td>
+                            <td className="font-mono">{p.pnrNumber || '—'}</td>
+                            <td className="text-green font-bold">{p.amount.toLocaleString()}</td>
+                            <td>{p.remarks || '—'}</td>
+                            <td className="text-amber">{p.remainingBalance.toLocaleString()}</td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </ScrollTable>
@@ -1050,59 +1011,31 @@ export default function PaymentConsolePage() {
               </div>
             )}
 
-            {/* Guild tab — same UI-first mock treatment as NCHE above, laid
-                out after the legacy ISMS reference screen
-                (frmTrnPaymentGUILD.aspx): a per-semester Paid/Due status
-                grid, a payment-entry form keyed by bank deposit slip number
-                (no Remarks field on this legacy form), and a payment
-                history table with edit/delete. */}
+            {/* Guild tab — fully wired to real endpoints: outstanding
+                balance from GET .../outstanding-all (filtered to category
+                4), payment submit from POST .../payment-guild
+                (payment/post-payment-guild.md) — structurally identical to
+                NCHE, keyed by a bank deposit slip number instead of a PRN,
+                no Remarks field. guildPayments below is a local session
+                log of what was actually submitted, same reasoning as
+                nchePayments above. */}
             {activePayTab === 'guild' && (
               <div className="card">
                 <div className="card-hdr">
                   <div className="card-title"><span className="ctitle-icon"><i className="lni lni-users"></i></span> Guild Payments</div>
-                  <span className="badge badge-grey">Mock UI · no live data</span>
+                  <span className="badge badge-blue">Outstanding: live</span>
                 </div>
 
-                {semesters.length === 0 ? (
-                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No semesters found for this programme.</div>
-                ) : (
-                  <ScrollTable className="no-sticky-col">
-                    <table>
-                      <thead><tr><th>Sr</th><th>Semester</th><th>Status</th></tr></thead>
-                      <tbody>
-                        {semesters.map((s, i) => (
-                          <tr key={s.semesterGuid}>
-                            <td>{i + 1}</td>
-                            <td>{s.semName}</td>
-                            <td>
-                              {guildPaidSemesters.has(s.semesterGuid)
-                                ? <span className="badge badge-green">Paid</span>
-                                : <span className="badge badge-amber">Due</span>}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </ScrollTable>
-                )}
+                <OutstandingCategoryTable items={guildOutstanding} isLoading={isAllOutstandingLoading} isError={isAllOutstandingError} />
 
                 <div className="sec-divider">Payment Detail</div>
 
-                <div className="fg mb-[14px]">
-                  <div className="lbl">Semester <span className="req">*</span></div>
-                  <SearchSelect
-                    placeholder="— Select Semester —"
-                    options={semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))}
-                    value={guildSemesterGuid}
-                    onChange={setGuildSemesterGuid}
-                  />
-                </div>
                 <div className="fg mb-[14px]">
                   <div className="lbl">Date <span className="req">*</span></div>
                   <DatePicker value={guildPayDate} onChange={setGuildPayDate} />
                 </div>
                 <div className="fg mb-[14px]">
-                  <div className="lbl">Bank Deposit Slip Number <span className="req">*</span></div>
+                  <div className="lbl">Bank Deposit Slip Number</div>
                   <input className="ctrl" type="text" placeholder="e.g. 100XCBERP009017" value={guildSlipNo} onChange={e => setGuildSlipNo(e.target.value)} />
                 </div>
                 <div className="fg mb-4">
@@ -1110,45 +1043,27 @@ export default function PaymentConsolePage() {
                   <input type="number" min={0} step={0.01} className="ctrl" placeholder="0.00" value={guildAmount} onChange={e => setGuildAmount(e.target.value)} />
                 </div>
 
-                <div className="flex gap-[10px] justify-between items-center mb-5">
-                  {guildEditingId
-                    ? <button className="btn btn-neu" onClick={resetGuildForm}><i className="lni lni-close"></i> Cancel Edit</button>
-                    : <span />}
-                  <button className="btn btn-primary" onClick={guildSaveEntry}>
-                    <i className="lni lni-save"></i> {guildEditingId ? 'Update Payment' : 'Add Payment'}
+                <div className="flex justify-end mb-5">
+                  <button className="btn btn-primary" disabled={createPaymentGuild.isPending} onClick={guildSubmit}>
+                    <i className="lni lni-save"></i> {createPaymentGuild.isPending ? 'Saving…' : 'Add Payment'}
                   </button>
                 </div>
 
-                <div className="fg mb-[10px]">
-                  <div className="inp-wrap">
-                    <span className="inp-icon"><i className="lni lni-search-alt"></i></span>
-                    <input className="ctrl" type="text" placeholder="Search by slip number…" value={guildSearch} onChange={e => setGuildSearch(e.target.value)} />
-                  </div>
-                </div>
-
                 {guildPayments.length === 0 ? (
-                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No Guild payments recorded yet.</div>
+                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No Guild payments recorded this visit.</div>
                 ) : (
                   <ScrollTable className="no-sticky-col">
                     <table>
-                      <thead><tr><th>#</th><th>Payment Date</th><th>Bank Deposit Slip Number</th><th>Amount</th><th></th></tr></thead>
+                      <thead><tr><th>Payment Date</th><th>Bank Deposit Slip Number</th><th>Amount</th><th>Balance After</th></tr></thead>
                       <tbody>
-                        {guildPayments
-                          .filter(p => !guildSearch.trim() || p.slipNo.toLowerCase().includes(guildSearch.trim().toLowerCase()))
-                          .map((p, i) => (
-                            <tr key={p.id}>
-                              <td>{i + 1}</td>
-                              <td>{p.payDate}</td>
-                              <td className="font-mono">{p.slipNo}</td>
-                              <td className="text-green font-bold">{parseFloat(p.amount).toLocaleString()}</td>
-                              <td>
-                                <div className="flex gap-1">
-                                  <button className="btn btn-neu btn-sm" onClick={() => guildEdit(p.id)}><i className="lni lni-pencil"></i></button>
-                                  <button className="btn btn-neu btn-sm" onClick={() => guildDelete(p.id)}><i className="lni lni-trash-can"></i></button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
+                        {guildPayments.map(p => (
+                          <tr key={p.id}>
+                            <td>{p.payDate}</td>
+                            <td className="font-mono">{p.bankDeposit || '—'}</td>
+                            <td className="text-green font-bold">{p.amount.toLocaleString()}</td>
+                            <td className="text-amber">{p.remainingBalance.toLocaleString()}</td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </ScrollTable>
@@ -1314,42 +1229,6 @@ export default function PaymentConsolePage() {
                   </ScrollTable>
                 )
               )}
-                <div className="mt-[10px]">
-                  <button className="btn btn-neu btn-sm justify-between w-full" onClick={() => setShowHistory(v => !v)}>
-                    <span><i className="lni lni-folder"></i> Payment History</span>
-                    <span>{showHistory ? '▴' : '▾'}</span>
-                  </button>
-                  {showHistory && (
-                    <div className="mt-2">
-                      {isHistoryLoading ? (
-                        <div className="text-g400 text-center" style={{ padding: 12, fontSize: 12.5 }}>Loading payment history…</div>
-                      ) : isHistoryError ? (
-                        <div className="text-clr-red text-center" style={{ padding: 12, fontSize: 12.5 }}>
-                          <i className="lni lni-warning"></i> Couldn&apos;t load payment history. Please try again.
-                        </div>
-                      ) : paymentHistory.length === 0 ? (
-                        <div className="text-g400 text-center" style={{ padding: 12, fontSize: 12.5 }}>No payment history for this application.</div>
-                      ) : (
-                        <ScrollTable className="no-sticky-col">
-                          <table>
-                            <thead><tr><th>Date</th><th>Category</th><th>Amount Paid</th><th>Method</th><th>Receipt #</th></tr></thead>
-                            <tbody>
-                              {paymentHistory.map(h => (
-                                <tr key={h.paymentGuid}>
-                                  <td>{h.payDate.slice(0, 10)}</td>
-                                  <td>{PAYMENT_CATEGORY_LABELS[h.category] ?? `Category ${h.category}`}</td>
-                                  <td className="text-green font-bold">{h.currencyName} {h.amount.toLocaleString()}</td>
-                                  <td><span className="pill pill-blue">{h.payType?.name ?? '—'}</span></td>
-                                  <td className="font-mono text-blue">{h.receipt ?? h.paymentCode}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </ScrollTable>
-                      )}
-                    </div>
-                  )}
-                </div>
               </div>
           </div>
 
@@ -1488,6 +1367,14 @@ export default function PaymentConsolePage() {
         </div>
         )}
       </div>
+      <PaymentHistoryModal
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
+        showToast={showToast}
+        entries={paymentHistory}
+        isLoading={isHistoryLoading}
+        isError={isHistoryError}
+      />
       <Toast toast={toast} />
     </>
   )

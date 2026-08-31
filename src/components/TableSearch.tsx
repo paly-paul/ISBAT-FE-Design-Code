@@ -31,6 +31,28 @@ interface TableSearchProps {
   // keystroke. Defaults to 1 (any non-empty input opens it), matching every
   // existing caller's behavior.
   minChars?: number
+  // Infinite-scroll trio — all optional, and only meaningful together. When
+  // a caller passes onLoadMore, scrolling the results list near its bottom
+  // calls it (e.g. an useInfiniteQuery's fetchNextPage). hasMore stops
+  // that once the caller has nothing left to fetch; loadingMore shows a
+  // small inline "Loading more…" row instead of triggering onLoadMore
+  // again while a fetch is already in flight. A caller that omits
+  // onLoadMore gets the old fixed-list behavior unchanged.
+  //
+  // The scroll handler additionally requires scrollTop > 0 before it'll
+  // fire at all — not just "near enough to the bottom". A plain distance-
+  // to-bottom check alone was tried first and pulled: on a list barely
+  // taller than its own container (e.g. 8 short rows), that distance stays
+  // under any reasonable threshold right after each new page loads, and
+  // browsers fire a native scroll event on a scrollable container's
+  // content changing even with no user interaction — confirmed live as a
+  // 13-request cascade for one search term, every one of them at
+  // scrollTop 0 (nothing had actually moved). Real user scrolling is the
+  // only thing that changes scrollTop away from 0, so gating on that
+  // filters the spurious case out without weakening the real one.
+  onLoadMore?: () => void
+  hasMore?: boolean
+  loadingMore?: boolean
 }
 
 // Search-by-code/name input + live "as you type" results dropdown, meant to
@@ -47,9 +69,18 @@ export function TableSearch({
   emptyLabel = 'No matches',
   loading = false,
   minChars = 1,
+  onLoadMore,
+  hasMore = false,
+  loadingMore = false,
 }: TableSearchProps) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
+
+  function handleResultsScroll(e: React.UIEvent<HTMLDivElement>) {
+    if (!onLoadMore || !hasMore || loadingMore) return
+    const el = e.currentTarget
+    if (el.scrollTop > 0 && el.scrollHeight - el.scrollTop - el.clientHeight < 48) onLoadMore()
+  }
 
   useEffect(() => {
     if (!open) return
@@ -77,22 +108,32 @@ export function TableSearch({
         onFocus={() => { if (value.trim().length >= minChars) setOpen(true) }}
       />
       {open && value.trim().length >= minChars && (
-        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-g200 rounded-lg shadow-lg z-20 max-h-56 overflow-y-auto">
+        <div
+          className="absolute left-0 right-0 top-full mt-1 bg-white border border-g200 rounded-lg shadow-lg z-20 max-h-56 overflow-y-auto"
+          onScroll={handleResultsScroll}
+        >
           {loading
             ? <div className="p-3 text-sm text-g400 flex items-center gap-2"><i className="lni lni-reload animate-spin"></i> Searching…</div>
             : results.length === 0
             ? <div className="p-3 text-sm text-g400">{emptyLabel}</div>
-            : results.map(r => (
-                <button
-                  key={r.id}
-                  type="button"
-                  className="w-full text-left px-4 py-2 text-sm hover:bg-b50 flex justify-between gap-3"
-                  onClick={() => select(r)}
-                >
-                  <span className="font-medium text-g800">{r.primary}</span>
-                  {r.secondary && <span className="text-g500 truncate">{r.secondary}</span>}
-                </button>
-              ))
+            : <>
+                {results.map(r => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-b50 flex justify-between gap-3"
+                    onClick={() => select(r)}
+                  >
+                    <span className="font-medium text-g800">{r.primary}</span>
+                    {r.secondary && <span className="text-g500 truncate">{r.secondary}</span>}
+                  </button>
+                ))}
+                {loadingMore && (
+                  <div className="p-2 text-xs text-g400 flex items-center justify-center gap-2">
+                    <i className="lni lni-reload animate-spin"></i> Loading more…
+                  </div>
+                )}
+              </>
           }
         </div>
       )}
