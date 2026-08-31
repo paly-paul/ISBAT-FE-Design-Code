@@ -52,8 +52,11 @@ export function getRefugeeStudents(): Promise<RefugeeStudentSummaryDto[]> {
   return apiGet<RefugeeStudentSummaryDto[] | null>('/api/v1/students/refugee').then(data => data ?? [])
 }
 
-// A student with no refugee-status record is the common case (404
-// `not_found` per the docs) — resolve to null rather than throwing.
+// A student with no refugee-status record is the common case. The docs say
+// 404 `not_found`, but a real response (2026-08-31) came back as a 400 with
+// the same `code: "not_found"` body instead — checked via err.code here, not
+// the HTTP status, so this still resolves to null either way rather than
+// throwing.
 export function getStudentRefugeeDetails(studentGuid: string): Promise<RefugeeDetailsDto | null> {
   if (MOCK_AUTH) return Promise.resolve(mockRefugees[studentGuid] ?? null)
   return apiGet<RefugeeDetailsDto>(`/api/v1/students/refugee/${studentGuid}`).catch(err => {

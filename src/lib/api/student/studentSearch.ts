@@ -66,6 +66,10 @@ export function searchStudentsAdvanced(filters: StudentSearchFilters): Promise<P
     pageNumber,
     pageSize,
   }
-  return apiPost<PagedResult<StudentDto> | null>('/api/v1/students/search/search', payload)
+  // Route is /api/v1/studentsearch/search — its own top-level "studentsearch"
+  // segment, not nested under /students/search/ — confirmed against the
+  // students/student-search/post-search.md doc (2026-08-17). The old
+  // /students/search/search path would 404 outside mock mode.
+  return apiPost<PagedResult<StudentDto> | null>('/api/v1/studentsearch/search', payload)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }

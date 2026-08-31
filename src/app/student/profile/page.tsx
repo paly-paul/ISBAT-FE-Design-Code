@@ -72,6 +72,12 @@ export default function Page() {
   const [tab, setTab] = useState<TabId>('info')
 
   const { data: detail } = useStudent(student?.studentGuid ?? null, !!student)
+  // studentNum has come back undefined on a real response (2026-08-31) —
+  // StudentDto's type still promises it as a required string, but the
+  // backend isn't reliably filling it in practice. studentRegNo has been
+  // reliable on every real response seen so far, so it's the fallback
+  // everywhere this page used to read studentNum directly.
+  const studentNo = student?.studentNum || student?.studentRegNo || '—'
 
   // Real ID-card record — GET /students/id-cards/{studentGuid}. Resolves to
   // null when the student has no card yet (404 not_found is the common case,
@@ -198,7 +204,7 @@ export default function Page() {
   useEffect(() => {
     if (!student) return
     const parts = student.studentName.trim().split(/\s+/)
-    const derivedEmail = `${student.studentNum.toLowerCase().replace(/[^a-z0-9]/g, '.')}@isbat.ac.ug`
+    const derivedEmail = `${studentNo.toLowerCase().replace(/[^a-z0-9]/g, '.')}@isbat.ac.ug`
     setFirstName(parts[0] ?? '')
     setLastName(parts.slice(1).join(' '))
     setStuEmail(derivedEmail)
@@ -367,7 +373,7 @@ export default function Page() {
                 <div className="stu-av">{initials(student.studentName)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="stu-banner-name">{student.studentName}</div>
-                  <div className="stu-banner-id">{student.studentNum} · {student.studentRegNo}</div>
+                  <div className="stu-banner-id">{studentNo} · {student.studentRegNo}</div>
                   <div className="stu-banner-pills">
                     <span className="stu-pill">{detail?.studActive === 1 ? '✓ Active' : detail ? '⚠ Inactive' : '…'}</span>
                     <span className="stu-pill"><i className="lni lni-graduation"></i> {student.programName || '—'}</span>
@@ -463,7 +469,7 @@ export default function Page() {
                 <div className="card">
                   <div className="card-hdr"><div className="card-title"><i className="lni lni-graduation"></i> Academic Details</div><span className="badge badge-grey">Read-only</span></div>
                   <div className="g3">
-                    <div className="fg"><label className="lbl">Student No.</label><input className="ctrl" readOnly value={student.studentNum} /></div>
+                    <div className="fg"><label className="lbl">Student No.</label><input className="ctrl" readOnly value={studentNo} /></div>
                     <div className="fg"><label className="lbl">Registration No.</label><input className="ctrl" readOnly value={student.studentRegNo} /></div>
                     <div className="fg"><label className="lbl">Programme</label><input className="ctrl" readOnly value={student.programName || '—'} /></div>
                     <div className="fg"><label className="lbl">Current Batch</label><input className="ctrl" readOnly value={student.batchCode || '—'} /></div>
@@ -507,7 +513,7 @@ export default function Page() {
                       <div style={{ fontSize: 10.5, color: 'var(--g500)', marginTop: 6, textAlign: 'center' }}>JPG/PNG · Max 2MB</div>
                     </div> */}
                     <div className="fg"><label className="lbl">Name on Card</label><input className="ctrl" value={student.studentName} readOnly /></div>
-                    <div className="fg"><label className="lbl">Student ID</label><input className="ctrl" value={student.studentNum} readOnly /></div>
+                    <div className="fg"><label className="lbl">Student ID</label><input className="ctrl" value={studentNo} readOnly /></div>
                     <div className="fg"><label className="lbl">Programme</label><input className="ctrl" value={student.programName || '—'} readOnly /></div>
                     <div className="g2">
                       <div className="fg"><label className="lbl">Joining Date</label><input className="ctrl" type="date" value={joiningDate} onChange={e => setJoiningDate(e.target.value)} /></div>
@@ -610,7 +616,7 @@ export default function Page() {
                 <div className="dcard">
                   <div className="dcard-hdr stu">
                     <div className="dcard-title"><i className="lni lni-user"></i> Student Profile</div>
-                    <div className="flex gap-2" style={{ alignItems: 'center' }}><span style={{ fontSize: 11, color: 'rgba(255,255,255,.7)' }}>Login ID:</span><span className="dcard-id">{student.studentNum}</span></div>
+                    <div className="flex gap-2" style={{ alignItems: 'center' }}><span style={{ fontSize: 11, color: 'rgba(255,255,255,.7)' }}>Login ID:</span><span className="dcard-id">{studentNo}</span></div>
                   </div>
                   <div className="dcard-body">
                     <div className="dcard-grid">
@@ -635,7 +641,7 @@ export default function Page() {
                 <div className="dcard">
                   <div className="dcard-hdr par">
                     <div className="dcard-title"><i className="lni lni-users"></i> Parent / Guardian Profile</div>
-                    <div className="flex gap-2" style={{ alignItems: 'center' }}><span style={{ fontSize: 11, color: 'rgba(255,255,255,.7)' }}>Auto-generated Login ID:</span><span className="dcard-id">{student.studentNum}_P</span></div>
+                    <div className="flex gap-2" style={{ alignItems: 'center' }}><span style={{ fontSize: 11, color: 'rgba(255,255,255,.7)' }}>Auto-generated Login ID:</span><span className="dcard-id">{studentNo}_P</span></div>
                   </div>
                   <div className="dcard-body">
                     <div className="purple-box" style={{ marginBottom: 14, background: '#f0fdf4', borderColor: 'var(--green-bd)' }}>

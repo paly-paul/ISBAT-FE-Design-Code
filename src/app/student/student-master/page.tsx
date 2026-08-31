@@ -6,6 +6,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
 import { StudentProfileModal } from '@/components/modals/student/StudentProfileModal'
+import { StudentRefugeeModal } from '@/components/modals/student/StudentRefugeeModal'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
@@ -43,6 +44,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [selectedStudentGuid, setSelectedStudentGuid] = useState<string | null>(null)
+  const [selectedStudentName, setSelectedStudentName] = useState<string | undefined>(undefined)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -53,6 +55,7 @@ export default function Page() {
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function handleView(studentGuid: string) { setSelectedStudentGuid(studentGuid); openModal('view-student-modal') }
+  function handleRefugee(studentGuid: string, studentName: string) { setSelectedStudentGuid(studentGuid); setSelectedStudentName(studentName); openModal('refugee-status-modal') }
   function updateSearch(value: string) { setSearch(value); setPage(1) }
   function updateAdvanced(patch: Partial<AdvancedFilterState>) { setAdvanced(prev => ({ ...prev, ...patch })); setPage(1) }
   function clearAdvanced() { setAdvanced(EMPTY_ADVANCED); setPage(1) }
@@ -216,7 +219,6 @@ export default function Page() {
               <thead>
                 <tr>
                   <th style={{ width: 48 }}></th>
-                  <th>Student No.</th>
                   <th>Reg No.</th>
                   <th>Name</th>
                   <th>Programme</th>
@@ -226,18 +228,18 @@ export default function Page() {
               </thead>
               <tbody>
                 {isLoading
-                  ? <TableLoadingState colSpan={7} />
+                  ? <TableLoadingState colSpan={6} />
                   : items.length === 0
-                    ? <EmptyState colSpan={7} hasFilters={!!search.trim() || hasAdvancedFilters} onClearFilters={() => { setSearch(''); clearAdvanced() }} />
+                    ? <EmptyState colSpan={6} hasFilters={!!search.trim() || hasAdvancedFilters} onClearFilters={() => { setSearch(''); clearAdvanced() }} />
                     : null}
                 {items.map(r => (
                   <tr key={r.studentGuid}>
                     <td>
                       <ActionMenu>
                         <button className="btn btn-neu btn-sm" onClick={() => handleView(r.studentGuid)}><i className="lni lni-eye"></i> View</button>
+                        <button className="btn btn-neu btn-sm" onClick={() => handleRefugee(r.studentGuid, r.studentName)}><i className="lni lni-shield"></i> Refugee Status</button>
                       </ActionMenu>
                     </td>
-                    <td className="font-mono">{r.studentNum}</td>
                     <td className="font-mono">{r.studentRegNo}</td>
                     <td><strong>{r.studentName}</strong></td>
                     <td>{r.programName || '—'}</td>
@@ -252,6 +254,7 @@ export default function Page() {
         </div>
       </div>
       <StudentProfileModal isOpen={openModals.has('view-student-modal')} onClose={() => closeModal('view-student-modal')} showToast={showToast} nav={nav} studentGuid={selectedStudentGuid} />
+      <StudentRefugeeModal isOpen={openModals.has('refugee-status-modal')} onClose={() => closeModal('refugee-status-modal')} showToast={showToast} studentGuid={selectedStudentGuid} studentName={selectedStudentName} />
       <Toast toast={toast} />
     </>
   )
