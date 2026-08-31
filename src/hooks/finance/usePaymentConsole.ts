@@ -2,6 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createAdvanceDeposit,
   createPayment,
+  createPaymentGuild,
+  createPaymentNche,
+  createPaymentOther,
+  getAllOutstandingLedgers,
   getOutstandingLedgers,
   getPayableLedgers,
   getPaymentHistory,
@@ -9,7 +13,10 @@ import {
   getStudentProfile,
   searchStudents,
   AdvanceDepositInput,
+  PaymentGuildInput,
   PaymentInput,
+  PaymentNcheInput,
+  PaymentOtherInput,
   PayableLedgersParams,
 } from '@/lib/api/finance/paymentConsole'
 
@@ -42,6 +49,17 @@ export function useOutstandingLedgers(applicationGuid: string | null, enabled: b
   return useQuery({
     queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-ledgers', applicationGuid, studentGuid],
     queryFn: () => getOutstandingLedgers(applicationGuid as string, studentGuid),
+    enabled: enabled && !!applicationGuid,
+  })
+}
+
+// All four categories (tuition/other/NCHE/guild) in one flat list — see
+// getAllOutstandingLedgers' own comment. Takes no studentGuid, unlike
+// useOutstandingLedgers above.
+export function useAllOutstandingLedgers(applicationGuid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-all', applicationGuid],
+    queryFn: () => getAllOutstandingLedgers(applicationGuid as string),
     enabled: enabled && !!applicationGuid,
   })
 }
@@ -100,6 +118,44 @@ export function useCreatePayment() {
   })
 }
 
+// Shared invalidation for the three category payment mutations below —
+// each lands money against a category outstanding-all (get-all-outstanding-
+// ledgers.md) covers, and payment-history spans all categories too (per
+// the flow doc), so both need refetching regardless of which category the
+// payment was in. Unlike useCreatePayment (Tuition) above, none of these
+// touch outstanding-ledgers — that endpoint is tuition-only.
+function invalidateAfterCategoryPayment(queryClient: ReturnType<typeof useQueryClient>, applicationGuid: string) {
+  queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-all', applicationGuid] })
+  queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'payment-history', applicationGuid] })
+}
+
+export function useCreatePaymentNche() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: PaymentNcheInput) => createPaymentNche(input),
+    onSuccess: (_result, input) => invalidateAfterCategoryPayment(queryClient, input.applicationGuid),
+  })
+}
+
+export function useCreatePaymentGuild() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: PaymentGuildInput) => createPaymentGuild(input),
+    onSuccess: (_result, input) => invalidateAfterCategoryPayment(queryClient, input.applicationGuid),
+  })
+}
+
+// Not called from the Other Payment tab yet — see createPaymentOther's own
+// "NOT wired up" comment. Exported ready for when the ledger-others picker
+// has a real GUID source.
+export function useCreatePaymentOther() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: PaymentOtherInput) => createPaymentOther(input),
+    onSuccess: (_result, input) => invalidateAfterCategoryPayment(queryClient, input.applicationGuid),
+  })
+}
+
 // Invalidates advanced-payments' own list (usePaymentAdvances, in
 // usePayments.ts) — a separate query-key family (['payments','advances'])
 // from this file's own ['payment-console', …] keys, but a new deposit here
@@ -116,5 +172,5 @@ export function useCreateAdvanceDeposit() {
   })
 }
 
-export type { AdvanceDepositInput, AdvanceDepositResult, ApplicationSummary, OutstandingLedger, PayableLedgerLine, PayableLedgersParams, PaymentHistoryEntry, PaymentHistoryListEntry, PaymentInput, PaymentResult, StudentProfile } from '@/lib/api/finance/paymentConsole'
+export type { AdvanceDepositInput, AdvanceDepositResult, AllOutstandingItem, ApplicationSummary, OutstandingLedger, PayableLedgerLine, PayableLedgersParams, PaymentGuildInput, PaymentGuildResult, PaymentHistoryEntry, PaymentHistoryListEntry, PaymentInput, PaymentNcheInput, PaymentNcheResult, PaymentOtherInput, PaymentOtherResult, PaymentResult, StudentProfile } from '@/lib/api/finance/paymentConsole'
 export { PAYMENT_CATEGORY_LABELS, PAY_TYPE_LABELS, PAY_TYPE_TO_RECEIPT_CATEGORY } from '@/lib/api/finance/paymentConsole'

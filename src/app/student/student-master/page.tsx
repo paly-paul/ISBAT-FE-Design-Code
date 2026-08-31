@@ -10,7 +10,7 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { useStudents } from '@/hooks/student/useStudents'
+import { useStudents, useStudentsInfinite } from '@/hooks/student/useStudents'
 import { useStudentSearchAdvanced, StudentSearchFilters } from '@/hooks/student/useStudentSearch'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
@@ -93,7 +93,19 @@ export default function Page() {
   const items = data?.items ?? []
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  const searchMatches = search.trim() && !hasAdvancedFilters ? items.slice(0, 8) : []
+  // Dedicated, infinite-scroll query for the search dropdown — independent
+  // of the main table's own paginated query (page/PAGE_SIZE=10). Previously
+  // this reused `items` straight off that table query, so the dropdown was
+  // really just "whatever page the table happens to be showing, sliced to
+  // 8" rather than an actual search — a match beyond the table's current
+  // PAGE_SIZE window never appeared. A flat fixed-limit dropdown query (8
+  // rows, no more) fixed that but re-introduced its own cap; this appends
+  // a further page as the dropdown is scrolled instead of hiding anything
+  // past the first 8.
+  const searchDropdownQuery = useStudentsInfinite(search.trim(), 15)
+  const searchMatches = search.trim() && !hasAdvancedFilters
+    ? searchDropdownQuery.data?.pages.flatMap(p => p.items) ?? []
+    : []
 
   return (
     <>
@@ -110,6 +122,10 @@ export default function Page() {
                 placeholder="Search by Student No., Reg No. or name…"
                 value={search}
                 onChange={updateSearch}
+                loading={searchDropdownQuery.isLoading}
+                onLoadMore={() => searchDropdownQuery.fetchNextPage()}
+                hasMore={!!searchDropdownQuery.hasNextPage}
+                loadingMore={searchDropdownQuery.isFetchingNextPage}
                 results={searchMatches.map(r => ({ id: r.studentGuid, primary: r.studentNum, secondary: r.studentName }))}
               />
               <button className={`btn btn-sm ${hasAdvancedFilters ? 'btn-primary' : 'btn-neu'}`} onClick={() => setFiltersOpen(v => !v)}>
