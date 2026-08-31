@@ -37,8 +37,18 @@ export interface ProgramTransferBatchOption {
   batchCode: string
 }
 
+// Confirmed via a real GET .../program-transfer/fee-structures response
+// (2026-09-01) — the guid field is feeHdGuid, not feeGuid as the doc's own
+// sample promised. This mismatch was silent rather than a crash: SearchSelect
+// matches an option by `value === current`, so an option whose value read as
+// undefined (accessing the nonexistent f.feeGuid) still displayed its label
+// once picked — undefined selected against undefined current still "matches"
+// — while the page's targetFeeStructure state stayed undefined underneath,
+// which is exactly why Execute Transfer stayed disabled (and would have
+// submitted newFeeId: undefined) even though the field looked filled in.
 export interface ProgramFeeStructureOption {
-  feeGuid: string
+  feeHdGuid: string
+  intFee: number
   feeCode: string
   feeDesc: string
 }
@@ -81,9 +91,9 @@ const mockBatches: ProgramTransferBatchOption[] = [
 ]
 
 const mockFeeStructures: ProgramFeeStructureOption[] = [
-  { feeGuid: 'fee-mock-a', feeCode: 'LOCAL.650', feeDesc: 'Local · $650/sem' },
-  { feeGuid: 'fee-mock-b', feeCode: 'LOCAL.750', feeDesc: 'Local · $750/sem' },
-  { feeGuid: 'fee-mock-c', feeCode: 'INTL.1200', feeDesc: 'International · $1200/sem' },
+  { feeHdGuid: 'fee-mock-a', intFee: 0, feeCode: 'LOCAL.650', feeDesc: 'Local · $650/sem' },
+  { feeHdGuid: 'fee-mock-b', intFee: 0, feeCode: 'LOCAL.750', feeDesc: 'Local · $750/sem' },
+  { feeHdGuid: 'fee-mock-c', intFee: 0, feeCode: 'INTL.1200', feeDesc: 'International · $1200/sem' },
 ]
 
 export function getProgramTransferDetail(studentGuid: string): Promise<ProgramTransferDetail> {

@@ -87,7 +87,7 @@ export default function Page() {
       { studentGuid: student.studentGuid, input: { newProgramId: targetProg, newBatchId: targetBatch, newSemesterId: targetSemester, newFeeId: targetFeeStructure, remarks: remarks.trim() || null } },
       {
         onSuccess: result => { showToast(`Programme transfer executed — ${result.programTransferCode}`, 'ok'); setConfirmOpen(false); handleClear() },
-        onError: () => { showToast('Could not execute programme transfer', 'err'); setConfirmOpen(false) },
+        onError: (error: Error) => { showToast(error.message || 'Could not execute programme transfer', 'err'); setConfirmOpen(false) },
       }
     )
   }
@@ -145,7 +145,7 @@ export default function Page() {
                   <SearchSelect placeholder="— Select new batch —" disabled={!targetSemester} options={batches.map(b => ({ value: b.batchGuid, label: b.batchCode }))} value={targetBatch} onChange={setTargetBatch} />
                 </div>
                 <div className="fg"><label className="lbl">New Fee Structure <span className="req">*</span></label>
-                  <SearchSelect placeholder="— Select new fee structure —" disabled={!targetProg} options={feeStructures.map(f => ({ value: f.feeGuid, label: f.feeDesc }))} value={targetFeeStructure} onChange={setTargetFeeStructure} />
+                  <SearchSelect placeholder="— Select new fee structure —" disabled={!targetProg} options={feeStructures.map(f => ({ value: f.feeHdGuid, label: f.feeDesc }))} value={targetFeeStructure} onChange={setTargetFeeStructure} />
                 </div>
                 {/* Discount — display only, not editable here (per request); real
                     value from the student's own discount assignment, same field

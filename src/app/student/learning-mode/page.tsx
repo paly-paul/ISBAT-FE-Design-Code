@@ -1,114 +1,211 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
+import { ScrollTable } from '@/components/ScrollTable'
+import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
 import { StudentDto } from '@/lib/api/student/student'
+import { useCampusDropdown } from '@/hooks/config/useCampuses'
+import { useIntakes } from '@/hooks/academic/useIntakes'
+import {
+  useLearningModeOptions,
+  useStudentLearningModeDetail,
+  useUpdateStudentLearningMode,
+  useLearningModeReport,
+  LearningModeReportFilters,
+} from '@/hooks/student/useLearningMode'
 
-// Ported from isbat_student_module.html's Learning Mode page. No backend
-// contract exists for this workflow — mode state and its access impact are
-// page-local mock data.
-const REASONS = ['Job Relocation', 'Medical', 'Personal Preference', 'Administrative']
+// Ported from isbat_student_module.html's Learning Mode page, then rewired
+// to the real students/learning-mode/*.md endpoints (2026-08-31) — both the
+// per-student edit view and the campus-wide roster report live on this one
+// page, per every endpoint's own "Used by pages" entry. Only 3 real modes
+// exist (Campus/Blended/Online) — the old mock's binary Campus/ODL toggle,
+// Campus Location/Online Region/Effective From/Reason/Remarks fields, and
+// Impact Preview/Mode History sections all had no backing field anywhere in
+// this API and are dropped rather than faked.
+// The doc's own default is 25 — narrowed to 10 to match this app's usual
+// table-page-size convention (see e.g. academic/intake-master's own
+// PAGE_SIZE) rather than the API's raw default.
+const REPORT_PAGE_SIZE = 10
 
 export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [student, setStudent] = useState<StudentDto | null>(null)
-  const [mode, setMode] = useState<'campus' | 'odl'>('campus')
-  const [reason, setReason] = useState(REASONS[0])
-  const [remarks, setRemarks] = useState('')
-
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
-  function handleLoad(s: StudentDto) { setStudent(s); showToast(`${s.studentName} loaded`, 'ok') }
-  function handleClear() { setStudent(null); setMode('campus'); setReason(REASONS[0]); setRemarks('') }
+
+  const [student, setStudent] = useState<StudentDto | null>(null)
+  const { data: detail, isLoading: isDetailLoading } = useStudentLearningModeDetail(student?.studentGuid ?? null)
+  const { data: options = [] } = useLearningModeOptions()
+  const updateLearningMode = useUpdateStudentLearningMode()
+
+  const [selectedMode, setSelectedMode] = useState('')
+
+  // Once the detail loads for a newly-picked student, seed the picker with
+  // their current mode (falls back to nothing selected if they've never had
+  // one set — learningMode comes back null in that case).
+  useEffect(() => {
+    setSelectedMode(detail?.learningMode != null ? String(detail.learningMode) : '')
+  }, [detail?.studentGuid, detail?.learningMode])
+
+  function handleLoad(s: StudentDto) { setStudent(s) }
+  function handleClear() { setStudent(null); setSelectedMode('') }
+
+  function handleApply() {
+    if (!student) return
+    const modeNum = Number(selectedMode)
+    if (!selectedMode || !modeNum) { showToast('Please select a learning mode.', 'warn'); return }
+    updateLearningMode.mutate(
+      { studentGuid: student.studentGuid, learningMode: modeNum },
+      {
+        onSuccess: result => showToast(`Learning mode updated to ${result.learningModeLabel}.`, 'ok'),
+        onError: (error: Error) => showToast(error.message || 'Failed to update learning mode.', 'error'),
+      },
+    )
+  }
+
+  // Report section — campus-wide roster, independent of whichever student
+  // the edit section above has loaded.
+  const { data: campuses = [] } = useCampusDropdown()
+  const { data: intakes = [] } = useIntakes()
+  const [reportCampusGuid, setReportCampusGuid] = useState('')
+  const [reportMode, setReportMode] = useState('')
+  const [reportIntakeGuid, setReportIntakeGuid] = useState('')
+  const [reportSearch, setReportSearch] = useState('')
+  const [reportPage, setReportPage] = useState(1)
+
+  const reportFilters: LearningModeReportFilters | null = reportCampusGuid
+    ? { campusGuid: reportCampusGuid, learningMode: reportMode ? Number(reportMode) : null, intakeGuid: reportIntakeGuid || null, search: reportSearch.trim() || null }
+    : null
+  const { data: reportData, isLoading: isReportLoading } = useLearningModeReport(reportFilters, reportPage, REPORT_PAGE_SIZE)
+  const reportItems = reportData?.items ?? []
+  const reportTotal = reportData?.totalCount ?? 0
+  const reportTotalPages = Math.max(1, Math.ceil(reportTotal / REPORT_PAGE_SIZE))
+
+  useEffect(() => { setReportPage(1) }, [reportCampusGuid, reportMode, reportIntakeGuid, reportSearch])
 
   return (
     <>
       <div className="page active">
-        <div className="pg-hdr"><div><div className="pg-title">Learning Mode</div><div className="pg-sub">Switch a student between Campus-Based and Online / ODL modes</div></div></div>
+        <div className="pg-hdr"><div><div className="pg-title">Learning Mode</div><div className="pg-sub">Update a student's learning mode, or review the campus-wide roster</div></div></div>
 
         <StudentLookup onLoad={handleLoad} onClear={handleClear} loaded={!!student} />
 
-        {!student && (
+        {!student ? (
           <div className="empty">
             <div className="empty-icon"><i className="lni lni-display"></i></div>
             <div className="empty-title">No Student Loaded</div>
-            <div className="empty-sub">Search for a student to view their current learning mode and switch between Campus-Based and Online/ODL.</div>
+            <div className="empty-sub">Search for a student to view and update their learning mode.</div>
           </div>
-        )}
-
-        {student && (
+        ) : isDetailLoading ? (
+          <div className="text-g400 text-center" style={{ padding: 24 }}>Loading learning mode…</div>
+        ) : (
           <>
             <BaselinePanel
               label="Current Enrollment (Read-Only)"
               items={[
-                { label: 'Student', value: student.studentName },
-                { label: 'Current Mode', value: <span style={{ color: 'var(--green)' }}>Campus-Based</span> },
-                { label: 'Campus', value: 'Main Campus' },
+                { label: 'Student', value: detail?.studentName ?? student.studentName },
+                { label: 'Programme', value: detail?.programName ?? '—' },
+                { label: 'Semester', value: detail?.semesterName ?? '—' },
+                { label: 'Current Mode', value: detail?.learningModeLabel ?? 'Not set' },
               ]}
             />
-            <div className="g2">
-              <div className="card">
-                <div className="card-hdr"><div className="card-title"><i className="lni lni-display"></i> Select New Learning Mode</div></div>
-                <div className={`mode-card${mode === 'campus' ? ' sel' : ''}`} onClick={() => setMode('campus')}>
-                  <div className="mode-icon"><i className="lni lni-home"></i></div>
-                  <div><div className="mode-lbl">Campus-Based</div><div className="mode-sub">Student attends physical classes. Full access to campus facilities, labs, library, and biometric attendance.</div></div>
-                </div>
-                <div className={`mode-card${mode === 'odl' ? ' sel' : ''}`} onClick={() => setMode('odl')}>
-                  <div className="mode-icon"><i className="lni lni-display"></i></div>
-                  <div><div className="mode-lbl">Online / ODL</div><div className="mode-sub">Student learns remotely via digital platforms. Physical campus access suspended. LMS fully unlocked.</div></div>
-                </div>
-                {mode === 'campus'
-                  ? <div className="fg" style={{ marginTop: 6 }}><label className="lbl">Campus Location</label><SearchSelect options={['Main Campus · Kampala', 'City Campus · Kampala CBD']} /></div>
-                  : <div className="fg" style={{ marginTop: 6 }}><label className="lbl">Online Campus Region</label><SearchSelect options={['Uganda (Online)', 'Kenya (Online)', 'Rwanda (Online)', 'International (Online)']} /></div>}
-                <div className="fg"><label className="lbl">Effective From <span className="req">*</span></label><SearchSelect options={['Immediately', 'Next Semester']} /></div>
-                <div className="fg"><label className="lbl">Reason <span className="req">*</span></label>
-                  <SearchSelect
-                    placeholder="— Select reason —"
-                    options={REASONS}
-                    value={reason}
-                    onChange={setReason}
-                  />
-                </div>
-                <div className="fg"><label className="lbl">Remarks <span className="req">*</span></label><textarea className="ctrl" rows={3} placeholder="Explain the reason for mode change…" value={remarks} onChange={e => setRemarks(e.target.value)} /></div>
-                <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
-                  <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                  <button className="btn btn-primary" onClick={() => showToast('Learning mode updated', 'ok')}><i className="lni lni-checkmark"></i> Apply Mode Change</button>
-                </div>
+            <div className="card">
+              <div className="card-hdr"><div className="card-title"><i className="lni lni-display"></i> Update Learning Mode</div></div>
+              <div className="fg"><label className="lbl">Learning Mode <span className="req">*</span></label>
+                <SearchSelect
+                  placeholder="— Select mode —"
+                  options={options.map(o => ({ value: String(o.value), label: o.label }))}
+                  value={selectedMode}
+                  onChange={setSelectedMode}
+                />
               </div>
-              <div className="card">
-                <div className="card-hdr"><div className="card-title"><i className="lni lni-information"></i> Impact Preview</div></div>
-                {mode === 'campus' ? (
-                  <>
-                    <div className="success-box" style={{ marginBottom: 12 }}><i className="lni lni-checkmark-circle" style={{ color: 'var(--green)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12 }}><strong>Campus-Based active.</strong> Student has full physical access.</div></div>
-                    <div className="chklist">
-                      <div className="chk pass"><i className="lni lni-checkmark-circle chk-icon" style={{ color: 'var(--green)' }}></i><span className="chk-text">Physical class attendance — Enabled</span><span className="chk-status">Active</span></div>
-                      <div className="chk pass"><i className="lni lni-checkmark-circle chk-icon" style={{ color: 'var(--green)' }}></i><span className="chk-text">Biometric tracking — Enabled</span><span className="chk-status">Active</span></div>
-                      <div className="chk pass"><i className="lni lni-checkmark-circle chk-icon" style={{ color: 'var(--green)' }}></i><span className="chk-text">Lab &amp; Library access — Enabled</span><span className="chk-status">Active</span></div>
-                      <div className="chk pass"><i className="lni lni-checkmark-circle chk-icon" style={{ color: 'var(--green)' }}></i><span className="chk-text">LMS / Online portal — Enabled</span><span className="chk-status">Active</span></div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="warn-box" style={{ marginBottom: 12 }}><i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12 }}><strong>Switching to Online/ODL.</strong> Physical campus access will be suspended on save.</div></div>
-                    <div className="chklist">
-                      <div className="chk fail"><i className="lni lni-close chk-icon" style={{ color: 'var(--red)' }}></i><span className="chk-text">Physical attendance — Disabled</span><span className="chk-status">Suspended</span></div>
-                      <div className="chk fail"><i className="lni lni-close chk-icon" style={{ color: 'var(--red)' }}></i><span className="chk-text">Biometric tracking — Disabled</span><span className="chk-status">Suspended</span></div>
-                      <div className="chk fail"><i className="lni lni-close chk-icon" style={{ color: 'var(--red)' }}></i><span className="chk-text">Lab &amp; Library — Revoked</span><span className="chk-status">Revoked</span></div>
-                      <div className="chk pass"><i className="lni lni-checkmark-circle chk-icon" style={{ color: 'var(--green)' }}></i><span className="chk-text">LMS / Online portal — Fully unlocked</span><span className="chk-status">Unlocked</span></div>
-                    </div>
-                  </>
-                )}
-                <div className="card" style={{ marginTop: 16, marginBottom: 0 }}>
-                  <div className="card-hdr" style={{ marginBottom: 10 }}><div className="card-title"><i className="lni lni-alarm-clock"></i> Mode History</div></div>
-                  <div className="timeline">
-                    <div className="tl-item"><div className="tl-dot done"><i className="lni lni-checkmark"></i></div><div><div className="tl-label">Campus-Based — Enrolled</div><div className="tl-meta">Jan 2024 · Initial mode at registration</div></div></div>
-                  </div>
-                </div>
+              <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
+                <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
+                <button className="btn btn-primary" disabled={updateLearningMode.isPending} onClick={handleApply}>
+                  <i className="lni lni-checkmark"></i> {updateLearningMode.isPending ? 'Saving…' : 'Apply Mode Change'}
+                </button>
               </div>
             </div>
           </>
         )}
+
+        <div className="card">
+          <div className="card-hdr"><div className="card-title"><i className="lni lni-bar-chart"></i> Learning Mode Report</div></div>
+          <div className="g3 mb-3">
+            <div className="fg">
+              <label className="lbl">Campus <span className="req">*</span></label>
+              <SearchSelect
+                placeholder="— Select campus —"
+                options={campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))}
+                value={reportCampusGuid}
+                onChange={setReportCampusGuid}
+              />
+            </div>
+            <div className="fg">
+              <label className="lbl">Learning Mode</label>
+              <SearchSelect
+                placeholder="— All modes —"
+                options={options.map(o => ({ value: String(o.value), label: o.label }))}
+                value={reportMode}
+                onChange={setReportMode}
+              />
+            </div>
+            <div className="fg">
+              <label className="lbl">Intake</label>
+              <SearchSelect
+                placeholder="— All intakes —"
+                options={intakes.map(i => ({ value: i.intakeGuid, label: i.description }))}
+                value={reportIntakeGuid}
+                onChange={setReportIntakeGuid}
+              />
+            </div>
+          </div>
+          <div className="fg mb-3">
+            <label className="lbl">Search</label>
+            <input className="ctrl" type="text" maxLength={50} placeholder="Student number, reg. no, or name…" value={reportSearch} onChange={e => setReportSearch(e.target.value)} />
+          </div>
+
+          {!reportCampusGuid ? (
+            <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Select a campus to load the roster.</div>
+          ) : (
+            <>
+              <ScrollTable>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Student No.</th>
+                      <th>Name</th>
+                      <th>Programme</th>
+                      <th>Semester</th>
+                      <th>Batch</th>
+                      <th>Learning Mode</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isReportLoading
+                      ? <TableLoadingState colSpan={6} />
+                      : reportItems.length === 0
+                        ? <EmptyState colSpan={6} hasFilters={!!(reportMode || reportIntakeGuid || reportSearch)} onClearFilters={() => { setReportMode(''); setReportIntakeGuid(''); setReportSearch('') }} />
+                        : reportItems.map(r => (
+                          <tr key={r.studentGuid}>
+                            <td className="font-mono">{r.studentNum ?? '—'}</td>
+                            <td><strong>{r.studentName ?? '—'}</strong></td>
+                            <td>{r.programName ?? '—'}</td>
+                            <td>{r.semesterName ?? '—'}</td>
+                            <td>{r.batchCode ?? '—'}</td>
+                            <td><span className="pill pill-blue">{r.learningModeLabel}</span></td>
+                          </tr>
+                        ))}
+                  </tbody>
+                </table>
+              </ScrollTable>
+              <Pagination page={reportPage} totalPages={reportTotalPages} totalCount={reportTotal} itemLabel="students" onPageChange={setReportPage} />
+            </>
+          )}
+        </div>
       </div>
       <Toast toast={toast} />
     </>

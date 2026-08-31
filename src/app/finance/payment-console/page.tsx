@@ -16,15 +16,19 @@ import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import {
   useSearchStudents,
   useStudentProfile,
-  useOutstandingLedgers,
+  useCurrentSemesterPayable,
   useAllOutstandingLedgers,
+  useLedgerOthers,
   usePaymentHistory,
   usePayableLedgers,
   useCreatePayment,
+  useCreatePaymentOther,
   PAYMENT_CATEGORY_LABELS,
   PAY_TYPE_LABELS,
   PAY_TYPE_TO_RECEIPT_CATEGORY,
   AllOutstandingItem,
+  CurrentSemesterPayableLedger,
+  CurrentSemesterPayableTotal,
 } from '@/hooks/finance/usePaymentConsole'
 import { formatDateTime } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
@@ -61,6 +65,36 @@ function OutstandingCategoryTable({ items, isLoading, isError }: { items: AllOut
         <span className="font-bold text-blue">{total.toLocaleString()}</span>
       </div>
     </>
+  )
+}
+
+// Discount breakdown for Step 2's Outstanding Balance card — pulled out of
+// the per-ledger inline note it used to be into one fixed block, rendered
+// once right after the Library Deposit row specifically (per request),
+// regardless of which ledger(s) the discount actually applies to. Renders
+// nothing when nothing in the current semester earned a discount, rather
+// than an empty/all-zero block.
+function DiscountDetails({ ledgers, totals }: { ledgers: CurrentSemesterPayableLedger[]; totals: CurrentSemesterPayableTotal[] }) {
+  const discounted = ledgers.filter(l => l.discountAmount > 0)
+  if (discounted.length === 0) return null
+  return (
+    <div className="mt-2 mb-2 p-3 rounded-[var(--rsm)] bg-clr-green-bg border border-[1.5px]" style={{ borderColor: 'var(--green-bd)' }}>
+      <div className="font-bold text-green flex items-center gap-1.5" style={{ fontSize: 11.5, marginBottom: 6 }}>
+        <i className="lni lni-tag"></i> Discount Applied
+      </div>
+      {discounted.map((l, i) => (
+        <div className="receipt-row" key={`${l.discountGuid ?? l.ledgerName}-${i}`} style={{ padding: '2px 0' }}>
+          <span className="text-muted">{l.discountName} <span className="text-g400">— {l.ledgerName}</span></span>
+          <span className="font-bold text-green">− {l.currencyName} {l.discountAmount.toLocaleString()}</span>
+        </div>
+      ))}
+      {totals.filter(t => t.totalDiscount > 0).map(t => (
+        <div className="flex justify-between items-center" key={t.currencyGuid ?? t.currencyName} style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed var(--green-bd)' }}>
+          <span className="text-muted" style={{ fontSize: 12 }}>Total Discount ({t.currencyName})</span>
+          <span className="font-bold text-green">− {t.totalDiscount.toLocaleString()}</span>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -113,11 +147,12 @@ type PayCategory = 'tuition' | 'other'
 // narrowing applies, while still always evaluating to false at runtime.
 const SHOW_ALLOCATION_PREVIEW: boolean = false
 
-// Other Payment tab — mock ledger picker (legacy ISMS frmTrnPaymentOther.aspx
-// "Ledger" dropdown), same UI-first mock treatment as NCHE/Guild. No real
-// "other fee ledgers" master is wired up here, so this is a representative
-// static list, not a fetched one.
-const OTHER_LEDGER_OPTIONS = ['Library Fine', 'ID Card Fee', 'Transcript Fee', 'Caution Money', 'Uniform Fee', 'Other Fee']
+// Gate for Other Payment's own "Paid Fee Details" log — commented out (not
+// removed) per request, now that the left column's Payment History card
+// already shows this application's Other-category payments (it isn't
+// filtered to Tuition the way tuitionPaymentHistory narrows the tuition
+// tab), making this second list redundant.
+const SHOW_OTHER_PAID_FEE_DETAILS: boolean = false
 
 export default function PaymentConsolePage() {
   const router = useRouter()
@@ -125,8 +160,9 @@ export default function PaymentConsolePage() {
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
   // Success confirmation for every payment category's submit (Tuition/
-  // NCHE/Guild) — replaces the plain success toast; errors still use
-  // showToast (see each submit handler's own onError). null when closed.
+  // Other; NCHE/Guild before they were dropped from this page) — replaces
+  // the plain success toast; errors still use showToast (see each submit
+  // handler's own onError). null when closed.
   const [successModal, setSuccessModal] = useState<{ title: string; rows: [string, string][]; notices?: string[] } | null>(null)
 
   const { data: allProcBanks = [] } = useProcBanks()
@@ -178,21 +214,33 @@ export default function PaymentConsolePage() {
   // screen's own header fields — Student/Programme/Semester — are already
   // covered by the Student Profile Details bar above the 3-column body, so
   // they aren't repeated); this tab is closer to a flat payment log keyed
-  // by a ledger picker rather than a semester. isAdvance mirrors the
-  // legacy form's "Advance Payment" checkbox + date; bank account is
-  // gated the same way Step 3's own bank fields are (only when the
-  // payment method isn't cash).
-  const [otherPayments, setOtherPayments] = useState<{ id: string; code: string; receiptNo: string; payDate: string; ledgerName: string; amount: string; currencyCode: string }[]>([])
+  // by a ledger picker rather than a semester, now wired to the real
+  // post-payment-other.md submit (ledgerOthersGuid sourced from
+  // getLedgerOthers()). Receipt Book/Bank fields mirror Tuition's own
+  // (narrowed by payType via PAY_TYPE_TO_RECEIPT_CATEGORY, bank only when
+  // the payment method isn't cash) since the real endpoint needs
+  // receiptBookGuid/procBankGuid, not the free-text "Bank Account" field the
+  // old mock form had. otherIsAdvance mirrors the legacy form's "Advance
+  // Payment" checkbox + date, but stays local-only — the endpoint's advance
+  // mode needs an existing advance deposit's paymentAdvanceGuid, and nothing
+  // in this app lists a student's existing deposits to pick one from
+  // (createAdvanceDeposit only creates new ones) — otherSaveEntry blocks
+  // submit with a toast instead of sending a fabricated guid.
+  const [otherPayments, setOtherPayments] = useState<{ id: string; code: string; receiptNo: string | null; payDate: string; ledgerName: string; amount: string; currencyCode: string }[]>([])
   const [otherLedger, setOtherLedger] = useState('')
   const [otherPayDate, setOtherPayDate] = useState(todayYmd)
   const [otherIsAdvance, setOtherIsAdvance] = useState(false)
   const [otherAdvanceDate, setOtherAdvanceDate] = useState(todayYmd)
   const [otherPayType, setOtherPayType] = useState('1')
+  // Narrowed to only the category CreatePaymentOther will accept for the
+  // currently-selected Payment Type — same reasoning as Tuition's own
+  // receiptBooks derivation above.
+  const otherReceiptBooks = activeReceiptBooks.filter(r => r.category === PAY_TYPE_TO_RECEIPT_CATEGORY[Number(otherPayType)])
+  const [otherReceiptBookGuid, setOtherReceiptBookGuid] = useState('')
+  const [otherProcBankGuid, setOtherProcBankGuid] = useState('')
   const [otherAmount, setOtherAmount] = useState('')
   const [otherCurrencyGuid, setOtherCurrencyGuid] = useState('')
-  const [otherBankAccount, setOtherBankAccount] = useState('')
   const [otherRemarks, setOtherRemarks] = useState('')
-  const [otherSeq, setOtherSeq] = useState(1)
 
   const [amount, setAmount] = useState('')
   const [currencyGuid, setCurrencyGuid] = useState('')
@@ -272,7 +320,17 @@ export default function PaymentConsolePage() {
   // there even when the search hit had none, so it isn't just a one-time
   // override).
   const studentGuid = profile?.studentGuid ?? selectedStudentGuidHint ?? null
-  const { data: ledgers = [], isLoading: isLedgersLoading } = useOutstandingLedgers(selectedApplicationGuid, !!selectedApplicationGuid, studentGuid)
+  // Discount-aware replacement for the old useOutstandingLedgers — same
+  // current-semester scoping, but each ledger also carries its applicable
+  // discount (discountName/discountAmount/netPayable), which
+  // outstanding-ledgers has no fields for at all (see
+  // get-current-semester-payable-ledgers.md). `ledgers` here is already
+  // scoped to "this semester" server-side, so there's no client-side
+  // semester-grouping/picking step left to do the way the old
+  // ledgerGroups/currentSemesterGroup had to.
+  const { data: currentSemesterPayable, isLoading: isLedgersLoading } = useCurrentSemesterPayable(selectedApplicationGuid, !!selectedApplicationGuid, studentGuid)
+  const ledgers = currentSemesterPayable?.ledgers ?? []
+  const ledgerTotals = currentSemesterPayable?.totals ?? []
   // All four categories in one call (get-all-outstanding-ledgers.md) — used
   // to show a real outstanding figure on the Other Payment tab, whose own
   // payment-entry form stays mock (no documented single-category submit
@@ -320,29 +378,6 @@ export default function PaymentConsolePage() {
   const batchCode = profile?.batchCode ?? batches.find(b => b.batchGuid === profile?.batchGuid)?.batchCode
   const semName = profile?.semesterName ?? semesters.find(s => s.semesterGuid === profile?.semesterGuid)?.semName
 
-  // Groups preserve first-seen order (the API already returns rows semester
-  // by semester) rather than sorting — Map insertion order does that for
-  // free. Falls back to a single '—' bucket if semesterName ever comes back
-  // null so grouping degrades to "one group" instead of silently dropping
-  // rows.
-  const ledgerGroups = useMemo(() => {
-    const groups = new Map<string, typeof ledgers>()
-    for (const l of ledgers) {
-      const key = l.semesterName ?? '—'
-      const bucket = groups.get(key)
-      if (bucket) bucket.push(l); else groups.set(key, [l])
-    }
-    return Array.from(groups.entries())
-  }, [ledgers])
-  // Step 2 shows one semester's ledgers, not every group — prefer the
-  // student's actual current semester (semName, resolved above from the
-  // profile) when the outstanding-ledgers response includes it, since that
-  // response can span every remaining semester of the programme at once
-  // when studentGuid isn't known yet (see ledgerGroups' own comment).
-  // Falls back to the first returned group so something still shows for an
-  // application whose current semester name doesn't match any group
-  // (semesters not yet loaded, or a mismatch between the two endpoints).
-  const currentSemesterGroup = ledgerGroups.find(([name]) => name === semName) ?? ledgerGroups[0]
   const selectedCurrency = currencies.find(c => c.currencyGuid === currencyGuid)
 
   const payableLedgersParams = useMemo(() => {
@@ -361,6 +396,8 @@ export default function PaymentConsolePage() {
   const { data: payableLedgers, isFetching: isPreviewLoading, isError: isPreviewError, error: previewError } = usePayableLedgers(payableLedgersParams, !!payableLedgersParams)
 
   const createPayment = useCreatePayment()
+  const { data: ledgerOthers = [] } = useLedgerOthers()
+  const createPaymentOther = useCreatePaymentOther()
 
   function handleSearchClick() {
     const term = search.trim()
@@ -387,34 +424,72 @@ export default function PaymentConsolePage() {
     setOtherIsAdvance(false)
     setOtherAdvanceDate(todayYmd())
     setOtherPayType('1')
+    setOtherReceiptBookGuid('')
+    setOtherProcBankGuid('')
     setOtherAmount('')
     setOtherCurrencyGuid('')
-    setOtherBankAccount('')
     setOtherRemarks('')
   }
 
-  // Mock-only add — no edit/delete here, unlike NCHE/Guild: the legacy
-  // Other Payment reference screen's own "Paid Fee Details" table has no
-  // edit/delete affordance, so this stays a flat append-only log to match.
+  // No edit/delete here, unlike Tuition's receipt — the legacy Other
+  // Payment reference screen's own "Paid Fee Details" table has no edit/
+  // delete affordance, so this stays a flat append-only log to match; each
+  // successful submit appends the real result (post-payment-other.md) to it.
   function otherSaveEntry() {
+    if (!profile || !selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
     if (!otherLedger) { showToast('Please select a ledger.', 'warn'); return }
     const amt = parseFloat(otherAmount)
     if (!otherAmount.trim() || isNaN(amt) || amt <= 0) { showToast('Amount must be greater than 0.', 'warn'); return }
     if (!otherCurrencyGuid) { showToast('Please select a currency.', 'warn'); return }
     if (!otherPayDate) { showToast('Please select a payment date.', 'warn'); return }
     const payTypeNum = Number(otherPayType)
-    if (payTypeNum > 1 && !otherBankAccount.trim()) { showToast('Please enter a bank account.', 'warn'); return }
+    // Advance mode needs an existing advance deposit's paymentAdvanceGuid —
+    // nothing in this app lists a student's existing deposits with balance
+    // to pick one from (createAdvanceDeposit only creates new ones), so
+    // blocked here rather than sending a fabricated guid that would 404.
+    if (otherIsAdvance) { showToast('Paying from an existing advance deposit isn’t available yet — uncheck Advance Payment to record a cash/bank payment.', 'warn'); return }
+    if (!otherReceiptBookGuid) { showToast('Please select a receipt book.', 'warn'); return }
+    const showOtherBankFields = payTypeNum > 1
+    if (showOtherBankFields && !otherProcBankGuid) { showToast('Please select a bank.', 'warn'); return }
 
     const currencyCode = currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyCode ?? ''
-    setOtherPayments(prev => [...prev, {
-      id: `other-${Date.now()}`,
-      code: `OTH-${String(otherSeq).padStart(4, '0')}`,
-      receiptNo: `RCP-OTH-${String(otherSeq).padStart(4, '0')}`,
-      payDate: otherPayDate, ledgerName: otherLedger, amount: otherAmount, currencyCode,
-    }])
-    setOtherSeq(n => n + 1)
-    showToast('Other payment recorded.', 'success')
-    resetOtherForm()
+    const ledgerName = ledgerOthers.find(l => l.ledgerOthersGuid === otherLedger)?.ledgerName ?? '—'
+
+    createPaymentOther.mutate(
+      {
+        applicationGuid: selectedApplicationGuid,
+        studentGuid,
+        ledgerOthersGuid: otherLedger,
+        amount: amt,
+        currencyGuid: otherCurrencyGuid,
+        payDate: otherPayDate,
+        payType: payTypeNum,
+        remarks: otherRemarks.trim() || null,
+        receiptBookGuid: otherReceiptBookGuid,
+        procBankGuid: showOtherBankFields ? otherProcBankGuid : null,
+        paymentAdvanceGuid: null,
+      },
+      {
+        onSuccess: result => {
+          setOtherPayments(prev => [...prev, {
+            id: result.paymentOtherGuid,
+            code: result.paymentCode,
+            receiptNo: result.receipt,
+            payDate: otherPayDate, ledgerName, amount: String(result.amount), currencyCode,
+          }])
+          setSuccessModal({
+            title: 'Other Payment Recorded',
+            rows: [
+              ['Ledger', ledgerName],
+              ['Receipt', result.receipt ?? '—'],
+              ['Amount', `${result.amount.toLocaleString()} ${currencyCode}`],
+            ],
+          })
+          resetOtherForm()
+        },
+        onError: (error: Error) => showToast(error.message || 'Failed to save other payment. Please try again.', 'error'),
+      },
+    )
   }
 
   function selectStudent(applicationGuid: string, name: string, studentGuidHint: string | null) {
@@ -597,7 +672,12 @@ export default function PaymentConsolePage() {
                   onKeyDown={e => { if (e.key === 'Enter') handleSearchClick() }}
                 />
               </div>
-              <button className="btn btn-primary" onClick={handleSearchClick}><i className="lni lni-search-alt"></i> Search</button>
+              {/* Search button commented out per request — the dropdown
+                  already opens live on focus/typing (browse-all when empty,
+                  narrowed as you type) and Enter still commits the search
+                  via the input's own onKeyDown above, so the button was
+                  redundant. handleSearchClick kept as-is for that Enter path. */}
+              {/* <button className="btn btn-primary" onClick={handleSearchClick}><i className="lni lni-search-alt"></i> Search</button> */}
             </div>
 
             {/* Dropdown: opens on focus (empty box lists every application,
@@ -787,12 +867,14 @@ export default function PaymentConsolePage() {
                 {/* Ledger moved to the top of the form, ahead of the
                     Currency/Amount pair — picking the ledger first is the
                     natural order for Other Payment (its outstanding-items
-                    list is keyed by ledger). */}
+                    list is keyed by ledger). Real catalogue now
+                    (get-ledger-others.md) — value is the ledgerOthersGuid
+                    CreatePaymentOther needs, not a display label. */}
                 <div className="fg mb-[14px]">
                   <div className="lbl">Ledger <span className="req">*</span></div>
                   <SearchSelect
                     placeholder="— Select Ledger —"
-                    options={OTHER_LEDGER_OPTIONS.map(l => ({ value: l, label: l }))}
+                    options={ledgerOthers.map(l => ({ value: l.ledgerOthersGuid, label: l.ledgerName }))}
                     value={otherLedger}
                     onChange={setOtherLedger}
                   />
@@ -829,15 +911,35 @@ export default function PaymentConsolePage() {
                     <SearchSelect
                       options={Object.entries(PAY_TYPE_LABELS).map(([value, label]) => ({ value, label }))}
                       value={otherPayType}
-                      onChange={setOtherPayType}
+                      onChange={val => { setOtherPayType(val); setOtherReceiptBookGuid('') }}
                     />
                   </div>
                 </div>
 
+                {/* Receipt Book + Bank — real fields post-payment-other.md
+                    needs (receiptBookGuid required, procBankGuid required
+                    too unless Cash), replacing the old free-text "Bank
+                    Account" input, same convention as Tuition's own
+                    Receipt Book/Bank Name fields. */}
+                <div className="fg mb-[14px]">
+                  <div className="lbl">Receipt Book <span className="req">*</span></div>
+                  <SearchSelect
+                    placeholder="— Select Receipt Book —"
+                    options={otherReceiptBooks.map(r => ({ value: r.receiptBookGuid, label: r.bookCode }))}
+                    value={otherReceiptBookGuid}
+                    onChange={setOtherReceiptBookGuid}
+                  />
+                </div>
+
                 {Number(otherPayType) > 1 && (
                   <div className="fg mb-[14px]">
-                    <div className="lbl">Bank Account <span className="req">*</span></div>
-                    <input className="ctrl" type="text" placeholder="Bank account number" value={otherBankAccount} onChange={e => setOtherBankAccount(e.target.value)} />
+                    <div className="lbl">Bank Name <span className="req">*</span></div>
+                    <SearchSelect
+                      placeholder="— Select Bank —"
+                      options={banks.map(b => ({ value: b.procBankGuid, label: b.bankName }))}
+                      value={otherProcBankGuid}
+                      onChange={setOtherProcBankGuid}
+                    />
                   </div>
                 )}
 
@@ -847,6 +949,11 @@ export default function PaymentConsolePage() {
                     <input type="checkbox" checked={otherIsAdvance} onChange={e => setOtherIsAdvance(e.target.checked)} />
                     Advance Payment
                   </label>
+                  {otherIsAdvance && (
+                    <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4 }}>
+                      Not available yet — there's no picker for an existing advance deposit to pay from. Uncheck this to submit a cash/bank payment instead.
+                    </div>
+                  )}
                 </div>
                 {otherIsAdvance && (
                   <div className="fg mb-[14px]">
@@ -860,34 +967,37 @@ export default function PaymentConsolePage() {
                   <textarea className="ctrl" rows={2} placeholder="Optional notes" value={otherRemarks} onChange={e => setOtherRemarks(e.target.value)} />
                 </div>
 
-                <div className="flex gap-[10px] justify-between items-center mb-5">
-                  <button className="btn btn-neu" onClick={resetOtherForm}><i className="lni lni-close"></i> Clear</button>
-                  <button className="btn btn-primary btn-lg" onClick={otherSaveEntry}>
-                    <i className="lni lni-save"></i> Add Payment
+                <div className="flex gap-[10px] justify-end items-center mb-5">
+                  <button className="btn btn-primary btn-lg" disabled={createPaymentOther.isPending} onClick={otherSaveEntry}>
+                    <i className="lni lni-save"></i> {createPaymentOther.isPending ? 'Saving…' : 'Add Payment'}
                   </button>
                 </div>
 
-                <div className="sec-divider" style={{ marginTop: 0 }}>Paid Fee Details</div>
-                {otherPayments.length === 0 ? (
-                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No other payments recorded yet.</div>
-                ) : (
-                  <ScrollTable className="no-sticky-col">
-                    <table>
-                      <thead><tr><th>Payment Code</th><th>Payment Date</th><th>Receipt No.</th><th>Ledger Name</th><th>Amount</th><th>Cur.</th></tr></thead>
-                      <tbody>
-                        {otherPayments.map(p => (
-                          <tr key={p.id}>
-                            <td className="font-mono">{p.code}</td>
-                            <td>{p.payDate}</td>
-                            <td className="font-mono text-blue">{p.receiptNo}</td>
-                            <td>{p.ledgerName}</td>
-                            <td className="text-green font-bold">{parseFloat(p.amount).toLocaleString()}</td>
-                            <td>{p.currencyCode}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </ScrollTable>
+                {SHOW_OTHER_PAID_FEE_DETAILS && (
+                  <>
+                    <div className="sec-divider" style={{ marginTop: 0 }}>Paid Fee Details</div>
+                    {otherPayments.length === 0 ? (
+                      <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No other payments recorded yet.</div>
+                    ) : (
+                      <ScrollTable className="no-sticky-col">
+                        <table>
+                          <thead><tr><th>Payment Code</th><th>Payment Date</th><th>Receipt No.</th><th>Ledger Name</th><th>Amount</th><th>Cur.</th></tr></thead>
+                          <tbody>
+                            {otherPayments.map(p => (
+                              <tr key={p.id}>
+                                <td className="font-mono">{p.code}</td>
+                                <td>{p.payDate}</td>
+                                <td className="font-mono text-blue">{p.receiptNo ?? '—'}</td>
+                                <td>{p.ledgerName}</td>
+                                <td className="text-green font-bold">{parseFloat(p.amount).toLocaleString()}</td>
+                                <td>{p.currencyCode}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </ScrollTable>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -911,39 +1021,43 @@ export default function PaymentConsolePage() {
                   ) : (
                     <div>
                       {/* Label-left/value-right rows (.receipt-row — same
-                          class the receipt card below already uses) for a
-                          single semester's ledgers — matches the reference
-                          "Completing Registration" panel's layout. Only one
-                          semester group is shown: without studentGuid
-                          narrowing the billed range (an application that
-                          hasn't become a student yet), outstanding-ledgers
-                          can return every remaining semester of the
-                          programme at once (confirmed live: 11 rows across
-                          4 semesters) — currentSemesterGroup picks the
-                          student's actual current semester (profile.semName)
-                          when it's one of the returned groups, falling back
-                          to the first group otherwise, rather than dumping
-                          every future semester's billing onto this screen. */}
-                      {currentSemesterGroup && (
-                        <>
-                          <div className="font-bold text-blue uppercase" style={{ fontSize: 10.5, letterSpacing: '.04em', marginBottom: 2 }}>
-                            {currentSemesterGroup[0]}
-                          </div>
-                          {currentSemesterGroup[1].map((l, i) => {
-                            const isPaid = l.outstanding === 0
-                            return (
-                              <div className="receipt-row" key={`${l.ledgerGuid ?? 'none'}-${l.semesterGuid ?? currentSemesterGroup[0]}-${i}`}>
-                                <span className="text-muted">{l.ledgerName}{l.ledgerNum ? ` (${l.ledgerNum})` : ''}{isPaid ? ' (paid)' : ''}</span>
-                                <span className="flex items-baseline gap-1.5 justify-end">
-                                  <span className="text-g400 font-semibold" style={{ fontSize: 11 }}>{l.currencyName}</span>
-                                  <span className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>
-                                    {isPaid ? `${l.paidAmount.toLocaleString()} ✓` : l.outstanding.toLocaleString()}
-                                  </span>
+                          class the receipt card below already uses), one per
+                          current-semester ledger — get-current-semester-
+                          payable-ledgers.md is already scoped server-side to
+                          "this semester" (+ any carried-forward semester-1
+                          registration fee), so there's no client-side
+                          semester grouping/picking left to do here, unlike
+                          the old outstanding-ledgers-backed version. The
+                          amount shown is netPayable (outstanding minus any
+                          discount, floored at 0) — not the raw outstanding
+                          figure — since that's the actual amount still owed.
+                          Discount detail is pulled out of the per-row note
+                          it used to be and rendered once, in a fixed spot
+                          right after the Library Deposit row specifically
+                          (per request) rather than under whichever ledger it
+                          actually applies to — falls back to right after the
+                          last row if this application's ledgers don't
+                          include one. */}
+                      {ledgers.map((l, i) => {
+                        const isPaid = l.outstanding === 0
+                        const isLibraryDeposit = l.ledgerName.trim().toLowerCase() === 'library deposit'
+                        return (
+                          <div key={`${l.ledgerGuid ?? 'none'}-${i}`}>
+                            <div className="receipt-row">
+                              <span className="text-muted">{l.ledgerName}{l.ledgerNum ? ` (${l.ledgerNum})` : ''}{isPaid ? ' (paid)' : ''}</span>
+                              <span className="flex items-baseline gap-1.5 justify-end">
+                                <span className="text-g400 font-semibold" style={{ fontSize: 11 }}>{l.currencyName}</span>
+                                <span className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>
+                                  {isPaid ? `${l.paidAmount.toLocaleString()} ✓` : l.netPayable.toLocaleString()}
                                 </span>
-                              </div>
-                            )
-                          })}
-                        </>
+                              </span>
+                            </div>
+                            {isLibraryDeposit && <DiscountDetails ledgers={ledgers} totals={ledgerTotals} />}
+                          </div>
+                        )
+                      })}
+                      {!ledgers.some(l => l.ledgerName.trim().toLowerCase() === 'library deposit') && (
+                        <DiscountDetails ledgers={ledgers} totals={ledgerTotals} />
                       )}
                     </div>
                   )
@@ -1042,8 +1156,7 @@ export default function PaymentConsolePage() {
                       <textarea className="ctrl" rows={2} placeholder="Optional notes or sponsor details..." value={remarks} onChange={e => setRemarks(e.target.value)} />
                     </div>
 
-                    <div className="flex gap-[10px] justify-between items-center">
-                      <button className="btn btn-neu" onClick={handleClear}><i className="lni lni-close"></i> Clear</button>
+                    <div className="flex gap-[10px] justify-end items-center">
                       <button className="btn btn-primary btn-lg" disabled={createPayment.isPending} onClick={() => handleSave()}>
                         <i className="lni lni-save"></i> {createPayment.isPending ? 'Saving…' : 'Save Payment & Generate Receipt →'}
                       </button>

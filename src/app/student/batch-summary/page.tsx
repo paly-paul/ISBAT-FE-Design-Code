@@ -32,6 +32,20 @@ function statsFromRows(rows: { headCount: number }[]) {
   }
 }
 
+// The real endpoint returns semCode — a bare int counting semesters
+// across the whole programme (1, 2, 3…), not a resolved name and not
+// per-year — rather than a semesterName string, confirmed against a real
+// response (2026-08-31). No lookup/name mapping exists anywhere for this
+// code, so it's turned into a "Year N - Semester M" label by simple
+// arithmetic (two semesters per year, the convention every other real
+// semester name in this app already follows) instead of showing the raw
+// number or leaving the column blank.
+function semesterLabelFromCode(semCode: number): string {
+  const year = Math.ceil(semCode / 2)
+  const sem = semCode % 2 === 0 ? 2 : 1
+  return `Year ${year} - Semester ${sem}`
+}
+
 const PAGE_SIZE = 10
 
 export default function Page() {
@@ -104,11 +118,11 @@ export default function Page() {
                     // qualified, matching the Sl. No column) is always
                     // unique regardless of what the guid comes back as.
                     <tr key={`${r.batchGuid || 'row'}-${(page - 1) * PAGE_SIZE + i}`}>
-                      <td className="text-g500">{(page - 1) * PAGE_SIZE + i + 1}</td>
+                      <td className="text-g500">{r.slNo ?? (page - 1) * PAGE_SIZE + i + 1}</td>
                       <td><span className="font-bold font-mono text-blue">{r.batchCode}</span></td>
                       <td>{r.programName}</td>
-                      <td>{r.semesterName}</td>
-                      <td>{r.facultyName}</td>
+                      <td>{semesterLabelFromCode(r.semCode)}</td>
+                      <td>{r.facultyName || '—'}</td>
                       <td>{r.headCount}</td>
                     </tr>
                   ))}
