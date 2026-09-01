@@ -26,6 +26,19 @@ CDN in `src/app/layout.tsx`. The frontend renders an icon as:
 The `icon` value below is the **full class string** (`lni lni-calendar`),
 not just the LineIcons name — copy it as-is into the `icon` field.
 
+## Which tree actually renders
+
+`getMenu()` in `menu.ts` picks between two sources at request time, gated by
+`NEXT_PUBLIC_RBAC_MOCK` (falls back to `NEXT_PUBLIC_AUTH_MOCK` if unset):
+
+- `true` → `mockMenu`, the literal tree documented below — full access, no
+  role restrictions.
+- `false` → the real `GET /api/v1/users/me/menu` response, run through the
+  `merge*`/`ensure*` functions this doc's per-module notes describe —
+  permission-gated per the logged-in user's role, with certain sections/
+  leaves/icons patched in or overridden where the backend doesn't fully
+  match this reference yet (see the per-module notes below for which).
+
 ## `url` format
 
 Full path from the app root (e.g. `/config/faculty-master`), not a bare
@@ -658,7 +671,7 @@ through unchanged.
         },
         {
           "name": "Batch Transfer",
-          "icon": "lni lni-transfer",
+          "icon": "lni lni-shuffle",
           "url": "/student/batch-transfer",
           "permissions": {},
           "children": []
@@ -773,6 +786,16 @@ through unchanged.
 > leaf inserted right after `Specialization Management`; unlike the rest of
 > this module it does gate `add`/`edit`/`delete` via `usePagePermissions()`
 > (no `get` action exists on the page).
+
+> `Operations`' icons are frontend-owned, not backend-owned: even when the
+> real `/me/menu` response already registers the whole `Operations` section
+> (so the earlier "append only if the section is missing" logic never
+> touches it), `mergeStudentSections()` still stamps the icon values above
+> over whatever the backend sends for each leaf, by name — `url` and
+> `permissions` are left as the backend's real values. `Batch Transfer`
+> specifically was changed from `lni lni-transfer` to `lni lni-shuffle`
+> (2026-09-01) after confirming `lni-transfer` isn't a real LineIcons 4.0
+> class (it silently rendered nothing).
 
 ---
 
