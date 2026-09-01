@@ -124,7 +124,7 @@ export function searchStudentStatement(filters: StudentStatementSearchFilters, p
   if (filters.studentName?.trim()) params.set('studentName', filters.studentName.trim())
   params.set('pageNumber', String(page))
   params.set('pageSize', String(pageSize))
-  return apiGet<PagedResult<StudentStatementSearchResultDto> | null>(`/api/v1/student-statement/search?${params.toString()}`)
+  return apiGet<PagedResult<StudentStatementSearchResultDto> | null>(`/api/v1/student/studentstatement/search?${params.toString()}`)
     .then(data => data ?? { items: [], totalCount: 0, page, pageSize })
 }
 
