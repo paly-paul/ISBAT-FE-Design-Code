@@ -7,6 +7,7 @@ import DatePicker from '@/components/DatePicker'
 import { useIaTestSchedule, useUpdateIaTestSchedule } from '@/hooks/assessment/useIaTestSchedule'
 import { useExamRules } from '@/hooks/assessment/useExamRules'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
+import { ExamRuleLookupModal } from './ExamRuleLookupModal'
 
 interface CbtScheduleModalProps {
   isOpen: boolean
@@ -38,6 +39,7 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
   const [testType, setTestType] = useState<number>(0)
   const [publishStatus, setPublishStatus] = useState<number>(0)
   const [examRuleGuid, setExamRuleGuid] = useState<string>('')
+  const [lookupOpen, setLookupOpen] = useState(false)
 
   // Fetch Exam Rules for the dropdown
   const { data: rulesData, isLoading: rulesLoading } = useExamRules(1, 100, '', isOpen)
@@ -203,7 +205,7 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
               </div>
 
               {/* Marks & Duration */}
-              <div>
+              <div className="hidden">
                 <label className="lbl">Max Mark <span className="text-red-500">*</span></label>
                 <input
                   type="number"
@@ -277,7 +279,15 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
 
               {/* Exam Rule Picker */}
               <div>
-                <label className="lbl">Exam Rule (Optional)</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="lbl mb-0">Exam Rule (Optional)</label>
+                  <button 
+                    className="text-[13px] text-[#3a6bc9] hover:underline" 
+                    onClick={() => setLookupOpen(true)}
+                  >
+                    View Rule Details
+                  </button>
+                </div>
                 <SearchSelect
                   options={ruleOptions}
                   value={examRuleGuid}
@@ -315,6 +325,11 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
         </div>
       </div>
       <Toast toast={toast} />
+      <ExamRuleLookupModal 
+        isOpen={lookupOpen} 
+        onClose={() => setLookupOpen(false)} 
+        onSelect={guid => setExamRuleGuid(guid)} 
+      />
     </div>
   )
 }

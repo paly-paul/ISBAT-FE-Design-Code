@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getStudentStatement, searchStudentStatement, StudentStatementSearchFilters } from '@/lib/api/student/studentStatement'
+import { getStudentStatement, searchStudentStatement, StudentStatementSearchFilters, getStudentFeeSummary } from '@/lib/api/student/studentStatement'
 
 // Search-as-you-type box, same "browse all on an empty box" behavior as the
 // Finance Payment Console's own student search (PaymentConsoleStudentSearch
@@ -22,6 +22,15 @@ export function useStudentStatement(studentGuid: string | null) {
   return useQuery({
     queryKey: ['student-statement', studentGuid],
     queryFn: () => getStudentStatement(studentGuid as string),
+    enabled: !!studentGuid,
+    retry: false,
+  })
+}
+
+export function useStudentFeeSummary(studentGuid: string | null) {
+  return useQuery({
+    queryKey: ['student-fee-summary', studentGuid],
+    queryFn: () => getStudentFeeSummary(studentGuid as string),
     enabled: !!studentGuid,
     retry: false,
   })

@@ -2,8 +2,8 @@
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { TableSearch } from '@/components/TableSearch'
-import { useStudentSearchAdvanced } from '@/hooks/student/useStudentSearch'
-import { useStudentStatement } from '@/hooks/student/useStudentStatement'
+import { useStudentStatementSearch, useStudentStatement, useStudentFeeSummary } from '@/hooks/student/useStudentStatement'
+import { getStudentStatementPdfUrl } from '@/lib/api/student/studentStatement'
 import { PAYMENT_CATEGORY_LABELS } from '@/lib/api/finance/paymentConsole'
 
 // Ported from isbat_student_module.html's Student Statement page, then
@@ -34,19 +34,15 @@ export default function Page() {
   const [term, setTerm] = useState('')
   const [selectedGuid, setSelectedGuid] = useState<string | null>(null)
 
-  const trimmed = term.trim()
-  const { data: searchPage, isLoading: isSearching } = useStudentSearchAdvanced({
-    studentRegNo: /^\d+$/.test(trimmed) ? trimmed : null,
-    studentName: !/^\d+$/.test(trimmed) && trimmed ? trimmed : null,
-    pageNumber: 1,
-    pageSize: 15,
-  }, true)
+  const { data: searchPage, isLoading: isSearching } = useStudentStatementSearch(term)
   const matches = searchPage?.items ?? []
 
   const { data: statement, isLoading: isStatementLoading, isError: isStatementError } = useStudentStatement(selectedGuid)
   const header = statement?.header
   const paymentHistory = statement?.paymentHistory ?? []
   const outstandingItems = statement?.outstandingItems ?? []
+
+  const { data: feeSummary } = useStudentFeeSummary(selectedGuid)
 
   function handleSelect(guid: string) {
     setSelectedGuid(guid)
@@ -58,7 +54,12 @@ export default function Page() {
     <div className="page active">
       <div className="pg-hdr">
         <div><div className="pg-title">Student Statement</div><div className="pg-sub">Fee ledger and payment history per student</div></div>
-        <div className="flex gap-2"><button className="btn btn-neu btn-sm"><i className="lni lni-printer"></i> Print</button><button className="btn btn-neu btn-sm"><i className="lni lni-download"></i> PDF</button></div>
+        <div className="flex gap-2">
+          <button className="btn btn-neu btn-sm"><i className="lni lni-printer"></i> Print</button>
+          <button className="btn btn-neu btn-sm" onClick={() => selectedGuid && window.open(getStudentStatementPdfUrl(selectedGuid), '_blank')} disabled={!selectedGuid}>
+            <i className="lni lni-download"></i> PDF
+          </button>
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
@@ -101,8 +102,9 @@ export default function Page() {
 
           <div className="stats-row">
             <div className="stat-card"><div className="stat-lbl">Admission Type</div><div className="stat-num" style={{ fontSize: 18, color: 'var(--b700)' }}>{header.admissionTypeLabel ?? '—'}</div><div className="stat-sub">{header.appRefNo ?? '—'}</div></div>
-            <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Paid</div><div className="stat-num" style={{ color: 'var(--green)' }}>{sumByCurrency(paymentHistory, 'amount')}</div><div className="stat-sub up">{paymentHistory.length} payments</div></div>
-            <div className="stat-card [--b700:var(--red)] [--b400:#f87171]"><div className="stat-lbl">Outstanding</div><div className="stat-num" style={{ color: 'var(--red)' }}>{sumByCurrency(outstandingItems, 'outstanding')}</div><div className="stat-sub warn">{outstandingItems.length} items</div></div>
+            <div className="stat-card"><div className="stat-lbl">Total to Pay</div><div className="stat-num">{feeSummary?.totalAmountToPay.toLocaleString() ?? '—'}</div><div className="stat-sub">Overall charged</div></div>
+            <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Paid</div><div className="stat-num" style={{ color: 'var(--green)' }}>{feeSummary?.amountPaid.toLocaleString() ?? '—'}</div><div className="stat-sub up">{paymentHistory.length} payments</div></div>
+            <div className="stat-card [--b700:var(--red)] [--b400:#f87171]"><div className="stat-lbl">Outstanding</div><div className="stat-num" style={{ color: 'var(--red)' }}>{feeSummary?.pendingFee.toLocaleString() ?? '—'}</div><div className="stat-sub warn">{outstandingItems.length} items</div></div>
           </div>
 
           <div className="card" style={{ marginBottom: 16 }}>

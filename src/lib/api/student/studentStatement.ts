@@ -75,6 +75,12 @@ export interface StudentStatementDto {
   outstandingItems: StudentStatementOutstandingDto[]
 }
 
+export interface GetStudentFeeSummaryDto {
+  totalAmountToPay: number
+  amountPaid: number
+  pendingFee: number
+}
+
 export interface StudentStatementSearchFilters {
   studentGuid?: string
   studentRegNo?: string
@@ -108,8 +114,8 @@ export function searchStudentStatement(filters: StudentStatementSearchFilters, p
     const items = filters.studentGuid
       ? mockSearchResults.filter(s => s.studentGuid === filters.studentGuid)
       : term
-      ? mockSearchResults.filter(s => `${s.studentName} ${s.studentRegNo}`.toLowerCase().includes(term))
-      : mockSearchResults
+        ? mockSearchResults.filter(s => `${s.studentName} ${s.studentRegNo}`.toLowerCase().includes(term))
+        : mockSearchResults
     return Promise.resolve({ items, totalCount: items.length, page, pageSize })
   }
   const params = new URLSearchParams()
@@ -125,4 +131,14 @@ export function searchStudentStatement(filters: StudentStatementSearchFilters, p
 export function getStudentStatement(studentGuid: string): Promise<StudentStatementDto> {
   if (MOCK_AUTH) return Promise.resolve(mockStatement)
   return apiGet<StudentStatementDto>(`/api/v1/student-statement/${studentGuid}`)
+}
+
+export function getStudentFeeSummary(studentGuid: string): Promise<GetStudentFeeSummaryDto> {
+  if (MOCK_AUTH) return Promise.resolve({ totalAmountToPay: 1500, amountPaid: 600, pendingFee: 900 })
+  return apiGet<GetStudentFeeSummaryDto>(`/api/v1/student-statement/${studentGuid}/fee-summary`)
+}
+
+export function getStudentStatementPdfUrl(studentGuid: string): string {
+  // Returning the URL so the frontend can just window.open or window.location.href it
+  return `/api/v1/student-statement/${studentGuid}/pdf`
 }
