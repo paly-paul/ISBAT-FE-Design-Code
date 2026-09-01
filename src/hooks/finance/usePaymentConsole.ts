@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createAdvanceDeposit,
   createPayment,
@@ -25,6 +25,29 @@ export function useSearchStudents(searchTerm: string, pageNumber: number, pageSi
     queryKey: [...PAYMENT_CONSOLE_KEY, 'search', searchTerm, pageNumber, pageSize],
     queryFn: () => searchStudents(searchTerm, pageNumber, pageSize),
     enabled,
+  })
+}
+
+// Infinite-scroll variant of useSearchStudents, same shape as the student
+// module's own useStudentSearchAdvancedInfinite (useStudentSearch.ts) — the
+// picker dropdowns here (Payment Console, and NCHE/Guild's Guild tab) load
+// more results as the list is scrolled instead of a fixed single page.
+// staleTime/gcTime: Infinity, same reasoning as that hook — once a page of
+// search results is fetched for a given term it doesn't go stale from
+// under the user mid-scroll, and there's no case where refetching an
+// already-loaded page makes sense here.
+export function useSearchStudentsInfinite(searchTerm: string, pageSize: number, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'search-infinite', searchTerm, pageSize],
+    queryFn: ({ pageParam }) => searchStudents(searchTerm, pageParam, pageSize),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const fetched = allPages.reduce((sum, p) => sum + p.items.length, 0)
+      return fetched < lastPage.totalCount ? allPages.length + 1 : undefined
+    },
+    enabled,
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
 }
 

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createRegulatoryPayment,
   deleteRegulatoryPayment,
@@ -93,6 +93,26 @@ export function useNcheStudentSearch(searchTerm: string, page: number, pageSize:
     queryKey: [...keyFor('nche'), 'search', searchTerm, page, pageSize],
     queryFn: () => searchNcheStudents(searchTerm, page, pageSize),
     enabled,
+  })
+}
+
+// Infinite-scroll variant of useNcheStudentSearch, same shape as the
+// student module's own useStudentSearchAdvancedInfinite (useStudentSearch.ts)
+// — the NCHE tab's picker dropdown loads more results as the list is
+// scrolled instead of a fixed single page. staleTime/gcTime: Infinity, same
+// reasoning as that hook.
+export function useNcheStudentSearchInfinite(searchTerm: string, pageSize: number, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...keyFor('nche'), 'search-infinite', searchTerm, pageSize],
+    queryFn: ({ pageParam }) => searchNcheStudents(searchTerm, pageParam, pageSize),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const fetched = allPages.reduce((sum, p) => sum + p.items.length, 0)
+      return fetched < lastPage.totalCount ? allPages.length + 1 : undefined
+    },
+    enabled,
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
 }
 

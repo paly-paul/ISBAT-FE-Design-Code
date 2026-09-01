@@ -81,7 +81,9 @@ export default function Page() {
 
   function studentLabel(r: PaymentAdvance) {
     const p = profileByApplication.get(r.applicationGuid)
-    return { name: applicantName(p) ?? p?.appRefNo ?? '—', ref: p?.studentNum ?? p?.appRefNo ?? r.applicationGuid, programme: p?.programName ?? '—' }
+    // No raw-guid fallback — an unresolved profile shows '—' rather than
+    // the bare applicationGuid, which isn't a meaningful identifier here.
+    return { name: applicantName(p) ?? p?.appRefNo ?? '—', ref: p?.studentNum ?? p?.appRefNo ?? '—', programme: p?.programName ?? '—' }
   }
 
   // The API has no name/student-no search param (get-payment-advances.md
