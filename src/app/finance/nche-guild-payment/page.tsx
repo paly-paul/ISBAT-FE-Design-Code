@@ -401,7 +401,14 @@ export default function NcheGuildPaymentPage() {
 
   return (
     <>
-      <div className="page active">
+      {/* id scopes the .pc-body 2-column override in globals.css to just
+          this page — same convention #page-payment-console's own id uses,
+          per request (2026-09-01) to bring this page's layout in line with
+          Payment Console's: a left column (Profile Details + Payment
+          History, merged) beside a wider right column (Outstanding
+          Balance + Payment Detail, merged), instead of everything stacked
+          full-width in a single column. */}
+      <div className="page active" id="page-nche-guild-payment">
         <div className="pg-hdr">
           <div>
             <div className="pg-title">NCHE &amp; Guild Payment</div>
@@ -500,129 +507,151 @@ export default function NcheGuildPaymentPage() {
         </div>
 
         {profile && (
-          <>
-            <div className="card">
-              <div className="card-hdr">
-                <div className="card-title"><span className="ctitle-icon"><i className="lni lni-user"></i></span> Profile Details</div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-full flex-shrink-0 grid place-items-center text-white font-extrabold" style={{ background: 'linear-gradient(135deg,var(--b700),var(--b500))', fontSize: 17 }}>
-                  {initialsFor(applicantName(profile))}
+          <div className="pc-body">
+            {/* LEFT column: Profile Details + Payment History, merged into
+                one card — same layout Payment Console's own left column
+                uses (see its own "merged into this same card as a second
+                section" comment). */}
+            <div className="flex flex-col gap-5 min-w-0">
+              <div className="card">
+                <div className="card-hdr">
+                  <div className="card-title"><span className="ctitle-icon"><i className="lni lni-user"></i></span> Profile Details</div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-extrabold text-g900" style={{ fontSize: 15.5 }}>{applicantName(profile)}</div>
-                  <div className="text-g500 text-xs truncate">{profile.programName ?? '—'} &middot; {profile.semesterName ?? '—'}</div>
-                </div>
-                <span className="badge badge-blue font-mono"><i className="lni lni-bookmark"></i> {profile.appRefNo}</span>
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="card-hdr">
-                <div className="card-title"><span className="ctitle-icon"><i className="lni lni-dollar"></i></span> Outstanding Balance ({CATEGORY_LABEL[category]})</div>
-                {dueSemester ? (
-                  <span className={`badge ${statusBadgeClass(dueSemester.status)}`}>{dueSemester.semName} — Due</span>
-                ) : allSemestersPaid ? (
-                  <span className="badge badge-green">Fully Paid</span>
-                ) : null}
-              </div>
-              <RegulatoryOutstandingTable items={semesterStatusList} isLoading={isOutstandingLoading} isError={isOutstandingError} category={category} />
-            </div>
-
-            <div className="card">
-              <div className="card-hdr">
-                <div className="card-title"><span className="ctitle-icon"><i className="lni lni-wallet"></i></span> Payment Detail</div>
-                {editingGuid && <span className="badge badge-amber">Editing existing payment</span>}
-              </div>
-              <div className="g2 mb-[14px]">
-                <div className="fg">
-                  <div className="lbl">Amount <span className="req">*</span></div>
-                  <input type="number" min={0} step={0.01} className="amt-val-input" placeholder="0.00"
-                    style={{ fontSize: 18, fontWeight: 700 }}
-                    value={amount} onChange={e => setAmount(e.target.value)} />
-                  <div style={{ fontSize: 11, color: 'var(--g500)', marginTop: 4 }}>Must be a multiple of the configured {CATEGORY_LABEL[category]} rate — enforced server-side.</div>
-                </div>
-                <div className="fg">
-                  <div className="lbl">Payment Date <span className="req">*</span></div>
-                  <DatePicker value={payDate} onChange={setPayDate} />
-                </div>
-              </div>
-              {category === 'nche' ? (
-                <>
-                  <div className="fg mb-[14px]">
-                    <div className="lbl">PNR Number</div>
-                    <input className="ctrl" type="text" placeholder="Optional reference number" value={pnrNumber} onChange={e => setPnrNumber(e.target.value)} />
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="w-14 h-14 rounded-full flex-shrink-0 grid place-items-center text-white font-extrabold" style={{ background: 'linear-gradient(135deg,var(--b700),var(--b500))', fontSize: 17 }}>
+                    {initialsFor(applicantName(profile))}
                   </div>
-                  <div className="fg mb-4">
-                    <div className="lbl">Remarks</div>
-                    <textarea className="ctrl" rows={2} placeholder="Optional notes" value={remarks} onChange={e => setRemarks(e.target.value)} />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-extrabold text-g900" style={{ fontSize: 15.5 }}>{applicantName(profile)}</div>
+                    <div className="text-g500 text-xs truncate">{profile.programName ?? '—'}</div>
                   </div>
-                </>
-              ) : (
-                <div className="fg mb-4">
-                  <div className="lbl">Bank Deposit</div>
-                  <input className="ctrl" type="text" placeholder="Optional bank deposit reference" value={bankDeposit} onChange={e => setBankDeposit(e.target.value)} />
                 </div>
-              )}
-              <div className="flex gap-[10px] justify-end items-center">
-                {editingGuid && <button className="btn btn-neu" onClick={resetForm}><i className="lni lni-close"></i> Cancel Edit</button>}
-                <button className="btn btn-primary btn-lg" disabled={isSaving} onClick={handleSave}>
-                  <i className="lni lni-save"></i> {isSaving ? 'Saving…' : editingGuid ? `Update ${CATEGORY_LABEL[category]} Payment` : `Save ${CATEGORY_LABEL[category]} Payment`}
-                </button>
-              </div>
-            </div>
+                <div className="mb-3">
+                  <span className="badge badge-blue font-mono"><i className="lni lni-bookmark"></i> {profile.appRefNo}</span>
+                </div>
+                {/* Same pc-fact-grid tiles as Payment Console's own Profile
+                    Details — Campus has no client-side name resolver on
+                    this page (Payment Console falls back to useCampuses()
+                    for it; not pulled in here), so it stays '—' rather than
+                    a guessed value. Every other field is already
+                    pre-resolved on StudentProfile itself, same as there. */}
+                <div className="pc-fact-grid">
+                  <div className="pc-fact"><i className="lni lni-map-marker"></i><div><span className="pc-fact-lbl">Campus</span><span className="pc-fact-val">—</span></div></div>
+                  <div className="pc-fact"><i className="lni lni-calendar"></i><div><span className="pc-fact-lbl">Semester</span><span className="pc-fact-val">{profile.semesterName ?? '—'}</span></div></div>
+                  {/* Guards against the literal string "null" — same live
+                      quirk Payment Console's own Intake tile guards against. */}
+                  <div className="pc-fact"><i className="lni lni-calendar"></i><div><span className="pc-fact-lbl">Intake</span><span className="pc-fact-val">{profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}</span></div></div>
+                  <div className="pc-fact"><i className="lni lni-graduation"></i><div><span className="pc-fact-lbl">Batch</span><span className="pc-fact-val">{profile.batchCode ?? '—'}</span></div></div>
+                  <div className="pc-fact"><i className="lni lni-calendar"></i><div><span className="pc-fact-lbl">Year</span><span className="pc-fact-val">{profile.yearCode ?? '—'}</span></div></div>
+                  <div className="pc-fact"><i className="lni lni-phone"></i><div><span className="pc-fact-lbl">Phone</span><span className="pc-fact-val">{profile.phone ?? '—'}</span></div></div>
+                  <div className="pc-fact pc-fact-span2"><i className="lni lni-envelope"></i><div><span className="pc-fact-lbl">Email</span><span className="pc-fact-val truncate">{profile.emailId ?? profile.universityEmail ?? '—'}</span></div></div>
+                </div>
 
-            <div className="card">
-              <div className="card-hdr">
-                <div className="card-title"><span className="ctitle-icon"><i className="lni lni-files"></i></span> Payment History</div>
-              </div>
-              {isHistoryLoading ? (
-                <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading payment history…</div>
-              ) : history.length === 0 ? (
-                <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No {CATEGORY_LABEL[category]} payments recorded yet.</div>
-              ) : (
-                <>
-                <ScrollTable className="no-sticky-col">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Payment Date</th>
-                        {category === 'nche' ? <th>PNR Number</th> : <><th>Bank Deposit</th><th>Receipt</th></>}
-                        <th>Amount</th>
-                        {category === 'nche' && <th>Remarks</th>}
-                        <th style={{ width: 90 }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pagedHistory.map(h => (
-                        <tr key={h.paymentGuid}>
-                          <td>{h.payDate.slice(0, 10)}</td>
-                          {category === 'nche' ? (
-                            <td className="font-mono text-blue">{h.pnrNumber ?? '—'}</td>
-                          ) : (
-                            <>
-                              <td className="text-muted">{h.bankDeposit ?? '—'}</td>
-                              <td className="font-mono text-blue">{h.receipt ?? '—'}</td>
-                            </>
-                          )}
-                          <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
-                          {category === 'nche' && <td className="text-muted">{h.remarks ?? '—'}</td>}
-                          <td>
-                            <div className="flex gap-2">
-                              <button className="btn-icon" title="Edit" onClick={() => startEdit(h)}><i className="lni lni-pencil-alt"></i></button>
-                              <button className="btn-icon" title="Delete" style={{ color: 'var(--red)' }} onClick={() => handleDelete(h)}><i className="lni lni-trash-can"></i></button>
-                            </div>
-                          </td>
+                <div className="sec-divider"><i className="lni lni-files"></i> Payment History</div>
+                {isHistoryLoading ? (
+                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading payment history…</div>
+                ) : history.length === 0 ? (
+                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No {CATEGORY_LABEL[category]} payments recorded yet.</div>
+                ) : (
+                  <>
+                  <ScrollTable className="no-sticky-col">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Payment Date</th>
+                          {category === 'nche' ? <th>PNR Number</th> : <th>Bank Deposit</th>}
+                          <th>Amount</th>
+                          {category === 'nche' && <th>Remarks</th>}
+                          <th style={{ width: 90 }}></th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </ScrollTable>
-                <Pagination page={historyPage} totalPages={historyTotalPages} totalCount={history.length} itemLabel="payments" onPageChange={setHistoryPage} />
-                </>
-              )}
+                      </thead>
+                      <tbody>
+                        {pagedHistory.map(h => (
+                          <tr key={h.paymentGuid}>
+                            <td>{h.payDate.slice(0, 10)}</td>
+                            {category === 'nche' ? (
+                              <td className="font-mono text-blue">{h.pnrNumber ?? '—'}</td>
+                            ) : (
+                              <td className="text-muted">{h.bankDeposit ?? '—'}</td>
+                            )}
+                            <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
+                            {category === 'nche' && <td className="text-muted">{h.remarks ?? '—'}</td>}
+                            <td>
+                              <div className="flex gap-2">
+                                <button className="btn-icon" title="Edit" onClick={() => startEdit(h)}><i className="lni lni-pencil-alt"></i></button>
+                                <button className="btn-icon" title="Delete" style={{ color: 'var(--red)' }} onClick={() => handleDelete(h)}><i className="lni lni-trash-can"></i></button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </ScrollTable>
+                  <Pagination page={historyPage} totalPages={historyTotalPages} totalCount={history.length} itemLabel="payments" onPageChange={setHistoryPage} />
+                  </>
+                )}
+              </div>
             </div>
-          </>
+
+            {/* RIGHT column: Outstanding Balance + Payment Detail, merged
+                into one card — same "single card, not two" treatment
+                Payment Console's own Tuition tab uses for its outstanding-
+                balance-plus-form section. */}
+            <div className="flex flex-col gap-5 min-w-0">
+              <div className="card">
+                <div className="card-hdr">
+                  <div className="card-title"><span className="ctitle-icon"><i className="lni lni-dollar"></i></span> Outstanding Balance ({CATEGORY_LABEL[category]})</div>
+                  {dueSemester ? (
+                    <span className={`badge ${statusBadgeClass(dueSemester.status)}`}>{dueSemester.semName} — Due</span>
+                  ) : allSemestersPaid ? (
+                    <span className="badge badge-green">Fully Paid</span>
+                  ) : null}
+                </div>
+                <RegulatoryOutstandingTable items={semesterStatusList} isLoading={isOutstandingLoading} isError={isOutstandingError} category={category} />
+
+                <div className="sec-divider flex items-center justify-between">
+                  <span><i className="lni lni-wallet"></i> Payment Detail</span>
+                  {editingGuid && <span className="badge badge-amber">Editing existing payment</span>}
+                </div>
+                <div className="g2 mb-[14px]">
+                  <div className="fg">
+                    <div className="lbl">Amount <span className="req">*</span></div>
+                    <input type="number" min={0} step={0.01} className="amt-val-input" placeholder="0.00"
+                      style={{ fontSize: 18, fontWeight: 700 }}
+                      value={amount} onChange={e => setAmount(e.target.value)} />
+                    <div style={{ fontSize: 11, color: 'var(--g500)', marginTop: 4 }}>Must be a multiple of the configured {CATEGORY_LABEL[category]} rate — enforced server-side.</div>
+                  </div>
+                  <div className="fg">
+                    <div className="lbl">Payment Date <span className="req">*</span></div>
+                    <DatePicker value={payDate} onChange={setPayDate} />
+                  </div>
+                </div>
+                {category === 'nche' ? (
+                  <>
+                    <div className="fg mb-[14px]">
+                      <div className="lbl">PNR Number</div>
+                      <input className="ctrl" type="text" placeholder="Optional reference number" value={pnrNumber} onChange={e => setPnrNumber(e.target.value)} />
+                    </div>
+                    <div className="fg mb-4">
+                      <div className="lbl">Remarks</div>
+                      <textarea className="ctrl" rows={2} placeholder="Optional notes" value={remarks} onChange={e => setRemarks(e.target.value)} />
+                    </div>
+                  </>
+                ) : (
+                  <div className="fg mb-4">
+                    <div className="lbl">Bank Deposit</div>
+                    <input className="ctrl" type="text" placeholder="Optional bank deposit reference" value={bankDeposit} onChange={e => setBankDeposit(e.target.value)} />
+                  </div>
+                )}
+                <div className="flex gap-[10px] justify-end items-center">
+                  {editingGuid && <button className="btn btn-neu" onClick={resetForm}><i className="lni lni-close"></i> Cancel Edit</button>}
+                  <button className="btn btn-primary btn-lg" disabled={isSaving} onClick={handleSave}>
+                    <i className="lni lni-save"></i> {isSaving ? 'Saving…' : editingGuid ? `Update ${CATEGORY_LABEL[category]} Payment` : `Save ${CATEGORY_LABEL[category]} Payment`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 

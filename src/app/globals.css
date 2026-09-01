@@ -2293,6 +2293,29 @@ textarea.ctrl {
   }
 }
 
+/* Same .pc-body two-column split as Payment Console above, reused for the
+   NCHE/Guild page's own UI-parity pass (per request, 2026-09-01) — a
+   separate page-scoped id rather than sharing #page-payment-console's,
+   since that id's own .g2/.g3 overrides are specific to Payment Console's
+   Tuition/Other tabs and don't apply here. */
+#page-nche-guild-payment > .pc-body {
+  display: grid;
+  grid-template-columns: minmax(380px, 520px) minmax(0, 1fr);
+  gap: 16px
+}
+
+@media(max-width:1280px) {
+  #page-nche-guild-payment > .pc-body {
+    grid-template-columns: minmax(320px, 400px) minmax(0, 1fr)
+  }
+}
+
+@media(max-width:1200px) {
+  #page-nche-guild-payment > .pc-body {
+    grid-template-columns: 1fr
+  }
+}
+
 /* At mobile widths, collapse every 2-column field-pair grid on this page
    to a single column too — not just the top-level layout grids above.
    Uses a descendant selector (space, not the direct-child ">" the other
