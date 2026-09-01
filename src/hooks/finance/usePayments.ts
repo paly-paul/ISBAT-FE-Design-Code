@@ -22,10 +22,16 @@ export function usePayments(page: number, pageSize: number) {
   })
 }
 
-export function usePaymentAdvances(page: number, pageSize: number) {
+// enabled defaults to true (the advanced-payments console page's own usage,
+// always visible) — the Other Payment tab's Advance Payment picker modal
+// (payment-console/page.tsx) passes false until it's actually open, so this
+// unfiltered back-office list isn't fetched on every page load just because
+// the checkbox exists.
+export function usePaymentAdvances(page: number, pageSize: number, enabled = true) {
   return useQuery({
     queryKey: [...PAYMENTS_KEY, 'advances', page, pageSize],
     queryFn: () => getPaymentAdvances(page, pageSize),
+    enabled,
   })
 }
 

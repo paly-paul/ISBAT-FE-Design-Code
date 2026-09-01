@@ -426,6 +426,27 @@ through unchanged.
           "children": []
         },
         {
+          "name": "NCHE Payment",
+          "icon": "lni lni-graduation",
+          "url": "/finance/nche-payment",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Guild Payment",
+          "icon": "lni lni-users",
+          "url": "/finance/guild-payment",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Guild Payment Console",
+          "icon": "lni lni-grid-alt",
+          "url": "/finance/guild-console",
+          "permissions": {},
+          "children": []
+        },
+        {
           "name": "Payment History",
           "icon": "lni lni-bar-chart",
           "url": "/finance/payment-history",
@@ -568,10 +589,15 @@ through unchanged.
 ```
 
 > `Payment Collection` and `Reports & Statements` are new sections, ported
-> from `isbat_student_module.html`'s sibling Finance mockup — all 8 pages are
+> from `isbat_student_module.html`'s sibling Finance mockup — all 11 pages are
 > mock/static (no backend permission entries exist for this workflow yet),
 > forced into the real menu tree by `mergeFinanceSections()` in `menu.ts`.
-> None of the 8 gate on `permissions.xxx` in code, hence `{}` throughout.
+> None of the 11 gate on `permissions.xxx` in code, hence `{}` throughout.
+> `NCHE Payment`, `Guild Payment` and `Guild Payment Console` are newer
+> additions inserted right after `Payment Console` — `mergeFinanceSections()`
+> fixes these three in at the leaf level even when the `Payment Collection`
+> section itself is already present from the real backend (same pattern
+> `mergeStudentSections()` uses for `Student Records`/`Settings` below).
 
 > `Finance Core` and `Banking` were previously listed with `permissions: {}`
 > in this doc — corrected here; all 10 pages do gate Add/Edit/Delete via
@@ -697,9 +723,16 @@ through unchanged.
       "permissions": null,
       "children": [
         {
-          "name": "Category Masters",
+          "name": "Student Category Master",
+          "icon": "lni lni-users",
+          "url": "/student/student-category-master",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Service Category Master",
           "icon": "lni lni-list",
-          "url": "/student/masters",
+          "url": "/student/service-category-master",
           "permissions": {},
           "children": []
         },
@@ -708,6 +741,13 @@ through unchanged.
           "icon": "lni lni-graduation",
           "url": "/student/specialization",
           "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Discount Management",
+          "icon": "lni lni-tag",
+          "url": "/student/discount-management",
+          "permissions": { "add": true, "delete": true, "edit": true },
           "children": []
         }
       ]
@@ -721,8 +761,18 @@ through unchanged.
 > permission entries exist for this workflow yet), forced into the real menu
 > tree by `mergeStudentSections()` in `menu.ts`. `Batch Summary` and `Student
 > Statement` extend the existing `Student Records` section rather than
-> getting their own. None of these 9 pages gate on `permissions.xxx` in code
-> (all `{}`) — this is the least permission-aware module in the app today.
+> getting their own. 10 of these 11 pages don't gate on `permissions.xxx` in
+> code (all `{}`) — this is the least permission-aware module in the app
+> today.
+
+> `Category Masters` (`/student/masters`) was later split into two unrelated
+> resources sharing that one page — **Student Category Master** (real
+> sponsor-categories CRUD) and **Service Category Master** (mock ticketing
+> categories) — `mergeStudentSections()` swaps the old single leaf for both
+> in place rather than appending duplicates. `Discount Management` is a new
+> leaf inserted right after `Specialization Management`; unlike the rest of
+> this module it does gate `add`/`edit`/`delete` via `usePagePermissions()`
+> (no `get` action exists on the page).
 
 ---
 
@@ -747,6 +797,13 @@ through unchanged.
           "url": "/employee/employee-master",
           "permissions": { "add": true, "assign": true, "edit": true, "get": true },
           "children": []
+        },
+        {
+          "name": "Employee Approvals",
+          "icon": "lni lni-checkmark-circle",
+          "url": "/employee/employee-approve",
+          "permissions": {},
+          "children": []
         }
       ]
     }
@@ -760,6 +817,12 @@ through unchanged.
 > Permissions" actions). There is no `delete` action on this page at all
 > (employees can't be deleted from the UI today), so `delete` is omitted
 > rather than set `false`.
+
+> `Employee Approvals` is a new leaf — mock/static, doesn't gate on
+> `permissions.xxx` (`{}`) — inserted right after `Employee Master` by
+> `ensureEmployeeApprovals()` in `menu.ts`, which patches whichever
+> `Employee` module ends up in the tree (real or the temporary hardcoded
+> one) since it's a no-op once the backend starts returning the leaf itself.
 
 ---
 
@@ -955,7 +1018,7 @@ Previously scattered under "Academics" (Faculty Master only) and
 ## Assessment
 
 New module/rail — had no entry in the previous version of this doc. Mirrors
-`ASSESSMENT_SECTIONS` in `menu.ts`. None of its 21 pages gate on
+`ASSESSMENT_SECTIONS` in `menu.ts`. None of its 29 pages gate on
 `permissions.xxx` in code yet (all `{}`) — it's the newest module in the app.
 
 ```json
@@ -987,6 +1050,27 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
       "permissions": null,
       "children": [
         {
+          "name": "Assessment Master",
+          "icon": "lni lni-list",
+          "url": "/assessment/assessment-master",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Exam Rules Master",
+          "icon": "lni lni-files",
+          "url": "/assessment/exam-rules",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Question FAQs",
+          "icon": "lni lni-comments",
+          "url": "/assessment/question-faqs",
+          "permissions": {},
+          "children": []
+        },
+        {
           "name": "Weight Configuration",
           "icon": "lni lni-cog",
           "url": "/assessment/weight-config",
@@ -997,6 +1081,13 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "name": "Assessment Schedule",
           "icon": "lni lni-calendar",
           "url": "/assessment/schedule",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "IA Creation",
+          "icon": "lni lni-graduation",
+          "url": "/assessment/ia-creation",
           "permissions": {},
           "children": []
         }
@@ -1048,13 +1139,6 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "name": "CBT Overview",
           "icon": "lni lni-folder",
           "url": "/assessment/cbt-overview",
-          "permissions": {},
-          "children": []
-        },
-        {
-          "name": "CBT Schedule",
-          "icon": "lni lni-calendar",
-          "url": "/assessment/cbt-schedule",
           "permissions": {},
           "children": []
         },
@@ -1153,6 +1237,13 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
       "permissions": null,
       "children": [
         {
+          "name": "Resit Master",
+          "icon": "lni lni-cogs",
+          "url": "/assessment/resit-configs",
+          "permissions": {},
+          "children": []
+        },
+        {
           "name": "Resit Calendar",
           "icon": "lni lni-calendar",
           "url": "/assessment/resit-calendar",
@@ -1208,6 +1299,15 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
 }
 ```
 
+> `Assessment Master`, `Exam Rules Master`, `Question FAQs` and `IA Creation`
+> are newer leaves under `Assessment Structure` — fixed in at the leaf level
+> by `ensureAssessmentMaster()` even when the section itself is already
+> present. `Resit Master` is the equivalent addition to `Resit & Disputes`
+> (`ensureResitMaster()`), inserted before `Resit Calendar`. `CBT Schedule`
+> was dropped from `Class Test (CBT)` — its page still exists on disk but is
+> no longer linked from this menu; see the "no sidebar/menu entry" table
+> below.
+
 ---
 
 ## Pages with no sidebar/menu entry yet
@@ -1232,6 +1332,7 @@ routes with no inbound navigation left in the codebase at all.
 | Results | `/academic/results` | Placeholder — page states this functionality is "owned by the Assessment Module" and pending a KT session. |
 | University Exam (legacy) | `/academic/university-exam` | Superseded by the Assessment module's UE pages (`/assessment/ue-*`); no inbound nav found. |
 | ODeL Student Preview | `/academic/odel-student-preview` | Reached via `nav('acad-dashboard')`/back-link only; not linked *to* from anywhere found — appears to be a preview/demo page. |
+| CBT Schedule | `/assessment/cbt-schedule` | No longer in `ASSESSMENT_SECTIONS`' `Class Test (CBT)` section; page still exists on disk but has no inbound sidebar link. |
 
 ---
 
