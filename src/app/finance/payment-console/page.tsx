@@ -11,7 +11,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
-import { PaymentAdvance } from '@/hooks/finance/usePayments'
+import { usePaymentAdvances, PaymentAdvance } from '@/hooks/finance/usePayments'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
@@ -354,6 +354,17 @@ export default function PaymentConsolePage() {
   // there even when the search hit had none, so it isn't just a one-time
   // override).
   const studentGuid = profile?.studentGuid ?? selectedStudentGuidHint ?? null
+  // pageSize: 1 — this is purely a "does this student have any advance
+  // deposits at all" check (totalCount), not a list to render here; the
+  // actual browsing happens in AdvanceDepositPickerModal once opened. Per
+  // request (2026-09-01): the Advance Payment checkbox itself shouldn't
+  // even show when this comes back empty, since there'd be nothing to draw
+  // from. No studentGuid (an application that hasn't registered as a
+  // student yet) also hides it — there's no reliable studentGuid to check
+  // against, and no meaningful per-application-only advance history to
+  // offer instead (the applicationGuid filter isn't used, per request).
+  const { data: advanceCheck } = usePaymentAdvances(1, 1, !!selectedApplicationGuid && !!studentGuid, studentGuid)
+  const hasAdvanceDeposits = (advanceCheck?.totalCount ?? 0) > 0
   // Discount-aware replacement for the old useOutstandingLedgers — same
   // current-semester scoping, but each ledger also carries its applicable
   // discount (discountName/discountAmount/netPayable), which
@@ -895,7 +906,7 @@ export default function PaymentConsolePage() {
                     <>
                     <ScrollTable className="no-sticky-col">
                       <table>
-                        <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th><th>Receipt #</th></tr></thead>
+                        <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
                         <tbody>
                           {pagedPaymentHistory.map(h => (
                             <tr key={h.paymentGuid}>
@@ -904,7 +915,6 @@ export default function PaymentConsolePage() {
                               <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
                               <td>{h.currencyName ?? '—'}</td>
                               <td><span className="pill pill-blue">{h.payType?.name ?? '—'}</span></td>
-                              <td className="font-mono text-blue">{h.receipt ?? h.paymentCode}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -968,7 +978,11 @@ export default function PaymentConsolePage() {
                     Checking it opens AdvanceDepositPickerModal rather than
                     flipping otherIsAdvance straight away — see
                     toggleAdvancePayment/confirmAdvanceSelection's own
-                    comments. */}
+                    comments. Hidden entirely when this student has no
+                    advance deposits to draw from at all (hasAdvanceDeposits,
+                    per request 2026-09-01) — showing a checkbox that opens
+                    an empty picker isn't useful. */}
+                {hasAdvanceDeposits && (
                 <div className="fg mb-[14px]">
                   <label className="flex items-center gap-2" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
                     <input type="checkbox" checked={otherIsAdvance} onChange={e => toggleAdvancePayment(e.target.checked)} />
@@ -984,6 +998,7 @@ export default function PaymentConsolePage() {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Currency + Amount paired, amount on the right — same
                     pairing as Tuition's own Currency/Amount row. */}
@@ -1408,6 +1423,13 @@ export default function PaymentConsolePage() {
         onClose={() => setShowAdvancePicker(false)}
         onConfirm={confirmAdvanceSelection}
         showToast={showToast}
+        // Scopes the picker to the currently-loaded student instead of
+        // every deposit in the system (get-payment-advances.md's now-
+        // confirmed studentGuid filter, 2026-09-01). Falls back to the
+        // unfiltered list if the applicant hasn't registered as a student
+        // yet (no studentGuid) — not worth an applicationGuid filter too.
+        studentGuid={studentGuid}
+        studentDisplayName={profile ? applicantName(profile) : undefined}
       />
       <Toast toast={toast} />
     </>

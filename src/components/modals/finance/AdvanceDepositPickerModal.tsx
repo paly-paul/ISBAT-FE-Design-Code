@@ -18,6 +18,16 @@ interface AdvanceDepositPickerModalProps extends ModalProps {
   // Payment's Advance Payment checkbox) owns what happens with it (filling
   // otherCurrencyGuid/otherAmount, storing paymentAdvanceGuid for submit).
   onConfirm: (advance: PaymentAdvance) => void
+  // Scopes the list to one student's own deposits instead of every deposit
+  // in the system — get-payment-advances.md now documents studentGuid as an
+  // optional filter (2026-09-01 revision). Omit to browse the full
+  // unfiltered list (kept for any future admin-style caller; the Other
+  // Payment tab always has a studentGuid once a student is loaded, so it
+  // never hits that path in practice).
+  studentGuid?: string | null
+  // Shown above the table once scoped, in place of a Student column that
+  // would otherwise repeat the same name on every row.
+  studentDisplayName?: string
 }
 
 function fmtAmount(n: number) {
@@ -43,25 +53,29 @@ function depositStatus(balance: number, amount: number): { label: string; badge:
 // createAdvanceDeposit's own comment (paymentConsole.ts) used to flag, now
 // that get-payment-advances.md's list endpoint is confirmed wired
 // (usePaymentAdvances, already backing the Advanced Payments console page).
-// Same unfiltered-across-all-students shape that page shows — this endpoint
-// takes no applicationGuid/studentGuid to narrow by — so this reuses its
-// per-row student-profile resolution (GetPaymentAdvances carries no
-// name/programme, only the raw guids) and its balance-vs-amount status
-// derivation rather than re-deriving either from scratch.
-export function AdvanceDepositPickerModal({ isOpen, onClose, onConfirm }: AdvanceDepositPickerModalProps) {
+// Scoped to the current student via studentGuid (per request, 2026-09-01,
+// now that the doc confirms it as a real filter) — the per-row student-
+// profile resolution below only runs for the unscoped (no guid passed)
+// case, since a scoped list is every row's own student by definition and
+// studentDisplayName already covers it.
+export function AdvanceDepositPickerModal({ isOpen, onClose, onConfirm, studentGuid, studentDisplayName }: AdvanceDepositPickerModalProps) {
   const [page, setPage] = useState(1)
   const [selectedGuid, setSelectedGuid] = useState<string | null>(null)
+  const isScoped = !!studentGuid
 
-  const { data, isLoading } = usePaymentAdvances(page, PAGE_SIZE, isOpen)
+  const { data, isLoading } = usePaymentAdvances(page, PAGE_SIZE, isOpen, isScoped ? studentGuid : undefined)
   const rows = data?.items ?? []
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
-  const applicationGuidsOnPage = useMemo(() => Array.from(new Set(rows.map(r => r.applicationGuid))), [rows])
+  // Only needed in the unscoped (browse-everyone) case — GetPaymentAdvances
+  // carries no name/programme, only the raw guids, same reasoning
+  // advanced-payments/page.tsx's own per-row resolution uses.
+  const applicationGuidsOnPage = useMemo(() => isScoped ? [] : Array.from(new Set(rows.map(r => r.applicationGuid))), [rows, isScoped])
   const profileQueries = useQueries({
-    queries: applicationGuidsOnPage.map(applicationGuid => ({
-      queryKey: ['payment-console', 'profile', applicationGuid],
-      queryFn: () => getStudentProfile(applicationGuid),
+    queries: applicationGuidsOnPage.map(guid => ({
+      queryKey: ['payment-console', 'profile', guid],
+      queryFn: () => getStudentProfile(guid),
       staleTime: Infinity,
       gcTime: Infinity,
       retry: false,
@@ -114,14 +128,17 @@ export function AdvanceDepositPickerModal({ isOpen, onClose, onConfirm }: Advanc
 
         <div style={{ padding: '14px 20px 0' }}>
           <div className="text-g500" style={{ fontSize: 12, marginBottom: 10 }}>
-            Pick the deposit to draw this payment from. Only deposits with an undrawn balance can be selected.
+            {isScoped
+              ? <>Showing deposits for <strong className="text-g700">{studentDisplayName ?? 'this student'}</strong>. Only deposits with an undrawn balance can be selected.</>
+              : 'Pick the deposit to draw this payment from. Only deposits with an undrawn balance can be selected.'}
           </div>
           <ScrollTable>
             <table>
               <thead>
                 <tr>
                   <th style={{ width: 36 }}></th>
-                  <th>Student</th><th>Deposit Code</th><th>Deposit Date</th>
+                  {!isScoped && <th>Student</th>}
+                  <th>Deposit Code</th><th>Deposit Date</th>
                   <th>Deposited</th><th>Cur.</th><th>Method</th><th>Status</th><th>Remaining</th>
                 </tr>
               </thead>
@@ -129,7 +146,7 @@ export function AdvanceDepositPickerModal({ isOpen, onClose, onConfirm }: Advanc
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
                   : rows.length === 0
-                    ? <EmptyState colSpan={999} title="No advance deposits" subtitle="There are no advance deposits recorded in the system yet." />
+                    ? <EmptyState colSpan={999} title="No advance deposits" subtitle={isScoped ? "This student has no advance deposits on record." : "There are no advance deposits recorded in the system yet."} />
                     : null}
                 {!isLoading && rows.map(r => {
                   const s = studentLabel(r)
@@ -152,10 +169,12 @@ export function AdvanceDepositPickerModal({ isOpen, onClose, onConfirm }: Advanc
                           onClick={e => e.stopPropagation()}
                         />
                       </td>
-                      <td>
-                        <strong>{s.name}</strong>
-                        <div className="font-mono text-blue" style={{ fontSize: 11 }}>{s.ref}</div>
-                      </td>
+                      {!isScoped && (
+                        <td>
+                          <strong>{s.name}</strong>
+                          <div className="font-mono text-blue" style={{ fontSize: 11 }}>{s.ref}</div>
+                        </td>
+                      )}
                       <td className="font-mono text-blue" style={{ fontSize: 12 }}>{r.advPaymentCode}</td>
                       <td>{formatDate(r.payDate)}</td>
                       <td className="font-bold">{fmtAmount(r.amount)}</td>

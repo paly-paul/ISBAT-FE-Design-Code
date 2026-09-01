@@ -29,6 +29,12 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 // before that modal is opened, since useStudent already carries them.
 // Refugee status is wired to students/refugee/*.md the same way, via its
 // own assign/remove modal (assign is multipart — a document is mandatory).
+// Sponsor/Discount/Refugee's own dedicated GET endpoints are no longer
+// fetched automatically the moment a student loads (per request,
+// 2026-09-01) — each now fires only on demand (Sponsor: entering edit;
+// Discount: opening the management modal; Refugee: an explicit "Check
+// status" click, since it has no fallback field to show passively) — see
+// each hook call's own comment below.
 // Fee structure/learning mode display and the communication dispatch audit
 // log still have no backend contract — page-local mock state only, same
 // "UI-first prototype" convention as Finance's Payment Collection pages.
@@ -87,13 +93,22 @@ export default function Page() {
   const updateIdCardDates = useUpdateIdCardDates(student?.studentGuid ?? null)
 
   // Real sponsor assignment — GET .../sponsor-details, resolves to null when
-  // unassigned. `error` here is NOT "no assignment" (that's a null `data`,
-  // handled server-side as 404) — a real 401 has been observed live
-  // (2026-08-25): "You are not authorized to view sponsor details for
-  // students in this campus", despite the docs saying no fine-grained
-  // permission exists. Surfaced as "Restricted" below rather than silently
-  // reading as "Unassigned", which would misleadingly invite editing.
-  const { data: sponsorDetail, error: sponsorError } = useSponsorDetails(student?.studentGuid ?? null, !!student)
+  // unassigned. No longer fetched automatically on profile load (per
+  // request, 2026-09-01) — sponsorRequested gates it to only fire once the
+  // cashier actually clicks in to edit, since that's the one place the
+  // fetched value (sponsorCategoryGuid, for seeding the picker) and the
+  // restriction check both matter. The inline read-only label falls back to
+  // detail?.sponsor (StudentDetailDto's own raw field, already fetched by
+  // useStudent above) instead of a bare "Unassigned" while unrequested, so
+  // it doesn't lie about a value that simply hasn't been checked yet.
+  // `error` here is NOT "no assignment" (that's a null `data`, handled
+  // server-side as 404) — a real 401 has been observed live (2026-08-25):
+  // "You are not authorized to view sponsor details for students in this
+  // campus", despite the docs saying no fine-grained permission exists.
+  // Surfaced as "Restricted" below rather than silently reading as
+  // "Unassigned", which would misleadingly invite editing.
+  const [sponsorRequested, setSponsorRequested] = useState(false)
+  const { data: sponsorDetail, error: sponsorError } = useSponsorDetails(student?.studentGuid ?? null, !!student && sponsorRequested)
   const sponsorRestricted = !!sponsorError
   const { data: sponsorCategoriesPage } = useSponsorCategories()
   const assignSponsorCategory = useAssignSponsorCategory()
@@ -102,8 +117,14 @@ export default function Page() {
 
   // Real refugee-status record — GET /students/refugee/{guid}, resolves to
   // null when the student has no record yet (404 not_found is the common
-  // case, not an error — see getStudentRefugeeDetails).
-  const { data: refugeeDetail } = useStudentRefugeeDetails(student?.studentGuid ?? null, !!student)
+  // case, not an error — see getStudentRefugeeDetails). No longer fetched
+  // automatically on profile load (per request, 2026-09-01) — unlike
+  // Sponsor/Discount, StudentDetailDto carries no refugee field at all to
+  // fall back on for a passive display, so refugeeRequested gates a genuine
+  // "check status" step the cashier triggers explicitly, before the row can
+  // show either state (Refugee/Not a refugee).
+  const [refugeeRequested, setRefugeeRequested] = useState(false)
+  const { data: refugeeDetail, isFetching: isRefugeeChecking } = useStudentRefugeeDetails(student?.studentGuid ?? null, !!student && refugeeRequested)
   const assignRefugeeStatus = useAssignRefugeeStatus()
   const removeRefugeeStatus = useRemoveRefugeeStatus()
   const [refugeeModalOpen, setRefugeeModalOpen] = useState(false)
@@ -112,15 +133,21 @@ export default function Page() {
   const [refugeeDocFile, setRefugeeDocFile] = useState<File | null>(null)
 
   // Real discount assignment — GET /students/{guid}/discount, resolves to
-  // null when unassigned (see getStudentDiscount). Finance's own discount
+  // null when unassigned (see getStudentDiscount). No longer fetched
+  // automatically on profile load (per request, 2026-09-01) — gated on the
+  // management modal actually being open instead, since the inline
+  // read-only badge already has a real fallback (detail's own
+  // discountStatus/calcType/amtPer fields, from the always-fetched
+  // useStudent above — see formatDiscount(detail) below) and doesn't need
+  // this dedicated endpoint just to display a label. Finance's own discount
   // catalogue (useDiscounts) backs the "which discount" picker in the
   // management modal.
-  const { data: discountDetail } = useStudentDiscount(student?.studentGuid ?? null, !!student)
+  const [discountModalOpen, setDiscountModalOpen] = useState(false)
+  const { data: discountDetail } = useStudentDiscount(student?.studentGuid ?? null, !!student && discountModalOpen)
   const { data: discountCatalogue = [] } = useDiscounts()
   const assignStudentDiscount = useAssignStudentDiscount()
   const updateStudentDiscount = useUpdateStudentDiscount()
   const cancelStudentDiscount = useCancelStudentDiscount()
-  const [discountModalOpen, setDiscountModalOpen] = useState(false)
   const [discountChoice, setDiscountChoice] = useState('')
   const [discountCalcType, setDiscountCalcType] = useState<'Amount' | 'Percentage'>('Percentage')
   const [discountAmtPer, setDiscountAmtPer] = useState('')
@@ -223,8 +250,11 @@ export default function Page() {
     setTab('info')
   }, [student])
 
-  function handleLoad(s: StudentDto) { setStudent(s); showToast(`${s.studentName} profile loaded`, 'ok') }
-  function handleClear() { setStudent(null) }
+  // sponsorRequested/refugeeRequested reset here too — a newly-loaded (or
+  // cleared) student starts back at "not checked" for both, same as a first
+  // visit, rather than carrying over the previous student's requested state.
+  function handleLoad(s: StudentDto) { setStudent(s); setSponsorRequested(false); setRefugeeRequested(false); showToast(`${s.studentName} profile loaded`, 'ok') }
+  function handleClear() { setStudent(null); setSponsorRequested(false); setRefugeeRequested(false) }
 
   function dispatch(who: 'student' | 'parent', channel: 'email' | 'whatsapp') {
     const clbl = channel === 'email' ? 'Email' : 'WhatsApp'
@@ -417,8 +447,8 @@ export default function Page() {
                       <button className="btn-icon" title="Cancel" onClick={() => setEditingSponsor(false)}><i className="lni lni-close"></i></button>
                     </div>
                   ) : (
-                    <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={() => setEditingSponsor(true)} title="Click to change sponsor category">
-                      {sponsorDetail?.category ?? 'Unassigned'} <i className="lni lni-pencil-alt" style={{ fontSize: 10 }}></i>
+                    <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={() => { setSponsorRequested(true); setEditingSponsor(true) }} title="Click to change sponsor category">
+                      {sponsorDetail?.category ?? detail?.sponsor ?? 'Unassigned'} <i className="lni lni-pencil-alt" style={{ fontSize: 10 }}></i>
                     </div>
                   )}
                 </div>
@@ -431,7 +461,17 @@ export default function Page() {
                 </div>
                 <div className="stu-meta-item">
                   <div className="stu-meta-lbl">Refugee Status</div>
-                  {refugeeDetail ? (
+                  {/* No fallback field exists on StudentDetailDto for this
+                      one (unlike Sponsor/Discount) — the row starts at an
+                      explicit "not checked" state instead of guessing, and
+                      only fetches once the cashier actually asks. */}
+                  {!refugeeRequested ? (
+                    <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={() => setRefugeeRequested(true)} title="Click to check refugee status">
+                      Check status <i className="lni lni-search-alt" style={{ fontSize: 10 }}></i>
+                    </div>
+                  ) : isRefugeeChecking ? (
+                    <div className="stu-meta-val text-g400">Checking…</div>
+                  ) : refugeeDetail ? (
                     <div className="flex gap-2" style={{ alignItems: 'center' }}>
                       <span className="stu-meta-val">Refugee · ID {refugeeDetail.refugeeId}</span>
                       <button className="btn-icon" title="Remove refugee status" onClick={handleRemoveRefugee} disabled={removeRefugeeStatus.isPending}><i className="lni lni-close"></i></button>

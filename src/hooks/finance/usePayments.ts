@@ -23,14 +23,15 @@ export function usePayments(page: number, pageSize: number) {
 }
 
 // enabled defaults to true (the advanced-payments console page's own usage,
-// always visible) — the Other Payment tab's Advance Payment picker modal
-// (payment-console/page.tsx) passes false until it's actually open, so this
-// unfiltered back-office list isn't fetched on every page load just because
-// the checkbox exists.
-export function usePaymentAdvances(page: number, pageSize: number, enabled = true) {
+// always visible, unfiltered — no studentGuid passed) — the Other Payment
+// tab's Advance Payment picker modal (AdvanceDepositPickerModal) passes
+// false until it's actually open, plus studentGuid (per
+// get-payment-advances.md's own optional filter) to scope the list to just
+// the currently-selected student instead of every deposit in the system.
+export function usePaymentAdvances(page: number, pageSize: number, enabled = true, studentGuid?: string | null) {
   return useQuery({
-    queryKey: [...PAYMENTS_KEY, 'advances', page, pageSize],
-    queryFn: () => getPaymentAdvances(page, pageSize),
+    queryKey: [...PAYMENTS_KEY, 'advances', page, pageSize, studentGuid ?? null],
+    queryFn: () => getPaymentAdvances(page, pageSize, studentGuid),
     enabled,
   })
 }

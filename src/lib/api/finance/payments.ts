@@ -77,9 +77,18 @@ export interface PaymentAdvance {
   baseAmount: number
 }
 
-export function getPaymentAdvances(page = 1, pageSize = 10): Promise<PagedResult<PaymentAdvance>> {
+// studentGuid confirmed as an optional filter on this same endpoint
+// (get-payment-advances.md, 2026-09-01 revision) — narrows the unfiltered
+// list to one student's own deposits; omitting it keeps the original
+// unfiltered-across-all-students behavior the Advanced Payments console
+// page still wants. The doc also documents an independent applicationGuid
+// filter, not used here — this app only ever has a studentGuid on hand by
+// the time it wants to scope this list.
+export function getPaymentAdvances(page = 1, pageSize = 10, studentGuid?: string | null): Promise<PagedResult<PaymentAdvance>> {
   if (MOCK_AUTH) return Promise.resolve(emptyPage(page, pageSize))
-  return apiGet<PagedResult<PaymentAdvance> | null>(`/api/v1/finance/payment-advances?page=${page}&pageSize=${pageSize}`)
+  const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (studentGuid) qs.set('studentGuid', studentGuid)
+  return apiGet<PagedResult<PaymentAdvance> | null>(`/api/v1/finance/payment-advances?${qs.toString()}`)
     .then(data => data ?? emptyPage(page, pageSize))
 }
 
