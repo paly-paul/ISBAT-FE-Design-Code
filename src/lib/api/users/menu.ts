@@ -122,7 +122,7 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Assessment Dashboard', 'dashboard', '/assessment/dashboard'),
   ]),
   section('Assessment Structure', [
-    leaf('Assessment Master', 'list', '/assessment/assessment-master'),
+    leaf('Fee Clearance Master', 'list', '/assessment/assessment-master'),
     leaf('Exam Rules Master', 'files', '/assessment/exam-rules'),
     leaf('Question FAQs', 'comments', '/assessment/question-faqs'),
     leaf('Weight Configuration', 'cog', '/assessment/weight-config'),
@@ -550,7 +550,7 @@ function ensureAssessmentMaster(menu: MenuNode[]): MenuNode[] {
   if (structIdx === -1) return menu
 
   const structSection = assessModule.children[structIdx]
-  const hasAssMaster = structSection.children.some(l => l.name === 'Assessment Master')
+  const hasAssMaster = structSection.children.some(l => l.name === 'Fee Clearance Master')
   const hasExamRules = structSection.children.some(l => l.name === 'Exam Rules Master')
   const hasFaqs = structSection.children.some(l => l.name === 'Question FAQs')
   const hasIaCreation = structSection.children.some(l => l.name === 'IA Creation')
@@ -569,7 +569,7 @@ function ensureAssessmentMaster(menu: MenuNode[]): MenuNode[] {
   }
 
   if (!hasExamRules) children.unshift(leaf('Exam Rules Master', 'files', '/assessment/exam-rules'))
-  if (!hasAssMaster) children.unshift(leaf('Assessment Master', 'list', '/assessment/assessment-master'))
+  if (!hasAssMaster) children.unshift(leaf('Fee Clearance Master', 'list', '/assessment/assessment-master'))
 
   // IA Creation — inject after Assessment Schedule if present, otherwise at end
   if (!hasIaCreation) {
