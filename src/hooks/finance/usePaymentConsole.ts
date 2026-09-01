@@ -145,9 +145,9 @@ export function useCreatePayment() {
 // so both need refetching regardless of which category the payment was in.
 // Unlike useCreatePayment (Tuition) above, none of these touch
 // outstanding-ledgers — that endpoint is tuition-only. Exported for the
-// standalone NCHE/Guild payment pages' own hooks (useNchePayment.ts,
-// useGuildPayment.ts), which need the identical invalidation but create
-// against their own dedicated endpoints, not this file's.
+// merged NCHE/Guild payment page's own hooks (useNcheGuildPayment.ts),
+// which need the identical invalidation but create against their own
+// dedicated endpoints, not this file's.
 export function invalidateAfterCategoryPayment(queryClient: ReturnType<typeof useQueryClient>, applicationGuid: string) {
   queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-all', applicationGuid] })
   queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'payment-history', applicationGuid] })

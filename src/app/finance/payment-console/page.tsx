@@ -798,41 +798,42 @@ export default function PaymentConsolePage() {
                     <div className="pc-fact"><i className="lni lni-phone"></i><div><span className="pc-fact-lbl">Phone</span><span className="pc-fact-val">{profile.phone ?? '—'}</span></div></div>
                     <div className="pc-fact pc-fact-span2"><i className="lni lni-envelope"></i><div><span className="pc-fact-lbl">Email</span><span className="pc-fact-val truncate">{profile.emailId ?? profile.universityEmail ?? '—'}</span></div></div>
                   </div>
+
+                  {/* Payment History — merged into this same card as a
+                      second section (per request) instead of its own
+                      separate card below, matching the "Payment Detail"
+                      sec-divider convention the right column's own cards
+                      already use rather than a second card-hdr. */}
+                  <div className="sec-divider"><i className="lni lni-folder"></i> Payment History</div>
+                  {isHistoryLoading ? (
+                    <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading payment history…</div>
+                  ) : isHistoryError ? (
+                    <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}>
+                      <i className="lni lni-warning"></i> Couldn&apos;t load payment history. Please try again.
+                    </div>
+                  ) : tuitionPaymentHistory.length === 0 ? (
+                    <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No payment history for this application.</div>
+                  ) : (
+                    <ScrollTable className="no-sticky-col">
+                      <table>
+                        <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th><th>Receipt #</th></tr></thead>
+                        <tbody>
+                          {tuitionPaymentHistory.map(h => (
+                            <tr key={h.paymentGuid}>
+                              <td>{h.payDate.slice(0, 10)}</td>
+                              <td>{PAYMENT_CATEGORY_LABELS[h.category] ?? `Category ${h.category}`}</td>
+                              <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
+                              <td>{h.currencyName ?? '—'}</td>
+                              <td><span className="pill pill-blue">{h.payType?.name ?? '—'}</span></td>
+                              <td className="font-mono text-blue">{h.receipt ?? h.paymentCode}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </ScrollTable>
+                  )}
                 </div>
               )}
-
-              <div className="card">
-                <div className="card-hdr">
-                  <div className="card-title"><span className="ctitle-icon"><i className="lni lni-folder"></i></span> Payment History</div>
-                </div>
-                {isHistoryLoading ? (
-                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading payment history…</div>
-                ) : isHistoryError ? (
-                  <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}>
-                    <i className="lni lni-warning"></i> Couldn&apos;t load payment history. Please try again.
-                  </div>
-                ) : tuitionPaymentHistory.length === 0 ? (
-                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No payment history for this application.</div>
-                ) : (
-                  <ScrollTable className="no-sticky-col">
-                    <table>
-                      <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th><th>Receipt #</th></tr></thead>
-                      <tbody>
-                        {tuitionPaymentHistory.map(h => (
-                          <tr key={h.paymentGuid}>
-                            <td>{h.payDate.slice(0, 10)}</td>
-                            <td>{PAYMENT_CATEGORY_LABELS[h.category] ?? `Category ${h.category}`}</td>
-                            <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
-                            <td>{h.currencyName ?? '—'}</td>
-                            <td><span className="pill pill-blue">{h.payType?.name ?? '—'}</span></td>
-                            <td className="font-mono text-blue">{h.receipt ?? h.paymentCode}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </ScrollTable>
-                )}
-              </div>
             </div>
 
             {/* RIGHT column: the active category's outstanding balance,
