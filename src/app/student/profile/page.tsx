@@ -432,9 +432,9 @@ function StudentProfileContent() {
                   <div className="stu-banner-id">{studentNo} · {student.studentRegNo}</div>
                   <div className="stu-banner-pills">
                     <span className="stu-pill">{detail?.studActive === 1 ? '✓ Active' : detail ? '⚠ Inactive' : '…'}</span>
-                    <span className="stu-pill"><i className="lni lni-graduation"></i> {student.programName || '—'}</span>
-                    <span className="stu-pill"><i className="lni lni-grid-alt"></i> {student.batchCode || '—'}</span>
-                    <span className="stu-pill"><i className="lni lni-calendar"></i> {student.semesterName || '—'}</span>
+                    <span className="stu-pill"><i className="lni lni-graduation"></i> {student.programName || detail?.programme || '—'}</span>
+                    <span className="stu-pill"><i className="lni lni-grid-alt"></i> {student.batchCode || detail?.batch || '—'}</span>
+                    <span className="stu-pill"><i className="lni lni-calendar"></i> {student.semesterName || detail?.semester || '—'}</span>
                     <span className="stu-pill"><i className="lni lni-display"></i> Campus</span>
                   </div>
                 </div>
@@ -537,9 +537,9 @@ function StudentProfileContent() {
                   <div className="g3">
                     <div className="fg"><label className="lbl">Student No.</label><input className="ctrl" readOnly value={studentNo} /></div>
                     <div className="fg"><label className="lbl">Registration No.</label><input className="ctrl" readOnly value={student.studentRegNo} /></div>
-                    <div className="fg"><label className="lbl">Programme</label><input className="ctrl" readOnly value={student.programName || '—'} /></div>
-                    <div className="fg"><label className="lbl">Current Batch</label><input className="ctrl" readOnly value={student.batchCode || '—'} /></div>
-                    <div className="fg"><label className="lbl">Current Semester</label><input className="ctrl" readOnly value={student.semesterName || '—'} /></div>
+                    <div className="fg"><label className="lbl">Programme</label><input className="ctrl" readOnly value={student.programName || detail?.programme || '—'} /></div>
+                    <div className="fg"><label className="lbl">Current Batch</label><input className="ctrl" readOnly value={student.batchCode || detail?.batch || '—'} /></div>
+                    <div className="fg"><label className="lbl">Current Semester</label><input className="ctrl" readOnly value={student.semesterName || detail?.semester || '—'} /></div>
                     <div className="fg"><label className="lbl">Status</label><input className="ctrl" readOnly value={detail?.regStatusName || (detail?.studActive === 1 ? 'Active' : '—')} style={{ color: 'var(--green)', fontWeight: 700 }} /></div>
                   </div>
                   <div className="info-box"><i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12 }}>To change Batch, Programme, Learning Mode, or Intake — use the quick-action buttons in the banner above or navigate via the Operations section in the sidebar.</div></div>
@@ -580,7 +580,7 @@ function StudentProfileContent() {
                     </div> */}
                     <div className="fg"><label className="lbl">Name on Card</label><input className="ctrl" value={student.studentName} readOnly /></div>
                     <div className="fg"><label className="lbl">Student ID</label><input className="ctrl" value={studentNo} readOnly /></div>
-                    <div className="fg"><label className="lbl">Programme</label><input className="ctrl" value={student.programName || '—'} readOnly /></div>
+                    <div className="fg"><label className="lbl">Programme</label><input className="ctrl" value={student.programName || detail?.programme || '—'} readOnly /></div>
                     <div className="g2">
                       <div className="fg"><label className="lbl">Joining Date</label><input className="ctrl" type="date" value={joiningDate} onChange={e => setJoiningDate(e.target.value)} /></div>
                       <div className="fg"><label className="lbl">Expiry Date</label><input className="ctrl" type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} /></div>

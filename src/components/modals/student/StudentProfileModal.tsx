@@ -44,13 +44,12 @@ export function StudentProfileModal({ isOpen, onClose, studentGuid }: Props) {
   // row even though that catalogue is fetched successfully elsewhere in the
   // app (Country Master's own page, admission enquiry forms) — so this is
   // very likely not a fetch bug, but either a different/legacy ID space, or
-  // a genuinely orphaned guid on this student's record. Raw guid stays the
-  // last-resort fallback rather than silently reading as "—".
+  // a genuinely orphaned guid on this student's record.
+  // Note: The user requested to fallback to '—' instead of exposing the raw GUID.
   const nationalityGuidCandidate = student?.nationalityGuid ?? student?.applicationSummary?.countryGuid ?? null
   const nationality = student?.nationality
     ?? student?.nationalityCode
     ?? countries?.find(c => c.countryGuid === nationalityGuidCandidate)?.nationality
-    ?? nationalityGuidCandidate
     ?? '—'
 
   return (

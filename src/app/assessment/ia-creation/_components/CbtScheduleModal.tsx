@@ -92,6 +92,19 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
     }
   }, [schedule, isOpen])
 
+  // Auto-calculate duration based on start and end date/time
+  useEffect(() => {
+    if (startDate && startTime && endDate && endTime) {
+      const startDt = new Date(`${startDate}T${startTime}`)
+      const endDt = new Date(`${endDate}T${endTime}`)
+      if (!isNaN(startDt.getTime()) && !isNaN(endDt.getTime()) && endDt > startDt) {
+        const diffMs = endDt.getTime() - startDt.getTime()
+        const diffMins = Math.floor(diffMs / 60000)
+        setDuration(diffMins)
+      }
+    }
+  }, [startDate, startTime, endDate, endTime])
+
   async function handleSave() {
     if (!testGuid) return
 
