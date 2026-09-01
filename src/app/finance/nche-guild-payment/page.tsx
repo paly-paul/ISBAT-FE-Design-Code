@@ -436,7 +436,11 @@ export default function NcheGuildPaymentPage() {
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-search-alt"></i></span> Student Search</div>
           </div>
           <div className="fg" style={{ marginBottom: 0, position: 'relative' }} ref={searchBoxRef}>
-            <div className="lbl">{category === 'nche' ? 'Search by Student Name or Registration No' : 'Search by Applicant Name, Ref No, Phone, or Email'} <span className="req">*</span></div>
+            {/* Same label on both tabs per request (2026-09-01) — Guild's
+                placeholder below stays tab-specific since its search really
+                does still match on ref no/phone/email too (Payment
+                Console's generic search), unlike NCHE's dedicated picker. */}
+            <div className="lbl">Search by Student Name or Registration No <span className="req">*</span></div>
             <div className="inp-wrap">
               <span className="inp-icon"><i className="lni lni-search-alt"></i></span>
               <input

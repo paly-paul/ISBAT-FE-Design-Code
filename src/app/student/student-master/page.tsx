@@ -5,7 +5,6 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
-import { StudentProfileModal } from '@/components/modals/student/StudentProfileModal'
 import { StudentRefugeeModal } from '@/components/modals/student/StudentRefugeeModal'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
@@ -49,11 +48,14 @@ export default function Page() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [advanced, setAdvanced] = useState<AdvancedFilterState>(EMPTY_ADVANCED)
 
-  function nav(id: string) { router.push('/student/' + id) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
-  function handleView(studentGuid: string) { setSelectedStudentGuid(studentGuid); openModal('view-student-modal') }
+  // Navigates to the full Student Profile page instead of the old read-only
+  // modal (StudentProfileModal, now unused) — same page Student Profile's
+  // own sidebar link opens, just pre-loaded via ?studentGuid= instead of a
+  // StudentLookup search.
+  function handleView(studentGuid: string) { router.push('/student/profile?studentGuid=' + studentGuid) }
   function handleRefugee(studentGuid: string, studentName: string) { setSelectedStudentGuid(studentGuid); setSelectedStudentName(studentName); openModal('refugee-status-modal') }
   function updateSearch(value: string) { setSearch(value); setPage(1) }
   function updateAdvanced(patch: Partial<AdvancedFilterState>) { setAdvanced(prev => ({ ...prev, ...patch })); setPage(1) }
@@ -148,7 +150,6 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="students" onPageChange={setPage} />
         </div>
       </div>
-      <StudentProfileModal isOpen={openModals.has('view-student-modal')} onClose={() => closeModal('view-student-modal')} showToast={showToast} nav={nav} studentGuid={selectedStudentGuid} />
       <StudentRefugeeModal isOpen={openModals.has('refugee-status-modal')} onClose={() => closeModal('refugee-status-modal')} showToast={showToast} studentGuid={selectedStudentGuid} studentName={selectedStudentName} />
       <Toast toast={toast} />
     </>

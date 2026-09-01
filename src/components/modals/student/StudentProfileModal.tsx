@@ -1,6 +1,7 @@
 'use client'
 import { ModalProps } from '../types'
 import { useStudent } from '@/hooks/student/useStudents'
+import { useCountries } from '@/hooks/config/useCountries'
 
 interface Props extends ModalProps {
   studentGuid: string | null
@@ -19,6 +20,14 @@ interface Props extends ModalProps {
 // Transfer, which still read them — this modal just doesn't rely on them.
 export function StudentProfileModal({ isOpen, onClose, studentGuid }: Props) {
   const { data: student, isLoading, isError } = useStudent(studentGuid, isOpen)
+  // Country Master's own catalogue (config/country-master) — nationality/
+  // nationalityCode have both come back null on real responses that still
+  // carried a country guid, on live data confirmed live 2026-09-01: neither
+  // that guid nor students/students/get-student-by-guid.md's own documented
+  // applicationSummary.countryGuid matched any row here, so this app has no
+  // catalogue that actually resolves that guid — see the comment on
+  // `nationality` below for what that means for the fallback chain.
+  const { data: countries } = useCountries()
 
   if (!isOpen || !studentGuid) return null
 
@@ -27,11 +36,22 @@ export function StudentProfileModal({ isOpen, onClose, studentGuid }: Props) {
   const programme = student?.programme ?? student?.programName ?? '—'
   const semester = student?.semester ?? student?.semesterName ?? '—'
   const batch = student?.batch ?? student?.batchCode ?? '—'
-  // nationality/nationalityCode have both come back null on a real response
-  // that still carried a nationalityGuid — no lookup exists anywhere in this
-  // app to resolve that guid to a name, so it's shown raw as a last resort
-  // rather than silently reading as "—" when there's actually a value.
-  const nationality = student?.nationality ?? student?.nationalityCode ?? student?.nationalityGuid ?? '—'
+  // Two different live shapes have carried a country guid under two
+  // different field names (nationalityGuid directly on the DTO, or nested
+  // under applicationSummary.countryGuid per the newer doc) — both are
+  // tried against Country Master's catalogue. Confirmed live (2026-09-01)
+  // that at least nationalityGuid's value doesn't match any Country Master
+  // row even though that catalogue is fetched successfully elsewhere in the
+  // app (Country Master's own page, admission enquiry forms) — so this is
+  // very likely not a fetch bug, but either a different/legacy ID space, or
+  // a genuinely orphaned guid on this student's record. Raw guid stays the
+  // last-resort fallback rather than silently reading as "—".
+  const nationalityGuidCandidate = student?.nationalityGuid ?? student?.applicationSummary?.countryGuid ?? null
+  const nationality = student?.nationality
+    ?? student?.nationalityCode
+    ?? countries?.find(c => c.countryGuid === nationalityGuidCandidate)?.nationality
+    ?? nationalityGuidCandidate
+    ?? '—'
 
   return (
     <div className="modal-overlay open">

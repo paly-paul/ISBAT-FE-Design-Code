@@ -1,6 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ActionMenu } from '@/components/ActionMenu'
@@ -71,13 +71,32 @@ function formatDiscount(detail: { discountStatus: string | null; calcType: strin
   return detail.amtPer != null ? `${detail.amtPer}${kind}` : detail.discountStatus
 }
 
-export default function Page() {
+function StudentProfileContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  // Student Master's "View" row action links here as
+  // /student/profile?studentGuid=<guid> instead of opening its own read-only
+  // modal (that modal — StudentProfileModal — is now unused; this page is
+  // the single Profile view). No StudentLookup search happens in that case:
+  // the guid off the URL feeds the same useStudent(...) call below that a
+  // manual search would populate `student` from, so the rest of the page
+  // (tabs, ID card, sponsor, etc.) behaves identically either way.
+  const studentGuidParam = searchParams.get('studentGuid')
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [student, setStudent] = useState<StudentDto | null>(null)
   const [tab, setTab] = useState<TabId>('info')
 
-  const { data: detail } = useStudent(student?.studentGuid ?? null, !!student)
+  const effectiveStudentGuid = student?.studentGuid ?? studentGuidParam
+  const { data: detail } = useStudent(effectiveStudentGuid ?? null, !!effectiveStudentGuid)
+
+  // Once the deep-linked guid's detail resolves, seed `student` from it so
+  // the rest of the page (which reads off `student`, not `detail`, for name/
+  // programme/batch/etc.) renders exactly as if it had been picked from
+  // StudentLookup. Guarded on `!student` so it only ever fires the one time
+  // for the URL-driven load, not on every detail refetch.
+  useEffect(() => {
+    if (!student && studentGuidParam && detail) setStudent(detail)
+  }, [student, studentGuidParam, detail])
   // studentNum has come back undefined on a real response (2026-08-31) —
   // StudentDto's type still promises it as a required string, but the
   // backend isn't reliably filling it in practice. studentRegNo has been
@@ -254,7 +273,14 @@ export default function Page() {
   // cleared) student starts back at "not checked" for both, same as a first
   // visit, rather than carrying over the previous student's requested state.
   function handleLoad(s: StudentDto) { setStudent(s); setSponsorRequested(false); setRefugeeRequested(false); showToast(`${s.studentName} profile loaded`, 'ok') }
-  function handleClear() { setStudent(null); setSponsorRequested(false); setRefugeeRequested(false) }
+  function handleClear() {
+    setStudent(null)
+    setSponsorRequested(false)
+    setRefugeeRequested(false)
+    // Drop ?studentGuid= so the useEffect above doesn't immediately reload
+    // the same student right after Clear.
+    if (studentGuidParam) router.replace('/student/profile')
+  }
 
   function dispatch(who: 'student' | 'parent', channel: 'email' | 'whatsapp') {
     const clbl = channel === 'email' ? 'Email' : 'WhatsApp'
@@ -793,5 +819,13 @@ export default function Page() {
 
       <Toast toast={toast} />
     </>
+  )
+}
+
+export default function Page() {
+  return (
+    <Suspense>
+      <StudentProfileContent />
+    </Suspense>
   )
 }

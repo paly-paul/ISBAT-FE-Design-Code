@@ -2,6 +2,16 @@ import { apiGet } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
+// Role-based menu/permissions has its own toggle, separate from
+// NEXT_PUBLIC_AUTH_MOCK — that flag also controls login and every other API
+// module, so flipping it to test the real permission-driven sidebar means
+// mocking (or un-mocking) everything else too. NEXT_PUBLIC_RBAC_MOCK lets the
+// menu source be flipped on its own; when unset it just follows AUTH_MOCK, so
+// existing .env files keep working with no change.
+const MOCK_MENU = process.env.NEXT_PUBLIC_RBAC_MOCK !== undefined
+  ? process.env.NEXT_PUBLIC_RBAC_MOCK === 'true'
+  : MOCK_AUTH
+
 // Per-action flags on a leaf node (e.g. { add, edit, delete, get }). Shape is
 // backend-defined and not yet standardized across domains — treat as a loose
 // bag of booleans, not a fixed set of keys.
@@ -67,7 +77,7 @@ const FINANCE_PAYMENT_SECTIONS: MenuNode[] = [
 const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
   section('Operations', [
     leaf('Student Profile', 'user', '/student/profile'),
-    leaf('Batch Transfer', 'transfer', '/student/batch-transfer'),
+    leaf('Batch Transfer', 'shuffle', '/student/batch-transfer'),
     leaf('Programme Transfer', 'graduation', '/student/prog-transfer'),
     leaf('Learning Mode', 'display', '/student/learning-mode'),
     leaf('Intake Transfer', 'calendar', '/student/intake-transfer'),
@@ -395,6 +405,25 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
     }
   }
 
+  // Operations icons are frontend-owned, not backend-owned: the real
+  // /me/menu response already registers this whole section (so the
+  // whole-section-missing check at the bottom of this function never
+  // touches it), but its per-leaf icon values are backend-assigned and
+  // inconsistent/blank rather than matching STUDENT_OPERATIONS_SECTIONS
+  // above. Stamp the frontend-defined icon over whatever the backend sent,
+  // by name, without touching url/permissions (those stay backend-real).
+  const operationsIdx = studentModule.children.findIndex(c => c.name === 'Operations')
+  if (operationsIdx !== -1) {
+    const operationsSection = studentModule.children[operationsIdx]
+    const iconByName = new Map(
+      STUDENT_OPERATIONS_SECTIONS.find(s => s.name === 'Operations')!.children.map(l => [l.name, l.icon]),
+    )
+    const children = operationsSection.children.map(l =>
+      iconByName.has(l.name) ? { ...l, icon: iconByName.get(l.name)! } : l,
+    )
+    studentModule = { ...studentModule, children: [...studentModule.children.slice(0, operationsIdx), { ...operationsSection, children }, ...studentModule.children.slice(operationsIdx + 1)] }
+  }
+
   // Settings needs the same "leaf-level fixup, not just fill-in-if-missing"
   // treatment as Student Records above — the real backend still registers
   // this section with the old single "Category Masters" leaf (see
@@ -673,7 +702,7 @@ function ensureResitMaster(menu: MenuNode[]): MenuNode[] {
 }
 
 export function getMenu(): Promise<MenuResult> {
-  if (MOCK_AUTH) return Promise.resolve({ menu: mockMenu, isFallback: false })
+  if (MOCK_MENU) return Promise.resolve({ menu: mockMenu, isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
     .then(data => {
       const menu = data ?? []

@@ -62,6 +62,21 @@ export interface StudentDetailDto extends StudentDto {
   gender?: string | null
   sponsor?: string | null
   learningMode?: string | null
+  // A third live shape, confirmed against students/students/get-student-by-guid.md
+  // (2026-08-17 doc) — that response has no top-level nationalityGuid at all;
+  // the actual country identifier lives here instead, nested under the
+  // cross-service admissions summary. Kept alongside nationalityGuid above
+  // rather than replacing it, since which of the two a given live response
+  // actually populates hasn't been confirmed — StudentProfileModal checks
+  // both when resolving a country name.
+  applicationSummary?: {
+    applicationGuid?: string | null
+    studentName?: string | null
+    emailId?: string | null
+    phone?: string | null
+    gender?: number | null
+    countryGuid?: string | null
+  } | null
 }
 
 export interface PagedResult<T> {
