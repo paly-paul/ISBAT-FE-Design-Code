@@ -157,9 +157,11 @@ export default function IaCreationPage() {
               value={selectedIntakeGuid}
               onChange={val => setSelectedIntakeGuid(val)}
               disabled={initLoading}
-              options={(initData?.intakes ?? []).map(i => ({
-                value: i.intakeGuid,
-                label: `${i.description ?? `Intake ${i.intakeCode}`}${i.currentIntake ? ' (Current)' : ''}`,
+              options={(initData?.intakes ?? [])
+                .filter(i => i.currentIntake)
+                .map(i => ({
+                  value: i.intakeGuid,
+                  label: `${i.description ?? `Intake ${i.intakeCode}`} (Current)`,
               }))}
             />
           </div>
@@ -273,7 +275,7 @@ export default function IaCreationPage() {
                       <td className="border-r border-slate-200 px-4 py-3 text-left">
                         {row.classTestGuid ? (
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="badge badge-blue">{row.classTestMaxMark}</span>
+                            {/* Max mark removed as requested */}
                             {row.classTestStartDateTime ? (
                               <span className="text-g900 font-medium text-[11px] leading-tight">
                                 {formatDateRange(row.classTestStartDateTime, row.classTestEndDateTime)}
@@ -296,7 +298,7 @@ export default function IaCreationPage() {
                       <td className="border-r border-slate-200 px-4 py-3 text-left">
                         {row.courseworkGuid ? (
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="badge badge-green">{row.courseworkMaxMark}</span>
+                            {/* Max mark removed as requested */}
                             {row.courseworkStartDateTime ? (
                               <span className="text-g900 font-medium text-[11px] leading-tight">
                                 {formatDateRange(row.courseworkStartDateTime, row.courseworkEndDateTime)}
@@ -319,7 +321,7 @@ export default function IaCreationPage() {
                       <td className="px-4 py-3 text-left">
                         {row.universityExamGuid ? (
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="badge badge-amber">{row.universityExamMaxMark}</span>
+                            {/* Max mark removed as requested */}
                             {row.examDate && row.examStartTime ? (
                               <span className="text-g900 font-medium text-[11px] leading-tight">
                                 {formatDateRange(`${row.examDate}T${row.examStartTime}`, row.examEndTime ? `${row.examDate}T${row.examEndTime}` : null)}

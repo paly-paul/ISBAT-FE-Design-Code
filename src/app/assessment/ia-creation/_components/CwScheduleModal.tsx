@@ -7,6 +7,7 @@ import DatePicker from '@/components/DatePicker'
 import { useIaCwSchedule, useUpdateIaCwSchedule } from '@/hooks/assessment/useIaCwSchedule'
 import { useExamRules } from '@/hooks/assessment/useExamRules'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
+import { ExamRuleLookupModal } from './ExamRuleLookupModal'
 
 interface CwScheduleModalProps {
   isOpen: boolean
@@ -35,6 +36,7 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
   const [courseworkType, setCourseworkType] = useState<number>(0)
   const [publishStatus, setPublishStatus] = useState<number>(0)
   const [examRuleGuid, setExamRuleGuid] = useState<string>('')
+  const [lookupOpen, setLookupOpen] = useState(false)
 
   // Fetch Exam Rules for the dropdown
   const { data: rulesData, isLoading: rulesLoading } = useExamRules(1, 100, '', isOpen)
@@ -193,7 +195,7 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
               </div>
 
               {/* Marks */}
-              <div>
+              <div className="hidden">
                 <label className="lbl">Max Mark <span className="text-red-500">*</span></label>
                 <input
                   type="number"
@@ -257,7 +259,15 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
 
               {/* Exam Rule Picker */}
               <div>
-                <label className="lbl">Exam Rule (Optional)</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="lbl mb-0">Exam Rule (Optional)</label>
+                  <button 
+                    className="text-[13px] text-[#3a6bc9] hover:underline" 
+                    onClick={() => setLookupOpen(true)}
+                  >
+                    View Rule Details
+                  </button>
+                </div>
                 <SearchSelect
                   options={ruleOptions}
                   value={examRuleGuid}
@@ -286,6 +296,11 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
         </div>
       </div>
       <Toast toast={toast} />
+      <ExamRuleLookupModal 
+        isOpen={lookupOpen} 
+        onClose={() => setLookupOpen(false)} 
+        onSelect={guid => setExamRuleGuid(guid)} 
+      />
     </div>
   )
 }

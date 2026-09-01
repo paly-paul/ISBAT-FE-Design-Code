@@ -11,7 +11,7 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { useStudentSearchAdvanced, useStudentSearchAdvancedInfinite, StudentSearchFilters } from '@/hooks/student/useStudentSearch'
+import { useStudents, useStudentsInfinite } from '@/hooks/student/useStudents'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
@@ -68,41 +68,14 @@ export default function Page() {
 
   const hasAdvancedFilters = Object.values(advanced).some(v => v !== '')
 
-  // students/student-search/post-student-search.md — the full 14-filter
-  // search. Only used once an advanced filter is actually set; otherwise
-  // this stays on GET /students (useStudents), the documented "thin
-  // single-term variant" for the common free-text case.
-  const advancedFilters: StudentSearchFilters = {
-    programGuid: advanced.programGuid || null,
-    batchGuid: advanced.batchGuid || null,
-    semesterGuid: advanced.semesterGuid || null,
-    campusGuid: advanced.campusGuid || null,
-    sponsorCategoryGuid: advanced.sponsorCategoryGuid || null,
-    refugee: advanced.refugee === '' ? null : advanced.refugee === 'yes',
-    intCountryCode: advanced.intCountryCode ? Number(advanced.intCountryCode) : null,
-    intakeCode: advanced.intakeCode ? Number(advanced.intakeCode) : null,
-    gender: advanced.gender ? Number(advanced.gender) : null,
-    // The backend POST API uses AND logic. We cannot pass the same term to both fields.
-    // We will guess based on the input: if it contains only numbers, assume it's a Registration Number.
-    // Otherwise, assume it's a Name. (Note: Student No. is not supported by this POST API).
-    studentRegNo: /^\d+$/.test(search.trim()) ? search.trim() : null,
-    studentName: !/^\d+$/.test(search.trim()) && search.trim() ? search.trim() : null,
-    pageNumber: page,
-    pageSize: PAGE_SIZE,
-  }
-
-  const { data, isLoading } = useStudentSearchAdvanced(advancedFilters, true)
+  const { data, isLoading } = useStudents(page, PAGE_SIZE, search.trim() ? { searchTerm: search.trim() } : undefined)
 
   const items = data?.items ?? []
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
   // Dedicated, infinite-scroll query for the search dropdown
-  const searchDropdownFilters: StudentSearchFilters = {
-    studentRegNo: /^\d+$/.test(search.trim()) ? search.trim() : null,
-    studentName: !/^\d+$/.test(search.trim()) && search.trim() ? search.trim() : null,
-  }
-  const searchDropdownQuery = useStudentSearchAdvancedInfinite(searchDropdownFilters, 15)
+  const searchDropdownQuery = useStudentsInfinite(search.trim(), 15)
   const searchMatches = search.trim() && !hasAdvancedFilters
     ? searchDropdownQuery.data?.pages.flatMap(p => p.items) ?? []
     : []
@@ -134,82 +107,7 @@ export default function Page() {
             </div>
           </div>
 
-          {filtersOpen && (
-            <div className="p-4 mb-3 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100">
-              <div className="g3 mb-3">
-                <div className="fg">
-                  <label className="lbl">Programme</label>
-                  <SearchSelect
-                    placeholder="— Any programme —"
-                    options={programs.map(p => ({ value: p.programGuid, label: p.programName }))}
-                    value={advanced.programGuid}
-                    onChange={v => updateAdvanced({ programGuid: v, semesterGuid: '' })}
-                  />
-                </div>
-                <div className="fg">
-                  <label className="lbl">Semester</label>
-                  <SearchSelect
-                    placeholder={advanced.programGuid ? '— Any semester —' : 'Select a programme first'}
-                    options={semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))}
-                    value={advanced.semesterGuid}
-                    onChange={v => updateAdvanced({ semesterGuid: v })}
-                    disabled={!advanced.programGuid}
-                  />
-                </div>
-                <div className="fg">
-                  <label className="lbl">Batch</label>
-                  <SearchSelect
-                    placeholder="— Any batch —"
-                    options={batches.map(b => ({ value: b.batchGuid, label: b.batchCode }))}
-                    value={advanced.batchGuid}
-                    onChange={v => updateAdvanced({ batchGuid: v })}
-                  />
-                </div>
-                <div className="fg">
-                  <label className="lbl">Campus</label>
-                  <SearchSelect
-                    placeholder="— Any campus —"
-                    options={campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))}
-                    value={advanced.campusGuid}
-                    onChange={v => updateAdvanced({ campusGuid: v })}
-                  />
-                </div>
-                <div className="fg">
-                  <label className="lbl">Sponsor Category</label>
-                  <SearchSelect
-                    placeholder="— Any category —"
-                    options={(sponsorCategoriesPage?.items ?? []).map(c => ({ value: c.sponsorCategoryGuid, label: c.category }))}
-                    value={advanced.sponsorCategoryGuid}
-                    onChange={v => updateAdvanced({ sponsorCategoryGuid: v })}
-                  />
-                </div>
-                <div className="fg">
-                  <label className="lbl">Refugee Status</label>
-                  <SearchSelect
-                    placeholder="— Any —"
-                    options={[{ value: 'yes', label: 'Refugee' }, { value: 'no', label: 'Not a refugee' }]}
-                    value={advanced.refugee}
-                    onChange={v => updateAdvanced({ refugee: v as 'yes' | 'no' })}
-                  />
-                </div>
-              </div>
-              {/* Country code / intake code / gender are legacy integer keys with
-                  no confirmed lookup or label mapping anywhere in this app (see
-                  studentSearch.ts) — plain numeric inputs rather than invented
-                  dropdowns, same convention as the Refugee Status modal on the
-                  Student Profile page. */}
-              <div className="g3">
-                <div className="fg"><label className="lbl">Country Code</label><input className="ctrl" type="number" min={1} value={advanced.intCountryCode} onChange={e => updateAdvanced({ intCountryCode: e.target.value })} placeholder="Legacy numeric code" /></div>
-                <div className="fg"><label className="lbl">Intake Code</label><input className="ctrl" type="number" min={1} value={advanced.intakeCode} onChange={e => updateAdvanced({ intakeCode: e.target.value })} placeholder="e.g. 20264" /></div>
-                <div className="fg"><label className="lbl">Gender (enum value)</label><input className="ctrl" type="number" min={0} value={advanced.gender} onChange={e => updateAdvanced({ gender: e.target.value })} placeholder="Raw Gender enum value" /></div>
-              </div>
-              {hasAdvancedFilters && (
-                <div className="flex gap-2" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
-                  <button className="btn btn-neu btn-sm" onClick={clearAdvanced}><i className="lni lni-close"></i> Clear Filters</button>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Advanced filters removed for now as requested */}
 
           <ScrollTable>
             <table>
