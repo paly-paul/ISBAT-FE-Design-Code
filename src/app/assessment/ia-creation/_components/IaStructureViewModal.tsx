@@ -86,10 +86,13 @@ export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw
                   <div className="col-span-3 py-8 text-center text-g500">Loading Course Work details...</div>
                 ) : cwSchedule ? (
                   <>
+                    {/* Max Mark removed as requested */}
+                    {/*
                     <div>
                       <div className="text-[12.5px] font-medium text-g500 mb-1">Max Mark</div>
                       <div className="text-[14.5px] text-g900">{cwSchedule.maxMark ?? '—'}</div>
                     </div>
+                    */}
                     <div>
                       <div className="text-[12.5px] font-medium text-g500 mb-1">Start Date & Time</div>
                       <div className="text-[14.5px] text-g900">{formatDate(cwSchedule.scheduledStartDateTime)}</div>
@@ -133,10 +136,13 @@ export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw
                   <div className="col-span-3 py-8 text-center text-g500">Loading Class Test details...</div>
                 ) : ctSchedule ? (
                   <>
+                    {/* Max Mark removed as requested */}
+                    {/*
                     <div>
                       <div className="text-[12.5px] font-medium text-g500 mb-1">Max Mark</div>
                       <div className="text-[14.5px] text-g900">{ctSchedule.maxMark ?? '—'}</div>
                     </div>
+                    */}
                     <div>
                       <div className="text-[12.5px] font-medium text-g500 mb-1">Start Date & Time</div>
                       <div className="text-[14.5px] text-g900">{formatDate(ctSchedule.scheduledStartDateTime)}</div>
@@ -176,10 +182,13 @@ export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw
 
             {activeTab === 'UE' && (
               <>
+                {/* Max Mark removed as requested */}
+                {/*
                 <div>
                   <div className="text-[12.5px] font-medium text-g500 mb-1">Max Mark</div>
                   <div className="text-[14.5px] text-g900">{row.universityExamMaxMark ?? '—'}</div>
                 </div>
+                */}
                 <div>
                   <div className="text-[12.5px] font-medium text-g500 mb-1">Start Date & Time</div>
                   <div className="text-[14.5px] text-g900">{formatDate(row.examDate && row.examStartTime ? `${row.examDate}T${row.examStartTime}` : null)}</div>
