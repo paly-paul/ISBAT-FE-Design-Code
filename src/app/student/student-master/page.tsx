@@ -11,8 +11,7 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { useStudents, useStudentsInfinite } from '@/hooks/student/useStudents'
-import { useStudentSearchAdvanced, StudentSearchFilters } from '@/hooks/student/useStudentSearch'
+import { useStudentSearchAdvanced, useStudentSearchAdvancedInfinite, StudentSearchFilters } from '@/hooks/student/useStudentSearch'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
@@ -83,29 +82,27 @@ export default function Page() {
     intCountryCode: advanced.intCountryCode ? Number(advanced.intCountryCode) : null,
     intakeCode: advanced.intakeCode ? Number(advanced.intakeCode) : null,
     gender: advanced.gender ? Number(advanced.gender) : null,
-    studentRegNo: search.trim() || null,
-    studentName: search.trim() || null,
+    // The backend POST API uses AND logic. We cannot pass the same term to both fields.
+    // We will guess based on the input: if it contains only numbers, assume it's a Registration Number.
+    // Otherwise, assume it's a Name. (Note: Student No. is not supported by this POST API).
+    studentRegNo: /^\d+$/.test(search.trim()) ? search.trim() : null,
+    studentName: !/^\d+$/.test(search.trim()) && search.trim() ? search.trim() : null,
     pageNumber: page,
     pageSize: PAGE_SIZE,
   }
 
-  const plainQuery = useStudents(page, PAGE_SIZE, { searchTerm: search.trim() || undefined })
-  const advancedQuery = useStudentSearchAdvanced(advancedFilters, hasAdvancedFilters)
-  const { data, isLoading } = hasAdvancedFilters ? advancedQuery : plainQuery
+  const { data, isLoading } = useStudentSearchAdvanced(advancedFilters, true)
 
   const items = data?.items ?? []
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  // Dedicated, infinite-scroll query for the search dropdown — independent
-  // of the main table's own paginated query (page/PAGE_SIZE=10). Previously
-  // this reused `items` straight off that table query, so the dropdown was
-  // really just "whatever page the table happens to be showing, sliced to
-  // 8" rather than an actual search — a match beyond the table's current
-  // PAGE_SIZE window never appeared. A flat fixed-limit dropdown query (8
-  // rows, no more) fixed that but re-introduced its own cap; this appends
-  // a further page as the dropdown is scrolled instead of hiding anything
-  // past the first 8.
-  const searchDropdownQuery = useStudentsInfinite(search.trim(), 15)
+
+  // Dedicated, infinite-scroll query for the search dropdown
+  const searchDropdownFilters: StudentSearchFilters = {
+    studentRegNo: /^\d+$/.test(search.trim()) ? search.trim() : null,
+    studentName: !/^\d+$/.test(search.trim()) && search.trim() ? search.trim() : null,
+  }
+  const searchDropdownQuery = useStudentSearchAdvancedInfinite(searchDropdownFilters, 15)
   const searchMatches = search.trim() && !hasAdvancedFilters
     ? searchDropdownQuery.data?.pages.flatMap(p => p.items) ?? []
     : []

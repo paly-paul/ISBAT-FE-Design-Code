@@ -77,22 +77,26 @@ export default function AssessmentTypesPage() {
 
   return (
     <div id="page-assessment-types">
-      <div className="pg-hdr">
+      <div className="flex items-center justify-between mt-3 mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-g900">Assessment Types Master</h1>
-          <p className="text-sm text-g500 mt-0.5">Manage assessment categories and fee clearances</p>
+          <h1 className="text-[20px] font-semibold text-g900 leading-tight">Fee Clearance Master</h1>
+          <p className="text-[13.5px] text-g500 mt-0.5">Manage assessment categories and fee clearances</p>
         </div>
-        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          <button className="btn btn-ghost flex-1 sm:flex-none justify-center" onClick={() => router.push('/assessment/dashboard')}><i className="lni lni-arrow-left" /> Back</button>
-          <button className="btn btn-primary flex-1 sm:flex-none justify-center whitespace-nowrap" onClick={handleAddNew}><i className="lni lni-plus" /> Add Assessment Type</button>
+        <div className="flex items-center gap-3">
+          <button className="btn btn-neu btn-sm flex items-center gap-1.5" onClick={() => router.back()}>
+            <i className="lni lni-arrow-left font-bold" /> Back
+          </button>
+          <button className="btn btn-primary btn-sm flex items-center gap-1.5" onClick={handleAddNew}>
+            <i className="lni lni-plus font-bold" /> Add Fee Clearance
+          </button>
         </div>
       </div>
 
-      <div className="card">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <div className="card pt-5 pb-5">
+        <div className="px-6 mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold text-g800">Assessment Categories</h2>
-            <p className="text-xs text-g400 mt-0.5">{totalCount.toLocaleString()} total active types</p>
+            <h2 className="text-[15px] font-semibold text-g900">Fee Clearances</h2>
+            <div className="text-[12.5px] text-g500">{totalCount} total active clearances</div>
           </div>
           <TableSearch
             className="w-full sm:w-64"

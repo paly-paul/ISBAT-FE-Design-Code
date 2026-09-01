@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
 import { StudentSearchFilters, searchStudentsAdvanced } from '@/lib/api/student/studentSearch'
 
 const STUDENT_SEARCH_KEY = ['student-search']
@@ -12,6 +12,20 @@ export function useStudentSearchAdvanced(filters: StudentSearchFilters, enabled:
     queryKey: [...STUDENT_SEARCH_KEY, filters],
     queryFn: () => searchStudentsAdvanced(filters),
     enabled,
+  })
+}
+
+export function useStudentSearchAdvancedInfinite(filters: StudentSearchFilters, pageSize: number) {
+  return useInfiniteQuery({
+    queryKey: [...STUDENT_SEARCH_KEY, 'infinite', pageSize, filters],
+    queryFn: ({ pageParam }) => searchStudentsAdvanced({ ...filters, pageNumber: pageParam, pageSize }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const fetched = allPages.reduce((sum, p) => sum + p.items.length, 0)
+      return fetched < lastPage.totalCount ? allPages.length + 1 : undefined
+    },
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
 }
 

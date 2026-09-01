@@ -2,7 +2,8 @@
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { TableSearch } from '@/components/TableSearch'
-import { useStudentStatementSearch, useStudentStatement } from '@/hooks/student/useStudentStatement'
+import { useStudentSearchAdvanced } from '@/hooks/student/useStudentSearch'
+import { useStudentStatement } from '@/hooks/student/useStudentStatement'
 import { PAYMENT_CATEGORY_LABELS } from '@/lib/api/finance/paymentConsole'
 
 // Ported from isbat_student_module.html's Student Statement page, then
@@ -33,7 +34,13 @@ export default function Page() {
   const [term, setTerm] = useState('')
   const [selectedGuid, setSelectedGuid] = useState<string | null>(null)
 
-  const { data: searchPage, isFetching: isSearching } = useStudentStatementSearch(term)
+  const trimmed = term.trim()
+  const { data: searchPage, isLoading: isSearching } = useStudentSearchAdvanced({
+    studentRegNo: /^\d+$/.test(trimmed) ? trimmed : null,
+    studentName: !/^\d+$/.test(trimmed) && trimmed ? trimmed : null,
+    pageNumber: 1,
+    pageSize: 15,
+  }, true)
   const matches = searchPage?.items ?? []
 
   const { data: statement, isLoading: isStatementLoading, isError: isStatementError } = useStudentStatement(selectedGuid)
