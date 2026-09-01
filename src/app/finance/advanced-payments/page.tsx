@@ -81,7 +81,9 @@ export default function Page() {
 
   function studentLabel(r: PaymentAdvance) {
     const p = profileByApplication.get(r.applicationGuid)
-    return { name: applicantName(p) ?? p?.appRefNo ?? '—', ref: p?.studentNum ?? p?.appRefNo ?? r.applicationGuid, programme: p?.programName ?? '—' }
+    // No raw-guid fallback — an unresolved profile shows '—' rather than
+    // the bare applicationGuid, which isn't a meaningful identifier here.
+    return { name: applicantName(p) ?? p?.appRefNo ?? '—', ref: p?.studentNum ?? p?.appRefNo ?? '—' }
   }
 
   // The API has no name/student-no search param (get-payment-advances.md
@@ -139,7 +141,7 @@ export default function Page() {
             <table>
               <thead>
                 <tr>
-                  <th>Student</th><th>Programme</th><th>Deposit Code</th><th>Deposit Date</th>
+                  <th>Student</th><th>Deposit Code</th><th>Deposit Date</th>
                   <th>Deposited</th><th>Cur.</th><th>Method</th>
                   {/* Base Value (baseCurrency/baseAmount) commented out, not
                       removed — a real live sample (10-row page) had
@@ -150,7 +152,12 @@ export default function Page() {
                       if the backend starts populating baseCurrency
                       consistently. */}
                   {/* <th>Base Value</th> */}
-                  <th>Status</th><th>Remaining</th><th>Receipt #</th>
+                  {/* Programme and Status columns removed per request
+                      (2026-09-01) — status.label is still computed below (it
+                      colors the Remaining cell), and GetStudentProfile still
+                      carries programName in profileByApplication, just
+                      neither is rendered as its own column any more. */}
+                  <th>Remaining</th><th>Receipt #</th>
                 </tr>
               </thead>
               <tbody>
@@ -168,14 +175,12 @@ export default function Page() {
                         <strong>{s.name}</strong>
                         <div className="font-mono text-blue" style={{ fontSize: 11 }}>{s.ref}</div>
                       </td>
-                      <td>{s.programme}</td>
                       <td className="font-mono text-blue" style={{ fontSize: 12 }}>{r.advPaymentCode}</td>
                       <td>{formatDate(r.payDate)}</td>
                       <td className="font-bold">{fmtAmount(r.amount)}</td>
                       <td><span className="badge badge-gold">{r.currency?.currencyCode ?? '—'}</span></td>
                       <td>{PAY_TYPE_LABELS[r.payType] ?? `Type ${r.payType}`}</td>
                       {/* <td className="font-bold">{r.baseCurrency?.currencyCode ?? ''} {fmtAmount(r.baseAmount)}</td> */}
-                      <td><span className={`badge ${status.badge}`}>{status.label}</span></td>
                       {/* balance is NOT in the deposit's own `currency` despite
                           get-payment-advances.md's wording ("what is still
                           undrawn") reading as if it were — confirmed on a

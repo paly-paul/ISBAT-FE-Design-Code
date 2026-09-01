@@ -22,10 +22,17 @@ export function usePayments(page: number, pageSize: number) {
   })
 }
 
-export function usePaymentAdvances(page: number, pageSize: number) {
+// enabled defaults to true (the advanced-payments console page's own usage,
+// always visible, unfiltered — no studentGuid passed) — the Other Payment
+// tab's Advance Payment picker modal (AdvanceDepositPickerModal) passes
+// false until it's actually open, plus studentGuid (per
+// get-payment-advances.md's own optional filter) to scope the list to just
+// the currently-selected student instead of every deposit in the system.
+export function usePaymentAdvances(page: number, pageSize: number, enabled = true, studentGuid?: string | null) {
   return useQuery({
-    queryKey: [...PAYMENTS_KEY, 'advances', page, pageSize],
-    queryFn: () => getPaymentAdvances(page, pageSize),
+    queryKey: [...PAYMENTS_KEY, 'advances', page, pageSize, studentGuid ?? null],
+    queryFn: () => getPaymentAdvances(page, pageSize, studentGuid),
+    enabled,
   })
 }
 

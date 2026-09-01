@@ -3,18 +3,21 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
+import { Pagination } from '@/components/Pagination'
 import { PaymentSuccessModal } from '@/components/modals/finance/PaymentSuccessModal'
+import { AdvanceDepositPickerModal } from '@/components/modals/finance/AdvanceDepositPickerModal'
 import DatePicker from '@/components/DatePicker'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
+import { usePaymentAdvances, PaymentAdvance } from '@/hooks/finance/usePayments'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import {
-  useSearchStudents,
+  useSearchStudentsInfinite,
   useStudentProfile,
   useCurrentSemesterPayable,
   useAllOutstandingLedgers,
@@ -154,6 +157,12 @@ const SHOW_ALLOCATION_PREVIEW: boolean = false
 // tab), making this second list redundant.
 const SHOW_OTHER_PAID_FEE_DETAILS: boolean = false
 
+// Payment History (left column) is fetched whole per application — not
+// server-paginated (usePaymentHistory takes no page/pageSize) — so this
+// pages it client-side instead, same Pagination component the rest of the
+// app's server-paginated lists use.
+const HISTORY_PAGE_SIZE = 10
+
 export default function PaymentConsolePage() {
   const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
@@ -220,17 +229,25 @@ export default function PaymentConsolePage() {
   // (narrowed by payType via PAY_TYPE_TO_RECEIPT_CATEGORY, bank only when
   // the payment method isn't cash) since the real endpoint needs
   // receiptBookGuid/procBankGuid, not the free-text "Bank Account" field the
-  // old mock form had. otherIsAdvance mirrors the legacy form's "Advance
-  // Payment" checkbox + date, but stays local-only — the endpoint's advance
-  // mode needs an existing advance deposit's paymentAdvanceGuid, and nothing
-  // in this app lists a student's existing deposits to pick one from
-  // (createAdvanceDeposit only creates new ones) — otherSaveEntry blocks
-  // submit with a toast instead of sending a fabricated guid.
+  // old mock form had.
+  //
+  // otherIsAdvance mirrors the legacy form's "Advance Payment" checkbox —
+  // now wired for real (2026-09-01) via AdvanceDepositPickerModal +
+  // get-payment-advances.md's list endpoint (already backing the Advanced
+  // Payments console page, usePaymentAdvances). Checking the box opens the
+  // picker instead of flipping the flag directly; otherIsAdvance/
+  // selectedAdvance are only set once a deposit is actually confirmed there
+  // (see toggleAdvancePayment/confirmAdvanceSelection below), and unchecking
+  // clears both. No separate "Advance Payment Date" field any more — the
+  // picker's own Deposit Date column already shows when the selected
+  // deposit was originally paid in; otherPayDate is the one date that
+  // actually reaches CreatePaymentOther (when this draw-down happens).
   const [otherPayments, setOtherPayments] = useState<{ id: string; code: string; receiptNo: string | null; payDate: string; ledgerName: string; amount: string; currencyCode: string }[]>([])
   const [otherLedger, setOtherLedger] = useState('')
   const [otherPayDate, setOtherPayDate] = useState(todayYmd)
   const [otherIsAdvance, setOtherIsAdvance] = useState(false)
-  const [otherAdvanceDate, setOtherAdvanceDate] = useState(todayYmd)
+  const [selectedAdvance, setSelectedAdvance] = useState<PaymentAdvance | null>(null)
+  const [showAdvancePicker, setShowAdvancePicker] = useState(false)
   const [otherPayType, setOtherPayType] = useState('1')
   // Narrowed to only the category CreatePaymentOther will accept for the
   // currently-selected Payment Type — same reasoning as Tuition's own
@@ -296,11 +313,28 @@ export default function PaymentConsolePage() {
   // an empty box, not something to fetch on mount before the user has
   // interacted with the field at all.
   const searchTermLen = committedSearch.trim().length
-  const { data: searchResults, isFetching: isSearching, isError: isSearchError, error: searchError } = useSearchStudents(
-    committedSearch, 1, 20,
+  // Infinite-scroll variant (same mechanism as the student module's own
+  // student-master search dropdown, useStudentSearchAdvancedInfinite) —
+  // scrolling the results list near its bottom below fetches the next page
+  // instead of this dropdown being capped at a single fixed page of 20.
+  const {
+    data: searchPages, fetchNextPage, hasNextPage, isFetchingNextPage,
+    isFetching: isSearching, isError: isSearchError, error: searchError,
+  } = useSearchStudentsInfinite(
+    committedSearch, 20,
     searchFocused && (searchTermLen === 0 || searchTermLen >= 2),
   )
-  const matches = searchResults?.items ?? []
+  const matches = searchPages?.pages.flatMap(p => p.items) ?? []
+
+  // Same scrollTop > 0 guard TableSearch's own handleResultsScroll uses —
+  // see that component's comment: a plain distance-to-bottom check alone
+  // fires spuriously on a short list right after a new page loads, even
+  // with no user interaction.
+  function handleSearchResultsScroll(e: React.UIEvent<HTMLDivElement>) {
+    if (!hasNextPage || isFetchingNextPage) return
+    const el = e.currentTarget
+    if (el.scrollTop > 0 && el.scrollHeight - el.scrollTop - el.clientHeight < 48) fetchNextPage()
+  }
 
   // isError surfaced explicitly — without it, a profile fetch failure (e.g.
   // a real "Application not found." 404 for a guid the search endpoint just
@@ -320,6 +354,17 @@ export default function PaymentConsolePage() {
   // there even when the search hit had none, so it isn't just a one-time
   // override).
   const studentGuid = profile?.studentGuid ?? selectedStudentGuidHint ?? null
+  // pageSize: 1 — this is purely a "does this student have any advance
+  // deposits at all" check (totalCount), not a list to render here; the
+  // actual browsing happens in AdvanceDepositPickerModal once opened. Per
+  // request (2026-09-01): the Advance Payment checkbox itself shouldn't
+  // even show when this comes back empty, since there'd be nothing to draw
+  // from. No studentGuid (an application that hasn't registered as a
+  // student yet) also hides it — there's no reliable studentGuid to check
+  // against, and no meaningful per-application-only advance history to
+  // offer instead (the applicationGuid filter isn't used, per request).
+  const { data: advanceCheck } = usePaymentAdvances(1, 1, !!selectedApplicationGuid && !!studentGuid, studentGuid)
+  const hasAdvanceDeposits = (advanceCheck?.totalCount ?? 0) > 0
   // Discount-aware replacement for the old useOutstandingLedgers — same
   // current-semester scoping, but each ledger also carries its applicable
   // discount (discountName/discountAmount/netPayable), which
@@ -355,6 +400,13 @@ export default function PaymentConsolePage() {
     () => activePayTab === 'tuition' ? paymentHistory.filter(h => h.category === 1) : paymentHistory,
     [paymentHistory, activePayTab]
   )
+  const [historyPage, setHistoryPage] = useState(1)
+  // Reset to page 1 whenever the underlying list changes shape — a new
+  // student, or switching tabs narrows/widens which categories are shown —
+  // so the view doesn't get stranded on a now out-of-range page.
+  useEffect(() => setHistoryPage(1), [selectedApplicationGuid, activePayTab])
+  const historyTotalPages = Math.max(1, Math.ceil(tuitionPaymentHistory.length / HISTORY_PAGE_SIZE))
+  const pagedPaymentHistory = tuitionPaymentHistory.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE)
 
   // Client-side name resolution for the profile's guid FKs — same fallback
   // pattern used throughout the app (faculty.ts's deanName, enquiry-list's
@@ -422,13 +474,34 @@ export default function PaymentConsolePage() {
     setOtherLedger('')
     setOtherPayDate(todayYmd())
     setOtherIsAdvance(false)
-    setOtherAdvanceDate(todayYmd())
+    setSelectedAdvance(null)
     setOtherPayType('1')
     setOtherReceiptBookGuid('')
     setOtherProcBankGuid('')
     setOtherAmount('')
     setOtherCurrencyGuid('')
     setOtherRemarks('')
+  }
+
+  // Checking the box opens the picker instead of flipping otherIsAdvance
+  // straight away — it only actually turns on once a deposit is confirmed
+  // there (confirmAdvanceSelection below). Unchecking clears both right
+  // away, no picker involved.
+  function toggleAdvancePayment(checked: boolean) {
+    if (checked) setShowAdvancePicker(true)
+    else { setOtherIsAdvance(false); setSelectedAdvance(null) }
+  }
+
+  function confirmAdvanceSelection(advance: PaymentAdvance) {
+    setSelectedAdvance(advance)
+    setOtherIsAdvance(true)
+    setShowAdvancePicker(false)
+    // Prefilled from the deposit, both still editable: Currency should
+    // normally stay as-is (CreatePaymentOther draws down in the deposit's
+    // own currency), Amount defaults to the full undrawn balance but a
+    // cashier may want a partial draw-down instead.
+    if (advance.currency) setOtherCurrencyGuid(advance.currency.currencyGuid)
+    setOtherAmount(String(advance.balance))
   }
 
   // No edit/delete here, unlike Tuition's receipt — the legacy Other
@@ -443,14 +516,19 @@ export default function PaymentConsolePage() {
     if (!otherCurrencyGuid) { showToast('Please select a currency.', 'warn'); return }
     if (!otherPayDate) { showToast('Please select a payment date.', 'warn'); return }
     const payTypeNum = Number(otherPayType)
-    // Advance mode needs an existing advance deposit's paymentAdvanceGuid —
-    // nothing in this app lists a student's existing deposits with balance
-    // to pick one from (createAdvanceDeposit only creates new ones), so
-    // blocked here rather than sending a fabricated guid that would 404.
-    if (otherIsAdvance) { showToast('Paying from an existing advance deposit isn’t available yet — uncheck Advance Payment to record a cash/bank payment.', 'warn'); return }
-    if (!otherReceiptBookGuid) { showToast('Please select a receipt book.', 'warn'); return }
     const showOtherBankFields = payTypeNum > 1
-    if (showOtherBankFields && !otherProcBankGuid) { showToast('Please select a bank.', 'warn'); return }
+
+    // Advance mode: draw down against the selected deposit's own
+    // paymentAdvanceGuid instead of claiming a new receipt — no receipt
+    // book/bank needed (the money was already receipted when the advance
+    // was deposited), same reasoning PaymentOtherInput's own comment gives.
+    if (otherIsAdvance) {
+      if (!selectedAdvance) { showToast('Please select an advance deposit to draw from.', 'warn'); return }
+      if (amt > selectedAdvance.balance) { showToast(`Amount exceeds this deposit's remaining balance (${selectedAdvance.balance.toLocaleString()}).`, 'warn'); return }
+    } else {
+      if (!otherReceiptBookGuid) { showToast('Please select a receipt book.', 'warn'); return }
+      if (showOtherBankFields && !otherProcBankGuid) { showToast('Please select a bank.', 'warn'); return }
+    }
 
     const currencyCode = currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyCode ?? ''
     const ledgerName = ledgerOthers.find(l => l.ledgerOthersGuid === otherLedger)?.ledgerName ?? '—'
@@ -465,9 +543,9 @@ export default function PaymentConsolePage() {
         payDate: otherPayDate,
         payType: payTypeNum,
         remarks: otherRemarks.trim() || null,
-        receiptBookGuid: otherReceiptBookGuid,
-        procBankGuid: showOtherBankFields ? otherProcBankGuid : null,
-        paymentAdvanceGuid: null,
+        receiptBookGuid: otherIsAdvance ? null : otherReceiptBookGuid,
+        procBankGuid: otherIsAdvance ? null : (showOtherBankFields ? otherProcBankGuid : null),
+        paymentAdvanceGuid: otherIsAdvance ? selectedAdvance?.paymentAdvanceGuid ?? null : null,
       },
       {
         onSuccess: result => {
@@ -694,9 +772,15 @@ export default function PaymentConsolePage() {
                   background: 'var(--white)', border: '1.5px solid var(--b200)', borderRadius: 'var(--rsm)',
                   boxShadow: 'var(--neu-out)', maxHeight: 260, overflowY: 'auto',
                 }}
+                onScroll={handleSearchResultsScroll}
               >
-                {isSearching && <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>Searching…</div>}
-                {!isSearching && isSearchError && (
+                {/* matches.length === 0 gates the loading/error/empty states
+                    below — isSearching (useInfiniteQuery's isFetching) also
+                    goes true for a load-more fetch, which must not blank out
+                    an already-loaded list; isFetchingNextPage's own row
+                    further down covers that case instead. */}
+                {isSearching && matches.length === 0 && <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>Searching…</div>}
+                {!isSearching && isSearchError && matches.length === 0 && (
                   <div className="text-clr-red px-3 py-2" style={{ fontSize: 12.5 }}>
                     <i className="lni lni-warning"></i> {searchError instanceof Error ? searchError.message : 'Search failed. Please try again.'}
                   </div>
@@ -716,6 +800,11 @@ export default function PaymentConsolePage() {
                     <div className="text-g500" style={{ fontSize: 11 }}>{a.appRefNo} · {a.phone ?? '—'} · {a.emailId ?? '—'}</div>
                   </div>
                 ))}
+                {isFetchingNextPage && (
+                  <div className="text-g400 px-3 py-2 text-center" style={{ fontSize: 11.5 }}>
+                    <i className="lni lni-reload"></i> Loading more…
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -798,41 +887,44 @@ export default function PaymentConsolePage() {
                     <div className="pc-fact"><i className="lni lni-phone"></i><div><span className="pc-fact-lbl">Phone</span><span className="pc-fact-val">{profile.phone ?? '—'}</span></div></div>
                     <div className="pc-fact pc-fact-span2"><i className="lni lni-envelope"></i><div><span className="pc-fact-lbl">Email</span><span className="pc-fact-val truncate">{profile.emailId ?? profile.universityEmail ?? '—'}</span></div></div>
                   </div>
+
+                  {/* Payment History — merged into this same card as a
+                      second section (per request) instead of its own
+                      separate card below, matching the "Payment Detail"
+                      sec-divider convention the right column's own cards
+                      already use rather than a second card-hdr. */}
+                  <div className="sec-divider"><i className="lni lni-folder"></i> Payment History</div>
+                  {isHistoryLoading ? (
+                    <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading payment history…</div>
+                  ) : isHistoryError ? (
+                    <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}>
+                      <i className="lni lni-warning"></i> Couldn&apos;t load payment history. Please try again.
+                    </div>
+                  ) : tuitionPaymentHistory.length === 0 ? (
+                    <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No payment history for this application.</div>
+                  ) : (
+                    <>
+                    <ScrollTable className="no-sticky-col">
+                      <table>
+                        <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
+                        <tbody>
+                          {pagedPaymentHistory.map(h => (
+                            <tr key={h.paymentGuid}>
+                              <td>{h.payDate.slice(0, 10)}</td>
+                              <td>{PAYMENT_CATEGORY_LABELS[h.category] ?? `Category ${h.category}`}</td>
+                              <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
+                              <td>{h.currencyName ?? '—'}</td>
+                              <td><span className="pill pill-blue">{h.payType?.name ?? '—'}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </ScrollTable>
+                    <Pagination page={historyPage} totalPages={historyTotalPages} totalCount={tuitionPaymentHistory.length} itemLabel="payments" onPageChange={setHistoryPage} />
+                    </>
+                  )}
                 </div>
               )}
-
-              <div className="card">
-                <div className="card-hdr">
-                  <div className="card-title"><span className="ctitle-icon"><i className="lni lni-folder"></i></span> Payment History</div>
-                </div>
-                {isHistoryLoading ? (
-                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading payment history…</div>
-                ) : isHistoryError ? (
-                  <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}>
-                    <i className="lni lni-warning"></i> Couldn&apos;t load payment history. Please try again.
-                  </div>
-                ) : tuitionPaymentHistory.length === 0 ? (
-                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No payment history for this application.</div>
-                ) : (
-                  <ScrollTable className="no-sticky-col">
-                    <table>
-                      <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th><th>Receipt #</th></tr></thead>
-                      <tbody>
-                        {tuitionPaymentHistory.map(h => (
-                          <tr key={h.paymentGuid}>
-                            <td>{h.payDate.slice(0, 10)}</td>
-                            <td>{PAYMENT_CATEGORY_LABELS[h.category] ?? `Category ${h.category}`}</td>
-                            <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
-                            <td>{h.currencyName ?? '—'}</td>
-                            <td><span className="pill pill-blue">{h.payType?.name ?? '—'}</span></td>
-                            <td className="font-mono text-blue">{h.receipt ?? h.paymentCode}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </ScrollTable>
-                )}
-              </div>
             </div>
 
             {/* RIGHT column: the active category's outstanding balance,
@@ -880,6 +972,34 @@ export default function PaymentConsolePage() {
                   />
                 </div>
 
+                {/* Advance Payment — no Tuition equivalent, Other-specific.
+                    Moved directly below the Ledger field per request, ahead
+                    of Currency/Amount, rather than down by Receipt Book/Bank.
+                    Checking it opens AdvanceDepositPickerModal rather than
+                    flipping otherIsAdvance straight away — see
+                    toggleAdvancePayment/confirmAdvanceSelection's own
+                    comments. Hidden entirely when this student has no
+                    advance deposits to draw from at all (hasAdvanceDeposits,
+                    per request 2026-09-01) — showing a checkbox that opens
+                    an empty picker isn't useful. */}
+                {hasAdvanceDeposits && (
+                <div className="fg mb-[14px]">
+                  <label className="flex items-center gap-2" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={otherIsAdvance} onChange={e => toggleAdvancePayment(e.target.checked)} />
+                    Advance Payment
+                  </label>
+                  {otherIsAdvance && selectedAdvance && (
+                    <div className="flex items-center justify-between gap-2 mt-2 p-2.5 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100">
+                      <div style={{ fontSize: 12 }}>
+                        Drawing from <span className="font-mono text-blue font-bold">{selectedAdvance.advPaymentCode}</span>
+                        <span className="text-g500"> · Balance {selectedAdvance.balance.toLocaleString()} {selectedAdvance.currency?.currencyCode ?? ''}</span>
+                      </div>
+                      <button type="button" className="btn btn-neu btn-sm" onClick={() => setShowAdvancePicker(true)}>Change</button>
+                    </div>
+                  )}
+                </div>
+                )}
+
                 {/* Currency + Amount paired, amount on the right — same
                     pairing as Tuition's own Currency/Amount row. */}
                 <div className="g2 mb-[14px]">
@@ -920,7 +1040,11 @@ export default function PaymentConsolePage() {
                     needs (receiptBookGuid required, procBankGuid required
                     too unless Cash), replacing the old free-text "Bank
                     Account" input, same convention as Tuition's own
-                    Receipt Book/Bank Name fields. */}
+                    Receipt Book/Bank Name fields. Hidden entirely in
+                    Advance mode — no new receipt is claimed there, the
+                    money was already receipted when the advance was
+                    deposited (both sent as null on submit either way). */}
+                {!otherIsAdvance && (
                 <div className="fg mb-[14px]">
                   <div className="lbl">Receipt Book <span className="req">*</span></div>
                   <SearchSelect
@@ -930,8 +1054,9 @@ export default function PaymentConsolePage() {
                     onChange={setOtherReceiptBookGuid}
                   />
                 </div>
+                )}
 
-                {Number(otherPayType) > 1 && (
+                {!otherIsAdvance && Number(otherPayType) > 1 && (
                   <div className="fg mb-[14px]">
                     <div className="lbl">Bank Name <span className="req">*</span></div>
                     <SearchSelect
@@ -940,25 +1065,6 @@ export default function PaymentConsolePage() {
                       value={otherProcBankGuid}
                       onChange={setOtherProcBankGuid}
                     />
-                  </div>
-                )}
-
-                {/* Advance Payment — no Tuition equivalent, Other-specific. */}
-                <div className="fg mb-[14px]">
-                  <label className="flex items-center gap-2" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={otherIsAdvance} onChange={e => setOtherIsAdvance(e.target.checked)} />
-                    Advance Payment
-                  </label>
-                  {otherIsAdvance && (
-                    <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4 }}>
-                      Not available yet — there's no picker for an existing advance deposit to pay from. Uncheck this to submit a cash/bank payment instead.
-                    </div>
-                  )}
-                </div>
-                {otherIsAdvance && (
-                  <div className="fg mb-[14px]">
-                    <div className="lbl">Advance Payment Date</div>
-                    <DatePicker value={otherAdvanceDate} onChange={setOtherAdvanceDate} />
                   </div>
                 )}
 
@@ -1308,6 +1414,23 @@ export default function PaymentConsolePage() {
           notices={successModal.notices}
         />
       )}
+      <AdvanceDepositPickerModal
+        isOpen={showAdvancePicker}
+        // Cancelling the picker without confirming leaves otherIsAdvance
+        // however it was before (still off on a first check, unchanged on
+        // "Change" from an already-selected deposit) — only Confirm inside
+        // the modal (confirmAdvanceSelection) actually flips it.
+        onClose={() => setShowAdvancePicker(false)}
+        onConfirm={confirmAdvanceSelection}
+        showToast={showToast}
+        // Scopes the picker to the currently-loaded student instead of
+        // every deposit in the system (get-payment-advances.md's now-
+        // confirmed studentGuid filter, 2026-09-01). Falls back to the
+        // unfiltered list if the applicant hasn't registered as a student
+        // yet (no studentGuid) — not worth an applicationGuid filter too.
+        studentGuid={studentGuid}
+        studentDisplayName={profile ? applicantName(profile) : undefined}
+      />
       <Toast toast={toast} />
     </>
   )

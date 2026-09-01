@@ -47,9 +47,7 @@ const FINANCE_PAYMENT_SECTIONS: MenuNode[] = [
   section('Payment Collection', [
     leaf('Dashboard', 'dashboard', 'dashboard'),
     leaf('Payment Console', 'credit-cards', 'payment-console'),
-    leaf('NCHE Payment', 'graduation', 'nche-payment'),
-    leaf('Guild Payment', 'users', 'guild-payment'),
-    leaf('Guild Payment Console', 'grid-alt', 'guild-console'),
+    leaf('NCHE & Guild Payment', 'graduation', 'nche-guild-payment'),
     leaf('Payment History', 'bar-chart', 'payment-history'),
     leaf('Ledger Adjustments', 'lock', 'ledger-adjustments'),
     leaf('Exchange Rates', 'world', 'exchange-rates'),
@@ -331,9 +329,7 @@ function mergeFinanceSections(menu: MenuNode[]): MenuNode[] {
     const collectionSection = financeModule.children[collectionIdx]
     const existingLeaves = new Set(collectionSection.children.map(l => l.name))
     const missingLeaves = [
-      leaf('NCHE Payment', 'graduation', 'nche-payment'),
-      leaf('Guild Payment', 'users', 'guild-payment'),
-      leaf('Guild Payment Console', 'grid-alt', 'guild-console'),
+      leaf('NCHE & Guild Payment', 'graduation', 'nche-guild-payment'),
     ].filter(l => !existingLeaves.has(l.name))
     if (missingLeaves.length > 0) {
       // Inserted right after Payment Console, matching their position in

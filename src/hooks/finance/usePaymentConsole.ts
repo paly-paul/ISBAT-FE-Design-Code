@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createAdvanceDeposit,
   createPayment,
@@ -25,6 +25,29 @@ export function useSearchStudents(searchTerm: string, pageNumber: number, pageSi
     queryKey: [...PAYMENT_CONSOLE_KEY, 'search', searchTerm, pageNumber, pageSize],
     queryFn: () => searchStudents(searchTerm, pageNumber, pageSize),
     enabled,
+  })
+}
+
+// Infinite-scroll variant of useSearchStudents, same shape as the student
+// module's own useStudentSearchAdvancedInfinite (useStudentSearch.ts) — the
+// picker dropdowns here (Payment Console, and NCHE/Guild's Guild tab) load
+// more results as the list is scrolled instead of a fixed single page.
+// staleTime/gcTime: Infinity, same reasoning as that hook — once a page of
+// search results is fetched for a given term it doesn't go stale from
+// under the user mid-scroll, and there's no case where refetching an
+// already-loaded page makes sense here.
+export function useSearchStudentsInfinite(searchTerm: string, pageSize: number, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'search-infinite', searchTerm, pageSize],
+    queryFn: ({ pageParam }) => searchStudents(searchTerm, pageParam, pageSize),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const fetched = allPages.reduce((sum, p) => sum + p.items.length, 0)
+      return fetched < lastPage.totalCount ? allPages.length + 1 : undefined
+    },
+    enabled,
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
 }
 
@@ -145,9 +168,9 @@ export function useCreatePayment() {
 // so both need refetching regardless of which category the payment was in.
 // Unlike useCreatePayment (Tuition) above, none of these touch
 // outstanding-ledgers — that endpoint is tuition-only. Exported for the
-// standalone NCHE/Guild payment pages' own hooks (useNchePayment.ts,
-// useGuildPayment.ts), which need the identical invalidation but create
-// against their own dedicated endpoints, not this file's.
+// merged NCHE/Guild payment page's own hooks (useNcheGuildPayment.ts),
+// which need the identical invalidation but create against their own
+// dedicated endpoints, not this file's.
 export function invalidateAfterCategoryPayment(queryClient: ReturnType<typeof useQueryClient>, applicationGuid: string) {
   queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-all', applicationGuid] })
   queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'payment-history', applicationGuid] })
