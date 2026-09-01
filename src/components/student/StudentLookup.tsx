@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { TableSearch } from '@/components/TableSearch'
-import { useStudents } from '@/hooks/student/useStudents'
+import { useStudentSearchAdvanced } from '@/hooks/student/useStudentSearch'
 import { StudentDto } from '@/lib/api/student/student'
 
 interface StudentLookupProps {
@@ -30,7 +30,12 @@ interface StudentLookupProps {
 export function StudentLookup({ onLoad, onClear, loaded, placeholder, hint }: StudentLookupProps) {
   const [term, setTerm] = useState('')
   const trimmed = term.trim()
-  const { data, isFetching } = useStudents(1, 8, { searchTerm: trimmed || undefined })
+  const { data, isLoading } = useStudentSearchAdvanced({
+    studentRegNo: /^\d+$/.test(trimmed) ? trimmed : null,
+    studentName: !/^\d+$/.test(trimmed) && trimmed ? trimmed : null,
+    pageNumber: 1,
+    pageSize: 8,
+  }, true)
   const matches = data?.items ?? []
 
   function handleSelect(id: string) {
@@ -52,9 +57,9 @@ export function StudentLookup({ onLoad, onClear, loaded, placeholder, hint }: St
           value={term}
           onChange={setTerm}
           placeholder={placeholder ?? 'Student ID, name, or registration number…'}
-          loading={isFetching}
+          loading={isLoading}
           emptyLabel="No students found"
-          results={matches.map(m => ({ id: m.studentGuid, primary: m.studentName, secondary: `${m.studentNum} · ${m.studentRegNo}` }))}
+          results={matches.map(m => ({ id: m.studentGuid, primary: m.studentName ?? '—', secondary: `${m.studentNum ?? '—'} · ${m.studentRegNo ?? '—'}` }))}
           onSelect={r => handleSelect(r.id)}
         />
         {loaded && <button className="btn btn-neu" onClick={handleClear}><i className="lni lni-close"></i> Clear</button>}

@@ -18,6 +18,24 @@ import {
   useCreateIaStructure,
 } from '@/hooks/assessment/useIaCreation'
 
+function formatDateRange(start: string | null, end: string | null) {
+  if (!start) return null
+  const s = new Date(start)
+  const formatPart = (d: Date) => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    let h = d.getHours()
+    const ampm = h >= 12 ? 'PM' : 'AM'
+    h = h % 12; h = h ? h : 12;
+    const m = d.getMinutes().toString().padStart(2, '0')
+    return `${months[d.getMonth()]} ${d.getDate()} ${d.getFullYear()} ${h}:${m}${ampm}`
+  }
+  
+  const startStr = formatPart(s)
+  if (!end) return startStr
+  const e = new Date(end)
+  return `${startStr} - ${formatPart(e)}`
+}
+
 function formatDate(dateString: string | null) {
   if (!dateString) return <span className="text-g300">—</span>
   return <span>{new Date(dateString).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: '2-digit' })}</span>
@@ -206,25 +224,13 @@ export default function IaCreationPage() {
             <table>
               {canRefresh && structureRows && structureRows.length > 0 && (
                 <thead>
-                  <tr>
-                    <th className="w-12 text-center"></th>
-                    <th>Unit Code</th>
-                    <th>Unit Name</th>
-                    <th className="text-right border-l border-slate-200" style={{ minWidth: 90 }}>
-                      Course Work
-                    </th>
-                    <th className="text-right" style={{ minWidth: 90 }}>CW Start</th>
-                    <th className="text-right" style={{ minWidth: 90 }}>CW End</th>
-                    <th className="text-right border-l border-slate-200" style={{ minWidth: 90 }}>
-                      Class Test
-                    </th>
-                    <th className="text-right" style={{ minWidth: 90 }}>CT Start</th>
-                    <th className="text-right" style={{ minWidth: 90 }}>CT End</th>
-                    <th className="text-right border-l border-slate-200" style={{ minWidth: 90 }}>
-                      Uni. Exam
-                    </th>
-                    <th className="text-right" style={{ minWidth: 90 }}>Exam Start</th>
-                    <th className="text-right" style={{ minWidth: 90 }}>Exam End</th>
+                  <tr className="bg-[#001f5c] text-white text-center text-sm">
+                    <th className="w-12 text-center py-3 px-2 border-r border-white/20"></th>
+                    <th className="py-3 px-4 font-semibold border-r border-white/20 text-left">Unit Code</th>
+                    <th className="py-3 px-4 font-semibold border-r border-white/20 text-left">Unit Name</th>
+                    <th className="py-3 px-4 font-semibold border-r border-white/20 text-left">Class Test</th>
+                    <th className="py-3 px-4 font-semibold border-r border-white/20 text-left">Course Work</th>
+                    <th className="py-3 px-4 font-semibold text-left">University Exam</th>
                   </tr>
                 </thead>
               )}
@@ -242,14 +248,14 @@ export default function IaCreationPage() {
                   </tr>
                 ) : structureRows?.length === 0 ? (
                   <EmptyState
-                    colSpan={12}
+                    colSpan={6}
                     hasFilters={false}
                     onClearFilters={() => { }}
                     subtitle="No structure created yet. Click Create Structure to generate it."
                   />
                 ) : (
-                  structureRows?.map(row => (
-                    <tr key={row.internalAssessmentGuid}>
+                  structureRows?.map((row, idx) => (
+                    <tr key={row.internalAssessmentGuid} className={`text-[13px] ${idx % 2 === 0 ? 'bg-white' : 'bg-[#e7f1f9]'}`}>
                       <td className="text-center">
                         <ActionMenu>
                           <button
@@ -260,74 +266,71 @@ export default function IaCreationPage() {
                           </button>
                         </ActionMenu>
                       </td>
-                      <td className="font-mono text-sm">{row.unitCode ?? '—'}</td>
-                      <td className="font-medium">{row.unitName ?? '—'}</td>
-
-                      {/* Course Work */}
-                      <td className="text-right border-l border-slate-100">
-                        {row.courseworkGuid ? (
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="badge badge-green">{row.courseworkMaxMark}</span>
-                            <button
-                              onClick={() => setSelectedCwGuid(row.courseworkGuid)}
-                              className="text-g400 hover:text-green-600 transition-colors"
-                              title="Schedule Coursework"
-                            >
-                              <i className="lni lni-calendar text-lg" />
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-g400 text-xs">—</span>
-                        )}
-                      </td>
-                      <td className="text-right text-[11px] font-mono text-g600 leading-tight">
-                        {formatDate(row.courseworkStartDateTime)}
-                      </td>
-                      <td className="text-right text-[11px] font-mono text-g600 leading-tight">
-                        {formatDate(row.courseworkEndDateTime)}
-                      </td>
+                      <td className="font-mono text-sm border-r border-slate-200 px-4 py-3">{row.unitCode ?? '—'}</td>
+                      <td className="font-medium border-r border-slate-200 px-4 py-3">{row.unitName ?? '—'}</td>
 
                       {/* Class Test */}
-                      <td className="text-right border-l border-slate-100">
+                      <td className="border-r border-slate-200 px-4 py-3 text-left">
                         {row.classTestGuid ? (
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className="badge badge-blue">{row.classTestMaxMark}</span>
-                            <button
-                              onClick={() => setSelectedCbtData({
-                                testGuid: row.classTestGuid!,
-                                unitCode: row.unitCode ?? '',
-                                unitName: row.unitName ?? ''
-                              })}
-                              className="text-g400 hover:text-blue-600 transition-colors"
-                              title="Schedule CBT"
-                            >
-                              <i className="lni lni-calendar text-lg" />
-                            </button>
+                            {row.classTestStartDateTime ? (
+                              <span className="text-g900 font-medium text-[11px] leading-tight">
+                                {formatDateRange(row.classTestStartDateTime, row.classTestEndDateTime)}
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => setSelectedCbtData({ testGuid: row.classTestGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}
+                                className="text-[#3a6bc9] hover:underline"
+                              >
+                                Add Class Test
+                              </button>
+                            )}
                           </div>
                         ) : (
                           <span className="text-g400 text-xs">—</span>
                         )}
                       </td>
-                      <td className="text-right text-[11px] font-mono text-g600 leading-tight">
-                        {formatDate(row.classTestStartDateTime)}
-                      </td>
-                      <td className="text-right text-[11px] font-mono text-g600 leading-tight">
-                        {formatDate(row.classTestEndDateTime)}
-                      </td>
 
-                      {/* University Exam */}
-                      <td className="text-right border-l border-slate-100">
-                        {row.universityExamGuid ? (
-                          <span className="badge badge-amber">{row.universityExamMaxMark}</span>
+                      {/* Course Work */}
+                      <td className="border-r border-slate-200 px-4 py-3 text-left">
+                        {row.courseworkGuid ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="badge badge-green">{row.courseworkMaxMark}</span>
+                            {row.courseworkStartDateTime ? (
+                              <span className="text-g900 font-medium text-[11px] leading-tight">
+                                {formatDateRange(row.courseworkStartDateTime, row.courseworkEndDateTime)}
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => setSelectedCwGuid(row.courseworkGuid)}
+                                className="text-[#3a6bc9] hover:underline"
+                              >
+                                Add Course work
+                              </button>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-g400 text-xs">—</span>
                         )}
                       </td>
-                      <td className="text-right text-[11px] font-mono text-g600 leading-tight">
-                        {formatDate(row.examDate && row.examStartTime ? `${row.examDate}T${row.examStartTime}` : null)}
-                      </td>
-                      <td className="text-right text-[11px] font-mono text-g600 leading-tight">
-                        {formatDate(row.examDate && row.examEndTime ? `${row.examDate}T${row.examEndTime}` : null)}
+
+                      {/* Uni. Exam */}
+                      <td className="px-4 py-3 text-left">
+                        {row.universityExamGuid ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="badge badge-amber">{row.universityExamMaxMark}</span>
+                            {row.examDate && row.examStartTime ? (
+                              <span className="text-g900 font-medium text-[11px] leading-tight">
+                                {formatDateRange(`${row.examDate}T${row.examStartTime}`, row.examEndTime ? `${row.examDate}T${row.examEndTime}` : null)}
+                              </span>
+                            ) : (
+                              <button className="text-[#3a6bc9] hover:underline">Add University Exam</button>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-g400 text-xs">—</span>
+                        )}
                       </td>
                     </tr>
                   ))
