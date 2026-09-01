@@ -1282,6 +1282,26 @@ body {
   grid-template-columns: repeat(5, 1fr)
 }
 
+/* Batch Summary dropped its "Full Batches" tile (no capacity field to
+   compute it from — see student/batch-summary/page.tsx) so it's down to 3
+   live stat tiles; the base .stats-row's repeat(4,1fr) would leave a bare
+   gap on the right instead of filling the row. */
+#page-batch-summary .stats-row {
+  grid-template-columns: repeat(3, 1fr)
+}
+
+@media(max-width:600px) {
+  #page-batch-summary .stats-row {
+    grid-template-columns: 1fr 1fr
+  }
+}
+
+@media(max-width:420px) {
+  #page-batch-summary .stats-row {
+    grid-template-columns: 1fr
+  }
+}
+
 @media(max-width:900px) {
   #page-enquiry-list .stats-row {
     grid-template-columns: repeat(3, 1fr)
@@ -2220,7 +2240,7 @@ textarea.ctrl {
   }
 }
 
-@media(max-width:900px) {
+@media(max-width:1200px) {
   #page-payment-console > .g3 {
     grid-template-columns: 1fr
   }
@@ -2233,9 +2253,122 @@ textarea.ctrl {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)
 }
 
-@media(max-width:900px) {
+@media(max-width:1200px) {
   #page-payment-console > .g2 {
     grid-template-columns: 1fr
+  }
+}
+
+/* Redesigned body: a left column (Profile Details + Payment History)
+   beside a wider right column (the active Payment Category's outstanding/
+   form/receipt content) — matches the sketch's proportions (left column
+   narrower than right), unlike .g2's even split above.
+
+   minmax(320px, 420px) rather than a flat 320px cap: at 320px flat, the
+   Payment History table (Date/Category/Amount/Cur./Method/Receipt# — 6
+   columns) never fit and needed ScrollTable's horizontal scroll arrows
+   even on a wide desktop viewport, which read as "too small" (confirmed
+   live). Letting the track grow up to 420px as space allows fixes that on
+   typical desktop widths while the 320px floor still holds it back from
+   crowding the right column on a narrower one; the two breakpoints below
+   step it down further as the viewport shrinks, then collapse to one
+   column outright once neither side has room to be useful side-by-side.
+   minmax(0, ...) on the right track for the same overflow-safety reason as
+   .g2/.g3 elsewhere on this page. */
+#page-payment-console > .pc-body {
+  display: grid;
+  grid-template-columns: minmax(380px, 520px) minmax(0, 1fr);
+  gap: 16px
+}
+
+@media(max-width:1280px) {
+  #page-payment-console > .pc-body {
+    grid-template-columns: minmax(320px, 400px) minmax(0, 1fr)
+  }
+}
+
+@media(max-width:1200px) {
+  #page-payment-console > .pc-body {
+    grid-template-columns: 1fr
+  }
+}
+
+/* At mobile widths, collapse every 2-column field-pair grid on this page
+   to a single column too — not just the top-level layout grids above.
+   Uses a descendant selector (space, not the direct-child ">" the other
+   overrides on this page use) since these are nested deep inside
+   .pc-body's right column (Currency/Amount, Date/Method, Bank Name/Ref)
+   and deliberately weren't caught by those — the direct-child scoping
+   exists specifically so the desktop-width top-level overrides leave
+   inner field-pairs alone. At this width there's no such thing to
+   preserve; every grid on the page should just stack. */
+@media(max-width:640px) {
+  #page-payment-console .g2 {
+    grid-template-columns: 1fr
+  }
+}
+
+/* Profile Details fact grid — replaces the old flat label:value list with
+   icon-led tiles, 2-up, on a faint sunken tint so the block reads as a
+   scannable card rather than a form. pc-fact-span2 lets Email (the one
+   field liable to be long) take the full width instead of truncating
+   inside a half-width tile. */
+.pc-fact-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px
+}
+
+.pc-fact {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--rsm);
+  min-width: 0
+}
+
+.pc-fact > i {
+  color: var(--b500);
+  font-size: 14px;
+  margin-top: 2px;
+  flex-shrink: 0
+}
+
+.pc-fact > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0
+}
+
+.pc-fact-lbl {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--g500);
+  text-transform: uppercase;
+  letter-spacing: .03em
+}
+
+.pc-fact-val {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--g900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap
+}
+
+.pc-fact-span2 {
+  grid-column: span 2
+}
+
+@media(max-width:420px) {
+  .pc-fact-grid {
+    grid-template-columns: 1fr
+  }
+  .pc-fact-span2 {
+    grid-column: span 1
   }
 }
 

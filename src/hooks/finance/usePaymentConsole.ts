@@ -2,10 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createAdvanceDeposit,
   createPayment,
-  createPaymentGuild,
-  createPaymentNche,
   createPaymentOther,
   getAllOutstandingLedgers,
+  getCurrentSemesterPayable,
+  getLedgerOthers,
   getOutstandingLedgers,
   getPayableLedgers,
   getPaymentHistory,
@@ -13,9 +13,7 @@ import {
   getStudentProfile,
   searchStudents,
   AdvanceDepositInput,
-  PaymentGuildInput,
   PaymentInput,
-  PaymentNcheInput,
   PaymentOtherInput,
   PayableLedgersParams,
 } from '@/lib/api/finance/paymentConsole'
@@ -50,6 +48,28 @@ export function useOutstandingLedgers(applicationGuid: string | null, enabled: b
     queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-ledgers', applicationGuid, studentGuid],
     queryFn: () => getOutstandingLedgers(applicationGuid as string, studentGuid),
     enabled: enabled && !!applicationGuid,
+  })
+}
+
+// Discount-aware replacement for useOutstandingLedgers on Step 2's
+// Outstanding Balance display — see getCurrentSemesterPayable's own comment.
+// Same optional-studentGuid convention as useOutstandingLedgers.
+export function useCurrentSemesterPayable(applicationGuid: string | null, enabled: boolean, studentGuid?: string | null) {
+  return useQuery({
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'current-semester-payable', applicationGuid, studentGuid],
+    queryFn: () => getCurrentSemesterPayable(applicationGuid as string, studentGuid),
+    enabled: enabled && !!applicationGuid,
+  })
+}
+
+// Other Payment tab's Ledger dropdown — unpaged catalogue, fetched once and
+// cached like every other master-data list in this app.
+export function useLedgerOthers() {
+  return useQuery({
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'ledger-others'],
+    queryFn: getLedgerOthers,
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
 }
 
@@ -113,41 +133,26 @@ export function useCreatePayment() {
     // now stale the moment the payment lands — refetch both.
     onSuccess: (_result, input) => {
       queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-ledgers', input.applicationGuid] })
+      queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'current-semester-payable', input.applicationGuid] })
       queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'payment-history', input.applicationGuid] })
     },
   })
 }
 
-// Shared invalidation for the three category payment mutations below —
-// each lands money against a category outstanding-all (get-all-outstanding-
-// ledgers.md) covers, and payment-history spans all categories too (per
-// the flow doc), so both need refetching regardless of which category the
-// payment was in. Unlike useCreatePayment (Tuition) above, none of these
-// touch outstanding-ledgers — that endpoint is tuition-only.
-function invalidateAfterCategoryPayment(queryClient: ReturnType<typeof useQueryClient>, applicationGuid: string) {
+// Shared invalidation for category payment mutations — each lands money
+// against a category outstanding-all (get-all-outstanding-ledgers.md)
+// covers, and payment-history spans all categories too (per the flow doc),
+// so both need refetching regardless of which category the payment was in.
+// Unlike useCreatePayment (Tuition) above, none of these touch
+// outstanding-ledgers — that endpoint is tuition-only. Exported for the
+// standalone NCHE/Guild payment pages' own hooks (useNchePayment.ts,
+// useGuildPayment.ts), which need the identical invalidation but create
+// against their own dedicated endpoints, not this file's.
+export function invalidateAfterCategoryPayment(queryClient: ReturnType<typeof useQueryClient>, applicationGuid: string) {
   queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-all', applicationGuid] })
   queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'payment-history', applicationGuid] })
 }
 
-export function useCreatePaymentNche() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (input: PaymentNcheInput) => createPaymentNche(input),
-    onSuccess: (_result, input) => invalidateAfterCategoryPayment(queryClient, input.applicationGuid),
-  })
-}
-
-export function useCreatePaymentGuild() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (input: PaymentGuildInput) => createPaymentGuild(input),
-    onSuccess: (_result, input) => invalidateAfterCategoryPayment(queryClient, input.applicationGuid),
-  })
-}
-
-// Not called from the Other Payment tab yet — see createPaymentOther's own
-// "NOT wired up" comment. Exported ready for when the ledger-others picker
-// has a real GUID source.
 export function useCreatePaymentOther() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -172,5 +177,5 @@ export function useCreateAdvanceDeposit() {
   })
 }
 
-export type { AdvanceDepositInput, AdvanceDepositResult, AllOutstandingItem, ApplicationSummary, OutstandingLedger, PayableLedgerLine, PayableLedgersParams, PaymentGuildInput, PaymentGuildResult, PaymentHistoryEntry, PaymentHistoryListEntry, PaymentInput, PaymentNcheInput, PaymentNcheResult, PaymentOtherInput, PaymentOtherResult, PaymentResult, StudentProfile } from '@/lib/api/finance/paymentConsole'
+export type { AdvanceDepositInput, AdvanceDepositResult, AllOutstandingItem, ApplicationSummary, CurrentSemesterPayableLedger, CurrentSemesterPayableResult, CurrentSemesterPayableTotal, LedgerOthersDto, OutstandingLedger, PayableLedgerLine, PayableLedgersParams, PaymentHistoryEntry, PaymentHistoryListEntry, PaymentInput, PaymentOtherInput, PaymentOtherResult, PaymentResult, StudentProfile } from '@/lib/api/finance/paymentConsole'
 export { PAYMENT_CATEGORY_LABELS, PAY_TYPE_LABELS, PAY_TYPE_TO_RECEIPT_CATEGORY } from '@/lib/api/finance/paymentConsole'

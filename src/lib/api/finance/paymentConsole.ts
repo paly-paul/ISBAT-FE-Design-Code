@@ -313,6 +313,60 @@ export function getOutstandingLedgers(applicationGuid: string, studentGuid?: str
     })
 }
 
+// Confirmed via get-current-semester-payable-ledgers.md — same scoping as
+// getOutstandingLedgers above (current semester + carried-forward semester-1
+// registration fee), but with each ledger's applicable discount already
+// computed and unconditionally applied (no proposed amount to check against,
+// unlike getPayableLedgers' simulation) — the "what do I owe this semester,
+// discount included" figure Step 2's Outstanding Balance card needs, which
+// getOutstandingLedgers alone can't show since it carries no discount
+// fields at all.
+export interface CurrentSemesterPayableLedger {
+  ledgerGuid: string | null
+  semesterGuid: string | null
+  ledgerName: string
+  ledgerNum: number | null
+  currencyGuid: string | null
+  currencyName: string
+  ledgerAmount: number
+  paidAmount: number
+  outstanding: number
+  discountGuid: string | null
+  discountName: string | null
+  discountAmount: number
+  netPayable: number
+}
+
+export interface CurrentSemesterPayableTotal {
+  currencyGuid: string | null
+  currencyName: string
+  totalOutstanding: number
+  totalDiscount: number
+  totalNetPayable: number
+}
+
+export interface CurrentSemesterPayableResult {
+  ledgers: CurrentSemesterPayableLedger[]
+  totals: CurrentSemesterPayableTotal[]
+}
+
+// studentGuid is optional, same reasoning as getOutstandingLedgers' own —
+// without it the handler can't resolve the student's discount assignment or
+// academic status and falls back to the application's own semester.
+export function getCurrentSemesterPayable(applicationGuid: string, studentGuid?: string | null): Promise<CurrentSemesterPayableResult> {
+  if (MOCK_AUTH) return Promise.resolve({ ledgers: [], totals: [] })
+  const qs = studentGuid ? `?studentGuid=${encodeURIComponent(studentGuid)}` : ''
+  return apiGet<CurrentSemesterPayableResult | null>(`/api/v1/finance/payment-console/current-semester-payable/${applicationGuid}${qs}`)
+    .then(data => data ?? { ledgers: [], totals: [] })
+    // Same "empty result surfaces as a 404" behavior as getOutstandingLedgers
+    // — "No outstanding ledgers found" here means fully paid, a normal
+    // state, not an error (see the doc's own Errors table).
+    .catch(err => {
+      if (err instanceof AuthError && err.code === 'not_found') return { ledgers: [], totals: [] }
+      throw err
+    })
+}
+
 // Confirmed via get-all-outstanding-ledgers.md — everything the student
 // owes across all four fee categories (tuition/other/NCHE/guild) in one
 // flat list, each row tagged with `category`. Unlike getOutstandingLedgers
@@ -486,66 +540,50 @@ export function createAdvanceDeposit(input: AdvanceDepositInput): Promise<Advanc
   return apiPost<AdvanceDepositResult>('/api/v1/finance/payment-console/advance-deposit', input)
 }
 
-// Confirmed via payment-nche/payment-guild/payment-other .md docs (payment/
-// folder at repo root). Structurally near-identical to each other — no
-// currency, no receipt book, no bank, no receipt claimed; the amount must
-// be an exact multiple of a fixed per-semester rate configured in GenSets,
-// enforced server-side (the client has no way to know that rate ahead of
-// time, so this is left for the 400 to report, not pre-validated here).
-// The only payload difference is the free-text reference field: NCHE takes
-// pnrNumber, Guild takes bankDeposit.
-export interface PaymentNcheInput {
-  applicationGuid: string
-  studentGuid: string | null
-  amount: number
-  payDate: string
-  pnrNumber: string | null
-  remarks: string | null
+// NCHE/Guild payment creation moved out to their own dedicated pages/files
+// (finance/nchePayment.ts, finance/guildPayment.ts) — confirmed via
+// post-payment-nche.md/post-payment-guild.md (2026-08-31) that both now
+// live on their own erp-finance-compliance-service routes
+// (/finance/nche/payment-nche, /finance/guild/payment-guild), not nested
+// under payment-console/ the way this file's old scaffolding assumed.
+// Search/profile/outstanding-all below are still shared with those two
+// pages — only the create call itself moved.
+
+// Confirmed via get-ledger-others.md — the "other fees" catalogue
+// (ID replacement, transcript, lateral-entry fee, …), a separate table from
+// tuition ledgers; ledgerOthersGuid is not interchangeable with a
+// ledgerGuid. Unpaged/unfiltered, matching what a dropdown wants.
+export interface LedgerOthersDto {
+  ledgerOthersGuid: string
+  ledgerCode: string
+  ledgerName: string
 }
 
-export interface PaymentNcheResult {
-  paymentNcheGuid: string
-  amount: number
-  // What's still owed on NCHE after this payment (rate × semesterCount,
-  // minus what's now paid) — there is no receipt field, none is issued.
-  remainingBalance: number
+const mockLedgerOthers: LedgerOthersDto[] = [
+  { ledgerOthersGuid: 'ldo-mock-1', ledgerCode: 'LFN', ledgerName: 'Library Fine' },
+  { ledgerOthersGuid: 'ldo-mock-2', ledgerCode: 'IDCF', ledgerName: 'ID Card Fee' },
+  { ledgerOthersGuid: 'ldo-mock-3', ledgerCode: 'TRSF', ledgerName: 'Transcript Fee' },
+  { ledgerOthersGuid: 'ldo-mock-4', ledgerCode: 'CTM', ledgerName: 'Caution Money' },
+  { ledgerOthersGuid: 'ldo-mock-5', ledgerCode: 'UNF', ledgerName: 'Uniform Fee' },
+  { ledgerOthersGuid: 'ldo-mock-6', ledgerCode: 'OTH', ledgerName: 'Other Fee' },
+]
+
+export function getLedgerOthers(): Promise<LedgerOthersDto[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockLedgerOthers)
+  return apiGet<LedgerOthersDto[] | null>('/api/v1/finance/payment-console/ledger-others').then(data => data ?? [])
 }
 
-export function createPaymentNche(input: PaymentNcheInput): Promise<PaymentNcheResult> {
-  if (MOCK_AUTH) {
-    return Promise.resolve({ paymentNcheGuid: `mock-nche-${mockPaymentSeq++}`, amount: input.amount, remainingBalance: 0 })
-  }
-  return apiPost<PaymentNcheResult>('/api/v1/finance/payment-console/payment-nche', input)
-}
-
-export interface PaymentGuildInput {
-  applicationGuid: string
-  studentGuid: string | null
-  amount: number
-  payDate: string
-  bankDeposit: string | null
-}
-
-export interface PaymentGuildResult {
-  paymentGuildGuid: string
-  amount: number
-  remainingBalance: number
-}
-
-export function createPaymentGuild(input: PaymentGuildInput): Promise<PaymentGuildResult> {
-  if (MOCK_AUTH) {
-    return Promise.resolve({ paymentGuildGuid: `mock-guild-${mockPaymentSeq++}`, amount: input.amount, remainingBalance: 0 })
-  }
-  return apiPost<PaymentGuildResult>('/api/v1/finance/payment-console/payment-guild', input)
-}
-
-// Confirmed via payment-other.md — NOT wired up to the Other Payment tab
-// yet. ledgerOthersGuid must come from GET /payment-console/ledger-others
-// (referenced in that doc but its own spec hasn't been provided), so the
-// tab still uses a static label list with no real GUIDs behind it — wiring
-// this call today would send garbage into ledgerOthersGuid and 404
-// ("Ledger not found."). Left here as ready-to-use scaffolding, matching
-// the request/response shape exactly, once that picker has a real source.
+// Confirmed via post-payment-other.md — now wired to the Other Payment tab's
+// real submit, ledgerOthersGuid sourced from getLedgerOthers() above. Two
+// funding modes: cash/bank (paymentAdvanceGuid omitted — receiptBookGuid
+// required, procBankGuid required too unless payType is Cash) or from an
+// existing advance deposit (paymentAdvanceGuid supplied — no receipt/book/
+// bank needed). Only cash/bank mode is wired on the form: there's no picker
+// anywhere in this app for an existing advance deposit's paymentAdvanceGuid
+// (createAdvanceDeposit only *creates* one; nothing lists a student's
+// existing deposits with remaining balance) — the Advance Payment checkbox
+// stays local-only and blocks submit with a toast rather than sending a
+// fabricated paymentAdvanceGuid that would 404.
 export interface PaymentOtherInput {
   applicationGuid: string
   studentGuid: string | null

@@ -47,6 +47,9 @@ const FINANCE_PAYMENT_SECTIONS: MenuNode[] = [
   section('Payment Collection', [
     leaf('Dashboard', 'dashboard', 'dashboard'),
     leaf('Payment Console', 'credit-cards', 'payment-console'),
+    leaf('NCHE Payment', 'graduation', 'nche-payment'),
+    leaf('Guild Payment', 'users', 'guild-payment'),
+    leaf('Guild Payment Console', 'grid-alt', 'guild-console'),
     leaf('Payment History', 'bar-chart', 'payment-history'),
     leaf('Ledger Adjustments', 'lock', 'ledger-adjustments'),
     leaf('Exchange Rates', 'world', 'exchange-rates'),
@@ -85,6 +88,7 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
     leaf('Student Category Master', 'users', '/student/student-category-master'),
     leaf('Service Category Master', 'list', '/student/service-category-master'),
     leaf('Specialization Management', 'graduation', '/student/specialization'),
+    leaf('Discount Management', 'tag', '/student/discount-management'),
   ]),
 ]
 
@@ -313,12 +317,45 @@ function mergeFinanceSections(menu: MenuNode[]): MenuNode[] {
   const financeIdx = menu.findIndex(n => n.name === 'Finance')
   if (financeIdx === -1) return [...menu, module_('Finance', 'dollar', FINANCE_PAYMENT_SECTIONS)]
 
-  const financeModule = menu[financeIdx]
+  let financeModule = menu[financeIdx]
+
+  // Payment Collection needs the same "leaf-level fixup, not just
+  // fill-in-if-missing" treatment mergeStudentSections' own Settings/Student
+  // Records fixups use — the real backend already registers this section
+  // (it backs Payment Console/Payment History/etc.), so the whole-section-
+  // missing check below never touches it, and NCHE/Guild Payment (new
+  // frontend-only pages, no backend permission entry yet) would otherwise
+  // stay missing forever even once the section itself exists for real.
+  const collectionIdx = financeModule.children.findIndex(c => c.name === 'Payment Collection')
+  if (collectionIdx !== -1) {
+    const collectionSection = financeModule.children[collectionIdx]
+    const existingLeaves = new Set(collectionSection.children.map(l => l.name))
+    const missingLeaves = [
+      leaf('NCHE Payment', 'graduation', 'nche-payment'),
+      leaf('Guild Payment', 'users', 'guild-payment'),
+      leaf('Guild Payment Console', 'grid-alt', 'guild-console'),
+    ].filter(l => !existingLeaves.has(l.name))
+    if (missingLeaves.length > 0) {
+      // Inserted right after Payment Console, matching their position in
+      // FINANCE_PAYMENT_SECTIONS above, rather than tacked onto the end.
+      const consoleIdx = collectionSection.children.findIndex(l => l.name === 'Payment Console')
+      const children = [...collectionSection.children]
+      if (consoleIdx !== -1) children.splice(consoleIdx + 1, 0, ...missingLeaves)
+      else children.push(...missingLeaves)
+      const mergedFinanceChildren = [...financeModule.children]
+      mergedFinanceChildren[collectionIdx] = { ...collectionSection, children }
+      financeModule = { ...financeModule, children: mergedFinanceChildren }
+    }
+  }
+
   const existingSections = new Set(financeModule.children.map(c => c.name))
   const missingSections = FINANCE_PAYMENT_SECTIONS.filter(s => !existingSections.has(s.name))
-  if (missingSections.length === 0) return menu
 
   const merged = [...menu]
+  if (missingSections.length === 0) {
+    merged[financeIdx] = financeModule
+    return merged
+  }
   // Prepended, not appended — Payment Collection is meant to lead the
   // Finance panel (see its position in mockMenu above), not trail behind
   // whatever real sections the backend already returns.
@@ -379,10 +416,34 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
       leaf('Student Category Master', 'users', '/student/student-category-master'),
       leaf('Service Category Master', 'list', '/student/service-category-master'),
       leaf('Specialization Management', 'graduation', '/student/specialization'),
+      leaf('Discount Management', 'tag', '/student/discount-management'),
     ].filter(l => !existingSettingsLeaves.has(l.name))
-    if (withoutOldCategoryMasters.length !== settingsSection.children.length || missingSettingsLeaves.length > 0) {
+    // Discount Management specifically belongs right after Specialization
+    // Management (split out of that same page — see discount-management/
+    // page.tsx), not just bulk-appended at the end with everything else
+    // missing — a plain append landed it after whatever else the real
+    // backend already had registered in Settings, not adjacent to its
+    // former home the way the sidebar is meant to read. Specialization
+    // Management itself may be already-present (insert into orderedLeaves)
+    // or also missing (insert into missingSettingsLeaves, which preserves
+    // the array order above, so it still lands right after it there).
+    const discountIdx = missingSettingsLeaves.findIndex(l => l.name === 'Discount Management')
+    let orderedLeaves = withoutOldCategoryMasters
+    if (discountIdx !== -1) {
+      const [discountLeaf] = missingSettingsLeaves.splice(discountIdx, 1)
+      const specIdxInExisting = orderedLeaves.findIndex(l => l.name === 'Specialization Management')
+      if (specIdxInExisting !== -1) {
+        orderedLeaves = [...orderedLeaves]
+        orderedLeaves.splice(specIdxInExisting + 1, 0, discountLeaf)
+      } else {
+        const specIdxInMissing = missingSettingsLeaves.findIndex(l => l.name === 'Specialization Management')
+        if (specIdxInMissing !== -1) missingSettingsLeaves.splice(specIdxInMissing + 1, 0, discountLeaf)
+        else missingSettingsLeaves.push(discountLeaf)
+      }
+    }
+    if (orderedLeaves.length !== settingsSection.children.length || missingSettingsLeaves.length > 0) {
       const children = [...studentModule.children]
-      children[settingsIdx] = { ...settingsSection, children: [...withoutOldCategoryMasters, ...missingSettingsLeaves] }
+      children[settingsIdx] = { ...settingsSection, children: [...orderedLeaves, ...missingSettingsLeaves] }
       studentModule = { ...studentModule, children }
     }
   }

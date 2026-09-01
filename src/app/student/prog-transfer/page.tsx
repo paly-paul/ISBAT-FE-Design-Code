@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -9,41 +9,27 @@ import { BaselinePanel } from '@/components/student/BaselinePanel'
 import { StudentDto } from '@/lib/api/student/student'
 import { useStudent } from '@/hooks/student/useStudents'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
+import {
+  useProgramTransferDetail,
+  useProgramTransferBatches,
+  useProgramTransferFeeStructures,
+  useProgramTransferHistory,
+  usePostProgramTransfer,
+} from '@/hooks/student/useProgramTransfer'
 
-// Ported from isbat_student_module.html's Programme Transfer page. Student
-// identity/baseline comes from the real student list (StudentLookup) and
-// discount from the real GET /students/:guid (useStudent, same field the
-// Student Profile page already reads — see formatDiscount below). New
-// Programme is wired to the real Programme Master catalog
-// (useProgramMasters, already used elsewhere in the app). There's no
-// endpoint anywhere (students/ or academic/) that resolves batch/semester/
-// fee-structure options for an arbitrary *target* programme the way
-// students/resume/candidate does for a student's own current programme —
-// New Batch/New Semester/New Fee Structure stay mock dropdowns, and there's
-// no GET history endpoint for the transfer grid either, so it starts empty.
+// Ported from isbat_student_module.html's Programme Transfer page, then
+// rewired to the real students/program-transfer/*.md endpoints (2026-08-18/
+// 28) — New Batch/New Semester/New Fee Structure and the transfer history
+// grid used to be mock (TARGET_BATCHES/TARGET_SEMESTERS/TARGET_FEE_
+// STRUCTURES/TRANSFER_HISTORY constants); all four, plus the actual submit,
+// are real now. New Programme still comes from the Programme Master catalog
+// (useProgramMasters) same as before. New Semester comes from
+// useSemestersForProgram, scoped to the *target* programme — New Batch then
+// cascades off (targetProg, targetSemester) via
+// GET /program-transfer/batches, and New Fee Structure off targetProg alone
+// via GET /program-transfer/fee-structures.
 const TARGET_PROGRAMMES_FALLBACK = [{ value: '', label: 'No programmes available' }]
-
-const TARGET_BATCHES = ['BSc.AF-2024B · Evening', 'BSc.AF-2025A · Day', 'MBA-2025A · Weekend']
-const TARGET_SEMESTERS = ['Semester 1', 'Semester 2', 'Semester 3']
-const TARGET_FEE_STRUCTURES = ['Local · $650/sem', 'Local · $750/sem', 'International · $1200/sem']
-
-interface TransferHistoryRow {
-  transferCode: string
-  transferDate: string
-  oldProgramme: string
-  oldBatch: string
-  oldSemester: string
-  newProgramme: string
-  newBatch: string
-  newSemester: string
-}
-// Illustrative only — no GET history endpoint exists for this anywhere (see
-// docs/STUDENT_MODULE_API_INTEGRATION_STATUS.md), so these rows aren't tied
-// to whichever student is actually loaded above.
-const TRANSFER_HISTORY: TransferHistoryRow[] = [
-  { transferCode: 'PTX-2025-0014', transferDate: '12 Jan 2025', oldProgramme: 'BSc. Information Technology', oldBatch: 'BSC.IT-2023B', oldSemester: 'Semester 4', newProgramme: 'BSc. Computer Science', newBatch: 'BSC.CS-2024A', newSemester: 'Semester 4' },
-  { transferCode: 'PTX-2024-0027', transferDate: '03 Jul 2024', oldProgramme: 'Bachelor of Business Admin.', oldBatch: 'BBA-2023B', oldSemester: 'Semester 2', newProgramme: 'BSc. Accounting & Finance', newBatch: 'BSC.AF-2024A', newSemester: 'Semester 1' },
-]
 
 // calcType is documented ("1" = Amount, "2" = Percentage) on the
 // student-discounts assign/update endpoints; StudentDetailDto carries the
@@ -59,6 +45,9 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [student, setStudent] = useState<StudentDto | null>(null)
   const { data: detail } = useStudent(student?.studentGuid ?? null, !!student)
+  const { data: transferDetail } = useProgramTransferDetail(student?.studentGuid ?? null)
+  const { data: history = [] } = useProgramTransferHistory(student?.studentGuid ?? null)
+  const postProgramTransfer = usePostProgramTransfer()
 
   const { data: programmes = [] } = useProgramMasters()
   const programOptions = programmes.length > 0
@@ -66,19 +55,42 @@ export default function Page() {
     : TARGET_PROGRAMMES_FALLBACK
 
   const [targetProg, setTargetProg] = useState('')
-  const [targetBatch, setTargetBatch] = useState(TARGET_BATCHES[0])
-  const [targetSemester, setTargetSemester] = useState(TARGET_SEMESTERS[0])
-  const [targetFeeStructure, setTargetFeeStructure] = useState(TARGET_FEE_STRUCTURES[0])
+  const [targetSemester, setTargetSemester] = useState('')
+  const [targetBatch, setTargetBatch] = useState('')
+  const [targetFeeStructure, setTargetFeeStructure] = useState('')
   const [remarks, setRemarks] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
+
+  const { data: semesters = [] } = useSemestersForProgram(targetProg || null, !!targetProg)
+  const { data: batches = [] } = useProgramTransferBatches(targetProg || null, targetSemester || null)
+  const { data: feeStructures = [] } = useProgramTransferFeeStructures(targetProg || null)
+
+  // Each dropdown resets once whatever it cascades from changes — a
+  // semester/batch/fee guid picked for the old target programme means
+  // nothing once the programme itself has been swapped out.
+  useEffect(() => { setTargetSemester(''); setTargetBatch(''); setTargetFeeStructure('') }, [targetProg])
+  useEffect(() => { setTargetBatch('') }, [targetSemester])
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function handleLoad(s: StudentDto) { setStudent(s); showToast(`${s.studentName} loaded`, 'ok') }
   function handleClear() {
-    setStudent(null); setTargetProg(''); setTargetBatch(TARGET_BATCHES[0]); setTargetSemester(TARGET_SEMESTERS[0]); setTargetFeeStructure(TARGET_FEE_STRUCTURES[0]); setRemarks('')
+    setStudent(null); setTargetProg(''); setTargetSemester(''); setTargetBatch(''); setTargetFeeStructure(''); setRemarks('')
   }
 
   const target = programOptions.find(p => p.value === targetProg)
+  const targetSemesterLabel = semesters.find(s => s.semesterGuid === targetSemester)?.semName ?? ''
+  const targetBatchLabel = batches.find(b => b.batchGuid === targetBatch)?.batchCode ?? ''
+
+  function executeTransfer() {
+    if (!student || !targetProg || !targetBatch || !targetSemester || !targetFeeStructure) return
+    postProgramTransfer.mutate(
+      { studentGuid: student.studentGuid, input: { newProgramId: targetProg, newBatchId: targetBatch, newSemesterId: targetSemester, newFeeId: targetFeeStructure, remarks: remarks.trim() || null } },
+      {
+        onSuccess: result => { showToast(`Programme transfer executed — ${result.programTransferCode}`, 'ok'); setConfirmOpen(false); handleClear() },
+        onError: (error: Error) => { showToast(error.message || 'Could not execute programme transfer', 'err'); setConfirmOpen(false) },
+      }
+    )
+  }
 
   return (
     <>
@@ -106,15 +118,12 @@ export default function Page() {
               label="Current Programme (Read-Only)"
               items={[
                 { label: 'Student Name', value: student.studentName },
-                { label: 'Programme', value: student.programName || '—' },
-                // Campus/Intake/Admission Type have no field on
-                // StudentDto/StudentDetailDto yet — shown as placeholders,
-                // same convention as Batch Transfer's own Campus/Intake gap.
-                { label: 'Campus', value: '—' },
-                { label: 'Semester', value: student.semesterName || '—' },
-                { label: 'Intake', value: '—' },
-                { label: 'Fee Structure', value: 'Local · $750/sem' },
-                { label: 'Admission Type', value: '—' },
+                { label: 'Programme', value: transferDetail?.programName ?? student.programName ?? '—' },
+                { label: 'Campus', value: transferDetail?.campusName ?? '—' },
+                { label: 'Semester', value: transferDetail?.semesterName ?? student.semesterName ?? '—' },
+                { label: 'Intake', value: transferDetail?.intakeDescription ?? '—' },
+                { label: 'Fee Structure', value: transferDetail?.feeDesc ?? '—' },
+                { label: 'Admission Type', value: transferDetail?.admissionType ?? '—' },
               ]}
             />
 
@@ -129,23 +138,23 @@ export default function Page() {
                     onChange={setTargetProg}
                   />
                 </div>
-                <div className="fg"><label className="lbl">New Batch <span className="req">*</span></label>
-                  <SearchSelect options={TARGET_BATCHES} value={targetBatch} onChange={setTargetBatch} />
-                </div>
                 <div className="fg"><label className="lbl">New Semester <span className="req">*</span></label>
-                  <SearchSelect options={TARGET_SEMESTERS} value={targetSemester} onChange={setTargetSemester} />
+                  <SearchSelect placeholder="— Select new semester —" disabled={!targetProg} options={semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))} value={targetSemester} onChange={setTargetSemester} />
+                </div>
+                <div className="fg"><label className="lbl">New Batch <span className="req">*</span></label>
+                  <SearchSelect placeholder="— Select new batch —" disabled={!targetSemester} options={batches.map(b => ({ value: b.batchGuid, label: b.batchCode }))} value={targetBatch} onChange={setTargetBatch} />
                 </div>
                 <div className="fg"><label className="lbl">New Fee Structure <span className="req">*</span></label>
-                  <SearchSelect options={TARGET_FEE_STRUCTURES} value={targetFeeStructure} onChange={setTargetFeeStructure} />
+                  <SearchSelect placeholder="— Select new fee structure —" disabled={!targetProg} options={feeStructures.map(f => ({ value: f.feeHdGuid, label: f.feeDesc }))} value={targetFeeStructure} onChange={setTargetFeeStructure} />
                 </div>
                 {/* Discount — display only, not editable here (per request); real
                     value from the student's own discount assignment, same field
                     Student Profile's own Discount row reads. */}
                 <div className="fg"><label className="lbl">Discount</label><input className="ctrl" readOnly value={formatDiscount(detail)} /></div>
-                <div className="fg"><label className="lbl">Remarks <span className="req">*</span></label><textarea className="ctrl" rows={3} placeholder="Reason for programme transfer…" value={remarks} onChange={e => setRemarks(e.target.value)} /></div>
+                <div className="fg"><label className="lbl">Remarks</label><textarea className="ctrl" rows={3} maxLength={100} placeholder="Reason for programme transfer… (max 100 chars)" value={remarks} onChange={e => setRemarks(e.target.value)} /></div>
                 <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                   <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                  <button className="btn btn-primary" disabled={!targetProg} onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Execute Transfer</button>
+                  <button className="btn btn-primary" disabled={!targetProg || !targetSemester || !targetBatch || !targetFeeStructure} onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Execute Transfer</button>
                 </div>
               </div>
               <div className="card">
@@ -155,23 +164,21 @@ export default function Page() {
                     <thead>
                       <tr>
                         <th>Transfer Code</th><th>Transfer Date</th>
-                        <th>Old Programme</th><th>Old Batch</th><th>Old Semester</th>
+                        <th>Old Programme</th>
                         <th>New Programme</th><th>New Batch</th><th>New Semester</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {TRANSFER_HISTORY.length === 0
-                        ? <EmptyState colSpan={8} title="No transfers on record" subtitle="This student hasn't been moved between programmes yet." />
-                        : TRANSFER_HISTORY.map(r => (
-                          <tr key={r.transferCode}>
-                            <td className="font-mono text-blue">{r.transferCode}</td>
-                            <td>{r.transferDate}</td>
-                            <td>{r.oldProgramme}</td>
-                            <td>{r.oldBatch}</td>
-                            <td>{r.oldSemester}</td>
-                            <td>{r.newProgramme}</td>
-                            <td>{r.newBatch}</td>
-                            <td>{r.newSemester}</td>
+                      {history.length === 0
+                        ? <EmptyState colSpan={6} title="No transfers on record" subtitle="This student hasn't been moved between programmes yet." />
+                        : history.map(r => (
+                          <tr key={r.programTransferId}>
+                            <td className="font-mono text-blue">{r.programTransferCode}</td>
+                            <td>{r.programTransferDate.slice(0, 10)}</td>
+                            <td>{r.oldProgramName ?? '—'}</td>
+                            <td>{r.newProgramName ?? '—'}</td>
+                            <td>{r.newBatchCode ?? '—'}</td>
+                            <td>{r.newSemesterName ?? '—'}</td>
                           </tr>
                         ))}
                     </tbody>
@@ -191,15 +198,17 @@ export default function Page() {
               <div className="warn-box" style={{ marginBottom: 16 }}><i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 16, flexShrink: 0 }}></i><div><strong>Current programme track will be archived.</strong> Records will be preserved as read-only. The student will be registered fresh in the target programme.</div></div>
               <div style={{ fontSize: 13, color: 'var(--g700)', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={{ display: 'flex', gap: 12 }}><span style={{ fontWeight: 600, width: 140, color: 'var(--g500)' }}>Student</span><span>{student.studentName}</span></div>
-                <div style={{ display: 'flex', gap: 12 }}><span style={{ fontWeight: 600, width: 140, color: 'var(--g500)' }}>From programme</span><span>{student.programName || '—'}</span></div>
+                <div style={{ display: 'flex', gap: 12 }}><span style={{ fontWeight: 600, width: 140, color: 'var(--g500)' }}>From programme</span><span>{transferDetail?.programName ?? student.programName ?? '—'}</span></div>
                 <div style={{ display: 'flex', gap: 12 }}><span style={{ fontWeight: 600, width: 140, color: 'var(--g500)' }}>To programme</span><span style={{ color: 'var(--b700)', fontWeight: 700 }}>{target.label}</span></div>
-                <div style={{ display: 'flex', gap: 12 }}><span style={{ fontWeight: 600, width: 140, color: 'var(--g500)' }}>New batch</span><span>{targetBatch}</span></div>
-                <div style={{ display: 'flex', gap: 12 }}><span style={{ fontWeight: 600, width: 140, color: 'var(--g500)' }}>New semester</span><span>{targetSemester}</span></div>
+                <div style={{ display: 'flex', gap: 12 }}><span style={{ fontWeight: 600, width: 140, color: 'var(--g500)' }}>New batch</span><span>{targetBatchLabel || '—'}</span></div>
+                <div style={{ display: 'flex', gap: 12 }}><span style={{ fontWeight: 600, width: 140, color: 'var(--g500)' }}>New semester</span><span>{targetSemesterLabel || '—'}</span></div>
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-neu" onClick={() => setConfirmOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={() => { showToast('Programme transfer executed', 'ok'); setConfirmOpen(false) }}><i className="lni lni-checkmark"></i> Confirm &amp; Execute</button>
+              <button className="btn btn-primary" onClick={executeTransfer} disabled={postProgramTransfer.isPending}>
+                <i className="lni lni-checkmark"></i> {postProgramTransfer.isPending ? 'Executing…' : 'Confirm & Execute'}
+              </button>
             </div>
           </div>
         </div>

@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
+import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { useSponsorCategories, useCreateSponsorCategory, useUpdateSponsorCategory, useDeleteSponsorCategory, isMandatoryFeeCheck } from '@/hooks/student/useSponsor'
 import { SponsorCategoryDto } from '@/lib/api/student/sponsor'
@@ -75,10 +76,10 @@ export default function Page() {
                     <td><strong>{c.category}</strong></td>
                     <td className="text-muted">{isMandatoryFeeCheck(c.mandatoryFeeCheck) ? 'Yes' : 'No'}</td>
                     <td>
-                      <div className="flex gap-2">
-                        <button className="btn-icon" onClick={() => openEditStudentCat(c)}><i className="lni lni-pencil-alt"></i></button>
-                        <button className="btn-icon" style={{ color: 'var(--red)' }} onClick={() => removeStudentCategory(c.sponsorCategoryGuid)}><i className="lni lni-trash-can"></i></button>
-                      </div>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openEditStudentCat(c)}><i className="lni lni-pencil-alt"></i> Edit</button>
+                        <button className="btn btn-neu btn-sm" style={{ color: 'var(--red)' }} onClick={() => removeStudentCategory(c.sponsorCategoryGuid)}><i className="lni lni-trash-can"></i> Delete</button>
+                      </ActionMenu>
                     </td>
                   </tr>
                 ))}
