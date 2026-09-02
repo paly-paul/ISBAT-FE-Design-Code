@@ -70,10 +70,10 @@ export interface ProgramTransferHistoryRow {
 }
 
 export interface ProgramTransferInput {
-  newProgramId: string
-  newBatchId: string
-  newSemesterId: string
-  newFeeId: string
+  newProgramGuid: string
+  newBatchGuid: string
+  newSemesterGuid: string
+  newFeeGuid: string
   remarks?: string | null
 }
 

@@ -10,6 +10,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { IaStructureViewModal } from './_components/IaStructureViewModal'
 import { CwScheduleModal } from './_components/CwScheduleModal'
 import { CbtScheduleModal } from './_components/CbtScheduleModal'
+import { UeScheduleModal } from './_components/UeScheduleModal'
 import { type IaStructureRowDto } from '@/lib/api/assessment/iaCreation'
 import {
   useIaCreationInit,
@@ -53,6 +54,7 @@ export default function IaCreationPage() {
   const [viewingRow, setViewingRow] = useState<IaStructureRowDto | null>(null)
   const [selectedCwGuid, setSelectedCwGuid] = useState<string | null>(null)
   const [selectedCbtData, setSelectedCbtData] = useState<{ testGuid: string, unitCode: string, unitName: string } | null>(null)
+  const [selectedUeData, setSelectedUeData] = useState<{ examGuid: string, unitCode: string, unitName: string } | null>(null)
 
   // ── Data fetching ─────────────────────────────────
   const { data: initData, isLoading: initLoading } = useIaCreationInit()
@@ -323,11 +325,11 @@ export default function IaCreationPage() {
                           <div className="flex flex-wrap items-center gap-2">
                             {/* Max mark removed as requested */}
                             {row.examDate && row.examStartTime ? (
-                              <span className="text-g900 font-medium text-[11px] leading-tight">
-                                {formatDateRange(`${row.examDate}T${row.examStartTime}`, row.examEndTime ? `${row.examDate}T${row.examEndTime}` : null)}
+                              <span className="text-g900 font-medium text-[11px] leading-tight" style={{ cursor: 'pointer', borderBottom: '1px dashed #9ca3af' }} onClick={() => setSelectedUeData({ examGuid: row.universityExamGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}>
+                                {formatDateRange(`${row.examDate.split('T')[0]}T${row.examStartTime}`, row.examEndTime ? `${row.examDate.split('T')[0]}T${row.examEndTime}` : null)}
                               </span>
                             ) : (
-                              <button className="text-[#3a6bc9] hover:underline">Add University Exam</button>
+                              <button onClick={() => setSelectedUeData({ examGuid: row.universityExamGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })} className="text-[#3a6bc9] hover:underline">Add University Exam</button>
                             )}
                           </div>
                         ) : (
@@ -357,6 +359,11 @@ export default function IaCreationPage() {
             unitCode: viewingRow.unitCode ?? '',
             unitName: viewingRow.unitName ?? ''
           })}
+          onEditUe={(guid) => setSelectedUeData({
+            examGuid: guid,
+            unitCode: viewingRow.unitCode ?? '',
+            unitName: viewingRow.unitName ?? ''
+          })}
         />
       )}
 
@@ -372,6 +379,14 @@ export default function IaCreationPage() {
         testGuid={selectedCbtData?.testGuid || null}
         unitCode={selectedCbtData?.unitCode || ''}
         unitName={selectedCbtData?.unitName || ''}
+      />
+
+      <UeScheduleModal
+        isOpen={!!selectedUeData}
+        onClose={() => setSelectedUeData(null)}
+        examGuid={selectedUeData?.examGuid || null}
+        unitCode={selectedUeData?.unitCode || ''}
+        unitName={selectedUeData?.unitName || ''}
       />
     </div>
   )
