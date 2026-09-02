@@ -10,18 +10,14 @@ import { StudentLookup } from '@/components/student/StudentLookup'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
 import { StudentDto } from '@/lib/api/student/student'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
+import { useFeeTransferContext, useFeeTransferHistory, useExecuteFeeTransfer } from '@/hooks/student/useFeeTransfer'
+import { useProgramTransferFeeStructures } from '@/hooks/student/useProgramTransfer'
 
 export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
   const [student, setStudent] = useState<StudentDto | null>(null)
-  
-  // Mock target fee structures
-  const feeStructures = [
-    { value: 'FEE-1', label: 'BSC.AIML.CE.LCL.FL25 (BSC.AIML.CE.LCL.FL25)' },
-    { value: 'FEE-2', label: 'BSC.VFX.FL.25.LCL (BSC.VFX.FL.25.LCL)' }
-  ]
   const [targetFeeStructure, setTargetFeeStructure] = useState('')
   const [applyPrevious, setApplyPrevious] = useState(false)
   const [remarks, setRemarks] = useState('')
@@ -30,10 +26,20 @@ export default function Page() {
   const [page, setPage] = useState(1)
   const itemsPerPage = 10
   
-  // Mock history
-  const [history, setHistory] = useState([
-    { id: '1', code: 'FT/20261/691', date: '02/09/2026', oldFee: 'BSC.VFX.FL.25.LCL(BSC.VFX.FL.25.LCL)', newFee: 'BSC.AIML.CE.LCL.FL25(BSC.AIML.CE.LCL.FL25)' }
-  ])
+  // Queries
+  const { data: ctx, isFetching: loadingCtx } = useFeeTransferContext(student?.studentGuid || null, !!student)
+  const { data: history = [], isFetching: loadingHistory } = useFeeTransferHistory(student?.studentGuid || null, !!student)
+  const executeTransfer = useExecuteFeeTransfer()
+
+  // Target fee structures from API
+  const { data: feeStructuresRaw = [], isFetching: loadingFeeStructures } = useProgramTransferFeeStructures(ctx?.programGuid || null)
+  
+  const feeStructures = feeStructuresRaw
+    .filter(f => f.feeHdGuid !== ctx?.currentFeeGuid)
+    .map(f => ({
+      value: f.feeHdGuid,
+      label: `${f.feeCode} (${f.feeDesc})`
+    }))
 
   function handleLoad(s: StudentDto) { setStudent(s); showToast(`${s.studentName} loaded`, 'ok') }
   function handleClear() {
@@ -47,23 +53,28 @@ export default function Page() {
   const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage))
   const paginatedHistory = history.slice((page - 1) * itemsPerPage, page * itemsPerPage)
 
-  const canExecute = !!(student && targetFeeStructure && remarks.trim())
+  const canExecute = !!(student && targetFeeStructure && remarks.trim() && !executeTransfer.isPending)
 
-  function executeTransfer() {
-    if (!canExecute) return
-    const newFee = feeStructures.find(f => f.value === targetFeeStructure)?.label || ''
-    const newRecord = {
-      id: Date.now().toString(),
-      code: `FT/20261/${Math.floor(Math.random() * 1000)}`,
-      date: new Date().toLocaleDateString('en-GB'),
-      oldFee: 'BSC.VFX.FL.25.LCL(BSC.VFX.FL.25.LCL)',
-      newFee
-    }
-    setHistory(prev => [newRecord, ...prev])
-    setShowSuccess(true)
-    setTargetFeeStructure('')
-    setApplyPrevious(false)
-    setRemarks('')
+  function handleSubmit() {
+    if (!canExecute || !student) return
+    executeTransfer.mutate({
+      studentGuid: student.studentGuid,
+      payload: {
+        newFeeGuid: targetFeeStructure,
+        changeAllSemesters: applyPrevious,
+        remarks: remarks.trim()
+      }
+    }, {
+      onSuccess: () => {
+        setShowSuccess(true)
+        setTargetFeeStructure('')
+        setApplyPrevious(false)
+        setRemarks('')
+      },
+      onError: (err: any) => {
+        showToast(err.message || 'Transfer failed', 'error')
+      }
+    })
   }
 
   return (
@@ -89,16 +100,16 @@ export default function Page() {
         {student && (
           <>
             <BaselinePanel
-              label="Student Details (Read-Only)"
+              label={loadingCtx ? "Student Details (Loading...)" : "Student Details (Read-Only)"}
               items={[
-                { label: 'Name', value: student.studentName },
-                { label: 'Student Number', value: student.studentNum || student.studentRegNo || '—' },
-                { label: 'Programme', value: student.programName || '—' },
-                { label: 'Campus', value: 'ISBAT University - Main Campus' },
-                { label: 'Semester', value: student.semesterName || '—' },
-                { label: 'Batch', value: student.batchCode || '—', accent: true },
-                { label: 'Intake', value: '20261' },
-                { label: 'Fee Structure', value: 'BSC.AIML.CE.LCL.FL25 (BSC.AIML.CE.LCL.FL25)' },
+                { label: 'Name', value: ctx?.studentName || student.studentName },
+                { label: 'Student Number', value: ctx?.studentRegNo || student.studentNum || student.studentRegNo || '—' },
+                { label: 'Programme', value: ctx?.programName || student.programName || '—' },
+                { label: 'Campus', value: ctx?.campusName || 'ISBAT University - Main Campus' },
+                { label: 'Semester', value: ctx?.semesterName || student.semesterName || '—' },
+                { label: 'Batch', value: ctx?.batchName || student.batchCode || '—', accent: true },
+                { label: 'Intake', value: ctx?.intakeName || '—' },
+                { label: 'Fee Structure', value: ctx?.currentFeeDesc || '—' },
               ]}
             />
             
@@ -130,14 +141,19 @@ export default function Page() {
                 </div>
               </div>
               <div className="flex gap-2" style={{ justifyContent: 'flex-start', marginTop: 8 }}>
-                <button className="btn btn-primary" disabled={!canExecute} onClick={executeTransfer}><i className="lni lni-checkmark"></i> Submit</button>
+                <button className="btn btn-primary" disabled={!canExecute} onClick={handleSubmit}>
+                  {executeTransfer.isPending ? <i className="lni lni-spinner lni-spin"></i> : <i className="lni lni-checkmark"></i>} Submit
+                </button>
                 <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
               </div>
             </div>
 
             <div className="card">
               <div className="card-hdr">
-                <div className="card-title"><i className="lni lni-alarm-clock"></i> Fee Structure Transfers</div>
+                <div className="card-title">
+                  <i className="lni lni-alarm-clock"></i> Fee Structure Transfers
+                  {loadingHistory && <span style={{ marginLeft: 8, fontSize: 13, color: 'var(--g500)', fontWeight: 400 }}>(Loading...)</span>}
+                </div>
               </div>
               <ScrollTable>
                 <table>
@@ -155,16 +171,16 @@ export default function Page() {
                       <EmptyState colSpan={5} title="No transfers found" subtitle="This student has no fee structure transfer history." />
                     ) : (
                       paginatedHistory.map(r => (
-                        <tr key={r.id}>
+                        <tr key={r.feeTransferGuid}>
                           <td>
                             <ActionMenu>
                               <button className="btn btn-neu btn-sm" onClick={() => alert('View action triggered')}><i className="lni lni-eye"></i> View</button>
                             </ActionMenu>
                           </td>
-                          <td className="font-mono text-blue">{r.code}</td>
-                          <td>{r.date}</td>
-                          <td>{r.oldFee}</td>
-                          <td>{r.newFee}</td>
+                          <td className="font-mono text-blue">{r.transferCode}</td>
+                          <td>{new Date(r.transferDate).toLocaleDateString('en-GB')}</td>
+                          <td>{r.oldFeeDesc || r.oldFeeCode || '—'}</td>
+                          <td>{r.newFeeDesc || r.newFeeCode || '—'}</td>
                         </tr>
                       ))
                     )}

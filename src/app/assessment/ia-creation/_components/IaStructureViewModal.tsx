@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { IaStructureRowDto } from '@/lib/api/assessment/iaCreation'
 import { useIaTestSchedule } from '@/hooks/assessment/useIaTestSchedule'
 import { useIaCwSchedule } from '@/hooks/assessment/useIaCwSchedule'
+import { useIaUeSchedule } from '@/hooks/assessment/useIaUeSchedule'
 
 interface Props {
   row: IaStructureRowDto | null
@@ -13,14 +14,16 @@ interface Props {
   onClose: () => void
   onEditCw?: (courseworkGuid: string) => void
   onEditCt?: (classTestGuid: string) => void
+  onEditUe?: (universityExamGuid: string) => void
 }
 
-export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw, onEditCt }: Props) {
+export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw, onEditCt, onEditUe }: Props) {
   const [activeTab, setActiveTab] = useState<'CW' | 'CT' | 'UE'>('CT')
   
-  // Fetch details for CT and CW
+  // Fetch details for CT, CW, and UE
   const { data: ctSchedule, isLoading: ctLoading } = useIaTestSchedule(row?.classTestGuid || null)
   const { data: cwSchedule, isLoading: cwLoading } = useIaCwSchedule(row?.courseworkGuid || null)
+  const { data: ueSchedule, isLoading: ueLoading } = useIaUeSchedule(row?.universityExamGuid || null)
 
   if (!row) return null
 
@@ -182,39 +185,52 @@ export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw
 
             {activeTab === 'UE' && (
               <>
-                {/* Max Mark removed as requested */}
-                {/*
-                <div>
-                  <div className="text-[12.5px] font-medium text-g500 mb-1">Max Mark</div>
-                  <div className="text-[14.5px] text-g900">{row.universityExamMaxMark ?? '—'}</div>
-                </div>
-                */}
-                <div>
-                  <div className="text-[12.5px] font-medium text-g500 mb-1">Start Date & Time</div>
-                  <div className="text-[14.5px] text-g900">{formatDate(row.examDate && row.examStartTime ? `${row.examDate}T${row.examStartTime}` : null)}</div>
-                </div>
-                <div>
-                  <div className="text-[12.5px] font-medium text-g500 mb-1">End Date & Time</div>
-                  <div className="text-[14.5px] text-g900">{formatDate(row.examDate && row.examEndTime ? `${row.examDate}T${row.examEndTime}` : null)}</div>
-                </div>
+                {ueLoading ? (
+                  <div className="col-span-3 py-8 text-center text-g500">Loading University Exam details...</div>
+                ) : ueSchedule ? (
+                  <>
+                    <div>
+                      <div className="text-[12.5px] font-medium text-g500 mb-1">Exam Date</div>
+                      <div className="text-[14.5px] text-g900">{formatDate(ueSchedule.examDate && ueSchedule.startTime ? `${ueSchedule.examDate.split('T')[0]}T${ueSchedule.startTime}` : null).split(',')[0]}</div>
+                    </div>
+                    <div>
+                      <div className="text-[12.5px] font-medium text-g500 mb-1">Start Time</div>
+                      <div className="text-[14.5px] text-g900">{ueSchedule.startTime ?? '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[12.5px] font-medium text-g500 mb-1">End Time</div>
+                      <div className="text-[14.5px] text-g900">{ueSchedule.endTime ?? '—'}</div>
+                    </div>
 
-                <div>
-                  <div className="text-[12.5px] font-medium text-g500 mb-1">Duration</div>
-                  <div className="text-[14.5px] text-g900">—</div>
-                </div>
-                <div>
-                  <div className="text-[12.5px] font-medium text-g500 mb-1">Test Type</div>
-                  <div className="text-[14.5px] text-g900">—</div>
-                </div>
-                <div>
-                  <div className="text-[12.5px] font-medium text-g500 mb-1">Publish Status</div>
-                  <div className="text-[14.5px] text-g900">—</div>
-                </div>
+                    <div>
+                      <div className="text-[12.5px] font-medium text-g500 mb-1">Max Mark</div>
+                      <div className="text-[14.5px] text-g900">{ueSchedule.maxMark ?? '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[12.5px] font-medium text-g500 mb-1">Exam Type</div>
+                      <div className="text-[14.5px] text-g900">{ueSchedule.examType === 1 ? 'Offline' : (ueSchedule.examType === 0 ? 'Online' : '—')}</div>
+                    </div>
+                    <div>
+                      <div className="text-[12.5px] font-medium text-g500 mb-1">UE Type</div>
+                      <div className="text-[14.5px] text-g900">{ueSchedule.universityExamType === 1 ? 'Practical' : (ueSchedule.universityExamType === 0 ? 'Theory' : '—')}</div>
+                    </div>
+                    <div>
+                      <div className="text-[12.5px] font-medium text-g500 mb-1">Publish Status</div>
+                      <div className="text-[14.5px] text-g900">
+                        {ueSchedule.publishStatus === 1 ? 'Published' : 'Unpublished'}
+                      </div>
+                    </div>
 
-                <div className="col-span-3">
-                  <div className="text-[12.5px] font-medium text-g500 mb-1">Exam Rule</div>
-                  <div className="text-[14.5px] text-g900">—</div>
-                </div>
+                    <div className="col-span-3">
+                      <div className="text-[12.5px] font-medium text-g500 mb-1">Exam Rule</div>
+                      <div className="text-[14.5px] text-g900">
+                        {ueSchedule.examRuleCode ? `${ueSchedule.examRuleCode} — ${ueSchedule.examRuleName}` : 'No rule linked'}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="col-span-3 py-8 text-center text-g500 italic">No detailed schedule found for this University Exam.</div>
+                )}
               </>
             )}
             
@@ -229,6 +245,10 @@ export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw
             </button>
           ) : activeTab === 'CW' && row.courseworkGuid ? (
             <button className="btn btn-primary" style={{ padding: '8px 20px', borderRadius: '6px' }} onClick={() => { onClose(); onEditCw?.(row.courseworkGuid!); }}>
+              Edit
+            </button>
+          ) : activeTab === 'UE' && row.universityExamGuid ? (
+            <button className="btn btn-primary" style={{ padding: '8px 20px', borderRadius: '6px' }} onClick={() => { onClose(); onEditUe?.(row.universityExamGuid!); }}>
               Edit
             </button>
           ) : (
