@@ -124,21 +124,21 @@ export function searchStudentStatement(filters: StudentStatementSearchFilters, p
   if (filters.studentName?.trim()) params.set('studentName', filters.studentName.trim())
   params.set('pageNumber', String(page))
   params.set('pageSize', String(pageSize))
-  return apiGet<PagedResult<StudentStatementSearchResultDto> | null>(`/api/v1/student/studentstatement/search?${params.toString()}`)
+  return apiGet<PagedResult<StudentStatementSearchResultDto> | null>(`/api/v1/students/studentstatement/search?${params.toString()}`)
     .then(data => data ?? { items: [], totalCount: 0, page, pageSize })
 }
 
 export function getStudentStatement(studentGuid: string): Promise<StudentStatementDto> {
   if (MOCK_AUTH) return Promise.resolve(mockStatement)
-  return apiGet<StudentStatementDto>(`/api/v1/student-statement/${studentGuid}`)
+  return apiGet<StudentStatementDto>(`/api/v1/students/studentstatement/${studentGuid}`)
 }
 
 export function getStudentFeeSummary(studentGuid: string): Promise<GetStudentFeeSummaryDto> {
   if (MOCK_AUTH) return Promise.resolve({ totalAmountToPay: 1500, amountPaid: 600, pendingFee: 900 })
-  return apiGet<GetStudentFeeSummaryDto>(`/api/v1/student-statement/${studentGuid}/fee-summary`)
+  return apiGet<GetStudentFeeSummaryDto>(`/api/v1/students/studentstatement/${studentGuid}/fee-summary`)
 }
 
 export function getStudentStatementPdfUrl(studentGuid: string): string {
   // Returning the URL so the frontend can just window.open or window.location.href it
-  return `/api/v1/student-statement/${studentGuid}/pdf`
+  return `/api/v1/students/studentstatement/${studentGuid}/pdf`
 }
