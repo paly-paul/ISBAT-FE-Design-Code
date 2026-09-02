@@ -84,7 +84,7 @@ export default function Page() {
   function executeTransfer() {
     if (!student || !targetProg || !targetBatch || !targetSemester || !targetFeeStructure) return
     postProgramTransfer.mutate(
-      { studentGuid: student.studentGuid, input: { newProgramId: targetProg, newBatchId: targetBatch, newSemesterId: targetSemester, newFeeId: targetFeeStructure, remarks: remarks.trim() || null } },
+      { studentGuid: student.studentGuid, input: { newProgramGuid: targetProg, newBatchGuid: targetBatch, newSemesterGuid: targetSemester, newFeeGuid: targetFeeStructure, remarks: remarks.trim() || null } },
       {
         onSuccess: result => { showToast(`Programme transfer executed — ${result.programTransferCode}`, 'ok'); setConfirmOpen(false); handleClear() },
         onError: (error: Error) => { showToast(error.message || 'Could not execute programme transfer', 'err'); setConfirmOpen(false) },
