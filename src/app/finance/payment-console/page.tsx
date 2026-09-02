@@ -11,7 +11,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
-import { usePaymentAdvances, PaymentAdvance } from '@/hooks/finance/usePayments'
+import { PaymentAdvance } from '@/hooks/finance/usePayments'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
@@ -377,17 +377,6 @@ export default function PaymentConsolePage() {
   // there even when the search hit had none, so it isn't just a one-time
   // override).
   const studentGuid = profile?.studentGuid ?? selectedStudentGuidHint ?? null
-  // pageSize: 1 — this is purely a "does this student have any advance
-  // deposits at all" check (totalCount), not a list to render here; the
-  // actual browsing happens in AdvanceDepositPickerModal once opened. Per
-  // request (2026-09-01): the Advance Payment checkbox itself shouldn't
-  // even show when this comes back empty, since there'd be nothing to draw
-  // from. No studentGuid (an application that hasn't registered as a
-  // student yet) also hides it — there's no reliable studentGuid to check
-  // against, and no meaningful per-application-only advance history to
-  // offer instead (the applicationGuid filter isn't used, per request).
-  const { data: advanceCheck } = usePaymentAdvances(1, 1, !!selectedApplicationGuid && !!studentGuid, studentGuid)
-  const hasAdvanceDeposits = (advanceCheck?.totalCount ?? 0) > 0
   // Discount-aware replacement for the old useOutstandingLedgers — same
   // current-semester scoping, but each ledger also carries its applicable
   // discount (discountName/discountAmount/netPayable), which
@@ -911,10 +900,19 @@ export default function PaymentConsolePage() {
                       <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={batchCode ?? '—'}>{batchCode ?? '—'}</span></div>
                       <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Year</span><span className="pc-hero-fact-val" title={profile.yearCode ?? '—'}>{profile.yearCode ?? '—'}</span></div>
                       <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Phone</span><span className="pc-hero-fact-val" title={profile.phone ?? '—'}>{profile.phone ?? '—'}</span></div>
+                      {/* Full row to itself (pc-hero-fact-span2) — an email
+                          is typically longer than every other fact here, so
+                          pairing it with a short one would risk the same
+                          uneven-row-height issue the Campus/Semester
+                          pairing above was built to avoid. Was previously
+                          its own plain div sitting below the hero box
+                          entirely, formatted differently from every other
+                          fact — moved in and reformatted to match. */}
+                      <div className="pc-hero-fact pc-hero-fact-span2">
+                        <span className="pc-hero-fact-lbl">Email</span>
+                        <span className="pc-hero-fact-val truncate" title={profile.emailId ?? profile.universityEmail ?? '—'}>{profile.emailId ?? profile.universityEmail ?? '—'}</span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-g500 flex items-center gap-1.5 px-5 pt-4" style={{ fontSize: 11.5 }}>
-                    <i className="lni lni-envelope text-b500"></i> <span className="truncate">{profile.emailId ?? profile.universityEmail ?? '—'}</span>
                   </div>
 
                   {/* Payment History — merged into this same card as a
@@ -1009,11 +1007,11 @@ export default function PaymentConsolePage() {
                     Checking it opens AdvanceDepositPickerModal rather than
                     flipping otherIsAdvance straight away — see
                     toggleAdvancePayment/confirmAdvanceSelection's own
-                    comments. Hidden entirely when this student has no
-                    advance deposits to draw from at all (hasAdvanceDeposits,
-                    per request 2026-09-01) — showing a checkbox that opens
-                    an empty picker isn't useful. */}
-                {hasAdvanceDeposits && (
+                    comments. Always shown now (per request, 2026-09-02) —
+                    the hasAdvanceDeposits gate that used to hide this
+                    entirely when the student had no deposits on record is
+                    gone; the picker itself already has its own empty state
+                    for that case. */}
                 <div className="fg mb-[14px]">
                   <label className="flex items-center gap-2" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
                     <input type="checkbox" checked={otherIsAdvance} onChange={e => toggleAdvancePayment(e.target.checked)} />
@@ -1029,7 +1027,6 @@ export default function PaymentConsolePage() {
                     </div>
                   )}
                 </div>
-                )}
 
                 {/* Live summary strip — same treatment as Tuition's own,
                     purely derived from this form's state. */}

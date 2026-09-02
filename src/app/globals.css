@@ -2325,6 +2325,20 @@ textarea.ctrl {
   }
 }
 
+/* Payment Console Adjustments — same 50/50 .pc-body split as Discount
+   Allocation above. */
+#page-payment-console-adjustments > .pc-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px
+}
+
+@media(max-width:1200px) {
+  #page-payment-console-adjustments > .pc-body {
+    grid-template-columns: 1fr
+  }
+}
+
 /* At mobile widths, collapse every 2-column field-pair grid on this page
    to a single column too — not just the top-level layout grids above.
    Uses a descendant selector (space, not the direct-child ">" the other
@@ -2527,6 +2541,14 @@ textarea.ctrl {
   font-weight: 700;
   overflow-wrap: break-word;
   word-break: break-word;
+}
+
+/* Full-width fact row — for a value long enough to want the row to itself
+   (an email address) rather than being paired with a shorter neighbor,
+   same overflow-avoidance reasoning as the Campus/Semester pairing rule
+   above pc-hero-facts' own definition. */
+.pc-hero-fact-span2 {
+  grid-column: span 2;
 }
 
 /* Pill-style tab switcher (Payment Console's Semester/Other, reused
