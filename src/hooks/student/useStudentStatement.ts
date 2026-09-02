@@ -10,11 +10,18 @@ import { getStudentStatement, searchStudentStatement, StudentStatementSearchFilt
 // itself) so clicking into the empty box — TableSearch's minChars={0} below
 // — opens the dropdown with a result list already in it, rather than an
 // empty state until the first keystroke.
+import { useInfiniteQuery } from '@tanstack/react-query'
+
 export function useStudentStatementSearch(term: string) {
   const trimmed = term.trim()
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['student-statement-search', trimmed],
-    queryFn: () => searchStudentStatement({ studentName: trimmed }, 1, 15),
+    queryFn: ({ pageParam = 1 }) => searchStudentStatement({ studentName: trimmed }, pageParam, 15),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      const loaded = lastPage.page * lastPage.pageSize
+      return loaded < lastPage.totalCount ? lastPage.page + 1 : undefined
+    },
   })
 }
 

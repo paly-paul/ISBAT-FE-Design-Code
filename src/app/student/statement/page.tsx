@@ -34,10 +34,16 @@ export default function Page() {
   const [term, setTerm] = useState('')
   const [selectedGuid, setSelectedGuid] = useState<string | null>(null)
 
-  const { data: searchPage, isLoading: isSearching } = useStudentStatementSearch(term)
-  const matches = searchPage?.items ?? []
+  const {
+    data: searchPages,
+    isLoading: isSearching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage
+  } = useStudentStatementSearch(term)
+  const matches = searchPages?.pages.flatMap(p => p.items) ?? []
 
-  const { data: statement, isLoading: isStatementLoading, isError: isStatementError } = useStudentStatement(selectedGuid)
+  const { data: statement, isLoading: isStatementLoading, isError: isStatementError, error: statementError } = useStudentStatement(selectedGuid)
   const header = statement?.header
   const paymentHistory = statement?.paymentHistory ?? []
   const outstandingItems = statement?.outstandingItems ?? []
@@ -75,6 +81,9 @@ export default function Page() {
           minChars={0}
           results={matches.map(m => ({ id: m.studentGuid, primary: m.studentName ?? '—', secondary: [m.studentRegNo, m.programName].filter(Boolean).join(' · ') }))}
           onSelect={r => handleSelect(r.id)}
+          onLoadMore={() => hasNextPage && fetchNextPage()}
+          hasMore={hasNextPage}
+          loadingMore={isFetchingNextPage}
         />
       </div>
 
@@ -87,7 +96,7 @@ export default function Page() {
       ) : isStatementLoading ? (
         <div className="text-g400 text-center" style={{ padding: 24 }}>Loading statement…</div>
       ) : isStatementError || !header ? (
-        <div className="text-clr-red text-center" style={{ padding: 24 }}><i className="lni lni-warning"></i> Couldn&apos;t load this student&apos;s statement.</div>
+        <div className="text-clr-red text-center" style={{ padding: 24 }}><i className="lni lni-warning"></i> {statementError instanceof Error && statementError.message && statementError.message !== 'not_found' ? statementError.message : "Couldn't load this student's statement."}</div>
       ) : (
         <>
           <div className="card" style={{ marginBottom: 16 }}>
