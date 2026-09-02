@@ -22,9 +22,11 @@ const PAGE_SIZE = 10
 // that lists specializations independent of a batch, so the old mock
 // "Specializations" master table (name/programme/headcount, edit-in-place)
 // doesn't map onto this API and was replaced with the actual assignment
-// flow. Discount Management (a different, unrelated resource — see its own
-// page) used to share this page and was split out per request into
-// /student/discount-management.
+// flow. Discount Management (a different, unrelated resource) used to share
+// this page, was split out into its own /student/discount-management page,
+// and was later removed from the Students module entirely (2026-09-02) —
+// it duplicated Finance > Discounts (the catalogue CRUD) and Finance >
+// Discount Allocation (the per-student assignment) both already cover.
 export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }

@@ -46,26 +46,40 @@ import { AuthError } from '@/lib/api/client'
 function OutstandingCategoryTable({ items, isLoading, isError }: { items: AllOutstandingItem[]; isLoading: boolean; isError: boolean }) {
   if (isLoading) return <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading outstanding balance…</div>
   if (isError) return <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load the outstanding balance.</div>
-  if (items.length === 0) return <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Fully settled — nothing outstanding in this category.</div>
+  // Matches Tuition's own "Fully settled" empty state (a checkmark
+  // medallion + heading + subtext) instead of a bare line of grey text, so
+  // the two tabs read as the same design system rather than one looking
+  // finished and the other looking like a placeholder.
+  if (items.length === 0) return (
+    <div className="text-center" style={{ padding: 24 }}>
+      <div className="pc-receipt-check" style={{ fontSize: 22 }}><i className="lni lni-checkmark-circle"></i></div>
+      <div className="font-bold text-g700" style={{ fontSize: 13.5 }}>Fully settled</div>
+      <div className="text-g400 mt-1" style={{ fontSize: 12.5 }}>Nothing outstanding in this category — there is nothing to bill right now.</div>
+    </div>
+  )
   const total = items.reduce((sum, it) => sum + it.outstanding, 0)
   return (
     <>
-      {/* Label-left/value-right rows (.receipt-row), same treatment as
-          Step 2's own tuition ledger list — matches the reference
-          "Completing Registration" panel's layout instead of a
-          Description/Semester/Outstanding table. */}
+      {/* Itemized card rows (.pc-ledger-item), same treatment as Step 2's
+          own tuition ledger list — matches the reference "Completing
+          Registration" panel's layout instead of a Description/Semester/
+          Outstanding table. */}
       {items.map((it, i) => (
-        <div className="receipt-row" key={`${it.ledgerGuid ?? it.description}-${i}`}>
-          <span className="text-muted">{it.description}{it.semesterName ? ` — ${it.semesterName}` : ''}</span>
-          <span className="flex items-baseline gap-1.5 justify-end">
+        <div className="pc-ledger-item" key={`${it.ledgerGuid ?? it.description}-${i}`}>
+          <span className="pc-ledger-icon"><i className="lni lni-wallet"></i></span>
+          <div className="flex-1 min-w-0">
+            <div className="pc-ledger-name truncate">{it.description}</div>
+            {it.semesterName && <div className="pc-ledger-sub">{it.semesterName}</div>}
+          </div>
+          <span className="flex items-baseline gap-1.5 justify-end flex-shrink-0">
             {it.currencyCode && <span className="text-g400 font-semibold" style={{ fontSize: 11 }}>{it.currencyCode}</span>}
-            <span className="font-bold text-amber">{it.outstanding.toLocaleString()}</span>
+            <span className="font-bold text-amber">{fmtAmt(it.outstanding)}</span>
           </span>
         </div>
       ))}
-      <div className="mt-[10px] p-3 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100 flex justify-between items-center">
+      <div className="pc-total-due">
         <span className="text-muted" style={{ fontSize: 12 }}>Total Outstanding</span>
-        <span className="font-bold text-blue">{total.toLocaleString()}</span>
+        <span className="font-bold text-amber" style={{ fontSize: 15 }}>{fmtAmt(total)}</span>
       </div>
     </>
   )
@@ -99,6 +113,15 @@ function DiscountDetails({ ledgers, totals }: { ledgers: CurrentSemesterPayableL
       ))}
     </div>
   )
+}
+
+// Outstanding/total figures (Outstanding Balance, Total Outstanding, Total
+// Due) always render with exactly 2 decimal places, matching how these
+// amounts are quoted elsewhere in Finance — plain toLocaleString() would
+// drop the decimals entirely for a whole-number amount (e.g. "500" instead
+// of "500.00"), which reads as imprecise next to a currency figure.
+function fmtAmt(n: number) {
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function applicantName(a: { firstName: string | null; lastName: string | null }) {
@@ -829,25 +852,23 @@ export default function PaymentConsolePage() {
             and the g2/g3 three-column split. */}
         {selectedApplicationGuid && (
         <>
-          <div className="card p-0 overflow-hidden">
-            <div className="tab-bar">
-              <button
-                className={`tab-btn${activePayTab === 'tuition' ? ' active' : ''}`}
-                onClick={() => setActivePayTab('tuition')}
-              >
-                <i className="lni lni-graduation"></i> Semester Payment
-              </button>
-              {/* NCHE and Guild are dropped from this page — they'll get
-                  their own pages later — so "Other Payment" is just the
-                  Other-category form now, no inner sub-tab switcher
-                  needed. */}
-              <button
-                className={`tab-btn${activePayTab === 'other' ? ' active' : ''}`}
-                onClick={() => setActivePayTab('other')}
-              >
-                <i className="lni lni-wallet"></i> Other Payment
-              </button>
-            </div>
+          <div className="pc-tabs">
+            <button
+              className={`pc-tab-btn${activePayTab === 'tuition' ? ' active' : ''}`}
+              onClick={() => setActivePayTab('tuition')}
+            >
+              <i className="lni lni-graduation"></i> Semester Payment
+            </button>
+            {/* NCHE and Guild are dropped from this page — they'll get
+                their own pages later — so "Other Payment" is just the
+                Other-category form now, no inner sub-tab switcher
+                needed. */}
+            <button
+              className={`pc-tab-btn${activePayTab === 'other' ? ' active' : ''}`}
+              onClick={() => setActivePayTab('other')}
+            >
+              <i className="lni lni-wallet"></i> Other Payment
+            </button>
           </div>
 
           <div className="pc-body">
@@ -857,35 +878,43 @@ export default function PaymentConsolePage() {
                 modal it was in before this redesign. */}
             <div className="flex flex-col gap-5 min-w-0">
               {profile && (
-                <div className="card">
-                  <div className="card-hdr">
-                    <div className="card-title"><span className="ctitle-icon"><i className="lni lni-user"></i></span> Profile Details</div>
-                  </div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <div className="w-14 h-14 rounded-full flex-shrink-0 grid place-items-center text-white font-extrabold" style={{ background: 'linear-gradient(135deg,var(--b700),var(--b500))', fontSize: 17 }}>
-                      {initialsFor(applicantName(profile))}
+                <div className="card p-0 overflow-hidden">
+                  {/* Hero header, gradient-on-brand — replaces the old
+                      plain card-hdr + avatar row so the Profile Details
+                      block reads as a summary banner rather than a form,
+                      matching the reference layouts' glossy header treatment. */}
+                  <div className="pc-hero">
+                    <div className="pc-hero-top">
+                      <div className="pc-hero-avatar">{initialsFor(applicantName(profile))}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="pc-hero-name truncate">{applicantName(profile)}</div>
+                        <div className="pc-hero-sub truncate">{programName ?? '—'}</div>
+                        <span className="pc-hero-badge"><i className="lni lni-bookmark"></i> {profile.appRefNo}</span>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-extrabold text-g900" style={{ fontSize: 15.5 }}>{applicantName(profile)}</div>
-                      <div className="text-g500 text-xs truncate">{programName ?? '—'}</div>
+                    <div className="pc-hero-facts">
+                      {/* title on each value gives the full text as a native
+                          hover tooltip when it's long enough to be
+                          ellipsis-truncated by pc-hero-fact-val, without
+                          letting a long value wrap and break the grid's row
+                          alignment (confirmed live: wrapping "ISBAT
+                          University - Main Campus" etc. staggered every row
+                          after it out of alignment). */}
+                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val" title={campusName ?? '—'}>{campusName ?? '—'}</span></div>
+                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Semester</span><span className="pc-hero-fact-val" title={semName ?? '—'}>{semName ?? '—'}</span></div>
+                      {/* Guards against the literal string "null" —
+                          confirmed live on an application with no intake
+                          assigned yet, this field can come back as the
+                          4-char string "null" rather than a real null,
+                          which ?? alone doesn't catch. */}
+                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Intake</span><span className="pc-hero-fact-val" title={profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}>{profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}</span></div>
+                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={batchCode ?? '—'}>{batchCode ?? '—'}</span></div>
+                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Year</span><span className="pc-hero-fact-val" title={profile.yearCode ?? '—'}>{profile.yearCode ?? '—'}</span></div>
+                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Phone</span><span className="pc-hero-fact-val" title={profile.phone ?? '—'}>{profile.phone ?? '—'}</span></div>
                     </div>
                   </div>
-                  <div className="mb-3">
-                    <span className="badge badge-blue font-mono"><i className="lni lni-bookmark"></i> {profile.appRefNo}</span>
-                  </div>
-                  <div className="pc-fact-grid">
-                    <div className="pc-fact"><i className="lni lni-map-marker"></i><div><span className="pc-fact-lbl">Campus</span><span className="pc-fact-val">{campusName ?? '—'}</span></div></div>
-                    <div className="pc-fact"><i className="lni lni-calendar"></i><div><span className="pc-fact-lbl">Semester</span><span className="pc-fact-val">{semName ?? '—'}</span></div></div>
-                    {/* Guards against the literal string "null" — confirmed
-                        live on an application with no intake assigned yet,
-                        this field can come back as the 4-char string
-                        "null" rather than a real null, which ?? alone
-                        doesn't catch. */}
-                    <div className="pc-fact"><i className="lni lni-calendar"></i><div><span className="pc-fact-lbl">Intake</span><span className="pc-fact-val">{profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}</span></div></div>
-                    <div className="pc-fact"><i className="lni lni-graduation"></i><div><span className="pc-fact-lbl">Batch</span><span className="pc-fact-val">{batchCode ?? '—'}</span></div></div>
-                    <div className="pc-fact"><i className="lni lni-calendar"></i><div><span className="pc-fact-lbl">Year</span><span className="pc-fact-val">{profile.yearCode ?? '—'}</span></div></div>
-                    <div className="pc-fact"><i className="lni lni-phone"></i><div><span className="pc-fact-lbl">Phone</span><span className="pc-fact-val">{profile.phone ?? '—'}</span></div></div>
-                    <div className="pc-fact pc-fact-span2"><i className="lni lni-envelope"></i><div><span className="pc-fact-lbl">Email</span><span className="pc-fact-val truncate">{profile.emailId ?? profile.universityEmail ?? '—'}</span></div></div>
+                  <div className="text-g500 flex items-center gap-1.5 px-5 pt-4" style={{ fontSize: 11.5 }}>
+                    <i className="lni lni-envelope text-b500"></i> <span className="truncate">{profile.emailId ?? profile.universityEmail ?? '—'}</span>
                   </div>
 
                   {/* Payment History — merged into this same card as a
@@ -893,6 +922,7 @@ export default function PaymentConsolePage() {
                       separate card below, matching the "Payment Detail"
                       sec-divider convention the right column's own cards
                       already use rather than a second card-hdr. */}
+                  <div className="px-5 pb-5">
                   <div className="sec-divider"><i className="lni lni-folder"></i> Payment History</div>
                   {isHistoryLoading ? (
                     <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading payment history…</div>
@@ -923,6 +953,7 @@ export default function PaymentConsolePage() {
                     <Pagination page={historyPage} totalPages={historyTotalPages} totalCount={tuitionPaymentHistory.length} itemLabel="payments" onPageChange={setHistoryPage} />
                     </>
                   )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1000,6 +1031,20 @@ export default function PaymentConsolePage() {
                 </div>
                 )}
 
+                {/* Live summary strip — same treatment as Tuition's own,
+                    purely derived from this form's state. */}
+                {otherAmount.trim() && (
+                  <div className="pc-pay-summary">
+                    <div>
+                      <div className="pc-pay-lbl">Amount to Collect</div>
+                      <div className="pc-pay-amt">{currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyCode ?? ''} {(parseFloat(otherAmount) || 0).toLocaleString()}</div>
+                    </div>
+                    <div className="pc-pay-meta">
+                      <div><span>Date</span><b>{otherPayDate}</b></div>
+                      <div><span>Method</span><b>{otherIsAdvance ? 'Advance Draw-down' : (PAY_TYPE_LABELS[Number(otherPayType)] ?? `Type ${otherPayType}`)}</b></div>
+                    </div>
+                  </div>
+                )}
                 {/* Currency + Amount paired, amount on the right — same
                     pairing as Tuition's own Currency/Amount row. */}
                 <div className="g2 mb-[14px]">
@@ -1123,11 +1168,14 @@ export default function PaymentConsolePage() {
                   isLedgersLoading ? (
                     <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading ledgers…</div>
                   ) : ledgers.length === 0 ? (
-                    <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No outstanding tuition ledgers for this application.</div>
+                    // No separate "nothing outstanding" line here — the
+                    // fully-settled checkmark block below (after the
+                    // Payment Detail divider) already says this; showing
+                    // both back to back just repeated the same message twice.
+                    null
                   ) : (
                     <div>
-                      {/* Label-left/value-right rows (.receipt-row — same
-                          class the receipt card below already uses), one per
+                      {/* Itemized card rows (.pc-ledger-item), one per
                           current-semester ledger — get-current-semester-
                           payable-ledgers.md is already scoped server-side to
                           "this semester" (+ any carried-forward semester-1
@@ -1149,12 +1197,16 @@ export default function PaymentConsolePage() {
                         const isLibraryDeposit = l.ledgerName.trim().toLowerCase() === 'library deposit'
                         return (
                           <div key={`${l.ledgerGuid ?? 'none'}-${i}`}>
-                            <div className="receipt-row">
-                              <span className="text-muted">{l.ledgerName}{l.ledgerNum ? ` (${l.ledgerNum})` : ''}{isPaid ? ' (paid)' : ''}</span>
-                              <span className="flex items-baseline gap-1.5 justify-end">
+                            <div className={`pc-ledger-item${isPaid ? ' paid' : ''}`}>
+                              <span className="pc-ledger-icon"><i className={isPaid ? 'lni lni-checkmark-circle' : 'lni lni-invoice'}></i></span>
+                              <div className="flex-1 min-w-0">
+                                <div className="pc-ledger-name truncate">{l.ledgerName}{l.ledgerNum ? ` (${l.ledgerNum})` : ''}</div>
+                                {isPaid && <div className="pc-ledger-sub">Paid</div>}
+                              </div>
+                              <span className="flex items-baseline gap-1.5 justify-end flex-shrink-0">
                                 <span className="text-g400 font-semibold" style={{ fontSize: 11 }}>{l.currencyName}</span>
                                 <span className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>
-                                  {isPaid ? `${l.paidAmount.toLocaleString()} ✓` : l.netPayable.toLocaleString()}
+                                  {isPaid ? fmtAmt(l.paidAmount) : fmtAmt(l.netPayable)}
                                 </span>
                               </span>
                             </div>
@@ -1165,6 +1217,16 @@ export default function PaymentConsolePage() {
                       {!ledgers.some(l => l.ledgerName.trim().toLowerCase() === 'library deposit') && (
                         <DiscountDetails ledgers={ledgers} totals={ledgerTotals} />
                       )}
+                      {/* Total Net Payable across every currency present this
+                          semester — purely a display sum of the totals the
+                          server already returned (totalNetPayable per
+                          currency), not a new figure computed client-side. */}
+                      {ledgerTotals.filter(t => t.totalNetPayable > 0).map(t => (
+                        <div className="pc-total-due" key={t.currencyGuid ?? t.currencyName}>
+                          <span className="text-muted" style={{ fontSize: 12 }}>Total Due ({t.currencyName})</span>
+                          <span className="font-bold text-amber" style={{ fontSize: 15 }}>{fmtAmt(t.totalNetPayable)}</span>
+                        </div>
+                      ))}
                     </div>
                   )
                 }
@@ -1188,13 +1250,30 @@ export default function PaymentConsolePage() {
                 )}
                 {!receipt && !isLedgersLoading && ledgers.length === 0 && (
                   <div className="text-center" style={{ padding: 24 }}>
-                    <div className="mb-2 text-green" style={{ fontSize: 28 }}><i className="lni lni-checkmark-circle"></i></div>
+                    <div className="pc-receipt-check" style={{ fontSize: 22 }}><i className="lni lni-checkmark-circle"></i></div>
                     <div className="font-bold text-g700" style={{ fontSize: 13.5 }}>Fully settled</div>
                     <div className="text-g400 mt-1" style={{ fontSize: 12.5 }}>This application has no outstanding tuition ledgers — there is nothing to bill right now.</div>
                   </div>
                 )}
                 {!receipt && !isLedgersLoading && ledgers.length > 0 && (
                   <>
+                    {/* Live summary strip — mirrors the amount/currency/date/
+                        method already entered below back at the cashier as
+                        a glanceable card, purely derived from this form's
+                        own state (no extra fetch). Only shows once an
+                        amount has actually been typed. */}
+                    {amount.trim() && (
+                      <div className="pc-pay-summary">
+                        <div>
+                          <div className="pc-pay-lbl">Amount to Collect</div>
+                          <div className="pc-pay-amt">{selectedCurrency?.currencyCode ?? ''} {(parseFloat(amount) || 0).toLocaleString()}</div>
+                        </div>
+                        <div className="pc-pay-meta">
+                          <div><span>Date</span><b>{payDate}</b></div>
+                          <div><span>Method</span><b>{PAY_TYPE_LABELS[Number(payType)] ?? `Type ${payType}`}</b></div>
+                        </div>
+                      </div>
+                    )}
                     {/* Currency + Amount paired, amount on the right, per
                         request — then Date + Method paired, then Receipt
                         Book on its own row. */}
@@ -1350,6 +1429,7 @@ export default function PaymentConsolePage() {
                     existed anywhere in this app. Now only this card prints. */}
                 <div className="receipt-print-area border border-g200 rounded-xl p-5 bg-g50">
                   <div className="text-center mb-4 pb-3 border-b border-g200">
+                    <div className="pc-receipt-check"><i className="lni lni-checkmark-circle"></i></div>
                     <h3 className="font-bold text-g900" style={{ fontSize: 'var(--fs-lg)' }}>ISBAT University</h3>
                     <p className="text-g500" style={{ fontSize: 'var(--fs-xs)' }}>Institute of Skill Development And Training</p>
                     <p className="text-g400" style={{ fontSize: 11 }}><i className="lni lni-map-marker"></i> Kampala, Uganda · erp.isbatuniversity.ac.ug</p>

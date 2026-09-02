@@ -62,3 +62,4 @@ export function useActiveAssignmentCount(discountGuid: string | null, enabled: b
 }
 
 export type { StudentDiscountDto, AssignStudentDiscountRequest, UpdateStudentDiscountRequest } from '@/lib/api/student/studentDiscount'
+export { DISCOUNT_STATUS_VALUES, DISCOUNT_STATUS_LABELS } from '@/lib/api/student/studentDiscount'

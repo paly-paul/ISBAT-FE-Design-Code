@@ -10,7 +10,7 @@ import { StudentDto } from '@/lib/api/student/student'
 import { useIdCard, useIssueOrRenewIdCard, useUpdateIdCardDates, getIdCardQrImageUrl, currentCardIssue } from '@/hooks/student/useIdCards'
 import { useSponsorDetails, useSponsorCategories, useAssignSponsorCategory } from '@/hooks/student/useSponsor'
 import { useStudentRefugeeDetails, useAssignRefugeeStatus, useRemoveRefugeeStatus } from '@/hooks/student/useRefugee'
-import { useStudentDiscount, useAssignStudentDiscount, useUpdateStudentDiscount, useCancelStudentDiscount } from '@/hooks/student/useStudentDiscount'
+import { useStudentDiscount, useAssignStudentDiscount, useUpdateStudentDiscount, useCancelStudentDiscount, DISCOUNT_STATUS_VALUES, StudentDiscountDto } from '@/hooks/student/useStudentDiscount'
 import { useDiscounts } from '@/hooks/finance/useDiscounts'
 import { CALC_TYPE_VALUES } from '@/lib/api/finance/discount'
 import { formatDate } from '@/lib/date'
@@ -69,6 +69,17 @@ function formatDiscount(detail: { discountStatus: string | null; calcType: strin
   if (!detail?.discountStatus || detail.discountStatus === 'Cancelled' || detail.discountStatus === 'CancelledImmediate') return 'None'
   const kind = detail.calcType === '2' ? '%' : detail.calcType === '1' ? 'Amt' : ''
   return detail.amtPer != null ? `${detail.amtPer}${kind}` : detail.discountStatus
+}
+
+// Same summary format as formatDiscount above, but for the real
+// student-discount assignment (StudentDiscountDto) — discountStatus there
+// is a confirmed-live NUMERIC enum, not the string label formatDiscount's
+// StudentDetailDto-sourced fallback expects (see studentDiscount.ts), so
+// this doesn't just reformat and delegate to it.
+function formatDiscountDetail(detail: StudentDiscountDto) {
+  if (detail.discountStatus !== DISCOUNT_STATUS_VALUES.Active) return 'None'
+  const kind = detail.calcType === CALC_TYPE_VALUES.Percentage ? '%' : detail.calcType === CALC_TYPE_VALUES.Amount ? 'Amt' : ''
+  return detail.amtPer != null ? `${detail.amtPer}${kind}` : 'Active'
 }
 
 function StudentProfileContent() {
@@ -171,6 +182,13 @@ function StudentProfileContent() {
   const [discountCalcType, setDiscountCalcType] = useState<'Amount' | 'Percentage'>('Percentage')
   const [discountAmtPer, setDiscountAmtPer] = useState('')
   const [discountRemarks, setDiscountRemarks] = useState('')
+  // A cancelled assignment is still a non-null discountDetail (cancellation
+  // is a status change, not a delete — post-cancel-student-discount.md), so
+  // "is there something to edit/cancel" needs the status check too, not
+  // just "did this fetch resolve to a record at all" — otherwise the modal
+  // would offer Update/Cancel on an assignment that's already cancelled
+  // instead of reopening the Assign form for a new one.
+  const hasActiveDiscount = discountDetail?.discountStatus === DISCOUNT_STATUS_VALUES.Active
 
   // Personal-info edit form — seeded from the loaded record, editable but
   // not wired to any save endpoint (none confirmed for this workflow).
@@ -225,7 +243,7 @@ function StudentProfileContent() {
   // a fresh assignment.
   useEffect(() => {
     if (!discountModalOpen) return
-    if (discountDetail) {
+    if (hasActiveDiscount && discountDetail) {
       setDiscountChoice(discountDetail.discountGuid)
       setDiscountCalcType(discountDetail.calcType === CALC_TYPE_VALUES.Amount ? 'Amount' : 'Percentage')
       setDiscountAmtPer(discountDetail.amtPer != null ? String(discountDetail.amtPer) : '')
@@ -236,7 +254,7 @@ function StudentProfileContent() {
       setDiscountAmtPer('')
       setDiscountRemarks('')
     }
-  }, [discountModalOpen, discountDetail, discountCatalogue])
+  }, [discountModalOpen, discountDetail, hasActiveDiscount, discountCatalogue])
 
   useEffect(() => {
     if (!refugeeModalOpen) return
@@ -363,7 +381,7 @@ function StudentProfileContent() {
     if (amtPer != null && amtPer <= 0) { showToast('Amount/percentage must be greater than 0.', 'warn'); return }
     if (amtPer != null && discountCalcType === 'Percentage' && amtPer > 100) { showToast('Percentage cannot be more than 100.', 'warn'); return }
 
-    if (discountDetail) {
+    if (hasActiveDiscount) {
       updateStudentDiscount.mutate(
         { studentGuid: student.studentGuid, payload: { calcType: CALC_TYPE_VALUES[discountCalcType], amtPer, remarks: discountRemarks.trim() || null } },
         { onSuccess: () => { showToast('Discount updated', 'ok'); setDiscountModalOpen(false) }, onError: (error: Error) => showToast(error.message || 'Could not update discount', 'err') },
@@ -481,7 +499,7 @@ function StudentProfileContent() {
                 <div className="stu-meta-item">
                   <div className="stu-meta-lbl">Discount</div>
                   <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={() => setDiscountModalOpen(true)} title="Click to manage this student's discount">
-                    {discountDetail ? formatDiscount({ discountStatus: discountDetail.discountStatus, calcType: discountDetail.calcType != null ? String(discountDetail.calcType) : null, amtPer: discountDetail.amtPer }) : formatDiscount(detail)}
+                    {discountDetail ? formatDiscountDetail(discountDetail) : formatDiscount(detail)}
                     {' '}<i className="lni lni-pencil-alt" style={{ fontSize: 10 }}></i>
                   </div>
                 </div>
@@ -779,7 +797,17 @@ function StudentProfileContent() {
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr"><div className="modal-title"><i className="lni lni-tag"></i> Manage Discount</div><button className="modal-close" onClick={() => setDiscountModalOpen(false)}>✕</button></div>
             <div>
-              {!discountDetail && (
+              {/* A cancelled discountDetail is still "nothing currently
+                  assigned" (see hasActiveDiscount's own comment) — the
+                  discount picker reopens for it same as with no assignment
+                  at all, with a note about what it's replacing. */}
+              {discountDetail && !hasActiveDiscount && (
+                <div className="info-box" style={{ marginBottom: 12 }}>
+                  <i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i>
+                  <div style={{ fontSize: 12 }}>Previous discount &ldquo;{discountDetail.discountName}&rdquo; is {discountDetail.discountStatus === DISCOUNT_STATUS_VALUES.CancelledImmediate ? 'cancelled immediately' : 'cancelled'}. Assigning below starts a new one.</div>
+                </div>
+              )}
+              {!hasActiveDiscount && (
                 <div className="fg">
                   <label className="lbl">Discount <span className="req">*</span></label>
                   <SearchSelect
@@ -795,12 +823,12 @@ function StudentProfileContent() {
                 <div className="fg"><label className="lbl">{discountCalcType === 'Percentage' ? 'Percentage (%)' : 'Amount'}</label><input className="ctrl" type="number" min={0} value={discountAmtPer} onChange={e => setDiscountAmtPer(e.target.value)} placeholder="Leave blank to inherit from the discount" /></div>
               </div>
               <div className="fg"><label className="lbl">Remarks</label><textarea className="ctrl" rows={2} maxLength={500} value={discountRemarks} onChange={e => setDiscountRemarks(e.target.value)} /></div>
-              {discountDetail && (
+              {hasActiveDiscount && (
                 <div className="info-box"><i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12 }}>The discount and its effective-from semester can&apos;t be changed here — cancel this assignment and assign again to change either.</div></div>
               )}
             </div>
-            <div className="modal-footer" style={{ justifyContent: discountDetail ? 'space-between' : 'flex-end' }}>
-              {discountDetail && (
+            <div className="modal-footer" style={{ justifyContent: hasActiveDiscount ? 'space-between' : 'flex-end' }}>
+              {hasActiveDiscount && (
                 <div className="flex gap-2">
                   <button className="btn btn-neu btn-sm" onClick={() => handleCancelDiscount(false)} disabled={cancelStudentDiscount.isPending}>Cancel (from next semester)</button>
                   <button className="btn btn-danger btn-sm" onClick={() => handleCancelDiscount(true)} disabled={cancelStudentDiscount.isPending}>Cancel Immediately</button>
@@ -809,7 +837,7 @@ function StudentProfileContent() {
               <div className="flex gap-2">
                 <button className="btn btn-neu" onClick={() => setDiscountModalOpen(false)}>Close</button>
                 <button className="btn btn-primary" onClick={handleSaveDiscount} disabled={assignStudentDiscount.isPending || updateStudentDiscount.isPending}>
-                  <i className="lni lni-checkmark"></i> {assignStudentDiscount.isPending || updateStudentDiscount.isPending ? 'Saving…' : discountDetail ? 'Update Terms' : 'Assign Discount'}
+                  <i className="lni lni-checkmark"></i> {assignStudentDiscount.isPending || updateStudentDiscount.isPending ? 'Saving…' : hasActiveDiscount ? 'Update Terms' : 'Assign Discount'}
                 </button>
               </div>
             </div>
