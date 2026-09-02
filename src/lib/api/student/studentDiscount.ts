@@ -2,24 +2,49 @@ import { apiGet, apiPost, apiPut, AuthError } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// students/student-discounts/*.md give no JSON response sample for
-// GET /students/{studentGuid}/discount — only prose ("the discount
-// reference, the assignment's own calcType/amtPer overrides, its status …,
-// and the effective-from and cancelled-at semester GUIDs"). Field names
-// below follow the same naming StudentDetailDto already uses for these same
-// concepts (discountStatus, discountEffectiveFromSemesterGuid, etc. — see
-// student.ts) rather than guessing a different convention; treat as
-// unconfirmed until seen live, same caution as sponsor.ts's
-// mandatoryFeeCheck note.
+// Confirmed via a real live GET /students/{studentGuid}/discount response
+// (2026-09-02) — supersedes an earlier guessed shape (students/student-
+// discounts/*.md gives no JSON sample for this DTO, only prose). Notably:
+// - discountStatus is a NUMERIC enum, not a string label — a page that
+//   compared it to 'Cancelled'/'CancelledImmediate' string literals would
+//   silently never match and treat every assignment as still active. See
+//   DISCOUNT_STATUS_VALUES/LABELS below.
+// - discountCode/discountName come pre-resolved on this record, so no
+//   separate Finance discount-catalogue lookup is needed just to show what
+//   a student is assigned.
+// - The two semester GUIDs are discountEffectiveFromSemesterGuid /
+//   discountCancelledAtSemesterGuid (prefixed), not the bare
+//   effectiveFromSemesterGuid/cancelledAtSemesterGuid guessed before.
 export interface StudentDiscountDto {
+  studentGuid: string
   discountGuid: string
+  discountCode: string
+  discountName: string
   calcType: number | null
   amtPer: number | null
   cop: string | null
-  discountStatus: string | null
-  effectiveFromSemesterGuid: string | null
-  cancelledAtSemesterGuid: string | null
+  discountStatus: number
+  discountEffectiveFromSemesterGuid: string | null
+  discountCancelledAtSemesterGuid: string | null
   remarks: string | null
+}
+
+// Only "cancelled" is confirmed live so far — a second cancel call against
+// an assignment already at status 3 was refused with "Discount is already
+// cancelled." The 1/2 values below follow the same "start at 1, in the
+// order the docs list the three states (Active / Cancelled /
+// CancelledImmediate)" convention CALC_TYPE_VALUES uses elsewhere in this
+// module, but aren't independently confirmed live — treat Active/Cancelled
+// here with the same caution as any other unverified guess, and prefer
+// `status !== DISCOUNT_STATUS_VALUES.Active` over comparing against a
+// specific cancelled value when the only thing that matters is "is this
+// still in force", since that check holds regardless of which of 2/3 is
+// which.
+export const DISCOUNT_STATUS_VALUES = { Active: 1, Cancelled: 2, CancelledImmediate: 3 } as const
+export const DISCOUNT_STATUS_LABELS: Record<number, string> = {
+  [DISCOUNT_STATUS_VALUES.Active]: 'Active',
+  [DISCOUNT_STATUS_VALUES.Cancelled]: 'Cancelled',
+  [DISCOUNT_STATUS_VALUES.CancelledImmediate]: 'Cancelled Immediately',
 }
 
 export interface AssignStudentDiscountRequest {
@@ -59,13 +84,18 @@ export function getStudentDiscount(studentGuid: string): Promise<StudentDiscount
 export function assignStudentDiscount(studentGuid: string, payload: AssignStudentDiscountRequest): Promise<StudentDiscountDto> {
   if (MOCK_AUTH) {
     const row: StudentDiscountDto = {
+      studentGuid,
       discountGuid: payload.discountGuid,
+      // Mock mode has no discount catalogue wired into this module to
+      // resolve a real code/name from — left blank rather than guessed.
+      discountCode: '',
+      discountName: '',
       calcType: payload.calcType ?? null,
       amtPer: payload.amtPer ?? null,
       cop: payload.cop ?? null,
-      discountStatus: 'Active',
-      effectiveFromSemesterGuid: payload.effectiveFromSemesterGuid,
-      cancelledAtSemesterGuid: null,
+      discountStatus: DISCOUNT_STATUS_VALUES.Active,
+      discountEffectiveFromSemesterGuid: payload.effectiveFromSemesterGuid,
+      discountCancelledAtSemesterGuid: null,
       remarks: payload.remarks ?? null,
     }
     mockDiscountAssignments[studentGuid] = row
@@ -91,7 +121,7 @@ export function updateStudentDiscount(studentGuid: string, payload: UpdateStuden
 export function cancelStudentDiscount(studentGuid: string, includeCurrentSemester: boolean): Promise<unknown> {
   if (MOCK_AUTH) {
     const existing = mockDiscountAssignments[studentGuid]
-    if (existing) existing.discountStatus = includeCurrentSemester ? 'CancelledImmediate' : 'Cancelled'
+    if (existing) existing.discountStatus = includeCurrentSemester ? DISCOUNT_STATUS_VALUES.CancelledImmediate : DISCOUNT_STATUS_VALUES.Cancelled
     return Promise.resolve({ studentGuid, includeCurrentSemester })
   }
   return apiPost(`/api/v1/students/${studentGuid}/discount/cancel?includeCurrentSemester=${includeCurrentSemester}`, null)
@@ -103,7 +133,7 @@ export function cancelStudentDiscount(studentGuid: string, includeCurrentSemeste
 // Students module; Finance's own discount.ts has no equivalent.
 export function getActiveAssignmentCount(discountGuid: string): Promise<number> {
   if (MOCK_AUTH) {
-    const count = Object.values(mockDiscountAssignments).filter(a => a.discountGuid === discountGuid && a.discountStatus === 'Active').length
+    const count = Object.values(mockDiscountAssignments).filter(a => a.discountGuid === discountGuid && a.discountStatus === DISCOUNT_STATUS_VALUES.Active).length
     return Promise.resolve(count)
   }
   return apiGet<number>(`/api/v1/students/discounts/${discountGuid}/active-assignment-count`)

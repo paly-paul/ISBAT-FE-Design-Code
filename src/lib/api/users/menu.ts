@@ -58,6 +58,7 @@ const FINANCE_PAYMENT_SECTIONS: MenuNode[] = [
     leaf('Dashboard', 'dashboard', 'dashboard'),
     leaf('Payment Console', 'credit-cards', 'payment-console'),
     leaf('NCHE & Guild Payment', 'graduation', 'nche-guild-payment'),
+    leaf('Discount Allocation', 'tag', 'discount-allocation'),
     leaf('Payment History', 'bar-chart', 'payment-history'),
     leaf('Ledger Adjustments', 'lock', 'ledger-adjustments'),
     leaf('Exchange Rates', 'world', 'exchange-rates'),
@@ -97,7 +98,6 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
     leaf('Student Category Master', 'users', '/student/student-category-master'),
     leaf('Service Category Master', 'list', '/student/service-category-master'),
     leaf('Specialization Management', 'graduation', '/student/specialization'),
-    leaf('Discount Management', 'tag', '/student/discount-management'),
   ]),
 ]
 
@@ -341,6 +341,7 @@ function mergeFinanceSections(menu: MenuNode[]): MenuNode[] {
     const existingLeaves = new Set(collectionSection.children.map(l => l.name))
     const missingLeaves = [
       leaf('NCHE & Guild Payment', 'graduation', 'nche-guild-payment'),
+      leaf('Discount Allocation', 'tag', 'discount-allocation'),
     ].filter(l => !existingLeaves.has(l.name))
     if (missingLeaves.length > 0) {
       // Inserted right after Payment Console, matching their position in
@@ -442,37 +443,20 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
   const settingsIdx = studentModule.children.findIndex(c => c.name === 'Settings')
   if (settingsIdx !== -1) {
     const settingsSection = studentModule.children[settingsIdx]
-    const withoutOldCategoryMasters = settingsSection.children.filter(l => l.name !== 'Category Masters')
-    const existingSettingsLeaves = new Set(withoutOldCategoryMasters.map(l => l.name))
+    // Discount Management (per-student assignment moved to Finance's own
+    // Discount Allocation page, and this page's other half — the discount
+    // catalogue CRUD — was always a duplicate of Finance > Discounts) is
+    // dropped from this page entirely, 2026-09-02 — filtered out here too
+    // in case the real backend still has it registered, so a stale entry
+    // pointing at the now-removed /student/discount-management route
+    // doesn't linger in the sidebar.
+    const orderedLeaves = settingsSection.children.filter(l => l.name !== 'Category Masters' && l.name !== 'Discount Management')
+    const existingSettingsLeaves = new Set(orderedLeaves.map(l => l.name))
     const missingSettingsLeaves = [
       leaf('Student Category Master', 'users', '/student/student-category-master'),
       leaf('Service Category Master', 'list', '/student/service-category-master'),
       leaf('Specialization Management', 'graduation', '/student/specialization'),
-      leaf('Discount Management', 'tag', '/student/discount-management'),
     ].filter(l => !existingSettingsLeaves.has(l.name))
-    // Discount Management specifically belongs right after Specialization
-    // Management (split out of that same page — see discount-management/
-    // page.tsx), not just bulk-appended at the end with everything else
-    // missing — a plain append landed it after whatever else the real
-    // backend already had registered in Settings, not adjacent to its
-    // former home the way the sidebar is meant to read. Specialization
-    // Management itself may be already-present (insert into orderedLeaves)
-    // or also missing (insert into missingSettingsLeaves, which preserves
-    // the array order above, so it still lands right after it there).
-    const discountIdx = missingSettingsLeaves.findIndex(l => l.name === 'Discount Management')
-    let orderedLeaves = withoutOldCategoryMasters
-    if (discountIdx !== -1) {
-      const [discountLeaf] = missingSettingsLeaves.splice(discountIdx, 1)
-      const specIdxInExisting = orderedLeaves.findIndex(l => l.name === 'Specialization Management')
-      if (specIdxInExisting !== -1) {
-        orderedLeaves = [...orderedLeaves]
-        orderedLeaves.splice(specIdxInExisting + 1, 0, discountLeaf)
-      } else {
-        const specIdxInMissing = missingSettingsLeaves.findIndex(l => l.name === 'Specialization Management')
-        if (specIdxInMissing !== -1) missingSettingsLeaves.splice(specIdxInMissing + 1, 0, discountLeaf)
-        else missingSettingsLeaves.push(discountLeaf)
-      }
-    }
     if (orderedLeaves.length !== settingsSection.children.length || missingSettingsLeaves.length > 0) {
       const children = [...studentModule.children]
       children[settingsIdx] = { ...settingsSection, children: [...orderedLeaves, ...missingSettingsLeaves] }
