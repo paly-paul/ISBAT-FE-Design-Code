@@ -4,6 +4,7 @@ import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
+import { Pagination } from '@/components/Pagination'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
 import { StudentDto } from '@/lib/api/student/student'
@@ -61,6 +62,16 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
   const { data: dropouts = [], isLoading: listLoading, isError: listError } = useDropoutStudents(true)
   const [selectedGuid, setSelectedGuid] = useState<string | null>(null)
   const { data: candidate, isLoading: candidateLoading, isError: candidateError } = useRejoinCandidate(selectedGuid, !!selectedGuid)
+
+  const [page, setPage] = useState(1)
+  const itemsPerPage = 10
+  const totalCount = dropouts.length
+  const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage))
+  const paginatedDropouts = dropouts.slice((page - 1) * itemsPerPage, page * itemsPerPage)
+
+  useEffect(() => {
+    setPage(1)
+  }, [dropouts.length])
   const rejoin = useRejoinStudent()
 
   const [targetSemester, setTargetSemester] = useState('')
@@ -103,32 +114,37 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
         {listError ? (
           <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load the dropout list. Please try again.</div>
         ) : (
-          <ScrollTable>
-            <table>
-              <thead><tr><th>Student</th><th>Reg No.</th><th>Programme</th><th>Semester</th><th>Batch</th><th>Eligibility</th><th></th></tr></thead>
-              <tbody>
-                {listLoading ? (
-                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 16, fontSize: 12.5, color: 'var(--g400)' }}>Loading dropout students…</td></tr>
-                ) : dropouts.length === 0 ? (
-                  <EmptyState colSpan={7} title="No dropout students" subtitle="There are no students currently marked as dropped out." />
-                ) : dropouts.map(d => (
-                  <tr key={d.studentGuid}>
-                    <td className="font-bold">{d.studentName}</td>
-                    <td className="font-mono">{d.studentRegNo}</td>
-                    <td>{d.programName || '—'}</td>
-                    <td>{d.semesterName || '—'}</td>
-                    <td>{d.batchCode || '—'}</td>
-                    <td>
-                      {d.canRejoin
-                        ? <span className="badge badge-green">Fees Cleared</span>
-                        : <span className="badge badge-amber">Fees Pending</span>}
-                    </td>
-                    <td><button className="btn btn-neu btn-sm" onClick={() => handlePick(d.studentGuid)}><i className="lni lni-arrow-right"></i> Rejoin</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </ScrollTable>
+          <>
+            <ScrollTable>
+              <table>
+                <thead><tr><th>Student</th><th>Reg No.</th><th>Programme</th><th>Semester</th><th>Batch</th><th>Eligibility</th><th></th></tr></thead>
+                <tbody>
+                  {listLoading ? (
+                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: 16, fontSize: 12.5, color: 'var(--g400)' }}>Loading dropout students…</td></tr>
+                  ) : paginatedDropouts.length === 0 ? (
+                    <EmptyState colSpan={7} title="No dropout students" subtitle="There are no students currently marked as dropped out." />
+                  ) : paginatedDropouts.map(d => (
+                    <tr key={d.studentGuid}>
+                      <td className="font-bold">{d.studentName}</td>
+                      <td className="font-mono">{d.studentRegNo}</td>
+                      <td>{d.programName || '—'}</td>
+                      <td>{d.semesterName || '—'}</td>
+                      <td>{d.batchCode || '—'}</td>
+                      <td>
+                        {d.canRejoin
+                          ? <span className="badge badge-green">Fees Cleared</span>
+                          : <span className="badge badge-amber">Fees Pending</span>}
+                      </td>
+                      <td><button className="btn btn-neu btn-sm" onClick={() => handlePick(d.studentGuid)}><i className="lni lni-arrow-right"></i> Rejoin</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </ScrollTable>
+            {dropouts.length > 0 && (
+              <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="dropout students" onPageChange={setPage} />
+            )}
+          </>
         )}
       </div>
     )

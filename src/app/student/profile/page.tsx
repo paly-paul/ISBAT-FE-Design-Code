@@ -429,7 +429,7 @@ function StudentProfileContent() {
                 <div className="stu-av">{initials(student.studentName)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="stu-banner-name">{student.studentName}</div>
-                  <div className="stu-banner-id">{studentNo} · {student.studentRegNo}</div>
+                  <div className="stu-banner-id">{studentNo} · {student.studentRegNo || detail?.regNo}</div>
                   <div className="stu-banner-pills">
                     <span className="stu-pill">{detail?.studActive === 1 ? '✓ Active' : detail ? '⚠ Inactive' : '…'}</span>
                     <span className="stu-pill"><i className="lni lni-graduation"></i> {student.programName || detail?.programme || '—'}</span>
@@ -509,7 +509,7 @@ function StudentProfileContent() {
                   )}
                 </div>
                 <div className="stu-meta-item"><div className="stu-meta-lbl">Learning Mode</div><div className="stu-meta-val">Campus</div></div>
-                <div className="stu-meta-item"><div className="stu-meta-lbl">Registration No.</div><div className="stu-meta-val">{student.studentRegNo}</div></div>
+                <div className="stu-meta-item"><div className="stu-meta-lbl">Registration No.</div><div className="stu-meta-val">{student.studentRegNo || detail?.regNo}</div></div>
                 <div className="stu-meta-item"><div className="stu-meta-lbl">Status</div><div className="stu-meta-val">{detail?.regStatusName || '—'}</div></div>
               </div>
             </div>
@@ -536,7 +536,7 @@ function StudentProfileContent() {
                   <div className="card-hdr"><div className="card-title"><i className="lni lni-graduation"></i> Academic Details</div><span className="badge badge-grey">Read-only</span></div>
                   <div className="g3">
                     <div className="fg"><label className="lbl">Student No.</label><input className="ctrl" readOnly value={studentNo} /></div>
-                    <div className="fg"><label className="lbl">Registration No.</label><input className="ctrl" readOnly value={student.studentRegNo} /></div>
+                    <div className="fg"><label className="lbl">Registration No.</label><input className="ctrl" readOnly value={student.studentRegNo || detail?.regNo || ''} /></div>
                     <div className="fg"><label className="lbl">Programme</label><input className="ctrl" readOnly value={student.programName || detail?.programme || '—'} /></div>
                     <div className="fg"><label className="lbl">Current Batch</label><input className="ctrl" readOnly value={student.batchCode || detail?.batch || '—'} /></div>
                     <div className="fg"><label className="lbl">Current Semester</label><input className="ctrl" readOnly value={student.semesterName || detail?.semester || '—'} /></div>
@@ -639,7 +639,7 @@ function StudentProfileContent() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div className="id-name">{student.studentName}</div>
                           <div className="id-prog">{student.programName || '—'} · {student.semesterName || '—'}</div>
-                          <div className="id-num">{student.studentRegNo}</div>
+                          <div className="id-num">{student.studentRegNo || detail?.regNo}</div>
                         </div>
                         {/* QR box needs a white backing plate — the code itself is dark-on-
                             transparent PNG and won't scan against the card's dark gradient. */}
@@ -664,7 +664,7 @@ function StudentProfileContent() {
                         <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Expiry</span> {expiryDate ? formatDate(expiryDate) : '—'}</div>
                       </div>
                       <div className="id-bar" style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'inherit', letterSpacing: 'normal', textTransform: 'none' }}>
-                        <span>REG NO {student.studentRegNo}</span>
+                        <span>REG NO {student.studentRegNo || detail?.regNo}</span>
                         <span>PRINTED {currentCard?.issueDate ? formatDate(currentCard.issueDate) : '—'}</span>
                       </div>
                     </div>
