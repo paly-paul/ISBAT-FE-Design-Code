@@ -81,6 +81,7 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
     leaf('Programme Transfer', 'graduation', '/student/prog-transfer'),
     leaf('Learning Mode', 'display', '/student/learning-mode'),
     leaf('Intake Transfer', 'calendar', '/student/intake-transfer'),
+    leaf('Fee Structure Transfer', 'dollar', '/student/fee-structure-transfer'),
   ]),
   section('Services', [
     leaf('Student Services', 'ticket', '/student/services'),
@@ -415,12 +416,18 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
   const operationsIdx = studentModule.children.findIndex(c => c.name === 'Operations')
   if (operationsIdx !== -1) {
     const operationsSection = studentModule.children[operationsIdx]
-    const iconByName = new Map(
-      STUDENT_OPERATIONS_SECTIONS.find(s => s.name === 'Operations')!.children.map(l => [l.name, l.icon]),
-    )
-    const children = operationsSection.children.map(l =>
-      iconByName.has(l.name) ? { ...l, icon: iconByName.get(l.name)! } : l,
-    )
+    const operationsDef = STUDENT_OPERATIONS_SECTIONS.find(s => s.name === 'Operations')!
+    const iconByName = new Map(operationsDef.children.map(l => [l.name, l.icon]))
+    
+    const existingLeaves = new Set(operationsSection.children.map(l => l.name))
+    const missingLeaves = operationsDef.children.filter(l => !existingLeaves.has(l.name))
+    
+    const children = [
+      ...operationsSection.children.map(l =>
+        iconByName.has(l.name) ? { ...l, icon: iconByName.get(l.name)! } : l,
+      ),
+      ...missingLeaves
+    ]
     studentModule = { ...studentModule, children: [...studentModule.children.slice(0, operationsIdx), { ...operationsSection, children }, ...studentModule.children.slice(operationsIdx + 1)] }
   }
 
