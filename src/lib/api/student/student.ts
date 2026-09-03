@@ -79,6 +79,39 @@ export interface StudentDetailDto extends StudentDto {
   } | null
 }
 
+// GET /api/v1/students/{guid} (getStudentByGuid) can come back in the
+// alternate-field-name shape described above — regNo/batch/semester/
+// programme populated instead of studentRegNo/batchCode/semesterName/
+// programName. Student Profile's own page compensates for this ad hoc,
+// with a `student.xxx || detail?.yyy` fallback at every render site that
+// needs one; any other page seeding its own `student` state straight from
+// this fetch (e.g. via a ?studentGuid= deep link) doesn't get that same
+// per-render safety net, so the primary fields silently end up blank —
+// confirmed live (2026-09-04): Batch Transfer's own detail call takes
+// studentRegNo as a request param, so an unnormalized fetch left it
+// sending an empty string and nothing came back. Backfills the primary
+// fields from their alternates once, at the seeding point, so a `student`
+// built from this call behaves identically to one picked via StudentLookup
+// (which only ever returns the primary shape) everywhere downstream.
+//
+// requestedGuid backfills studentGuid itself — also confirmed missing on a
+// real response (2026-09-04): Student Profile's own ?studentGuid= seeding
+// set `student.studentGuid` to that same undefined, and every link Profile
+// builds off `student.studentGuid` (this app's whole deep-link convention)
+// silently carried a literal "undefined" instead of a guid. The guid this
+// was fetched *with* is always the right one regardless of what the
+// response body says, so pass it in whenever it's known.
+export function normalizeStudentDetail(d: StudentDetailDto, requestedGuid?: string | null): StudentDetailDto {
+  return {
+    ...d,
+    studentGuid: d.studentGuid || requestedGuid || '',
+    studentRegNo: d.studentRegNo || d.regNo || '',
+    programName: d.programName || d.programme || '',
+    semesterName: d.semesterName || d.semester || '',
+    batchCode: d.batchCode || d.batch || '',
+  }
+}
+
 export interface PagedResult<T> {
   items: T[]
   totalCount: number

@@ -2422,7 +2422,9 @@ textarea.ctrl {
    PAYMENT CONSOLE — hero profile card, pill tabs,
    ledger item rows, live payment-summary strip.
    Shared across any page using the .pc-* component set — originally
-   Payment Console only, now also Discount Allocation. Genuinely
+   Payment Console only, then Discount Allocation, now also Student
+   Profile's own banner (as .pc-hero.stu-hero — see .stu-hero further
+   down this file for its background override). Genuinely
    page-specific bits (the .pc-body column-width grid, the pc-hero-facts
    4-vs-2-up rule) stay scoped by id further up/down this file; these are
    plain reusable visual components, same as .card/.badge elsewhere.
@@ -7169,11 +7171,25 @@ body {
   box-shadow: var(--neu-out);
 }
 
+/* Student Profile's hero — reuses .pc-hero (Payment Console's/Discount
+   Allocation's summary-banner component, defined further up this file)
+   wholesale for its alignment/layout, with just the background swapped
+   back to this page's own blue. The combined selector's extra specificity
+   beats plain .pc-hero regardless of source order. */
+.pc-hero.stu-hero {
+  background: linear-gradient(135deg, var(--b700), var(--b500));
+}
+
 .stu-banner-top {
   background: linear-gradient(135deg, var(--b700), var(--b500));
   padding: 16px 20px;
   display: flex;
-  align-items: center;
+  /* flex-start, not center — with `center` the row's height comes from the
+     tallest child (the name/id/pills block, which grows taller as pills
+     wrap at narrow widths), so the fixed-size avatar and action menu drift
+     toward the vertical middle of that block instead of lining up with the
+     student's name at the top. */
+  align-items: flex-start;
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -7205,11 +7221,18 @@ body {
   margin-top: 2px;
 }
 
+/* Grid, not flex-wrap — auto-fit packs as many 150px+ columns as the
+   banner is wide, so short pills like "Campus" sit two-up next to each
+   other on a roomy screen, and it collapses to one pill per row on a
+   narrow one (same auto-fit approach as .stu-meta-row below). Each pill
+   stretches to fill its column by default, which is also what gives long
+   text like the programme name a full-width box to wrap inside instead of
+   however much its own content happened to need. */
 .stu-banner-pills {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 7px;
   margin-top: 8px;
-  flex-wrap: wrap;
 }
 
 .stu-pill {
@@ -7225,19 +7248,31 @@ body {
   border: 1px solid rgba(255, 255, 255, .3);
 }
 
+/* Flexbox, not a fixed-column grid — the item count varies by page (7 on
+   Student Profile, 2 on Staff Profile), and a grid's column tracks stay
+   fixed across every row regardless of how many items actually land in the
+   last one, so an odd leftover (e.g. row 3 of 3+3+1) sits stranded on the
+   left with dead space beside it. Flex-wrap repacks each row on its own and
+   flex-grow lets that row's items — however many there are — stretch to
+   fill it, so there's never a half-empty last row. This also replaces the
+   old fixed-5-columns-until-900px-then-2 breakpoint, which left 5 columns
+   visibly cramped well before 900px on anything narrower than a full
+   desktop width; item width now reflows continuously with the container. */
 .stu-meta-row {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  border-top: 1px solid var(--g200);
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .stu-meta-item {
+  flex: 1 1 140px;
+  min-width: 140px;
   padding: 12px 16px;
-  border-right: 1px solid var(--g200);
-}
-
-.stu-meta-item:last-child {
-  border-right: none;
+  /* An outline (not a border) draws independently per item rather than
+     collapsing with its neighbors, so every cell gets a clean box on all
+     four sides with no per-row "last column" bookkeeping needed — it holds
+     up under any wrap pattern the flex layout produces. */
+  outline: 1px solid var(--g200);
+  outline-offset: -1px;
 }
 
 .stu-meta-lbl {
@@ -8051,10 +8086,6 @@ body {
   .dcard-grid,
   .quick-actions {
     grid-template-columns: 1fr;
-  }
-
-  .stu-meta-row {
-    grid-template-columns: 1fr 1fr;
   }
 
   .batch-body {

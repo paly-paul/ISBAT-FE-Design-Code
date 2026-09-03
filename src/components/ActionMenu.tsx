@@ -1,5 +1,5 @@
 'use client'
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 
 interface ActionMenuProps {
@@ -7,10 +7,18 @@ interface ActionMenuProps {
   tooltip?: string
 }
 
+// Viewport margin kept clear on every side when clamping the dropdown —
+// deliberately more than the 6px gap below the trigger so a menu shoved
+// against an edge still reads as "placed", not "clipped".
+const EDGE_MARGIN = 16
+
 export function ActionMenu({ children, tooltip = 'Actions' }: ActionMenuProps) {
   const [open, setOpen] = useState(false)
   const [showTip, setShowTip] = useState(false)
-  const [pos, setPos] = useState({ top: 0, left: 0 })
+  // pos starts as the trigger's own center — just a first guess used to
+  // measure the dropdown's natural size; the layout effect below replaces
+  // it with a viewport-clamped left edge before anything paints.
+  const [pos, setPos] = useState({ top: 0, left: 0, ready: false })
   const [tipPos, setTipPos] = useState({ top: 0, left: 0 })
   const triggerRef = useRef<HTMLButtonElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -18,11 +26,35 @@ export function ActionMenu({ children, tooltip = 'Actions' }: ActionMenuProps) {
   function openMenu() {
     if (triggerRef.current) {
       const r = triggerRef.current.getBoundingClientRect()
-      setPos({ top: r.bottom + 6, left: r.left + r.width / 2 })
+      setPos({ top: r.bottom + 6, left: r.left + r.width / 2, ready: false })
     }
     setShowTip(false)
     setOpen(true)
   }
+
+  // Centers the dropdown under the trigger by default, same as before, but
+  // slides it back onto the screen whenever that would push it past the
+  // left/right (or bottom) edge of the viewport — e.g. a row action button
+  // sitting flush against the right side of the page, as on Student
+  // Profile's banner. Runs before paint so there's no visible jump.
+  useLayoutEffect(() => {
+    if (!open || !dropdownRef.current || !triggerRef.current) return
+    const menuRect = dropdownRef.current.getBoundingClientRect()
+    const triggerRect = triggerRef.current.getBoundingClientRect()
+
+    let left = triggerRect.left + triggerRect.width / 2 - menuRect.width / 2
+    left = Math.min(left, window.innerWidth - EDGE_MARGIN - menuRect.width)
+    left = Math.max(left, EDGE_MARGIN)
+
+    let top = triggerRect.bottom + 6
+    if (top + menuRect.height > window.innerHeight - EDGE_MARGIN) {
+      // Not enough room below — flip above the trigger instead.
+      top = triggerRect.top - 6 - menuRect.height
+    }
+
+    setPos(prev => (prev.left === left && prev.top === top && prev.ready ? prev : { top, left, ready: true }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pos.top, pos.left])
 
   function onMouseEnter() {
     if (!open && triggerRef.current) {
@@ -42,7 +74,7 @@ export function ActionMenu({ children, tooltip = 'Actions' }: ActionMenuProps) {
     function updatePos() {
       if (!triggerRef.current) return
       const r = triggerRef.current.getBoundingClientRect()
-      setPos({ top: r.bottom + 6, left: r.left + r.width / 2 })
+      setPos({ top: r.bottom + 6, left: r.left + r.width / 2, ready: false })
     }
     function onScroll() { requestAnimationFrame(updatePos) }
     const observer = new IntersectionObserver(
@@ -97,7 +129,10 @@ export function ActionMenu({ children, tooltip = 'Actions' }: ActionMenuProps) {
         <div
           ref={dropdownRef}
           className="act-menu-list"
-          style={{ position: 'fixed', top: pos.top, left: pos.left, transform: 'translateX(-50%)' }}
+          // pos.left/top are already the dropdown's final top-left corner
+          // (clamped to the viewport by the layout effect above) — no
+          // centering transform needed, unlike the tooltip below.
+          style={{ position: 'fixed', top: pos.top, left: pos.left, visibility: pos.ready ? 'visible' : 'hidden' }}
           onClick={() => setOpen(false)}
         >
           {children}

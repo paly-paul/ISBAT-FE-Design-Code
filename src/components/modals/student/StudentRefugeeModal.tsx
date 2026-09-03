@@ -1,7 +1,9 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
+import { SearchSelect } from '@/components/SearchSelect'
 import { useStudentRefugeeDetails, useAssignRefugeeStatus, useRemoveRefugeeStatus } from '@/hooks/student/useRefugee'
+import { useCountries } from '@/hooks/config/useCountries'
 
 interface Props extends ModalProps {
   studentGuid: string | null
@@ -19,6 +21,11 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
   const { data: refugeeDetail, isLoading } = useStudentRefugeeDetails(studentGuid, isOpen)
   const assignRefugeeStatus = useAssignRefugeeStatus()
   const removeRefugeeStatus = useRemoveRefugeeStatus()
+  const { data: countries = [] } = useCountries()
+  // intCountryCode has no confirmed mapping back to a real country guid (see
+  // the note on CountryDropdownDto/EmployeeFormModal's own country field) —
+  // sent as the option's 1-based list position, same convention used there.
+  const countryOptions = countries.map((c, i) => ({ value: String(i + 1), label: c.countryName }))
 
   const [countryCode, setCountryCode] = useState('')
   const [refugeeId, setRefugeeId] = useState('')
@@ -74,9 +81,8 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
           ) : (
             <>
               <div className="fg">
-                <label className="lbl">Country Code <span className="req">*</span></label>
-                <input className="ctrl" type="number" min={1} value={countryCode} onChange={e => setCountryCode(e.target.value)} placeholder="Legacy numeric country code" />
-                <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4 }}>No lookup source exists for this legacy code yet — enter the numeric value directly.</div>
+                <label className="lbl">Country <span className="req">*</span></label>
+                <SearchSelect placeholder="-- Select Country --" options={countryOptions} value={countryCode} onChange={setCountryCode} />
               </div>
               <div className="fg"><label className="lbl">Refugee ID <span className="req">*</span></label><input className="ctrl" maxLength={20} value={refugeeId} onChange={e => setRefugeeId(e.target.value)} placeholder="Refugee document/registration number" /></div>
               <div className="fg">

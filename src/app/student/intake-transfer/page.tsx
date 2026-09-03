@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -26,7 +27,10 @@ const DEFERMENT_REASONS = ['Deferment — Medical', 'Deferment — Job / Relocat
 
 type Mode = 'dropout' | 'deferment'
 
-export default function Page() {
+// useSearchParams() requires a Suspense boundary above it (Next.js App
+// Router) — see the wrapping default export at the bottom of this file,
+// same split Student Profile uses for the same reason.
+function IntakeTransferContent() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -57,12 +61,31 @@ export default function Page() {
   )
 }
 
+export default function Page() {
+  return (
+    <Suspense>
+      <IntakeTransferContent />
+    </Suspense>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Dropout Rejoin — real flow against students/dropout-rejoin/*.md.
 // ---------------------------------------------------------------------------
 function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: string) => void }) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  // Student Profile's action menu links here as
+  // /student/intake-transfer?studentGuid=<guid> — unlike the free-text
+  // StudentLookup pages, this panel picks students off a fixed dropout list
+  // (GetEligibleDropoutStudents), so there's no "load by guid" step to
+  // preload: seeding selectedGuid straight from the URL and letting
+  // useRejoinCandidate below fetch it directly works whether or not that
+  // guid happens to also be in the visible list. If the linked student
+  // isn't actually a dropout, this resolves to the existing
+  // "Couldn't Load Candidate" state below rather than a silent no-op.
+  const [selectedGuid, setSelectedGuid] = useState<string | null>(() => searchParams.get('studentGuid'))
   const { data: dropouts = [], isLoading: listLoading, isError: listError } = useDropoutStudents(true)
-  const [selectedGuid, setSelectedGuid] = useState<string | null>(null)
   const { data: candidate, isLoading: candidateLoading, isError: candidateError } = useRejoinCandidate(selectedGuid, !!selectedGuid)
 
   const [page, setPage] = useState(1)
@@ -83,19 +106,26 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   // Seed the dropdowns once the candidate's restricted option lists arrive.
+  // Each list can come back missing entirely (not just empty) on a real
+  // response — see the note on RejoinCandidateDto — so every read below
+  // falls back to [] rather than assuming the array is always there.
   useEffect(() => {
     if (!candidate) { setTargetSemester(''); setTargetBatch(''); setTargetFeeHead(''); return }
-    setTargetSemester(candidate.currentSemesterGuid || candidate.availableSemesters[0]?.semesterGuid || '')
-    setTargetBatch(candidate.availableBatches[0]?.batchGuid || '')
-    setTargetFeeHead(candidate.availableFeeHeads[0]?.feeHdGuid || '')
+    setTargetSemester(candidate.currentSemesterGuid || candidate.availableSemesters?.[0]?.semesterGuid || '')
+    setTargetBatch(candidate.availableBatches?.[0]?.batchGuid || '')
+    setTargetFeeHead(candidate.availableFeeHeads?.[0]?.feeHdGuid || '')
   }, [candidate])
 
   function handlePick(studentGuid: string) { setSelectedGuid(studentGuid); setRemarks('') }
-  function handleClear() { setSelectedGuid(null); setRemarks(''); setConfirmOpen(false) }
+  function handleClear() {
+    setSelectedGuid(null); setRemarks(''); setConfirmOpen(false)
+    // Drop ?studentGuid= so a page revisit doesn't reseed the same guid.
+    if (searchParams.get('studentGuid')) router.replace('/student/intake-transfer')
+  }
 
-  const targetSemesterOpt = candidate?.availableSemesters.find(s => s.semesterGuid === targetSemester)
-  const targetBatchOpt = candidate?.availableBatches.find(b => b.batchGuid === targetBatch)
-  const targetFeeHeadOpt = candidate?.availableFeeHeads.find(f => f.feeHdGuid === targetFeeHead)
+  const targetSemesterOpt = candidate?.availableSemesters?.find(s => s.semesterGuid === targetSemester)
+  const targetBatchOpt = candidate?.availableBatches?.find(b => b.batchGuid === targetBatch)
+  const targetFeeHeadOpt = candidate?.availableFeeHeads?.find(f => f.feeHdGuid === targetFeeHead)
   const canExecute = !!(targetSemester && targetBatch && targetFeeHead)
 
   function executeRejoin() {
@@ -185,7 +215,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
                 <label className="lbl">Target Semester <span className="req">*</span></label>
                 <SearchSelect
                   placeholder="— Select semester —"
-                  options={candidate.availableSemesters.map(s => ({ value: s.semesterGuid, label: s.semName }))}
+                  options={(candidate.availableSemesters ?? []).map(s => ({ value: s.semesterGuid, label: s.semName }))}
                   value={targetSemester}
                   onChange={setTargetSemester}
                 />
@@ -195,7 +225,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
                 <label className="lbl">Target Batch <span className="req">*</span></label>
                 <SearchSelect
                   placeholder="— Select batch —"
-                  options={candidate.availableBatches.map(b => ({ value: b.batchGuid, label: b.batchCode }))}
+                  options={(candidate.availableBatches ?? []).map(b => ({ value: b.batchGuid, label: b.batchCode }))}
                   value={targetBatch}
                   onChange={setTargetBatch}
                 />
@@ -204,7 +234,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
                 <label className="lbl">Fee Head <span className="req">*</span></label>
                 <SearchSelect
                   placeholder="— Select fee head —"
-                  options={candidate.availableFeeHeads.map(f => ({ value: f.feeHdGuid, label: `${f.feeCode} — ${f.feeDesc}` }))}
+                  options={(candidate.availableFeeHeads ?? []).map(f => ({ value: f.feeHdGuid, label: `${f.feeCode} — ${f.feeDesc}` }))}
                   value={targetFeeHead}
                   onChange={setTargetFeeHead}
                 />
@@ -220,7 +250,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
               <div style={{ fontSize: 12.5, color: 'var(--g700)', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div>The student&apos;s active history row is deactivated and cloned into a new row under the target semester/batch/fee, marked <strong>&quot;DropOut Rejoined&quot;</strong>.</div>
                 <div>Registration status on the new row is set based on whether registration fees are already paid.</div>
-                <div>A <span className="font-mono">T_STUDENT_REJOIN</span> audit row is written. This cannot be undone from this page.</div>
+                <div>An audit record of this rejoin is written. This cannot be undone from this page.</div>
               </div>
             </div>
           </div>
