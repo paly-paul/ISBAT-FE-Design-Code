@@ -31,6 +31,7 @@ import {
   PAY_TYPE_LABELS,
   PAY_TYPE_TO_RECEIPT_CATEGORY,
   AllOutstandingItem,
+  CurrentSemesterPayableTotal,
 } from '@/hooks/finance/usePaymentConsole'
 import { formatDateTime } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
@@ -181,6 +182,16 @@ const SHOW_OTHER_PAID_FEE_DETAILS: boolean = false
 // pages it client-side instead, same Pagination component the rest of the
 // app's server-paginated lists use.
 const HISTORY_PAGE_SIZE = 10
+
+// Step 2's "Convert to Currency" picker always offers exactly these three,
+// per request (2026-09-04) — not just whichever currencies happen to appear
+// in the selected student's own ledgers (the old source, ledgerTotals,
+// meant a student billed in a single currency only ever had one option to
+// pick from, which defeats the point of a conversion picker). Matched
+// against the real finance-currencies master list by code below, so a code
+// that isn't actually configured there is silently dropped rather than
+// offered as a dead option.
+const CONVERTIBLE_CURRENCY_CODES = ['KES', 'USD', 'UGX']
 
 export default function PaymentConsolePage() {
   const router = useRouter()
@@ -382,25 +393,93 @@ export default function PaymentConsolePage() {
   // semester-grouping/picking step left to do the way the old
   // ledgerGroups/currentSemesterGroup had to.
   const { data: currentSemesterPayable, isLoading: isLedgersLoading } = useCurrentSemesterPayable(selectedApplicationGuid, !!selectedApplicationGuid, studentGuid)
-  const ledgers = currentSemesterPayable?.ledgers ?? []
-  const ledgerTotals = currentSemesterPayable?.totals ?? []
+  const ledgers = currentSemesterPayable ?? []
+  // Business rule (2026-09-04, per request): the discount is documented as
+  // conditional on "this group is paid in full" (see discountMessage's own
+  // wording), but this endpoint always shows it unconditionally — it has no
+  // proposed amount to check against, so it can't itself tell a fresh
+  // ledger from one that already took a partial payment without earning the
+  // discount. A paidAmount > 0 means exactly that already happened: some of
+  // this ledger was paid without the group being paid in full, so the
+  // discount is already forfeited and would double-count if still shown.
+  // Zeroed client-side here rather than trusted from the response, and
+  // netPayable falls back to the plain outstanding (no discount to net
+  // against) — every other field, including outstanding/paidAmount
+  // themselves, passes through unchanged.
+  const effectiveLedgers = useMemo(() => ledgers.map(l => {
+    if (l.paidAmount <= 0 || !l.discountGuid) return l
+    return {
+      ...l,
+      discountGuid: null,
+      discountName: null,
+      discountCalcType: null,
+      discountAmtPer: null,
+      discountGroupLedgerNums: [],
+      discountAmount: 0,
+      discountMessage: null,
+      discountExcessAmount: 0,
+      discountWarning: null,
+      netPayable: l.outstanding,
+    }
+  }), [ledgers])
+  // 2026-09-03 backend change: the endpoint used to return a
+  // { ledgers, totals } wrapper with a server-computed per-currency totals[]
+  // block; it now returns the flat ledger list only (see
+  // getCurrentSemesterPayable's own comment) — sum client-side, per
+  // currency, same grouping key (currencyGuid, falling back to currencyName)
+  // the old server-side totals used. Summed from effectiveLedgers, not the
+  // raw ledgers, so a forfeited discount above doesn't leak into the totals.
+  const ledgerTotals = useMemo<CurrentSemesterPayableTotal[]>(() => {
+    const byCurrency = new Map<string, CurrentSemesterPayableTotal>()
+    for (const l of effectiveLedgers) {
+      const key = l.currencyGuid ?? l.currencyName
+      const entry = byCurrency.get(key) ?? { currencyGuid: l.currencyGuid, currencyName: l.currencyName, totalOutstanding: 0, totalDiscount: 0, totalNetPayable: 0 }
+      entry.totalOutstanding += l.outstanding
+      entry.totalDiscount += l.discountAmount
+      entry.totalNetPayable += l.netPayable
+      byCurrency.set(key, entry)
+    }
+    return Array.from(byCurrency.values())
+  }, [effectiveLedgers])
   // Outstanding Balance shows one currency's table at a time behind a
   // dropdown now, per request (2026-09-04) — two stacked tables for a
   // student billed in more than one currency read as confusing rather than
-  // informative. Resyncs to the first currency present whenever the ledger
-  // set changes shape (a new student, or this one's currencies changing)
-  // so the dropdown never points at a currency no longer in the list.
+  // informative. The picker's own options are the fixed KES/USD/UGX set
+  // above (CONVERTIBLE_CURRENCY_CODES), not ledgerTotals — a student billed
+  // in only one currency should still be able to convert into any of the
+  // three, not just see a single-option dropdown.
+  const convertibleCurrencies = useMemo(
+    () => currencies.filter(c => CONVERTIBLE_CURRENCY_CODES.includes(c.currencyCode)),
+    [currencies],
+  )
   const [selectedOutstandingCurrency, setSelectedOutstandingCurrency] = useState<string | null>(null)
   useEffect(() => {
-    const keys = ledgerTotals.map(t => t.currencyGuid ?? t.currencyName)
-    if (keys.length === 0) { setSelectedOutstandingCurrency(null); return }
-    if (!selectedOutstandingCurrency || !keys.includes(selectedOutstandingCurrency)) setSelectedOutstandingCurrency(keys[0])
+    if (convertibleCurrencies.length === 0) { setSelectedOutstandingCurrency(null); return }
+    if (selectedOutstandingCurrency && convertibleCurrencies.some(c => c.currencyGuid === selectedOutstandingCurrency)) return
+    // Defaults to whichever of the three the student's own ledgers are
+    // actually billed in, when that's one of them — falls back to the
+    // first of the three otherwise. Only runs when the current selection is
+    // missing/no longer valid, so it doesn't fight a cashier's own pick
+    // once one's been made.
+    const preferred = ledgerTotals.find(t => convertibleCurrencies.some(c => c.currencyGuid === t.currencyGuid))
+    setSelectedOutstandingCurrency(preferred?.currencyGuid ?? convertibleCurrencies[0].currencyGuid)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ledgerTotals])
-  // Converts every ledger (regardless of its own original currency) into
-  // whichever currency is picked above, per request (2026-09-04) — the
-  // dropdown used to just pick which currency-group's own table to show;
-  // now it merges everything into one list of converted figures instead.
+  }, [convertibleCurrencies, ledgerTotals])
+  // Converts Scheduled Bill/Outstanding (regardless of a given ledger's own
+  // original currency) into whichever currency is picked above — per
+  // request (2026-09-04). Scheduled Amt and Paid deliberately do NOT
+  // convert (per a follow-up correction, same date): those are the actual
+  // fee-line figures — a student's Admission Fee ledger can genuinely be
+  // billed in USD while their Semester Fee ledger is billed in UGX, so
+  // showing Scheduled Amt/Paid pre-converted would misreport what was
+  // actually charged/collected on that specific ledger. Only Scheduled Bill
+  // (the same ledgerAmount, but converted — the two now deliberately
+  // diverge where they used to read the same figure twice) and Outstanding
+  // exist to be compared/totalled across a mixed-currency ledger set, so
+  // those are what actually need a common currency. Each ledger's own
+  // native code is shown right under its Scheduled Amt figure; the target
+  // currency for Scheduled Bill/Outstanding is named in the "Total Payable
+  // (…)" footer and the picker above.
   // Today's board (get-exchange-rates-by-date.md) — a rate is only ever
   // entered for "today", so that's the only date meaningful for a live
   // "what does this student owe right now" figure; there's no historical
@@ -408,22 +487,35 @@ export default function PaymentConsolePage() {
   const { data: todayRates = [] } = useExchangeRatesByDate(todayYmd())
   const baseCurrency = currencies.find(c => c.isDefault === 1)
   const ratesByGuid = new Map(todayRates.map(r => [r.currencyGuid, r.exRate]))
-  const targetOutstandingCurrency = ledgerTotals.find(t => (t.currencyGuid ?? t.currencyName) === selectedOutstandingCurrency)
+  const targetOutstandingCurrency = convertibleCurrencies.find(c => c.currencyGuid === selectedOutstandingCurrency)
   const targetCurrencyGuid = targetOutstandingCurrency?.currencyGuid ?? null
   const targetCurrencyName = targetOutstandingCurrency?.currencyName ?? ''
   // null on a given ledger means its own currency (or the target's) has no
   // resolvable rate — shown as "—" rather than silently defaulting to the
   // original, unconverted figure, which would misreport what's actually
   // owed in the chosen currency.
-  const convertedLedgers = ledgers.map(l => ({
+  const convertedLedgers = effectiveLedgers.map(l => ({
     ...l,
     convScheduled: convertAmount(l.ledgerAmount, l.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid),
-    convPaid: convertAmount(l.paidAmount, l.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid),
     convOutstanding: convertAmount(l.outstanding, l.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid),
   }))
-  const convertedTotalOutstanding = convertedLedgers.reduce((sum, l) => sum + (l.convOutstanding ?? 0), 0)
   const convertedTotalDiscount = ledgerTotals.reduce((sum, t) => {
     const conv = convertAmount(t.totalDiscount, t.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid)
+    return sum + (conv ?? 0)
+  }, 0)
+  // What the "Discount" row above the total actually needs to feed into —
+  // the footer used to just re-show the raw pre-discount outstanding sum
+  // here, which left the Discount line looking like a subtraction that
+  // never actually applied to the number below it (a student billed 250
+  // outstanding with a 187.50 discount kept showing "Total Outstanding:
+  // 250.00" instead of the 62.50 the backend's own netPayable already
+  // computes per-row). Summed from ledgerTotals' totalNetPayable, same
+  // per-currency-then-convert approach convertedTotalDiscount uses, rather
+  // than (per-ledger outstanding total) - convertedTotalDiscount, so a
+  // ledger with an unconvertible currency (convOutstanding null) doesn't
+  // desync the two.
+  const convertedTotalNetPayable = ledgerTotals.reduce((sum, t) => {
+    const conv = convertAmount(t.totalNetPayable, t.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid)
     return sum + (conv ?? 0)
   }, 0)
   const hasUnconvertibleLedger = convertedLedgers.some(l => l.convOutstanding === null)
@@ -1232,11 +1324,16 @@ export default function PaymentConsolePage() {
                           judgment call ("nothing to convert with one
                           currency"), not anything the backend dictates, so
                           the picker now always shows even for a single-
-                          currency student. */}
+                          currency student. Options fixed to KES/USD/UGX
+                          (convertibleCurrencies) rather than ledgerTotals,
+                          per a further request (2026-09-04) — a student
+                          billed in only one currency should still be able
+                          to convert into any of the three, not see a
+                          single-option dropdown. */}
                       <div className="fg" style={{ maxWidth: 220 }}>
                         <label className="lbl">Convert to Currency</label>
                         <SearchSelect
-                          options={ledgerTotals.map(t => ({ value: t.currencyGuid ?? t.currencyName, label: t.currencyName }))}
+                          options={convertibleCurrencies.map(c => ({ value: c.currencyGuid, label: c.currencyName }))}
                           value={selectedOutstandingCurrency ?? ''}
                           onChange={setSelectedOutstandingCurrency}
                         />
@@ -1264,9 +1361,44 @@ export default function PaymentConsolePage() {
                                   {l.ledgerName}{l.ledgerNum ? ` (${l.ledgerNum})` : ''}
                                   {isPaid && <span className="text-green" style={{ fontSize: 11, fontWeight: 600, marginLeft: 6 }}>Paid</span>}
                                 </span>
-                                <span data-label="Scheduled Amt">{l.convScheduled != null ? fmtAmt(l.convScheduled) : '—'}</span>
+                                {/* Native — the raw fee-line amount, not run
+                                    through convertAmount, with the ledger's
+                                    own currencyCode (added to the API
+                                    2026-09-03) shown right under it — no
+                                    separate Currency column anymore (removed
+                                    per request, 2026-09-04). Stays native
+                                    rather than the "Convert to Currency"
+                                    picker's selection: a student's Admission
+                                    Fee ledger can genuinely be billed in USD
+                                    while their Semester Fee ledger is billed
+                                    in UGX, so pre-converting this figure
+                                    would misreport what was actually
+                                    charged on that ledger. */}
+                                {/* Wrapped in its own inner span, rather than
+                                    two direct children of the cell, so the
+                                    amount and currency code stay paired as
+                                    one flex item under the mobile "stack
+                                    instead of squeeze" breakpoint below
+                                    (640px) — that layout turns each cell
+                                    into a flex row of [label, value], and an
+                                    unwrapped second child here would become
+                                    a third item space-between'd off to the
+                                    side instead of sitting under the amount. */}
+                                <span data-label="Scheduled Amt">
+                                  <span>
+                                    {fmtAmt(l.ledgerAmount)}
+                                    {l.currencyCode && <span className="text-g400" style={{ display: 'block', fontSize: 11, fontWeight: 600 }}>({l.currencyCode})</span>}
+                                  </span>
+                                </span>
+                                {/* Converted — same underlying ledgerAmount
+                                    as Scheduled Amt, but into the picked
+                                    target currency; the two intentionally
+                                    diverge now instead of repeating the same
+                                    figure twice. */}
                                 <span data-label="Scheduled Bill">{l.convScheduled != null ? fmtAmt(l.convScheduled) : '—'}</span>
-                                <span data-label="Paid" className="font-bold text-green">{l.convPaid != null ? fmtAmt(l.convPaid) : '—'}</span>
+                                {/* Native — actually collected in the
+                                    ledger's own currency. */}
+                                <span data-label="Paid" className="font-bold text-green">{fmtAmt(l.paidAmount)}</span>
                                 <span data-label="Outstanding" className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>{l.convOutstanding != null ? fmtAmt(l.convOutstanding) : '—'}</span>
                               </div>
                             )
@@ -1295,8 +1427,17 @@ export default function PaymentConsolePage() {
                             </span>
                           </div>
                           <div className="recgrid-foot recgrid-total">
-                            <span>Total Outstanding {targetCurrencyName && `(${targetCurrencyName})`}</span>
-                            <span style={{ color: 'var(--amber)' }}>{fmtAmt(convertedTotalOutstanding)}</span>
+                            {/* Net of the Discount row above it — was
+                                convertedTotalOutstanding (the raw, pre-
+                                discount sum) until 2026-09-04, which made
+                                the Discount line above look like a
+                                subtraction that never actually landed in
+                                this figure. Relabeled to "Total Payable" so
+                                it doesn't read as the same "Outstanding"
+                                figure the per-ledger column above already
+                                shows pre-discount. */}
+                            <span>Total Payable {targetCurrencyName && `(${targetCurrencyName})`}</span>
+                            <span style={{ color: 'var(--amber)' }}>{fmtAmt(convertedTotalNetPayable)}</span>
                           </div>
                         </div>
                       </div>
