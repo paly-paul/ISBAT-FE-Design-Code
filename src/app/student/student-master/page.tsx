@@ -56,6 +56,7 @@ export default function Page() {
   // own sidebar link opens, just pre-loaded via ?studentGuid= instead of a
   // StudentLookup search.
   function handleView(studentGuid: string) { router.push('/student/profile?studentGuid=' + studentGuid) }
+  function handleLearningMode(studentGuid: string) { router.push('/student/learning-mode?studentGuid=' + studentGuid) }
   function handleRefugee(studentGuid: string, studentName: string) { setSelectedStudentGuid(studentGuid); setSelectedStudentName(studentName); openModal('refugee-status-modal') }
   function updateSearch(value: string) { setSearch(value); setPage(1) }
   function updateAdvanced(patch: Partial<AdvancedFilterState>) { setAdvanced(prev => ({ ...prev, ...patch })); setPage(1) }
@@ -134,6 +135,7 @@ export default function Page() {
                     <td>
                       <ActionMenu>
                         <button className="btn btn-neu btn-sm" onClick={() => handleView(r.studentGuid)}><i className="lni lni-eye"></i> View</button>
+                        <button className="btn btn-neu btn-sm" onClick={() => handleLearningMode(r.studentGuid)}><i className="lni lni-book"></i> Learning Mode</button>
                         <button className="btn btn-neu btn-sm" onClick={() => handleRefugee(r.studentGuid, r.studentName)}><i className="lni lni-shield"></i> Refugee Status</button>
                       </ActionMenu>
                     </td>

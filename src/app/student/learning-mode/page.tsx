@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -9,6 +10,7 @@ import { Pagination } from '@/components/Pagination'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
 import { StudentDto } from '@/lib/api/student/student'
+import { useStudent } from '@/hooks/student/useStudents'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import {
@@ -33,10 +35,22 @@ import {
 const REPORT_PAGE_SIZE = 10
 
 export default function Page() {
+  const searchParams = useSearchParams()
+  const studentGuidParam = searchParams.get('studentGuid')
+
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
   const [student, setStudent] = useState<StudentDto | null>(null)
+  const { data: urlStudent, isLoading: isUrlStudentLoading } = useStudent(studentGuidParam, true)
+
+  // Auto-load student if provided in URL
+  useEffect(() => {
+    if (urlStudent && !student) {
+      setStudent(urlStudent)
+    }
+  }, [urlStudent, student])
+
   const { data: detail, isLoading: isDetailLoading } = useStudentLearningModeDetail(student?.studentGuid ?? null)
   const { data: options = [] } = useLearningModeOptions()
   const updateLearningMode = useUpdateStudentLearningMode()
@@ -107,9 +121,9 @@ export default function Page() {
               label="Current Enrollment (Read-Only)"
               items={[
                 { label: 'Student', value: detail?.studentName ?? student.studentName },
-                { label: 'Programme', value: detail?.programName ?? '—' },
-                { label: 'Semester', value: detail?.semesterName ?? '—' },
-                { label: 'Current Mode', value: detail?.learningModeLabel ?? 'Not set' },
+                { label: 'Programme', value: detail?.programName ?? (detail as any)?.programme ?? student.programName ?? (student as any).programme ?? '—' },
+                { label: 'Semester', value: detail?.semesterName ?? (detail as any)?.semester ?? student.semesterName ?? (student as any).semester ?? '—' },
+                { label: 'Current Mode', value: detail?.learningModeLabel ?? (detail as any)?.learningMode ?? (student as any).learningMode ?? 'Not set' },
               ]}
             />
             <div className="card">
