@@ -4,8 +4,9 @@ Companion doc for the permission-driven sidebar menu API (`GET` response with
 `{ name, icon, url, permissions, children }` nodes). Below is the same JSON
 shape, with `icon` and `url` filled in for every node — cross-checked against
 the merged/final tree built in `src/lib/api/users/menu.ts` (mockMenu plus its
-`ensureBulkIntakeEdit` / `ensureProgrammeApproval` / `mergeFinanceSections` /
-`mergeStudentSections` merge functions), the actual `page.tsx` routes on disk
+`ensureBulkIntakeEdit` / `ensureBatchSummary` / `ensureProgrammeApproval` /
+`mergeFinanceSections` / `mergeStudentSections` merge functions), the actual
+`page.tsx` routes on disk
 under `src/app/*`, and `src/components/Sidebar.tsx` (the single source of
 truth for what the sidebar actually renders) for rail ordering/icons. One
 top-level module per rail. Each leaf's `permissions` field reflects the real
@@ -255,6 +256,13 @@ through unchanged.
           "children": []
         },
         {
+          "name": "Batch Summary",
+          "icon": "lni lni-grid-alt",
+          "url": "/academic/batch-summary",
+          "permissions": {},
+          "children": []
+        },
+        {
           "name": "Room Management",
           "icon": "lni lni-home",
           "url": "/academic/room-management",
@@ -439,23 +447,23 @@ through unchanged.
           "children": []
         },
         {
-          "name": "NCHE Payment",
+          "name": "Payment Console Adjustments",
+          "icon": "lni lni-pencil-alt",
+          "url": "/finance/payment-console-adjustments",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "NCHE & Guild Payment",
           "icon": "lni lni-graduation",
-          "url": "/finance/nche-payment",
+          "url": "/finance/nche-guild-payment",
           "permissions": {},
           "children": []
         },
         {
-          "name": "Guild Payment",
-          "icon": "lni lni-users",
-          "url": "/finance/guild-payment",
-          "permissions": {},
-          "children": []
-        },
-        {
-          "name": "Guild Payment Console",
-          "icon": "lni lni-grid-alt",
-          "url": "/finance/guild-console",
+          "name": "Discount Allocation",
+          "icon": "lni lni-tag",
+          "url": "/finance/discount-allocation",
           "permissions": {},
           "children": []
         },
@@ -606,11 +614,23 @@ through unchanged.
 > mock/static (no backend permission entries exist for this workflow yet),
 > forced into the real menu tree by `mergeFinanceSections()` in `menu.ts`.
 > None of the 11 gate on `permissions.xxx` in code, hence `{}` throughout.
-> `NCHE Payment`, `Guild Payment` and `Guild Payment Console` are newer
-> additions inserted right after `Payment Console` — `mergeFinanceSections()`
-> fixes these three in at the leaf level even when the `Payment Collection`
-> section itself is already present from the real backend (same pattern
-> `mergeStudentSections()` uses for `Student Records`/`Settings` below).
+> `Payment Console Adjustments`, `NCHE & Guild Payment` and `Discount
+> Allocation` are newer additions inserted right after `Payment Console` —
+> `mergeFinanceSections()` fixes these three in at the leaf level even when
+> the `Payment Collection` section itself is already present from the real
+> backend (same pattern `mergeStudentSections()` uses for `Student Records`/
+> `Settings` below).
+>
+> `NCHE & Guild Payment` (2026-09-01) consolidates what used to be three
+> separate leaves — `NCHE Payment` (`/finance/nche-payment`), `Guild Payment`
+> (`/finance/guild-payment`) and `Guild Payment Console`
+> (`/finance/guild-console`) — into one page at `/finance/nche-guild-payment`;
+> the three old routes no longer exist on disk. `Payment Console Adjustments`
+> and `Discount Allocation` (both 2026-09-02) are net-new pages — the latter
+> replaces the per-student discount assignment half of `Student` >
+> `Discount Management`, which was dropped the same day (see the `Student`
+> module's notes below); the catalogue-CRUD half of that old page duplicated
+> `Finance` > `Discounts` and was likewise removed rather than ported.
 
 > `Finance Core` and `Banking` were previously listed with `permissions: {}`
 > in this doc — corrected here; all 10 pages do gate Add/Edit/Delete via
@@ -637,13 +657,6 @@ through unchanged.
           "name": "Student Master",
           "icon": "lni lni-graduation",
           "url": "/student/student-master",
-          "permissions": {},
-          "children": []
-        },
-        {
-          "name": "Batch Summary",
-          "icon": "lni lni-grid-alt",
-          "url": "/student/batch-summary",
           "permissions": {},
           "children": []
         },
@@ -691,24 +704,16 @@ through unchanged.
           "children": []
         },
         {
-          "name": "Intake Transfer",
+          "name": "Dropout Rejoin",
           "icon": "lni lni-calendar",
           "url": "/student/intake-transfer",
           "permissions": {},
           "children": []
-        }
-      ]
-    },
-    {
-      "name": "Services",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
+        },
         {
-          "name": "Student Services",
-          "icon": "lni lni-ticket",
-          "url": "/student/services",
+          "name": "Fee Structure Transfer",
+          "icon": "lni lni-dollar",
+          "url": "/student/fee-structure-transfer",
           "permissions": {},
           "children": []
         }
@@ -736,31 +741,10 @@ through unchanged.
       "permissions": null,
       "children": [
         {
-          "name": "Student Category Master",
-          "icon": "lni lni-users",
-          "url": "/student/student-category-master",
-          "permissions": {},
-          "children": []
-        },
-        {
-          "name": "Service Category Master",
-          "icon": "lni lni-list",
-          "url": "/student/service-category-master",
-          "permissions": {},
-          "children": []
-        },
-        {
           "name": "Specialization Management",
           "icon": "lni lni-graduation",
           "url": "/student/specialization",
           "permissions": {},
-          "children": []
-        },
-        {
-          "name": "Discount Management",
-          "icon": "lni lni-tag",
-          "url": "/student/discount-management",
-          "permissions": { "add": true, "delete": true, "edit": true },
           "children": []
         }
       ]
@@ -772,20 +756,56 @@ through unchanged.
 > `Operations`, `Services`, `Communications` and `Settings` are new sections,
 > ported from `isbat_student_module.html` — all mock/static (no backend
 > permission entries exist for this workflow yet), forced into the real menu
-> tree by `mergeStudentSections()` in `menu.ts`. `Batch Summary` and `Student
-> Statement` extend the existing `Student Records` section rather than
-> getting their own. 10 of these 11 pages don't gate on `permissions.xxx` in
-> code (all `{}`) — this is the least permission-aware module in the app
-> today.
+> tree by `mergeStudentSections()` in `menu.ts`. `Student Statement` extends
+> the existing `Student Records` section rather than getting its own. 9 of
+> these 10 pages don't gate on `permissions.xxx` in code (all `{}`) — this is
+> the least permission-aware module in the app today.
+
+> `Batch Summary` moved out of `Student Records` into `Academic` >
+> `Academic Core` on 2026-09-02 (see the `Academic` section above) — the
+> page already pulled from the academic batch-summary API, not a students
+> endpoint. `mergeStudentSections()` filters it out of `Student Records`
+> here in case the real backend still registers it, and `ensureBatchSummary`
+> adds it into `Academic Core` (right after `Batch Management`) if the
+> backend doesn't register it there yet.
+
+> The whole `Services` section (`Student Services`) was hidden from the
+> sidebar on 2026-09-02 — `mergeStudentSections()` filters it out (so a
+> stale entry doesn't linger for users on the real, non-mock menu tree). The
+> page still exists at `/student/services`, just not linked to.
+>
+> `Intake Transfer` (`Operations`) was likewise hidden on 2026-09-02, then
+> re-enabled and renamed to `Dropout Rejoin` on 2026-09-03 — same route
+> (`/student/intake-transfer`), matching the page's own "Dropout Rejoin"
+> mode tab. The page also had a second mode, "Deferment / Period Shift",
+> commented out on the page itself the same day (no backend contract exists
+> for it — always page-local mock data), leaving Dropout Rejoin as the
+> page's only reachable mode. `mergeStudentSections()` filters the old
+> `Intake Transfer` name out of `Operations` in case the real backend still
+> registers it under that label, so a stale entry doesn't linger alongside
+> the renamed one.
 
 > `Category Masters` (`/student/masters`) was later split into two unrelated
 > resources sharing that one page — **Student Category Master** (real
 > sponsor-categories CRUD) and **Service Category Master** (mock ticketing
-> categories) — `mergeStudentSections()` swaps the old single leaf for both
-> in place rather than appending duplicates. `Discount Management` is a new
-> leaf inserted right after `Specialization Management`; unlike the rest of
-> this module it does gate `add`/`edit`/`delete` via `usePagePermissions()`
-> (no `get` action exists on the page).
+> categories) — `mergeStudentSections()` swapped the old single leaf for both
+> in place rather than appending duplicates. Both were then moved out of this
+> module entirely (2026-09-02) into `Config` > `Students` (see the `Config`
+> section below) — `mergeStudentSections()` now filters both names out of
+> `Settings` here so a stale entry pointing at the removed
+> `/student/student-category-master` / `/student/service-category-master`
+> routes doesn't linger for users still on the old real menu tree.
+
+> `Discount Management` (`/student/discount-management`) was dropped from
+> `Settings` entirely on 2026-09-02 — its per-student assignment half moved
+> to Finance's new `Discount Allocation` page, and its other half (the
+> discount catalogue CRUD) duplicated `Finance` > `Discounts`, so the whole
+> page was retired rather than ported. `mergeStudentSections()` filters the
+> name out of `Settings` here too, so a stale entry pointing at the
+> now-removed route doesn't linger for users still on the old real menu
+> tree. `Settings` is now just `Specialization Management`, which — unlike
+> the rest of this module — does gate `add`/`edit`/`delete` via
+> `usePagePermissions()` (no `get` action exists on the page).
 
 > `Operations`' icons are frontend-owned, not backend-owned: even when the
 > real `/me/menu` response already registers the whole `Operations` section
@@ -861,6 +881,28 @@ Previously scattered under "Academics" (Faculty Master only) and
   "url": null,
   "permissions": null,
   "children": [
+    {
+      "name": "Students",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Student Category Master",
+          "icon": "lni lni-users",
+          "url": "/config/student-category-master",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Service Category Master",
+          "icon": "lni lni-list",
+          "url": "/config/service-category-master",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    },
     {
       "name": "Organization",
       "icon": null,
@@ -1023,6 +1065,11 @@ Previously scattered under "Academics" (Faculty Master only) and
 }
 ```
 
+> `Students` is a new section (2026-09-02), moved here from the `Student`
+> module's own `Settings` section — see the `Student` module's notes above.
+> Like the rest of that former section, neither page gates on
+> `permissions.xxx` in code (both `{}`).
+
 > `/config/enquiry-source` ("Isbat Enquiry Source") and
 > `/config/enquiry-source-master` ("Enquiry Source") are two **genuinely
 > different backend resources** with their own guid spaces — not a typo,
@@ -1073,7 +1120,7 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
       "permissions": null,
       "children": [
         {
-          "name": "Assessment Master",
+          "name": "Fee Clearance Master",
           "icon": "lni lni-list",
           "url": "/assessment/assessment-master",
           "permissions": {},
@@ -1322,14 +1369,17 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
 }
 ```
 
-> `Assessment Master`, `Exam Rules Master`, `Question FAQs` and `IA Creation`
-> are newer leaves under `Assessment Structure` — fixed in at the leaf level
-> by `ensureAssessmentMaster()` even when the section itself is already
-> present. `Resit Master` is the equivalent addition to `Resit & Disputes`
-> (`ensureResitMaster()`), inserted before `Resit Calendar`. `CBT Schedule`
-> was dropped from `Class Test (CBT)` — its page still exists on disk but is
-> no longer linked from this menu; see the "no sidebar/menu entry" table
-> below.
+> `Fee Clearance Master`, `Exam Rules Master`, `Question FAQs` and `IA
+> Creation` are newer leaves under `Assessment Structure` — fixed in at the
+> leaf level by `ensureAssessmentMaster()` even when the section itself is
+> already present. `Fee Clearance Master` was named `Assessment Master`
+> until it was renamed (same route, `/assessment/assessment-master`) to
+> better reflect what the page actually does — `ensureAssessmentMaster()`
+> matches on the current name. `Resit Master` is the equivalent addition to
+> `Resit & Disputes` (`ensureResitMaster()`), inserted before `Resit
+> Calendar`. `CBT Schedule` was dropped from `Class Test (CBT)` — its page
+> still exists on disk but is no longer linked from this menu; see the "no
+> sidebar/menu entry" table below.
 
 ---
 

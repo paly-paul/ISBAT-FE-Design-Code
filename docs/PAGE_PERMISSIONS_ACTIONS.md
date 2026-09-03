@@ -73,6 +73,7 @@ A page with nothing beyond View is written as "View only".
 | Bulk Intake Edit | `/academic/bulk-intake-edit` | View · Edit multiple intake rows inline, Save changes, Reset changes (all not yet permission-gated) |
 | Skill Management | `/academic/skill-master` | View · Add Skill (gated: `add`) · Edit (gated: `edit`) · Delete (gated: `delete`) · Proceed to Allocation (not yet permission-gated) |
 | Batch Management | `/academic/batch-management` | View · Create Batch (gated: `add`) · Edit (gated: `edit`) · Delete (gated: `delete`) |
+| Batch Summary | `/academic/batch-summary` | View · Export |
 | Room Management | `/academic/room-management` | View · Add Room (gated: `add`) · Edit (gated: `edit`) · Delete (gated: `delete`) |
 | Session Movement | `/academic/session-movement` | View · Preview Movement Results, Download Preview CSV, Cancel, Confirm & Execute Session Movement (all not yet permission-gated) |
 
@@ -232,7 +233,7 @@ None of these 6 pages gate any action on `permissions.xxx` today.
 
 ## Student
 
-None of Student's 11 pages gate any action on `permissions.xxx` today —
+None of Student's 10 pages gate any action on `permissions.xxx` today —
 every action below is **not yet permission-gated**. This is the least
 permission-aware module in the app.
 
@@ -241,7 +242,6 @@ permission-aware module in the app.
 | Page | Route | Actions |
 |---|---|---|
 | Student Master | `/student/student-master` | View · View detail (per student) |
-| Batch Summary | `/student/batch-summary` | View · Export |
 | Student Statement | `/student/statement` | View · Load, Print, PDF |
 
 ### Operations

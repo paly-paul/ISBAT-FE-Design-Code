@@ -1283,7 +1283,7 @@ body {
 }
 
 /* Batch Summary dropped its "Full Batches" tile (no capacity field to
-   compute it from — see student/batch-summary/page.tsx) so it's down to 3
+   compute it from — see academic/batch-summary/page.tsx) so it's down to 3
    live stat tiles; the base .stats-row's repeat(4,1fr) would leave a bare
    gap on the right instead of filling the row. */
 #page-batch-summary .stats-row {
