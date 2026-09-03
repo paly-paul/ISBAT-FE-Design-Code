@@ -9,7 +9,8 @@ import { Pagination } from '@/components/Pagination'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
 import { StudentDto } from '@/lib/api/student/student'
-import { useDropoutStudents, useRejoinCandidate, useRejoinStudent } from '@/hooks/student/useDropoutRejoin'
+import { useDropoutStudents, useRejoinCandidate, useRejoinBatches, useRejoinStudent } from '@/hooks/student/useDropoutRejoin'
+import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 
 // Ported from isbat_student_module.html's Intake Transfer page. Only the
 // "Dropout Rejoin" reason has a real backend contract — students/dropout-
@@ -100,21 +101,40 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
   const rejoin = useRejoinStudent()
 
   const [targetSemester, setTargetSemester] = useState('')
+  const [targetBatchTime, setTargetBatchTime] = useState('')
   const [targetBatch, setTargetBatch] = useState('')
   const [targetFeeHead, setTargetFeeHead] = useState('')
   const [remarks, setRemarks] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
 
+  // Batch Time — a plain global list (Morning/Evening/etc.), same source
+  // Admission's own filing form uses, not something the candidate response
+  // carries. Sits ahead of Target Batch in the form since get-rejoin-batches.md
+  // needs both the semester and this before it can return anything.
+  const { data: batchTimes = [] } = useBatchTimes()
+  // The real batch dropdown for this form (get-rejoin-batches.md) — replaces
+  // candidate.availableBatches entirely rather than falling back to it, since
+  // that list isn't scoped to a batch time at all. Only fires once both
+  // targetSemester and targetBatchTime are picked.
+  const { data: rejoinBatches = [], isFetching: isRejoinBatchesLoading } = useRejoinBatches(candidate?.studentGuid ?? null, targetSemester || null, targetBatchTime || null, !!candidate)
+
   // Seed the dropdowns once the candidate's restricted option lists arrive.
   // Each list can come back missing entirely (not just empty) on a real
   // response — see the note on RejoinCandidateDto — so every read below
-  // falls back to [] rather than assuming the array is always there.
+  // falls back to [] rather than assuming the array is always there. Batch
+  // Time/Target Batch aren't seeded here — Batch Time has no candidate-
+  // supplied default to seed from, and Target Batch now depends on it.
   useEffect(() => {
-    if (!candidate) { setTargetSemester(''); setTargetBatch(''); setTargetFeeHead(''); return }
+    if (!candidate) { setTargetSemester(''); setTargetBatchTime(''); setTargetBatch(''); setTargetFeeHead(''); return }
     setTargetSemester(candidate.currentSemesterGuid || candidate.availableSemesters?.[0]?.semesterGuid || '')
-    setTargetBatch(candidate.availableBatches?.[0]?.batchGuid || '')
     setTargetFeeHead(candidate.availableFeeHeads?.[0]?.feeHdGuid || '')
   }, [candidate])
+
+  // The batch list is scoped to (semester, batch time) together — whichever
+  // one just changed, whatever was previously picked for Target Batch no
+  // longer necessarily applies, same cascading-reset convention Programme
+  // Transfer's own semester→batch chain uses.
+  useEffect(() => { setTargetBatch('') }, [targetSemester, targetBatchTime])
 
   function handlePick(studentGuid: string) { setSelectedGuid(studentGuid); setRemarks('') }
   function handleClear() {
@@ -124,7 +144,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
   }
 
   const targetSemesterOpt = candidate?.availableSemesters?.find(s => s.semesterGuid === targetSemester)
-  const targetBatchOpt = candidate?.availableBatches?.find(b => b.batchGuid === targetBatch)
+  const targetBatchOpt = rejoinBatches.find(b => b.batchGuid === targetBatch)
   const targetFeeHeadOpt = candidate?.availableFeeHeads?.find(f => f.feeHdGuid === targetFeeHead)
   const canExecute = !!(targetSemester && targetBatch && targetFeeHead)
 
@@ -222,10 +242,21 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
                 <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4 }}>Restricted to the student&apos;s current semester and the next one.</div>
               </div>
               <div className="fg">
+                <label className="lbl">Batch Time <span className="req">*</span></label>
+                <SearchSelect
+                  placeholder="— Select batch time —"
+                  disabled={!targetSemester}
+                  options={batchTimes.map(bt => ({ value: bt.batchTimeGuid, label: bt.batchTime }))}
+                  value={targetBatchTime}
+                  onChange={setTargetBatchTime}
+                />
+              </div>
+              <div className="fg">
                 <label className="lbl">Target Batch <span className="req">*</span></label>
                 <SearchSelect
-                  placeholder="— Select batch —"
-                  options={(candidate.availableBatches ?? []).map(b => ({ value: b.batchGuid, label: b.batchCode }))}
+                  placeholder={isRejoinBatchesLoading ? 'Loading batches…' : '— Select batch —'}
+                  disabled={!targetSemester || !targetBatchTime}
+                  options={rejoinBatches.map(b => ({ value: b.batchGuid, label: b.batchCode }))}
                   value={targetBatch}
                   onChange={setTargetBatch}
                 />

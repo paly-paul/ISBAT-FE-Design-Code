@@ -101,6 +101,24 @@ export function getRejoinCandidate(studentGuid: string): Promise<RejoinCandidate
   return apiGet<RejoinCandidateDto>(`/api/v1/students/dropout-rejoin/${studentGuid}/candidate`)
 }
 
+// Confirmed via get-rejoin-batches.md (2026-09-03) — a separate, narrower
+// batch dropdown than candidate.availableBatches above: filtered by the
+// student's program, the chosen semester, AND the chosen batch time (Day/
+// Evening/etc., picked via a batch-time dropdown the form gains alongside
+// this). Called only once both are selected — same "cascading, not
+// preloaded" convention as e.g. Programme Transfer's own semester→batch
+// chain. Response shape (batchGuid/batchCode) matches RejoinBatchOption
+// exactly, so no new type is needed for it.
+export function getRejoinBatches(studentGuid: string, semesterGuid: string, batchTimeGuid: string): Promise<RejoinBatchOption[]> {
+  if (MOCK_AUTH) {
+    const found = mockDropouts.find(d => d.studentGuid === studentGuid)
+    return Promise.resolve(found ? [{ batchGuid: found.batchGuid, batchCode: found.batchCode }] : [])
+  }
+  const params = new URLSearchParams({ semesterGuid, batchTimeGuid })
+  return apiGet<RejoinBatchOption[] | null>(`/api/v1/students/dropout-rejoin/${studentGuid}/batches?${params.toString()}`)
+    .then(data => data ?? [])
+}
+
 export function rejoinStudent(studentGuid: string, payload: RejoinStudentRequest): Promise<RejoinResultDto> {
   if (MOCK_AUTH) {
     const found = mockDropouts.find(d => d.studentGuid === studentGuid)

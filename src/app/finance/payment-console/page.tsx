@@ -30,8 +30,6 @@ import {
   PAY_TYPE_LABELS,
   PAY_TYPE_TO_RECEIPT_CATEGORY,
   AllOutstandingItem,
-  CurrentSemesterPayableLedger,
-  CurrentSemesterPayableTotal,
 } from '@/hooks/finance/usePaymentConsole'
 import { formatDateTime } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
@@ -82,36 +80,6 @@ function OutstandingCategoryTable({ items, isLoading, isError }: { items: AllOut
         <span className="font-bold text-amber" style={{ fontSize: 15 }}>{fmtAmt(total)}</span>
       </div>
     </>
-  )
-}
-
-// Discount breakdown for Step 2's Outstanding Balance card — pulled out of
-// the per-ledger inline note it used to be into one fixed block, rendered
-// once right after the Library Deposit row specifically (per request),
-// regardless of which ledger(s) the discount actually applies to. Renders
-// nothing when nothing in the current semester earned a discount, rather
-// than an empty/all-zero block.
-function DiscountDetails({ ledgers, totals }: { ledgers: CurrentSemesterPayableLedger[]; totals: CurrentSemesterPayableTotal[] }) {
-  const discounted = ledgers.filter(l => l.discountAmount > 0)
-  if (discounted.length === 0) return null
-  return (
-    <div className="mt-2 mb-2 p-3 rounded-[var(--rsm)] bg-clr-green-bg border border-[1.5px]" style={{ borderColor: 'var(--green-bd)' }}>
-      <div className="font-bold text-green flex items-center gap-1.5" style={{ fontSize: 11.5, marginBottom: 6 }}>
-        <i className="lni lni-tag"></i> Discount Applied
-      </div>
-      {discounted.map((l, i) => (
-        <div className="receipt-row" key={`${l.discountGuid ?? l.ledgerName}-${i}`} style={{ padding: '2px 0' }}>
-          <span className="text-muted">{l.discountName} <span className="text-g400">— {l.ledgerName}</span></span>
-          <span className="font-bold text-green">− {l.currencyName} {l.discountAmount.toLocaleString()}</span>
-        </div>
-      ))}
-      {totals.filter(t => t.totalDiscount > 0).map(t => (
-        <div className="flex justify-between items-center" key={t.currencyGuid ?? t.currencyName} style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed var(--green-bd)' }}>
-          <span className="text-muted" style={{ fontSize: 12 }}>Total Discount ({t.currencyName})</span>
-          <span className="font-bold text-green">− {t.totalDiscount.toLocaleString()}</span>
-        </div>
-      ))}
-    </div>
   )
 }
 
@@ -388,6 +356,19 @@ export default function PaymentConsolePage() {
   const { data: currentSemesterPayable, isLoading: isLedgersLoading } = useCurrentSemesterPayable(selectedApplicationGuid, !!selectedApplicationGuid, studentGuid)
   const ledgers = currentSemesterPayable?.ledgers ?? []
   const ledgerTotals = currentSemesterPayable?.totals ?? []
+  // Outstanding Balance shows one currency's table at a time behind a
+  // dropdown now, per request (2026-09-04) — two stacked tables for a
+  // student billed in more than one currency read as confusing rather than
+  // informative. Resyncs to the first currency present whenever the ledger
+  // set changes shape (a new student, or this one's currencies changing)
+  // so the dropdown never points at a currency no longer in the list.
+  const [selectedOutstandingCurrency, setSelectedOutstandingCurrency] = useState<string | null>(null)
+  useEffect(() => {
+    const keys = ledgerTotals.map(t => t.currencyGuid ?? t.currencyName)
+    if (keys.length === 0) { setSelectedOutstandingCurrency(null); return }
+    if (!selectedOutstandingCurrency || !keys.includes(selectedOutstandingCurrency)) setSelectedOutstandingCurrency(keys[0])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ledgerTotals])
   // All four categories in one call (get-all-outstanding-ledgers.md) — used
   // to show a real outstanding figure on the Other Payment tab, whose own
   // payment-entry form stays mock (no documented single-category submit
@@ -1171,60 +1152,101 @@ export default function PaymentConsolePage() {
                     // both back to back just repeated the same message twice.
                     null
                   ) : (
-                    <div>
-                      {/* Itemized card rows (.pc-ledger-item), one per
-                          current-semester ledger — get-current-semester-
-                          payable-ledgers.md is already scoped server-side to
-                          "this semester" (+ any carried-forward semester-1
-                          registration fee), so there's no client-side
-                          semester grouping/picking left to do here, unlike
-                          the old outstanding-ledgers-backed version. The
-                          amount shown is netPayable (outstanding minus any
-                          discount, floored at 0) — not the raw outstanding
-                          figure — since that's the actual amount still owed.
-                          Discount detail is pulled out of the per-row note
-                          it used to be and rendered once, in a fixed spot
-                          right after the Library Deposit row specifically
-                          (per request) rather than under whichever ledger it
-                          actually applies to — falls back to right after the
-                          last row if this application's ledgers don't
-                          include one. */}
-                      {ledgers.map((l, i) => {
-                        const isPaid = l.outstanding === 0
-                        const isLibraryDeposit = l.ledgerName.trim().toLowerCase() === 'library deposit'
+                    <>
+                      {/* Table redesign per request (2026-09-04) — replaces the
+                          old itemized-card layout with a Ledger/Scheduled Amt/
+                          Scheduled Bill/Paid/Outstanding grid, matching a
+                          cashier's paper worksheet. Scheduled Amt and Scheduled
+                          Bill both read from ledgerAmount — the backend has no
+                          second figure distinguishing them, they're the same
+                          value shown twice. Discount/Total moved out of the
+                          table into an invoice-style summary block below it,
+                          right-aligned, per a follow-up request — matches a
+                          typical invoice's Subtotal/Tax/Total corner instead
+                          of being table rows the table's own column headers
+                          don't really describe (Discount and Total aren't
+                          "a ledger"). One currency's table shows at a time
+                          behind the dropdown below, rather than stacking every
+                          currency's table one after another — confirmed
+                          confusing for a student billed in more than one. */}
+                      {ledgerTotals.length > 1 && (
+                        <div className="fg" style={{ maxWidth: 220 }}>
+                          <label className="lbl">Currency</label>
+                          <SearchSelect
+                            options={ledgerTotals.map(t => ({ value: t.currencyGuid ?? t.currencyName, label: t.currencyName }))}
+                            value={selectedOutstandingCurrency ?? ''}
+                            onChange={setSelectedOutstandingCurrency}
+                          />
+                        </div>
+                      )}
+                      {ledgerTotals.filter(t => (t.currencyGuid ?? t.currencyName) === selectedOutstandingCurrency).map(t => {
+                        const currencyLedgers = ledgers.filter(l => (l.currencyGuid ?? l.currencyName) === (t.currencyGuid ?? t.currencyName))
+                        // No totalLedgerAmount field on CurrentSemesterPayableTotal —
+                        // summed client-side from the ledger rows themselves.
+                        const totalScheduled = currencyLedgers.reduce((sum, l) => sum + l.ledgerAmount, 0)
                         return (
-                          <div key={`${l.ledgerGuid ?? 'none'}-${i}`}>
-                            <div className={`pc-ledger-item${isPaid ? ' paid' : ''}`}>
-                              <span className="pc-ledger-icon"><i className={isPaid ? 'lni lni-checkmark-circle' : 'lni lni-invoice'}></i></span>
-                              <div className="flex-1 min-w-0">
-                                <div className="pc-ledger-name truncate">{l.ledgerName}{l.ledgerNum ? ` (${l.ledgerNum})` : ''}</div>
-                                {isPaid && <div className="pc-ledger-sub">Paid</div>}
+                          <div key={t.currencyGuid ?? t.currencyName} className="mb-4">
+                            <ScrollTable className="no-sticky-col">
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>Ledger</th>
+                                    <th>Scheduled Amt</th>
+                                    <th>Scheduled Bill</th>
+                                    <th>Paid</th>
+                                    <th>Outstanding</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {currencyLedgers.map((l, i) => {
+                                    const isPaid = l.outstanding === 0
+                                    return (
+                                      <tr key={`${l.ledgerGuid ?? 'none'}-${i}`}>
+                                        <td>
+                                          {l.ledgerName}{l.ledgerNum ? ` (${l.ledgerNum})` : ''}
+                                          {isPaid && <div className="text-green" style={{ fontSize: 11, fontWeight: 600 }}>Paid</div>}
+                                        </td>
+                                        <td>{fmtAmt(l.ledgerAmount)}</td>
+                                        <td>{fmtAmt(l.ledgerAmount)}</td>
+                                        <td className="font-bold text-green">{fmtAmt(l.paidAmount)}</td>
+                                        <td className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>{fmtAmt(l.outstanding)}</td>
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+                            </ScrollTable>
+                            {/* Invoice-style totals corner — .receipt-row/.receipt-total
+                                are the same dashed-divider-then-bold-final-line pair
+                                already used for the payment receipt elsewhere in this
+                                app, just narrowed and pushed to the right instead of
+                                full-width. Discount only shows when this currency
+                                actually earned one — same as the old in-table row's
+                                condition — and still carries the same "full payment
+                                only" caveat, since that condition can't be read off
+                                the figure itself. */}
+                            <div className="flex justify-end mt-2">
+                              <div style={{ minWidth: 240, maxWidth: 320, width: '100%' }}>
+                                <div className="receipt-row">
+                                  <span className="text-muted">Scheduled Bill Total</span>
+                                  <span className="font-bold">{fmtAmt(totalScheduled)}</span>
+                                </div>
+                                {t.totalDiscount > 0 && (
+                                  <div className="receipt-row">
+                                    <span className="text-muted">Discount <span className="text-g400" style={{ fontSize: 10.5 }}>(full payment only)</span></span>
+                                    <span className="font-bold text-green">− {fmtAmt(t.totalDiscount)}</span>
+                                  </div>
+                                )}
+                                <div className="receipt-total">
+                                  <span>Total Outstanding ({t.currencyName})</span>
+                                  <span className="text-amber">{fmtAmt(t.totalOutstanding)}</span>
+                                </div>
                               </div>
-                              <span className="flex items-baseline gap-1.5 justify-end flex-shrink-0">
-                                <span className="text-g400 font-semibold" style={{ fontSize: 11 }}>{l.currencyName}</span>
-                                <span className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>
-                                  {isPaid ? fmtAmt(l.paidAmount) : fmtAmt(l.netPayable)}
-                                </span>
-                              </span>
                             </div>
-                            {isLibraryDeposit && <DiscountDetails ledgers={ledgers} totals={ledgerTotals} />}
                           </div>
                         )
                       })}
-                      {!ledgers.some(l => l.ledgerName.trim().toLowerCase() === 'library deposit') && (
-                        <DiscountDetails ledgers={ledgers} totals={ledgerTotals} />
-                      )}
-                      {/* Total Net Payable across every currency present this
-                          semester — purely a display sum of the totals the
-                          server already returned (totalNetPayable per
-                          currency), not a new figure computed client-side. */}
-                      {ledgerTotals.filter(t => t.totalNetPayable > 0).map(t => (
-                        <div className="pc-total-due" key={t.currencyGuid ?? t.currencyName}>
-                          <span className="text-muted" style={{ fontSize: 12 }}>Total Due ({t.currencyName})</span>
-                          <span className="font-bold text-amber" style={{ fontSize: 15 }}>{fmtAmt(t.totalNetPayable)}</span>
-                        </div>
-                      ))}
-                    </div>
+                    </>
                   )
                 }
                 {/* Payment Detail — no separate card/section, per request;
