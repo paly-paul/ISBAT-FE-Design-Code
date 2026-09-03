@@ -1,12 +1,13 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
-import { StudentDto } from '@/lib/api/student/student'
+import { StudentDto, normalizeStudentDetail } from '@/lib/api/student/student'
 import { useStudent } from '@/hooks/student/useStudents'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
@@ -35,16 +36,50 @@ const TARGET_PROGRAMMES_FALLBACK = [{ value: '', label: 'No programmes available
 // student-discounts assign/update endpoints; StudentDetailDto carries the
 // same field for whatever discount is already resolved onto the student —
 // same helper as student/profile's own Discount display.
-function formatDiscount(detail: { discountStatus: string | null; calcType: string | null; amtPer: number | null } | undefined) {
+//
+// transferDetail (program-transfer/detail — this page's own primary data
+// source) turns out to carry its own, more specific discountCode/
+// discountName/discountAmtPer/discountCalcType (confirmed live, 2026-09-04)
+// that the generic student-detail fields below don't reliably mirror for
+// this particular programme/fee assignment — a real student with an active
+// "Lumpsum Discount" there still showed "None" reading detail alone. Prefer
+// transferDetail's own fields when present; detail's stay the fallback for
+// whenever transferDetail doesn't have one (e.g. mock mode, which never
+// populates its discount fields at all).
+function formatDiscount(
+  transferDetail: { discountName: string | null; discountAmtPer?: number | null; discountCalcType?: number | null } | undefined,
+  detail: { discountStatus: string | null; calcType: string | null; amtPer: number | null } | undefined,
+) {
+  if (transferDetail?.discountName) {
+    const kind = transferDetail.discountCalcType === 2 ? '%' : transferDetail.discountCalcType === 1 ? 'Amt' : ''
+    return transferDetail.discountAmtPer != null ? `${transferDetail.discountName} — ${transferDetail.discountAmtPer}${kind}` : transferDetail.discountName
+  }
   if (!detail?.discountStatus || detail.discountStatus === 'Cancelled' || detail.discountStatus === 'CancelledImmediate') return 'None'
   const kind = detail.calcType === '2' ? '%' : detail.calcType === '1' ? 'Amt' : ''
   return detail.amtPer != null ? `${detail.amtPer}${kind}` : detail.discountStatus
 }
 
-export default function Page() {
+// useSearchParams() requires a Suspense boundary above it (Next.js App
+// Router) — see the wrapping default export at the bottom of this file,
+// same split Student Profile uses for the same reason.
+function ProgTransferContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  // Student Profile's action menu links here as
+  // /student/prog-transfer?studentGuid=<guid> instead of requiring a second
+  // StudentLookup search for the student already open there — same
+  // deep-link convention Student Master's own "View" action uses to reach
+  // Profile itself.
+  const studentGuidParam = searchParams.get('studentGuid')
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [student, setStudent] = useState<StudentDto | null>(null)
-  const { data: detail } = useStudent(student?.studentGuid ?? null, !!student)
+  const effectiveStudentGuid = student?.studentGuid ?? studentGuidParam
+  const { data: detail } = useStudent(effectiveStudentGuid ?? null, !!effectiveStudentGuid)
+  // Once the deep-linked guid's detail resolves, seed `student` from it —
+  // same effect Profile itself uses for its own ?studentGuid= param.
+  useEffect(() => {
+    if (!student && studentGuidParam && detail) setStudent(normalizeStudentDetail(detail, effectiveStudentGuid))
+  }, [student, studentGuidParam, detail, effectiveStudentGuid])
   const { data: transferDetail } = useProgramTransferDetail(student?.studentGuid ?? null)
   const { data: history = [] } = useProgramTransferHistory(student?.studentGuid ?? null)
   const postProgramTransfer = usePostProgramTransfer()
@@ -75,6 +110,9 @@ export default function Page() {
   function handleLoad(s: StudentDto) { setStudent(s); showToast(`${s.studentName} loaded`, 'ok') }
   function handleClear() {
     setStudent(null); setTargetProg(''); setTargetSemester(''); setTargetBatch(''); setTargetFeeStructure(''); setRemarks('')
+    // Drop ?studentGuid= so the effect above doesn't immediately reload the
+    // same student right back in — same reasoning as Profile's own clear.
+    if (studentGuidParam) router.replace('/student/prog-transfer')
   }
 
   const target = programOptions.find(p => p.value === targetProg)
@@ -123,13 +161,13 @@ export default function Page() {
                 { label: 'Semester', value: transferDetail?.semesterName ?? student.semesterName ?? '—' },
                 { label: 'Intake', value: transferDetail?.intakeDescription ?? '—' },
                 { label: 'Fee Structure', value: transferDetail?.feeDesc ?? '—' },
-                { label: 'Admission Type', value: transferDetail?.admissionType ?? '—' },
+                { label: 'Admission Type', value: transferDetail?.admissionTypeLabel ?? transferDetail?.admissionType ?? '—' },
               ]}
             />
 
             <div className="g2">
               <div className="card">
-                <div className="card-hdr"><div className="card-title"><i className="lni lni-transfer"></i> Transfer Parameters</div></div>
+                <div className="card-hdr"><div className="card-title"><i className="lni lni-shuffle"></i> Transfer Parameters</div></div>
                 <div className="fg"><label className="lbl">New Programme <span className="req">*</span></label>
                   <SearchSelect
                     placeholder="— Select new programme —"
@@ -150,7 +188,7 @@ export default function Page() {
                 {/* Discount — display only, not editable here (per request); real
                     value from the student's own discount assignment, same field
                     Student Profile's own Discount row reads. */}
-                <div className="fg"><label className="lbl">Discount</label><input className="ctrl" readOnly value={formatDiscount(detail)} /></div>
+                <div className="fg"><label className="lbl">Discount</label><input className="ctrl" readOnly value={formatDiscount(transferDetail, detail)} /></div>
                 <div className="fg"><label className="lbl">Remarks</label><textarea className="ctrl" rows={3} maxLength={100} placeholder="Reason for programme transfer… (max 100 chars)" value={remarks} onChange={e => setRemarks(e.target.value)} /></div>
                 <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                   <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
@@ -215,5 +253,13 @@ export default function Page() {
       )}
       <Toast toast={toast} />
     </>
+  )
+}
+
+export default function Page() {
+  return (
+    <Suspense>
+      <ProgTransferContent />
+    </Suspense>
   )
 }

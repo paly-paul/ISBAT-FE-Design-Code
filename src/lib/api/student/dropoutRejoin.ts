@@ -42,9 +42,14 @@ export interface RejoinCandidateDto {
   currentSemesterName: string
   // Restricted to the student's current SemCode and current SemCode + 1
   // (get-rejoin-candidate.md) — unlike student-resuming's full semester list.
-  availableSemesters: RejoinSemesterOption[]
-  availableFeeHeads: RejoinFeeHeadOption[]
-  availableBatches: RejoinBatchOption[]
+  // Confirmed live (2026-09-04): a real candidate response can omit any of
+  // these three entirely rather than sending an empty array — crashed the
+  // page's own .find()/.map() calls, which assumed the docs' required-array
+  // shape held. Treat a missing one the same as "no options" everywhere it's
+  // read.
+  availableSemesters?: RejoinSemesterOption[] | null
+  availableFeeHeads?: RejoinFeeHeadOption[] | null
+  availableBatches?: RejoinBatchOption[] | null
 }
 
 export interface RejoinStudentRequest {
