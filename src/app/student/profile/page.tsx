@@ -464,7 +464,7 @@ function StudentProfileContent() {
                   <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/batch-transfer')}><i className="lni lni-transfer"></i> Batch Transfer</button>
                   <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/prog-transfer')}><i className="lni lni-graduation"></i> Prog. Transfer</button>
                   <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/learning-mode')}><i className="lni lni-display"></i> Learning Mode</button>
-                  <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/intake-transfer')}><i className="lni lni-calendar"></i> Intake Transfer</button>
+                  <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/intake-transfer')}><i className="lni lni-calendar"></i> Dropout Rejoin</button>
                 </ActionMenu>
               </div>
               <div className="stu-meta-row">

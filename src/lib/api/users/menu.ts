@@ -82,9 +82,12 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
     leaf('Batch Transfer', 'shuffle', '/student/batch-transfer'),
     leaf('Programme Transfer', 'graduation', '/student/prog-transfer'),
     leaf('Learning Mode', 'display', '/student/learning-mode'),
-    // Intake Transfer hidden from the sidebar per request, 2026-09-02 — page
-    // still exists at /student/intake-transfer, just not linked to.
-    // leaf('Intake Transfer', 'calendar', '/student/intake-transfer'),
+    // Re-enabled and renamed from "Intake Transfer" to "Dropout Rejoin",
+    // 2026-09-03 — same route (/student/intake-transfer), matching the page's
+    // own "Dropout Rejoin" mode tab (its "Deferment / Period Shift" tab was
+    // commented out on the page itself the same day, leaving Dropout Rejoin
+    // as the page's only mode).
+    leaf('Dropout Rejoin', 'calendar', '/student/intake-transfer'),
     leaf('Fee Structure Transfer', 'dollar', '/student/fee-structure-transfer'),
   ]),
   // Services section hidden from the sidebar per request, 2026-09-02 — its
@@ -413,9 +416,11 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
     const missingLeaves = operationsDef.children.filter(l => !existingLeaves.has(l.name))
 
     const children = [
-      // Intake Transfer hidden from the sidebar per request, 2026-09-02 —
-      // filtered out here too in case the real backend still registers it,
-      // so it doesn't linger for users on the real (non-mock) menu tree.
+      // "Intake Transfer" renamed to "Dropout Rejoin" 2026-09-03 (see
+      // STUDENT_OPERATIONS_SECTIONS above) — filtered out here too in case
+      // the real backend still registers the old name, so a stale entry
+      // pointing at it under the old label doesn't linger alongside the
+      // renamed one from missingLeaves below.
       ...operationsSection.children.filter(l => l.name !== 'Intake Transfer').map(l =>
         iconByName.has(l.name) ? { ...l, icon: iconByName.get(l.name)! } : l,
       ),

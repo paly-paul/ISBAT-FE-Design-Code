@@ -704,6 +704,13 @@ through unchanged.
           "children": []
         },
         {
+          "name": "Dropout Rejoin",
+          "icon": "lni lni-calendar",
+          "url": "/student/intake-transfer",
+          "permissions": {},
+          "children": []
+        },
+        {
           "name": "Fee Structure Transfer",
           "icon": "lni lni-dollar",
           "url": "/student/fee-structure-transfer",
@@ -762,11 +769,21 @@ through unchanged.
 > adds it into `Academic Core` (right after `Batch Management`) if the
 > backend doesn't register it there yet.
 
-> `Intake Transfer` (`Operations`) and the whole `Services` section
-> (`Student Services`) were hidden from the sidebar on 2026-09-02 —
-> `mergeStudentSections()` now filters both out (so a stale entry doesn't
-> linger for users on the real, non-mock menu tree). Both pages still exist
-> at `/student/intake-transfer` and `/student/services`, just not linked to.
+> The whole `Services` section (`Student Services`) was hidden from the
+> sidebar on 2026-09-02 — `mergeStudentSections()` filters it out (so a
+> stale entry doesn't linger for users on the real, non-mock menu tree). The
+> page still exists at `/student/services`, just not linked to.
+>
+> `Intake Transfer` (`Operations`) was likewise hidden on 2026-09-02, then
+> re-enabled and renamed to `Dropout Rejoin` on 2026-09-03 — same route
+> (`/student/intake-transfer`), matching the page's own "Dropout Rejoin"
+> mode tab. The page also had a second mode, "Deferment / Period Shift",
+> commented out on the page itself the same day (no backend contract exists
+> for it — always page-local mock data), leaving Dropout Rejoin as the
+> page's only reachable mode. `mergeStudentSections()` filters the old
+> `Intake Transfer` name out of `Operations` in case the real backend still
+> registers it under that label, so a stale entry doesn't linger alongside
+> the renamed one.
 
 > `Category Masters` (`/student/masters`) was later split into two unrelated
 > resources sharing that one page — **Student Category Master** (real

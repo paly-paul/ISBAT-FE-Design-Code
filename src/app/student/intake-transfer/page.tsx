@@ -36,16 +36,18 @@ export default function Page() {
     <>
       <div className="page active">
         <div className="pg-hdr">
-          <div><div className="pg-title">Intake Transfer</div><div className="pg-sub">Move a student to a different intake cohort — deferrals, rejoins, and period shifts</div></div>
+          <div><div className="pg-title">Dropout Rejoin</div><div className="pg-sub">Move a dropped-out student back into an active intake cohort</div></div>
         </div>
 
         <div className="flex gap-2 mb-4">
           <button className={`btn ${mode === 'dropout' ? 'btn-primary' : 'btn-neu'}`} onClick={() => setMode('dropout')}>
             <i className="lni lni-reload"></i> Dropout Rejoin
           </button>
+          {/* Deferment / Period Shift — commented out per request, 2026-09-03.
           <button className={`btn ${mode === 'deferment' ? 'btn-primary' : 'btn-neu'}`} onClick={() => setMode('deferment')}>
             <i className="lni lni-calendar"></i> Deferment / Period Shift
           </button>
+          */}
         </div>
 
         {mode === 'dropout' ? <DropoutRejoinPanel showToast={showToast} /> : <DefermentPanel showToast={showToast} />}
