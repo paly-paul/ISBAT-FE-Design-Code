@@ -1,13 +1,11 @@
 'use client'
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { logout } from '@/lib/auth'
 import { clearSessionIdentity } from '@/lib/session'
-import { useMarkNotificationRead, useNotificationsList, useUnreadCount } from '@/hooks/useNotifications'
-import { notificationHref, notificationVisual, NotificationItem } from '@/lib/api/notifications'
-import { endNotificationsSession, triggerSimulatedNotification } from '@/lib/notificationsHub'
-import { timeAgo } from '@/lib/date'
+import { useUnreadCount } from '@/hooks/useNotifications'
+import { endNotificationsSession } from '@/lib/notificationsHub'
 
 interface HeaderProps {
   panelOpen: boolean
@@ -30,50 +28,6 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
   const router = useRouter()
 
   const { data: unreadCount = 0 } = useUnreadCount()
-  const markRead = useMarkNotificationRead()
-
-  // Hover preview (back to the original interaction, not click-to-toggle) —
-  // clicking the bell itself always navigates straight to /notifications;
-  // hovering shows a quick preview instead. Still backed by a real
-  // fetch-on-open (not the stale polled list this used to read from), just
-  // without the search-result accumulation a "load more" needs — this is a
-  // single page, no pagination.
-  const [bellOpen, setBellOpen] = useState(false)
-  const [searchInput, setSearchInput] = useState('')
-  const [search, setSearch] = useState('')
-
-  // Unread only — a read notification has already been seen/acted on, so
-  // it has nothing left to surface in a quick preview; the full history
-  // (read + unread) still lives on the /notifications page.
-  const { data: listResult, isLoading } = useNotificationsList({ page: 1, size: 20, search, unreadOnly: true }, bellOpen)
-  const items = listResult?.items ?? []
-
-  // Debounce the raw input into `search` (~300ms per the doc) rather than
-  // sending a request per keystroke.
-  useEffect(() => {
-    const t = setTimeout(() => setSearch(searchInput), 300)
-    return () => clearTimeout(t)
-  }, [searchInput])
-
-  // Clear the search on close so reopening never starts from a stale term.
-  useEffect(() => {
-    if (!bellOpen) {
-      setSearchInput('')
-      setSearch('')
-    }
-  }, [bellOpen])
-
-  function openNotification(n: NotificationItem) {
-    if (!n.isRead) markRead.mutate(n.notificationGuid)
-    setBellOpen(false)
-    router.push(notificationHref(n))
-  }
-
-  // Dev/test aid — fires a simulated push immediately (mock auth only, see
-  // notificationsHub.ts) rather than waiting out its own interval.
-  function triggerTestNotification() {
-    triggerSimulatedNotification()
-  }
 
   async function handleSignOut(e: React.MouseEvent) {
     e.stopPropagation()
@@ -124,11 +78,14 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
         <div className="hdr-right">
           <div className="hdr-module-pill acad"><i className="lni lni-graduation"></i> Academic</div>
           <div className="hdr-intake">Spring 2026 (20261)</div>
-          <div
-            className="hdr-bell-wrap"
-            onMouseEnter={() => setBellOpen(true)}
-            onMouseLeave={() => setBellOpen(false)}
-          >
+          {/* No hover preview here anymore (removed per request, 2026-09-04)
+              — it fired a real /notifications list request on every single
+              hover-in, which read as an unwanted poll in the network tab
+              even though it was fetch-on-open rather than a timer. The bell
+              is now just the badge; clicking it still goes straight to
+              /notifications, which is the only place that list is fetched
+              from now. */}
+          <div className="hdr-bell-wrap">
             <button
               className={`hdr-bell${unreadCount > 0 ? ' has-unread' : ''}`}
               onClick={() => router.push('/notifications')}
@@ -138,63 +95,6 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
               <i className="lni lni-alarm"></i>
               {unreadCount > 0 && <span className="hdr-bell-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
             </button>
-
-            {/* Hover preview — clicking the bell always navigates straight to
-                /notifications instead of toggling this open. Still a real
-                fetch on hover-open (not the stale polled list this used to
-                read from), just a single page — no "load more" here. */}
-            {bellOpen && (
-              <div className="hdr-bell-dropdown">
-                <div className="hdr-bell-dropdown-inner">
-                  <div className="hdr-bell-dropdown-hdr">
-                    <span>Notifications</span>
-                    {unreadCount > 0 && <span className="badge badge-blue">{unreadCount} new</span>}
-                  </div>
-                  <div className="hdr-bell-search">
-                    <i className="lni lni-search-alt"></i>
-                    <input
-                      className="ctrl"
-                      style={{ fontSize: 13, height: 30, padding: '4px 8px' }}
-                      placeholder="Search notifications…"
-                      value={searchInput}
-                      onChange={e => setSearchInput(e.target.value)}
-                    />
-                  </div>
-                  <div className="hdr-bell-list">
-                    {isLoading ? (
-                      <div className="hdr-bell-dropdown-empty">Loading…</div>
-                    ) : items.length === 0 ? (
-                      <div className="hdr-bell-dropdown-empty">
-                        {search.trim() ? 'No matching notifications' : "You're all caught up"}
-                      </div>
-                    ) : (
-                      items.map(n => {
-                        const visual = notificationVisual(n.typeCode)
-                        return (
-                          <button key={n.notificationGuid} className={`hdr-bell-item${n.isRead ? '' : ' unread'}`} onClick={() => openNotification(n)}>
-                            <span className={`ntf-dot ${visual.tone}`} style={{ width: 30, height: 30, fontSize: 14 }}><i className={`lni ${visual.icon}`}></i></span>
-                            <span className="hdr-bell-item-content">
-                              <span className="hdr-bell-item-title">{n.title}</span>
-                              <span className="hdr-bell-item-time">{timeAgo(n.createdDate)}</span>
-                            </span>
-                          </button>
-                        )
-                      })
-                    )}
-                  </div>
-                  <button className="hdr-bell-dropdown-viewall" onClick={() => { setBellOpen(false); router.push('/notifications') }}>
-                    View all notifications <i className="lni lni-arrow-right"></i>
-                  </button>
-                  {/* Dev/test aid — mock auth only (see notificationsHub.ts);
-                      no-op against a real backend. */}
-                  {process.env.NEXT_PUBLIC_AUTH_MOCK === 'true' && (
-                    <button className="hdr-bell-dropdown-test" onClick={triggerTestNotification}>
-                      <i className="lni lni-bolt"></i> Simulate new notification
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
           <div className="hdr-user" ref={profileRef} onClick={() => setProfileOpen(p => !p)}>
             <div className="hdr-avatar">{initialsOf(displayName)}</div>

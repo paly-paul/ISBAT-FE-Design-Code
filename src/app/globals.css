@@ -3824,7 +3824,23 @@ th:hover .th-fi {
    column layout without native table markup. Header colors/typography
    match this app's real <table><thead> exactly (see thead tr/th above) so
    it reads as the same design language, not a one-off. */
+/* Ledger | Scheduled Amt | Scheduled Bill | Paid | Outstanding — the column
+   track is defined ONCE here, on the outer grid, not per-row. Every
+   .recgrid-row/.recgrid-foot below is a subgrid that inherits these exact
+   tracks rather than declaring its own grid-template-columns — with each
+   row as its own independent grid (the old setup), an `fr` track's width is
+   `minmax(auto, 1fr)`, i.e. it auto-sizes to that row's own content, so the
+   header row's longer uppercase labels ("SCHEDULED AMT", "SCHEDULED BILL")
+   could compute a different pixel width for a column than the same column
+   in a plain numeric data row — two separate grids, each sizing itself
+   independently, not one shared table structure. Subgrid makes every row
+   share the identical computed tracks so a column's width can't drift
+   between the header and the rows under it. No separate Currency column
+   (removed per request, 2026-09-04, in favor of showing each ledger's
+   native code inline under its own Scheduled Amt value — see the JSX). */
 .recgrid {
+  display: grid;
+  grid-template-columns: 2fr repeat(4, 1fr);
   border: 1.5px solid var(--g200);
   border-radius: var(--rsm);
   overflow: hidden;
@@ -3833,7 +3849,8 @@ th:hover .th-fi {
 
 .recgrid-row {
   display: grid;
-  grid-template-columns: 2fr repeat(4, 1fr);
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
 }
 
 .recgrid-hdr {
@@ -3885,17 +3902,17 @@ th:hover .th-fi {
   border-right-color: rgba(255, 255, 255, .25);
 }
 
-/* Footer rows — Discount/Total, same 5-column track as the header/body
-   above so the label lines up flush against the Outstanding column rather
-   than floating off in its own separately-aligned block. Label spans the
-   first 4 columns (right-aligned, so it reads immediately before its own
-   value) and the amount sits under the Outstanding column, same as the
-   reference invoice's own SUBTOTAL/TAX/TOTAL rows aligning under its
-   rightmost column. */
+/* Footer rows — Discount/Total. Same subgrid as .recgrid-row above (not its
+   own grid-template-columns) so its tracks are guaranteed pixel-identical
+   to the header/body rows rather than recomputed from this row's own two
+   cells. Label spans the first 4 columns (right-aligned, so it reads
+   immediately before its own value) and the amount sits under the
+   Outstanding column, same as the reference invoice's own
+   SUBTOTAL/TAX/TOTAL rows aligning under its rightmost column. */
 .recgrid-foot {
   display: grid;
-  grid-template-columns: 2fr repeat(4, 1fr);
-  padding: 10px 14px;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   font-size: var(--fs-sm);
   border-top: 1px solid var(--g100);
 }
@@ -3904,13 +3921,22 @@ th:hover .th-fi {
   grid-column: 1 / 5;
   text-align: right;
   color: var(--g500);
-  padding-right: 14px;
+  padding: 10px 14px;
+  /* Header/body draw a vertical rule after every column; the footer only
+     has two cells (this merged label + the value), so without this the
+     grid's own divider lines visibly stop dead at the header/body's last
+     row instead of continuing down — this redraws the one that matters,
+     right at the same Paid/Outstanding boundary the row cells' own rules
+     land on, so the value column reads as continuing straight down through
+     every row including the footer. */
+  border-right: 1px solid var(--g200);
 }
 
 .recgrid-foot>span:last-child {
   text-align: right;
   font-weight: 700;
   color: var(--g900);
+  padding: 10px 14px;
 }
 
 /* Total/Discount — bold emphasis row, not a solid colored bar (background
@@ -3952,6 +3978,10 @@ th:hover .th-fi {
   .recgrid-foot>span:first-child {
     text-align: left;
     padding-right: 0;
+    /* The label/value split becomes a left/right flex pair here, not
+       adjacent grid columns — the vertical rule between them only makes
+       sense in the desktop grid layout. */
+    border-right: none;
   }
 }
 
