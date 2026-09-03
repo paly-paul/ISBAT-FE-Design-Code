@@ -2,8 +2,8 @@ import { apiGet, apiPost, apiPut, apiDelete } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// Backs the Student module's Service Category Master page (see
-// student/service-category-master/page.tsx). CRUD confirmed against
+// Backs the Config module's Service Category Master page (see
+// config/service-category-master/page.tsx). CRUD confirmed against
 // students/service-categories/*.md (2026-08-28). The real record is just
 // { serviceCategoryGuid, categoryName } — there's no "Routes To" free-text
 // field on the backend, so that mock-only column was dropped rather than
