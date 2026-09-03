@@ -123,6 +123,20 @@ export interface StudentListFilters {
   searchTerm?: string
 }
 
+// Confirmed via get-students-filter.md (2026-09-03). Filters at the DB
+// level on the student's current ProgramGuid/SemesterGuid/BatchGuid —
+// unlike getStudents above (GET /api/v1/students), which only supports
+// free-text search — with searchTerm still applicable on top of any guid
+// filter. StudentListItemDto's fields are identical to StudentDto
+// (studentGuid/studentRegNo/studentName/programName/semesterName/
+// batchCode), so no separate response type is needed for it.
+export interface StudentColumnFilters {
+  programGuid?: string
+  semesterGuid?: string
+  batchGuid?: string
+  searchTerm?: string
+}
+
 const mockStudents: StudentDto[] = [
   { studentGuid: 'stu-mock-1', studentNum: 'ISB/2024/BSCS/0142', studentRegNo: '011240104', studentName: 'Aisha Nakamya', programName: 'BSc. Computer Science', semesterName: 'Semester 1', batchCode: 'BSC-IT-S26-DA' },
   { studentGuid: 'stu-mock-2', studentNum: 'ISB/2024/BBA/0089', studentRegNo: '012221279', studentName: 'Okello James', programName: 'BBA Business Administration', semesterName: 'Semester 2', batchCode: 'BBA-2024-JAN-A' },
@@ -143,6 +157,32 @@ export function getStudents(page: number, pageSize: number, filters?: StudentLis
   params.set('page', String(page))
   params.set('pageSize', String(pageSize))
   return apiGet<PagedResult<StudentDto> | null>(`/api/v1/students?${params.toString()}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+}
+
+// The response's own page-number field is named `page` per get-students-
+// filter.md's sample, not `pageNumber` like PagedResult declares elsewhere
+// in this file — neither this function nor its one consumer (Student
+// Master's column filters) reads that field back, so the mismatch is
+// harmless, but worth a note in case that ever changes.
+export function getStudentsFilter(page: number, pageSize: number, filters: StudentColumnFilters): Promise<PagedResult<StudentDto>> {
+  if (MOCK_AUTH) {
+    // The mock list's four rows carry no program/semester/batch guids at
+    // all — mock mode only honors searchTerm here, same as getStudents.
+    const term = filters.searchTerm?.trim().toLowerCase()
+    const items = term
+      ? mockStudents.filter(s => `${s.studentNum} ${s.studentRegNo} ${s.studentName}`.toLowerCase().includes(term))
+      : mockStudents
+    return Promise.resolve({ items, totalCount: items.length, pageNumber: page, pageSize })
+  }
+  const params = new URLSearchParams()
+  if (filters.programGuid) params.set('programGuid', filters.programGuid)
+  if (filters.semesterGuid) params.set('semesterGuid', filters.semesterGuid)
+  if (filters.batchGuid) params.set('batchGuid', filters.batchGuid)
+  if (filters.searchTerm?.trim()) params.set('searchTerm', filters.searchTerm.trim())
+  params.set('page', String(page))
+  params.set('pageSize', String(pageSize))
+  return apiGet<PagedResult<StudentDto> | null>(`/api/v1/students/filter?${params.toString()}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
