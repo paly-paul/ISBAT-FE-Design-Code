@@ -2572,23 +2572,32 @@ textarea.ctrl {
   gap: 7px;
   padding: 10px 16px;
   border-radius: 999px;
-  border: none;
+  /* Visible even at rest, and dark enough to actually read as one — the
+     active tab reads as selected via its own white background + shadow
+     below, but an inactive tab needs its own affordance rather than
+     nothing (border:none) or a border too close in value to the pill's own
+     --g100 background to register (--g200 confirmed live: still read as
+     disabled). Same border/text combination .btn-neu already uses
+     elsewhere for "clickable, not currently selected". */
+  border: 1.5px solid var(--g300);
   background: none;
   cursor: pointer;
   font-size: var(--fs-sm);
   font-weight: 700;
-  color: var(--g500);
+  color: var(--g700);
   transition: var(--tr);
   white-space: nowrap;
 }
 
 .pc-tab-btn:hover {
-  color: var(--g700);
+  border-color: var(--b300);
+  color: var(--b700);
 }
 
 .pc-tab-btn.active {
   background: #fff;
   color: var(--b700);
+  border-color: transparent;
   box-shadow: var(--neu-sm);
 }
 
@@ -2658,7 +2667,11 @@ textarea.ctrl {
 }
 
 /* Live summary strip shown above a form — mirrors what's been entered back
-   at the user as they fill the form in, card-mockup style. */
+   at the user as they fill the form in, card-mockup style. Plain white +
+   border rather than the blue-gradient banner this used to be (removed per
+   request, 2026-09-04) — text colors below carry the contrast a light
+   background needs instead of the opacity-on-white-text treatment tuned for
+   a dark one. */
 .pc-pay-summary {
   display: flex;
   align-items: center;
@@ -2667,22 +2680,9 @@ textarea.ctrl {
   gap: 14px;
   padding: 16px 18px;
   border-radius: var(--rsm);
-  background: linear-gradient(135deg, var(--b700), var(--b500));
-  color: #fff;
+  background: var(--white);
+  border: 1.5px solid var(--g200);
   margin-bottom: 16px;
-  position: relative;
-  overflow: hidden;
-}
-
-.pc-pay-summary::after {
-  content: '';
-  position: absolute;
-  top: -30px;
-  right: -30px;
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .08);
 }
 
 .pc-pay-amt {
@@ -2690,28 +2690,23 @@ textarea.ctrl {
   font-weight: 800;
   font-family: 'Inter', -apple-system, sans-serif;
   letter-spacing: -.02em;
-  position: relative;
-  z-index: 1;
+  color: var(--b700);
 }
 
 .pc-pay-lbl {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: .05em;
-  opacity: .8;
+  color: var(--g500);
   font-weight: 600;
-  position: relative;
-  z-index: 1;
 }
 
 .pc-pay-meta {
   font-size: 11px;
-  opacity: .9;
+  color: var(--g500);
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
-  position: relative;
-  z-index: 1;
 }
 
 .pc-pay-meta > div {
@@ -2723,6 +2718,7 @@ textarea.ctrl {
 .pc-pay-meta b {
   font-size: 12px;
   font-weight: 700;
+  color: var(--g900);
 }
 
 /* Checkmark medallion (receipt headers, fully-settled/no-assignment empty
@@ -3819,6 +3815,183 @@ th:hover .th-fi {
 
   .receipt-row>span:last-child {
     align-self: flex-start
+  }
+}
+
+/* Column-aligned "table look" built from CSS Grid rows, not a <table> —
+   Payment Console's Outstanding Balance (Ledger/Scheduled Amt/Scheduled
+   Bill/Paid/Outstanding), per an invoice-reference request for that same
+   column layout without native table markup. Header colors/typography
+   match this app's real <table><thead> exactly (see thead tr/th above) so
+   it reads as the same design language, not a one-off. */
+.recgrid {
+  border: 1.5px solid var(--g200);
+  border-radius: var(--rsm);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.recgrid-row {
+  display: grid;
+  grid-template-columns: 2fr repeat(4, 1fr);
+}
+
+.recgrid-hdr {
+  background: linear-gradient(135deg, #4e6dd1, #486ab5);
+}
+
+.recgrid-hdr>span {
+  padding: 11px 14px;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: rgba(255, 255, 255, .9);
+}
+
+.recgrid-body {
+  border-bottom: 1px solid var(--g200);
+  transition: var(--tr);
+}
+
+.recgrid-body:last-child {
+  border-bottom: none;
+}
+
+.recgrid-body:hover {
+  background: var(--b50);
+}
+
+.recgrid-body>span {
+  padding: 12px 14px;
+  font-size: var(--fs-base);
+  color: var(--g700);
+}
+
+.recgrid-hdr>span:not(:first-child),
+.recgrid-body>span:not(:first-child) {
+  text-align: right;
+}
+
+/* Grid lines, not zebra striping — vertical rules between columns (the
+   header's own colored background already reads as its row divider) so
+   the layout reads as an actual grid rather than alternating row shading. */
+.recgrid-hdr>span:not(:last-child),
+.recgrid-body>span:not(:last-child) {
+  border-right: 1px solid var(--g200);
+}
+
+.recgrid-hdr>span:not(:last-child) {
+  border-right-color: rgba(255, 255, 255, .25);
+}
+
+/* Footer rows — Discount/Total, same 5-column track as the header/body
+   above so the label lines up flush against the Outstanding column rather
+   than floating off in its own separately-aligned block. Label spans the
+   first 4 columns (right-aligned, so it reads immediately before its own
+   value) and the amount sits under the Outstanding column, same as the
+   reference invoice's own SUBTOTAL/TAX/TOTAL rows aligning under its
+   rightmost column. */
+.recgrid-foot {
+  display: grid;
+  grid-template-columns: 2fr repeat(4, 1fr);
+  padding: 10px 14px;
+  font-size: var(--fs-sm);
+  border-top: 1px solid var(--g100);
+}
+
+.recgrid-foot>span:first-child {
+  grid-column: 1 / 5;
+  text-align: right;
+  color: var(--g500);
+  padding-right: 14px;
+}
+
+.recgrid-foot>span:last-child {
+  text-align: right;
+  font-weight: 700;
+  color: var(--g900);
+}
+
+/* Total/Discount — bold emphasis row, not a solid colored bar (background
+   removed per request, 2026-09-04 — was a blue gradient bookending the
+   header above). Just typography now; each value's own color (amber for
+   Total Outstanding, green/muted for Discount) comes from the JSX's own
+   text-* className instead of being baked in here, same convention the
+   rest of this app's amount figures already use. */
+.recgrid-total {
+  background: var(--white);
+  border-top: 1.5px solid var(--g200);
+}
+
+.recgrid-total + .recgrid-total {
+  border-top: 1px solid var(--g100);
+}
+
+.recgrid-total>span:first-child {
+  color: var(--g500);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: var(--fs-2xs);
+}
+
+.recgrid-total>span:last-child {
+  color: var(--g900);
+  font-weight: 800;
+  font-size: var(--fs-md);
+}
+
+@media(max-width:640px) {
+  .recgrid-foot {
+    grid-template-columns: 1fr;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .recgrid-foot>span:first-child {
+    text-align: left;
+    padding-right: 0;
+  }
+}
+
+/* Same "stack instead of squeeze" treatment .receipt-row gets below —
+   5 columns have nowhere to go on a narrow screen, so each ledger becomes
+   its own label/value stack instead. */
+@media(max-width:640px) {
+  .recgrid-hdr {
+    display: none;
+  }
+
+  .recgrid-row {
+    grid-template-columns: 1fr;
+  }
+
+  .recgrid-body {
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .recgrid-body>span {
+    padding: 0;
+    display: flex;
+    justify-content: space-between;
+    text-align: left !important;
+    /* The vertical grid lines only make sense column-to-column — with each
+       span now stacked full-width, a border-right just draws a stray line
+       down its own right edge. */
+    border-right: none !important;
+  }
+
+  /* Every span past the first (Ledger name, kept as the row's own title)
+     loses its header-row label once the header hides above — put it back
+     inline via the cell's own data-label. */
+  .recgrid-body>span:not(:first-child)::before {
+    content: attr(data-label);
+    color: var(--g500);
+    font-weight: 600;
   }
 }
 
