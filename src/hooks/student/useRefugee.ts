@@ -63,4 +63,4 @@ export function useRemoveRefugeeStatus() {
   })
 }
 
-export type { RefugeeStudentSummaryDto, RefugeeDetailsDto, AssignRefugeeStatusRequest } from '@/lib/api/student/refugee'
+export type { EligibleRefugeeStudentDto, RefugeeStudentDto, RefugeeStudentDetailsDto, AssignRefugeeStatusRequest } from '@/lib/api/student/refugee'

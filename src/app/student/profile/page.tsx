@@ -158,13 +158,13 @@ function StudentProfileContent() {
   const { data: refugeeDetail, isFetching: isRefugeeChecking } = useStudentRefugeeDetails(student?.studentGuid ?? null, !!student && refugeeRequested)
   const assignRefugeeStatus = useAssignRefugeeStatus()
   const removeRefugeeStatus = useRemoveRefugeeStatus()
+  // CountryGuid — confirmed (post-assign-refugee-status.md) as a real guid
+  // field on the student entity, not a legacy numeric code, so the option's
+  // own countryGuid is sent as-is; no index/position workaround needed.
   const { data: refugeeCountries = [] } = useCountries()
-  // intCountryCode has no confirmed mapping back to a real country guid (see
-  // the note on StudentRefugeeModal/EmployeeFormModal's own country field) —
-  // sent as the option's 1-based list position, same convention used there.
-  const refugeeCountryOptions = refugeeCountries.map((c, i) => ({ value: String(i + 1), label: c.countryName }))
+  const refugeeCountryOptions = refugeeCountries.map(c => ({ value: c.countryGuid, label: c.countryName }))
   const [refugeeModalOpen, setRefugeeModalOpen] = useState(false)
-  const [refugeeCountryCode, setRefugeeCountryCode] = useState('')
+  const [refugeeCountryGuid, setRefugeeCountryGuid] = useState('')
   const [refugeeIdInput, setRefugeeIdInput] = useState('')
   const [refugeeDocFile, setRefugeeDocFile] = useState<File | null>(null)
 
@@ -264,7 +264,7 @@ function StudentProfileContent() {
 
   useEffect(() => {
     if (!refugeeModalOpen) return
-    setRefugeeCountryCode('')
+    setRefugeeCountryGuid('')
     setRefugeeIdInput('')
     setRefugeeDocFile(null)
   }, [refugeeModalOpen])
@@ -359,13 +359,12 @@ function StudentProfileContent() {
 
   function handleAssignRefugee() {
     if (!student) return
-    const countryCode = Number(refugeeCountryCode)
-    if (!countryCode || countryCode <= 0) { showToast('Enter a valid country code.', 'warn'); return }
+    if (!refugeeCountryGuid) { showToast('Country is required.', 'warn'); return }
     if (!refugeeIdInput.trim()) { showToast('Refugee ID is required.', 'warn'); return }
     if (refugeeIdInput.trim().length > 20) { showToast('Refugee ID must be 20 characters or fewer.', 'warn'); return }
     if (!refugeeDocFile) { showToast('A supporting document is required.', 'warn'); return }
     assignRefugeeStatus.mutate(
-      { studentGuid: student.studentGuid, intCountryCode: countryCode, refugeeId: refugeeIdInput.trim(), document: refugeeDocFile },
+      { studentGuid: student.studentGuid, countryGuid: refugeeCountryGuid, refugeeId: refugeeIdInput.trim(), document: refugeeDocFile },
       {
         onSuccess: () => { showToast('Refugee status granted', 'ok'); setRefugeeModalOpen(false) },
         onError: (error: Error) => showToast(error.message || 'Could not assign refugee status', 'err'),
@@ -800,7 +799,7 @@ function StudentProfileContent() {
               <div className="fg"><label className="lbl">Student</label><input className="ctrl" readOnly value={student.studentName} /></div>
               <div className="fg">
                 <label className="lbl">Country <span className="req">*</span></label>
-                <SearchSelect placeholder="-- Select Country --" options={refugeeCountryOptions} value={refugeeCountryCode} onChange={setRefugeeCountryCode} />
+                <SearchSelect placeholder="-- Select Country --" options={refugeeCountryOptions} value={refugeeCountryGuid} onChange={setRefugeeCountryGuid} />
               </div>
               <div className="fg"><label className="lbl">Refugee ID <span className="req">*</span></label><input className="ctrl" maxLength={20} value={refugeeIdInput} onChange={e => setRefugeeIdInput(e.target.value)} placeholder="Refugee document/registration number" /></div>
               <div className="fg">
