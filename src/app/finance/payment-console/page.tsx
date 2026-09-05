@@ -11,7 +11,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
-import { useExchangeRatesByDate } from '@/hooks/finance/useExchangeRates'
+import { useExchangeRatesByDate, useExchangeRateExists, useCreateExchangeRate, useUpdateExchangeRate } from '@/hooks/finance/useExchangeRates'
 import { PaymentAdvance } from '@/hooks/finance/usePayments'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
@@ -46,17 +46,12 @@ import { AuthError } from '@/lib/api/client'
 function OutstandingCategoryTable({ items, isLoading, isError }: { items: AllOutstandingItem[]; isLoading: boolean; isError: boolean }) {
   if (isLoading) return <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading outstanding balance…</div>
   if (isError) return <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load the outstanding balance.</div>
-  // Matches Tuition's own "Fully settled" empty state (a checkmark
-  // medallion + heading + subtext) instead of a bare line of grey text, so
-  // the two tabs read as the same design system rather than one looking
-  // finished and the other looking like a placeholder.
-  if (items.length === 0) return (
-    <div className="text-center" style={{ padding: 24 }}>
-      <div className="pc-receipt-check" style={{ fontSize: 22 }}><i className="lni lni-checkmark-circle"></i></div>
-      <div className="font-bold text-g700" style={{ fontSize: 13.5 }}>Fully settled</div>
-      <div className="text-g400 mt-1" style={{ fontSize: 12.5 }}>Nothing outstanding in this category — there is nothing to bill right now.</div>
-    </div>
-  )
+  // No "Fully settled" empty state here (removed per request, 2026-09-04)
+  // — Other Payment's own Payment Detail form always renders right below
+  // this regardless of whether there's anything outstanding, so an empty
+  // items list just renders nothing above it instead of a redundant
+  // checkmark block.
+  if (items.length === 0) return null
   const total = items.reduce((sum, it) => sum + it.outstanding, 0)
   return (
     <>
@@ -183,16 +178,6 @@ const SHOW_OTHER_PAID_FEE_DETAILS: boolean = false
 // app's server-paginated lists use.
 const HISTORY_PAGE_SIZE = 10
 
-// Step 2's "Convert to Currency" picker always offers exactly these three,
-// per request (2026-09-04) — not just whichever currencies happen to appear
-// in the selected student's own ledgers (the old source, ledgerTotals,
-// meant a student billed in a single currency only ever had one option to
-// pick from, which defeats the point of a conversion picker). Matched
-// against the real finance-currencies master list by code below, so a code
-// that isn't actually configured there is silently dropped rather than
-// offered as a dead option.
-const CONVERTIBLE_CURRENCY_CODES = ['KES', 'USD', 'UGX']
-
 export default function PaymentConsolePage() {
   const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
@@ -210,12 +195,6 @@ export default function PaymentConsolePage() {
   const activeReceiptBooks = allReceiptBooks.filter(r => r.status === 1)
   const { data: currencies = [] } = useFinanceCurrencies()
 
-  // Purely informational reference rates — no longer feeds any computation
-  // (GetPayableLedgers/CreatePayment both operate in the payment's own real
-  // currency via currencyGuid/intCurrency, no client-side UGX conversion
-  // happens anywhere in the real flow).
-  const [usdRate, setUsdRate] = useState('3750')
-  const [kesRate, setKesRate] = useState('28.5')
   // Exchange Rate bar now lives behind the header's "Exchange Rates"
   // toggle instead of always showing — collapsed by default so the page
   // opens straight to Student Search per the redesign.
@@ -441,30 +420,24 @@ export default function PaymentConsolePage() {
     }
     return Array.from(byCurrency.values())
   }, [effectiveLedgers])
-  // Outstanding Balance shows one currency's table at a time behind a
-  // dropdown now, per request (2026-09-04) — two stacked tables for a
-  // student billed in more than one currency read as confusing rather than
-  // informative. The picker's own options are the fixed KES/USD/UGX set
-  // above (CONVERTIBLE_CURRENCY_CODES), not ledgerTotals — a student billed
-  // in only one currency should still be able to convert into any of the
-  // three, not just see a single-option dropdown.
-  const convertibleCurrencies = useMemo(
-    () => currencies.filter(c => CONVERTIBLE_CURRENCY_CODES.includes(c.currencyCode)),
-    [currencies],
-  )
-  const [selectedOutstandingCurrency, setSelectedOutstandingCurrency] = useState<string | null>(null)
+  // Outstanding Balance shows one currency's table at a time, converted
+  // into whichever currency the cashier has picked as "Currency Received"
+  // below — per a follow-up request (2026-09-05) that dropped the separate
+  // "Convert to Currency" picker above the ledger table in favour of
+  // reusing that one field, rather than asking the cashier to keep two
+  // currency pickers in sync on one form.
   useEffect(() => {
-    if (convertibleCurrencies.length === 0) { setSelectedOutstandingCurrency(null); return }
-    if (selectedOutstandingCurrency && convertibleCurrencies.some(c => c.currencyGuid === selectedOutstandingCurrency)) return
-    // Defaults to whichever of the three the student's own ledgers are
-    // actually billed in, when that's one of them — falls back to the
-    // first of the three otherwise. Only runs when the current selection is
-    // missing/no longer valid, so it doesn't fight a cashier's own pick
-    // once one's been made.
-    const preferred = ledgerTotals.find(t => convertibleCurrencies.some(c => c.currencyGuid === t.currencyGuid))
-    setSelectedOutstandingCurrency(preferred?.currencyGuid ?? convertibleCurrencies[0].currencyGuid)
+    if (currencies.length === 0) return
+    if (currencyGuid && currencies.some(c => c.currencyGuid === currencyGuid)) return
+    // Defaults to whichever currency the student's own ledgers are actually
+    // billed in, when that's one of the configured ones — falls back to
+    // the first configured currency otherwise. Only runs when the current
+    // selection is missing/no longer valid, so it doesn't fight a
+    // cashier's own pick once one's been made.
+    const preferred = ledgerTotals.find(t => currencies.some(c => c.currencyGuid === t.currencyGuid))
+    setCurrencyGuid(preferred?.currencyGuid ?? currencies[0].currencyGuid)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [convertibleCurrencies, ledgerTotals])
+  }, [currencies, ledgerTotals])
   // Converts Scheduled Bill/Outstanding (regardless of a given ledger's own
   // original currency) into whichever currency is picked above — per
   // request (2026-09-04). Scheduled Amt and Paid deliberately do NOT
@@ -485,9 +458,88 @@ export default function PaymentConsolePage() {
   // "what does this student owe right now" figure; there's no historical
   // date on this screen to convert as of.
   const { data: todayRates = [] } = useExchangeRatesByDate(todayYmd())
+  // Today's Exchange Rates bar (header toggle) — wired to the real
+  // POST/PUT exchange-rate endpoints now (per request, 2026-09-04), same
+  // create-if-missing/update-if-present pattern the dedicated Exchange
+  // Rate Management page (exchange-rates/page.tsx) already uses, just
+  // narrowed to USD/KSH since that's all this compact bar has room for.
+  // Reseeded from todayRates whenever it changes (including right after a
+  // save invalidates and refetches it), so the inputs reflect what's
+  // actually saved rather than a stale typed value.
+  const usdCurrency = currencies.find(c => c.currencyCode === 'USD')
+  const kesCurrency = currencies.find(c => c.currencyCode === 'KSH') // Kenyan Shilling — backend's Currency Master uses code KSH, not KES
+  const todayRateByCurrency = new Map(todayRates.map(r => [r.currencyGuid, r]))
+  // Per exchange-rates/get-exchange-rate-exists.md — the authoritative
+  // "can this be edited today?" check for each currency, run independently
+  // of the by-date board above so the lock reflects the dedicated exists
+  // endpoint rather than an inference from todayRates. Once today's rate
+  // exists for a currency, that input is locked; PUT only ever allows
+  // today's row anyway, but the point here is to stop a cashier from
+  // silently overwriting a rate someone already committed for the day.
+  const usdRateExists = useExchangeRateExists(usdCurrency?.currencyGuid ?? null, todayYmd(), showExchangeRates)
+  const kesRateExists = useExchangeRateExists(kesCurrency?.currencyGuid ?? null, todayYmd(), showExchangeRates)
+  const usdRateLocked = usdRateExists.data?.exists === true
+  const kesRateLocked = kesRateExists.data?.exists === true
+  // The bar deliberately asks for the intuitive "1 USD = ___ UGX" direction
+  // (a cashier thinks in "how many shillings per dollar", not the reverse),
+  // but the API's exRate field is the other way round — confirmed via the
+  // Exchange Rate Management page's own "{currency} per 1 {base}" label
+  // (exchange-rates/page.tsx) and convertAmount's math above: it's how many
+  // units of THIS currency equal 1 unit of the base (UGX), so a currency
+  // stronger than the base stores a small fraction (e.g. USD ≈ 0.00026),
+  // not the ~3800 a cashier would type here. So this bar inverts in both
+  // directions — 1/exRate to display what's saved, 1/typed to save what's
+  // displayed — rather than switching the label to match the raw field,
+  // which would just move the confusion onto the person entering the rate.
+  const [rateBarInputs, setRateBarInputs] = useState<Record<string, string>>({})
+  useEffect(() => {
+    const map: Record<string, string> = {}
+    todayRates.forEach(r => { if (r.exRate) map[r.currencyGuid] = String(1 / r.exRate) })
+    setRateBarInputs(map)
+  }, [todayRates])
+  const createExchangeRate = useCreateExchangeRate()
+  const updateExchangeRate = useUpdateExchangeRate()
+  const isSavingRates = createExchangeRate.isPending || updateExchangeRate.isPending
+
+  async function saveExchangeRateBar() {
+    const lockedByGuid: Record<string, boolean> = {
+      ...(usdCurrency ? { [usdCurrency.currencyGuid]: usdRateLocked } : {}),
+      ...(kesCurrency ? { [kesCurrency.currencyGuid]: kesRateLocked } : {}),
+    }
+    const targets = [usdCurrency, kesCurrency]
+      .filter((c): c is NonNullable<typeof c> => !!c)
+      .filter(c => !lockedByGuid[c.currencyGuid])
+    if (targets.length === 0) {
+      const reason = (usdCurrency || kesCurrency) ? 'Today’s rate is already set — it can’t be edited again today.' : 'USD/KSH aren’t configured in Currency Master.'
+      showToast(reason, 'warn')
+      return
+    }
+    let successCount = 0
+    const failures: string[] = []
+    for (const c of targets) {
+      const raw = rateBarInputs[c.currencyGuid] ?? ''
+      const num = parseFloat(raw)
+      if (!raw || !(num > 0)) { failures.push(`${c.currencyCode}: enter a valid rate`); continue }
+      // Invert the "1 USD = ___ UGX" figure the cashier typed back into the
+      // API's "currency per 1 base" convention before saving — see the
+      // rateBarInputs effect above for why.
+      const apiExRate = 1 / num
+      const existing = todayRateByCurrency.get(c.currencyGuid)
+      try {
+        if (existing) await updateExchangeRate.mutateAsync({ guid: existing.exchangeRateGuid, input: { exRate: apiExRate, exDate: todayYmd() } })
+        else await createExchangeRate.mutateAsync({ currencyGuid: c.currencyGuid, exRate: apiExRate, exDate: todayYmd() })
+        successCount++
+      } catch (err) {
+        failures.push(`${c.currencyCode}: ${err instanceof Error ? err.message : 'failed'}`)
+      }
+    }
+    if (failures.length === 0) showToast(`Saved today’s rate for ${successCount} currenc${successCount === 1 ? 'y' : 'ies'}.`, 'success')
+    else showToast(`Saved ${successCount}; ${failures.join('; ')}`, successCount > 0 ? 'warn' : 'error')
+  }
+
   const baseCurrency = currencies.find(c => c.isDefault === 1)
   const ratesByGuid = new Map(todayRates.map(r => [r.currencyGuid, r.exRate]))
-  const targetOutstandingCurrency = convertibleCurrencies.find(c => c.currencyGuid === selectedOutstandingCurrency)
+  const targetOutstandingCurrency = currencies.find(c => c.currencyGuid === currencyGuid)
   const targetCurrencyGuid = targetOutstandingCurrency?.currencyGuid ?? null
   const targetCurrencyName = targetOutstandingCurrency?.currencyName ?? ''
   // null on a given ledger means its own currency (or the target's) has no
@@ -850,22 +902,54 @@ export default function PaymentConsolePage() {
               <i className="lni lni-money-protection"></i> Today&apos;s Exchange Rates
               <span className="badge badge-blue text-[10px]">Daily Rate</span>
             </div>
+            {/* Wired to the real POST/PUT exchange-rate endpoints (per
+                request, 2026-09-04) — saveExchangeRateBar above creates a
+                fresh rate for today if none exists yet, or updates the
+                existing one (only today's row is PUT-able per
+                put-exchange-rate.md). Disabled + placeholder when USD/KSH
+                aren't in Currency Master at all, rather than accepting
+                input that has nowhere real to save to. Locked instead
+                (get-exchange-rate-exists.md) once today's rate has already
+                been entered for that currency — it can only be edited again
+                once today's row no longer exists (e.g. tomorrow). */}
             <div className="flex items-center gap-[6px] flex-wrap text-[var(--fs-sm)]">
               <span className="text-muted">1 USD =</span>
-              <input type="number" className="ctrl" value={usdRate} onChange={e => setUsdRate(e.target.value)}
-                style={{ width: 72, padding: '5px 9px', fontSize: 13, fontWeight: 700, color: 'var(--b800)' }} />
+              <input
+                type="number"
+                className="ctrl"
+                disabled={!usdCurrency || usdRateLocked}
+                placeholder={usdCurrency ? '' : 'Not configured'}
+                title={usdRateLocked ? 'Today’s USD rate is already set and can’t be edited again today.' : undefined}
+                value={usdCurrency ? (rateBarInputs[usdCurrency.currencyGuid] ?? '') : ''}
+                onChange={e => usdCurrency && setRateBarInputs(prev => ({ ...prev, [usdCurrency.currencyGuid]: e.target.value }))}
+                style={{ width: 72, padding: '5px 9px', fontSize: 13, fontWeight: 700, color: 'var(--b800)' }}
+              />
               <span className="badge badge-gold">UGX</span>
+              {usdRateLocked && <i className="lni lni-lock-alt-1 text-muted" title="Locked — today’s rate already set"></i>}
             </div>
             <div className="flex items-center gap-[6px] flex-wrap text-[var(--fs-sm)]">
-              <span className="text-muted">1 KES =</span>
-              <input type="number" className="ctrl" value={kesRate} onChange={e => setKesRate(e.target.value)}
-                style={{ width: 72, padding: '5px 9px', fontSize: 13, fontWeight: 700, color: 'var(--b800)' }} />
+              <span className="text-muted">1 KSH =</span>
+              <input
+                type="number"
+                className="ctrl"
+                disabled={!kesCurrency || kesRateLocked}
+                placeholder={kesCurrency ? '' : 'Not configured'}
+                title={kesRateLocked ? 'Today’s KSH rate is already set and can’t be edited again today.' : undefined}
+                value={kesCurrency ? (rateBarInputs[kesCurrency.currencyGuid] ?? '') : ''}
+                onChange={e => kesCurrency && setRateBarInputs(prev => ({ ...prev, [kesCurrency.currencyGuid]: e.target.value }))}
+                style={{ width: 72, padding: '5px 9px', fontSize: 13, fontWeight: 700, color: 'var(--b800)' }}
+              />
               <span className="badge badge-gold">UGX</span>
+              {kesRateLocked && <i className="lni lni-lock-alt-1 text-muted" title="Locked — today’s rate already set"></i>}
             </div>
             <div className="flex items-center gap-[7px] flex-wrap" style={{ marginLeft: 'auto' }}>
-              <span className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>Last updated: Today 08:30 AM</span>
-              <button className="btn btn-neu btn-sm" style={{ fontSize: 11 }} onClick={() => showToast('Rates refreshed.', 'success')}>
-                <i className="lni lni-reload"></i> Refresh
+              <button
+                className="btn btn-neu btn-sm"
+                style={{ fontSize: 11 }}
+                disabled={isSavingRates || (usdRateLocked && kesRateLocked)}
+                onClick={saveExchangeRateBar}
+              >
+                <i className="lni lni-save"></i> {isSavingRates ? 'Saving…' : 'Save Rates'}
               </button>
             </div>
           </div>
@@ -1313,30 +1397,21 @@ export default function PaymentConsolePage() {
                           Total stay below as their own bold footer rows
                           (Discount/Total aren't "a ledger", so they don't
                           belong as grid rows the column headers describe).
-                          The dropdown now converts every ledger (regardless
-                          of its own original currency) into whichever
-                          currency is picked — one merged list, not one table
-                          per currency-group — per a follow-up request;
-                          convertAmount/convertedLedgers above do the actual
-                          exchange-rate math. */}
-                      {/* ledgerTotals.length > 1 gate commented out per
-                          request (2026-09-05) — this was a frontend-only
-                          judgment call ("nothing to convert with one
-                          currency"), not anything the backend dictates, so
-                          the picker now always shows even for a single-
-                          currency student. Options fixed to KES/USD/UGX
-                          (convertibleCurrencies) rather than ledgerTotals,
-                          per a further request (2026-09-04) — a student
-                          billed in only one currency should still be able
-                          to convert into any of the three, not see a
-                          single-option dropdown. */}
-                      <div className="fg" style={{ maxWidth: 220 }}>
-                        <label className="lbl">Convert to Currency</label>
-                        <SearchSelect
-                          options={convertibleCurrencies.map(c => ({ value: c.currencyGuid, label: c.currencyName }))}
-                          value={selectedOutstandingCurrency ?? ''}
-                          onChange={setSelectedOutstandingCurrency}
-                        />
+                          Every ledger (regardless of its own original
+                          currency) converts into whichever currency the
+                          cashier picks as "Currency Received" further down
+                          this form — one merged list, not one table per
+                          currency-group. There's no separate "Convert to
+                          Currency" picker here any more (dropped per a
+                          follow-up request, 2026-09-05): it just duplicated
+                          Currency Received, so this table now reads live
+                          off that same field/state (currencyGuid),
+                          defaulted the same way the old picker was — see
+                          the effect above ledgerTotals. convertAmount/
+                          convertedLedgers do the actual exchange-rate
+                          math. */}
+                      <div className="text-g400 mb-2" style={{ fontSize: 11.5 }}>
+                        Converted to {targetCurrencyName || 'the currency picked below'} — set via <b>Currency Received</b> in Payment Detail.
                       </div>
                       {hasUnconvertibleLedger && (
                         <div className="warn-box mb-3">
@@ -1397,8 +1472,17 @@ export default function PaymentConsolePage() {
                                     figure twice. */}
                                 <span data-label="Scheduled Bill">{l.convScheduled != null ? fmtAmt(l.convScheduled) : '—'}</span>
                                 {/* Native — actually collected in the
-                                    ledger's own currency. */}
-                                <span data-label="Paid" className="font-bold text-green">{fmtAmt(l.paidAmount)}</span>
+                                    ledger's own currency, with the code
+                                    shown underneath same as Scheduled Amt
+                                    (per request, 2026-09-04) — wrapped the
+                                    same way for the same mobile-stacking
+                                    reason. */}
+                                <span data-label="Paid" className="font-bold text-green">
+                                  <span>
+                                    {fmtAmt(l.paidAmount)}
+                                    {l.currencyCode && <span className="text-g400" style={{ display: 'block', fontSize: 11, fontWeight: 600 }}>({l.currencyCode})</span>}
+                                  </span>
+                                </span>
                                 <span data-label="Outstanding" className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>{l.convOutstanding != null ? fmtAmt(l.convOutstanding) : '—'}</span>
                               </div>
                             )
@@ -1490,7 +1574,13 @@ export default function PaymentConsolePage() {
                     )}
                     {/* Currency + Amount paired, amount on the right, per
                         request — then Date + Method paired, then Receipt
-                        Book on its own row. */}
+                        Book on its own row. This currency picker now does
+                        double duty (per follow-up request, 2026-09-05): it's
+                        also what the Outstanding Balance table above
+                        converts into (targetCurrencyGuid/targetCurrencyName
+                        further up read straight off this same currencyGuid
+                        state), replacing what used to be a separate
+                        "Convert to Currency" dropdown up there. */}
                     <div className="g2 mb-[14px]">
                       <div className="fg">
                         <div className="lbl">Currency Received <span className="req">*</span></div>
