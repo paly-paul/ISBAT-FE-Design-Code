@@ -120,7 +120,7 @@ export default function Page() {
             */}
 
             <div className="card" style={{ marginBottom: 16 }}>
-              <div className="card-hdr"><div className="card-title"><i className="lni lni-transfer"></i> Transfer Parameters</div></div>
+              <div className="card-hdr"><div className="card-title"><i className="lni lni-shuffle"></i> Transfer Parameters</div></div>
               <div className="g2">
                 <div className="fg">
                   <label className="lbl">New Fee Structure <span className="req">*</span></label>

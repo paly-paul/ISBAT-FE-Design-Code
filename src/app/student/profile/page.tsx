@@ -6,10 +6,11 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { ActionMenu } from '@/components/ActionMenu'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { useStudent } from '@/hooks/student/useStudents'
-import { StudentDto } from '@/lib/api/student/student'
+import { StudentDto, normalizeStudentDetail } from '@/lib/api/student/student'
 import { useIdCard, useIssueOrRenewIdCard, useUpdateIdCardDates, getIdCardQrImageUrl, currentCardIssue } from '@/hooks/student/useIdCards'
 import { useSponsorDetails, useSponsorCategories, useAssignSponsorCategory } from '@/hooks/student/useSponsor'
 import { useStudentRefugeeDetails, useAssignRefugeeStatus, useRemoveRefugeeStatus } from '@/hooks/student/useRefugee'
+import { useCountries } from '@/hooks/config/useCountries'
 import { useStudentDiscount, useAssignStudentDiscount, useUpdateStudentDiscount, useCancelStudentDiscount, DISCOUNT_STATUS_VALUES, StudentDiscountDto } from '@/hooks/student/useStudentDiscount'
 import { useDiscounts } from '@/hooks/finance/useDiscounts'
 import { CALC_TYPE_VALUES } from '@/lib/api/finance/discount'
@@ -106,8 +107,8 @@ function StudentProfileContent() {
   // StudentLookup. Guarded on `!student` so it only ever fires the one time
   // for the URL-driven load, not on every detail refetch.
   useEffect(() => {
-    if (!student && studentGuidParam && detail) setStudent(detail)
-  }, [student, studentGuidParam, detail])
+    if (!student && studentGuidParam && detail) setStudent(normalizeStudentDetail(detail, effectiveStudentGuid))
+  }, [student, studentGuidParam, detail, effectiveStudentGuid])
   // studentNum has come back undefined on a real response (2026-08-31) —
   // StudentDto's type still promises it as a required string, but the
   // backend isn't reliably filling it in practice. studentRegNo has been
@@ -157,8 +158,13 @@ function StudentProfileContent() {
   const { data: refugeeDetail, isFetching: isRefugeeChecking } = useStudentRefugeeDetails(student?.studentGuid ?? null, !!student && refugeeRequested)
   const assignRefugeeStatus = useAssignRefugeeStatus()
   const removeRefugeeStatus = useRemoveRefugeeStatus()
+  // CountryGuid — confirmed (post-assign-refugee-status.md) as a real guid
+  // field on the student entity, not a legacy numeric code, so the option's
+  // own countryGuid is sent as-is; no index/position workaround needed.
+  const { data: refugeeCountries = [] } = useCountries()
+  const refugeeCountryOptions = refugeeCountries.map(c => ({ value: c.countryGuid, label: c.countryName }))
   const [refugeeModalOpen, setRefugeeModalOpen] = useState(false)
-  const [refugeeCountryCode, setRefugeeCountryCode] = useState('')
+  const [refugeeCountryGuid, setRefugeeCountryGuid] = useState('')
   const [refugeeIdInput, setRefugeeIdInput] = useState('')
   const [refugeeDocFile, setRefugeeDocFile] = useState<File | null>(null)
 
@@ -258,7 +264,7 @@ function StudentProfileContent() {
 
   useEffect(() => {
     if (!refugeeModalOpen) return
-    setRefugeeCountryCode('')
+    setRefugeeCountryGuid('')
     setRefugeeIdInput('')
     setRefugeeDocFile(null)
   }, [refugeeModalOpen])
@@ -353,13 +359,12 @@ function StudentProfileContent() {
 
   function handleAssignRefugee() {
     if (!student) return
-    const countryCode = Number(refugeeCountryCode)
-    if (!countryCode || countryCode <= 0) { showToast('Enter a valid country code.', 'warn'); return }
+    if (!refugeeCountryGuid) { showToast('Country is required.', 'warn'); return }
     if (!refugeeIdInput.trim()) { showToast('Refugee ID is required.', 'warn'); return }
     if (refugeeIdInput.trim().length > 20) { showToast('Refugee ID must be 20 characters or fewer.', 'warn'); return }
     if (!refugeeDocFile) { showToast('A supporting document is required.', 'warn'); return }
     assignRefugeeStatus.mutate(
-      { studentGuid: student.studentGuid, intCountryCode: countryCode, refugeeId: refugeeIdInput.trim(), document: refugeeDocFile },
+      { studentGuid: student.studentGuid, countryGuid: refugeeCountryGuid, refugeeId: refugeeIdInput.trim(), document: refugeeDocFile },
       {
         onSuccess: () => { showToast('Refugee status granted', 'ok'); setRefugeeModalOpen(false) },
         onError: (error: Error) => showToast(error.message || 'Could not assign refugee status', 'err'),
@@ -443,29 +448,49 @@ function StudentProfileContent() {
         {student && (
           <>
             <div className="stu-banner">
-              <div className="stu-banner-top">
-                <div className="stu-av">{initials(student.studentName)}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="stu-banner-name">{student.studentName}</div>
-                  <div className="stu-banner-id">{studentNo} · {student.studentRegNo || detail?.regNo}</div>
-                  <div className="stu-banner-pills">
-                    <span className="stu-pill">{detail?.studActive === 1 ? '✓ Active' : detail ? '⚠ Inactive' : '…'}</span>
-                    <span className="stu-pill"><i className="lni lni-graduation"></i> {student.programName || detail?.programme || '—'}</span>
-                    <span className="stu-pill"><i className="lni lni-grid-alt"></i> {student.batchCode || detail?.batch || '—'}</span>
-                    <span className="stu-pill"><i className="lni lni-calendar"></i> {student.semesterName || detail?.semester || '—'}</span>
-                    <span className="stu-pill"><i className="lni lni-display"></i> Campus</span>
+              {/* Hero header — reuses Payment Console's/Discount Allocation's
+                  pc-hero layout wholesale (avatar + name/programme/reg-no up
+                  top, an aligned label/value facts grid below) instead of the
+                  old free-flowing pill row, see globals.css. .stu-hero below
+                  overrides just the background back to this page's own blue
+                  rather than pc-hero's own gradient. Same five data points as
+                  before — status, programme, batch, semester, campus — just
+                  laid out consistently with the rest of the app now. */}
+              <div className="pc-hero stu-hero">
+                <div className="pc-hero-top">
+                  <div className="pc-hero-avatar">{initials(student.studentName)}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="pc-hero-name truncate">{student.studentName}</div>
+                    <div className="pc-hero-sub truncate">{student.programName || detail?.programme || '—'}</div>
+                    <span className="pc-hero-badge"><i className="lni lni-bookmark"></i> {studentNo} · {student.studentRegNo || detail?.regNo}</span>
                   </div>
+                  {/* Batch/Programme Transfer, Learning Mode, Intake Transfer — tucked
+                      behind a single three-dot menu instead of four always-visible
+                      buttons, same ActionMenu component the table rows elsewhere in
+                      this app use for their own row actions. A flex sibling here,
+                      not absolutely positioned — pc-hero-top's flex-1 name column
+                      otherwise doesn't reserve room for it and the programme/reg-no
+                      lines end up sitting underneath the button instead of beside it.
+                      Each link carries ?studentGuid= so the destination page
+                      preloads this same student instead of requiring a second
+                      StudentLookup search — same deep-link convention Student
+                      Master's own "View" action uses to reach this page. */}
+                  <ActionMenu tooltip="Student Actions">
+                    {/* lni-transfer isn't a real LineIcons 4.0 class (silently renders
+                        nothing) — lni-shuffle is what the sidebar leaf uses for this
+                        same page, see menu.ts. */}
+                    <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/batch-transfer?studentGuid=' + student.studentGuid)}><i className="lni lni-shuffle"></i> Batch Transfer</button>
+                    <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/prog-transfer?studentGuid=' + student.studentGuid)}><i className="lni lni-graduation"></i> Prog. Transfer</button>
+                    <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/learning-mode?studentGuid=' + student.studentGuid)}><i className="lni lni-display"></i> Learning Mode</button>
+                    <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/intake-transfer?studentGuid=' + student.studentGuid)}><i className="lni lni-calendar"></i> Dropout Rejoin</button>
+                  </ActionMenu>
                 </div>
-                {/* Batch/Programme Transfer, Learning Mode, Intake Transfer — tucked
-                    behind a single three-dot menu instead of four always-visible
-                    buttons, same ActionMenu component the table rows elsewhere in
-                    this app use for their own row actions. */}
-                <ActionMenu tooltip="Student Actions">
-                  <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/batch-transfer')}><i className="lni lni-transfer"></i> Batch Transfer</button>
-                  <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/prog-transfer')}><i className="lni lni-graduation"></i> Prog. Transfer</button>
-                  <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/learning-mode')}><i className="lni lni-display"></i> Learning Mode</button>
-                  <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/intake-transfer')}><i className="lni lni-calendar"></i> Intake Transfer</button>
-                </ActionMenu>
+                <div className="pc-hero-facts">
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Status</span><span className="pc-hero-fact-val">{detail?.studActive === 1 ? '✓ Active' : detail ? '⚠ Inactive' : '…'}</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={student.batchCode || detail?.batch || '—'}>{student.batchCode || detail?.batch || '—'}</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Semester</span><span className="pc-hero-fact-val" title={student.semesterName || detail?.semester || '—'}>{student.semesterName || detail?.semester || '—'}</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val">Campus</span></div>
+                </div>
               </div>
               <div className="stu-meta-row">
                 {/* Fee Structure / Learning Mode still have no backend contract — left as
@@ -773,9 +798,8 @@ function StudentProfileContent() {
             <div>
               <div className="fg"><label className="lbl">Student</label><input className="ctrl" readOnly value={student.studentName} /></div>
               <div className="fg">
-                <label className="lbl">Country Code <span className="req">*</span></label>
-                <input className="ctrl" type="number" min={1} value={refugeeCountryCode} onChange={e => setRefugeeCountryCode(e.target.value)} placeholder="Legacy numeric country code" />
-                <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4 }}>No lookup source exists for this legacy code yet — enter the numeric value directly.</div>
+                <label className="lbl">Country <span className="req">*</span></label>
+                <SearchSelect placeholder="-- Select Country --" options={refugeeCountryOptions} value={refugeeCountryGuid} onChange={setRefugeeCountryGuid} />
               </div>
               <div className="fg"><label className="lbl">Refugee ID <span className="req">*</span></label><input className="ctrl" maxLength={20} value={refugeeIdInput} onChange={e => setRefugeeIdInput(e.target.value)} placeholder="Refugee document/registration number" /></div>
               <div className="fg">

@@ -264,10 +264,10 @@ export default function PaymentConsoleAdjustmentsPage() {
 
         {student && (
           <div className="pc-body">
-            {/* LEFT: profile hero + Outstanding Balance merged into one
-                card (per request) — same "hero header, sec-divider section
-                below" treatment Payment Console's own Profile Details +
-                Payment History card uses, instead of two separate cards. */}
+            {/* LEFT: profile hero on its own — matches Payment Console's own
+                column split, where Outstanding Balance travels with the
+                Payment Detail form on the right, not with the profile
+                card. */}
             <div className="flex flex-col gap-5 min-w-0">
               <div className="card p-0 overflow-hidden">
                 <div className="pc-hero">
@@ -286,51 +286,76 @@ export default function PaymentConsoleAdjustmentsPage() {
                     <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Phone</span><span className="pc-hero-fact-val" title={student.phone}>{student.phone}</span></div>
                   </div>
                 </div>
-
-                <div className="px-5 pb-5">
-                  <div className="sec-divider"><i className="lni lni-dollar"></i> Outstanding Balance</div>
-                  {ledgers.filter(l => l.outstanding > 0).length === 0 ? (
-                    <div className="text-center" style={{ padding: 24 }}>
-                      <div className="pc-receipt-check" style={{ fontSize: 22 }}><i className="lni lni-checkmark-circle"></i></div>
-                      <div className="font-bold text-g700" style={{ fontSize: 13.5 }}>Fully settled</div>
-                      <div className="text-g400 mt-1" style={{ fontSize: 12.5 }}>No outstanding tuition ledgers for this application.</div>
-                    </div>
-                  ) : (
-                    <div>
-                      {ledgers.map((l, i) => {
-                        const isPaid = l.outstanding === 0
-                        return (
-                          <div className={`pc-ledger-item${isPaid ? ' paid' : ''}`} key={`${l.name}-${i}`}>
-                            <span className="pc-ledger-icon"><i className={isPaid ? 'lni lni-checkmark-circle' : 'lni lni-invoice'}></i></span>
-                            <div className="flex-1 min-w-0">
-                              <div className="pc-ledger-name truncate">{l.name}</div>
-                              {isPaid && <div className="pc-ledger-sub">Paid</div>}
-                            </div>
-                            <span className="flex items-baseline gap-1.5 justify-end flex-shrink-0">
-                              <span className="text-g400 font-semibold" style={{ fontSize: 11 }}>{l.currency}</span>
-                              <span className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>
-                                {fmtAmt(isPaid ? l.paid : l.outstanding)}
-                              </span>
-                            </span>
-                          </div>
-                        )
-                      })}
-                      <div className="pc-total-due">
-                        <span className="text-muted" style={{ fontSize: 12 }}>Total Due</span>
-                        <span className="font-bold text-amber" style={{ fontSize: 15 }}>{fmtAmt(ledgers.reduce((s, l) => s + l.outstanding, 0))}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
 
-            {/* RIGHT: pick a recorded payment, adjust it (mock save — see
-                file-header note), Paid Fee Details below. */}
+            {/* RIGHT: Outstanding Balance + Payment Details merged into one
+                card, same as Payment Console's own Outstanding Balance +
+                Payment Detail card — a plain sec-divider between them, not
+                a second card-hdr. Paid Fee Details stays its own full-width
+                card below (see that card's own comment on why). */}
             <div className="flex flex-col gap-5 min-w-0">
               <div className="card">
                 <div className="card-hdr">
-                  <div className="card-title"><span className="ctitle-icon"><i className="lni lni-pencil-alt"></i></span> Payment Details</div>
+                  <div className="card-title"><span className="ctitle-icon"><i className="lni lni-dollar"></i></span> Outstanding Balance</div>
+                </div>
+                {/* Same gating as Payment Console's own Outstanding
+                    Balance: "fully settled" means the ledger list itself
+                    is empty (nothing to bill this semester at all), not
+                    "every line happens to already be paid" — an
+                    already-paid line (Library Deposit here) still lists
+                    with its green checkmark/"Paid" treatment rather than
+                    collapsing the whole card to the empty state. */}
+                {ledgers.length === 0 ? (
+                  <div className="text-center" style={{ padding: 24 }}>
+                    <div className="pc-receipt-check" style={{ fontSize: 22 }}><i className="lni lni-checkmark-circle"></i></div>
+                    <div className="font-bold text-g700" style={{ fontSize: 13.5 }}>Fully settled</div>
+                    <div className="text-g400 mt-1" style={{ fontSize: 12.5 }}>No outstanding tuition ledgers for this application.</div>
+                  </div>
+                ) : (
+                  <div>
+                    {ledgers.map((l, i) => {
+                      const isPaid = l.outstanding === 0
+                      return (
+                        <div className={`pc-ledger-item${isPaid ? ' paid' : ''}`} key={`${l.name}-${i}`}>
+                          <span className="pc-ledger-icon"><i className={isPaid ? 'lni lni-checkmark-circle' : 'lni lni-invoice'}></i></span>
+                          <div className="flex-1 min-w-0">
+                            <div className="pc-ledger-name truncate">{l.name}</div>
+                            {isPaid && <div className="pc-ledger-sub">Paid</div>}
+                          </div>
+                          <span className="flex items-baseline gap-1.5 justify-end flex-shrink-0">
+                            <span className="text-g400 font-semibold" style={{ fontSize: 11 }}>{l.currency}</span>
+                            <span className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>
+                              {fmtAmt(isPaid ? l.paid : l.outstanding)}
+                            </span>
+                          </span>
+                        </div>
+                      )
+                    })}
+                    {/* Grouped per currency, same as Payment Console's own
+                        ledgerTotals — matters once a student carries
+                        ledgers in more than one currency. */}
+                    {Object.entries(
+                      ledgers.reduce<Record<string, number>>((acc, l) => {
+                        if (l.outstanding > 0) acc[l.currency] = (acc[l.currency] ?? 0) + l.outstanding
+                        return acc
+                      }, {}),
+                    ).map(([currency, total]) => (
+                      <div className="pc-total-due" key={currency}>
+                        <span className="text-muted" style={{ fontSize: 12 }}>Total Due ({currency})</span>
+                        <span className="font-bold text-amber" style={{ fontSize: 15 }}>{fmtAmt(total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Text/icon color matched to the Outstanding Balance
+                    card-title above (var(--g900), the same ctitle-icon
+                    wrapper) instead of .sec-divider's own default blue —
+                    per request, so the two section headers stacked in this
+                    one card read as the same color language. */}
+                <div className="sec-divider" style={{ color: 'var(--g900)' }}>
+                  <span className="ctitle-icon"><i className="lni lni-pencil-alt"></i></span> Payment Detail
                 </div>
 
                 <div className="fg mb-[14px]">
@@ -366,6 +391,20 @@ export default function PaymentConsoleAdjustmentsPage() {
 
                 {selectedPayment && (
                   <>
+                    {/* Live summary strip — same gradient "billing app"
+                        card-mockup treatment Payment Console uses for its
+                        own Amount to Collect preview, adapted here to show
+                        what's actually being adjusted. */}
+                    <div className="pc-pay-summary">
+                      <div>
+                        <div className="pc-pay-lbl">Adjusting Payment</div>
+                        <div className="pc-pay-amt" style={{ fontSize: 18 }}>{selectedPayment.code}</div>
+                      </div>
+                      <div className="pc-pay-meta">
+                        <div><span>Amount</span><b>{selectedPayment.currency} {fmtAmt(selectedPayment.amount)}</b></div>
+                        <div><span>Original Date</span><b>{selectedPayment.date}</b></div>
+                      </div>
+                    </div>
                     <div className="g2 mb-[14px]">
                       <div className="fg">
                         <div className="lbl">Payment Date <span className="req">*</span></div>
@@ -401,7 +440,7 @@ export default function PaymentConsoleAdjustmentsPage() {
                     <div className="flex gap-[10px] justify-end flex-wrap">
                       <button className="btn btn-neu" onClick={() => selectPayment(paymentGuid)}><i className="lni lni-reload"></i> Refresh</button>
                       <button className="btn btn-neu" onClick={resetAll}><i className="lni lni-close"></i> Cancel</button>
-                      <button className="btn btn-primary" onClick={handleSave}><i className="lni lni-checkmark"></i> OK</button>
+                      <button className="btn btn-primary btn-lg" onClick={handleSave}><i className="lni lni-checkmark"></i> OK</button>
                     </div>
                   </>
                 )}

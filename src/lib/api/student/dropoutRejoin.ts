@@ -42,9 +42,14 @@ export interface RejoinCandidateDto {
   currentSemesterName: string
   // Restricted to the student's current SemCode and current SemCode + 1
   // (get-rejoin-candidate.md) — unlike student-resuming's full semester list.
-  availableSemesters: RejoinSemesterOption[]
-  availableFeeHeads: RejoinFeeHeadOption[]
-  availableBatches: RejoinBatchOption[]
+  // Confirmed live (2026-09-04): a real candidate response can omit any of
+  // these three entirely rather than sending an empty array — crashed the
+  // page's own .find()/.map() calls, which assumed the docs' required-array
+  // shape held. Treat a missing one the same as "no options" everywhere it's
+  // read.
+  availableSemesters?: RejoinSemesterOption[] | null
+  availableFeeHeads?: RejoinFeeHeadOption[] | null
+  availableBatches?: RejoinBatchOption[] | null
 }
 
 export interface RejoinStudentRequest {
@@ -94,6 +99,24 @@ export function getRejoinCandidate(studentGuid: string): Promise<RejoinCandidate
     })
   }
   return apiGet<RejoinCandidateDto>(`/api/v1/students/dropout-rejoin/${studentGuid}/candidate`)
+}
+
+// Confirmed via get-rejoin-batches.md (2026-09-03) — a separate, narrower
+// batch dropdown than candidate.availableBatches above: filtered by the
+// student's program, the chosen semester, AND the chosen batch time (Day/
+// Evening/etc., picked via a batch-time dropdown the form gains alongside
+// this). Called only once both are selected — same "cascading, not
+// preloaded" convention as e.g. Programme Transfer's own semester→batch
+// chain. Response shape (batchGuid/batchCode) matches RejoinBatchOption
+// exactly, so no new type is needed for it.
+export function getRejoinBatches(studentGuid: string, semesterGuid: string, batchTimeGuid: string): Promise<RejoinBatchOption[]> {
+  if (MOCK_AUTH) {
+    const found = mockDropouts.find(d => d.studentGuid === studentGuid)
+    return Promise.resolve(found ? [{ batchGuid: found.batchGuid, batchCode: found.batchCode }] : [])
+  }
+  const params = new URLSearchParams({ semesterGuid, batchTimeGuid })
+  return apiGet<RejoinBatchOption[] | null>(`/api/v1/students/dropout-rejoin/${studentGuid}/batches?${params.toString()}`)
+    .then(data => data ?? [])
 }
 
 export function rejoinStudent(studentGuid: string, payload: RejoinStudentRequest): Promise<RejoinResultDto> {

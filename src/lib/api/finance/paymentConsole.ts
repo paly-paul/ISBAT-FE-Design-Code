@@ -321,22 +321,58 @@ export function getOutstandingLedgers(applicationGuid: string, studentGuid?: str
 // discount included" figure Step 2's Outstanding Balance card needs, which
 // getOutstandingLedgers alone can't show since it carries no discount
 // fields at all.
+//
+// 2026-09-03 backend change: the response used to be a
+// CurrentSemesterPayableResultDto wrapper ({ ledgers, totals }) with a
+// server-computed per-currency totals[] block. That wrapper and the totals
+// block are both gone — the endpoint now returns a flat
+// List<CurrentSemesterPayableLedgerDto> (one row per ledger, ordered by
+// semester code then ledgerNum) with no totals of any kind; callers sum
+// client-side, per currency (see the page's own ledgerTotals useMemo).
+// currencyCode and the discount detail fields below (discountCalcType
+// through discountWarning) are new in the same change.
 export interface CurrentSemesterPayableLedger {
   ledgerGuid: string | null
   semesterGuid: string | null
   ledgerName: string
   ledgerNum: number | null
   currencyGuid: string | null
+  currencyCode: string | null
   currencyName: string
   ledgerAmount: number
   paidAmount: number
   outstanding: number
   discountGuid: string | null
   discountName: string | null
+  // DiscountCalcType: 1 Amount, 2 Percentage. null when discountGuid is null.
+  discountCalcType: number | null
+  // The configured flat amount or percentage (paired with discountCalcType
+  // above to interpret it) — null when discountGuid is null.
+  discountAmtPer: number | null
+  // The ledgerNums sharing this ledger's discount group; [] when no
+  // discount. Purely informational here — unlike payable-ledgers'
+  // simulation, this endpoint doesn't gate the discount on the group being
+  // paid in full, it's shown unconditionally regardless of this list.
+  discountGroupLedgerNums: number[]
+  // This ledger's apportioned share of its discount group's total discount,
+  // rounded to 2dp.
   discountAmount: number
+  // Display string from the discount formatter, e.g. "TALENT 1-10%: 75.00
+  // USD off if this group is paid in full".
+  discountMessage: string | null
+  // Portion of discountAmount that exceeds this ledger's own outstanding
+  // and couldn't be applied to it.
+  discountExcessAmount: number
+  // Non-null only when the discount needs the cashier's attention.
+  discountWarning: string | null
+  // outstanding - discountAmount, floored at 0.
   netPayable: number
 }
 
+// No longer sent by the backend (see CurrentSemesterPayableLedger's own
+// comment) — kept as the shape the page's own client-side per-currency
+// aggregation produces from the flat ledger list, so the render code below
+// didn't need to change shape.
 export interface CurrentSemesterPayableTotal {
   currencyGuid: string | null
   currencyName: string
@@ -345,24 +381,19 @@ export interface CurrentSemesterPayableTotal {
   totalNetPayable: number
 }
 
-export interface CurrentSemesterPayableResult {
-  ledgers: CurrentSemesterPayableLedger[]
-  totals: CurrentSemesterPayableTotal[]
-}
-
 // studentGuid is optional, same reasoning as getOutstandingLedgers' own —
 // without it the handler can't resolve the student's discount assignment or
 // academic status and falls back to the application's own semester.
-export function getCurrentSemesterPayable(applicationGuid: string, studentGuid?: string | null): Promise<CurrentSemesterPayableResult> {
-  if (MOCK_AUTH) return Promise.resolve({ ledgers: [], totals: [] })
+export function getCurrentSemesterPayable(applicationGuid: string, studentGuid?: string | null): Promise<CurrentSemesterPayableLedger[]> {
+  if (MOCK_AUTH) return Promise.resolve([])
   const qs = studentGuid ? `?studentGuid=${encodeURIComponent(studentGuid)}` : ''
-  return apiGet<CurrentSemesterPayableResult | null>(`/api/v1/finance/payment-console/current-semester-payable/${applicationGuid}${qs}`)
-    .then(data => data ?? { ledgers: [], totals: [] })
+  return apiGet<CurrentSemesterPayableLedger[] | null>(`/api/v1/finance/payment-console/current-semester-payable/${applicationGuid}${qs}`)
+    .then(data => data ?? [])
     // Same "empty result surfaces as a 404" behavior as getOutstandingLedgers
     // — "No outstanding ledgers found" here means fully paid, a normal
     // state, not an error (see the doc's own Errors table).
     .catch(err => {
-      if (err instanceof AuthError && err.code === 'not_found') return { ledgers: [], totals: [] }
+      if (err instanceof AuthError && err.code === 'not_found') return []
       throw err
     })
 }
@@ -376,10 +407,22 @@ export function getCurrentSemesterPayable(applicationGuid: string, studentGuid?:
 // payment screen. Used here just to show a real what's-owed figure on the
 // Other/NCHE/Guild tabs, whose own payment-entry forms stay mock (no
 // documented single-category submit endpoint for them yet).
+//
+// 2026-09 backend change (confirmed live, no doc update seen yet): rows now
+// also carry ledgerNum, scheduledAmount/paidAmount (outstanding used to be
+// the only figure on a row), and the same discount detail block
+// current-semester-payable's own DTO gained on 2026-09-03 (discountGuid
+// through discountWarning) — null/[] on NCHE/GUILD rows (category 3/4),
+// which have no ledgerGuid/currency of their own either. Typed here for
+// completeness; OutstandingCategoryTable (this file's only consumer, via
+// the Other Payment tab's category-2 rows) still only reads
+// description/currencyCode/outstanding — nothing here surfaces the new
+// scheduledAmount/paidAmount/discount fields in the UI yet.
 export interface AllOutstandingItem {
   category: number
   ledgerGuid: string | null
   ledgerName: string | null
+  ledgerNum: number | null
   semesterGuid: string | null
   semesterName: string | null
   semCode: number | null
@@ -387,7 +430,18 @@ export interface AllOutstandingItem {
   currencyGuid: string | null
   currencyCode: string | null
   currencyName: string | null
+  scheduledAmount: number
+  paidAmount: number
   outstanding: number
+  discountGuid: string | null
+  discountName: string | null
+  discountCalcType: number | null
+  discountAmtPer: number | null
+  discountGroupLedgerNums: number[]
+  discountAmount: number
+  discountMessage: string | null
+  discountExcessAmount: number
+  discountWarning: string | null
 }
 
 export function getAllOutstandingLedgers(applicationGuid: string): Promise<AllOutstandingItem[]> {

@@ -11,6 +11,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
+import { useExchangeRatesByDate, useExchangeRateExists, useCreateExchangeRate, useUpdateExchangeRate } from '@/hooks/finance/useExchangeRates'
 import { PaymentAdvance } from '@/hooks/finance/usePayments'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
@@ -30,7 +31,6 @@ import {
   PAY_TYPE_LABELS,
   PAY_TYPE_TO_RECEIPT_CATEGORY,
   AllOutstandingItem,
-  CurrentSemesterPayableLedger,
   CurrentSemesterPayableTotal,
 } from '@/hooks/finance/usePaymentConsole'
 import { formatDateTime } from '@/lib/date'
@@ -46,17 +46,12 @@ import { AuthError } from '@/lib/api/client'
 function OutstandingCategoryTable({ items, isLoading, isError }: { items: AllOutstandingItem[]; isLoading: boolean; isError: boolean }) {
   if (isLoading) return <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading outstanding balance…</div>
   if (isError) return <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load the outstanding balance.</div>
-  // Matches Tuition's own "Fully settled" empty state (a checkmark
-  // medallion + heading + subtext) instead of a bare line of grey text, so
-  // the two tabs read as the same design system rather than one looking
-  // finished and the other looking like a placeholder.
-  if (items.length === 0) return (
-    <div className="text-center" style={{ padding: 24 }}>
-      <div className="pc-receipt-check" style={{ fontSize: 22 }}><i className="lni lni-checkmark-circle"></i></div>
-      <div className="font-bold text-g700" style={{ fontSize: 13.5 }}>Fully settled</div>
-      <div className="text-g400 mt-1" style={{ fontSize: 12.5 }}>Nothing outstanding in this category — there is nothing to bill right now.</div>
-    </div>
-  )
+  // No "Fully settled" empty state here (removed per request, 2026-09-04)
+  // — Other Payment's own Payment Detail form always renders right below
+  // this regardless of whether there's anything outstanding, so an empty
+  // items list just renders nothing above it instead of a redundant
+  // checkmark block.
+  if (items.length === 0) return null
   const total = items.reduce((sum, it) => sum + it.outstanding, 0)
   return (
     <>
@@ -85,36 +80,6 @@ function OutstandingCategoryTable({ items, isLoading, isError }: { items: AllOut
   )
 }
 
-// Discount breakdown for Step 2's Outstanding Balance card — pulled out of
-// the per-ledger inline note it used to be into one fixed block, rendered
-// once right after the Library Deposit row specifically (per request),
-// regardless of which ledger(s) the discount actually applies to. Renders
-// nothing when nothing in the current semester earned a discount, rather
-// than an empty/all-zero block.
-function DiscountDetails({ ledgers, totals }: { ledgers: CurrentSemesterPayableLedger[]; totals: CurrentSemesterPayableTotal[] }) {
-  const discounted = ledgers.filter(l => l.discountAmount > 0)
-  if (discounted.length === 0) return null
-  return (
-    <div className="mt-2 mb-2 p-3 rounded-[var(--rsm)] bg-clr-green-bg border border-[1.5px]" style={{ borderColor: 'var(--green-bd)' }}>
-      <div className="font-bold text-green flex items-center gap-1.5" style={{ fontSize: 11.5, marginBottom: 6 }}>
-        <i className="lni lni-tag"></i> Discount Applied
-      </div>
-      {discounted.map((l, i) => (
-        <div className="receipt-row" key={`${l.discountGuid ?? l.ledgerName}-${i}`} style={{ padding: '2px 0' }}>
-          <span className="text-muted">{l.discountName} <span className="text-g400">— {l.ledgerName}</span></span>
-          <span className="font-bold text-green">− {l.currencyName} {l.discountAmount.toLocaleString()}</span>
-        </div>
-      ))}
-      {totals.filter(t => t.totalDiscount > 0).map(t => (
-        <div className="flex justify-between items-center" key={t.currencyGuid ?? t.currencyName} style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed var(--green-bd)' }}>
-          <span className="text-muted" style={{ fontSize: 12 }}>Total Discount ({t.currencyName})</span>
-          <span className="font-bold text-green">− {t.totalDiscount.toLocaleString()}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 // Outstanding/total figures (Outstanding Balance, Total Outstanding, Total
 // Due) always render with exactly 2 decimal places, matching how these
 // amounts are quoted elsewhere in Finance — plain toLocaleString() would
@@ -122,6 +87,33 @@ function DiscountDetails({ ledgers, totals }: { ledgers: CurrentSemesterPayableL
 // of "500.00"), which reads as imprecise next to a currency figure.
 function fmtAmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+// Currency conversion for Outstanding Balance's Scheduled Bill/Outstanding
+// figures (per request, 2026-09-04) — exRate (exchange-rates/get-exchange-
+// rate-by-guid.md, confirmed via the Exchange Rates page's own "{currency}
+// per 1 {base}" label) is "this currency's units per 1 unit of the base
+// currency" (Currency Master's isDefault=1 row), never a direct rate
+// between two arbitrary currencies. Converting A→B always routes through
+// the base: amountInBase = amount / rateA, amountInB = amountInBase * rateB.
+// The base currency itself has an implicit rate of 1 against itself — it
+// has no row in the exchange-rates board at all. Returns null (not a
+// fallback guess) when either currency's rate can't be resolved — a ledger
+// with no currencyGuid, or a currency with no rate on file for today — so
+// callers can show "no rate available" instead of silently wrong math.
+function convertAmount(
+  amount: number,
+  fromGuid: string | null,
+  toGuid: string | null,
+  baseGuid: string | null,
+  ratesByGuid: Map<string, number>,
+): number | null {
+  if (!fromGuid || !toGuid) return null
+  if (fromGuid === toGuid) return amount
+  const fromRate = fromGuid === baseGuid ? 1 : ratesByGuid.get(fromGuid)
+  const toRate = toGuid === baseGuid ? 1 : ratesByGuid.get(toGuid)
+  if (fromRate == null || toRate == null) return null
+  return (amount / fromRate) * toRate
 }
 
 function applicantName(a: { firstName: string | null; lastName: string | null }) {
@@ -203,12 +195,6 @@ export default function PaymentConsolePage() {
   const activeReceiptBooks = allReceiptBooks.filter(r => r.status === 1)
   const { data: currencies = [] } = useFinanceCurrencies()
 
-  // Purely informational reference rates — no longer feeds any computation
-  // (GetPayableLedgers/CreatePayment both operate in the payment's own real
-  // currency via currencyGuid/intCurrency, no client-side UGX conversion
-  // happens anywhere in the real flow).
-  const [usdRate, setUsdRate] = useState('3750')
-  const [kesRate, setKesRate] = useState('28.5')
   // Exchange Rate bar now lives behind the header's "Exchange Rates"
   // toggle instead of always showing — collapsed by default so the page
   // opens straight to Student Search per the redesign.
@@ -386,8 +372,205 @@ export default function PaymentConsolePage() {
   // semester-grouping/picking step left to do the way the old
   // ledgerGroups/currentSemesterGroup had to.
   const { data: currentSemesterPayable, isLoading: isLedgersLoading } = useCurrentSemesterPayable(selectedApplicationGuid, !!selectedApplicationGuid, studentGuid)
-  const ledgers = currentSemesterPayable?.ledgers ?? []
-  const ledgerTotals = currentSemesterPayable?.totals ?? []
+  const ledgers = currentSemesterPayable ?? []
+  // Business rule (2026-09-04, per request): the discount is documented as
+  // conditional on "this group is paid in full" (see discountMessage's own
+  // wording), but this endpoint always shows it unconditionally — it has no
+  // proposed amount to check against, so it can't itself tell a fresh
+  // ledger from one that already took a partial payment without earning the
+  // discount. A paidAmount > 0 means exactly that already happened: some of
+  // this ledger was paid without the group being paid in full, so the
+  // discount is already forfeited and would double-count if still shown.
+  // Zeroed client-side here rather than trusted from the response, and
+  // netPayable falls back to the plain outstanding (no discount to net
+  // against) — every other field, including outstanding/paidAmount
+  // themselves, passes through unchanged.
+  const effectiveLedgers = useMemo(() => ledgers.map(l => {
+    if (l.paidAmount <= 0 || !l.discountGuid) return l
+    return {
+      ...l,
+      discountGuid: null,
+      discountName: null,
+      discountCalcType: null,
+      discountAmtPer: null,
+      discountGroupLedgerNums: [],
+      discountAmount: 0,
+      discountMessage: null,
+      discountExcessAmount: 0,
+      discountWarning: null,
+      netPayable: l.outstanding,
+    }
+  }), [ledgers])
+  // 2026-09-03 backend change: the endpoint used to return a
+  // { ledgers, totals } wrapper with a server-computed per-currency totals[]
+  // block; it now returns the flat ledger list only (see
+  // getCurrentSemesterPayable's own comment) — sum client-side, per
+  // currency, same grouping key (currencyGuid, falling back to currencyName)
+  // the old server-side totals used. Summed from effectiveLedgers, not the
+  // raw ledgers, so a forfeited discount above doesn't leak into the totals.
+  const ledgerTotals = useMemo<CurrentSemesterPayableTotal[]>(() => {
+    const byCurrency = new Map<string, CurrentSemesterPayableTotal>()
+    for (const l of effectiveLedgers) {
+      const key = l.currencyGuid ?? l.currencyName
+      const entry = byCurrency.get(key) ?? { currencyGuid: l.currencyGuid, currencyName: l.currencyName, totalOutstanding: 0, totalDiscount: 0, totalNetPayable: 0 }
+      entry.totalOutstanding += l.outstanding
+      entry.totalDiscount += l.discountAmount
+      entry.totalNetPayable += l.netPayable
+      byCurrency.set(key, entry)
+    }
+    return Array.from(byCurrency.values())
+  }, [effectiveLedgers])
+  // Outstanding Balance shows one currency's table at a time, converted
+  // into whichever currency the cashier has picked as "Currency Received"
+  // below — per a follow-up request (2026-09-05) that dropped the separate
+  // "Convert to Currency" picker above the ledger table in favour of
+  // reusing that one field, rather than asking the cashier to keep two
+  // currency pickers in sync on one form.
+  useEffect(() => {
+    if (currencies.length === 0) return
+    if (currencyGuid && currencies.some(c => c.currencyGuid === currencyGuid)) return
+    // Defaults to whichever currency the student's own ledgers are actually
+    // billed in, when that's one of the configured ones — falls back to
+    // the first configured currency otherwise. Only runs when the current
+    // selection is missing/no longer valid, so it doesn't fight a
+    // cashier's own pick once one's been made.
+    const preferred = ledgerTotals.find(t => currencies.some(c => c.currencyGuid === t.currencyGuid))
+    setCurrencyGuid(preferred?.currencyGuid ?? currencies[0].currencyGuid)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currencies, ledgerTotals])
+  // Converts Scheduled Bill/Outstanding (regardless of a given ledger's own
+  // original currency) into whichever currency is picked above — per
+  // request (2026-09-04). Scheduled Amt and Paid deliberately do NOT
+  // convert (per a follow-up correction, same date): those are the actual
+  // fee-line figures — a student's Admission Fee ledger can genuinely be
+  // billed in USD while their Semester Fee ledger is billed in UGX, so
+  // showing Scheduled Amt/Paid pre-converted would misreport what was
+  // actually charged/collected on that specific ledger. Only Scheduled Bill
+  // (the same ledgerAmount, but converted — the two now deliberately
+  // diverge where they used to read the same figure twice) and Outstanding
+  // exist to be compared/totalled across a mixed-currency ledger set, so
+  // those are what actually need a common currency. Each ledger's own
+  // native code is shown right under its Scheduled Amt figure; the target
+  // currency for Scheduled Bill/Outstanding is named in the "Total Payable
+  // (…)" footer and the picker above.
+  // Today's board (get-exchange-rates-by-date.md) — a rate is only ever
+  // entered for "today", so that's the only date meaningful for a live
+  // "what does this student owe right now" figure; there's no historical
+  // date on this screen to convert as of.
+  const { data: todayRates = [] } = useExchangeRatesByDate(todayYmd())
+  // Today's Exchange Rates bar (header toggle) — wired to the real
+  // POST/PUT exchange-rate endpoints now (per request, 2026-09-04), same
+  // create-if-missing/update-if-present pattern the dedicated Exchange
+  // Rate Management page (exchange-rates/page.tsx) already uses, just
+  // narrowed to USD/KSH since that's all this compact bar has room for.
+  // Reseeded from todayRates whenever it changes (including right after a
+  // save invalidates and refetches it), so the inputs reflect what's
+  // actually saved rather than a stale typed value.
+  const usdCurrency = currencies.find(c => c.currencyCode === 'USD')
+  const kesCurrency = currencies.find(c => c.currencyCode === 'KSH') // Kenyan Shilling — backend's Currency Master uses code KSH, not KES
+  const todayRateByCurrency = new Map(todayRates.map(r => [r.currencyGuid, r]))
+  // Per exchange-rates/get-exchange-rate-exists.md — the authoritative
+  // "can this be edited today?" check for each currency, run independently
+  // of the by-date board above so the lock reflects the dedicated exists
+  // endpoint rather than an inference from todayRates. Once today's rate
+  // exists for a currency, that input is locked; PUT only ever allows
+  // today's row anyway, but the point here is to stop a cashier from
+  // silently overwriting a rate someone already committed for the day.
+  const usdRateExists = useExchangeRateExists(usdCurrency?.currencyGuid ?? null, todayYmd(), showExchangeRates)
+  const kesRateExists = useExchangeRateExists(kesCurrency?.currencyGuid ?? null, todayYmd(), showExchangeRates)
+  const usdRateLocked = usdRateExists.data?.exists === true
+  const kesRateLocked = kesRateExists.data?.exists === true
+  // The bar deliberately asks for the intuitive "1 USD = ___ UGX" direction
+  // (a cashier thinks in "how many shillings per dollar", not the reverse),
+  // but the API's exRate field is the other way round — confirmed via the
+  // Exchange Rate Management page's own "{currency} per 1 {base}" label
+  // (exchange-rates/page.tsx) and convertAmount's math above: it's how many
+  // units of THIS currency equal 1 unit of the base (UGX), so a currency
+  // stronger than the base stores a small fraction (e.g. USD ≈ 0.00026),
+  // not the ~3800 a cashier would type here. So this bar inverts in both
+  // directions — 1/exRate to display what's saved, 1/typed to save what's
+  // displayed — rather than switching the label to match the raw field,
+  // which would just move the confusion onto the person entering the rate.
+  const [rateBarInputs, setRateBarInputs] = useState<Record<string, string>>({})
+  useEffect(() => {
+    const map: Record<string, string> = {}
+    todayRates.forEach(r => { if (r.exRate) map[r.currencyGuid] = String(1 / r.exRate) })
+    setRateBarInputs(map)
+  }, [todayRates])
+  const createExchangeRate = useCreateExchangeRate()
+  const updateExchangeRate = useUpdateExchangeRate()
+  const isSavingRates = createExchangeRate.isPending || updateExchangeRate.isPending
+
+  async function saveExchangeRateBar() {
+    const lockedByGuid: Record<string, boolean> = {
+      ...(usdCurrency ? { [usdCurrency.currencyGuid]: usdRateLocked } : {}),
+      ...(kesCurrency ? { [kesCurrency.currencyGuid]: kesRateLocked } : {}),
+    }
+    const targets = [usdCurrency, kesCurrency]
+      .filter((c): c is NonNullable<typeof c> => !!c)
+      .filter(c => !lockedByGuid[c.currencyGuid])
+    if (targets.length === 0) {
+      const reason = (usdCurrency || kesCurrency) ? 'Today’s rate is already set — it can’t be edited again today.' : 'USD/KSH aren’t configured in Currency Master.'
+      showToast(reason, 'warn')
+      return
+    }
+    let successCount = 0
+    const failures: string[] = []
+    for (const c of targets) {
+      const raw = rateBarInputs[c.currencyGuid] ?? ''
+      const num = parseFloat(raw)
+      if (!raw || !(num > 0)) { failures.push(`${c.currencyCode}: enter a valid rate`); continue }
+      // Invert the "1 USD = ___ UGX" figure the cashier typed back into the
+      // API's "currency per 1 base" convention before saving — see the
+      // rateBarInputs effect above for why.
+      const apiExRate = 1 / num
+      const existing = todayRateByCurrency.get(c.currencyGuid)
+      try {
+        if (existing) await updateExchangeRate.mutateAsync({ guid: existing.exchangeRateGuid, input: { exRate: apiExRate, exDate: todayYmd() } })
+        else await createExchangeRate.mutateAsync({ currencyGuid: c.currencyGuid, exRate: apiExRate, exDate: todayYmd() })
+        successCount++
+      } catch (err) {
+        failures.push(`${c.currencyCode}: ${err instanceof Error ? err.message : 'failed'}`)
+      }
+    }
+    if (failures.length === 0) showToast(`Saved today’s rate for ${successCount} currenc${successCount === 1 ? 'y' : 'ies'}.`, 'success')
+    else showToast(`Saved ${successCount}; ${failures.join('; ')}`, successCount > 0 ? 'warn' : 'error')
+  }
+
+  const baseCurrency = currencies.find(c => c.isDefault === 1)
+  const ratesByGuid = new Map(todayRates.map(r => [r.currencyGuid, r.exRate]))
+  const targetOutstandingCurrency = currencies.find(c => c.currencyGuid === currencyGuid)
+  const targetCurrencyGuid = targetOutstandingCurrency?.currencyGuid ?? null
+  const targetCurrencyName = targetOutstandingCurrency?.currencyName ?? ''
+  // null on a given ledger means its own currency (or the target's) has no
+  // resolvable rate — shown as "—" rather than silently defaulting to the
+  // original, unconverted figure, which would misreport what's actually
+  // owed in the chosen currency.
+  const convertedLedgers = effectiveLedgers.map(l => ({
+    ...l,
+    convScheduled: convertAmount(l.ledgerAmount, l.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid),
+    convOutstanding: convertAmount(l.outstanding, l.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid),
+  }))
+  const convertedTotalDiscount = ledgerTotals.reduce((sum, t) => {
+    const conv = convertAmount(t.totalDiscount, t.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid)
+    return sum + (conv ?? 0)
+  }, 0)
+  // What the "Discount" row above the total actually needs to feed into —
+  // the footer used to just re-show the raw pre-discount outstanding sum
+  // here, which left the Discount line looking like a subtraction that
+  // never actually applied to the number below it (a student billed 250
+  // outstanding with a 187.50 discount kept showing "Total Outstanding:
+  // 250.00" instead of the 62.50 the backend's own netPayable already
+  // computes per-row). Summed from ledgerTotals' totalNetPayable, same
+  // per-currency-then-convert approach convertedTotalDiscount uses, rather
+  // than (per-ledger outstanding total) - convertedTotalDiscount, so a
+  // ledger with an unconvertible currency (convOutstanding null) doesn't
+  // desync the two.
+  const convertedTotalNetPayable = ledgerTotals.reduce((sum, t) => {
+    const conv = convertAmount(t.totalNetPayable, t.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid)
+    return sum + (conv ?? 0)
+  }, 0)
+  const hasUnconvertibleLedger = convertedLedgers.some(l => l.convOutstanding === null)
   // All four categories in one call (get-all-outstanding-ledgers.md) — used
   // to show a real outstanding figure on the Other Payment tab, whose own
   // payment-entry form stays mock (no documented single-category submit
@@ -719,22 +902,54 @@ export default function PaymentConsolePage() {
               <i className="lni lni-money-protection"></i> Today&apos;s Exchange Rates
               <span className="badge badge-blue text-[10px]">Daily Rate</span>
             </div>
+            {/* Wired to the real POST/PUT exchange-rate endpoints (per
+                request, 2026-09-04) — saveExchangeRateBar above creates a
+                fresh rate for today if none exists yet, or updates the
+                existing one (only today's row is PUT-able per
+                put-exchange-rate.md). Disabled + placeholder when USD/KSH
+                aren't in Currency Master at all, rather than accepting
+                input that has nowhere real to save to. Locked instead
+                (get-exchange-rate-exists.md) once today's rate has already
+                been entered for that currency — it can only be edited again
+                once today's row no longer exists (e.g. tomorrow). */}
             <div className="flex items-center gap-[6px] flex-wrap text-[var(--fs-sm)]">
               <span className="text-muted">1 USD =</span>
-              <input type="number" className="ctrl" value={usdRate} onChange={e => setUsdRate(e.target.value)}
-                style={{ width: 72, padding: '5px 9px', fontSize: 13, fontWeight: 700, color: 'var(--b800)' }} />
+              <input
+                type="number"
+                className="ctrl"
+                disabled={!usdCurrency || usdRateLocked}
+                placeholder={usdCurrency ? '' : 'Not configured'}
+                title={usdRateLocked ? 'Today’s USD rate is already set and can’t be edited again today.' : undefined}
+                value={usdCurrency ? (rateBarInputs[usdCurrency.currencyGuid] ?? '') : ''}
+                onChange={e => usdCurrency && setRateBarInputs(prev => ({ ...prev, [usdCurrency.currencyGuid]: e.target.value }))}
+                style={{ width: 72, padding: '5px 9px', fontSize: 13, fontWeight: 700, color: 'var(--b800)' }}
+              />
               <span className="badge badge-gold">UGX</span>
+              {usdRateLocked && <i className="lni lni-lock-alt-1 text-muted" title="Locked — today’s rate already set"></i>}
             </div>
             <div className="flex items-center gap-[6px] flex-wrap text-[var(--fs-sm)]">
-              <span className="text-muted">1 KES =</span>
-              <input type="number" className="ctrl" value={kesRate} onChange={e => setKesRate(e.target.value)}
-                style={{ width: 72, padding: '5px 9px', fontSize: 13, fontWeight: 700, color: 'var(--b800)' }} />
+              <span className="text-muted">1 KSH =</span>
+              <input
+                type="number"
+                className="ctrl"
+                disabled={!kesCurrency || kesRateLocked}
+                placeholder={kesCurrency ? '' : 'Not configured'}
+                title={kesRateLocked ? 'Today’s KSH rate is already set and can’t be edited again today.' : undefined}
+                value={kesCurrency ? (rateBarInputs[kesCurrency.currencyGuid] ?? '') : ''}
+                onChange={e => kesCurrency && setRateBarInputs(prev => ({ ...prev, [kesCurrency.currencyGuid]: e.target.value }))}
+                style={{ width: 72, padding: '5px 9px', fontSize: 13, fontWeight: 700, color: 'var(--b800)' }}
+              />
               <span className="badge badge-gold">UGX</span>
+              {kesRateLocked && <i className="lni lni-lock-alt-1 text-muted" title="Locked — today’s rate already set"></i>}
             </div>
             <div className="flex items-center gap-[7px] flex-wrap" style={{ marginLeft: 'auto' }}>
-              <span className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>Last updated: Today 08:30 AM</span>
-              <button className="btn btn-neu btn-sm" style={{ fontSize: 11 }} onClick={() => showToast('Rates refreshed.', 'success')}>
-                <i className="lni lni-reload"></i> Refresh
+              <button
+                className="btn btn-neu btn-sm"
+                style={{ fontSize: 11 }}
+                disabled={isSavingRates || (usdRateLocked && kesRateLocked)}
+                onClick={saveExchangeRateBar}
+              >
+                <i className="lni lni-save"></i> {isSavingRates ? 'Saving…' : 'Save Rates'}
               </button>
             </div>
           </div>
@@ -1158,9 +1373,9 @@ export default function PaymentConsolePage() {
                 into one card (tuition only). */}
             {activePayTab === 'tuition' && (
               <div className="card">
-                <div className="card-hdr">
-                  <div className="card-title"><span className="ctitle-icon"><i className="lni lni-dollar"></i></span> Outstanding Balance</div>
-                </div>
+                {/* "Outstanding Balance" card-hdr label removed per request
+                    (2026-09-04) — the table below already makes clear
+                    what's being shown. */}
                 {
                   isLedgersLoading ? (
                     <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading ledgers…</div>
@@ -1171,60 +1386,146 @@ export default function PaymentConsolePage() {
                     // both back to back just repeated the same message twice.
                     null
                   ) : (
-                    <div>
-                      {/* Itemized card rows (.pc-ledger-item), one per
-                          current-semester ledger — get-current-semester-
-                          payable-ledgers.md is already scoped server-side to
-                          "this semester" (+ any carried-forward semester-1
-                          registration fee), so there's no client-side
-                          semester grouping/picking left to do here, unlike
-                          the old outstanding-ledgers-backed version. The
-                          amount shown is netPayable (outstanding minus any
-                          discount, floored at 0) — not the raw outstanding
-                          figure — since that's the actual amount still owed.
-                          Discount detail is pulled out of the per-row note
-                          it used to be and rendered once, in a fixed spot
-                          right after the Library Deposit row specifically
-                          (per request) rather than under whichever ledger it
-                          actually applies to — falls back to right after the
-                          last row if this application's ledgers don't
-                          include one. */}
-                      {ledgers.map((l, i) => {
-                        const isPaid = l.outstanding === 0
-                        const isLibraryDeposit = l.ledgerName.trim().toLowerCase() === 'library deposit'
-                        return (
-                          <div key={`${l.ledgerGuid ?? 'none'}-${i}`}>
-                            <div className={`pc-ledger-item${isPaid ? ' paid' : ''}`}>
-                              <span className="pc-ledger-icon"><i className={isPaid ? 'lni lni-checkmark-circle' : 'lni lni-invoice'}></i></span>
-                              <div className="flex-1 min-w-0">
-                                <div className="pc-ledger-name truncate">{l.ledgerName}{l.ledgerNum ? ` (${l.ledgerNum})` : ''}</div>
-                                {isPaid && <div className="pc-ledger-sub">Paid</div>}
-                              </div>
-                              <span className="flex items-baseline gap-1.5 justify-end flex-shrink-0">
-                                <span className="text-g400 font-semibold" style={{ fontSize: 11 }}>{l.currencyName}</span>
-                                <span className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>
-                                  {isPaid ? fmtAmt(l.paidAmount) : fmtAmt(l.netPayable)}
-                                </span>
-                              </span>
-                            </div>
-                            {isLibraryDeposit && <DiscountDetails ledgers={ledgers} totals={ledgerTotals} />}
-                          </div>
-                        )
-                      })}
-                      {!ledgers.some(l => l.ledgerName.trim().toLowerCase() === 'library deposit') && (
-                        <DiscountDetails ledgers={ledgers} totals={ledgerTotals} />
-                      )}
-                      {/* Total Net Payable across every currency present this
-                          semester — purely a display sum of the totals the
-                          server already returned (totalNetPayable per
-                          currency), not a new figure computed client-side. */}
-                      {ledgerTotals.filter(t => t.totalNetPayable > 0).map(t => (
-                        <div className="pc-total-due" key={t.currencyGuid ?? t.currencyName}>
-                          <span className="text-muted" style={{ fontSize: 12 }}>Total Due ({t.currencyName})</span>
-                          <span className="font-bold text-amber" style={{ fontSize: 15 }}>{fmtAmt(t.totalNetPayable)}</span>
+                    <>
+                      {/* Column-aligned per request (2026-09-04, invoice
+                          reference) — Ledger/Scheduled Amt/Scheduled Bill/
+                          Paid/Outstanding columns as .recgrid CSS-Grid rows
+                          (see globals.css) instead of a <table>. Scheduled
+                          Amt and Scheduled Bill both read from ledgerAmount —
+                          the backend has no second figure distinguishing
+                          them, they're the same value shown twice. Discount/
+                          Total stay below as their own bold footer rows
+                          (Discount/Total aren't "a ledger", so they don't
+                          belong as grid rows the column headers describe).
+                          Every ledger (regardless of its own original
+                          currency) converts into whichever currency the
+                          cashier picks as "Currency Received" further down
+                          this form — one merged list, not one table per
+                          currency-group. There's no separate "Convert to
+                          Currency" picker here any more (dropped per a
+                          follow-up request, 2026-09-05): it just duplicated
+                          Currency Received, so this table now reads live
+                          off that same field/state (currencyGuid),
+                          defaulted the same way the old picker was — see
+                          the effect above ledgerTotals. convertAmount/
+                          convertedLedgers do the actual exchange-rate
+                          math. */}
+                      <div className="text-g400 mb-2" style={{ fontSize: 11.5 }}>
+                        Converted to {targetCurrencyName || 'the currency picked below'} — set via <b>Currency Received</b> in Payment Detail.
+                      </div>
+                      {hasUnconvertibleLedger && (
+                        <div className="warn-box mb-3">
+                          <i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0, marginTop: 1 }}></i>
+                          <div>Some ledgers couldn&apos;t be converted to {targetCurrencyName || 'the selected currency'} — no exchange rate is on file for today for that currency. Those rows show <span className="font-mono">—</span> below; the totals only include what could be converted.</div>
                         </div>
-                      ))}
-                    </div>
+                      )}
+                      <div className="mb-4">
+                        <div className="recgrid">
+                          <div className="recgrid-row recgrid-hdr">
+                            <span>Ledger</span>
+                            <span>Scheduled Amt</span>
+                            <span>Scheduled Bill</span>
+                            <span>Paid</span>
+                            <span>Outstanding</span>
+                          </div>
+                          {convertedLedgers.map((l, i) => {
+                            const isPaid = l.outstanding === 0
+                            return (
+                              <div className="recgrid-row recgrid-body" key={`${l.ledgerGuid ?? 'none'}-${i}`}>
+                                <span>
+                                  {l.ledgerName}{l.ledgerNum ? ` (${l.ledgerNum})` : ''}
+                                  {isPaid && <span className="text-green" style={{ fontSize: 11, fontWeight: 600, marginLeft: 6 }}>Paid</span>}
+                                </span>
+                                {/* Native — the raw fee-line amount, not run
+                                    through convertAmount, with the ledger's
+                                    own currencyCode (added to the API
+                                    2026-09-03) shown right under it — no
+                                    separate Currency column anymore (removed
+                                    per request, 2026-09-04). Stays native
+                                    rather than the "Convert to Currency"
+                                    picker's selection: a student's Admission
+                                    Fee ledger can genuinely be billed in USD
+                                    while their Semester Fee ledger is billed
+                                    in UGX, so pre-converting this figure
+                                    would misreport what was actually
+                                    charged on that ledger. */}
+                                {/* Wrapped in its own inner span, rather than
+                                    two direct children of the cell, so the
+                                    amount and currency code stay paired as
+                                    one flex item under the mobile "stack
+                                    instead of squeeze" breakpoint below
+                                    (640px) — that layout turns each cell
+                                    into a flex row of [label, value], and an
+                                    unwrapped second child here would become
+                                    a third item space-between'd off to the
+                                    side instead of sitting under the amount. */}
+                                <span data-label="Scheduled Amt">
+                                  <span>
+                                    {fmtAmt(l.ledgerAmount)}
+                                    {l.currencyCode && <span className="text-g400" style={{ display: 'block', fontSize: 11, fontWeight: 600 }}>({l.currencyCode})</span>}
+                                  </span>
+                                </span>
+                                {/* Converted — same underlying ledgerAmount
+                                    as Scheduled Amt, but into the picked
+                                    target currency; the two intentionally
+                                    diverge now instead of repeating the same
+                                    figure twice. */}
+                                <span data-label="Scheduled Bill">{l.convScheduled != null ? fmtAmt(l.convScheduled) : '—'}</span>
+                                {/* Native — actually collected in the
+                                    ledger's own currency, with the code
+                                    shown underneath same as Scheduled Amt
+                                    (per request, 2026-09-04) — wrapped the
+                                    same way for the same mobile-stacking
+                                    reason. */}
+                                <span data-label="Paid" className="font-bold text-green">
+                                  <span>
+                                    {fmtAmt(l.paidAmount)}
+                                    {l.currencyCode && <span className="text-g400" style={{ display: 'block', fontSize: 11, fontWeight: 600 }}>({l.currencyCode})</span>}
+                                  </span>
+                                </span>
+                                <span data-label="Outstanding" className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>{l.convOutstanding != null ? fmtAmt(l.convOutstanding) : '—'}</span>
+                              </div>
+                            )
+                          })}
+                          {/* Discount/Total as bold footer rows on the same
+                              grid, not a separate right-aligned block — no
+                              colored bar behind either (removed per request,
+                              2026-09-04), just the emphasis typography
+                              .recgrid-total gives them. Value colors set
+                              inline since .recgrid-total>span:last-child's
+                              own color is more specific than a plain text-*
+                              class and would otherwise win over it. Discount
+                              always shows, even at 0, and still carries the
+                              "full payment only" caveat since that condition
+                              can't be read off the figure itself. Both are
+                              the converted totals (summed from
+                              convertedLedgers/ledgerTotals above), not the
+                              original per-currency totals. */}
+                          <div className="recgrid-foot recgrid-total">
+                            <span>
+                              Discount
+                              <span className="text-g400" style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, marginLeft: 4 }}>(full payment only)</span>
+                            </span>
+                            <span style={{ color: convertedTotalDiscount > 0 ? 'var(--green)' : 'var(--g400)' }}>
+                              {convertedTotalDiscount > 0 ? `− ${fmtAmt(convertedTotalDiscount)}` : fmtAmt(convertedTotalDiscount)}
+                            </span>
+                          </div>
+                          <div className="recgrid-foot recgrid-total">
+                            {/* Net of the Discount row above it — was
+                                convertedTotalOutstanding (the raw, pre-
+                                discount sum) until 2026-09-04, which made
+                                the Discount line above look like a
+                                subtraction that never actually landed in
+                                this figure. Relabeled to "Total Payable" so
+                                it doesn't read as the same "Outstanding"
+                                figure the per-ledger column above already
+                                shows pre-discount. */}
+                            <span>Total Payable {targetCurrencyName && `(${targetCurrencyName})`}</span>
+                            <span style={{ color: 'var(--amber)' }}>{fmtAmt(convertedTotalNetPayable)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </>
                   )
                 }
                 {/* Payment Detail — no separate card/section, per request;
@@ -1273,7 +1574,13 @@ export default function PaymentConsolePage() {
                     )}
                     {/* Currency + Amount paired, amount on the right, per
                         request — then Date + Method paired, then Receipt
-                        Book on its own row. */}
+                        Book on its own row. This currency picker now does
+                        double duty (per follow-up request, 2026-09-05): it's
+                        also what the Outstanding Balance table above
+                        converts into (targetCurrencyGuid/targetCurrencyName
+                        further up read straight off this same currencyGuid
+                        state), replacing what used to be a separate
+                        "Convert to Currency" dropdown up there. */}
                     <div className="g2 mb-[14px]">
                       <div className="fg">
                         <div className="lbl">Currency Received <span className="req">*</span></div>

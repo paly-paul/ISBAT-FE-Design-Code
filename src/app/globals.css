@@ -1283,7 +1283,7 @@ body {
 }
 
 /* Batch Summary dropped its "Full Batches" tile (no capacity field to
-   compute it from — see student/batch-summary/page.tsx) so it's down to 3
+   compute it from — see academic/batch-summary/page.tsx) so it's down to 3
    live stat tiles; the base .stats-row's repeat(4,1fr) would leave a bare
    gap on the right instead of filling the row. */
 #page-batch-summary .stats-row {
@@ -2422,7 +2422,9 @@ textarea.ctrl {
    PAYMENT CONSOLE — hero profile card, pill tabs,
    ledger item rows, live payment-summary strip.
    Shared across any page using the .pc-* component set — originally
-   Payment Console only, now also Discount Allocation. Genuinely
+   Payment Console only, then Discount Allocation, now also Student
+   Profile's own banner (as .pc-hero.stu-hero — see .stu-hero further
+   down this file for its background override). Genuinely
    page-specific bits (the .pc-body column-width grid, the pc-hero-facts
    4-vs-2-up rule) stay scoped by id further up/down this file; these are
    plain reusable visual components, same as .card/.badge elsewhere.
@@ -2570,23 +2572,32 @@ textarea.ctrl {
   gap: 7px;
   padding: 10px 16px;
   border-radius: 999px;
-  border: none;
+  /* Visible even at rest, and dark enough to actually read as one — the
+     active tab reads as selected via its own white background + shadow
+     below, but an inactive tab needs its own affordance rather than
+     nothing (border:none) or a border too close in value to the pill's own
+     --g100 background to register (--g200 confirmed live: still read as
+     disabled). Same border/text combination .btn-neu already uses
+     elsewhere for "clickable, not currently selected". */
+  border: 1.5px solid var(--g300);
   background: none;
   cursor: pointer;
   font-size: var(--fs-sm);
   font-weight: 700;
-  color: var(--g500);
+  color: var(--g700);
   transition: var(--tr);
   white-space: nowrap;
 }
 
 .pc-tab-btn:hover {
-  color: var(--g700);
+  border-color: var(--b300);
+  color: var(--b700);
 }
 
 .pc-tab-btn.active {
   background: #fff;
   color: var(--b700);
+  border-color: transparent;
   box-shadow: var(--neu-sm);
 }
 
@@ -2656,7 +2667,11 @@ textarea.ctrl {
 }
 
 /* Live summary strip shown above a form — mirrors what's been entered back
-   at the user as they fill the form in, card-mockup style. */
+   at the user as they fill the form in, card-mockup style. Plain white +
+   border rather than the blue-gradient banner this used to be (removed per
+   request, 2026-09-04) — text colors below carry the contrast a light
+   background needs instead of the opacity-on-white-text treatment tuned for
+   a dark one. */
 .pc-pay-summary {
   display: flex;
   align-items: center;
@@ -2665,22 +2680,9 @@ textarea.ctrl {
   gap: 14px;
   padding: 16px 18px;
   border-radius: var(--rsm);
-  background: linear-gradient(135deg, var(--b700), var(--b500));
-  color: #fff;
+  background: var(--white);
+  border: 1.5px solid var(--g200);
   margin-bottom: 16px;
-  position: relative;
-  overflow: hidden;
-}
-
-.pc-pay-summary::after {
-  content: '';
-  position: absolute;
-  top: -30px;
-  right: -30px;
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .08);
 }
 
 .pc-pay-amt {
@@ -2688,28 +2690,23 @@ textarea.ctrl {
   font-weight: 800;
   font-family: 'Inter', -apple-system, sans-serif;
   letter-spacing: -.02em;
-  position: relative;
-  z-index: 1;
+  color: var(--b700);
 }
 
 .pc-pay-lbl {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: .05em;
-  opacity: .8;
+  color: var(--g500);
   font-weight: 600;
-  position: relative;
-  z-index: 1;
 }
 
 .pc-pay-meta {
   font-size: 11px;
-  opacity: .9;
+  color: var(--g500);
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
-  position: relative;
-  z-index: 1;
 }
 
 .pc-pay-meta > div {
@@ -2721,6 +2718,7 @@ textarea.ctrl {
 .pc-pay-meta b {
   font-size: 12px;
   font-weight: 700;
+  color: var(--g900);
 }
 
 /* Checkmark medallion (receipt headers, fully-settled/no-assignment empty
@@ -3817,6 +3815,213 @@ th:hover .th-fi {
 
   .receipt-row>span:last-child {
     align-self: flex-start
+  }
+}
+
+/* Column-aligned "table look" built from CSS Grid rows, not a <table> —
+   Payment Console's Outstanding Balance (Ledger/Scheduled Amt/Scheduled
+   Bill/Paid/Outstanding), per an invoice-reference request for that same
+   column layout without native table markup. Header colors/typography
+   match this app's real <table><thead> exactly (see thead tr/th above) so
+   it reads as the same design language, not a one-off. */
+/* Ledger | Scheduled Amt | Scheduled Bill | Paid | Outstanding — the column
+   track is defined ONCE here, on the outer grid, not per-row. Every
+   .recgrid-row/.recgrid-foot below is a subgrid that inherits these exact
+   tracks rather than declaring its own grid-template-columns — with each
+   row as its own independent grid (the old setup), an `fr` track's width is
+   `minmax(auto, 1fr)`, i.e. it auto-sizes to that row's own content, so the
+   header row's longer uppercase labels ("SCHEDULED AMT", "SCHEDULED BILL")
+   could compute a different pixel width for a column than the same column
+   in a plain numeric data row — two separate grids, each sizing itself
+   independently, not one shared table structure. Subgrid makes every row
+   share the identical computed tracks so a column's width can't drift
+   between the header and the rows under it. No separate Currency column
+   (removed per request, 2026-09-04, in favor of showing each ledger's
+   native code inline under its own Scheduled Amt value — see the JSX). */
+.recgrid {
+  display: grid;
+  grid-template-columns: 2fr repeat(4, 1fr);
+  border: 1.5px solid var(--g200);
+  border-radius: var(--rsm);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.recgrid-row {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+}
+
+.recgrid-hdr {
+  background: linear-gradient(135deg, #4e6dd1, #486ab5);
+}
+
+.recgrid-hdr>span {
+  padding: 11px 14px;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: rgba(255, 255, 255, .9);
+}
+
+.recgrid-body {
+  border-bottom: 1px solid var(--g200);
+  transition: var(--tr);
+}
+
+.recgrid-body:last-child {
+  border-bottom: none;
+}
+
+.recgrid-body:hover {
+  background: var(--b50);
+}
+
+.recgrid-body>span {
+  padding: 12px 14px;
+  font-size: var(--fs-base);
+  color: var(--g700);
+}
+
+.recgrid-hdr>span:not(:first-child),
+.recgrid-body>span:not(:first-child) {
+  text-align: right;
+}
+
+/* Grid lines, not zebra striping — vertical rules between columns (the
+   header's own colored background already reads as its row divider) so
+   the layout reads as an actual grid rather than alternating row shading. */
+.recgrid-hdr>span:not(:last-child),
+.recgrid-body>span:not(:last-child) {
+  border-right: 1px solid var(--g200);
+}
+
+.recgrid-hdr>span:not(:last-child) {
+  border-right-color: rgba(255, 255, 255, .25);
+}
+
+/* Footer rows — Discount/Total. Same subgrid as .recgrid-row above (not its
+   own grid-template-columns) so its tracks are guaranteed pixel-identical
+   to the header/body rows rather than recomputed from this row's own two
+   cells. Label spans the first 4 columns (right-aligned, so it reads
+   immediately before its own value) and the amount sits under the
+   Outstanding column, same as the reference invoice's own
+   SUBTOTAL/TAX/TOTAL rows aligning under its rightmost column. */
+.recgrid-foot {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  font-size: var(--fs-sm);
+  border-top: 1px solid var(--g100);
+}
+
+.recgrid-foot>span:first-child {
+  grid-column: 1 / 5;
+  text-align: right;
+  color: var(--g500);
+  padding: 10px 14px;
+  /* Header/body draw a vertical rule after every column; the footer only
+     has two cells (this merged label + the value), so without this the
+     grid's own divider lines visibly stop dead at the header/body's last
+     row instead of continuing down — this redraws the one that matters,
+     right at the same Paid/Outstanding boundary the row cells' own rules
+     land on, so the value column reads as continuing straight down through
+     every row including the footer. */
+  border-right: 1px solid var(--g200);
+}
+
+.recgrid-foot>span:last-child {
+  text-align: right;
+  font-weight: 700;
+  color: var(--g900);
+  padding: 10px 14px;
+}
+
+/* Total/Discount — bold emphasis row, not a solid colored bar (background
+   removed per request, 2026-09-04 — was a blue gradient bookending the
+   header above). Just typography now; each value's own color (amber for
+   Total Outstanding, green/muted for Discount) comes from the JSX's own
+   text-* className instead of being baked in here, same convention the
+   rest of this app's amount figures already use. */
+.recgrid-total {
+  background: var(--white);
+  border-top: 1.5px solid var(--g200);
+}
+
+.recgrid-total + .recgrid-total {
+  border-top: 1px solid var(--g100);
+}
+
+.recgrid-total>span:first-child {
+  color: var(--g500);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: var(--fs-2xs);
+}
+
+.recgrid-total>span:last-child {
+  color: var(--g900);
+  font-weight: 800;
+  font-size: var(--fs-md);
+}
+
+@media(max-width:640px) {
+  .recgrid-foot {
+    grid-template-columns: 1fr;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .recgrid-foot>span:first-child {
+    text-align: left;
+    padding-right: 0;
+    /* The label/value split becomes a left/right flex pair here, not
+       adjacent grid columns — the vertical rule between them only makes
+       sense in the desktop grid layout. */
+    border-right: none;
+  }
+}
+
+/* Same "stack instead of squeeze" treatment .receipt-row gets below —
+   5 columns have nowhere to go on a narrow screen, so each ledger becomes
+   its own label/value stack instead. */
+@media(max-width:640px) {
+  .recgrid-hdr {
+    display: none;
+  }
+
+  .recgrid-row {
+    grid-template-columns: 1fr;
+  }
+
+  .recgrid-body {
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .recgrid-body>span {
+    padding: 0;
+    display: flex;
+    justify-content: space-between;
+    text-align: left !important;
+    /* The vertical grid lines only make sense column-to-column — with each
+       span now stacked full-width, a border-right just draws a stray line
+       down its own right edge. */
+    border-right: none !important;
+  }
+
+  /* Every span past the first (Ledger name, kept as the row's own title)
+     loses its header-row label once the header hides above — put it back
+     inline via the cell's own data-label. */
+  .recgrid-body>span:not(:first-child)::before {
+    content: attr(data-label);
+    color: var(--g500);
+    font-weight: 600;
   }
 }
 
@@ -7169,11 +7374,25 @@ body {
   box-shadow: var(--neu-out);
 }
 
+/* Student Profile's hero — reuses .pc-hero (Payment Console's/Discount
+   Allocation's summary-banner component, defined further up this file)
+   wholesale for its alignment/layout, with just the background swapped
+   back to this page's own blue. The combined selector's extra specificity
+   beats plain .pc-hero regardless of source order. */
+.pc-hero.stu-hero {
+  background: linear-gradient(135deg, var(--b700), var(--b500));
+}
+
 .stu-banner-top {
   background: linear-gradient(135deg, var(--b700), var(--b500));
   padding: 16px 20px;
   display: flex;
-  align-items: center;
+  /* flex-start, not center — with `center` the row's height comes from the
+     tallest child (the name/id/pills block, which grows taller as pills
+     wrap at narrow widths), so the fixed-size avatar and action menu drift
+     toward the vertical middle of that block instead of lining up with the
+     student's name at the top. */
+  align-items: flex-start;
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -7205,11 +7424,18 @@ body {
   margin-top: 2px;
 }
 
+/* Grid, not flex-wrap — auto-fit packs as many 150px+ columns as the
+   banner is wide, so short pills like "Campus" sit two-up next to each
+   other on a roomy screen, and it collapses to one pill per row on a
+   narrow one (same auto-fit approach as .stu-meta-row below). Each pill
+   stretches to fill its column by default, which is also what gives long
+   text like the programme name a full-width box to wrap inside instead of
+   however much its own content happened to need. */
 .stu-banner-pills {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 7px;
   margin-top: 8px;
-  flex-wrap: wrap;
 }
 
 .stu-pill {
@@ -7225,19 +7451,31 @@ body {
   border: 1px solid rgba(255, 255, 255, .3);
 }
 
+/* Flexbox, not a fixed-column grid — the item count varies by page (7 on
+   Student Profile, 2 on Staff Profile), and a grid's column tracks stay
+   fixed across every row regardless of how many items actually land in the
+   last one, so an odd leftover (e.g. row 3 of 3+3+1) sits stranded on the
+   left with dead space beside it. Flex-wrap repacks each row on its own and
+   flex-grow lets that row's items — however many there are — stretch to
+   fill it, so there's never a half-empty last row. This also replaces the
+   old fixed-5-columns-until-900px-then-2 breakpoint, which left 5 columns
+   visibly cramped well before 900px on anything narrower than a full
+   desktop width; item width now reflows continuously with the container. */
 .stu-meta-row {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  border-top: 1px solid var(--g200);
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .stu-meta-item {
+  flex: 1 1 140px;
+  min-width: 140px;
   padding: 12px 16px;
-  border-right: 1px solid var(--g200);
-}
-
-.stu-meta-item:last-child {
-  border-right: none;
+  /* An outline (not a border) draws independently per item rather than
+     collapsing with its neighbors, so every cell gets a clean box on all
+     four sides with no per-row "last column" bookkeeping needed — it holds
+     up under any wrap pattern the flex layout produces. */
+  outline: 1px solid var(--g200);
+  outline-offset: -1px;
 }
 
 .stu-meta-lbl {
@@ -8051,10 +8289,6 @@ body {
   .dcard-grid,
   .quick-actions {
     grid-template-columns: 1fr;
-  }
-
-  .stu-meta-row {
-    grid-template-columns: 1fr 1fr;
   }
 
   .batch-body {

@@ -24,12 +24,23 @@ export interface ProgramTransferDetail {
   campusName: string | null
   intakeGuid: string | null
   intakeDescription: string | null
+  // admissionType is a raw numeric code (1 = "Regular Student", ...) — not
+  // documented as an enum anywhere in the students/ doc set, so admissionTypeLabel
+  // (confirmed live, 2026-09-04) is what actually gets displayed; admissionType
+  // itself is kept only as a last-resort fallback if a response ever omits the label.
   admissionType: string | null
+  admissionTypeLabel?: string | null
   feeGuid: string | null
   feeCode: string | null
   feeDesc: string | null
   discountGuid: string | null
   discountName: string | null
+  // Confirmed live (2026-09-04) alongside discountGuid/discountName above —
+  // not in the original doc sample, so optional rather than assumed always present.
+  discountCode?: string | null
+  discountAmtPer?: number | null
+  // 1 = Amount, 2 = Percentage — same convention as StudentDetailDto's own calcType.
+  discountCalcType?: number | null
 }
 
 export interface ProgramTransferBatchOption {

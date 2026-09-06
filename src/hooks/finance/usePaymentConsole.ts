@@ -200,5 +200,5 @@ export function useCreateAdvanceDeposit() {
   })
 }
 
-export type { AdvanceDepositInput, AdvanceDepositResult, AllOutstandingItem, ApplicationSummary, CurrentSemesterPayableLedger, CurrentSemesterPayableResult, CurrentSemesterPayableTotal, LedgerOthersDto, OutstandingLedger, PayableLedgerLine, PayableLedgersParams, PaymentHistoryEntry, PaymentHistoryListEntry, PaymentInput, PaymentOtherInput, PaymentOtherResult, PaymentResult, StudentProfile } from '@/lib/api/finance/paymentConsole'
+export type { AdvanceDepositInput, AdvanceDepositResult, AllOutstandingItem, ApplicationSummary, CurrentSemesterPayableLedger, CurrentSemesterPayableTotal, LedgerOthersDto, OutstandingLedger, PayableLedgerLine, PayableLedgersParams, PaymentHistoryEntry, PaymentHistoryListEntry, PaymentInput, PaymentOtherInput, PaymentOtherResult, PaymentResult, StudentProfile } from '@/lib/api/finance/paymentConsole'
 export { PAYMENT_CATEGORY_LABELS, PAY_TYPE_LABELS, PAY_TYPE_TO_RECEIPT_CATEGORY } from '@/lib/api/finance/paymentConsole'

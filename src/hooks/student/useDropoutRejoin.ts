@@ -2,12 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getDropoutStudents,
   getRejoinCandidate,
+  getRejoinBatches,
   rejoinStudent,
   RejoinStudentRequest,
 } from '@/lib/api/student/dropoutRejoin'
 
 const DROPOUT_LIST_KEY = ['dropout-students']
 const REJOIN_CANDIDATE_KEY = ['rejoin-candidate']
+const REJOIN_BATCHES_KEY = ['rejoin-batches']
 
 export function useDropoutStudents(enabled: boolean) {
   return useQuery({
@@ -24,6 +26,18 @@ export function useRejoinCandidate(studentGuid: string | null, enabled: boolean)
     queryKey: [...REJOIN_CANDIDATE_KEY, studentGuid],
     queryFn: () => getRejoinCandidate(studentGuid as string),
     enabled: enabled && !!studentGuid,
+  })
+}
+
+// Only enabled once both the semester and batch time are picked — matches
+// the doc's own "call this after the user picks a semester and batch time"
+// instruction, same cascading-dropdown convention as
+// useSemestersForProgram/useProgramTransferBatches on Programme Transfer.
+export function useRejoinBatches(studentGuid: string | null, semesterGuid: string | null, batchTimeGuid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...REJOIN_BATCHES_KEY, studentGuid, semesterGuid, batchTimeGuid],
+    queryFn: () => getRejoinBatches(studentGuid as string, semesterGuid as string, batchTimeGuid as string),
+    enabled: enabled && !!studentGuid && !!semesterGuid && !!batchTimeGuid,
   })
 }
 

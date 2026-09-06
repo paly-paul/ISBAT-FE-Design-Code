@@ -1,6 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -9,7 +9,7 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
-import { StudentDto } from '@/lib/api/student/student'
+import { StudentDto, normalizeStudentDetail } from '@/lib/api/student/student'
 import { useStudent } from '@/hooks/student/useStudents'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { useIntakes } from '@/hooks/academic/useIntakes'
@@ -34,22 +34,29 @@ import {
 // PAGE_SIZE) rather than the API's raw default.
 const REPORT_PAGE_SIZE = 10
 
-export default function Page() {
+// useSearchParams() requires a Suspense boundary above it (Next.js App
+// Router) — see the wrapping default export at the bottom of this file,
+// same split Student Profile uses for the same reason.
+function LearningModeContent() {
+  const router = useRouter()
   const searchParams = useSearchParams()
+  // Student Profile's action menu links here as
+  // /student/learning-mode?studentGuid=<guid> instead of requiring a second
+  // StudentLookup search for the student already open there — same
+  // deep-link convention Student Master's own "View" action uses to reach
+  // Profile itself.
   const studentGuidParam = searchParams.get('studentGuid')
-
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
   const [student, setStudent] = useState<StudentDto | null>(null)
-  const { data: urlStudent, isLoading: isUrlStudentLoading } = useStudent(studentGuidParam, true)
-
-  // Auto-load student if provided in URL
+  const effectiveStudentGuid = student?.studentGuid ?? studentGuidParam
+  const { data: guidLoadedStudent } = useStudent(effectiveStudentGuid ?? null, !!effectiveStudentGuid)
+  // Once the deep-linked guid's detail resolves, seed `student` from it —
+  // same effect Profile itself uses for its own ?studentGuid= param.
   useEffect(() => {
-    if (urlStudent && !student) {
-      setStudent(urlStudent)
-    }
-  }, [urlStudent, student])
+    if (!student && studentGuidParam && guidLoadedStudent) setStudent(normalizeStudentDetail(guidLoadedStudent, effectiveStudentGuid))
+  }, [student, studentGuidParam, guidLoadedStudent, effectiveStudentGuid])
 
   const { data: detail, isLoading: isDetailLoading } = useStudentLearningModeDetail(student?.studentGuid ?? null)
   const { data: options = [] } = useLearningModeOptions()
@@ -65,7 +72,12 @@ export default function Page() {
   }, [detail?.studentGuid, detail?.learningMode])
 
   function handleLoad(s: StudentDto) { setStudent(s) }
-  function handleClear() { setStudent(null); setSelectedMode('') }
+  function handleClear() {
+    setStudent(null); setSelectedMode('')
+    // Drop ?studentGuid= so the effect above doesn't immediately reload the
+    // same student right back in — same reasoning as Profile's own clear.
+    if (studentGuidParam) router.replace('/student/learning-mode')
+  }
 
   function handleApply() {
     if (!student) return
@@ -223,5 +235,13 @@ export default function Page() {
       </div>
       <Toast toast={toast} />
     </>
+  )
+}
+
+export default function Page() {
+  return (
+    <Suspense>
+      <LearningModeContent />
+    </Suspense>
   )
 }

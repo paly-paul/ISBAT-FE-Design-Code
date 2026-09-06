@@ -82,27 +82,39 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
     leaf('Batch Transfer', 'shuffle', '/student/batch-transfer'),
     leaf('Programme Transfer', 'graduation', '/student/prog-transfer'),
     leaf('Learning Mode', 'display', '/student/learning-mode'),
-    leaf('Intake Transfer', 'calendar', '/student/intake-transfer'),
+    // Re-enabled and renamed from "Intake Transfer" to "Dropout Rejoin",
+    // 2026-09-03 — same route (/student/intake-transfer), matching the page's
+    // own "Dropout Rejoin" mode tab (its "Deferment / Period Shift" tab was
+    // commented out on the page itself the same day, leaving Dropout Rejoin
+    // as the page's only mode).
+    leaf('Dropout Rejoin', 'calendar', '/student/intake-transfer'),
     leaf('Fee Structure Transfer', 'dollar', '/student/fee-structure-transfer'),
   ]),
-  section('Services', [
-    leaf('Student Services', 'ticket', '/student/services'),
-  ]),
+  // Services section hidden from the sidebar per request, 2026-09-02 — its
+  // one leaf (Student Services) still exists at /student/services, just not
+  // linked to. Commented out whole (not just the leaf) since Sidebar.tsx
+  // renders a childless section as a disabled "Soon" item instead of
+  // skipping it (see sbItem/sbSection in Sidebar.tsx).
+  // section('Services', [
+  //   leaf('Student Services', 'ticket', '/student/services'),
+  // ]),
   section('Communications', [
     leaf('Send Communication', 'envelope', '/student/communications'),
   ]),
   section('Settings', [
-    // Split from a single combined "Category Masters" page into two —
-    // Student Category Master (real sponsor-categories CRUD) and Service
-    // Category Master (mock ticketing categories) are unrelated resources
-    // that happened to share a page.
-    leaf('Student Category Master', 'users', '/student/student-category-master'),
-    leaf('Service Category Master', 'list', '/student/service-category-master'),
     leaf('Specialization Management', 'graduation', '/student/specialization'),
   ]),
 ]
 
 const CONFIG_SECTIONS: MenuNode[] = [
+  section('Students', [
+    // Moved out of the Student module's Settings section — these are config
+    // masters (sponsor/student categories and ticketing categories), not
+    // day-to-day student operations, so they belong alongside the rest of
+    // Config's setup masters instead.
+    leaf('Student Category Master', 'users', '/config/student-category-master'),
+    leaf('Service Category Master', 'list', '/config/service-category-master'),
+  ]),
   section('Organization', [
     leaf('Faculty Master', 'library', '/config/faculty-master'),
     leaf('Department Master', 'briefcase', '/config/department-master'),
@@ -213,6 +225,9 @@ const mockMenu: MenuNode[] = [
       leaf('Bulk Intake Edit', 'layers', '/academic/bulk-intake-edit'),
       leaf('Skill Management', 'bulb', '/academic/skill-master'),
       leaf('Batch Management', 'users', '/academic/batch-management'),
+      // Moved from Student > Student Records, 2026-09-02 — the page already
+      // pulled from the academic/batchSummary API, not a students endpoint.
+      leaf('Batch Summary', 'grid-alt', '/academic/batch-summary'),
       leaf('Room Management', 'home', '/academic/room-management'),
       leaf('Session Movement', 'reload', '/academic/session-movement'),
     ]),
@@ -258,7 +273,6 @@ const mockMenu: MenuNode[] = [
   module_('Student', 'user', [
     section('Student Records', [
       leaf('Student Master', 'graduation', '/student/student-master'),
-      leaf('Batch Summary', 'grid-alt', '/student/batch-summary'),
       leaf('Student Statement', 'files', '/student/statement'),
     ]),
     ...STUDENT_OPERATIONS_SECTIONS,
@@ -269,34 +283,7 @@ const mockMenu: MenuNode[] = [
       leaf('Employee Approvals', 'checkmark-circle', '/employee/employee-approve'),
     ]),
   ]),
-  module_('Config', 'cog', [
-    section('Organization', [
-      leaf('Faculty Master', 'library', '/config/faculty-master'),
-      leaf('Department Master', 'briefcase', '/config/department-master'),
-      leaf('Designation Master', 'tag', '/config/designation-master'),
-      leaf('Campus Master', 'home', '/config/campus-master'),
-      leaf('Country Master', 'world', '/config/country-master'),
-    ]),
-    section('Academic Setup', [
-      leaf('Specialization', 'certificate', '/config/specialization'),
-      leaf('Skill Master', 'bulb', '/config/skill'),
-      leaf('Unit Type Master', 'tag', '/config/unit-type'),
-      leaf('Unit Category Master', 'tag', '/config/unit-category'),
-      leaf('Weekdays', 'calendar', '/config/weekdays'),
-      leaf('Batch Times', 'timer', '/config/batch-times'),
-    ]),
-    section('Admissions', [
-      leaf('Enquiry Status', 'flag', '/config/enquiry-status'),
-      leaf('Isbat Enquiry Source', 'compass', '/config/enquiry-source'),
-      leaf('Enquiry Source', 'volume', '/config/enquiry-source-master'),
-      leaf('Followup Status', 'phone', '/config/followup-status'),
-      leaf('Followup Mode', 'comments', '/config/followup-mode'),
-      leaf('Interest Level', 'signal', '/config/interest-level'),
-    ]),
-    section('Access Control', [
-      leaf('Permission Master', 'lock', '/config/permission-master'),
-    ]),
-  ]),
+
   module_('Assessment', 'pencil-alt', ASSESSMENT_SECTIONS),
 ]
 
@@ -383,7 +370,6 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
   if (studentIdx === -1) {
     return [...menu, module_('Student', 'user', [
       section('Student Records', [
-        leaf('Batch Summary', 'grid-alt', '/student/batch-summary'),
         leaf('Student Statement', 'files', '/student/statement'),
       ]),
       ...STUDENT_OPERATIONS_SECTIONS,
@@ -392,19 +378,23 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
 
   let studentModule = menu[studentIdx]
 
-  // Batch Summary / Student Statement extend the existing "Student Records"
-  // section rather than getting their own section.
+  // Student Statement extends the existing "Student Records" section rather
+  // than getting its own section. Batch Summary used to live here too, but
+  // moved to Academic > Academic Core on 2026-09-02 (see
+  // ensureBatchSummary below) — filtered out of Student Records here in
+  // case the real backend still registers it, so a stale entry pointing at
+  // the now-removed /student/batch-summary route doesn't linger.
   const recordsIdx = studentModule.children.findIndex(c => c.name === 'Student Records')
   if (recordsIdx !== -1) {
     const recordsSection = studentModule.children[recordsIdx]
-    const existingLeaves = new Set(recordsSection.children.map(l => l.name))
+    const orderedRecordsLeaves = recordsSection.children.filter(l => l.name !== 'Batch Summary')
+    const existingLeaves = new Set(orderedRecordsLeaves.map(l => l.name))
     const missingLeaves = [
-      leaf('Batch Summary', 'grid-alt', '/student/batch-summary'),
       leaf('Student Statement', 'files', '/student/statement'),
     ].filter(l => !existingLeaves.has(l.name))
-    if (missingLeaves.length > 0) {
+    if (orderedRecordsLeaves.length !== recordsSection.children.length || missingLeaves.length > 0) {
       const children = [...studentModule.children]
-      children[recordsIdx] = { ...recordsSection, children: [...recordsSection.children, ...missingLeaves] }
+      children[recordsIdx] = { ...recordsSection, children: [...orderedRecordsLeaves, ...missingLeaves] }
       studentModule = { ...studentModule, children }
     }
   }
@@ -421,12 +411,17 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
     const operationsSection = studentModule.children[operationsIdx]
     const operationsDef = STUDENT_OPERATIONS_SECTIONS.find(s => s.name === 'Operations')!
     const iconByName = new Map(operationsDef.children.map(l => [l.name, l.icon]))
-    
+
     const existingLeaves = new Set(operationsSection.children.map(l => l.name))
     const missingLeaves = operationsDef.children.filter(l => !existingLeaves.has(l.name))
-    
+
     const children = [
-      ...operationsSection.children.map(l =>
+      // "Intake Transfer" renamed to "Dropout Rejoin" 2026-09-03 (see
+      // STUDENT_OPERATIONS_SECTIONS above) — filtered out here too in case
+      // the real backend still registers the old name, so a stale entry
+      // pointing at it under the old label doesn't linger alongside the
+      // renamed one from missingLeaves below.
+      ...operationsSection.children.filter(l => l.name !== 'Intake Transfer').map(l =>
         iconByName.has(l.name) ? { ...l, icon: iconByName.get(l.name)! } : l,
       ),
       ...missingLeaves
@@ -451,12 +446,15 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
     // dropped from this page entirely, 2026-09-02 — filtered out here too
     // in case the real backend still has it registered, so a stale entry
     // pointing at the now-removed /student/discount-management route
-    // doesn't linger in the sidebar.
-    const orderedLeaves = settingsSection.children.filter(l => l.name !== 'Category Masters' && l.name !== 'Discount Management')
+    // doesn't linger in the sidebar. Student Category Master and Service
+    // Category Master moved to Config > Students the same day (see
+    // CONFIG_SECTIONS) — filtered out here too so a stale entry pointing at
+    // the now-removed /student/student-category-master and
+    // /student/service-category-master routes doesn't linger either;
+    // mergeConfigSections is what adds them back under Config.
+    const orderedLeaves = settingsSection.children.filter(l => l.name !== 'Category Masters' && l.name !== 'Discount Management' && l.name !== 'Student Category Master' && l.name !== 'Service Category Master')
     const existingSettingsLeaves = new Set(orderedLeaves.map(l => l.name))
     const missingSettingsLeaves = [
-      leaf('Student Category Master', 'users', '/student/student-category-master'),
-      leaf('Service Category Master', 'list', '/student/service-category-master'),
       leaf('Specialization Management', 'graduation', '/student/specialization'),
     ].filter(l => !existingSettingsLeaves.has(l.name))
     if (orderedLeaves.length !== settingsSection.children.length || missingSettingsLeaves.length > 0) {
@@ -464,6 +462,16 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
       children[settingsIdx] = { ...settingsSection, children: [...orderedLeaves, ...missingSettingsLeaves] }
       studentModule = { ...studentModule, children }
     }
+  }
+
+  // Services hidden from the sidebar per request, 2026-09-02 — dropped
+  // entirely (whole section, not just its one leaf) in case the real
+  // backend still registers it, so it doesn't linger for users on the real
+  // (non-mock) menu tree. See STUDENT_OPERATIONS_SECTIONS above for why the
+  // whole section is commented out there rather than left with 0 children.
+  const withoutServices = studentModule.children.filter(c => c.name !== 'Services')
+  if (withoutServices.length !== studentModule.children.length) {
+    studentModule = { ...studentModule, children: withoutServices }
   }
 
   const existingSections = new Set(studentModule.children.map(c => c.name))
@@ -532,6 +540,43 @@ function ensureBulkIntakeEdit(menu: MenuNode[]): MenuNode[] {
     children.splice(intakeIdx + 1, 0, bulkEditLeaf)
   } else {
     children.push(bulkEditLeaf)
+  }
+
+  const mergedSection = { ...coreSection, children }
+
+  const mergedAcad = { ...acadModule }
+  mergedAcad.children = [...acadModule.children]
+  mergedAcad.children[coreIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[acadIdx] = mergedAcad
+  return mergedMenu
+}
+
+// TEMPORARY: Batch Summary moved from Student > Student Records to Academic
+// > Academic Core, 2026-09-02 — mergeStudentSections() above strips it out
+// of Student Records if the real backend still has it registered there, and
+// this adds it into Academic Core (right after Batch Management) if the
+// backend doesn't register it there yet. Same shape as ensureBulkIntakeEdit.
+function ensureBatchSummary(menu: MenuNode[]): MenuNode[] {
+  const acadIdx = menu.findIndex(n => n.name === 'Academic')
+  if (acadIdx === -1) return menu
+
+  const acadModule = menu[acadIdx]
+  const coreIdx = acadModule.children.findIndex(c => c.name === 'Academic Core')
+  if (coreIdx === -1) return menu
+
+  const coreSection = acadModule.children[coreIdx]
+  if (coreSection.children.some(l => l.name === 'Batch Summary')) return menu
+
+  const children = [...coreSection.children]
+  const batchMgmtIdx = children.findIndex(l => l.name === 'Batch Management')
+  const batchSummaryLeaf = leaf('Batch Summary', 'grid-alt', '/academic/batch-summary')
+
+  if (batchMgmtIdx !== -1) {
+    children.splice(batchMgmtIdx + 1, 0, batchSummaryLeaf)
+  } else {
+    children.push(batchSummaryLeaf)
   }
 
   const mergedSection = { ...coreSection, children }
@@ -705,7 +750,8 @@ export function getMenu(): Promise<MenuResult> {
       const withFinance = mergeFinanceSections(withAssessment)
       const withStudent = mergeStudentSections(withFinance)
       const withBulkEdit = ensureBulkIntakeEdit(withStudent)
-      const withConfig = mergeConfigSections(withBulkEdit)
+      const withBatchSummary = ensureBatchSummary(withBulkEdit)
+      const withConfig = mergeConfigSections(withBatchSummary)
       const withProgApp = ensureProgrammeApproval(withConfig)
       const withAssMaster = ensureAssessmentMaster(withProgApp)
       const finalMenu = ensureResitMaster(withAssMaster)

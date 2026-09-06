@@ -2,8 +2,8 @@ import { apiGet } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// Backs the Student module's Batch Summary page (see
-// student/batch-summary/page.tsx). One row per batch plus a live headcount —
+// Backs the Academic module's Batch Summary page (see
+// academic/batch-summary/page.tsx). One row per batch plus a live headcount —
 // unlike students/counts-by-batch (headcount only, needs known batch guids)
 // or students/search/search (returns students, not batches), this is the
 // one endpoint that returns the exact grid shape the page needs. Field names

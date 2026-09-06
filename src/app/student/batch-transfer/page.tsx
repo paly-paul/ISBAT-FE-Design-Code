@@ -1,12 +1,14 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
-import { StudentDto } from '@/lib/api/student/student'
+import { StudentDto, normalizeStudentDetail } from '@/lib/api/student/student'
+import { useStudent } from '@/hooks/student/useStudents'
 import { useBatchTransferDetail, useEligibleBatches, useBatchTransferHistory, useExecuteBatchTransfer } from '@/hooks/student/useBatchTransfer'
 import { formatDateTime } from '@/lib/date'
 
@@ -25,7 +27,20 @@ import { formatDateTime } from '@/lib/date'
 // this endpoint's payload either.
 const REASONS = ['Dropout Rejoin', 'Deferment', 'Job / Relocation', 'Medical', 'Schedule Preference', 'Administrative Correction']
 
-export default function Page() {
+// useSearchParams() requires a Suspense boundary above it (Next.js App
+// Router) — see the wrapping default export at the bottom of this file,
+// same split Student Profile uses for the same reason.
+function BatchTransferContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  // Student Profile's action menu links here as
+  // /student/batch-transfer?studentGuid=<guid> instead of requiring a second
+  // StudentLookup search for the student already open there — same
+  // deep-link convention Student Master's own "View" action uses to reach
+  // Profile itself. See Profile's own studentGuidParam comment for the full
+  // rationale; this is the same pattern, just seeding `student` here
+  // instead of `detail`.
+  const studentGuidParam = searchParams.get('studentGuid')
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [student, setStudent] = useState<StudentDto | null>(null)
   const [transferType, setTransferType] = useState<'batch' | 'intake'>('batch')
@@ -34,6 +49,12 @@ export default function Page() {
   const [reason, setReason] = useState(REASONS[0])
   const [remarks, setRemarks] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
+
+  const effectiveStudentGuid = student?.studentGuid ?? studentGuidParam
+  const { data: guidLoadedStudent } = useStudent(effectiveStudentGuid ?? null, !!effectiveStudentGuid)
+  useEffect(() => {
+    if (!student && studentGuidParam && guidLoadedStudent) setStudent(normalizeStudentDetail(guidLoadedStudent, effectiveStudentGuid))
+  }, [student, studentGuidParam, guidLoadedStudent, effectiveStudentGuid])
 
   const { data: detail, isLoading: detailLoading } = useBatchTransferDetail(
     student?.studentGuid ?? null,
@@ -61,6 +82,9 @@ export default function Page() {
   function handleLoad(s: StudentDto) { setStudent(s); showToast(`${s.studentName} loaded`, 'ok') }
   function handleClear() {
     setStudent(null); setDiscount(0); setReason(REASONS[0]); setRemarks('')
+    // Drop ?studentGuid= so the effect above doesn't immediately reload the
+    // same student right back in — same reasoning as Profile's own clear.
+    if (studentGuidParam) router.replace('/student/batch-transfer')
   }
 
   const targetBatchOpt = eligibleBatches.find(b => b.batchGuid === targetBatch)
@@ -86,7 +110,7 @@ export default function Page() {
 
         {!student && (
           <div className="empty">
-            <div className="empty-icon"><i className="lni lni-transfer"></i></div>
+            <div className="empty-icon"><i className="lni lni-shuffle"></i></div>
             <div className="empty-title">No Student Loaded</div>
             <div className="empty-sub">Search for a student to load their baseline profile before making transfer changes.</div>
           </div>
@@ -121,7 +145,7 @@ export default function Page() {
             <div className="g2">
               <div>
                 <div className="card">
-                  <div className="card-hdr"><div className="card-title"><i className="lni lni-transfer"></i> Transfer Parameters</div></div>
+                  <div className="card-hdr"><div className="card-title"><i className="lni lni-shuffle"></i> Transfer Parameters</div></div>
                   {/* Transfer Type — commented out per request.
                   <div className="fg">
                     <label className="lbl">Transfer Type <span className="req">*</span></label>
@@ -253,5 +277,13 @@ export default function Page() {
       )}
       <Toast toast={toast} />
     </>
+  )
+}
+
+export default function Page() {
+  return (
+    <Suspense>
+      <BatchTransferContent />
+    </Suspense>
   )
 }
