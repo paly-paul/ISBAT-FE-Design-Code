@@ -113,9 +113,11 @@ export default function Page() {
               ]}
             />
             
+            {/* 
             <div style={{ color: 'var(--red)', fontWeight: 700, marginBottom: 16, marginTop: -8, marginLeft: 20 }}>
               Discount : 011230354-100%
             </div>
+            */}
 
             <div className="card" style={{ marginBottom: 16 }}>
               <div className="card-hdr"><div className="card-title"><i className="lni lni-shuffle"></i> Transfer Parameters</div></div>
