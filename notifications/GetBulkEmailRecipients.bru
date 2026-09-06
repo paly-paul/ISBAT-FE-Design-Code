@@ -1,0 +1,57 @@
+meta {
+  name: Get Bulk Email Recipients
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{notificationsBaseUrl}}/api/v1/notifications/bulk-email/{{bulkEmailJobGuid}}/recipients?page=1&size=50
+  body: none
+  auth: none
+}
+
+params:query {
+  page: 1
+  size: 50
+  ~status: Failed
+  ~search: example.com
+}
+
+vars:pre-request {
+  bulkEmailJobGuid: e6c63664-de00-415a-b0a1-9fb5ac3fba8e
+}
+
+docs {
+  The per-person breakdown for one bulk job: one row per recipient with the address,
+  send status, attempt count, and last error. This is where "did THIS student get it,
+  and if not why" gets answered — Get Bulk Email gives the totals, this gives the rows
+  behind them.
+  
+  Rows come from OutboundEmails filtered to this job id. Transactional rows (no job id)
+  are unreachable here by construction.
+  
+  Set bulkEmailJobGuid from a List Bulk Emails response.
+  
+  Query params:
+    page   - default 1
+    size   - default 50; clamped to 1..200 (note: ceiling is 200 here, vs 100 on the job list)
+    status - Queued | Sending | Sent | Failed | Suppressed  -- the RECIPIENT status enum
+             (OutboundEmailStatus), NOT the job status enum. Bound by name.
+    search - case-insensitive LIKE against toEmail
+  
+  Success (200): data is a PagedResult of BulkEmailRecipientStatusDto:
+    emailGuid   - the OutboundEmails row id; distinct from jobGuid and recipientGuid.
+                  There is no single-row GET for it.
+    toEmail     - the resolved address (the application's EmailId)
+    recipientType   - Student | Employee (always Student in practice)
+    recipientGuid   - the student GUID from the original selections
+    status, attempts, lastError, processedDate
+  
+  attempts increments at CLAIM time, not send time. A permanently-undeliverable address
+  (malformed / provider-rejected) is still retried up to attempts=5 before going Failed
+  rather than failing on the first try — against real SES that is five bounces, not one.
+  
+  404 not_found "Bulk email not found." - no BulkEmailJobs row with that GUID.
+  A job that exists but has zero recipient rows is a 200 with items: [], not a 404.
+  401 unauthorized - no valid erp_access cookie.
+}

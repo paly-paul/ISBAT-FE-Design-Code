@@ -1,0 +1,56 @@
+meta {
+  name: Send Bulk Email
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{notificationsBaseUrl}}/api/v1/notifications/bulk-email
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  subject: Semester registration closes Friday
+  body: <p>Dear student,</p><p>Registration for the coming semester closes on Friday at 5pm.</p>
+  selections: [{"type":"Student","guids":["628B6873-7634-43A2-9101-F73D8B36FAAD","8B3249D4-E8F6-4308-AB3D-58E41754B6F9"]}]
+  ~file: @file(C:\path\to\circular.pdf)
+}
+
+docs {
+  Queues one bulk email send. Returns immediately with a job GUID — nothing is sent during this
+  request. Two background workers do the rest: an expander turns the selected GUIDs into rows in
+  OutboundEmails, then the outbound dispatcher drains that table at the configured SES rate.
+
+  OutboundEmails carries every email in the system, not just bulk — OTPs and password-setup links
+  land there at a higher Priority and preempt a running bulk job, so a large circular never delays
+  a password reset.
+
+  selections: a JSON array, one entry per recipient type, sent as a single form field (the nested
+  shape does not survive repeated-form-field binding). Each entry is
+  `{"type": "Student" | "Employee", "guids": [...]}`. One job can mix both types — the type lives on
+  the recipient row, not the job. Duplicate GUIDs are collapsed server-side before insert.
+
+  Only the Student resolver is implemented today; an Employee selection fails expansion with
+  "No recipient resolver is registered for type 'Employee'" and the job is marked Failed.
+
+  file: optional, disabled by default (prefixed with ~). Enable it and point it at a real file to
+  test an upload. NOTE: the object is uploaded and recorded, but the download link is not yet
+  appended to the email body and there is no endpoint serving it — recipients currently have no way
+  to reach an attached file. Send without a file until that lands.
+
+  selectedRecipients in the response is how many GUIDs were accepted, NOT how many emails will be
+  sent. Students whose application record has no email address are dropped during expansion, so the
+  delivered count is usually lower.
+
+  There is no CANCEL endpoint, but progress can be read back: List Bulk Emails, Get Bulk Email
+  (job + rendered body + counters), and Get Bulk Email Recipients (per-person outcomes). The
+  BulkEmailJobs / OutboundEmails tables and the logs remain the ground truth.
+
+  Success (201): `data` is `{ jobGuid, selectedRecipients }`.
+  Failures: 400 validation_error — subject/body missing, subject > 998 chars, selections missing or
+  not valid JSON, no recipients selected, more than 10000 recipients, attachment empty/over 8 MB/
+  disallowed MIME type, or attachment file name missing or > 260 chars.
+  400 bad_request — the caller has no X-User-Guid (the job records who created it).
+  401 unauthorized — no valid erp_access cookie.
+}

@@ -3,8 +3,9 @@ import { apiGet } from '../client'
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 // Confirmed via get-payment-others.md (repo root) — the dedicated "other fee"
-// payment ledger (GET /payment-others, paged, filterable by studentGuid/
-// applicationGuid). Distinct from paymentConsole.ts's own PaymentOtherResult
+// payment ledger (GET /api/v1/finance/other-payment, paged, filterable by
+// studentGuid/applicationGuid — moved here from /payment-others on
+// 2026-09-05, per the doc's changelog). Distinct from paymentConsole.ts's own PaymentOtherResult
 // (the POST .../payment-other create response) and PaymentHistoryEntry (the
 // cross-category .../payment-history/{applicationGuid} list Payment
 // Console's own left-column history card used to show unfiltered — every
@@ -28,7 +29,7 @@ export interface PaymentOtherDto {
   bank: { bankGuid: string; shortCode: string; bankName: string } | null
   // PaymentAdvanceType: 1 means this payment drew down an advance deposit
   // (get-payment-advances.md) rather than fresh cash — such rows can't be
-  // edited directly (PUT /payment-console/payment-other/{guid} rejects them).
+  // edited directly (PUT /api/v1/finance/other-payment/{guid} rejects them).
   advance: number
   ledger: { ledgerGuid: string; ledgerCode: string; ledgerName: string } | null
   // Raw PaymentGroupCategory byte (1 Tuition/2 Other/3 Nche/4 Guild) — only
@@ -58,6 +59,6 @@ export function getPaymentOthers(params: PaymentOtherListParams): Promise<Paymen
   const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (params.studentGuid) qs.set('studentGuid', params.studentGuid)
   if (params.applicationGuid) qs.set('applicationGuid', params.applicationGuid)
-  return apiGet<PaymentOtherListResponse | null>(`/api/v1/finance/payment-others?${qs.toString()}`)
+  return apiGet<PaymentOtherListResponse | null>(`/api/v1/finance/other-payment?${qs.toString()}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }

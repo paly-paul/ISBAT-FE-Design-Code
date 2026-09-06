@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
-import { Pagination } from '@/components/Pagination'
 import { PaymentSuccessModal } from '@/components/modals/finance/PaymentSuccessModal'
 import DatePicker from '@/components/DatePicker'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -14,27 +13,30 @@ import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import {
   useSearchStudentsInfinite,
   useStudentProfile,
-  usePaymentHistory,
 } from '@/hooks/finance/usePaymentConsole'
-import { usePaymentRefundsList, useCreatePaymentRefund } from '@/hooks/finance/usePaymentRefund'
+import {
+  useLedgerOptions,
+  useTotalPaid,
+  useRefundsByApplication,
+  useCreateRefund,
+} from '@/hooks/finance/usePaymentRefund'
+import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { formatDate } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
 
 // Reference: a legacy ISMS screen ("Payment Console - Refund" —
 // frmPaymentConsoleRefund.aspx) for issuing a refund against a payment a
-// student has already made. Wired to the real endpoints (post-payment-refund.md
-// / get-payment-refunds.md, repo root) as of 2026-09-05 — student search and
-// the profile summary reuse Payment Console's own real hooks/components
-// (useSearchStudentsInfinite/useStudentProfile, the pc-hero card), same 50/50
-// pc-body split as that page's own Profile Details + payment form.
-//
-// The legacy screen's own "Refund Ledger" picker doesn't map onto this API at
-// all: a refund is issued against a specific TUITION PAYMENT (paymentGuid),
-// not a ledger picked independently — it reverses that payment's one
-// allocation line, and currency is inferred server-side from the original
-// payment rather than chosen here. So the form below picks a payment (from
-// this application's own Tuition payment history) instead of a ledger; "Total
-// Amount" shows that payment's own amount, read-only.
+// student has already made. Rebuilt 2026-09-05 against the refund/ doc set
+// (repo root) — the backend was ported 1:1 from the legacy
+// T_InsertPaymentConsole_Refund stored procedure and the model changed from
+// "refund a specific tuition payment" to "refund a (applicationGuid,
+// ledgerGuid) pair": pick a LEDGER (from this application's own paid
+// ledgers), not a payment — a refund here doesn't reverse any ledger line,
+// isn't linked to any payment, and an application can be refunded at most
+// once per ledger, ever. Student search and the profile summary still reuse
+// Payment Console's own real hooks/components (useSearchStudentsInfinite/
+// useStudentProfile, the pc-hero card), same 50/50 pc-body split as that
+// page's own Profile Details + payment form.
 
 function fmtAmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -57,8 +59,6 @@ function todayYmd() {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
-
-const REFUND_HISTORY_PAGE_SIZE = 10
 
 export default function PaymentRefundPage() {
   const router = useRouter()
@@ -128,41 +128,48 @@ export default function PaymentRefundPage() {
   const batchCode = profile?.batchCode ?? batches.find(b => b.batchGuid === profile?.batchGuid)?.batchCode
   const semName = profile?.semesterName ?? semesters.find(s => s.semesterGuid === profile?.semesterGuid)?.semName
 
-  // Refund candidates — this application's own Tuition (category 1) payment
-  // history. There's no client-visible way to tell a single-ledger payment
-  // from a multi-ledger one ahead of time (see paymentRefund.ts's own
-  // comment) — every tuition payment is offered here, and a multi-ledger one
-  // is rejected server-side on submit with a clear message.
-  const { data: paymentHistory = [], isLoading: isHistoryLoading, isError: isHistoryError } = usePaymentHistory(selectedApplicationGuid, !!selectedApplicationGuid)
-  const tuitionPayments = paymentHistory.filter(h => h.category === 1)
+  // Refund Details — this application's own refund history
+  // (get-refunds-by-application.md), unpaged: at most one row per ledger,
+  // ever, so there's nothing to page through.
+  const {
+    data: refundHistory = [], isLoading: isRefundHistoryLoading, isError: isRefundHistoryError,
+  } = useRefundsByApplication(selectedApplicationGuid, !!selectedApplicationGuid)
+  // Ledgers already refunded are permanently locked out of a second refund
+  // (post-refund.md: "at most once per ledger, ever") — excluded from the
+  // picker below rather than left to fail on submit.
+  const refundedLedgerGuids = new Set(refundHistory.map(r => r.ledgerGuid))
 
-  const [paymentGuid, setPaymentGuid] = useState('')
+  // Ledger picker — this application's own paid ledgers (get-ledger-options.md).
+  const { data: ledgerOptions = [], isLoading: isLedgersLoading, isError: isLedgersError } = useLedgerOptions(selectedApplicationGuid, !!selectedApplicationGuid)
+  const [ledgerGuid, setLedgerGuid] = useState('')
+
+  // Total already paid into the picked ledger (get-total-paid.md) — the
+  // exact figure the create endpoint validates the refund amount against.
+  const { data: totalPaid, isLoading: isTotalPaidLoading } = useTotalPaid(selectedApplicationGuid, ledgerGuid || null, !!ledgerGuid)
+
+  const { data: currencies = [] } = useFinanceCurrencies()
+  const [currencyGuid, setCurrencyGuid] = useState('')
   const [refundAmount, setRefundAmount] = useState('')
   const [refundDate, setRefundDate] = useState(todayYmd)
   const [remarks, setRemarks] = useState('')
 
-  const selectedPayment = tuitionPayments.find(p => p.paymentGuid === paymentGuid)
+  // Default the currency picker to the ledger's own paid currency as soon as
+  // it's known — the common case is refunding in the same currency it was
+  // paid in; still freely changeable (the create endpoint accepts any
+  // currency, only USD/UGX get a cross-check — see post-refund.md).
+  useEffect(() => {
+    if (totalPaid?.currencyGuid) setCurrencyGuid(totalPaid.currencyGuid)
+  }, [totalPaid?.currencyGuid])
 
   function resetForm() {
-    setPaymentGuid('')
+    setLedgerGuid('')
+    setCurrencyGuid('')
     setRefundAmount('')
     setRefundDate(todayYmd())
     setRemarks('')
   }
 
-  // Refund Details — this student/application's own refund history
-  // (get-payment-refunds.md), server-paginated same as the standalone
-  // Payment History page.
-  const [refundHistoryPage, setRefundHistoryPage] = useState(1)
-  useEffect(() => setRefundHistoryPage(1), [selectedApplicationGuid])
-  const { data: refundHistory, isLoading: isRefundHistoryLoading, isError: isRefundHistoryError } = usePaymentRefundsList(
-    { studentGuid, applicationGuid: studentGuid ? undefined : selectedApplicationGuid, page: refundHistoryPage, pageSize: REFUND_HISTORY_PAGE_SIZE },
-    !!selectedApplicationGuid,
-  )
-  const refundHistoryItems = refundHistory?.items ?? []
-  const refundHistoryTotalPages = Math.max(1, Math.ceil((refundHistory?.totalCount ?? 0) / REFUND_HISTORY_PAGE_SIZE))
-
-  const createRefund = useCreatePaymentRefund()
+  const createRefund = useCreateRefund()
 
   function selectStudent(applicationGuid: string, name: string, studentGuidHint: string | null) {
     setSelectedApplicationGuid(applicationGuid)
@@ -189,34 +196,56 @@ export default function PaymentRefundPage() {
     showToast('Form cleared.', 'warn')
   }
 
+  const selectedLedger = ledgerOptions.find(l => l.ledgerGuid === ledgerGuid)
+  const selectedCurrency = currencies.find(c => c.currencyGuid === currencyGuid)
+
   function handleSubmit() {
     if (!profile || !selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
-    if (!selectedPayment) { showToast('Please select a payment to refund.', 'warn'); return }
+    if (!selectedLedger) { showToast('Please select a ledger to refund.', 'warn'); return }
+    if (!currencyGuid) { showToast('Please select a currency.', 'warn'); return }
     const amt = parseFloat(refundAmount)
     if (!refundAmount.trim() || isNaN(amt) || amt <= 0) { showToast('Refund amount must be greater than 0.', 'warn'); return }
-    if (amt > selectedPayment.amount) { showToast(`Refund amount exceeds the payment's total amount (${fmtAmt(selectedPayment.amount)}).`, 'warn'); return }
+    // Only checked client-side when refunding in the same currency it was
+    // paid in — matches post-refund.md's own rule (the amount-vs-total-paid
+    // check only runs then; a currency mismatch skips straight to the
+    // USD/UGX cross-check server-side, which needs an exchange rate this
+    // page doesn't have).
+    if (totalPaid && currencyGuid === totalPaid.currencyGuid && amt > totalPaid.amount) {
+      showToast(`Refund amount exceeds the total paid into this ledger (${fmtAmt(totalPaid.amount)}).`, 'warn')
+      return
+    }
     if (!refundDate) { showToast('Please select a refund date.', 'warn'); return }
 
     createRefund.mutate(
       {
-        paymentGuid: selectedPayment.paymentGuid,
-        input: { amount: amt, refundDate, remarks: remarks.trim() || null },
+        applicationGuid: selectedApplicationGuid,
+        input: {
+          ledgerGuid: selectedLedger.ledgerGuid,
+          currencyGuid,
+          amount: amt,
+          refundDate,
+          studentGuid,
+          remarks: remarks.trim() || null,
+        },
       },
       {
-        onSuccess: result => {
+        // The response is just { refundGuid } now — an internal id, not
+        // something to surface to the user, so the modal below is built
+        // entirely from what was submitted rather than the result.
+        onSuccess: () => {
           setSuccessModal({
             title: 'Refund Recorded',
             rows: [
-              ['Receipt', result.receipt],
-              ['Amount', `${selectedPayment.currencyName} ${fmtAmt(amt)}`],
-              ['Remaining Refundable Balance', `${selectedPayment.currencyName} ${fmtAmt(result.remainingRefundableBalance)}`],
+              ['Ledger', selectedLedger.ledgerName],
+              ['Amount', `${selectedCurrency?.currencyName ?? ''} ${fmtAmt(amt)}`.trim()],
+              ['Refund Date', formatDate(refundDate)],
             ],
           })
           resetForm()
         },
         onError: (error: Error) => {
-          // Business-rule rejections (multi-ledger payment, missing
-          // exchange rate, over the refundable balance, …) all come back as
+          // Business-rule rejections ("Refund already exists.", over the
+          // total-paid amount, missing ledger/currency, …) all come back as
           // a plain message on the generic-failure branch — surface it
           // as-is rather than a generic "failed" toast.
           showToast(error instanceof AuthError ? error.message : (error.message || 'Failed to record refund. Please try again.'), 'error')
@@ -231,7 +260,7 @@ export default function PaymentRefundPage() {
         <div className="pg-hdr">
           <div>
             <div className="pg-title">Payment Console - Refund</div>
-            <div className="pg-sub">Search student → pick a tuition payment → record the refund</div>
+            <div className="pg-sub">Search student → pick a ledger → record the refund</div>
           </div>
           <button className="btn btn-neu" onClick={() => router.push('/finance/dashboard')}><i className="lni lni-arrow-left"></i> Back</button>
         </div>
@@ -340,25 +369,34 @@ export default function PaymentRefundPage() {
 
                 <div className="g2 mb-[14px]">
                   <div className="fg">
-                    <div className="lbl">Payment to Refund <span className="req">*</span></div>
+                    <div className="lbl">Ledger to Refund <span className="req">*</span></div>
                     <SearchSelect
-                      placeholder="— Select a Tuition payment —"
-                      options={tuitionPayments.map(p => ({ value: p.paymentGuid, label: `${p.paymentCode} — ${p.currencyName} ${fmtAmt(p.amount)} (${formatDate(p.payDate)})` }))}
-                      value={paymentGuid}
-                      onChange={setPaymentGuid}
-                      disabled={isHistoryLoading || tuitionPayments.length === 0}
+                      placeholder="— Select a ledger —"
+                      options={ledgerOptions.map(l => ({
+                        value: l.ledgerGuid,
+                        label: refundedLedgerGuids.has(l.ledgerGuid) ? `${l.ledgerName} (already refunded)` : l.ledgerName,
+                        disabled: refundedLedgerGuids.has(l.ledgerGuid),
+                      }))}
+                      value={ledgerGuid}
+                      onChange={setLedgerGuid}
+                      disabled={isLedgersLoading || ledgerOptions.length === 0}
                     />
-                    {isHistoryLoading ? (
-                      <div className="text-g400 mt-1" style={{ fontSize: 11 }}>Loading payment history…</div>
-                    ) : isHistoryError ? (
-                      <div className="text-clr-red mt-1" style={{ fontSize: 11 }}><i className="lni lni-warning"></i> Couldn&apos;t load payment history.</div>
-                    ) : tuitionPayments.length === 0 ? (
-                      <div className="text-g400 mt-1" style={{ fontSize: 11 }}>No Tuition payments recorded for this application.</div>
+                    {isLedgersLoading ? (
+                      <div className="text-g400 mt-1" style={{ fontSize: 11 }}>Loading paid ledgers…</div>
+                    ) : isLedgersError ? (
+                      <div className="text-clr-red mt-1" style={{ fontSize: 11 }}><i className="lni lni-warning"></i> Couldn&apos;t load paid ledgers.</div>
+                    ) : ledgerOptions.length === 0 ? (
+                      <div className="text-g400 mt-1" style={{ fontSize: 11 }}>No paid ledgers found for this application.</div>
                     ) : null}
                   </div>
                   <div className="fg">
-                    <div className="lbl">Total Amount</div>
-                    <input className="ctrl" readOnly value={selectedPayment ? `${selectedPayment.currencyName} ${fmtAmt(selectedPayment.amount)}` : ''} placeholder="—" />
+                    <div className="lbl">Total Paid</div>
+                    <input
+                      className="ctrl"
+                      readOnly
+                      value={isTotalPaidLoading ? 'Loading…' : totalPaid ? `${totalPaid.currencyName} ${fmtAmt(totalPaid.amount)}` : ''}
+                      placeholder="—"
+                    />
                   </div>
                 </div>
 
@@ -371,18 +409,30 @@ export default function PaymentRefundPage() {
                       placeholder="0.00"
                       value={refundAmount}
                       onChange={e => setRefundAmount(e.target.value)}
-                      disabled={!selectedPayment}
+                      disabled={!selectedLedger}
                     />
                   </div>
+                  <div className="fg">
+                    <div className="lbl">Currency <span className="req">*</span></div>
+                    <SearchSelect
+                      placeholder="— Select currency —"
+                      options={currencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))}
+                      value={currencyGuid}
+                      onChange={setCurrencyGuid}
+                      disabled={!selectedLedger}
+                    />
+                  </div>
+                </div>
+
+                <div className="g2 mb-[14px]">
                   <div className="fg">
                     <div className="lbl">Refund Date <span className="req">*</span></div>
                     <DatePicker value={refundDate} onChange={setRefundDate} />
                   </div>
-                </div>
-
-                <div className="fg mb-4">
-                  <div className="lbl">Remarks</div>
-                  <textarea className="ctrl" rows={2} placeholder="Reason for this refund" value={remarks} onChange={e => setRemarks(e.target.value)} disabled={!selectedPayment} />
+                  <div className="fg">
+                    <div className="lbl">Remarks</div>
+                    <textarea className="ctrl" rows={1} placeholder="Reason for this refund" value={remarks} onChange={e => setRemarks(e.target.value)} disabled={!selectedLedger} />
+                  </div>
                 </div>
 
                 <div className="flex gap-[10px] justify-end flex-wrap">
@@ -397,7 +447,9 @@ export default function PaymentRefundPage() {
         )}
 
         {/* Refund Details — full width history table below the 2-column
-            body, server-paginated (get-payment-refunds.md). */}
+            body. Unpaged (get-refunds-by-application.md): at most one row
+            per ledger, ever, so no Pagination here. No Payment Code column
+            any more either — a refund isn't linked to a payment. */}
         {selectedApplicationGuid && (
           <div className="card">
             <div className="card-hdr">
@@ -407,35 +459,25 @@ export default function PaymentRefundPage() {
               <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading refund history…</div>
             ) : isRefundHistoryError ? (
               <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load refund history.</div>
-            ) : refundHistoryItems.length === 0 ? (
+            ) : refundHistory.length === 0 ? (
               <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No records found.</div>
             ) : (
-              <>
-                <ScrollTable className="no-sticky-col">
-                  <table>
-                    <thead><tr><th>Payment Code</th><th>Ledger</th><th>Amount</th><th>Currency</th><th>Refund Date</th><th>Remarks</th></tr></thead>
-                    <tbody>
-                      {refundHistoryItems.map(r => (
-                        <tr key={r.refundGuid}>
-                          <td className="font-mono text-blue">{r.payment.paymentCode}</td>
-                          <td>{r.ledger.ledgerName}</td>
-                          <td className="text-green font-bold">{fmtAmt(r.amount)}</td>
-                          <td>{r.currency.currencyCode}</td>
-                          <td>{formatDate(r.refundDate)}</td>
-                          <td>{r.remarks || '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </ScrollTable>
-                <Pagination
-                  page={refundHistoryPage}
-                  totalPages={refundHistoryTotalPages}
-                  totalCount={refundHistory?.totalCount ?? 0}
-                  itemLabel="refunds"
-                  onPageChange={setRefundHistoryPage}
-                />
-              </>
+              <ScrollTable className="no-sticky-col">
+                <table>
+                  <thead><tr><th>Ledger</th><th>Amount</th><th>Currency</th><th>Refund Date</th><th>Remarks</th></tr></thead>
+                  <tbody>
+                    {refundHistory.map(r => (
+                      <tr key={r.refundGuid}>
+                        <td>{r.ledgerName}</td>
+                        <td className="text-green font-bold">{fmtAmt(r.amount)}</td>
+                        <td>{r.currencyName}</td>
+                        <td>{formatDate(r.refundDate)}</td>
+                        <td>{r.remarks || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </ScrollTable>
             )}
           </div>
         )}
