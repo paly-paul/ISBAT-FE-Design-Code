@@ -1,0 +1,52 @@
+meta {
+  name: List Bulk Emails
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{notificationsBaseUrl}}/api/v1/notifications/bulk-email?page=1&size=20
+  body: none
+  auth: none
+}
+
+params:query {
+  page: 1
+  size: 20
+  ~status: Completed
+  ~search: registration
+  ~from: 2026-09-01T00:00:00Z
+  ~to: 2026-09-30T23:59:59Z
+}
+
+docs {
+  The bulk-email list — one row per SEND, newest first, not one row per recipient.
+  A 3,000-recipient circular is a single entry here with sent/failed/suppressed counts.
+  Open Get Bulk Email Recipients for the per-person breakdown.
+
+  Only bulk jobs appear. OTPs, password-setup and application-decision mails share the
+  underlying OutboundEmails table but have no BulkEmailJobs row, and every query here
+  joins through BulkEmailJobs — so transactional mail can never surface on this endpoint.
+
+  Query params (all optional, ANDed):
+    page   - default 1; a value < 1 is treated as 1
+    size   - default 20; clamped to 1..100 in the handler (out-of-range is coerced, not rejected)
+    status - Draft | Resolving | Processing | Completed | PartiallyFailed | Failed
+             (the JOB status enum). Bound by name. An unknown value is a bare 400 from
+             model binding, NOT the standard envelope.
+    search - case-insensitive LIKE against the job subject
+    from   - ISO 8601; filters createdDate >= from
+    to     - ISO 8601; filters createdDate <= to
+
+  Success (200): data is a PagedResult of BulkEmailJobListItemDto:
+    jobGuid, subject, status, totalRecipients, sentCount, failedCount,
+    suppressedCount, hasAttachment, createdDate, completedDate.
+
+  totalRecipients is the count of GUIDs that RESOLVED to an address, which is lower than
+  the "selectedRecipients" the create call returned. The three counters are recomputed on
+  an interval (OutboundEmail:RollUpEveryTicks, default every 10 ticks) so they can lag a
+  live send by ~10s; terminal values are always correct.
+
+  An empty result is a 200 with items: [], totalCount: 0 — never a 404.
+  401 unauthorized - no valid erp_access cookie.
+}

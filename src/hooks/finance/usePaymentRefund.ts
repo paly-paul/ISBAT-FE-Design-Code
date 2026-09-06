@@ -1,13 +1,51 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  createPaymentRefund,
+  createRefund,
+  getLedgerOptions,
   getPaymentRefunds,
-  CreatePaymentRefundInput,
+  getRefundsByApplication,
+  getTotalPaid,
+  CreateRefundInput,
   PaymentRefundListParams,
 } from '@/lib/api/finance/paymentRefund'
 
 const PAYMENT_REFUND_KEY = ['payment-refunds']
+const LEDGER_OPTIONS_KEY = ['refund-ledger-options']
+const TOTAL_PAID_KEY = ['refund-total-paid']
+const REFUNDS_BY_APPLICATION_KEY = ['refunds-by-application']
 
+// The ledger picker — enabled once an application is selected.
+export function useLedgerOptions(applicationGuid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...LEDGER_OPTIONS_KEY, applicationGuid],
+    queryFn: () => getLedgerOptions(applicationGuid as string),
+    enabled: enabled && !!applicationGuid,
+  })
+}
+
+// Shown once a ledger is picked, before submitting — same total-paid figure
+// the create endpoint validates against.
+export function useTotalPaid(applicationGuid: string | null, ledgerGuid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...TOTAL_PAID_KEY, applicationGuid, ledgerGuid],
+    queryFn: () => getTotalPaid(applicationGuid as string, ledgerGuid as string),
+    enabled: enabled && !!applicationGuid && !!ledgerGuid,
+  })
+}
+
+// This application's own refund history (unpaged — at most one row per
+// ledger, ever) — backs the refund page's own "Refund Details" table.
+export function useRefundsByApplication(applicationGuid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...REFUNDS_BY_APPLICATION_KEY, applicationGuid],
+    queryFn: () => getRefundsByApplication(applicationGuid as string),
+    enabled: enabled && !!applicationGuid,
+  })
+}
+
+// Cross-application, paged refund ledger — not used by the refund page
+// itself (see getPaymentRefunds's own comment), kept for any future
+// cross-application refunds report.
 export function usePaymentRefundsList(params: PaymentRefundListParams, enabled: boolean) {
   return useQuery({
     queryKey: [...PAYMENT_REFUND_KEY, 'list', params],
@@ -16,22 +54,28 @@ export function usePaymentRefundsList(params: PaymentRefundListParams, enabled: 
   })
 }
 
-export function useCreatePaymentRefund() {
+export function useCreateRefund() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ paymentGuid, input }: { paymentGuid: string; input: CreatePaymentRefundInput }) =>
-      createPaymentRefund(paymentGuid, input),
-    onSuccess: () => {
-      // This page's own refund history list is now stale — refetch it.
+    mutationFn: ({ applicationGuid, input }: { applicationGuid: string; input: CreateRefundInput }) =>
+      createRefund(applicationGuid, input),
+    onSuccess: (_result, { applicationGuid }) => {
+      // This application's refund history and ledger picker (a just-refunded
+      // ledger should no longer be offered) are both now stale.
+      queryClient.invalidateQueries({ queryKey: [...REFUNDS_BY_APPLICATION_KEY, applicationGuid] })
+      queryClient.invalidateQueries({ queryKey: [...LEDGER_OPTIONS_KEY, applicationGuid] })
       queryClient.invalidateQueries({ queryKey: PAYMENT_REFUND_KEY })
-      // The refunded payment becomes permanently uneditable (per the flow
-      // doc) and its refundable balance has moved — Payment Console's own
-      // payment-history query (this page's source for the payment picker)
-      // needs refetching too, even though it lives under a different key
-      // family (['payment-console', …]).
-      queryClient.invalidateQueries({ queryKey: ['payment-console', 'payment-history'] })
     },
   })
 }
 
-export type { CreatePaymentRefundInput, PaymentRefundDto, PaymentRefundListResponse, PaymentRefundListParams, RefundResultDto } from '@/lib/api/finance/paymentRefund'
+export type {
+  CreateRefundInput,
+  LedgerOptionDto,
+  PaymentRefundDto,
+  PaymentRefundListParams,
+  PaymentRefundListResponse,
+  RefundDto,
+  RefundResultDto,
+  TotalPaidDto,
+} from '@/lib/api/finance/paymentRefund'

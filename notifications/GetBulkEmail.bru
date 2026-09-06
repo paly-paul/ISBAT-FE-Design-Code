@@ -1,0 +1,43 @@
+meta {
+  name: Get Bulk Email
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{notificationsBaseUrl}}/api/v1/notifications/bulk-email/{{bulkEmailJobGuid}}
+  body: none
+  auth: none
+}
+
+vars:pre-request {
+  bulkEmailJobGuid: e6c63664-de00-415a-b0a1-9fb5ac3fba8e
+}
+
+docs {
+  One bulk job in full: the list-row summary plus the rendered bodyHtml, attachment
+  metadata, lastError, and a computed pendingCount. Job-level only — it does not
+  enumerate recipients (use Get Bulk Email Recipients for that).
+  
+  Set bulkEmailJobGuid from a List Bulk Emails response, or from the jobGuid the
+  create call returned.
+  
+  Path param bulkEmailJobGuid is route-constrained to a GUID. A non-GUID segment is a
+  route miss (bare 404, handler never runs).
+  
+  Success (200): data is a BulkEmailJobDetailDto:
+    jobGuid, subject, bodyHtml, status,
+    totalRecipients, sentCount, failedCount, suppressedCount,
+    pendingCount (= totalRecipients - sent - failed - suppressed, i.e. Queued+Sending),
+    attachmentMode (None | Link | Attach), attachmentFileName, attachmentContentType,
+    lastError, createdDate, startedDate, completedDate.
+  
+  lastError here is only set when recipient RESOLUTION threw (an Employee selection, or
+  the Students service unreachable). Per-recipient send errors are on the recipient row,
+  not here — see Get Bulk Email Recipients.
+  
+  404 not_found "Bulk email not found." - no BulkEmailJobs row with that GUID. This also
+  covers a GUID that belongs to a transactional OutboundEmails row (an OTP): the join
+  finds nothing, so those are structurally unreachable here.
+  401 unauthorized - no valid erp_access cookie.
+}

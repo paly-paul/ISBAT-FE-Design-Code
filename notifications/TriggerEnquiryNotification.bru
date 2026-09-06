@@ -1,0 +1,49 @@
+meta {
+  name: Trigger - Create Enquiry
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admissions/enquiries
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "enquiryDate": "2026-08-18T00:00:00",
+    "enquirySourceGuid": "83F89C92-F309-474F-9E2B-48F7AFDDBD89",
+    "studentName": "Bruno Test Student",
+    "dob": "2003-05-14T00:00:00",
+    "countryGuid": "E7D0E7FD-7331-43C1-9783-04B2A32FAFEC",
+    "mobile": "0700111222",
+    "email": "bruno.test@example.com",
+    "remarks": "notification pipeline test",
+    "intakeGuid": "F0C0E3CE-A0FD-4DDF-8934-E3F5DE5B2877",
+    "campusGuid": "3962D427-9E41-4205-9472-F9C02A988D12"
+  }
+}
+
+docs {
+  Not a notifications endpoint — this is the action that produces one, kept here
+  so the whole pipeline can be exercised from a single folder.
+
+  Creating an enquiry writes the row and a MassTransit outbox row in one
+  transaction, so the event is exactly as durable as the enquiry itself. The
+  notification service consumes it, resolves everyone holding
+  admission.enquiryfollowup.get, writes one row per recipient, then pushes over
+  SignalR.
+
+  Two things to expect:
+
+  - The creator is excluded. Logging in as the only permission holder and
+    creating an enquiry produces no notification for yourself — that is correct
+    behaviour, not a failure. Use a second account to see it arrive.
+  - Delivery is not instant. The outbox sweeps on an interval, so allow a few
+    seconds before checking Get Unread Count.
+
+  The GUIDs above are from the local dev database and will not exist in Stage.
+  Replace them from Admissions Master Data and Academic lookups for that
+  environment.
+}
