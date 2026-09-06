@@ -3,16 +3,19 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
+import { ActionMenu } from '@/components/ActionMenu'
 import { Pagination } from '@/components/Pagination'
 import { PaymentSuccessModal } from '@/components/modals/finance/PaymentSuccessModal'
 import { AdvanceDepositPickerModal } from '@/components/modals/finance/AdvanceDepositPickerModal'
+import { ViewPaymentModal } from '@/components/modals/finance/ViewPaymentModal'
+import { EditPaymentModal, EditablePaymentTarget } from '@/components/modals/finance/EditPaymentModal'
 import DatePicker from '@/components/DatePicker'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
-import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
+import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
 import { useExchangeRatesByDate, useExchangeRateExists, useCreateExchangeRate, useUpdateExchangeRate } from '@/hooks/finance/useExchangeRates'
-import { PaymentAdvance } from '@/hooks/finance/usePayments'
+import { PaymentAdvance, useAdvanceStatusByPayment } from '@/hooks/finance/usePayments'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
@@ -32,6 +35,7 @@ import {
   PAY_TYPE_TO_RECEIPT_CATEGORY,
   AllOutstandingItem,
   CurrentSemesterPayableTotal,
+  PaymentHistoryEntry,
 } from '@/hooks/finance/usePaymentConsole'
 import { usePaymentOthersList } from '@/hooks/finance/usePaymentOthers'
 import { formatDateTime } from '@/lib/date'
@@ -602,6 +606,19 @@ export default function PaymentConsolePage() {
   const historyTotalPages = Math.max(1, Math.ceil(tuitionPaymentHistory.length / HISTORY_PAGE_SIZE))
   const pagedPaymentHistory = tuitionPaymentHistory.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE)
 
+  // View/Edit (get-payments.md/put-payment.md) — this table's own
+  // ActionMenu, Tuition rows only (this is already the Tuition tab's own
+  // history, so every row here qualifies). No separate fetch for View: the
+  // row itself (PaymentHistoryEntry) already carries everything shown.
+  const [viewEntry, setViewEntry] = useState<PaymentHistoryEntry | null>(null)
+  const [editTarget, setEditTarget] = useState<EditablePaymentTarget | null>(null)
+  // Which of this application's payments are advance-funded — put-payment.md
+  // rejects editing those outright ("adjust the advance deposit instead"),
+  // and the fee-line row itself has no `advance` field to check ahead of
+  // time (see useAdvanceStatusByPayment's own comment). Only fetched while
+  // the Tuition tab is actually active, matching this table's own gating.
+  const advanceByPayment = useAdvanceStatusByPayment(selectedApplicationGuid, !!selectedApplicationGuid && activePayTab === 'tuition')
+
   // Other Payment tab's own Payment History — genuinely server-paginated
   // (get-payment-others.md), unlike Tuition's own fetch-whole-then-slice
   // approach above. Filtered by studentGuid once known (narrows to the
@@ -690,9 +707,19 @@ export default function PaymentConsolePage() {
     setOtherReceiptBookGuid('')
     setOtherProcBankGuid('')
     setOtherAmount('')
-    setOtherCurrencyGuid('')
+    setOtherCurrencyGuid(getDefaultFinanceCurrencyGuid(currencies))
     setOtherRemarks('')
   }
+
+  // Other Payment's own currency picker has no ledger to default off of the
+  // way Tuition's does (see that tab's own currencyGuid effect) — just
+  // Finance's own default (UGX) once the currency list loads, rather than
+  // sitting blank. Only fires while nothing's been picked yet (an advance
+  // draw-down's own currency, set in confirmAdvanceSelection above, or a
+  // manual pick both take priority).
+  useEffect(() => {
+    if (!otherCurrencyGuid && currencies.length > 0) setOtherCurrencyGuid(getDefaultFinanceCurrencyGuid(currencies))
+  }, [otherCurrencyGuid, currencies])
 
   // Checking the box opens the picker instead of flipping otherIsAdvance
   // straight away — it only actually turns on once a deposit is confirmed
@@ -1174,17 +1201,43 @@ export default function PaymentConsolePage() {
                       <>
                       <ScrollTable className="no-sticky-col">
                         <table>
-                          <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
+                          <thead><tr><th style={{ width: 40 }}></th><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
                           <tbody>
-                            {pagedPaymentHistory.map(h => (
+                            {pagedPaymentHistory.map(h => {
+                              // put-payment.md rejects editing an advance-funded
+                              // payment outright — this is how you can tell
+                              // ahead of time instead of finding out from the
+                              // rejection toast: the badge below, and Edit
+                              // disabled with the same explanation as its title.
+                              const isAdvanceFunded = advanceByPayment.get(h.paymentGuid) === true
+                              return (
                               <tr key={h.paymentGuid}>
+                                <td>
+                                  <ActionMenu>
+                                    <button className="btn btn-neu btn-sm" onClick={() => setViewEntry(h)}>
+                                      <i className="lni lni-eye"></i> View
+                                    </button>
+                                    <button
+                                      className="btn btn-neu btn-sm"
+                                      disabled={isAdvanceFunded}
+                                      title={isAdvanceFunded ? 'Linked to an advance deposit — adjust the deposit instead.' : undefined}
+                                      onClick={() => setEditTarget({ paymentGuid: h.paymentGuid, amount: h.amount, payDate: h.payDate, payType: h.payType, label: h.paymentCode })}
+                                    >
+                                      <i className="lni lni-pencil-alt"></i> Edit
+                                    </button>
+                                  </ActionMenu>
+                                </td>
                                 <td>{h.payDate.slice(0, 10)}</td>
                                 <td>{PAYMENT_CATEGORY_LABELS[h.category] ?? `Category ${h.category}`}</td>
                                 <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
                                 <td>{h.currencyName ?? '—'}</td>
-                                <td><span className="pill pill-blue">{h.payType?.name ?? '—'}</span></td>
+                                <td>
+                                  <span className="pill pill-blue">{h.payType?.name ?? '—'}</span>
+                                  {isAdvanceFunded && <span className="badge badge-purple ml-1" title="Funded from an advance deposit">Advance</span>}
+                                </td>
                               </tr>
-                            ))}
+                              )
+                            })}
                           </tbody>
                         </table>
                       </ScrollTable>
@@ -1871,6 +1924,8 @@ export default function PaymentConsolePage() {
         studentGuid={studentGuid}
         studentDisplayName={profile ? applicantName(profile) : undefined}
       />
+      <ViewPaymentModal isOpen={!!viewEntry} onClose={() => setViewEntry(null)} showToast={showToast} entry={viewEntry} />
+      <EditPaymentModal isOpen={!!editTarget} onClose={() => setEditTarget(null)} showToast={showToast} target={editTarget} applicationGuid={selectedApplicationGuid ?? undefined} />
       <Toast toast={toast} />
     </>
   )

@@ -20,7 +20,7 @@ import {
   useRefundsByApplication,
   useCreateRefund,
 } from '@/hooks/finance/usePaymentRefund'
-import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
+import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
 import { formatDate } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
 
@@ -156,14 +156,18 @@ export default function PaymentRefundPage() {
   // Default the currency picker to the ledger's own paid currency as soon as
   // it's known — the common case is refunding in the same currency it was
   // paid in; still freely changeable (the create endpoint accepts any
-  // currency, only USD/UGX get a cross-check — see post-refund.md).
+  // currency, only USD/UGX get a cross-check — see post-refund.md). Before
+  // a ledger is picked (or if its paid currency can't be resolved), falls
+  // back to Finance's own default (UGX) rather than sitting blank.
   useEffect(() => {
     if (totalPaid?.currencyGuid) setCurrencyGuid(totalPaid.currencyGuid)
-  }, [totalPaid?.currencyGuid])
+    else if (!currencyGuid && currencies.length > 0) setCurrencyGuid(getDefaultFinanceCurrencyGuid(currencies))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalPaid?.currencyGuid, currencies])
 
   function resetForm() {
     setLedgerGuid('')
-    setCurrencyGuid('')
+    setCurrencyGuid(getDefaultFinanceCurrencyGuid(currencies))
     setRefundAmount('')
     setRefundDate(todayYmd())
     setRemarks('')

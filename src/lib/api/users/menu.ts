@@ -260,6 +260,7 @@ const mockMenu: MenuNode[] = [
       leaf('Cooperates', 'handshake', '/finance/cooperates'),
       leaf('Discounts', 'tag', '/finance/discounts'),
       leaf('Ledgers', 'book', '/finance/ledgers'),
+      leaf('Other Ledgers', 'book', '/finance/ledger-others'),
       leaf('Currency Master', 'dollar', '/finance/currency-master'),
       leaf('Receipt Books', 'ticket', '/finance/receipt-books'),
       leaf('General Settings', 'cog', '/finance/gen-sets'),
