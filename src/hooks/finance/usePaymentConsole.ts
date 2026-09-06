@@ -17,6 +17,7 @@ import {
   PaymentOtherInput,
   PayableLedgersParams,
 } from '@/lib/api/finance/paymentConsole'
+import { PAYMENT_OTHERS_KEY } from './usePaymentOthers'
 
 const PAYMENT_CONSOLE_KEY = ['payment-console']
 
@@ -180,7 +181,15 @@ export function useCreatePaymentOther() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: PaymentOtherInput) => createPaymentOther(input),
-    onSuccess: (_result, input) => invalidateAfterCategoryPayment(queryClient, input.applicationGuid),
+    onSuccess: (_result, input) => {
+      invalidateAfterCategoryPayment(queryClient, input.applicationGuid)
+      // This page's own Payment History card now sources the Other Payment
+      // tab from the dedicated payment-others list (usePaymentOthers.ts), a
+      // separate key family from PAYMENT_CONSOLE_KEY above — a newly-added
+      // Other payment needs that refetched too, or it only shows up via the
+      // local otherPayments append rather than reflecting the real list.
+      queryClient.invalidateQueries({ queryKey: PAYMENT_OTHERS_KEY })
+    },
   })
 }
 
