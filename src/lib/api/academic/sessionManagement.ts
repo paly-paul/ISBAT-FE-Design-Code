@@ -53,13 +53,43 @@ export interface SessionListParams {
   pageSize?: number
 }
 
+// Defensive against the response not matching SessionListResponse exactly
+// (a field renamed/nested differently server-side) — confirmed elsewhere on
+// this app's notifications list, where a shape mismatch on `items` silently
+// crashed the page. Here a mismatch on just the *count* fields wouldn't
+// crash anything — rows still render fine off `items` — it would just leave
+// Pagination's `totalCount === 0` guard permanently hiding the pagination
+// bar. Accept a couple of common aliases and fall back to deriving from
+// `items`/pageSize rather than trusting `totalCount`/`totalPages` blindly.
+function normalizeSessionList(raw: unknown, pageNumber: number, pageSize: number): SessionListResponse {
+  const r = raw as Partial<SessionListResponse> & { totalRecords?: number; total?: number; pageCount?: number } | null
+  const items = Array.isArray(r?.items) ? r!.items : []
+  if (!r || !Array.isArray(r.items)) {
+    console.warn('[session-management] unexpected list response shape:', raw)
+  }
+  const totalCount =
+    typeof r?.totalCount === 'number' ? r.totalCount :
+    typeof r?.totalRecords === 'number' ? r.totalRecords :
+    typeof r?.total === 'number' ? r.total :
+    items.length
+  const totalPages =
+    typeof r?.totalPages === 'number' ? r.totalPages :
+    typeof r?.pageCount === 'number' ? r.pageCount :
+    Math.max(1, Math.ceil(totalCount / pageSize))
+  if (r && Array.isArray(r.items) && typeof r.totalCount !== 'number') {
+    console.warn('[session-management] list response is missing totalCount — pagination counts are derived, not authoritative:', raw)
+  }
+  return { items, totalCount, pageNumber: r?.pageNumber ?? pageNumber, pageSize: r?.pageSize ?? pageSize, totalPages }
+}
+
 export function getSessions(params: SessionListParams): Promise<SessionListResponse> {
   const pageNumber = params.pageNumber ?? 1
   const pageSize = params.pageSize ?? 20
   if (MOCK_AUTH) return Promise.resolve({ items: [], totalCount: 0, pageNumber, pageSize, totalPages: 1 })
   const qs = new URLSearchParams({ intakeGuid: params.intakeGuid, pageNumber: String(pageNumber), pageSize: String(pageSize) })
   if (params.campusGuid) qs.set('campusGuid', params.campusGuid)
-  return apiGet<SessionListResponse>(`/api/v1/academic/session-management/?${qs.toString()}`)
+  return apiGet<unknown>(`/api/v1/academic/session-management/?${qs.toString()}`)
+    .then(raw => normalizeSessionList(raw, pageNumber, pageSize))
 }
 
 // Every value the pre-flight check can return — 200 in all cases, this is
