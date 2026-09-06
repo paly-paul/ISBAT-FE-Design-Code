@@ -72,6 +72,60 @@ function idFromUrl(url: string): string {
   return url.split('/').filter(Boolean).pop()!
 }
 
+// Sidebar entries hidden from navigation without touching the backend menu
+// tree or deleting the page itself — keyed by the same url-slug idFromUrl()
+// resolves for every other leaf (BADGES above, sb-item's `active` state).
+// Ledger Adjustments: commented out per request (2026-09-07) — that page is
+// still a UI-only mock (see AdjustLedgerModal.tsx's own comment: no backing
+// "ledger adjustment" endpoint exists in the API spec yet), so it stays out
+// of the menu until there's something real behind it. The route/page are
+// left in place, just unreachable from here.
+const HIDDEN_ITEM_IDS = new Set<string>([
+  'ledger-adjustments',
+])
+
+// Client-side reorder for Finance's own Payment Collection items, per
+// request (2026-09-07) — the backend menu API decides sidebar order, so
+// there's no static array to reorder in-place the way a hardcoded nav
+// would; this re-sorts whichever children array these slugs turn up in
+// instead. Listed items move to the front in this exact order; anything
+// not listed here (a section header, another module's items, a future
+// Finance page not yet accounted for) keeps its original relative order
+// and simply follows after — a plain index lookup used as a stable-sort
+// key achieves both at once.
+const ORDER_PRIORITY = [
+  'dashboard',
+  'payment-console',
+  'payment-console-adjustments',
+  'nche-guild-payment',
+  'advanced-payments',
+  'discount-allocation',
+  'payment-refund',
+  'payment-history',
+  'exchange-rates',
+]
+
+function orderIndex(item: MenuNode): number {
+  if (!item.url) return ORDER_PRIORITY.length
+  const i = ORDER_PRIORITY.indexOf(idFromUrl(item.url))
+  return i === -1 ? ORDER_PRIORITY.length : i
+}
+
+// railId scopes ORDER_PRIORITY's re-sort to Finance only — several other
+// modules have their own "Dashboard" leaf sharing the exact slug ORDER_
+// PRIORITY matches on, and re-sorting every module just because Finance's
+// own order was requested would silently reshuffle navigation nobody asked
+// to change. The hide-filter has no such collision risk (HIDDEN_ITEM_IDS is
+// currently Finance-only anyway) so it stays applied everywhere.
+function visibleChildren(children: MenuNode[], railId: RailId): MenuNode[] {
+  const filtered = children.filter(c => !c.url || !HIDDEN_ITEM_IDS.has(idFromUrl(c.url)))
+  if (railId !== 'finance') return filtered
+  // Array.prototype.sort is a stable sort in every engine this app ships
+  // to (spec-guaranteed since ES2019) — items tied on orderIndex (i.e.
+  // every unlisted one) keep the relative order the API sent them in.
+  return filtered.sort((a, b) => orderIndex(a) - orderIndex(b))
+}
+
 export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {
   const router = useRouter()
   const { data, isLoading, isError, refetch } = useMenu()
@@ -133,7 +187,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
           <span>{section.name}</span><span className="sb-chevron">{collapsed ? '▸' : '▾'}</span>
         </div>
         <div className="sb-collapse-body">
-          {section.children.map(item => sbItem(item, railId))}
+          {visibleChildren(section.children, railId).map(item => sbItem(item, railId))}
         </div>
       </div>
     )
@@ -188,7 +242,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
           <div className="sb-panel-hdr-title">Module</div>
           <div className="sb-panel-hdr-name"><i className={node.icon ?? def.fallbackIcon}></i> {node.name}</div>
         </div>
-        {node.children.map(section => (section.children.length > 0 ? sbSection(node.name, section, def.id) : sbItem(section, def.id)))}
+        {visibleChildren(node.children, def.id).map(section => (section.children.length > 0 ? sbSection(node.name, section, def.id) : sbItem(section, def.id)))}
         <div className="sb-panel-footer">{def.footer}</div>
       </>
     )

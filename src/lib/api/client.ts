@@ -150,6 +150,37 @@ export async function get<T>(path: string, retried = false): Promise<T> {
   return res.json() as Promise<T>
 }
 
+// Plain (non-enveloped) DELETE — mirrors get()/post() above rather than
+// apiDelete's own { success, data, message, code, errors } assumption.
+// Needed for endpoints (confirmed: nche/delete-payment-nche.md,
+// guild/delete-payment-guild.md) whose 200 body is a bare JSON literal
+// (`true`), not the app's standard envelope: run that response through
+// apiDelete and `envelope.success` reads as `undefined` off the boolean
+// primitive, so `!envelope.success` is true and it throws on every
+// successful delete. Same limitation as post()/get() above — a 401 here
+// isn't distinguishable from a genuine envelope-less error response,
+// since there's no envelope to read a `code` off before the retry check.
+export async function del<T>(path: string, retried = false): Promise<T> {
+  const res = await fetch(buildUrl(path), {
+    method: 'DELETE',
+    headers: NGROK_HEADERS,
+    credentials: 'include',
+  })
+
+  if (res.status === 401 && !isAuthEndpoint(path) && !retried) {
+    await handleUnauthorized(path)
+    return del<T>(path, true)
+  }
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ code: 'unknown' }))
+    throw new AuthError(err.code ?? 'unknown', err.message)
+  }
+
+  if (res.status === 204) return undefined as T
+  return res.json() as Promise<T>
+}
+
 // Envelope used by the real backend: { success, data, message, code, errors }
 interface ApiEnvelope<T> {
   success: boolean
