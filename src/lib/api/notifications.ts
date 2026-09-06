@@ -118,7 +118,16 @@ export function getNotifications(params: NotificationListParams = {}): Promise<N
   if (search?.trim()) qs.set('search', search.trim())
   if (unreadOnly) qs.set('unreadOnly', 'true')
   return apiGet<{ items: NotificationItem[]; totalCount: number } | null>(`/api/v1/notifications?${qs}`)
-    .then(data => data ?? { items: [], totalCount: 0 })
+    .then(data => {
+      if (data && Array.isArray(data.items)) return data
+      // Defensive: the backend envelope's `data` didn't come back as
+      // `{ items, totalCount }` (e.g. `data` is the array itself, or
+      // `items` is missing/misnamed). Log the actual shape once so it can
+      // be diagnosed, but never let a shape mismatch crash the page by
+      // handing `undefined` into `items` state.
+      console.warn('[notifications] unexpected /api/v1/notifications response shape:', data)
+      return { items: [], totalCount: 0 }
+    })
 }
 
 // Returns the *remaining* unread count directly — the doc is explicit that

@@ -33,6 +33,7 @@ import {
   AllOutstandingItem,
   CurrentSemesterPayableTotal,
 } from '@/hooks/finance/usePaymentConsole'
+import { usePaymentOthersList } from '@/hooks/finance/usePaymentOthers'
 import { formatDateTime } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
 
@@ -167,15 +168,18 @@ const SHOW_ALLOCATION_PREVIEW: boolean = false
 
 // Gate for Other Payment's own "Paid Fee Details" log — commented out (not
 // removed) per request, now that the left column's Payment History card
-// already shows this application's Other-category payments (it isn't
-// filtered to Tuition the way tuitionPaymentHistory narrows the tuition
-// tab), making this second list redundant.
+// calls the dedicated get-payment-others.md list while the Other Payment tab
+// is active (usePaymentOthersList below), making this second list redundant.
 const SHOW_OTHER_PAID_FEE_DETAILS: boolean = false
 
-// Payment History (left column) is fetched whole per application — not
-// server-paginated (usePaymentHistory takes no page/pageSize) — so this
-// pages it client-side instead, same Pagination component the rest of the
-// app's server-paginated lists use.
+// Tuition's own Payment History (left column) is fetched whole per
+// application — not server-paginated (usePaymentHistory takes no
+// page/pageSize) — so this pages it client-side instead, same Pagination
+// component the rest of the app's server-paginated lists use. The Other
+// Payment tab's own history (usePaymentOthersList) is genuinely
+// server-paginated, so it uses this same page size but its own page state
+// and Pagination instance further down — the two histories come from
+// different endpoints and can't share one paging cursor.
 const HISTORY_PAGE_SIZE = 10
 
 export default function PaymentConsolePage() {
@@ -583,25 +587,37 @@ export default function PaymentConsolePage() {
   // applications) must not render the same "No payment history" message as
   // a genuinely empty result, since that would misreport a backend failure
   // as "this student has no payment history."
-  // Fetched as soon as a student is selected — Payment History is now its
-  // own inline card in the left column (below Profile Details), not a
-  // modal opened on demand, so there's no toggle left to gate this on.
-  const { data: paymentHistory = [], isLoading: isHistoryLoading, isError: isHistoryError } = usePaymentHistory(selectedApplicationGuid, !!selectedApplicationGuid)
-  // The left-column Payment History card only shows Tuition (category 1)
-  // rows while the Semester Payment tab is active — Other Payment already
-  // gets its own "Paid Fee Details" history table scoped to category 2 in
-  // the right column, so this one narrows instead of duplicating it.
-  const tuitionPaymentHistory = useMemo(
-    () => activePayTab === 'tuition' ? paymentHistory.filter(h => h.category === 1) : paymentHistory,
-    [paymentHistory, activePayTab]
-  )
+  // Fetched only while the Semester Payment tab is active — the left-column
+  // Payment History card now sources the Other Payment tab from the
+  // dedicated get-payment-others.md list further down instead (that
+  // endpoint has no Tuition rows to filter out, so there's nothing this
+  // cross-category list adds there any more; it used to be shown there
+  // unfiltered, spanning every category, which is what this change fixes).
+  const { data: paymentHistory = [], isLoading: isHistoryLoading, isError: isHistoryError } = usePaymentHistory(selectedApplicationGuid, !!selectedApplicationGuid && activePayTab === 'tuition')
+  const tuitionPaymentHistory = useMemo(() => paymentHistory.filter(h => h.category === 1), [paymentHistory])
   const [historyPage, setHistoryPage] = useState(1)
-  // Reset to page 1 whenever the underlying list changes shape — a new
-  // student, or switching tabs narrows/widens which categories are shown —
-  // so the view doesn't get stranded on a now out-of-range page.
-  useEffect(() => setHistoryPage(1), [selectedApplicationGuid, activePayTab])
+  // Reset to page 1 on a new student so the view doesn't get stranded on a
+  // now out-of-range page.
+  useEffect(() => setHistoryPage(1), [selectedApplicationGuid])
   const historyTotalPages = Math.max(1, Math.ceil(tuitionPaymentHistory.length / HISTORY_PAGE_SIZE))
   const pagedPaymentHistory = tuitionPaymentHistory.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE)
+
+  // Other Payment tab's own Payment History — genuinely server-paginated
+  // (get-payment-others.md), unlike Tuition's own fetch-whole-then-slice
+  // approach above. Filtered by studentGuid once known (narrows to the
+  // enrolled student's own rows), falling back to applicationGuid before
+  // that — same precedence Payment Console's other studentGuid-optional
+  // queries use elsewhere on this page.
+  const [otherHistoryPage, setOtherHistoryPage] = useState(1)
+  useEffect(() => setOtherHistoryPage(1), [selectedApplicationGuid])
+  const {
+    data: otherPaymentHistory, isLoading: isOtherHistoryLoading, isError: isOtherHistoryError,
+  } = usePaymentOthersList(
+    { applicationGuid: studentGuid ? undefined : selectedApplicationGuid, studentGuid, page: otherHistoryPage, pageSize: HISTORY_PAGE_SIZE },
+    !!selectedApplicationGuid && activePayTab === 'other',
+  )
+  const otherHistoryItems = otherPaymentHistory?.items ?? []
+  const otherHistoryTotalPages = Math.max(1, Math.ceil((otherPaymentHistory?.totalCount ?? 0) / HISTORY_PAGE_SIZE))
 
   // Client-side name resolution for the profile's guid FKs — same fallback
   // pattern used throughout the app (faculty.ts's deanName, enquiry-list's
@@ -1137,34 +1153,74 @@ export default function PaymentConsolePage() {
                       already use rather than a second card-hdr. */}
                   <div className="px-5 pb-5">
                   <div className="sec-divider"><i className="lni lni-folder"></i> Payment History</div>
-                  {isHistoryLoading ? (
-                    <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading payment history…</div>
-                  ) : isHistoryError ? (
-                    <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}>
-                      <i className="lni lni-warning"></i> Couldn&apos;t load payment history. Please try again.
-                    </div>
-                  ) : tuitionPaymentHistory.length === 0 ? (
-                    <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No payment history for this application.</div>
+                  {/* Semester Payment tab: Tuition-only rows sliced client-side
+                      out of the whole-application payment-history fetch (see
+                      usePaymentHistory's own comment on why it isn't
+                      server-paginated). Other Payment tab: the dedicated
+                      get-payment-others.md list instead, genuinely
+                      server-paginated — replaces what used to be the same
+                      cross-category fetch shown UNFILTERED (every category,
+                      not just Other) while this tab was active. */}
+                  {activePayTab === 'tuition' ? (
+                    isHistoryLoading ? (
+                      <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading payment history…</div>
+                    ) : isHistoryError ? (
+                      <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}>
+                        <i className="lni lni-warning"></i> Couldn&apos;t load payment history. Please try again.
+                      </div>
+                    ) : tuitionPaymentHistory.length === 0 ? (
+                      <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No payment history for this application.</div>
+                    ) : (
+                      <>
+                      <ScrollTable className="no-sticky-col">
+                        <table>
+                          <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
+                          <tbody>
+                            {pagedPaymentHistory.map(h => (
+                              <tr key={h.paymentGuid}>
+                                <td>{h.payDate.slice(0, 10)}</td>
+                                <td>{PAYMENT_CATEGORY_LABELS[h.category] ?? `Category ${h.category}`}</td>
+                                <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
+                                <td>{h.currencyName ?? '—'}</td>
+                                <td><span className="pill pill-blue">{h.payType?.name ?? '—'}</span></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </ScrollTable>
+                      <Pagination page={historyPage} totalPages={historyTotalPages} totalCount={tuitionPaymentHistory.length} itemLabel="payments" onPageChange={setHistoryPage} />
+                      </>
+                    )
                   ) : (
-                    <>
-                    <ScrollTable className="no-sticky-col">
-                      <table>
-                        <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
-                        <tbody>
-                          {pagedPaymentHistory.map(h => (
-                            <tr key={h.paymentGuid}>
-                              <td>{h.payDate.slice(0, 10)}</td>
-                              <td>{PAYMENT_CATEGORY_LABELS[h.category] ?? `Category ${h.category}`}</td>
-                              <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
-                              <td>{h.currencyName ?? '—'}</td>
-                              <td><span className="pill pill-blue">{h.payType?.name ?? '—'}</span></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </ScrollTable>
-                    <Pagination page={historyPage} totalPages={historyTotalPages} totalCount={tuitionPaymentHistory.length} itemLabel="payments" onPageChange={setHistoryPage} />
-                    </>
+                    isOtherHistoryLoading ? (
+                      <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading payment history…</div>
+                    ) : isOtherHistoryError ? (
+                      <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}>
+                        <i className="lni lni-warning"></i> Couldn&apos;t load payment history. Please try again.
+                      </div>
+                    ) : otherHistoryItems.length === 0 ? (
+                      <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No other payments recorded for this application.</div>
+                    ) : (
+                      <>
+                      <ScrollTable className="no-sticky-col">
+                        <table>
+                          <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
+                          <tbody>
+                            {otherHistoryItems.map(h => (
+                              <tr key={h.paymentOtherGuid}>
+                                <td>{h.payDate.slice(0, 10)}</td>
+                                <td>{PAYMENT_CATEGORY_LABELS[2]}</td>
+                                <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
+                                <td>{h.currency.currencyCode}</td>
+                                <td><span className="pill pill-blue">{PAY_TYPE_LABELS[h.payType] ?? `Type ${h.payType}`}</span></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </ScrollTable>
+                      <Pagination page={otherHistoryPage} totalPages={otherHistoryTotalPages} totalCount={otherPaymentHistory?.totalCount ?? 0} itemLabel="payments" onPageChange={setOtherHistoryPage} />
+                      </>
+                    )
                   )}
                   </div>
                 </div>

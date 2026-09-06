@@ -58,7 +58,8 @@ export default function NotificationsPage() {
   // own dropdown.
   useEffect(() => {
     if (!listResult) return
-    setItems(prev => (page === 1 ? listResult.items : [...prev, ...listResult.items]))
+    const newItems = listResult.items ?? []
+    setItems(prev => (page === 1 ? newItems : [...prev, ...newItems]))
   }, [listResult, page])
 
   useLayoutEffect(() => {

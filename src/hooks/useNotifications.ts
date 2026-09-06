@@ -13,6 +13,8 @@ import { onHubReconnected, onNotification, startNotificationsSession } from '@/l
 
 const UNREAD_COUNT_KEY = ['notifications', 'unread-count']
 const LIST_KEY_BASE = ['notifications', 'list']
+const PREVIEW_KEY = ['notifications', 'preview']
+const PREVIEW_SIZE = 8
 
 // Fetched once per login (see the hub bridge below for the "count, then
 // connect" ordering) and never polled afterward — from then on the hub
@@ -42,6 +44,24 @@ export function useNotificationsList(params: NotificationListParams, enabled = t
   })
 }
 
+// Backs the header bell's hover dropdown. Unlike useNotificationsList above,
+// this is deliberately NOT fetch-on-open — an earlier version fetched on
+// every mouseenter, which showed up as an unwanted poll in the network tab.
+// Fetched once per login (mirrors useUnreadCount's "count, then connect"
+// timing below) and kept current entirely from there: a live push prepends
+// itself directly (see useNotificationsHubBridge), a reconnect heals it with
+// one refetch, and mark-read/mark-all-read trim it — hovering the bell never
+// triggers a request of its own.
+export function useNotificationsPreview() {
+  return useQuery({
+    queryKey: PREVIEW_KEY,
+    queryFn: () => getNotifications({ page: 1, size: PREVIEW_SIZE, unreadOnly: true }),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnWindowFocus: false,
+  })
+}
+
 export function useMarkNotificationRead() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -57,6 +77,11 @@ export function useMarkNotificationRead() {
       queryClient.setQueriesData<NotificationListResult>({ queryKey: LIST_KEY_BASE }, old =>
         old ? { ...old, items: old.items.map(n => (n.notificationGuid === guid ? { ...n, isRead: true } : n)) } : old,
       )
+      // The preview is unread-only, so a now-read item no longer belongs in
+      // it — drop it rather than flipping its isRead flag.
+      queryClient.setQueryData<NotificationListResult>(PREVIEW_KEY, old =>
+        old ? { items: old.items.filter(n => n.notificationGuid !== guid), totalCount: Math.max(0, old.totalCount - 1) } : old,
+      )
     },
   })
 }
@@ -70,6 +95,8 @@ export function useMarkAllNotificationsRead() {
       queryClient.setQueriesData<NotificationListResult>({ queryKey: LIST_KEY_BASE }, old =>
         old ? { ...old, items: old.items.map(n => ({ ...n, isRead: true })) } : old,
       )
+      // Everything just became read — nothing left for the unread-only preview.
+      queryClient.setQueryData<NotificationListResult>(PREVIEW_KEY, { items: [], totalCount: 0 })
     },
   })
 }
@@ -89,19 +116,39 @@ export function useNotificationsHubBridge(enabled: boolean) {
     startNotificationsSession(() =>
       queryClient.fetchQuery({ queryKey: UNREAD_COUNT_KEY, queryFn: getUnreadCount, staleTime: Infinity }),
     )
+    // Seeds the bell's hover preview once per login — doesn't gate the hub
+    // connect like the unread-count fetch above, it's just a starting point
+    // for the prepend-on-push below to build on.
+    queryClient.fetchQuery({
+      queryKey: PREVIEW_KEY,
+      queryFn: () => getNotifications({ page: 1, size: PREVIEW_SIZE, unreadOnly: true }),
+      staleTime: Infinity,
+    })
 
-    const offNotification = onNotification(() => {
+    const offNotification = onNotification(n => {
       queryClient.setQueryData<number>(UNREAD_COUNT_KEY, c => (c ?? 0) + 1)
       // Only actually refetches list queries currently mounted/observed
-      // (i.e. the dropdown or the notifications page is open) — react-query
-      // skips inactive ones, so this doesn't eagerly load a page nobody's
-      // looking at.
+      // (i.e. the notifications page is open) — react-query skips inactive
+      // ones, so this doesn't eagerly load a page nobody's looking at.
       queryClient.invalidateQueries({ queryKey: LIST_KEY_BASE })
+      // The preview is always mounted (the header bell reads it regardless
+      // of hover state) but deliberately isn't refetched — a push already
+      // hands us the full item, so prepend it directly instead of spending
+      // a request to re-fetch what we already have.
+      queryClient.setQueryData<NotificationListResult>(PREVIEW_KEY, old =>
+        old
+          ? { items: [n, ...old.items].slice(0, PREVIEW_SIZE), totalCount: old.totalCount + 1 }
+          : { items: [n], totalCount: 1 },
+      )
     })
 
     const offReconnect = onHubReconnected(() => {
       queryClient.invalidateQueries({ queryKey: UNREAD_COUNT_KEY })
       queryClient.invalidateQueries({ queryKey: LIST_KEY_BASE })
+      // Same "socket's view is incomplete after an outage" reasoning as the
+      // two lines above — a real refetch here (not a prepend) is the only
+      // way to heal whatever the preview missed while disconnected.
+      queryClient.invalidateQueries({ queryKey: PREVIEW_KEY })
     })
 
     return () => {
