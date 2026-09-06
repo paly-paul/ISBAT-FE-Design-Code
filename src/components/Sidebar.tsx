@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useMenu } from '@/hooks/users/useMenu'
 import { MenuNode } from '@/lib/api/users/menu'
 
-export type RailId = 'admission' | 'academic' | 'finance' | 'student' | 'employee' | 'assessment' | 'config'
+export type RailId = 'admission' | 'academic' | 'finance' | 'student' | 'employee' | 'assessment' | 'config' | 'activity-log'
 
 interface SidebarProps {
   panelOpen: boolean
@@ -34,6 +34,7 @@ const RAIL_DEFS: RailDef[] = [
   { id: 'employee', name: 'Employee', fallbackIcon: 'lni lni-briefcase', footer: 'S4 · Employee Service' },
   { id: 'assessment', name: 'Assessment', fallbackIcon: 'lni lni-pencil-alt', footer: 'S4 · Evaluation Lifecycle' },
   { id: 'config', name: 'Config', fallbackIcon: 'lni lni-cog', footer: 'S0 · Core Config' },
+  { id: 'activity-log', name: 'Activity Log', fallbackIcon: 'lni lni-list', footer: 'S0 · Audit & Activity' },
 ]
 
 // Cosmetic-only counters — the menu API carries no notion of these, so they
@@ -223,6 +224,8 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
         {renderRailSlot(RAIL_DEFS[5])}
         <div className="rail-divider"></div>
         {renderRailSlot(RAIL_DEFS[6])}
+        <div className="rail-divider"></div>
+        {renderRailSlot(RAIL_DEFS[7])}
         <div className="rail-spacer"></div>
         {/* Admin (User & Role) — commented out per request, not deleted, in
             case a real backend-driven module takes its place later. Its

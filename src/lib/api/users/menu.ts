@@ -286,6 +286,11 @@ const mockMenu: MenuNode[] = [
   ]),
 
   module_('Assessment', 'pencil-alt', ASSESSMENT_SECTIONS),
+  module_('Activity Log', 'list', [
+    section('Audit Trail', [
+      leaf('Activity Log', 'list', '/activity-log/logs'),
+    ]),
+  ]),
 ]
 
 // TEMPORARY: the real /me/menu response has no Employee module yet (backend
@@ -300,6 +305,14 @@ const HARDCODED_EMPLOYEE_MODULE: MenuNode = module_('Employee', 'briefcase', [
 ])
 
 const HARDCODED_ASSESSMENT_MODULE: MenuNode = module_('Assessment', 'pencil-alt', ASSESSMENT_SECTIONS)
+
+// TEMPORARY: the real /me/menu response has no Activity Log module yet —
+// force it in until the backend starts returning a real "Activity Log" node.
+const HARDCODED_ACTIVITY_LOG_MODULE: MenuNode = module_('Activity Log', 'list', [
+  section('Audit Trail', [
+    leaf('Activity Log', 'list', '/activity-log/logs'),
+  ]),
+])
 
 // TEMPORARY: unlike Employee above, the real /me/menu response DOES have a
 // Finance module (it backs the already-real Cooperates/Discounts/Ledgers/
@@ -749,7 +762,8 @@ export function getMenu(): Promise<MenuResult> {
       const withEmployee = menu.some(n => n.name === 'Employee') ? menu : [...menu, HARDCODED_EMPLOYEE_MODULE]
       const withApprovals = ensureEmployeeApprovals(withEmployee)
       const withAssessment = withApprovals.some(n => n.name === 'Assessment') ? withApprovals : [...withApprovals, HARDCODED_ASSESSMENT_MODULE]
-      const withFinance = mergeFinanceSections(withAssessment)
+      const withActivityLog = withAssessment.some(n => n.name === 'Activity Log') ? withAssessment : [...withAssessment, HARDCODED_ACTIVITY_LOG_MODULE]
+      const withFinance = mergeFinanceSections(withActivityLog)
       const withStudent = mergeStudentSections(withFinance)
       const withBulkEdit = ensureBulkIntakeEdit(withStudent)
       const withBatchSummary = ensureBatchSummary(withBulkEdit)
