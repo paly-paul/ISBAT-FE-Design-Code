@@ -2339,6 +2339,20 @@ textarea.ctrl {
   }
 }
 
+/* Payment Refund — same 50/50 .pc-body split as Payment Console
+   Adjustments/Discount Allocation above. */
+#page-payment-refund > .pc-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px
+}
+
+@media(max-width:1200px) {
+  #page-payment-refund > .pc-body {
+    grid-template-columns: 1fr
+  }
+}
+
 /* At mobile widths, collapse every 2-column field-pair grid on this page
    to a single column too — not just the top-level layout grids above.
    Uses a descendant selector (space, not the direct-child ">" the other

@@ -58,6 +58,7 @@ const FINANCE_PAYMENT_SECTIONS: MenuNode[] = [
     leaf('Dashboard', 'dashboard', 'dashboard'),
     leaf('Payment Console', 'credit-cards', 'payment-console'),
     leaf('Payment Console Adjustments', 'pencil-alt', 'payment-console-adjustments'),
+    leaf('Payment Refund', 'reload', 'payment-refund'),
     leaf('NCHE & Guild Payment', 'graduation', 'nche-guild-payment'),
     leaf('Discount Allocation', 'tag', 'discount-allocation'),
     leaf('Payment History', 'bar-chart', 'payment-history'),
@@ -329,6 +330,7 @@ function mergeFinanceSections(menu: MenuNode[]): MenuNode[] {
     const existingLeaves = new Set(collectionSection.children.map(l => l.name))
     const missingLeaves = [
       leaf('Payment Console Adjustments', 'pencil-alt', 'payment-console-adjustments'),
+      leaf('Payment Refund', 'reload', 'payment-refund'),
       leaf('NCHE & Guild Payment', 'graduation', 'nche-guild-payment'),
       leaf('Discount Allocation', 'tag', 'discount-allocation'),
     ].filter(l => !existingLeaves.has(l.name))
