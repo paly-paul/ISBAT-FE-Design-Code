@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import {
   getSessions,
   executeSessionMove,
@@ -10,11 +10,21 @@ import {
 
 const SESSION_MGMT_KEY = ['session-management']
 
+// Real server-side pagination, params (intake/campus/page) as part of the
+// query key so each combination is cached independently — same convention
+// as useCourseUnits.ts/useEnquiries.ts. keepPreviousData avoids a loading
+// flash when paging or switching intake/campus, leaving the previous page's
+// rows on screen while the next request is in flight; staleTime/gcTime:
+// Infinity stops a re-fetch on every click, serving each already-seen
+// combination from cache until a mutation (move/move-all) invalidates it.
 export function useSessions(params: SessionListParams, enabled: boolean) {
   return useQuery({
     queryKey: [...SESSION_MGMT_KEY, 'list', params],
     queryFn: () => getSessions(params),
     enabled,
+    placeholderData: keepPreviousData,
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
 }
 

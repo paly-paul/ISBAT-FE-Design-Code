@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { EmptyState } from '@/components/EmptyState'
 import { Pagination } from '@/components/Pagination'
 import { ConfirmMovementModal, MovementTarget } from '@/components/modals/academic/ConfirmMovementModal'
 import { BulkSessionMovementModal } from '@/components/modals/academic/BulkSessionMovementModal'
@@ -49,7 +51,7 @@ const RESULT_LABELS: Record<Exclude<MovementResult, 'MovementAllowed'>, string> 
   ResultsNotPublished: 'Results Not Published',
 }
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 
 function toTarget(row: SessionListItemDto): MovementTarget {
   return { intake: row.intakeText, programme: `${row.programName} (${row.programCode})`, semester: row.semesterCode }
@@ -231,19 +233,20 @@ export default function SessionMovementPage() {
 
           {!intakeGuid ? (
             <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Select an Academic Session to load sessions.</div>
-          ) : isLoading ? (
-            <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading sessions…</div>
-          ) : isError ? (
-            <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load sessions. Please try again.</div>
-          ) : rows.length === 0 ? (
-            <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No sessions found for this intake/campus.</div>
           ) : (
             <>
               <ScrollTable>
                 <table>
                   <thead><tr><th>Admission Intake</th><th>Programme</th><th>Semester</th><th>Session Movement</th></tr></thead>
                   <tbody>
-                    {rows.map(r => {
+                    {isLoading
+                      ? <TableLoadingState colSpan={999} title="Loading sessions…" subtitle="Fetching the latest sessions, just a moment." />
+                      : isError
+                        ? <EmptyState colSpan={999} title="Couldn't load sessions" subtitle="Something went wrong fetching this list. Please try again." />
+                        : rows.length === 0
+                          ? <EmptyState colSpan={999} title="No sessions found" subtitle="No sessions match this intake/campus." />
+                          : null}
+                    {!isLoading && !isError && rows.map(r => {
                       const blocked = blockedResults[r.sessionGuid]
                       const isChecking = checkingGuid === r.sessionGuid
                       return (
