@@ -406,23 +406,28 @@ export default function PaymentConsoleAdjustmentsPage() {
                       <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={batchCode ?? '—'}>{batchCode ?? '—'}</span></div>
                     </div>
                   </div>
-                </div>
-              )}
 
-              {/* Advance balance strip — per-currency undrawn total
-                  (get-advance-balance.md). Informational: the deposit
-                  picker on the right is what actually drives a draw. */}
-              {advanceBalances.length > 0 && (
-                <div className="card">
-                  <div className="card-hdr">
-                    <div className="card-title"><span className="ctitle-icon"><i className="lni lni-wallet"></i></span> Undrawn Advance Balance</div>
-                  </div>
-                  {advanceBalances.map(b => (
-                    <div className="pc-total-due" key={b.currencyGuid}>
-                      <span className="text-muted" style={{ fontSize: 12 }}>{b.currencyName}</span>
-                      <span className="font-bold text-blue" style={{ fontSize: 15 }}>{fmtAmt(b.balance)}</span>
+                  {/* Advance balance strip — per-currency undrawn total
+                      (get-advance-balance.md). Informational: the deposit
+                      picker on the right is what actually drives a draw.
+                      Merged into this same card as a second section (same
+                      "compact like Payment Console" fix as its own Payment
+                      History section — see that page's identical comment)
+                      instead of its own separate card below, which stacked
+                      an extra 20px padding + 16px card-hdr margin right
+                      under the hero for what's really just a couple of
+                      figures. */}
+                  {advanceBalances.length > 0 && (
+                    <div className="px-5 pb-5">
+                      <div className="sec-divider"><i className="lni lni-wallet"></i> Undrawn Advance Balance</div>
+                      {advanceBalances.map(b => (
+                        <div className="pc-total-due" key={b.currencyGuid}>
+                          <span className="text-muted" style={{ fontSize: 12 }}>{b.currencyName}</span>
+                          <span className="font-bold text-blue" style={{ fontSize: 15 }}>{fmtAmt(b.balance)}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>

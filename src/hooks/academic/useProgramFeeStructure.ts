@@ -11,6 +11,7 @@ import {
   ProgramFeeStructureSaveCompleteInput,
   ProgramFeeStructureUpdateInput,
 } from '@/lib/api/academic/programFeeStructure'
+import { PROGRAM_MASTERS_KEY } from './useProgramMaster'
 
 const PROGRAM_FEE_STRUCTURES_KEY = ['programFeeStructures']
 
@@ -63,7 +64,17 @@ export function useSaveProgramFeeStructureComplete() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: ProgramFeeStructureSaveCompleteInput) => saveProgramFeeStructureComplete(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRAM_FEE_STRUCTURES_KEY }),
+    // Step 3 of ProgrammeModal's Add-mode wizard — the last of the three
+    // create calls (Step 1's useCreateProgramMasterStep1 invalidates
+    // PROGRAM_MASTERS_KEY too, but that fires right after Step 1, before Fee
+    // Structure/Course Units are attached). Without also invalidating
+    // PROGRAM_MASTERS_KEY here, the Programme Master list kept showing the
+    // stale Step-1-only snapshot of the new programme even after the wizard
+    // fully completed, since nothing told that query to refetch again.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PROGRAM_FEE_STRUCTURES_KEY })
+      queryClient.invalidateQueries({ queryKey: PROGRAM_MASTERS_KEY })
+    },
   })
 }
 

@@ -212,15 +212,6 @@ export default function Page() {
             {permissions.add && <button className="btn btn-primary" onClick={() => openModal('cu-new-modal')}><i className="lni lni-plus"></i> Add Course Unit</button>}
           </div>
         </div>
-        <div className="card mb-[14px]">
-          <div className="card-hdr"><div className="card-title"><span className="ctitle-icon"><i className="lni lni-key"></i></span> Unit Type → Assessment Component Rules</div></div>
-          <div className="g4">
-            <div className="p-3 bg-b50 border-b100 rounded-[var(--rsm)]" style={{ border: '1.5px solid' }}><div className="font-bold text-b700 mb-[6px]" style={{ fontSize: 'var(--fs-xs)' }}><i className="lni lni-book"></i> THEORY</div><div style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>Internal Assessment: <strong>CW + CBT</strong></div><div style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>University Assessment: <strong>UE Paper</strong></div></div>
-            <div className="p-3 bg-[var(--green-bg)] rounded-[var(--rsm)]" style={{ border: '1.5px solid var(--green-bd)' }}><div className="font-bold text-clr-green mb-[6px]" style={{ fontSize: 'var(--fs-xs)' }}><i className="lni lni-microscope"></i> PRACTICAL</div><div style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>Internal Assessment: <strong>CW only</strong> (no CBT)</div><div style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>University Assessment: <strong>Practical Exam</strong></div></div>
-            <div className="p-3 bg-[var(--amber-bg)] rounded-[var(--rsm)]" style={{ border: '1.5px solid var(--amber-bd)' }}><div className="font-bold text-clr-amber mb-[6px]" style={{ fontSize: 'var(--fs-xs)' }}><i className="lni lni-bulb"></i> COMBINED</div><div style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>Theory IA: <strong>CW + CBT</strong></div><div style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>Practical: <strong>No IA</strong>, separate exam only</div></div>
-            <div className="p-3 bg-[var(--purple-bg)] rounded-[var(--rsm)]" style={{ border: '1.5px solid var(--purple-bd)' }}><div className="font-bold mb-[6px]" style={{ fontSize: 'var(--fs-xs)', color: 'var(--purple)' }}><i className="lni lni-rocket"></i> PROJECT</div><div style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>Student-led work (internship / project)</div><div style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>Evaluated after set timeframe (e.g. 2 months)</div></div>
-          </div>
-        </div>
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-book"></i></span> Course Unit Master</div>
