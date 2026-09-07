@@ -7,6 +7,7 @@ import {
   getProgramMasters,
   getProgramMastersByCampus,
   updateProgramMasterComplete,
+  updateProgramMasterStep1,
   ProgramMaster,
   ProgramMasterInput,
   ProgramMasterCreateInput,
@@ -17,6 +18,7 @@ import {
   FeeLineInput,
   ProgramMasterFullDetails,
   ProgramMasterUpdateInput,
+  ProgramMasterUpdateStep1Input,
   ProgramUnitDetail,
   FeeLineDetail,
   FeeStructureDetail,
@@ -113,6 +115,15 @@ export function useUpdateProgramMasterComplete() {
   })
 }
 
+export function useUpdateProgramMasterStep1() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ programGuid, input }: { programGuid: string; input: ProgramMasterUpdateStep1Input }) =>
+      updateProgramMasterStep1(programGuid, input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRAM_MASTERS_KEY }),
+  })
+}
+
 export function useDeleteProgramMasterComplete() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -132,6 +143,7 @@ export type {
   FeeLineInput,
   ProgramMasterFullDetails,
   ProgramMasterUpdateInput,
+  ProgramMasterUpdateStep1Input,
   ProgramUnitDetail,
   FeeLineDetail,
   FeeStructureDetail,
@@ -139,3 +151,4 @@ export type {
   FeeLineUpdateInput,
   FeeStructureUpdateInput,
 }
+
