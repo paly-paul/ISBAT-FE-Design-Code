@@ -16,7 +16,7 @@ import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
 import { useExchangeRatesByDate, useCreateExchangeRate, useUpdateExchangeRate, ExchangeRate } from '@/hooks/finance/useExchangeRates'
-import { PaymentAdvance, useAdvanceStatusByPayment } from '@/hooks/finance/usePayments'
+import { PaymentAdvance, useAdvanceStatusByPayment, usePaymentAdvances } from '@/hooks/finance/usePayments'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
@@ -400,6 +400,18 @@ export default function PaymentConsolePage() {
   // there even when the search hit had none, so it isn't just a one-time
   // override).
   const studentGuid = profile?.studentGuid ?? selectedStudentGuidHint ?? null
+
+  // Re-added per request — hide the Other Payment tab's Advance Payment
+  // checkbox entirely when this student has zero advance deposits on record
+  // at all (matching AdvanceDepositPickerModal's own EmptyState condition,
+  // items.length === 0), rather than always showing it and letting the
+  // picker's empty state be the only place that says so. Fetched
+  // independently of the picker's own usePaymentAdvances call (that one only
+  // fires while the modal is open) so this gate is known before the
+  // checkbox even renders. pageSize: 1 is enough — only totalCount matters.
+  const { data: otherAdvancesCheck } = usePaymentAdvances(1, 1, !!studentGuid, studentGuid)
+  const hasAdvanceDeposits = (otherAdvancesCheck?.totalCount ?? 0) > 0
+
   // Discount-aware replacement for the old useOutstandingLedgers — same
   // current-semester scoping, but each ledger also carries its applicable
   // discount (discountName/discountAmount/netPayable), which
@@ -1383,26 +1395,29 @@ export default function PaymentConsolePage() {
                     Checking it opens AdvanceDepositPickerModal rather than
                     flipping otherIsAdvance straight away — see
                     toggleAdvancePayment/confirmAdvanceSelection's own
-                    comments. Always shown now (per request, 2026-09-02) —
-                    the hasAdvanceDeposits gate that used to hide this
-                    entirely when the student had no deposits on record is
-                    gone; the picker itself already has its own empty state
-                    for that case. */}
-                <div className="fg mb-[14px]">
-                  <label className="flex items-center gap-2" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={otherIsAdvance} onChange={e => toggleAdvancePayment(e.target.checked)} />
-                    Advance Payment
-                  </label>
-                  {otherIsAdvance && selectedAdvance && (
-                    <div className="flex items-center justify-between gap-2 mt-2 p-2.5 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100">
-                      <div style={{ fontSize: 12 }}>
-                        Drawing from <span className="font-mono text-blue font-bold">{selectedAdvance.advPaymentCode}</span>
-                        <span className="text-g500"> · Balance {selectedAdvance.balance.toLocaleString()} {selectedAdvance.currency?.currencyCode ?? ''}</span>
+                    comments. Hidden entirely when hasAdvanceDeposits is false
+                    (re-added per request, reversing the 2026-09-02 "always
+                    shown, let the picker's own empty state explain it"
+                    decision) — there's nothing to draw from, so offering the
+                    checkbox at all just invites opening the picker only to
+                    find it empty. */}
+                {hasAdvanceDeposits && (
+                  <div className="fg mb-[14px]">
+                    <label className="flex items-center gap-2" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={otherIsAdvance} onChange={e => toggleAdvancePayment(e.target.checked)} />
+                      Advance Payment
+                    </label>
+                    {otherIsAdvance && selectedAdvance && (
+                      <div className="flex items-center justify-between gap-2 mt-2 p-2.5 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100">
+                        <div style={{ fontSize: 12 }}>
+                          Drawing from <span className="font-mono text-blue font-bold">{selectedAdvance.advPaymentCode}</span>
+                          <span className="text-g500"> · Balance {selectedAdvance.balance.toLocaleString()} {selectedAdvance.currency?.currencyCode ?? ''}</span>
+                        </div>
+                        <button type="button" className="btn btn-neu btn-sm" onClick={() => setShowAdvancePicker(true)}>Change</button>
                       </div>
-                      <button type="button" className="btn btn-neu btn-sm" onClick={() => setShowAdvancePicker(true)}>Change</button>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Live summary strip — same treatment as Tuition's own,
                     purely derived from this form's state. */}

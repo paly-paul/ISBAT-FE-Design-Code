@@ -568,7 +568,7 @@ export default function DiscountAllocationPage() {
 
                     <div className="flex gap-[10px] justify-end mt-4">
                       <button className="btn btn-neu" disabled={busy} onClick={() => setShowCancelConfirm(true)}><i className="lni lni-close"></i> Cancel Discount</button>
-                      {permissions.edit && <button className="btn btn-primary" disabled={busy} onClick={startEdit}><i className="lni lni-pencil"></i> Edit Discount</button>}
+                      {/* {permissions.edit && <button className="btn btn-primary" disabled={busy} onClick={startEdit}><i className="lni lni-pencil"></i> Edit Discount</button>} */}
                     </div>
                   </>
                 ) : (

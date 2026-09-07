@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
+import { ActionMenu } from '@/components/ActionMenu'
 import { PaymentSuccessModal } from '@/components/modals/finance/PaymentSuccessModal'
 import DatePicker from '@/components/DatePicker'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -614,14 +615,32 @@ export default function PaymentConsoleAdjustmentsPage() {
           </div>
         )}
 
-        {/* Adjustment history for the currently-picked deposit
-            (get-adjustments-by-advance.md) — full width, same convention as
-            Payment Refund's own Refund Details table. Click a row for its
-            ledger breakdown. */}
+        {/* Payment Adjustment History for the currently-picked deposit
+            (get-adjustments-by-advance.md) — full width. Relabeled from
+            "Adjustment History" and switched from clickable rows to a
+            leftmost ActionMenu "View" column per request, matching Payment
+            Console's own history tables (Tuition/Other Payment tabs) rather
+            than Payment Refund's clickable-row convention. The endpoint
+            itself takes a paymentAdvanceGuid in its path — there's no
+            "all adjustments for this application" variant — so the section
+            genuinely can't render (or fire its API call) before a deposit is
+            picked in Apply Advance below; this placeholder says so instead
+            of just silently leaving that space blank with no explanation. */}
+        {/* Gated on deposits.length > 0 too — the "no drawable deposits"
+            empty state above already explains why there's nothing to pick,
+            so this placeholder would be a redundant second message on top
+            of it otherwise. */}
+        {selectedApplicationGuid && !paymentAdvanceGuid && deposits.length > 0 && (
+          <div className="card text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>
+            <i className="lni lni-folder" style={{ fontSize: 20, display: 'block', marginBottom: 6 }}></i>
+            Select an Advance Deposit above to see its Payment Adjustment History.
+          </div>
+        )}
         {selectedApplicationGuid && paymentAdvanceGuid && (
           <div className="card">
             <div className="card-hdr">
-              <div className="card-title"><span className="ctitle-icon"><i className="lni lni-folder"></i></span> Adjustment History — {selectedDeposit?.advPaymentCode}</div>
+              <div className="card-title"><span className="ctitle-icon"><i className="lni lni-folder"></i></span> Payment Adjustment History</div>
+              {selectedDeposit?.advPaymentCode && <span className="badge badge-grey">{selectedDeposit.advPaymentCode}</span>}
             </div>
             {isHistoryLoading ? (
               <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading adjustment history…</div>
@@ -632,10 +651,17 @@ export default function PaymentConsoleAdjustmentsPage() {
             ) : (
               <ScrollTable className="no-sticky-col">
                 <table>
-                  <thead><tr><th>Adjustment Code</th><th>Amount</th><th>Currency</th><th>Date</th><th>Receipt</th></tr></thead>
+                  <thead><tr><th style={{ width: 40 }}></th><th>Adjustment Code</th><th>Amount</th><th>Currency</th><th>Date</th><th>Receipt</th></tr></thead>
                   <tbody>
                     {adjustmentHistory.map(a => (
-                      <tr key={a.adjustmentGuid} className="cursor-pointer hover:bg-b50" onClick={() => setBreakdownGuid(a.adjustmentGuid)}>
+                      <tr key={a.adjustmentGuid}>
+                        <td>
+                          <ActionMenu>
+                            <button className="btn btn-neu btn-sm" onClick={() => setBreakdownGuid(a.adjustmentGuid)}>
+                              <i className="lni lni-eye"></i> View
+                            </button>
+                          </ActionMenu>
+                        </td>
                         <td className="font-mono text-blue">{a.adjustmentCode ?? '—'}</td>
                         <td className="text-green font-bold">{fmtAmt(a.adjustedAmount)}</td>
                         <td>{a.currencyName ?? '—'}</td>
