@@ -844,9 +844,13 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
   // Step 1's Update Basic Details in Edit mode — calls PUT /api/v1/academic/program-master/{programGuid}
   async function handleStep1Update() {
-    if (!validateStep1()) return
+    if (!validateStep1()) {
+      showToast('Please check the form for required fields', 'error')
+      return
+    }
     if (!programGuid) {
       setFailure('Programme GUID is missing.')
+      showToast('Programme GUID is missing.', 'error')
       return
     }
 
@@ -867,14 +871,15 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
     try {
       await updateProgramStep1.mutateAsync({ programGuid, input })
-      showToast('Basic details updated successfully')
+      showToast('Basic details updated successfully', 'success')
     } catch (err) {
       const code = err instanceof AuthError ? err.code : undefined
-      setFailure(
+      const msg =
         err instanceof Error
           ? (err.message || `Failed to update basic details${code ? ` (${code})` : ''}. Please try again.`)
           : 'Failed to update basic details. Please try again.'
-      )
+      setFailure(msg)
+      showToast(msg, 'error')
     }
   }
 
@@ -883,6 +888,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     if (!validateStep2()) return
     if (!programGuid) {
       setFailure('Programme GUID is missing.')
+      showToast('Programme GUID is missing.', 'error')
       return
     }
 
@@ -901,7 +907,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     )
 
     if (unitsPayload.some(u => !u.semesterGuid)) {
-      setFailure('Some course units could not resolve their semester ID. Please try again.')
+      const msg = 'Some course units could not resolve their semester ID. Please try again.'
+      setFailure(msg)
+      showToast(msg, 'error')
       return
     }
 
@@ -913,14 +921,15 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
     try {
       await updateProgramCourseUnits.mutateAsync({ programGuid, input })
-      showToast('Course units updated successfully')
+      showToast('Course units updated successfully', 'success')
     } catch (err) {
       const code = err instanceof AuthError ? err.code : undefined
-      setFailure(
+      const msg =
         err instanceof Error
           ? (err.message || `Failed to update course units${code ? ` (${code})` : ''}. Please try again.`)
           : 'Failed to update course units. Please try again.'
-      )
+      setFailure(msg)
+      showToast(msg, 'error')
     }
   }
 
@@ -928,13 +937,17 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   async function handleStep3Update() {
     if (!programGuid) {
       setFailure('Programme GUID is missing.')
+      showToast('Programme GUID is missing.', 'error')
       return
     }
-    if (!allFeeComplete) return
+    if (!allFeeComplete) {
+      showToast('Please complete required fee structure details', 'error')
+      return
+    }
 
     const nonBlankStructures = feeStructures.filter(s => !feeStructureIsBlank(s))
     if (nonBlankStructures.length === 0) {
-      showToast('No fee structures to update')
+      showToast('No fee structures to update', 'warn')
       return
     }
 
@@ -951,7 +964,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         )
 
         if (feeLines.some(l => !l.semesterGuid)) {
-          setFailure('Some fee lines could not resolve their semester ID. Please ensure each semester is configured.')
+          const msg = 'Some fee lines could not resolve their semester ID. Please ensure each semester is configured.'
+          setFailure(msg)
+          showToast(msg, 'error')
           return
         }
 
@@ -997,14 +1012,15 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           await saveFeeStructureComplete.mutateAsync(input)
         }
       }
-      showToast('Fee structure updated successfully')
+      showToast('Fee structure updated successfully', 'success')
     } catch (err) {
       const code = err instanceof AuthError ? err.code : undefined
-      setFailure(
+      const msg =
         err instanceof Error
           ? (err.message || `Failed to update fee structure${code ? ` (${code})` : ''}. Please try again.`)
           : 'Failed to update fee structure. Please try again.'
-      )
+      setFailure(msg)
+      showToast(msg, 'error')
     }
   }
 
@@ -1029,11 +1045,13 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       const created = await createProgramStep1.mutateAsync(input)
       setCreatedProgramGuid(created.programGuid)
       setCreatedSemesters(created.semesters)
-      showToast('Programme details saved')
+      showToast('Programme details saved', 'success')
       setStep(2)
     } catch (err) {
       const code = err instanceof AuthError ? err.code : undefined
-      setFailure(err instanceof Error ? (err.message || `Failed to save programme details${code ? ` (${code})` : ''}. Please try again.`) : 'Failed to save programme details. Please try again.')
+      const msg = err instanceof Error ? (err.message || `Failed to save programme details${code ? ` (${code})` : ''}. Please try again.`) : 'Failed to save programme details. Please try again.'
+      setFailure(msg)
+      showToast(msg, 'error')
     }
   }
 
@@ -1044,7 +1062,12 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   async function handleStep2Continue() {
     if (!validateStep2()) return
     if (unitsSubmitted) { setStep(3); return }
-    if (!createdProgramGuid) { setFailure('Programme details have not been saved yet — go back to Step 1.'); return }
+    if (!createdProgramGuid) {
+      const msg = 'Programme details have not been saved yet — go back to Step 1.'
+      setFailure(msg)
+      showToast(msg, 'error')
+      return
+    }
 
     const units: ProgramCourseUnitBulkItem[] = semUnits.flatMap((us, si) =>
       us.map(u => ({
@@ -1063,18 +1086,22 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     // submit rather than send a unit with semesterGuid: '' and get back a
     // not_found that doesn't explain why.
     if (units.some(u => !u.semesterGuid)) {
-      setFailure('Course units can\'t be saved yet — the server hasn\'t provided a semester ID for this programme. This is a known backend gap, not something fixable from this form.')
+      const msg = 'Course units can\'t be saved yet — the server hasn\'t provided a semester ID for this programme. This is a known backend gap, not something fixable from this form.'
+      setFailure(msg)
+      showToast(msg, 'error')
       return
     }
 
     try {
       await addProgramCourseUnits.mutateAsync({ programGuid: createdProgramGuid, programName, units })
       setUnitsSubmitted(true)
-      showToast('Course units saved')
+      showToast('Course units saved', 'success')
       setStep(3)
     } catch (err) {
       const code = err instanceof AuthError ? err.code : undefined
-      setFailure(err instanceof Error ? (err.message || `Failed to save course units${code ? ` (${code})` : ''}. Please try again.`) : 'Failed to save course units. Please try again.')
+      const msg = err instanceof Error ? (err.message || `Failed to save course units${code ? ` (${code})` : ''}. Please try again.`) : 'Failed to save course units. Please try again.'
+      setFailure(msg)
+      showToast(msg, 'error')
     }
   }
 
@@ -1204,10 +1231,12 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       updateProgramMasterComplete.mutate(
         { programGuid, input: updateInput },
         {
-          onSuccess: () => { setSaved(true); showToast('Programme updated successfully') },
+          onSuccess: () => { setSaved(true); showToast('Programme updated successfully', 'success') },
           onError: (error: Error) => {
             const code = error instanceof AuthError ? error.code : undefined
-            setFailure(error.message || `Failed to update programme${code ? ` (${code})` : ''}. Please try again.`)
+            const msg = error.message || `Failed to update programme${code ? ` (${code})` : ''}. Please try again.`
+            setFailure(msg)
+            showToast(msg, 'error')
           },
         },
       )
@@ -1224,7 +1253,12 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     // programme with multiple fee structures needs one call per structure.
     if (!validateStep1()) { setStep(1); return }
     if (!validateStep2()) { setStep(2); return }
-    if (!createdProgramGuid) { setFailure('Programme details have not been saved yet — go back to Step 1.'); return }
+    if (!createdProgramGuid) {
+      const msg = 'Programme details have not been saved yet — go back to Step 1.'
+      setFailure(msg)
+      showToast(msg, 'error')
+      return
+    }
 
     // Fee Structure is optional — an untouched structure is never sent, not
     // even as an empty shell (see feeStructureIsBlank above).
@@ -1264,7 +1298,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     // submit rather than send a fee line with semesterGuid: '' and get back
     // a not_found that doesn't explain why.
     if (feeStructuresPayload.some(s => s.feeLines.some(l => !l.semesterGuid))) {
-      setFailure('Fee structure can\'t be saved yet — the server hasn\'t provided a semester ID for this programme. This is a known backend gap, not something fixable from this form.')
+      const msg = 'Fee structure can\'t be saved yet — the server hasn\'t provided a semester ID for this programme. This is a known backend gap, not something fixable from this form.'
+      setFailure(msg)
+      showToast(msg, 'error')
       return
     }
 
@@ -1274,10 +1310,12 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           await saveFeeStructureComplete.mutateAsync(payload)
         }
         setSaved(true)
-        showToast('Programme saved successfully')
+        showToast('Programme saved successfully', 'success')
       } catch (err) {
         const code = err instanceof AuthError ? err.code : undefined
-        setFailure(err instanceof Error ? (err.message || `Failed to save fee structure${code ? ` (${code})` : ''}. Please try again.`) : 'Failed to save fee structure. Please try again.')
+        const msg = err instanceof Error ? (err.message || `Failed to save fee structure${code ? ` (${code})` : ''}. Please try again.`) : 'Failed to save fee structure. Please try again.'
+        setFailure(msg)
+        showToast(msg, 'error')
       }
     })()
   }
@@ -1327,7 +1365,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       aptechCreditExemptionFeeCurrency: source.aptechCreditExemptionFeeCurrency,
       semFees: source.semFees.map(items => items.map(item => ({ ...item, id: nextId++ }))),
     }))
-    showToast(`Copied fees from ${source.feeCode || 'New Fee Structure'}`)
+    showToast(`Copied fees from ${source.feeCode || 'New Fee Structure'}`, 'info')
   }
 
   function updateFeeStructureMeta(field: Exclude<keyof FeeStructure, 'id' | 'semFees'>, val: string) {
