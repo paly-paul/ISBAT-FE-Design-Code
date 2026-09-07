@@ -250,36 +250,60 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
 
   const activeDef = RAIL_DEFS.find(d => d.id === activeRail)!
 
-  return (
-    <div className="sidebar">
-      <div className="sb-rail bg-bg">
-        {renderRailSlot(RAIL_DEFS[0])}
-        <div className="rail-divider"></div>
-        {renderRailSlot(RAIL_DEFS[1])}
-        <div className="rail-divider"></div>
-        {renderRailSlot(RAIL_DEFS[2])}
-        <div className="rail-divider"></div>
-        {renderRailSlot(RAIL_DEFS[3])}
-        <div className="rail-divider"></div>
+  // renderRailSlot(def) returns null for a module the user has no access to
+  // (moduleByName.get(def.name) misses) — everything else here (the two
+  // locked "Coming Soon" placeholders, the loading skeleton) always
+  // renders something. Dividers used to be hardcoded between every pair of
+  // slots regardless, so a null slot (e.g. no Config access) left two
+  // .rail-dividers stacked back-to-back with nothing between them — a
+  // visibly doubled line right above whatever module happened to follow
+  // (confirmed live: Activity Log, when Config returned null). Built as a
+  // {key, node} list and filtered first instead, so a divider only ever
+  // renders between two slots that both actually rendered something.
+  const railSlots: { key: string; node: React.ReactNode }[] = [
+    { key: 'admission', node: renderRailSlot(RAIL_DEFS[0]) },
+    { key: 'academic', node: renderRailSlot(RAIL_DEFS[1]) },
+    { key: 'finance', node: renderRailSlot(RAIL_DEFS[2]) },
+    { key: 'student', node: renderRailSlot(RAIL_DEFS[3]) },
+    {
+      key: 'attendance',
+      node: (
         <div className="rail-item locked" data-mod="attendance">
           <span className="rail-icon"><i className="lni lni-alarm-clock"></i></span>
           <span className="rail-label">Attendance</span>
           <span className="rail-tooltip">Attendance · Coming Soon</span>
         </div>
-        <div className="rail-divider"></div>
+      ),
+    },
+    {
+      key: 'analytics',
+      node: (
         <div className="rail-item locked" data-mod="analytics">
           <span className="rail-icon"><i className="lni lni-bar-chart"></i></span>
           <span className="rail-label">Analytics</span>
           <span className="rail-tooltip">Analytics · Coming Soon</span>
         </div>
-        <div className="rail-divider"></div>
-        {renderRailSlot(RAIL_DEFS[4])}
-        <div className="rail-divider"></div>
-        {renderRailSlot(RAIL_DEFS[5])}
-        <div className="rail-divider"></div>
-        {renderRailSlot(RAIL_DEFS[6])}
-        <div className="rail-divider"></div>
-        {renderRailSlot(RAIL_DEFS[7])}
+      ),
+    },
+    { key: 'employee', node: renderRailSlot(RAIL_DEFS[4]) },
+    { key: 'assessment', node: renderRailSlot(RAIL_DEFS[5]) },
+    { key: 'config', node: renderRailSlot(RAIL_DEFS[6]) },
+    { key: 'activity-log', node: renderRailSlot(RAIL_DEFS[7]) },
+  ]
+  const visibleRailSlots = railSlots.filter(s => s.node)
+
+  return (
+    <div className="sidebar">
+      <div className="sb-rail bg-bg">
+        {visibleRailSlots.map((slot, i) => (
+          // display: contents keeps the wrapper out of .sb-rail's own flex
+          // layout (flex column + gap) — its children (the divider, the
+          // slot itself) participate directly as if there were no wrapper.
+          <div key={slot.key} style={{ display: 'contents' }}>
+            {i > 0 && <div className="rail-divider"></div>}
+            {slot.node}
+          </div>
+        ))}
         <div className="rail-spacer"></div>
         {/* Admin (User & Role) — commented out per request, not deleted, in
             case a real backend-driven module takes its place later. Its
