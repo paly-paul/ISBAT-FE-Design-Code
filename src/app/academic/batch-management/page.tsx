@@ -67,29 +67,21 @@ export default function Page() {
   const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isSearching)
 
   // Batch has no createdAt field — bStartDate is the only temporal signal
-  // available, so "newest to oldest" sorts by that, descending. Reads from
-  // the search-scoped response once debouncedSearch is set, falling back to
-  // the plain unfiltered list otherwise.
+  // available, so "newest to oldest" sorts by that, descending.
   const sortedRows = useMemo(
-    () => [...((debouncedSearch ? searchData?.items : data?.items) ?? [])].sort((a, b) => (b.bStartDate ?? '').localeCompare(a.bStartDate ?? '')),
-    [data, searchData, debouncedSearch],
+    () => [...(data?.items ?? [])].sort((a, b) => (b.bStartDate ?? '').localeCompare(a.bStartDate ?? '')),
+    [data],
   )
-  // Re-filter client-side on top of whatever the server sent back, so
-  // results stay correct even if the backend doesn't actually honor
-  // ?search= (see the note on getBatches).
-  const filteredRows = useMemo(
-    () => searchTrimmed.length >= MIN_SEARCH_CHARS
-      ? sortedRows.filter(r => r.batchCode.toLowerCase().includes(searchTrimmed.toLowerCase()))
-      : sortedRows,
-    [sortedRows, searchTrimmed],
-  )
+  // Re-filter client-side is removed per ACA-012 — search box now operates
+  // completely independently of the table content below it.
+  const filteredRows = sortedRows
   const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
   const createBatch = useCreateBatch()
-  const updateBatch  = useUpdateBatch()
-  const deleteBatch  = useDeleteBatch()
+  const updateBatch = useUpdateBatch()
+  const deleteBatch = useDeleteBatch()
 
-  const { data: programs = [] }   = useProgramMasters()
-  const { data: streams = [] }    = useStreams()
+  const { data: programs = [] } = useProgramMasters()
+  const { data: streams = [] } = useStreams()
   const { data: batchTimes = [] } = useBatchTimes()
 
   function programName(programGuid: string) {
@@ -103,10 +95,12 @@ export default function Page() {
   }
 
   const searchMatches = useMemo(
-    () => searchTrimmed.length >= MIN_SEARCH_CHARS
-      ? sortedRows.filter(r => r.batchCode.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
-      : [],
-    [sortedRows, searchTrimmed],
+    () => {
+      if (searchTrimmed.length < MIN_SEARCH_CHARS) return []
+      const source = (debouncedSearch ? searchData?.items : data?.items) ?? []
+      return source.filter(r => r.batchCode.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
+    },
+    [searchTrimmed, debouncedSearch, searchData, data],
   )
 
   // Semester is still scoped per-programme (no global semester list, only
@@ -155,8 +149,8 @@ export default function Page() {
   function confirmDeleteBatch() {
     if (!deleteTarget) return
     deleteBatch.mutate(deleteTarget.batchGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Batch deleted successfully') },
-      onError: (error: Error) => showToast(error.message || 'Failed to delete batch', 'error'),
+      onSuccess: () => { setDeleteTarget(null); showToast('Batch deleted successfully', 'success') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete batch', 'danger'),
     })
   }
 
@@ -166,6 +160,15 @@ export default function Page() {
         <div className="pg-hdr">
           <div><div className="pg-title">Batch Management</div><div className="pg-sub">Create batches per intake · Assign Batch In-Charge</div></div>
           <div className="flex items-center gap-3">
+            {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-batch-modal')}><i className="lni lni-plus"></i> Create Batch</button>}
+          </div>
+        </div>
+
+
+
+        <div className="card">
+          <div className="card-hdr" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-users"></i></span> Batches</div>
             <TableSearch
               className="w-56"
               placeholder="Search by batch code…"
@@ -176,17 +179,6 @@ export default function Page() {
               minChars={MIN_SEARCH_CHARS}
               onSelect={(r) => openViewModal(r.id)}
             />
-            {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-batch-modal')}><i className="lni lni-plus"></i> Create Batch</button>}
-          </div>
-        </div>
-
-        <div className="g4 mb-[18px]">
-          <div className="stat-card"><div className="stat-lbl">Total Batches</div><div className="stat-num">{serverTotalCount.toLocaleString()}</div></div>
-        </div>
-
-        <div className="card">
-          <div className="card-hdr">
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-users"></i></span> Batches</div>
           </div>
           <ScrollTable>
             <table>
@@ -204,18 +196,18 @@ export default function Page() {
                 </tr>
               </thead>
               <tbody>
-                {(isLoading || searchPending)
+                {isLoading
                   ? <TableLoadingState colSpan={999} />
                   : filteredRows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={!!search} onClearFilters={() => setSearch('')} />
+                    ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
-                {!(isLoading || searchPending) && pageItems.map(r => (
+                {!isLoading && pageItems.map(r => (
                   <tr key={r.batchGuid}>
                     <td>
-                        {(permissions.edit || permissions.delete || true) && (
-                          <ActionMenu>
-                            <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.batchGuid)}><i className="lni lni-eye"></i> View</button>
-                            {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.batchGuid)}><i className="lni lni-pencil"></i> Edit</button>}
+                      {(permissions.edit || permissions.delete || true) && (
+                        <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.batchGuid)}><i className="lni lni-eye"></i> View</button>
+                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.batchGuid)}><i className="lni lni-pencil"></i> Edit</button>}
                           {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
                         </ActionMenu>
                       )}
