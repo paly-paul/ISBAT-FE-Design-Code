@@ -18,9 +18,21 @@ export function Toast({ toast }: ToastProps) {
       ? 'info'
       : rawType
 
+  const icon =
+    normalizedType === 'success'
+      ? 'lni-checkmark-circle'
+      : normalizedType === 'danger'
+      ? 'lni-warning'
+      : normalizedType === 'warn'
+      ? 'lni-alarm'
+      : normalizedType === 'info'
+      ? 'lni-information'
+      : null
+
   return (
     <div className={`toast${normalizedType ? ' toast-' + normalizedType : ''} show`}>
-      {toast.msg}
+      {icon && <i className={`lni ${icon}`} style={{ fontSize: 18, flexShrink: 0 }} />}
+      <span style={{ flex: 1 }}>{toast.msg}</span>
     </div>
   )
 }
