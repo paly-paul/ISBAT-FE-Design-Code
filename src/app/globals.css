@@ -5672,6 +5672,14 @@ body:has(.modal-overlay.open) {
   color: var(--g500);
   background: var(--white);
   border: 1.5px solid var(--g200);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.prog-step:hover {
+  border-color: var(--b300);
+  color: var(--b700);
 }
 
 .prog-step.active {

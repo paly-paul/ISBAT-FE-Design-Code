@@ -22,9 +22,21 @@ import { useLedgers } from '@/hooks/finance/useLedgers'
 import {
   ProgramUnitUpdateInput, FeeStructureUpdateInput, ProgramMasterUpdateInput,
   ProgramMasterCreateInput, ProgramMasterSemester, useProgramMasterFullDetails, useCreateProgramMasterStep1,
+  useUpdateProgramMasterStep1, ProgramMasterUpdateStep1Input,
 } from '@/hooks/academic/useProgramMaster'
-import { useProgramCourseUnits, useAddProgramCourseUnitsBulk, ProgramCourseUnitBulkItem } from '@/hooks/academic/useProgramCourseUnits'
-import { useSaveProgramFeeStructureComplete, ProgramFeeStructureSaveCompleteInput } from '@/hooks/academic/useProgramFeeStructure'
+import {
+  useProgramCourseUnits,
+  useAddProgramCourseUnitsBulk,
+  useUpdateProgramCourseUnits,
+  ProgramCourseUnitBulkItem,
+  ProgramCourseUnitsUpdateInput,
+} from '@/hooks/academic/useProgramCourseUnits'
+import {
+  useSaveProgramFeeStructureComplete,
+  useUpdateProgramFeeStructureComplete,
+  ProgramFeeStructureSaveCompleteInput,
+  ProgramFeeStructureUpdateInput,
+} from '@/hooks/academic/useProgramFeeStructure'
 import { AuthError } from '@/lib/api/client'
 
 // Toggle between UGX and USD.
@@ -71,6 +83,7 @@ type SemUnits    = CUItem[][]
 // is the source of FeeStructureInput.feeLines.
 type FeeStructure = {
   id: number
+  feeHdGuid?: string
   feeCode: string
   description: string
   localOrForeign: string
@@ -109,6 +122,7 @@ function makeEmptySemFees(semCount: number): SemFees {
 function blankFeeStructure(id: number, semCount: number): FeeStructure {
   return {
     id,
+    feeHdGuid: '',
     feeCode: '',
     description: '',
     localOrForeign: 'false',
@@ -212,8 +226,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // resubmitting unchanged units would hit duplicate_program_unit.
   const [unitsSubmitted, setUnitsSubmitted] = useState(false)
   const createProgramStep1 = useCreateProgramMasterStep1()
+  const updateProgramStep1 = useUpdateProgramMasterStep1()
   const addProgramCourseUnits = useAddProgramCourseUnitsBulk()
+  const updateProgramCourseUnits = useUpdateProgramCourseUnits()
   const saveFeeStructureComplete = useSaveProgramFeeStructureComplete()
+  const updateFeeStructureComplete = useUpdateProgramFeeStructureComplete()
   // Add mode only — Step 1's programme record already exists once this is
   // set, so its own fields lock (see the banner + pointerEvents wrapper in
   // Step 1's JSX below) rather than risking a duplicate/orphaned create.
@@ -231,12 +248,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // lists semesters that already have a unit on them — no help for a brand
   // new programme) has one either. Until the backend team confirms where a
   // fresh programme's semesterGuids actually come from, this always
-  // resolves to '' — see the guards in handleStep2Continue and Step 3's
-  // submit below, which refuse to submit an empty semesterGuid rather than
-  // send one and get back a confusing not_found.
-  function semesterGuidForIndex(si: number): string {
-    return createdSemesters.find(s => s.semCode === si + 1)?.semesterGuid ?? ''
-  }
+  // resolves to '' — see getSemesterGuid / semesterGuidForIndex below.
   const [feeStructures, setFeeStructures] = useState<FeeStructure[]>(() => makeDefaultFeeStructures(1))
   const [activeFeeIdx, setActiveFeeIdx]   = useState(0)
   const [feeAccordion, setFeeAccordion]   = useState(0)
@@ -272,6 +284,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // "Semester N" until Edit mode's real semName data replaces it.
   const [semUnits, setSemUnits]     = useState<SemUnits>(() => [[]])
   const [semLabels, setSemLabels]   = useState<string[]>(() => ['Semester 1'])
+  const [semGuids, setSemGuids]     = useState<string[]>([])
   const [activeAcc, setActiveAcc]   = useState<number>(0)
   // Which course unit's Syllabus/Outline/Taught By detail panel is expanded
   // in Step 2 — per Program_Master_Change_Requests_Final.md's "Additional
@@ -446,6 +459,39 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     ...programCourseUnitRows.map(r => r.courseUnitGuid),
   ])
 
+  function getSemesterGuid(si: number, cuGuid?: string): string {
+    if (semGuids[si]) return semGuids[si]
+    if (cuGuid) {
+      const match = programCourseUnitRows.find(r => r.courseUnitGuid === cuGuid)
+      if (match?.semesterGuid) return match.semesterGuid
+    }
+    const unitsInThisSem = semUnits[si] ?? []
+    for (const u of unitsInThisSem) {
+      const match = programCourseUnitRows.find(r => r.courseUnitGuid === u.guid)
+      if (match?.semesterGuid) return match.semesterGuid
+    }
+    const label = semLabels[si]
+    if (label) {
+      const match = programCourseUnitRows.find(r => r.semName && r.semName.trim().toLowerCase() === label.trim().toLowerCase())
+      if (match?.semesterGuid) return match.semesterGuid
+    }
+    const semFromFull = (fullDetails?.semesters as any[])?.find((s: any) => s.semCode === si + 1) || (fullDetails?.semesters as any[])?.[si]
+    if (semFromFull?.semesterGuid) return semFromFull.semesterGuid
+    if (semFromFull?.guid) return semFromFull.guid
+    const fromCreated = createdSemesters.find(s => s.semCode === si + 1)
+    if (fromCreated?.semesterGuid) return fromCreated.semesterGuid
+    const fallbackSemesters: { semesterGuid: string; semName: string }[] = []
+    programCourseUnitRows.forEach(r => {
+      if (!fallbackSemesters.some(s => s.semesterGuid === r.semesterGuid)) fallbackSemesters.push({ semesterGuid: r.semesterGuid, semName: r.semName })
+    })
+    if (fallbackSemesters[si]?.semesterGuid) return fallbackSemesters[si].semesterGuid
+    return ''
+  }
+
+  function semesterGuidForIndex(si: number): string {
+    return getSemesterGuid(si) || (createdSemesters.find(s => s.semCode === si + 1)?.semesterGuid ?? '')
+  }
+
   useEffect(() => {
     // isOpen has to gate this (not just be an input to it) — react-query
     // keeps the same `fullDetails`/`programCourseUnitRows` object references
@@ -499,10 +545,18 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     let semCount: number
     let labels: string[]
     let units: SemUnits
+    let guids: string[] = []
 
     if (realSemesters.length > 0) {
       semCount = realSemesters.length
       labels = realSemesters.map(s => s.semName)
+      guids = realSemesters.map((s, idx) => {
+        if ((s as any).semesterGuid) return (s as any).semesterGuid
+        if ((s as any).guid) return (s as any).guid
+        const fromRow = programCourseUnitRows.find(r => r.semName && r.semName.trim().toLowerCase() === s.semName?.trim().toLowerCase())
+        if (fromRow?.semesterGuid) return fromRow.semesterGuid
+        return ''
+      })
       units = Array.from({ length: semCount }, () => [])
       // programUnits' own semCode already lines up 1:1 with these semesters
       // (both are position-based against the same programme), so no need to
@@ -510,6 +564,10 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       fullDetails.programUnits.forEach(u => {
         const si = u.semCode - 1
         if (si < 0 || si >= semCount) return
+        if (!guids[si]) {
+          const fromRow = programCourseUnitRows.find(r => r.courseUnitGuid === u.courseUnitGuid)
+          if (fromRow?.semesterGuid) guids[si] = fromRow.semesterGuid
+        }
         const cu = courseUnitsByGuid.get(u.courseUnitGuid)
         units[si].push({
           id: nextCUId++,
@@ -537,6 +595,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       if (fallbackSemesters.length > 0) {
         semCount = fallbackSemesters.length
         labels = fallbackSemesters.map(s => s.semName)
+        guids = fallbackSemesters.map(s => s.semesterGuid)
         units = Array.from({ length: semCount }, () => [])
         // program-course-units doesn't carry unitType/unitCat/streamGuid —
         // pull those in from fullDetails.programUnits by courseUnitGuid.
@@ -561,6 +620,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         const fallbackSemCount = fullDetails.programUnits.reduce((max, u) => Math.max(max, u.semCode), 0)
         semCount = Math.max(fallbackSemCount, 1)
         labels = Array.from({ length: semCount }, (_, i) => `Semester ${i + 1}`)
+        guids = Array.from({ length: semCount }, () => '')
         units = Array.from({ length: semCount }, () => [])
         fullDetails.programUnits.forEach(u => {
           const si = u.semCode - 1
@@ -582,6 +642,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     }
     setSemUnits(units)
     setSemLabels(labels)
+    setSemGuids(guids)
 
     const structures: FeeStructure[] = fullDetails.feeStructures.length > 0
       ? fullDetails.feeStructures.map(s => {
@@ -599,6 +660,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           })
           return {
             id: nextFeeStructId++,
+            feeHdGuid: s.feeHdGuid,
             feeCode: s.feeCode,
             description: s.feeDesc,
             localOrForeign: String(s.localOrForeign),
@@ -693,9 +755,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     if (!programName.trim()) e.programName = 'Programme Name is required'
     if (!programGroupGuid) e.programGroupGuid = 'Please select a Programme Group'
     if (!programLevelGuid) e.programLevelGuid = 'Please select a Programme Level'
-    if (!facultyGuid) e.facultyGuid = 'Please select a Faculty'
-    if (!appFee) e.appFee = 'Application Fee is required'
-    if (!lateFee) e.lateFee = 'Late Fee is required'
+    if (!intakeGuid) e.intakeGuid = 'Please select an Intake'
+    if (appFee === '') e.appFee = 'Application Fee is required'
+    if (lateFee === '') e.lateFee = 'Late Fee is required'
     if (!currencyGuid) e.currencyCode = 'Please select a Currency'
     // No. of Course Units, Accreditation Date, and Specialization are all
     // optional per Program_Master_Change_Requests_Final.md — unitCount is
@@ -729,6 +791,172 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     // }
     // setStep2Error(null)
     // return true
+  }
+
+  // Step 1's Update Basic Details in Edit mode — calls PUT /api/v1/academic/program-master/{programGuid}
+  async function handleStep1Update() {
+    if (!validateStep1()) return
+    if (!programGuid) {
+      setFailure('Programme GUID is missing.')
+      return
+    }
+
+    const input: ProgramMasterUpdateStep1Input = {
+      programCode,
+      programName,
+      pgmStatus,
+      noIa,
+      programGroupGuid: programGroupGuid || undefined,
+      programLevelGuid,
+      currencyGuid: currencyGuid || undefined,
+      unitCount: +unitCount > 0 ? +unitCount : undefined,
+      appFee: appFee !== '' ? +appFee : 0,
+      lateFee: lateFee !== '' ? +lateFee : 0,
+      streamGuids: streamGuids.length > 0 ? streamGuids : undefined,
+      intakeGuid: intakeGuid || undefined,
+    }
+
+    try {
+      await updateProgramStep1.mutateAsync({ programGuid, input })
+      showToast('Basic details updated successfully')
+    } catch (err) {
+      const code = err instanceof AuthError ? err.code : undefined
+      setFailure(
+        err instanceof Error
+          ? (err.message || `Failed to update basic details${code ? ` (${code})` : ''}. Please try again.`)
+          : 'Failed to update basic details. Please try again.'
+      )
+    }
+  }
+
+  // Step 2's Update Course Units in Edit mode — calls PUT /api/v1/academic/program-course-units/{programGuid}
+  async function handleStep2Update() {
+    if (!validateStep2()) return
+    if (!programGuid) {
+      setFailure('Programme GUID is missing.')
+      return
+    }
+
+    const unitsPayload = semUnits.flatMap((units, si) =>
+      units.map(u => {
+        const semGuid = getSemesterGuid(si, u.guid)
+        return {
+          semesterGuid: semGuid,
+          courseUnitGuid: u.guid,
+          streamGuid: u.streamGuid || streamGuids[0] || null,
+          unitTypeGuid: u.unitType || null,
+          unitCatGuid: u.unitCat || null,
+          flag: 1,
+        }
+      })
+    )
+
+    if (unitsPayload.some(u => !u.semesterGuid)) {
+      setFailure('Some course units could not resolve their semester ID. Please try again.')
+      return
+    }
+
+    const input: ProgramCourseUnitsUpdateInput = {
+      programGuid,
+      programName,
+      units: unitsPayload,
+    }
+
+    try {
+      await updateProgramCourseUnits.mutateAsync({ programGuid, input })
+      showToast('Course units updated successfully')
+    } catch (err) {
+      const code = err instanceof AuthError ? err.code : undefined
+      setFailure(
+        err instanceof Error
+          ? (err.message || `Failed to update course units${code ? ` (${code})` : ''}. Please try again.`)
+          : 'Failed to update course units. Please try again.'
+      )
+    }
+  }
+
+  // Step 3's Update Fee Structure in Edit mode — calls PUT /api/v1/academic/Programfee-structure/hd/{feeHdGuid}/update-complete
+  async function handleStep3Update() {
+    if (!programGuid) {
+      setFailure('Programme GUID is missing.')
+      return
+    }
+    if (!allFeeComplete) return
+
+    const nonBlankStructures = feeStructures.filter(s => !feeStructureIsBlank(s))
+    if (nonBlankStructures.length === 0) {
+      showToast('No fee structures to update')
+      return
+    }
+
+    try {
+      for (const s of nonBlankStructures) {
+        const feeLines = s.semFees.flatMap((items, si) =>
+          items.map((item, idx) => ({
+            semesterGuid: getSemesterGuid(si),
+            ledgerGuid: item.ledger,
+            currencyGuid: item.currencyGuid,
+            ledgerNum: idx + 1,
+            amount: +item.amount || 0,
+          }))
+        )
+
+        if (feeLines.some(l => !l.semesterGuid)) {
+          setFailure('Some fee lines could not resolve their semester ID. Please ensure each semester is configured.')
+          return
+        }
+
+        const feeHdGuid = s.feeHdGuid || fullDetails?.feeStructures?.[0]?.feeHdGuid
+        if (feeHdGuid) {
+          const input: ProgramFeeStructureUpdateInput = {
+            feeHdGuid,
+            programGuid,
+            feeCode: s.feeCode,
+            feeDesc: s.description,
+            status: true,
+            localOrForeign: s.localOrForeign === 'true',
+            calcType: +s.discountType || 1,
+            amtPer: s.discountAmount ? +s.discountAmount : null,
+            lef: s.lateralEntryFee ? +s.lateralEntryFee : null,
+            cef: s.creditExemptionFee ? +s.creditExemptionFee : null,
+            ace: s.aptechCreditExemptionFee ? +s.aptechCreditExemptionFee : null,
+            lec: s.lateralEntryFeeCurrency ? +s.lateralEntryFeeCurrency : null,
+            cec: s.creditExemptionFeeCurrency ? +s.creditExemptionFeeCurrency : null,
+            acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
+            intakeGuid: s.intakeGuid || null,
+            feeLines,
+          }
+          await updateFeeStructureComplete.mutateAsync({ feeHdGuid, input })
+        } else {
+          const input: ProgramFeeStructureSaveCompleteInput = {
+            feeCode: s.feeCode,
+            feeDesc: s.description,
+            status: true,
+            localOrForeign: s.localOrForeign === 'true',
+            programGuid,
+            lef: s.lateralEntryFee ? +s.lateralEntryFee : null,
+            cef: s.creditExemptionFee ? +s.creditExemptionFee : null,
+            ace: s.aptechCreditExemptionFee ? +s.aptechCreditExemptionFee : null,
+            lec: s.lateralEntryFeeCurrency ? +s.lateralEntryFeeCurrency : null,
+            cec: s.creditExemptionFeeCurrency ? +s.creditExemptionFeeCurrency : null,
+            acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
+            calcType: +s.discountType || 1,
+            amtPer: s.discountAmount ? +s.discountAmount : null,
+            intakeGuid: s.intakeGuid || null,
+            feeLines,
+          }
+          await saveFeeStructureComplete.mutateAsync(input)
+        }
+      }
+      showToast('Fee structure updated successfully')
+    } catch (err) {
+      const code = err instanceof AuthError ? err.code : undefined
+      setFailure(
+        err instanceof Error
+          ? (err.message || `Failed to update fee structure${code ? ` (${code})` : ''}. Please try again.`)
+          : 'Failed to update fee structure. Please try again.'
+      )
+    }
   }
 
   // Step 1's Save & Continue in Add mode — see post-program-master.md.
@@ -832,7 +1060,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const anyLedgerGaps     = feeStructures.some(feeStructHasLedgerGaps)
   const allFeeComplete    = feeStructures.every(feeStructComplete) && !anyCurrencyGaps && !anyLedgerGaps
   const isSaving = mode === 'edit'
-    ? !!updateProgramMasterComplete?.isPending
+    ? (!!updateProgramMasterComplete?.isPending || updateProgramStep1.isPending || updateProgramCourseUnits.isPending || updateFeeStructureComplete.isPending)
     : createProgramStep1.isPending || addProgramCourseUnits.isPending || saveFeeStructureComplete.isPending
 
   function handleClose() {
@@ -842,6 +1070,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setActiveFeeIdx(0); setFeeAccordion(0); setActiveAcc(0); setCopySourceId('')
     setSemUnits([[]])
     setSemLabels(['Semester 1'])
+    setSemGuids([])
     setProgramCode(''); setProgramName(''); setProgramGroupGuid(''); setProgramLevelGuid('')
     setFacultyGuid(''); setAppFee(''); setLateFee(''); setCurrencyGuid(''); setUnitCount('')
     setDateAcc(''); setStreamGuids([])
@@ -1167,6 +1396,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     const n = Math.max(count, 1)
     setSemUnits(prev => Array.from({ length: n }, (_, i) => prev[i] ?? []))
     setSemLabels(prev => Array.from({ length: n }, (_, i) => prev[i] ?? `Semester ${i + 1}`))
+    setSemGuids(prev => Array.from({ length: n }, (_, i) => prev[i] ?? ''))
     setFeeStructures(prev => prev.map(s => ({ ...s, semFees: Array.from({ length: n }, (_, i) => s.semFees[i] ?? []) })))
     setActiveAcc(a => Math.min(a, n - 1))
     setFeeAccordion(a => Math.min(a, n - 1))
@@ -1174,6 +1404,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   function addSemester() {
     setSemUnits(prev => [...prev, []])
     setSemLabels(prev => [...prev, `Semester ${prev.length + 1}`])
+    setSemGuids(prev => [...prev, ''])
     setFeeStructures(prev => prev.map(s => ({ ...s, semFees: [...s.semFees, []] })))
     setActiveAcc(semUnits.length)
   }
@@ -1181,6 +1412,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     if (semUnits.length <= 1) return
     setSemUnits(prev => prev.filter((_, i) => i !== index))
     setSemLabels(prev => prev.filter((_, i) => i !== index))
+    setSemGuids(prev => prev.filter((_, i) => i !== index))
     setFeeStructures(prev => prev.map(s => ({ ...s, semFees: s.semFees.filter((_, i) => i !== index) })))
     setActiveAcc(a => (a >= index && a > 0 ? a - 1 : a))
     setFeeAccordion(a => (a >= index && a > 0 ? a - 1 : a))
@@ -1243,11 +1475,26 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         </div>
 
         <div className="prog-steps">
-          <div className={`prog-step${step === 1 ? ' active' : ''}`}><span className="prog-step-num">1</span><span>Programme Details</span></div>
+          <div
+            className={`prog-step${step === 1 ? ' active' : ''}`}
+            onClick={() => setStep(1)}
+          >
+            <span className="prog-step-num">1</span><span>Programme Details</span>
+          </div>
           <div className="prog-step-line"></div>
-          <div className={`prog-step${step === 2 ? ' active' : ''}`}><span className="prog-step-num">2</span><span>Course Unit Allocation</span></div>
+          <div
+            className={`prog-step${step === 2 ? ' active' : ''}`}
+            onClick={() => setStep(2)}
+          >
+            <span className="prog-step-num">2</span><span>Course Unit Allocation</span>
+          </div>
           <div className="prog-step-line"></div>
-          <div className={`prog-step${step === 3 ? ' active' : ''}`}><span className="prog-step-num">3</span><span>Semester-wise Fee Structure</span></div>
+          <div
+            className={`prog-step${step === 3 ? ' active' : ''}`}
+            onClick={() => setStep(3)}
+          >
+            <span className="prog-step-num">3</span><span>Semester-wise Fee Structure</span>
+          </div>
         </div>
 
         {step !== 2 && (
@@ -1286,10 +1533,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   />
                   {step1Errors.programName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programName}</p>}
                 </div>
-                {/* Group and Level moved directly under Code/Name (was previously split
-                    apart by No. of Course Units sitting between them) so the two
-                    required pickers that most affect the rest of the form read as one
-                    connected block instead of getting broken up by an unrelated field. */}
+
                 <div className="fg">
                   <div className="lbl">Programme Group <span className="req">*</span></div>
                   <SearchSelect
@@ -1301,11 +1545,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   {step1Errors.programGroupGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programGroupGuid}</p>}
                 </div>
                 <div className="fg span2">
-                  {/* Inline style, not the `flex` utility class — .lbl's own
-                      `display: block` (globals.css) loads after Tailwind's
-                      utility layer in this stylesheet, so a `flex` class here
-                      would lose that cascade tie; an inline style always wins
-                      regardless of source order. */}
                   <div className="lbl" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     Programme Level <span className="req">*</span>
                     <span ref={levelInfoRef} style={{ position: 'relative', display: 'inline-flex' }}>
@@ -1331,10 +1570,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     <span className="lvl-chip"><span className="lvl-chip-lbl">Min. Credits</span><span className="lvl-chip-val">{selectedProgramLevel?.minCreditLoad ?? '—'}</span></span>
                   </div>
                 </div>
-                {/* Not mandatory per Program_Master_Change_Requests_Final.md — when
-                    left blank, Course Unit Allocation has no count to enforce;
-                    when filled in, it's validated there against the actual
-                    number of course units added (see the Step 2 count check). */}
+
                 <div className="fg">
                   <div className="lbl">No. of Course Units</div>
                   <input
@@ -1345,20 +1581,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     value={unitCount}
                     onChange={e => setUnitCount(e.target.value)}
                   />
-                </div>
-                <div className="fg">
-                  <div className="lbl">Faculty <span className="req">*</span></div>
-                  <SearchSelect
-                    placeholder="— Select faculty —"
-                    value={facultyGuid}
-                    onChange={v => { setFacultyGuid(v); if (step1Errors.facultyGuid) setStep1Errors(p => ({ ...p, facultyGuid: '' })) }}
-                    options={facultyOptions}
-                  />
-                  {step1Errors.facultyGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.facultyGuid}</p>}
-                </div>
-                <div className="fg">
-                  <div className="lbl">Campus</div>
-                  <input className="ctrl" type="text" value={selectedFaculty?.campusName ?? ''} placeholder="Derived from Faculty" disabled />
                 </div>
                 <div className="fg span2">
                   <div className="lbl">Application Fee &amp; Late Fee <span className="req">*</span></div>
@@ -1397,22 +1619,18 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.appFee || step1Errors.lateFee || step1Errors.currencyCode}</p>
                   )}
                 </div>
-                {/* Not mandatory per Program_Master_Change_Requests_Final.md — no
-                    required marker, no validation. */}
+
                 <div className="fg">
-                  <div className="lbl">Accreditation Date</div>
-                  <DatePicker
-                    value={dateAcc}
-                    onChange={setDateAcc}
+                  <div className="lbl">Intake</div>
+                  <SearchSelect
+                    placeholder="— Select intake —"
+                    value={intakeGuid}
+                    options={programIntakeOptions}
+                    onChange={v => { setIntakeGuid(v); if (step1Errors.intakeGuid) setStep1Errors(p => ({ ...p, intakeGuid: '' })) }}
                   />
+                  {step1Errors.intakeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.intakeGuid}</p>}
                 </div>
-                {/* Accreditation Expiry Date — commented out per request.
-                <div className="fg m-0"><div className="lbl">Accreditation Expiry Date</div><input className="ctrl" type="date" /></div>
-                */}
-                {/* Not mandatory per Program_Master_Change_Requests_Final.md — no
-                    required marker, no validation. Still feeds Course Unit
-                    Allocation's per-unit Specialization picker options. */}
-                <div className="fg">
+                <div className="fg span2">
                   <div className="lbl">Specialization(s)</div>
                   <MultiSelect
                     placeholder="— Select specialization(s) —"
@@ -1426,32 +1644,47 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   />
                   <div style={{ fontSize: 11, color: 'var(--g400)', marginTop: 4 }}>Every specialization this programme offers — picked per course unit in Course Unit Allocation.</div>
                 </div>
-                {/* Intake dropdown removed per Program_Master_Change_Requests_Final.md
-                    — intakeGuid is auto-filled from the Current Academic Intake
-                    instead (see the effect below), same pattern as the standalone
-                    Fee Structure page's Create mode. CONFIRMED broken as originally
-                    shipped: with no picker at all, a live environment where no intake
-                    is flagged currentIntake left intakeGuid permanently empty with no
-                    way to fix it — Create was silently blocked. Falls back to an
-                    editable picker in exactly that case (Edit mode is unaffected —
-                    it already carries intakeGuid through from fullDetails). */}
-                {mode !== 'edit' && !currentAcademicIntake && (
-                  <div className="fg">
-                    <div className="lbl">Intake</div>
-                    <SearchSelect
-                      placeholder="— Select intake —"
-                      value={intakeGuid}
-                      options={programIntakeOptions}
-                      onChange={setIntakeGuid}
-                    />
+
+                <div className="fg">
+                  <div className="lbl">Status <span className="req">*</span></div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, height: 38 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                      <input
+                        type="radio"
+                        name="pgmStatus"
+                        checked={pgmStatus === true}
+                        onChange={() => setPgmStatus(true)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span className="badge badge-green" style={{ fontSize: 11.5 }}>Active</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                      <input
+                        type="radio"
+                        name="pgmStatus"
+                        checked={pgmStatus === false}
+                        onChange={() => setPgmStatus(false)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span className="badge badge-grey" style={{ fontSize: 11.5 }}>Inactive</span>
+                    </label>
                   </div>
-                )}
-                <div className="fg span3">
-                  <div className="lbl">Accreditation Letter</div>
-                  <div className="file-zone p-[14px]">
-                    <input type="file" accept=".pdf" onChange={e => setAccLetterFile(e.target.files?.[0] ?? null)} />
-                    <div className="file-zone-icon"><i className="lni lni-files"></i></div>
-                    <p>{accLetterFile ? accLetterFile.name : 'Upload NCHE / UVTOP accreditation letter (PDF)'}</p>
+                </div>
+
+                <div className="fg span2">
+                  <div className="lbl">Internal Assessment</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, userSelect: 'none' }}>
+                      <input
+                        type="checkbox"
+                        checked={noIa}
+                        onChange={e => setNoIa(e.target.checked)}
+                        style={{ width: 17, height: 17, cursor: 'pointer' }}
+                      />
+                      <span style={{ fontWeight: 600, color: noIa ? 'var(--red)' : 'var(--g700)' }}>
+                        {noIa ? 'No IA (Internal Assessment Excluded)' : 'Include Internal Assessment (IA Active)'}
+                      </span>
+                    </label>
                   </div>
                 </div>
               </div>
@@ -1954,20 +2187,53 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
               <i className="lni lni-arrow-left"></i> Back
             </button>
           )}
-          {step < 3 && (
+          {mode === 'edit' && step === 1 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-neu"
+                onClick={() => {
+                  if (!validateStep1()) return
+                  setStep(2)
+                }}
+              >
+                Next <i className="lni lni-arrow-right"></i>
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={isSaving}
+                onClick={handleStep1Update}
+              >
+                <i className="lni lni-checkmark"></i> {updateProgramStep1.isPending ? 'Updating…' : 'Update Basic Details'}
+              </button>
+            </div>
+          ) : mode === 'edit' && step === 2 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-neu"
+                onClick={() => {
+                  if (!validateStep2()) return
+                  setStep(3)
+                }}
+              >
+                Next <i className="lni lni-arrow-right"></i>
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={isSaving}
+                onClick={handleStep2Update}
+              >
+                <i className="lni lni-checkmark"></i> {updateProgramCourseUnits.isPending ? 'Updating…' : 'Update Course Units'}
+              </button>
+            </div>
+          ) : step < 3 && (
             <button
               className="btn btn-primary"
               disabled={isSaving}
               onClick={() => {
-                // Edit mode: pure local validation + advance, same as
-                // before — the whole programme is still saved in one shot
-                // at Step 3 via updateProgramMasterComplete.
-                if (mode === 'edit') {
-                  if (step === 1 && !validateStep1()) return
-                  if (step === 2 && !validateStep2()) return
-                  setStep(s => s + 1)
-                  return
-                }
                 // Add mode: each step's own API call per
                 // post-program-master.md / post-program-course-units.md.
                 if (step === 1) handleStep1Continue()
@@ -1981,8 +2247,15 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             <span style={{ color: 'var(--red)', fontSize: 12 }}>Select a currency and ledger for every fee item before saving</span>
           )}
           {step === 3 && (
-            <button className="btn btn-primary" onClick={handleFinalSubmit} disabled={!allFeeComplete || isSaving}>
-              <i className="lni lni-checkmark"></i> {isSaving ? 'Saving…' : `${mode === 'edit' ? 'Update' : 'Save'} Programme`}
+            <button
+              className="btn btn-primary"
+              onClick={mode === 'edit' ? handleStep3Update : handleFinalSubmit}
+              disabled={!allFeeComplete || isSaving}
+            >
+              <i className="lni lni-checkmark"></i>{' '}
+              {mode === 'edit'
+                ? (updateFeeStructureComplete.isPending ? 'Updating…' : 'Update Fee Structure')
+                : (isSaving ? 'Saving…' : 'Save Programme')}
             </button>
           )}
         </div>
