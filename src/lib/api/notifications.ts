@@ -38,6 +38,7 @@ const FALLBACK_PAGE_FOR_ENTITY: Record<string, string> = {
   Batch: '/academic/batch-management',
   CourseUnit: '/academic/course-units',
   ProgramApproval: '/academic/programme-master',
+  Program: '/academic/programme-master',
   FeeStructure: '/academic/fee-structure',
   Timetable: '/academic/timetable',
 }
@@ -54,12 +55,14 @@ const MODULE_FOR_ENTITY: Record<string, string> = {
   Batch: 'academic',
   CourseUnit: 'academic',
   ProgramApproval: 'academic',
+  Program: 'academic',
   FeeStructure: 'academic',
   Timetable: 'academic',
 }
 
 export function notificationHref(n: NotificationItem): string {
   if (!n.pageUrl) return FALLBACK_PAGE_FOR_ENTITY[n.entityType] ?? '/notifications'
+  if (n.pageUrl.startsWith('/')) return n.pageUrl
   const module = MODULE_FOR_ENTITY[n.entityType] ?? 'academic'
   return `/${module}/${n.pageUrl}`
 }
@@ -117,14 +120,34 @@ export function getNotifications(params: NotificationListParams = {}): Promise<N
   const qs = new URLSearchParams({ page: String(page), size: String(size) })
   if (search?.trim()) qs.set('search', search.trim())
   if (unreadOnly) qs.set('unreadOnly', 'true')
-  return apiGet<{ items: NotificationItem[]; totalCount: number } | null>(`/api/v1/notifications?${qs}`)
+  return apiGet<any>(`/api/v1/notifications?${qs}`)
     .then(data => {
-      if (data && Array.isArray(data.items)) return data
-      // Defensive: the backend envelope's `data` didn't come back as
-      // `{ items, totalCount }` (e.g. `data` is the array itself, or
-      // `items` is missing/misnamed). Never let a shape mismatch crash the
-      // page by handing `undefined` into `items` state.
-      // console.warn('[notifications] unexpected /api/v1/notifications response shape:', data)
+      if (!data) return { items: [], totalCount: 0 }
+
+      // Handle the new grouped response shape: { groups: [...], totalNotificationCount: number }
+      if (Array.isArray(data.groups)) {
+        const allItems = data.groups.flatMap((g: any) => g.items || [])
+        // Sort newest first, as flattening groups might mix up the chronological order
+        allItems.sort((a: any, b: any) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime())
+        
+        const total = unreadOnly 
+          ? (data.totalUnreadCount ?? allItems.length)
+          : (data.totalNotificationCount ?? allItems.length)
+
+        return {
+          items: allItems,
+          totalCount: total
+        }
+      }
+
+      // Fallback for old/flat shape
+      if (Array.isArray(data.items)) {
+        return {
+          items: data.items,
+          totalCount: data.totalCount ?? data.items.length
+        }
+      }
+
       return { items: [], totalCount: 0 }
     })
 }
@@ -133,13 +156,13 @@ export function getNotifications(params: NotificationListParams = {}): Promise<N
 // the caller should set the badge from this response rather than issuing a
 // second unread-count call. A 404 (already read, or a double-click race) is
 // swallowed by the caller, not here — see useMarkNotificationRead.
-export function markNotificationRead(guid: string): Promise<number> {
+export function markNotificationRead(guid: string): Promise<number | undefined> {
   if (MOCK_AUTH) {
     const n = mockNotifications.find(x => x.notificationGuid === guid)
     if (n) n.isRead = true
     return Promise.resolve(mockNotifications.filter(x => !x.isRead).length)
   }
-  return apiPost<number | null>(`/api/v1/notifications/${guid}/read`, {}).then(n => n ?? 0)
+  return apiPost<number | null>(`/api/v1/notifications/${guid}/read`, {}).then(n => n == null ? undefined : n)
 }
 
 // Returns rows changed — 0 is a normal outcome (nothing was unread).
