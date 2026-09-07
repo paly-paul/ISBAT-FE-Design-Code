@@ -145,9 +145,15 @@ export default function RegistrationPage() {
                 <tr key={r.applicationGuid} className="border-b border-g100 hover:bg-g50">
                   <td>
                     <ActionMenu>
-                      {r.regPaid
-                        ? (permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => handleRegister(r.applicationGuid)}><i className="lni lni-graduation" /> Register</button>)
-                        : <button className="btn btn-neu btn-sm" disabled>Awaiting Payment</button>}
+                      {r.regPaid ? (
+                        <button className="btn btn-neu btn-sm" onClick={() => handleRegister(r.applicationGuid)}>
+                          <i className="lni lni-graduation" /> Register
+                        </button>
+                      ) : (
+                        <button className="btn btn-neu btn-sm" disabled>
+                          Awaiting Payment
+                        </button>
+                      )}
                     </ActionMenu>
                   </td>
                   <td className="py-2.5 font-mono text-xs text-b600">{r.appRefNo}</td>

@@ -4952,15 +4952,22 @@ body:has(.modal-overlay.open) {
 }
 
 .toast.toast-warn {
-  background: var(--amber)
+  background: var(--amber);
 }
 
-.toast.toast-success {
-  background: var(--green)
+.toast.toast-info {
+  background: var(--b700);
 }
 
-.toast.toast-danger {
-  background: var(--red)
+.toast.toast-success,
+.toast.toast-ok {
+  background: var(--green);
+}
+
+.toast.toast-danger,
+.toast.toast-error,
+.toast.toast-err {
+  background: var(--red);
 }
 
 /* ═══════════════════════════════════════
