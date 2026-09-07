@@ -40,7 +40,7 @@ export function useNotificationsList(params: NotificationListParams, enabled = t
     queryKey: [...LIST_KEY_BASE, params],
     queryFn: () => getNotifications(params),
     enabled,
-    staleTime: 0,
+    staleTime: 5000,
   })
 }
 
@@ -66,6 +66,19 @@ export function useMarkNotificationRead() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (guid: string) => markNotificationRead(guid),
+    onMutate: async (guid) => {
+      await queryClient.cancelQueries({ queryKey: UNREAD_COUNT_KEY })
+      await queryClient.cancelQueries({ queryKey: LIST_KEY_BASE })
+      await queryClient.cancelQueries({ queryKey: PREVIEW_KEY })
+
+      queryClient.setQueryData<number>(UNREAD_COUNT_KEY, old => Math.max(0, (old ?? 0) - 1))
+      queryClient.setQueriesData<NotificationListResult>({ queryKey: LIST_KEY_BASE }, old =>
+        old ? { ...old, items: old.items.map(n => (n.notificationGuid === guid ? { ...n, isRead: true } : n)) } : old,
+      )
+      queryClient.setQueryData<NotificationListResult>(PREVIEW_KEY, old =>
+        old ? { items: old.items.filter(n => n.notificationGuid !== guid), totalCount: Math.max(0, old.totalCount - 1) } : old,
+      )
+    },
     // The response *is* the new badge value — set it directly rather than
     // refetching unread-count, per the doc. Every call site fires
     // .mutate() and navigates immediately without awaiting it, so a 404
@@ -73,15 +86,10 @@ export function useMarkNotificationRead() {
     // shows an error — it just leaves the badge wherever it was, matching
     // "not an error worth showing the user".
     onSuccess: (remaining, guid) => {
-      queryClient.setQueryData(UNREAD_COUNT_KEY, remaining)
-      queryClient.setQueriesData<NotificationListResult>({ queryKey: LIST_KEY_BASE }, old =>
-        old ? { ...old, items: old.items.map(n => (n.notificationGuid === guid ? { ...n, isRead: true } : n)) } : old,
-      )
-      // The preview is unread-only, so a now-read item no longer belongs in
-      // it — drop it rather than flipping its isRead flag.
-      queryClient.setQueryData<NotificationListResult>(PREVIEW_KEY, old =>
-        old ? { items: old.items.filter(n => n.notificationGuid !== guid), totalCount: Math.max(0, old.totalCount - 1) } : old,
-      )
+      // Sometimes the backend response shape varies; only update if we got a valid number
+      if (typeof remaining === 'number') {
+        queryClient.setQueryData(UNREAD_COUNT_KEY, remaining)
+      }
     },
   })
 }
