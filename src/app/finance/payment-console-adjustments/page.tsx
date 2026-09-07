@@ -68,15 +68,20 @@ function todayYmd() {
 // as an identical copy rather than a shared import — the two pages don't
 // currently share a module for page-local helpers like this one, matching
 // fmtAmt/applicantName/etc. above already being duplicated the same way).
-// exRate is "this currency's units per 1 unit of the base currency"
-// (Currency Master's isDefault=1 row) — converting A→B always routes
-// through the base: amountInBase = amount / rateA, amountInB =
-// amountInBase * rateB. Returns null (not a fallback guess) when either
-// currency's rate can't be resolved, INCLUDING a rate of exactly 0 — that's
-// never a real "no rate available" (no currency trades at 0 units per 1
-// base), it's what the by-date board can return for a currency nobody has
-// entered today's rate for yet, and amount / 0 would otherwise produce
-// Infinity (then NaN once totalled) instead of a clean "can't convert".
+// exRate is base-currency units per 1 unit of the given currency (Currency
+// Master's isDefault=1 row is the base) — confirmed via a real
+// get-exchange-rate-exists response: USD came back as exRate: 3774.90 and
+// KSH as exRate: 29.16, i.e. exactly "1 {currency} = {exRate} {base}" (real
+// UGX/USD, UGX/KSH rates), not the tiny fraction ("this currency's units
+// per 1 base") this used to assume — see Payment Console's own page.tsx for
+// the same fix and the full story. Converting A→B always routes through the
+// base: amountInBase = amount * rateA, amountInB = amountInBase / rateB.
+// Returns null (not a fallback guess) when either currency's rate can't be
+// resolved, INCLUDING a rate of exactly 0 — that's never a real "no rate
+// available" (no currency trades at 0 units per 1 base), it's what the
+// by-date board can return for a currency nobody has entered today's rate
+// for yet, and dividing by a 0 toRate would otherwise produce Infinity
+// (then NaN once totalled) instead of a clean "can't convert".
 function convertAmount(
   amount: number,
   fromGuid: string | null | undefined,
@@ -89,7 +94,7 @@ function convertAmount(
   const fromRate = fromGuid === baseGuid ? 1 : ratesByGuid.get(fromGuid)
   const toRate = toGuid === baseGuid ? 1 : ratesByGuid.get(toGuid)
   if (fromRate == null || toRate == null || fromRate <= 0 || toRate <= 0) return null
-  return (amount / fromRate) * toRate
+  return (amount * fromRate) / toRate
 }
 
 export default function PaymentConsoleAdjustmentsPage() {

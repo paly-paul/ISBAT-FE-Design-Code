@@ -53,11 +53,22 @@ function Delta({ current, previous }: { current: number; previous: number | null
   if (previous == null) return <div className="text-g400" style={{ fontSize: 11 }}>No prior rate</div>
   const diff = current - previous
   const pct = previous ? (diff / previous) * 100 : 0
-  if (Math.abs(diff) < 0.005) return <div className="text-muted" style={{ fontSize: 11 }}>No change</div>
+  // Was a fixed `Math.abs(diff) < 0.005` — calibrated for this page's old
+  // large-number display (raw exRate, e.g. ~3800), where 0.005 UGX really
+  // was negligible noise. Now that this page shows the inverted "1 UGX =
+  // ___ {currency}" fraction (e.g. ~0.0002-0.03), that same absolute
+  // threshold swallows a real, large move as "No change" — confirmed live:
+  // USD going from 0.000909 to 0.0002600002 (a ~71% drop) still showed "No
+  // change" since the raw difference (~0.00065) stayed under 0.005. A
+  // percentage threshold scales correctly regardless of the numbers'
+  // magnitude, unlike a fixed absolute one. diff itself is now shown to 6dp
+  // (matching this page's own maximumFractionDigits: 6 elsewhere) instead
+  // of 2dp, which rounded every one of these small fractions to "0.00".
+  if (Math.abs(pct) < 0.5) return <div className="text-muted" style={{ fontSize: 11 }}>No change</div>
   const up = diff > 0
   return (
     <div className={up ? 'text-green' : 'text-red'} style={{ fontSize: 11 }}>
-      {up ? '↑' : '↓'} {up ? '+' : ''}{diff.toFixed(2)} ({up ? '+' : ''}{pct.toFixed(1)}%)
+      {up ? '↑' : '↓'} {up ? '+' : ''}{diff.toFixed(6)} ({up ? '+' : ''}{pct.toFixed(1)}%)
     </div>
   )
 }
@@ -79,6 +90,14 @@ export default function Page() {
 
   const { data: ratesForDate = EMPTY_RATES, isLoading: isRatesLoading, isError: isRatesError, error: ratesError } = useExchangeRatesByDate(rateDate)
   const { data: ratesForPrevDate = EMPTY_RATES } = useExchangeRatesByDate(addDays(rateDate, -1))
+  // Kept as the raw wire value (base units per 1 unit of the currency —
+  // confirmed via a real get-exchange-rate-exists response: USD came back
+  // as exRate: 3774.90, i.e. "1 USD = 3774.90 UGX", not a tiny fraction).
+  // This page displays/collects the reverse direction ("1 UGX = ___ USD")
+  // per request, so every read site below inverts it (1 / rawExRate) for
+  // display, and every write site inverts the typed value back (1 / typed)
+  // before it hits the API — the stored/sent value itself never changes
+  // meaning, only what this one page shows for it.
   const prevRateByCurrency = new Map(ratesForPrevDate.map(r => [r.currencyGuid, r.exRate]))
   const existingByCurrency = new Map(ratesForDate.map(r => [r.currencyGuid, r]))
 
@@ -86,11 +105,11 @@ export default function Page() {
   // server's rates for rateDate whenever the selected date changes or that
   // fetch resolves (e.g. right after a save invalidates it), so the field
   // reflects what's actually saved rather than staying stuck on a stale
-  // typed value.
+  // typed value. Displayed inverted (1 / exRate) — see the note above.
   const [rateInputs, setRateInputs] = useState<Record<string, string>>({})
   useEffect(() => {
     const map: Record<string, string> = {}
-    ratesForDate.forEach(r => { map[r.currencyGuid] = String(r.exRate) })
+    ratesForDate.forEach(r => { if (r.exRate) map[r.currencyGuid] = String(1 / r.exRate) })
     setRateInputs(map)
   }, [ratesForDate, rateDate])
 
@@ -103,6 +122,10 @@ export default function Page() {
     const raw = rateInputs[currencyGuid] ?? ''
     const num = parseFloat(raw)
     if (!raw || !(num > 0)) { showToast(`Enter a valid rate for ${currencyCode}.`, 'warn'); return }
+    // Invert the "1 UGX = ___ {code}" figure typed here back into the API's
+    // own "1 {code} = {exRate} UGX" convention before saving — see the
+    // rateInputs effect above for why.
+    const apiExRate = 1 / num
     const existing = existingByCurrency.get(currencyGuid)
     try {
       if (existing) {
@@ -112,9 +135,9 @@ export default function Page() {
         // here with existing && !isToday shouldn't normally happen — this
         // is a last-resort guard against a race (date changed mid-save).
         if (!isToday) { showToast('Only today’s exchange rates can be updated. Delete the historical rate below and re-enter it instead.', 'warn'); return }
-        await updateMutation.mutateAsync({ guid: existing.exchangeRateGuid, input: { exRate: num, exDate: rateDate } })
+        await updateMutation.mutateAsync({ guid: existing.exchangeRateGuid, input: { exRate: apiExRate, exDate: rateDate } })
       } else {
-        await createMutation.mutateAsync({ currencyGuid, exRate: num, exDate: rateDate })
+        await createMutation.mutateAsync({ currencyGuid, exRate: apiExRate, exDate: rateDate })
       }
       showToast(`${currencyCode} rate saved.`, 'success')
     } catch (err) {
@@ -137,11 +160,12 @@ export default function Page() {
     let successCount = 0
     const failures: string[] = []
     for (const c of targets) {
-      const num = parseFloat(rateInputs[c.currencyGuid])
+      // Same inversion as saveRate above — see the rateInputs effect's note.
+      const apiExRate = 1 / parseFloat(rateInputs[c.currencyGuid])
       const existing = existingByCurrency.get(c.currencyGuid)
       try {
-        if (existing) await updateMutation.mutateAsync({ guid: existing.exchangeRateGuid, input: { exRate: num, exDate: rateDate } })
-        else await createMutation.mutateAsync({ currencyGuid: c.currencyGuid, exRate: num, exDate: rateDate })
+        if (existing) await updateMutation.mutateAsync({ guid: existing.exchangeRateGuid, input: { exRate: apiExRate, exDate: rateDate } })
+        else await createMutation.mutateAsync({ currencyGuid: c.currencyGuid, exRate: apiExRate, exDate: rateDate })
         successCount++
       } catch (err) {
         failures.push(`${c.currencyCode}: ${err instanceof Error ? err.message : 'failed'}`)
@@ -242,14 +266,17 @@ export default function Page() {
                 {rateCurrencies.map(c => {
                   const existing = existingByCurrency.get(c.currencyGuid)
                   const locked = !!existing && !isToday
+                  // Displayed inverted (1 / rawExRate) — see the note on
+                  // prevRateByCurrency above for why.
+                  const prevDisplay = prevRateByCurrency.has(c.currencyGuid) ? 1 / prevRateByCurrency.get(c.currencyGuid)! : null
                   return (
                     <div key={c.currencyGuid} className="flex items-center gap-3 flex-wrap p-[14px] border border-[1.5px] border-b200 rounded-[var(--rsm)] bg-b50">
                       <span className="badge badge-gold" style={{ fontSize: 14, padding: '8px 12px' }}>{c.currencyCode}</span>
                       <div className="flex-1" style={{ minWidth: 160 }}>
-                        <div className="lbl">{c.currencyName} per 1 {baseCurrency?.currencyCode ?? 'base'} <span className="req">*</span></div>
+                        <div className="lbl">1 {baseCurrency?.currencyCode ?? 'base'} = ___ {c.currencyCode} <span className="req">*</span></div>
                         {locked ? (
                           <>
-                            <div className="font-mono font-extrabold text-g700" style={{ fontSize: 22 }}>{existing.exRate.toLocaleString(undefined, { maximumFractionDigits: 6 })}</div>
+                            <div className="font-mono font-extrabold text-g700" style={{ fontSize: 22 }}>{(1 / existing.exRate).toLocaleString(undefined, { maximumFractionDigits: 6 })}</div>
                             <div className="text-g400" style={{ fontSize: 11 }}>
                               Historical rate already set — only today’s rates can be edited. Delete it below (History panel) to change.
                             </div>
@@ -269,8 +296,8 @@ export default function Page() {
                         <div className="flex flex-col items-end gap-1">
                           <div className="text-right">
                             <div className="text-g400" style={{ fontSize: 10.5 }}>Yesterday</div>
-                            <div className="font-bold text-g500">{prevRateByCurrency.has(c.currencyGuid) ? prevRateByCurrency.get(c.currencyGuid)!.toLocaleString(undefined, { maximumFractionDigits: 6 }) : '—'}</div>
-                            <Delta current={parseFloat(rateInputs[c.currencyGuid] ?? '') || 0} previous={prevRateByCurrency.get(c.currencyGuid) ?? null} />
+                            <div className="font-bold text-g500">{prevDisplay != null ? prevDisplay.toLocaleString(undefined, { maximumFractionDigits: 6 }) : '—'}</div>
+                            <Delta current={parseFloat(rateInputs[c.currencyGuid] ?? '') || 0} previous={prevDisplay} />
                           </div>
                           <button className="btn btn-neu btn-sm" disabled={isSaving} onClick={() => saveRate(c.currencyGuid, c.currencyCode)}>
                             <i className="lni lni-save"></i> {existing ? 'Update' : 'Save'}
@@ -315,13 +342,16 @@ export default function Page() {
               <>
                 <ScrollTable>
                   <table>
-                    <thead><tr><th>Date</th><th>Currency</th><th>Rate</th><th></th></tr></thead>
+                    <thead><tr><th>Date</th><th>Currency</th><th>Rate (1 {baseCurrency?.currencyCode ?? 'base'} = )</th><th></th></tr></thead>
                     <tbody>
                       {historyItems.map(r => (
                         <tr key={r.exchangeRateGuid}>
                           <td>{toDisplayDate(r.exDate.slice(0, 10))}</td>
                           <td><span className="badge badge-gold">{r.currencyCode}</span></td>
-                          <td className="font-mono font-bold">{r.exRate.toLocaleString(undefined, { maximumFractionDigits: 6 })}</td>
+                          {/* Displayed inverted (1 / rawExRate) — same "1 UGX
+                              = ___ {code}" direction as the entry form above,
+                              see prevRateByCurrency's own note for why. */}
+                          <td className="font-mono font-bold">{r.exRate ? (1 / r.exRate).toLocaleString(undefined, { maximumFractionDigits: 6 }) : '—'}</td>
                           <td>
                             <button
                               className="btn btn-neu btn-sm"

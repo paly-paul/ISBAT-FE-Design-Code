@@ -13,7 +13,8 @@ import { useFaculties } from '@/hooks/config/useFaculties'
 import { useCurrencies } from '@/hooks/finance/useCurrencies'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useStreams } from '@/hooks/config/useStreams'
-import { useAllCourseUnits, useCourseUnit } from '@/hooks/academic/useCourseUnits'
+import { useCourseUnit, useCourseUnitsByGuids } from '@/hooks/academic/useCourseUnits'
+import { CourseUnitSearchPicker, CourseUnitPickOption } from '@/components/CourseUnitSearchPicker'
 import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { useUnitTypes } from '@/hooks/config/useUnitTypes'
 import { useUnitCategories } from '@/hooks/config/useUnitCategories'
@@ -270,7 +271,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // removeSemester below). semLabels is the display name per slot — generic
   // "Semester N" until Edit mode's real semName data replaces it.
   const [semUnits, setSemUnits]     = useState<SemUnits>(() => [[]])
-  const [pendingSel, setPendingSel] = useState<string[]>(() => [''])
   const [semLabels, setSemLabels]   = useState<string[]>(() => ['Semester 1'])
   const [activeAcc, setActiveAcc]   = useState<number>(0)
   // Which course unit's Syllabus/Outline/Taught By detail panel is expanded
@@ -378,17 +378,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // Step 2's per-semester picker only offers what was picked in Step 1.
   const semesterStreamOptions = streamOptions.filter(o => streamGuids.includes(o.value))
 
-  const { data: courseUnits = [] } = useAllCourseUnits()
-  const courseUnitOptions = courseUnits.map(u => ({
-    value: u.courseUnitGuid,
-    // "cr" read ambiguously as "crore" (Indian numbering, 10 million) rather
-    // than "credit" — spelled out and pluralized, same convention as the
-    // semester sidebar's own credit total below.
-    label: `${u.courseUnitCode} — ${u.courseUnitName} (${u.maxCredits} credit${u.maxCredits !== 1 ? 's' : ''})`,
-    code: u.courseUnitCode,
-    name: u.courseUnitName,
-    credits: u.maxCredits,
-  }))
 
   // Syllabus/Outline/Taught By detail panel (Step 2's "Additional Feature")
   // — fetches the full CourseUnit (syllabus + outlines[], each topic
@@ -446,6 +435,16 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // endpoint silently omits (confirmed via a real programme: semCount=6 but
   // program-course-units only returned rows for 1 of them).
   const { data: programCourseUnitRows = [] } = useProgramCourseUnits(programGuid ?? null, isOpen && mode === 'edit' && !!programGuid)
+
+  // maxCredits isn't carried on fullDetails.programUnits/programCourseUnitRows
+  // (they only have courseUnitCode/courseUnitName) — resolved here via a
+  // small batched by-guid lookup scoped to exactly this programme's own
+  // course units, not a full-table preload. See useCourseUnitsByGuids' own
+  // comment for why that distinction matters.
+  const courseUnitsByGuid = useCourseUnitsByGuids([
+    ...fullDetails?.programUnits.map(u => u.courseUnitGuid) ?? [],
+    ...programCourseUnitRows.map(r => r.courseUnitGuid),
+  ])
 
   useEffect(() => {
     // isOpen has to gate this (not just be an input to it) — react-query
@@ -511,7 +510,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       fullDetails.programUnits.forEach(u => {
         const si = u.semCode - 1
         if (si < 0 || si >= semCount) return
-        const cu = courseUnits.find(c => c.courseUnitGuid === u.courseUnitGuid)
+        const cu = courseUnitsByGuid.get(u.courseUnitGuid)
         units[si].push({
           id: nextCUId++,
           guid: u.courseUnitGuid,
@@ -544,7 +543,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         programCourseUnitRows.forEach(r => {
           const si = fallbackSemesters.findIndex(s => s.semesterGuid === r.semesterGuid)
           if (si < 0) return
-          const cu = courseUnits.find(c => c.courseUnitGuid === r.courseUnitGuid)
+          const cu = courseUnitsByGuid.get(r.courseUnitGuid)
           const detail = fullDetails.programUnits.find(u => u.courseUnitGuid === r.courseUnitGuid)
           units[si].push({
             id: nextCUId++,
@@ -566,7 +565,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         fullDetails.programUnits.forEach(u => {
           const si = u.semCode - 1
           if (si < 0 || si >= semCount) return
-          const cu = courseUnits.find(c => c.courseUnitGuid === u.courseUnitGuid)
+          const cu = courseUnitsByGuid.get(u.courseUnitGuid)
           units[si].push({
             id: nextCUId++,
             guid: u.courseUnitGuid,
@@ -583,7 +582,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     }
     setSemUnits(units)
     setSemLabels(labels)
-    setPendingSel(Array(semCount).fill(''))
 
     const structures: FeeStructure[] = fullDetails.feeStructures.length > 0
       ? fullDetails.feeStructures.map(s => {
@@ -843,7 +841,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setFeeStructures(makeDefaultFeeStructures(1))
     setActiveFeeIdx(0); setFeeAccordion(0); setActiveAcc(0); setCopySourceId('')
     setSemUnits([[]])
-    setPendingSel([''])
     setSemLabels(['Semester 1'])
     setProgramCode(''); setProgramName(''); setProgramGroupGuid(''); setProgramLevelGuid('')
     setFacultyGuid(''); setAppFee(''); setLateFee(''); setCurrencyGuid(''); setUnitCount('')
@@ -1169,7 +1166,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   function resizeSemesters(count: number) {
     const n = Math.max(count, 1)
     setSemUnits(prev => Array.from({ length: n }, (_, i) => prev[i] ?? []))
-    setPendingSel(prev => Array.from({ length: n }, (_, i) => prev[i] ?? ''))
     setSemLabels(prev => Array.from({ length: n }, (_, i) => prev[i] ?? `Semester ${i + 1}`))
     setFeeStructures(prev => prev.map(s => ({ ...s, semFees: Array.from({ length: n }, (_, i) => s.semFees[i] ?? []) })))
     setActiveAcc(a => Math.min(a, n - 1))
@@ -1177,7 +1173,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   }
   function addSemester() {
     setSemUnits(prev => [...prev, []])
-    setPendingSel(prev => [...prev, ''])
     setSemLabels(prev => [...prev, `Semester ${prev.length + 1}`])
     setFeeStructures(prev => prev.map(s => ({ ...s, semFees: [...s.semFees, []] })))
     setActiveAcc(semUnits.length)
@@ -1185,7 +1180,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   function removeSemester(index: number) {
     if (semUnits.length <= 1) return
     setSemUnits(prev => prev.filter((_, i) => i !== index))
-    setPendingSel(prev => prev.filter((_, i) => i !== index))
     setSemLabels(prev => prev.filter((_, i) => i !== index))
     setFeeStructures(prev => prev.map(s => ({ ...s, semFees: s.semFees.filter((_, i) => i !== index) })))
     setActiveAcc(a => (a >= index && a > 0 ? a - 1 : a))
@@ -1193,13 +1187,14 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   }
 
   /* ── course unit helpers ── */
-  function addUnit(si: number, val: string) {
-    const opt = courseUnitOptions.find(u => u.value === val)
-    if (!opt) return
+  // Takes the picked option directly now (CourseUnitSearchPicker hands back
+  // the full {value, code, name, credits} row it matched, not just a guid)
+  // — there's no preloaded courseUnitOptions array to look it back up in any
+  // more, see CourseUnitSearchPicker's own comment for why.
+  function addUnit(si: number, opt: CourseUnitPickOption) {
     setSemUnits(prev => prev.map((units, i) =>
       i === si ? [...units, { id: nextCUId++, guid: opt.value, code: opt.code, name: opt.name, credits: opt.credits, unitType: '', unitCat: '', streamGuid: '' }] : units
     ))
-    setPendingSel(prev => prev.map((s, i) => i === si ? '' : s))
   }
   function removeUnit(si: number, id: number) {
     setSemUnits(prev => prev.map((units, i) =>
@@ -1805,7 +1800,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           // scoped to `units` alone), so the same unit could silently end up
           // assigned to two or more semesters with nothing to stop it.
           const assignedCodes = semUnits.flatMap(semUnitsForSem => semUnitsForSem.map(u => u.code))
-          const availableOpts = courseUnitOptions.filter(o => !assignedCodes.includes(o.code))
           return (
             <>
             {mode !== 'edit' && unitsSubmitted && (
@@ -1941,11 +1935,10 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     })}
                   </div>
                 )}
-                <SearchSelect
-                  placeholder="— Select course unit —"
-                  value={pendingSel[si]}
-                  onChange={val => addUnit(si, val)}
-                  options={availableOpts}
+                <CourseUnitSearchPicker
+                  placeholder="Search course units to add…"
+                  excludeCodes={assignedCodes}
+                  onSelect={opt => addUnit(si, opt)}
                 />
               </div>
             </div>
