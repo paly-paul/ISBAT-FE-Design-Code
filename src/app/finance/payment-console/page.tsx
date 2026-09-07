@@ -117,7 +117,16 @@ function convertAmount(
   if (fromGuid === toGuid) return amount
   const fromRate = fromGuid === baseGuid ? 1 : ratesByGuid.get(fromGuid)
   const toRate = toGuid === baseGuid ? 1 : ratesByGuid.get(toGuid)
-  if (fromRate == null || toRate == null) return null
+  // A rate of exactly 0 is never a real "no rate available" — no currency
+  // trades at 0 units per 1 base — but it slips past the `== null` check
+  // above (0 isn't null), and amount / 0 produces Infinity, which then
+  // propagates into NaN once anything downstream multiplies/subtracts it.
+  // Confirmed root cause of the "∞ Total Payable / NaN Discount" bug: a
+  // currency the cashier hasn't entered today's rate for yet (e.g. USD/KSH
+  // before the Exchange Rates bar is filled in) can come back from the
+  // by-date board as an exRate: 0 row instead of being omitted entirely.
+  // Treat it the same as a missing rate — return null so callers show "—".
+  if (fromRate == null || toRate == null || fromRate <= 0 || toRate <= 0) return null
   return (amount / fromRate) * toRate
 }
 
