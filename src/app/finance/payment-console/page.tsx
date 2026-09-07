@@ -506,19 +506,18 @@ export default function PaymentConsolePage() {
   // now (an "already set" hint), not a disable condition.
   const usdHasTodayRate = !!(usdCurrency && todayRateByCurrency.has(usdCurrency.currencyGuid))
   const kesHasTodayRate = !!(kesCurrency && todayRateByCurrency.has(kesCurrency.currencyGuid))
-  // Displays the "1 UGX = ___ {currency}" direction now (per request,
-  // 2026-09-08) — matching the dedicated Exchange Rate Management page's
-  // own convention (see that page's Delta/rateInputs notes). The raw exRate
-  // itself is confirmed to be "1 {currency} = {exRate} UGX" (a real
+  // Displays the "1 {currency} = ___ UGX" direction (reverted per request,
+  // 2026-09-08 — was briefly flipped to "1 UGX = ___ {currency}" to match
+  // the Exchange Rate Management page, then both were reverted back to
+  // this direction together). The raw exRate itself is confirmed to be
+  // exactly this: "1 {currency} = {exRate} UGX" (a real
   // get-exchange-rate-exists response: USD came back as exRate: 3774.90,
-  // i.e. 1 USD = 3774.90 UGX) — the reverse of what's shown here — so this
-  // inverts on the way in (1 / exRate) and back on the way out (1 / typed)
-  // before it hits the API, same as exchange-rates/page.tsx does. The wire
-  // value/meaning hasn't changed, only what this bar displays for it.
+  // i.e. 1 USD = 3774.90 UGX) — so this displays/saves it as-is, no
+  // inversion in either direction.
   const [rateBarInputs, setRateBarInputs] = useState<Record<string, string>>({})
   useEffect(() => {
     const map: Record<string, string> = {}
-    todayRates.forEach(r => { if (r.exRate) map[r.currencyGuid] = String(1 / r.exRate) })
+    todayRates.forEach(r => { if (r.exRate) map[r.currencyGuid] = String(r.exRate) })
     setRateBarInputs(map)
   }, [todayRates])
   const createExchangeRate = useCreateExchangeRate()
@@ -537,10 +536,9 @@ export default function PaymentConsolePage() {
       const raw = rateBarInputs[c.currencyGuid] ?? ''
       const num = parseFloat(raw)
       if (!raw || !(num > 0)) { failures.push(`${c.currencyCode}: enter a valid rate`); continue }
-      // Invert the "1 UGX = ___ {code}" figure typed here back into the
-      // API's own "1 {code} = {exRate} UGX" convention before saving — see
-      // the rateBarInputs effect above for why.
-      const apiExRate = 1 / num
+      // Saved as-is — the "1 {code} = ___ UGX" figure typed here IS the
+      // API's own exRate convention, see the rateBarInputs effect above.
+      const apiExRate = num
       const existing = todayRateByCurrency.get(c.currencyGuid)
       try {
         if (existing) await updateExchangeRate.mutateAsync({ guid: existing.exchangeRateGuid, input: { exRate: apiExRate, exDate: todayYmd() } })
@@ -966,11 +964,9 @@ export default function PaymentConsolePage() {
                 small dot badge is just a heads-up that Save will correct an
                 existing rate rather than create a new one. */}
             <div className="flex items-center gap-[6px] flex-wrap text-[var(--fs-sm)]">
-              <span className="text-muted">1 UGX =</span>
+              <span className="text-muted">1 USD =</span>
               <input
                 type="number"
-                min={0}
-                step="0.000001"
                 className="ctrl"
                 disabled={!usdCurrency}
                 placeholder={usdCurrency ? '' : 'Not configured'}
@@ -978,15 +974,13 @@ export default function PaymentConsolePage() {
                 onChange={e => usdCurrency && setRateBarInputs(prev => ({ ...prev, [usdCurrency.currencyGuid]: e.target.value }))}
                 style={{ width: 72, padding: '5px 9px', fontSize: 13, fontWeight: 700, color: 'var(--b800)' }}
               />
-              <span className="badge badge-gold">USD</span>
+              <span className="badge badge-gold">UGX</span>
               {usdHasTodayRate && <i className="lni lni-checkmark-circle text-muted" title="Today’s rate is already set — Save will update it"></i>}
             </div>
             <div className="flex items-center gap-[6px] flex-wrap text-[var(--fs-sm)]">
-              <span className="text-muted">1 UGX =</span>
+              <span className="text-muted">1 KSH =</span>
               <input
                 type="number"
-                min={0}
-                step="0.000001"
                 className="ctrl"
                 disabled={!kesCurrency}
                 placeholder={kesCurrency ? '' : 'Not configured'}
@@ -994,7 +988,7 @@ export default function PaymentConsolePage() {
                 onChange={e => kesCurrency && setRateBarInputs(prev => ({ ...prev, [kesCurrency.currencyGuid]: e.target.value }))}
                 style={{ width: 72, padding: '5px 9px', fontSize: 13, fontWeight: 700, color: 'var(--b800)' }}
               />
-              <span className="badge badge-gold">KSH</span>
+              <span className="badge badge-gold">UGX</span>
               {kesHasTodayRate && <i className="lni lni-checkmark-circle text-muted" title="Today’s rate is already set — Save will update it"></i>}
             </div>
             <div className="flex items-center gap-[7px] flex-wrap" style={{ marginLeft: 'auto' }}>

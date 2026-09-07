@@ -235,6 +235,7 @@ const mockMenu: MenuNode[] = [
     section('Course Unit Master', [
       leaf('Repetition Tag', 'reload', '/academic/repetition-tag'),
       leaf('Course Units', 'book', '/academic/course-units'),
+      leaf('Course Allocation', 'agenda', '/academic/course-allocation'),
     ]),
     section('Programme Master', [
       leaf('Programme Level', 'layers', '/academic/programme-level'),
@@ -574,6 +575,44 @@ function ensureBulkIntakeEdit(menu: MenuNode[]): MenuNode[] {
 // of Student Records if the real backend still has it registered there, and
 // this adds it into Academic Core (right after Batch Management) if the
 // backend doesn't register it there yet. Same shape as ensureBulkIntakeEdit.
+// New page, no confirmed backend yet (no menu/permission registration for
+// it) — same "patch it into the real menu client-side" pattern as
+// ensureBatchSummary etc. immediately below. Targets "Course Unit Master"
+// specifically, inserted right after "Course Units" since that's the
+// page it's most closely related to (assigning lecturers to the units
+// listed there).
+function ensureCourseAllocation(menu: MenuNode[]): MenuNode[] {
+  const acadIdx = menu.findIndex(n => n.name === 'Academic')
+  if (acadIdx === -1) return menu
+
+  const acadModule = menu[acadIdx]
+  const cuSectionIdx = acadModule.children.findIndex(c => c.name === 'Course Unit Master')
+  if (cuSectionIdx === -1) return menu
+
+  const cuSection = acadModule.children[cuSectionIdx]
+  if (cuSection.children.some(l => l.name === 'Course Allocation')) return menu
+
+  const children = [...cuSection.children]
+  const courseUnitsIdx = children.findIndex(l => l.name === 'Course Units')
+  const courseAllocationLeaf = leaf('Course Allocation', 'agenda', '/academic/course-allocation')
+
+  if (courseUnitsIdx !== -1) {
+    children.splice(courseUnitsIdx + 1, 0, courseAllocationLeaf)
+  } else {
+    children.push(courseAllocationLeaf)
+  }
+
+  const mergedSection = { ...cuSection, children }
+
+  const mergedAcad = { ...acadModule }
+  mergedAcad.children = [...acadModule.children]
+  mergedAcad.children[cuSectionIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[acadIdx] = mergedAcad
+  return mergedMenu
+}
+
 function ensureBatchSummary(menu: MenuNode[]): MenuNode[] {
   const acadIdx = menu.findIndex(n => n.name === 'Academic')
   if (acadIdx === -1) return menu
@@ -768,7 +807,8 @@ export function getMenu(): Promise<MenuResult> {
       const withStudent = mergeStudentSections(withFinance)
       const withBulkEdit = ensureBulkIntakeEdit(withStudent)
       const withBatchSummary = ensureBatchSummary(withBulkEdit)
-      const withConfig = mergeConfigSections(withBatchSummary)
+      const withCourseAllocation = ensureCourseAllocation(withBatchSummary)
+      const withConfig = mergeConfigSections(withCourseAllocation)
       const withProgApp = ensureProgrammeApproval(withConfig)
       const withAssMaster = ensureAssessmentMaster(withProgApp)
       const finalMenu = ensureResitMaster(withAssMaster)

@@ -90,14 +90,13 @@ export default function Page() {
 
   const { data: ratesForDate = EMPTY_RATES, isLoading: isRatesLoading, isError: isRatesError, error: ratesError } = useExchangeRatesByDate(rateDate)
   const { data: ratesForPrevDate = EMPTY_RATES } = useExchangeRatesByDate(addDays(rateDate, -1))
-  // Kept as the raw wire value (base units per 1 unit of the currency —
-  // confirmed via a real get-exchange-rate-exists response: USD came back
-  // as exRate: 3774.90, i.e. "1 USD = 3774.90 UGX", not a tiny fraction).
-  // This page displays/collects the reverse direction ("1 UGX = ___ USD")
-  // per request, so every read site below inverts it (1 / rawExRate) for
-  // display, and every write site inverts the typed value back (1 / typed)
-  // before it hits the API — the stored/sent value itself never changes
-  // meaning, only what this one page shows for it.
+  // exRate is the raw wire value — "1 {currency} = {exRate} {base}"
+  // (confirmed via a real get-exchange-rate-exists response: USD came back
+  // as exRate: 3774.90, i.e. 1 USD = 3774.90 UGX). Briefly flipped to show
+  // "1 UGX = ___ {currency}" instead, then reverted back to this direction
+  // (per request, 2026-09-08) together with Payment Console's own bar, so
+  // both pages agree on the same "1 {currency} = ___ UGX" convention.
+  // Displayed/saved as-is now, no inversion in either direction.
   const prevRateByCurrency = new Map(ratesForPrevDate.map(r => [r.currencyGuid, r.exRate]))
   const existingByCurrency = new Map(ratesForDate.map(r => [r.currencyGuid, r]))
 
@@ -105,11 +104,11 @@ export default function Page() {
   // server's rates for rateDate whenever the selected date changes or that
   // fetch resolves (e.g. right after a save invalidates it), so the field
   // reflects what's actually saved rather than staying stuck on a stale
-  // typed value. Displayed inverted (1 / exRate) — see the note above.
+  // typed value.
   const [rateInputs, setRateInputs] = useState<Record<string, string>>({})
   useEffect(() => {
     const map: Record<string, string> = {}
-    ratesForDate.forEach(r => { if (r.exRate) map[r.currencyGuid] = String(1 / r.exRate) })
+    ratesForDate.forEach(r => { map[r.currencyGuid] = String(r.exRate) })
     setRateInputs(map)
   }, [ratesForDate, rateDate])
 
@@ -122,10 +121,9 @@ export default function Page() {
     const raw = rateInputs[currencyGuid] ?? ''
     const num = parseFloat(raw)
     if (!raw || !(num > 0)) { showToast(`Enter a valid rate for ${currencyCode}.`, 'warn'); return }
-    // Invert the "1 UGX = ___ {code}" figure typed here back into the API's
-    // own "1 {code} = {exRate} UGX" convention before saving — see the
-    // rateInputs effect above for why.
-    const apiExRate = 1 / num
+    // Saved as-is — the "1 {code} = ___ UGX" figure typed here IS the API's
+    // own exRate convention, see the rateInputs effect above.
+    const apiExRate = num
     const existing = existingByCurrency.get(currencyGuid)
     try {
       if (existing) {
@@ -160,8 +158,8 @@ export default function Page() {
     let successCount = 0
     const failures: string[] = []
     for (const c of targets) {
-      // Same inversion as saveRate above — see the rateInputs effect's note.
-      const apiExRate = 1 / parseFloat(rateInputs[c.currencyGuid])
+      // Saved as-is — see saveRate's own note above.
+      const apiExRate = parseFloat(rateInputs[c.currencyGuid])
       const existing = existingByCurrency.get(c.currencyGuid)
       try {
         if (existing) await updateMutation.mutateAsync({ guid: existing.exchangeRateGuid, input: { exRate: apiExRate, exDate: rateDate } })
@@ -266,17 +264,15 @@ export default function Page() {
                 {rateCurrencies.map(c => {
                   const existing = existingByCurrency.get(c.currencyGuid)
                   const locked = !!existing && !isToday
-                  // Displayed inverted (1 / rawExRate) — see the note on
-                  // prevRateByCurrency above for why.
-                  const prevDisplay = prevRateByCurrency.has(c.currencyGuid) ? 1 / prevRateByCurrency.get(c.currencyGuid)! : null
+                  const prevDisplay = prevRateByCurrency.get(c.currencyGuid) ?? null
                   return (
                     <div key={c.currencyGuid} className="flex items-center gap-3 flex-wrap p-[14px] border border-[1.5px] border-b200 rounded-[var(--rsm)] bg-b50">
                       <span className="badge badge-gold" style={{ fontSize: 14, padding: '8px 12px' }}>{c.currencyCode}</span>
                       <div className="flex-1" style={{ minWidth: 160 }}>
-                        <div className="lbl">1 {baseCurrency?.currencyCode ?? 'base'} = ___ {c.currencyCode} <span className="req">*</span></div>
+                        <div className="lbl">1 {c.currencyCode} = ___ {baseCurrency?.currencyCode ?? 'base'} <span className="req">*</span></div>
                         {locked ? (
                           <>
-                            <div className="font-mono font-extrabold text-g700" style={{ fontSize: 22 }}>{(1 / existing.exRate).toLocaleString(undefined, { maximumFractionDigits: 6 })}</div>
+                            <div className="font-mono font-extrabold text-g700" style={{ fontSize: 22 }}>{existing.exRate.toLocaleString(undefined, { maximumFractionDigits: 6 })}</div>
                             <div className="text-g400" style={{ fontSize: 11 }}>
                               Historical rate already set — only today’s rates can be edited. Delete it below (History panel) to change.
                             </div>
@@ -342,16 +338,13 @@ export default function Page() {
               <>
                 <ScrollTable>
                   <table>
-                    <thead><tr><th>Date</th><th>Currency</th><th>Rate (1 {baseCurrency?.currencyCode ?? 'base'} = )</th><th></th></tr></thead>
+                    <thead><tr><th>Date</th><th>Currency</th><th>Rate</th><th></th></tr></thead>
                     <tbody>
                       {historyItems.map(r => (
                         <tr key={r.exchangeRateGuid}>
                           <td>{toDisplayDate(r.exDate.slice(0, 10))}</td>
                           <td><span className="badge badge-gold">{r.currencyCode}</span></td>
-                          {/* Displayed inverted (1 / rawExRate) — same "1 UGX
-                              = ___ {code}" direction as the entry form above,
-                              see prevRateByCurrency's own note for why. */}
-                          <td className="font-mono font-bold">{r.exRate ? (1 / r.exRate).toLocaleString(undefined, { maximumFractionDigits: 6 }) : '—'}</td>
+                          <td className="font-mono font-bold">{r.exRate.toLocaleString(undefined, { maximumFractionDigits: 6 })}</td>
                           <td>
                             <button
                               className="btn btn-neu btn-sm"

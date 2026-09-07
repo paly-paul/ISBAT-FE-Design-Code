@@ -405,6 +405,41 @@ export async function apiDelete<T>(path: string, retried = false): Promise<T> {
   throw new AuthError(code, message)
 }
 
+// Raw file download — no JSON envelope on success (confirmed via
+// get-export-csv.md: "Returns a text/csv file download", streamed directly
+// as the response body, not wrapped in the app's { success, data, ... }
+// shape every other api* helper here assumes). A non-2xx response on this
+// same endpoint still comes back as the normal envelope per that doc's
+// Errors table, so failures are parsed the same way apiGet does. Returns
+// the filename the server suggested via Content-Disposition alongside the
+// blob, so callers don't have to parse that header themselves — null when
+// the header's missing or in an unexpected shape, leaving the caller to
+// fall back to a name of its own.
+export async function apiGetBlob(path: string, retried = false): Promise<{ blob: Blob; filename: string | null }> {
+  const res = await fetch(buildUrl(path), {
+    method: 'GET',
+    headers: NGROK_HEADERS,
+    credentials: 'include',
+  })
+
+  if (res.status === 401 && !isAuthEndpoint(path) && !retried) {
+    await handleUnauthorized(path)
+    return apiGetBlob(path, true)
+  }
+
+  if (!res.ok) {
+    const envelope = await res.json().catch(() => null)
+    const { code, message } = extractErrorInfo(envelope)
+    throw new AuthError(code, message)
+  }
+
+  const disposition = res.headers.get('content-disposition') ?? ''
+  const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)"?/i)
+  const filename = match ? decodeURIComponent(match[1]) : null
+
+  return { blob: await res.blob(), filename }
+}
+
 export async function apiGet<T>(path: string, retried = false): Promise<T> {
   const res = await fetch(buildUrl(path), {
     method: 'GET',
