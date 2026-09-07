@@ -14,7 +14,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
-import { useExchangeRatesByDate, useExchangeRateExists, useCreateExchangeRate, useUpdateExchangeRate } from '@/hooks/finance/useExchangeRates'
+import { useExchangeRatesByDate, useCreateExchangeRate, useUpdateExchangeRate } from '@/hooks/finance/useExchangeRates'
 import { PaymentAdvance, useAdvanceStatusByPayment } from '@/hooks/finance/usePayments'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
@@ -95,17 +95,22 @@ function fmtAmt(n: number) {
 }
 
 // Currency conversion for Outstanding Balance's Scheduled Bill/Outstanding
-// figures (per request, 2026-09-04) — exRate (exchange-rates/get-exchange-
-// rate-by-guid.md, confirmed via the Exchange Rates page's own "{currency}
-// per 1 {base}" label) is "this currency's units per 1 unit of the base
-// currency" (Currency Master's isDefault=1 row), never a direct rate
-// between two arbitrary currencies. Converting A→B always routes through
-// the base: amountInBase = amount / rateA, amountInB = amountInBase * rateB.
-// The base currency itself has an implicit rate of 1 against itself — it
-// has no row in the exchange-rates board at all. Returns null (not a
-// fallback guess) when either currency's rate can't be resolved — a ledger
-// with no currencyGuid, or a currency with no rate on file for today — so
-// callers can show "no rate available" instead of silently wrong math.
+// figures (per request, 2026-09-04). exRate was previously assumed to be
+// "this currency's units per 1 unit of the base currency" (a small fraction
+// for anything stronger than the base, e.g. USD ≈ 0.00026) — confirmed
+// WRONG against a real get-exchange-rate-exists response: USD came back as
+// exRate: 3774.90 and KSH as exRate: 29.16, both of which are exactly
+// "1 {currency} = {exRate} {base}" (real UGX/USD and UGX/KSH rates), not a
+// tiny fraction. exRate is actually base-currency units per 1 unit of the
+// given currency, the reverse of what this used to assume. Converting A→B
+// always routes through the base: amountInBase = amount * rateA (rateA
+// units of base per unit of A), amountInB = amountInBase / rateB. The base
+// currency itself has an implicit rate of 1 against itself (unaffected by
+// which direction that identity multiplication/division goes) — it has no
+// row in the exchange-rates board at all. Returns null (not a fallback
+// guess) when either currency's rate can't be resolved — a ledger with no
+// currencyGuid, or a currency with no rate on file for today — so callers
+// can show "no rate available" instead of silently wrong math.
 function convertAmount(
   amount: number,
   fromGuid: string | null,
@@ -127,7 +132,7 @@ function convertAmount(
   // by-date board as an exRate: 0 row instead of being omitted entirely.
   // Treat it the same as a missing rate — return null so callers show "—".
   if (fromRate == null || toRate == null || fromRate <= 0 || toRate <= 0) return null
-  return (amount / fromRate) * toRate
+  return (amount * fromRate) / toRate
 }
 
 function applicantName(a: { firstName: string | null; lastName: string | null }) {
@@ -448,11 +453,13 @@ export default function PaymentConsolePage() {
     if (currencyGuid && currencies.some(c => c.currencyGuid === currencyGuid)) return
     // Defaults to whichever currency the student's own ledgers are actually
     // billed in, when that's one of the configured ones — falls back to
-    // the first configured currency otherwise. Only runs when the current
-    // selection is missing/no longer valid, so it doesn't fight a
-    // cashier's own pick once one's been made.
+    // Finance's own default currency (UGX) otherwise, same as the Other
+    // Payment tab's otherCurrencyGuid default below, rather than whatever
+    // happened to be first in the API's own currency list order. Only runs
+    // when the current selection is missing/no longer valid, so it doesn't
+    // fight a cashier's own pick once one's been made.
     const preferred = ledgerTotals.find(t => currencies.some(c => c.currencyGuid === t.currencyGuid))
-    setCurrencyGuid(preferred?.currencyGuid ?? currencies[0].currencyGuid)
+    setCurrencyGuid(preferred?.currencyGuid ?? getDefaultFinanceCurrencyGuid(currencies))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currencies, ledgerTotals])
   // Converts Scheduled Bill/Outstanding (regardless of a given ledger's own
@@ -486,28 +493,28 @@ export default function PaymentConsolePage() {
   const usdCurrency = currencies.find(c => c.currencyCode === 'USD')
   const kesCurrency = currencies.find(c => c.currencyCode === 'KSH') // Kenyan Shilling — backend's Currency Master uses code KSH, not KES
   const todayRateByCurrency = new Map(todayRates.map(r => [r.currencyGuid, r]))
-  // Per exchange-rates/get-exchange-rate-exists.md — the authoritative
-  // "can this be edited today?" check for each currency, run independently
-  // of the by-date board above so the lock reflects the dedicated exists
-  // endpoint rather than an inference from todayRates. Once today's rate
-  // exists for a currency, that input is locked; PUT only ever allows
-  // today's row anyway, but the point here is to stop a cashier from
-  // silently overwriting a rate someone already committed for the day.
-  const usdRateExists = useExchangeRateExists(usdCurrency?.currencyGuid ?? null, todayYmd(), showExchangeRates)
-  const kesRateExists = useExchangeRateExists(kesCurrency?.currencyGuid ?? null, todayYmd(), showExchangeRates)
-  const usdRateLocked = usdRateExists.data?.exists === true
-  const kesRateLocked = kesRateExists.data?.exists === true
-  // The bar deliberately asks for the intuitive "1 USD = ___ UGX" direction
-  // (a cashier thinks in "how many shillings per dollar", not the reverse),
-  // but the API's exRate field is the other way round — confirmed via the
-  // Exchange Rate Management page's own "{currency} per 1 {base}" label
-  // (exchange-rates/page.tsx) and convertAmount's math above: it's how many
-  // units of THIS currency equal 1 unit of the base (UGX), so a currency
-  // stronger than the base stores a small fraction (e.g. USD ≈ 0.00026),
-  // not the ~3800 a cashier would type here. So this bar inverts in both
-  // directions — 1/exRate to display what's saved, 1/typed to save what's
-  // displayed — rather than switching the label to match the raw field,
-  // which would just move the confusion onto the person entering the rate.
+  // Was locked (inputs + Save disabled) once today's rate already existed
+  // for a currency, per request 2026-09-04 ("stop a cashier from silently
+  // overwriting a rate someone already committed"). Per a later request
+  // (2026-09-08), this bar should be able to correct today's rate too, not
+  // just set it once — same "Update" capability the dedicated Exchange Rate
+  // Management page already has (put-exchange-rate.md: "Only today's row
+  // can be corrected via PUT", which this bar's own saveExchangeRateBar
+  // already calls when todayRateByCurrency has an existing row — the lock
+  // was the only thing stopping that update path from ever being reached
+  // here). usdHasTodayRate/kesHasTodayRate below are purely informational
+  // now (an "already set" hint), not a disable condition.
+  const usdHasTodayRate = !!(usdCurrency && todayRateByCurrency.has(usdCurrency.currencyGuid))
+  const kesHasTodayRate = !!(kesCurrency && todayRateByCurrency.has(kesCurrency.currencyGuid))
+  // Displays the "1 UGX = ___ {currency}" direction now (per request,
+  // 2026-09-08) — matching the dedicated Exchange Rate Management page's
+  // own convention (see that page's Delta/rateInputs notes). The raw exRate
+  // itself is confirmed to be "1 {currency} = {exRate} UGX" (a real
+  // get-exchange-rate-exists response: USD came back as exRate: 3774.90,
+  // i.e. 1 USD = 3774.90 UGX) — the reverse of what's shown here — so this
+  // inverts on the way in (1 / exRate) and back on the way out (1 / typed)
+  // before it hits the API, same as exchange-rates/page.tsx does. The wire
+  // value/meaning hasn't changed, only what this bar displays for it.
   const [rateBarInputs, setRateBarInputs] = useState<Record<string, string>>({})
   useEffect(() => {
     const map: Record<string, string> = {}
@@ -519,16 +526,9 @@ export default function PaymentConsolePage() {
   const isSavingRates = createExchangeRate.isPending || updateExchangeRate.isPending
 
   async function saveExchangeRateBar() {
-    const lockedByGuid: Record<string, boolean> = {
-      ...(usdCurrency ? { [usdCurrency.currencyGuid]: usdRateLocked } : {}),
-      ...(kesCurrency ? { [kesCurrency.currencyGuid]: kesRateLocked } : {}),
-    }
-    const targets = [usdCurrency, kesCurrency]
-      .filter((c): c is NonNullable<typeof c> => !!c)
-      .filter(c => !lockedByGuid[c.currencyGuid])
+    const targets = [usdCurrency, kesCurrency].filter((c): c is NonNullable<typeof c> => !!c)
     if (targets.length === 0) {
-      const reason = (usdCurrency || kesCurrency) ? 'Today’s rate is already set — it can’t be edited again today.' : 'USD/KSH aren’t configured in Currency Master.'
-      showToast(reason, 'warn')
+      showToast('USD/KSH aren’t configured in Currency Master.', 'warn')
       return
     }
     let successCount = 0
@@ -537,9 +537,9 @@ export default function PaymentConsolePage() {
       const raw = rateBarInputs[c.currencyGuid] ?? ''
       const num = parseFloat(raw)
       if (!raw || !(num > 0)) { failures.push(`${c.currencyCode}: enter a valid rate`); continue }
-      // Invert the "1 USD = ___ UGX" figure the cashier typed back into the
-      // API's "currency per 1 base" convention before saving — see the
-      // rateBarInputs effect above for why.
+      // Invert the "1 UGX = ___ {code}" figure typed here back into the
+      // API's own "1 {code} = {exRate} UGX" convention before saving — see
+      // the rateBarInputs effect above for why.
       const apiExRate = 1 / num
       const existing = todayRateByCurrency.get(c.currencyGuid)
       try {
@@ -958,47 +958,50 @@ export default function PaymentConsolePage() {
                 request, 2026-09-04) — saveExchangeRateBar above creates a
                 fresh rate for today if none exists yet, or updates the
                 existing one (only today's row is PUT-able per
-                put-exchange-rate.md). Disabled + placeholder when USD/KSH
-                aren't in Currency Master at all, rather than accepting
-                input that has nowhere real to save to. Locked instead
-                (get-exchange-rate-exists.md) once today's rate has already
-                been entered for that currency — it can only be edited again
-                once today's row no longer exists (e.g. tomorrow). */}
+                put-exchange-rate.md, which is exactly the "today" case this
+                bar only ever deals with). Disabled + placeholder when USD/
+                KSH aren't in Currency Master at all, rather than accepting
+                input that has nowhere real to save to. No longer locks once
+                today's rate already exists (per request 2026-09-08) — the
+                small dot badge is just a heads-up that Save will correct an
+                existing rate rather than create a new one. */}
             <div className="flex items-center gap-[6px] flex-wrap text-[var(--fs-sm)]">
-              <span className="text-muted">1 USD =</span>
+              <span className="text-muted">1 UGX =</span>
               <input
                 type="number"
+                min={0}
+                step="0.000001"
                 className="ctrl"
-                disabled={!usdCurrency || usdRateLocked}
+                disabled={!usdCurrency}
                 placeholder={usdCurrency ? '' : 'Not configured'}
-                title={usdRateLocked ? 'Today’s USD rate is already set and can’t be edited again today.' : undefined}
                 value={usdCurrency ? (rateBarInputs[usdCurrency.currencyGuid] ?? '') : ''}
                 onChange={e => usdCurrency && setRateBarInputs(prev => ({ ...prev, [usdCurrency.currencyGuid]: e.target.value }))}
                 style={{ width: 72, padding: '5px 9px', fontSize: 13, fontWeight: 700, color: 'var(--b800)' }}
               />
-              <span className="badge badge-gold">UGX</span>
-              {usdRateLocked && <i className="lni lni-lock-alt-1 text-muted" title="Locked — today’s rate already set"></i>}
+              <span className="badge badge-gold">USD</span>
+              {usdHasTodayRate && <i className="lni lni-checkmark-circle text-muted" title="Today’s rate is already set — Save will update it"></i>}
             </div>
             <div className="flex items-center gap-[6px] flex-wrap text-[var(--fs-sm)]">
-              <span className="text-muted">1 KSH =</span>
+              <span className="text-muted">1 UGX =</span>
               <input
                 type="number"
+                min={0}
+                step="0.000001"
                 className="ctrl"
-                disabled={!kesCurrency || kesRateLocked}
+                disabled={!kesCurrency}
                 placeholder={kesCurrency ? '' : 'Not configured'}
-                title={kesRateLocked ? 'Today’s KSH rate is already set and can’t be edited again today.' : undefined}
                 value={kesCurrency ? (rateBarInputs[kesCurrency.currencyGuid] ?? '') : ''}
                 onChange={e => kesCurrency && setRateBarInputs(prev => ({ ...prev, [kesCurrency.currencyGuid]: e.target.value }))}
                 style={{ width: 72, padding: '5px 9px', fontSize: 13, fontWeight: 700, color: 'var(--b800)' }}
               />
-              <span className="badge badge-gold">UGX</span>
-              {kesRateLocked && <i className="lni lni-lock-alt-1 text-muted" title="Locked — today’s rate already set"></i>}
+              <span className="badge badge-gold">KSH</span>
+              {kesHasTodayRate && <i className="lni lni-checkmark-circle text-muted" title="Today’s rate is already set — Save will update it"></i>}
             </div>
             <div className="flex items-center gap-[7px] flex-wrap" style={{ marginLeft: 'auto' }}>
               <button
                 className="btn btn-neu btn-sm"
                 style={{ fontSize: 11 }}
-                disabled={isSavingRates || (usdRateLocked && kesRateLocked)}
+                disabled={isSavingRates}
                 onClick={saveExchangeRateBar}
               >
                 <i className="lni lni-save"></i> {isSavingRates ? 'Saving…' : 'Save Rates'}

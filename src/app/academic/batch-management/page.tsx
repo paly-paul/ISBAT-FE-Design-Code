@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { useBatches, useBatchSearch, useCreateBatch, useUpdateBatch, useDeleteBatch, Batch } from '@/hooks/academic/useBatches'
+import { useBatches, useBatchSearch, useCreateBatch, useUpdateBatch, useDeleteBatch, useBatchStudentCount, Batch } from '@/hooks/academic/useBatches'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useStreams } from '@/hooks/config/useStreams'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
@@ -152,6 +152,14 @@ export default function Page() {
     setSearch('')
   }
 
+  // Confirmed bug fix: the delete confirmation used to say nothing about
+  // whether the batch actually had students in it — students/counts-by-
+  // batch.md is explicit this endpoint exists "to display student counts on
+  // batch management screens", but nothing on this page ever called it.
+  // Scoped to just the batch actually being deleted (enabled only while the
+  // dialog is open), not the whole visible page.
+  const { data: deleteTargetStudentCount } = useBatchStudentCount(deleteTarget?.batchGuid ?? null, !!deleteTarget)
+
   function confirmDeleteBatch() {
     if (!deleteTarget) return
     deleteBatch.mutate(deleteTarget.batchGuid, {
@@ -271,6 +279,14 @@ export default function Page() {
             <div className="perm-delete-sub">
               This will permanently delete this batch. This can&apos;t be undone.
             </div>
+            {!!deleteTargetStudentCount && (
+              <div className="warn-box mt-2 mb-1" style={{ textAlign: 'left' }}>
+                <i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0, marginTop: 1 }}></i>
+                <div>
+                  {deleteTargetStudentCount} student{deleteTargetStudentCount !== 1 ? 's are' : ' is'} currently enrolled in this batch. Deleting it won&apos;t remove them, but they&apos;ll be left without a valid batch.
+                </div>
+              </div>
+            )}
             <div className="perm-delete-actions">
               <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
               <button className="btn btn-danger" disabled={deleteBatch.isPending} onClick={confirmDeleteBatch}>
