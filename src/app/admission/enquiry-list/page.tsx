@@ -11,20 +11,19 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { EnquiryFormModal } from '@/components/modals/admission/EnquiryFormModal'
 import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignModal'
 import { useEnquiries, useEnquiryCounts, useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
+import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
-import { usePagination } from '@/hooks/usePagination'
 
-// Fetches up to FETCH_SIZE rows in one request, then paginates that
-// already-fetched set 10-at-a-time client-side via usePagination — same
-// "fetch a big batch once, page through it locally" pattern as Vetting
-// Desk. 12000 covers the real dataset (11k+ rows per the comment on
-// useEnquiries) in one request, so search/filter effectively reaches the
-// whole table now rather than a capped batch — comes at the cost of a much
-// heavier single fetch on every page load.
-const FETCH_SIZE = 12000
+// Real server-side pagination — only DISPLAY_PAGE_SIZE rows are ever
+// requested for the page currently on screen (see useEnquiries), not the
+// whole ~11k-row table in one shot. Trade-off: search and the Channel/Intake
+// filters below can now only narrow the rows already on the current page,
+// not the full dataset — a deliberate choice over the previous FETCH_SIZE
+// = 12000 "fetch everything, filter client-side" approach, which meant a
+// much heavier request on every page load.
 const DISPLAY_PAGE_SIZE = 10
 // Don't narrow the table (or open the search dropdown) until the user's
 // typed at least this many characters — same convention as the other
@@ -56,10 +55,19 @@ export default function EnquiryListPage() {
   const [search, setSearch] = useState('')
   const [channel, setChannel] = useState('')
   const [intakeGuid, setIntakeGuid] = useState('')
+  const [page, setPage] = useState(1)
 
-  const { data, isLoading: loading } = useEnquiries(1, FETCH_SIZE)
+  const searchTrimmed = search.trim()
+  // Server-side search (see getEnquiries) — only actually queried once the
+  // term clears MIN_SEARCH_CHARS, same gate TableSearch's own dropdown uses,
+  // so a 1-character keystroke doesn't fire a request against the full ~11k
+  // row table.
+  const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
+  const { data, isLoading: loading } = useEnquiries(page, DISPLAY_PAGE_SIZE, activeSearch)
   const updateEnquiry = useUpdateEnquiry()
   const rows = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / DISPLAY_PAGE_SIZE))
   const hasActiveFilters = !!search.trim() || !!channel || !!intakeGuid
 
   // Stats-row summary — GET /api/v1/admissions/enquiries/counts, a separate
@@ -97,32 +105,29 @@ export default function EnquiryListPage() {
     return enquiryStatuses.find(s => s.enquiryStatusGuid === enquiryStatusGuid)?.enquiryStatusName
   }
 
-  // Searches across the full FETCH_SIZE batch (effectively the whole table
-  // now — see the comment above), not just whatever page is on screen.
-  function matchesSearch(r: typeof rows[number], term: string) {
-    return `${r.enquiryCode} ${r.studentName} ${r.mobile} ${r.email} ${resolveProgramName(r)} ${r.sourceName ?? ''} ${resolveStatusName(r.enquiryStatusGuid) ?? ''}`
-      .toLowerCase()
-      .includes(term)
-  }
   // `channel` stores the real enquirySourceGuid (not sourceName) so it can
-  // double as the counts endpoint's `sourceGuid` filter above — options are
-  // built dynamically from whatever (guid, name) pairs are actually present
-  // on the currently-loaded rows, same "no fixed list, derive from real
-  // data" pattern as vetting's own programme filter.
+  // double as the counts endpoint's `sourceGuid` filter above. Sourced from
+  // the actual Enquiry Source master rather than derived from the
+  // currently-loaded rows — with only DISPLAY_PAGE_SIZE rows loaded at a
+  // time now (server-side pagination, see above), deriving from rows would
+  // make the dropdown miss every channel not present on the current page.
+  const { data: enquirySources = [] } = useEnquirySourceMasters()
   const channelOptions = [
     { value: '', label: 'All Channels' },
-    ...Array.from(new Map(rows.filter(r => r.enquirySourceGuid && r.sourceName).map(r => [r.enquirySourceGuid as string, r.sourceName as string])).entries())
-      .map(([guid, name]) => ({ value: guid, label: name })),
+    ...enquirySources.map(s => ({ value: s.enquirySourceGuid, label: s.enquirySourceName })),
   ]
-  const searchTrimmed = search.trim()
+  // Search itself now happens server-side (see useEnquiries above) — rows
+  // already only contain matches for activeSearch. Channel/Intake stay
+  // client-side, narrowing only the current page's own rows (same
+  // pre-existing limitation as before this change, unrelated to search).
   const filteredRows = rows.filter(r =>
-    (searchTrimmed.length < MIN_SEARCH_CHARS || matchesSearch(r, searchTrimmed.toLowerCase())) &&
     (!channel || r.enquirySourceGuid === channel) &&
     (!intakeGuid || r.intakeGuid === intakeGuid)
   )
-  // Client-side pagination over the already-fetched (up to FETCH_SIZE) batch
-  // — 10 rows per page for display, same pattern as Vetting Desk.
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, DISPLAY_PAGE_SIZE)
+  // Rows are already server-paginated (see useEnquiries above) — filteredRows
+  // just narrows the current page's own rows, it doesn't page through them
+  // again client-side.
+  const pageItems = filteredRows
   // Empty below MIN_SEARCH_CHARS, matching TableSearch's own minChars gate on
   // when the dropdown is even allowed to open.
   const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? filteredRows.slice(0, 8) : []
@@ -146,8 +151,8 @@ export default function EnquiryListPage() {
           <p className="text-sm text-g500 mt-0.5">All enquiries across channels — walk-in, phone, online &amp; kiosk</p>
         </div>
         <div className="flex gap-2">
-          <button className="btn btn-ghost" onClick={() => router.push('/admission/dashboard')}><i className="lni lni-arrow-left" /> Back</button>
-          {permissions.add && <button className="btn btn-primary" onClick={() => openModal('enquiry-form-modal')}><i className="lni lni-plus" /> New Enquiry</button>}
+          {/* <button className="btn btn-ghost" onClick={() => router.push('/admission/dashboard')}><i className="lni lni-arrow-left" /> Back</button> */}
+          {/* {permissions.add && <button className="btn btn-primary" onClick={() => openModal('enquiry-form-modal')}><i className="lni lni-plus" /> New Enquiry</button>} */}
         </div>
       </div>
 
@@ -238,7 +243,8 @@ export default function EnquiryListPage() {
         {totalCount > 0 && (
           <div className="flex items-center justify-between mt-3" style={{ fontSize: 12.5, color: 'var(--g500)' }}>
             <span>
-              Page {page} of {totalPages} · {totalCount.toLocaleString()} {hasActiveFilters ? 'matching' : ''} enquiries
+              Page {page} of {totalPages} · {totalCount.toLocaleString()} enquiries
+              {hasActiveFilters && ` (search/filters only narrow this page's ${rows.length} rows)`}
             </span>
             <div className="flex gap-2">
               <button className="btn btn-neu btn-sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>

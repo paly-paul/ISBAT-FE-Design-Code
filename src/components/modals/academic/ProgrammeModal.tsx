@@ -64,7 +64,15 @@ const CALC_TYPES = [
 // displayed read-only (see the feeLines mapping in handleFinalSubmit and the
 // "Pri." column below) — same "position IS the sequence" convention as
 // Course Unit's read-only Study Sequence.
-type FeeItem     = { id: number; amount: string; currency: string; currencyGuid: string; ledger: string }
+// ledgerName/currencyName carry the real names straight off full-details'
+// feeLines[] (see FeeLineDetail in lib/api/academic/programMaster.ts) rather
+// than relying solely on the ledgerOptions/financeCurrencyOptions cross-
+// lookups below finding a match in their respective master lists — those
+// have no confirmed "fetch everything" guarantee, so a ledger/currency
+// genuinely used on this fee line could still be missing from them, which
+// was silently leaving the pickers blank despite a real, already-known
+// selection.
+type FeeItem     = { id: number; amount: string; currency: string; currencyGuid: string; currencyName?: string; ledger: string; ledgerName?: string }
 type SemFees     = FeeItem[][]
 // streamGuid here is the per-course-unit specialization pick — only meaningful
 // (and only editable) when unitCat resolves to a "Specialization" category;
@@ -308,10 +316,15 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // currencyGuid too now, not Currency.intCurrency — so this one state now
   // backs the Currency picker in both modes (previously Create used a
   // separate currencyCode/currencyIntOptions pair). In Edit mode it's
-  // prefilled from initialCurrencyGuid (the list row's own currencyGuid)
-  // below, not from full-details, which doesn't return one — but that list
-  // field has been observed null in every real sample seen so far, so this
-  // may still come up empty and need picking.
+  // prefilled twice: immediately from initialCurrencyGuid (the list row's
+  // own currencyGuid) below — that field has been observed null in every
+  // real sample seen so far, so this may still come up empty and need
+  // picking — then overridden once full-details resolves (see the
+  // fullDetails prefill effect's setCurrencyGuid), which DOES return a real
+  // currencyGuid/currencyName (confirmed live 2026-09-07; this was
+  // previously assumed absent from that response and never read from it,
+  // which is why Edit mode's Currency field came up blank even when the
+  // list row's own currencyGuid also happened to be null).
   const [currencyGuid, setCurrencyGuid] = useState('')
 
   // Programme Level's "auto-fills year/sem/credits" explanation used to sit
@@ -384,7 +397,14 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // ProgramMasterInput.currencyGuid note), so this now backs the top-level
   // Currency picker in both modes.
   const { data: financeCurrencies = [] } = useFinanceCurrencies()
-  const financeCurrencyOptions = financeCurrencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))
+  // Merged with a fallback for any currencyGuid already on a loaded fee item
+  // that's missing from the Finance Currency master list — see
+  // withFallbackOptions below (a hoisted function declaration, safe to call
+  // here despite being textually defined further down next to ledgerOptions).
+  const financeCurrencyOptions = withFallbackOptions(
+    financeCurrencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` })),
+    item => ({ guid: item.currencyGuid, name: item.currencyName }),
+  )
 
   const { data: streams = [] } = useStreams()
   const streamOptions = streams.map(s => ({ value: s.streamGuid, label: `${s.streamCode} — ${s.streamName}` }))
@@ -421,7 +441,29 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   }
 
   const { data: ledgers = [] } = useLedgers()
-  const ledgerOptions = ledgers.map(l => ({ value: l.ledgerGuid, label: l.ledgerName }))
+  // Base options from the Ledger master list, PLUS a synthesized option for
+  // any ledger/currency guid already sitting on a loaded fee item (from
+  // full-details) that isn't in its respective master list — using the real
+  // name full-details already carried for it (see the FeeItem.ledgerName/
+  // currencyName note above), rather than leaving the picker showing its
+  // blank placeholder for a genuinely real, already-known selection. Same
+  // fix as FeeStructureModal.tsx's own ledgerOptions.
+  function withFallbackOptions(base: { value: string; label: string }[], pick: (item: FeeItem) => { guid: string; name?: string }) {
+    const known = new Set(base.map(o => o.value))
+    const extra: { value: string; label: string }[] = []
+    feeStructures.forEach(s => s.semFees.forEach(items => items.forEach(item => {
+      const { guid, name } = pick(item)
+      if (guid && name && !known.has(guid)) {
+        known.add(guid)
+        extra.push({ value: guid, label: name })
+      }
+    })))
+    return [...base, ...extra]
+  }
+  const ledgerOptions = withFallbackOptions(
+    ledgers.map(l => ({ value: l.ledgerGuid, label: l.ledgerName })),
+    item => ({ guid: item.ledger, name: item.ledgerName }),
+  )
 
   const { data: intakes = [] } = useIntakes()
   // Per-fee-structure Intake — a real intakeGuid in both modes now (see the
@@ -519,6 +561,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setProgramGroupGuid(fullDetails.programGroupGuid)
     setProgramLevelGuid(fullDetails.programLevelGuid)
     setFacultyGuid(fullDetails.facultyGuid)
+    // Confirmed live (2026-09-07) that full-details DOES return a real
+    // currencyGuid — overrides whatever the initialCurrencyGuid-driven
+    // effect above set from the (often-null) list row the moment this
+    // richer fetch resolves.
+    setCurrencyGuid(fullDetails.currencyGuid ?? '')
     setAppFee(String(fullDetails.appFee))
     setLateFee(String(fullDetails.lateFee))
     setUnitCount(String(fullDetails.unitCount))
@@ -655,7 +702,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
               amount: String(l.amount),
               currency: '',
               currencyGuid: l.currencyGuid,
+              currencyName: l.currencyName ?? undefined,
               ledger: l.ledgerGuid,
+              ledgerName: l.ledgerName ?? undefined,
             })
           })
           return {
@@ -1450,7 +1499,23 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     return (
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }}>
-          <SuccessPopup title={mode === 'edit' ? 'Programme Updated!' : 'Programme Saved!'} subtitle="The programme version has been saved successfully." onClose={handleClose} />
+          <SuccessPopup
+            title={mode === 'edit' ? 'Programme Updated!' : 'Programme Saved!'}
+            // Per post-program-master.md: "The program is created with
+            // isApproved = false. It must be approved via PUT
+            // /program-approval before it appears in the main list." A new
+            // programme genuinely will NOT show up on this page (GET
+            // /program-master only ever returns isApproved = true rows) until
+            // someone approves it on the Programme Approval page — this isn't
+            // a caching/refresh bug, so say so here instead of implying it's
+            // immediately live. Edit mode isn't gated the same way (updating
+            // an already-approved programme doesn't reset isApproved), so it
+            // keeps the plain "saved successfully" message.
+            subtitle={mode === 'edit'
+              ? 'The programme version has been saved successfully.'
+              : 'The programme has been saved and is now pending approval — it won\'t appear in this list until it\'s approved on the Programme Approval page.'}
+            onClose={handleClose}
+          />
         </div>
       </div>
     )
@@ -1642,6 +1707,13 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     }}
                     options={streamOptions}
                   />
+                  {streamGuids.length > 0 && (
+                    <div className="flex flex-wrap gap-2" style={{ marginTop: 8 }}>
+                      {streamOptions.filter(o => streamGuids.includes(o.value)).map(o => (
+                        <span key={o.value} className="badge badge-blue">{o.label}</span>
+                      ))}
+                    </div>
+                  )}
                   <div style={{ fontSize: 11, color: 'var(--g400)', marginTop: 4 }}>Every specialization this programme offers — picked per course unit in Course Unit Allocation.</div>
                 </div>
 

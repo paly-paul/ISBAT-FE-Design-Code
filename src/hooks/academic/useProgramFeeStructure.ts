@@ -11,6 +11,7 @@ import {
   ProgramFeeStructureSaveCompleteInput,
   ProgramFeeStructureUpdateInput,
 } from '@/lib/api/academic/programFeeStructure'
+import { PROGRAM_MASTERS_KEY } from './useProgramMaster'
 
 const PROGRAM_FEE_STRUCTURES_KEY = ['programFeeStructures']
 

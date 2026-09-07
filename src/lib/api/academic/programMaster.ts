@@ -367,6 +367,21 @@ export function getProgramMasters(search = ''): Promise<ProgramMaster[]> {
     })
 }
 
+// GET /api/v1/academic/program-master/{programGuid} — per get-program-by-guid.md.
+// Single-record counterpart to getProgramMasters() above: used right after
+// Step 1 of ProgrammeModal's Add-mode wizard creates a programme, to merge
+// just that one new row into the cached Programme Master list (see
+// useCreateProgramMasterStep1's onSuccess) instead of invalidating and
+// refetching the entire list just to reflect one addition.
+export function getProgramMasterByGuid(programGuid: string): Promise<ProgramMaster> {
+  if (MOCK_AUTH) {
+    const existing = mockProgramMasters.find(p => p.programGuid === programGuid)
+    if (!existing) return Promise.reject(new Error('Programme not found'))
+    return Promise.resolve(existing)
+  }
+  return apiGet<ProgramMaster>(`/api/v1/academic/program-master/${programGuid}`)
+}
+
 // GET /api/v1/academic/program-master/by-campus/:campusGuid — per
 // Application_Payment_Change_Requests_Final_Updated.md #7, backs the
 // Application Payment page's Interested Programme dropdown, scoped to the
@@ -418,7 +433,16 @@ export interface ProgramSemesterDetail {
 export interface FeeLineDetail {
   semCode: number
   ledgerGuid: string
+  // get-program-full-details.md's own feeLines[] fields table documents
+  // both of these ("Resolved from finance service; null if not found"), but
+  // neither was ever modeled here — same gap class as ProgramMasterFullDetails.
+  // currencyGuid/currencyName above. Left the Ledger/Currency pickers in
+  // ProgrammeModal's Step 3 (Semester-wise Fee Structure) showing their blank
+  // placeholders for real, already-known selections whenever the separate
+  // Ledger/Currency master lists didn't happen to include that guid.
+  ledgerName?: string | null
   currencyGuid: string
+  currencyName?: string | null
   ledgerNum: number
   amount: number
 }
@@ -457,6 +481,14 @@ export interface ProgramMasterFullDetails {
   accLetter: string | null
   appFee: number
   lateFee: number
+  // Confirmed on a real GET .../full-details response (2026-09-07) — not in
+  // get-program-full-details.md's own top-level fields table (that doc only
+  // shows currencyGuid/currencyName nested under feeStructures[].feeLines[]),
+  // but it's genuinely there at the top level too on the live response.
+  // ProgrammeModal's Edit-mode Currency picker was silently blank because of
+  // this exact gap — this field went unread even though it was on the wire.
+  currencyGuid?: string | null
+  currencyName?: string | null
   intakeGuid: string | null
   streamGuids: string[]
   semesters: ProgramSemesterDetail[]
