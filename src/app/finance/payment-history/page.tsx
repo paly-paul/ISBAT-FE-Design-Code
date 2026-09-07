@@ -13,6 +13,7 @@ import type { PaymentHistoryListEntry } from '@/hooks/finance/usePaymentConsole'
 import { formatDate } from '@/lib/date'
 import { ViewPaymentReceiptModal } from '@/components/modals/finance/ViewPaymentReceiptModal'
 import { EditPaymentModal, EditablePaymentTarget } from '@/components/modals/finance/EditPaymentModal'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 // Don't narrow the table (or open the search dropdown) until the user's
@@ -55,6 +56,7 @@ function fmtAmount(n: number) {
 }
 
 export default function Page() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [search, setSearch] = useState('')
   const [feeType, setFeeType] = useState('')
@@ -217,7 +219,7 @@ export default function Page() {
                         <button className="btn btn-neu btn-sm" onClick={() => openReceipt(r, false)}>
                           <i className="lni lni-eye"></i> View
                         </button>
-                        {r.category === 1 && (
+                        {r.category === 1 && permissions.edit && (
                           <button
                             className="btn btn-neu btn-sm"
                             onClick={() => setEditEntry({ paymentGuid: r.paymentGuid, amount: r.amount, payDate: r.payDate, payType: r.payType, label: r.receiptNo })}

@@ -12,8 +12,10 @@ import { StudentDto } from '@/lib/api/student/student'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { useFeeTransferContext, useFeeTransferHistory, useExecuteFeeTransfer } from '@/hooks/student/useFeeTransfer'
 import { useProgramTransferFeeStructures } from '@/hooks/student/useProgramTransfer'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 export default function Page() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -143,9 +145,11 @@ export default function Page() {
                 </div>
               </div>
               <div className="flex gap-2" style={{ justifyContent: 'flex-start', marginTop: 8 }}>
-                <button className="btn btn-primary" disabled={!canExecute} onClick={handleSubmit}>
-                  {executeTransfer.isPending ? <i className="lni lni-spinner lni-spin"></i> : <i className="lni lni-checkmark"></i>} Submit
-                </button>
+                {permissions.edit && (
+                  <button className="btn btn-primary" disabled={!canExecute} onClick={handleSubmit}>
+                    {executeTransfer.isPending ? <i className="lni lni-spinner lni-spin"></i> : <i className="lni lni-checkmark"></i>} Submit
+                  </button>
+                )}
                 <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
               </div>
             </div>

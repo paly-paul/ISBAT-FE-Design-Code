@@ -13,10 +13,12 @@ import { EmptyState } from '@/components/EmptyState'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
+  const permissions = usePagePermissions()
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
@@ -162,7 +164,7 @@ export default function Page() {
                 <button className="tgl-btn" onClick={() => showToast('List view', 'info')}><i className="lni lni-clipboard"></i> List</button>
               </div>
               <span className="badge badge-green" id="tt-status-badge"><i className="lni lni-checkmark"></i> No Conflicts</span>
-              <button className="btn btn-neu btn-sm" onClick={() => openModal('add-slot-modal')}><i className="lni lni-plus"></i> Add Slot</button>
+              {permissions.add && <button className="btn btn-neu btn-sm" onClick={() => openModal('add-slot-modal')}><i className="lni lni-plus"></i> Add Slot</button>}
             </div>
           </div>
           <div className="info-box mb-[10px] p-[8px_12px]">
@@ -240,7 +242,7 @@ export default function Page() {
                   : null}
                 {pageItems.map((r, i) => (
                   <tr key={i}>
-                    <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => openModal('add-slot-modal')}><i className="lni lni-pencil"></i> Edit</button></ActionMenu></td>
+                    <td><ActionMenu>{permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openModal('add-slot-modal')}><i className="lni lni-pencil"></i> Edit</button>}</ActionMenu></td>
                     <td>{r.day}</td>
                     <td>{r.time}</td>
                     <td>{r.courseUnit}</td>
