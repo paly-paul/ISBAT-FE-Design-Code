@@ -554,6 +554,30 @@ export interface ExportApplicationsCsvParams {
   toDate?: string | null
 }
 
+// Splits raw CSV text into rows, respecting RFC 4180 double-quoted fields
+// that can themselves contain the newline being split on (get-export-csv.md:
+// "Fields that contain a comma, double-quote, or newline are RFC
+// 4180-quoted") — a naive text.split('\n') would cut a quoted multi-line
+// field in half.
+function splitCsvRows(text: string): string[] {
+  const rows: string[] = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (ch === '"') inQuotes = !inQuotes
+    if ((ch === '\n' || ch === '\r') && !inQuotes) {
+      if (ch === '\r' && text[i + 1] === '\n') i++
+      rows.push(current)
+      current = ''
+    } else {
+      current += ch
+    }
+  }
+  if (current) rows.push(current)
+  return rows
+}
+
 export function exportApplicationsCsv(params: ExportApplicationsCsvParams = {}): Promise<{ blob: Blob; filename: string }> {
   if (MOCK_AUTH) {
     // Nothing meaningful to fabricate for a raw file download in a UI-only
@@ -569,5 +593,19 @@ export function exportApplicationsCsv(params: ExportApplicationsCsvParams = {}):
   if (params.toDate) qs.set('toDate', params.toDate)
   const suffix = qs.toString() ? `?${qs.toString()}` : ''
   return apiGetBlob(`/api/v1/admissions/application-filling/export/csv${suffix}`)
-    .then(({ blob, filename }) => ({ blob, filename: filename ?? 'applications.csv' }))
+    .then(async ({ blob, filename }) => {
+      // The endpoint's own default order is CreatedDate ASCENDING — oldest
+      // first (get-export-csv.md) — and there's no sort-direction query
+      // param to ask it for the reverse. Re-ordered here to newest-first
+      // instead, same "newest to oldest" convention just applied to
+      // Course Allocation's table, so the exported file reads consistently
+      // with the rest of the app rather than needing backend support for it.
+      const rows = splitCsvRows(await blob.text())
+      const [header, ...dataRows] = rows
+      const reordered = header !== undefined ? [header, ...dataRows.reverse()].join('\r\n') : ''
+      return {
+        blob: reordered ? new Blob([reordered], { type: 'text/csv' }) : blob,
+        filename: filename ?? 'applications.csv',
+      }
+    })
 }
