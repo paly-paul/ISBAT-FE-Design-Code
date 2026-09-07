@@ -8,6 +8,7 @@ import { Pagination } from '@/components/Pagination'
 import { PaymentSuccessModal } from '@/components/modals/finance/PaymentSuccessModal'
 import { ViewRegulatoryPaymentModal } from '@/components/modals/finance/ViewRegulatoryPaymentModal'
 import { EditRegulatoryPaymentModal } from '@/components/modals/finance/EditRegulatoryPaymentModal'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import DatePicker from '@/components/DatePicker'
 import {
@@ -146,6 +147,7 @@ function RegulatoryOutstandingTable({ items, isLoading, isError, category }: { i
 }
 
 export default function NcheGuildPaymentPage() {
+  const permissions = usePagePermissions()
   const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
@@ -550,12 +552,16 @@ export default function NcheGuildPaymentPage() {
                                 <button className="btn btn-neu btn-sm" onClick={() => setViewEntry(h)}>
                                   <i className="lni lni-eye"></i> View
                                 </button>
-                                <button className="btn btn-neu btn-sm" onClick={() => setEditTarget(h)}>
-                                  <i className="lni lni-pencil-alt"></i> Edit
-                                </button>
-                                <button className="btn btn-neu btn-sm" onClick={() => handleDelete(h)}>
-                                  <i className="lni lni-trash-can"></i> Delete
-                                </button>
+                                {permissions.edit && (
+                                  <button className="btn btn-neu btn-sm" onClick={() => setEditTarget(h)}>
+                                    <i className="lni lni-pencil-alt"></i> Edit
+                                  </button>
+                                )}
+                                {permissions.delete && (
+                                  <button className="btn btn-neu btn-sm" onClick={() => handleDelete(h)}>
+                                    <i className="lni lni-trash-can"></i> Delete
+                                  </button>
+                                )}
                               </ActionMenu>
                             </td>
                             <td>{h.payDate.slice(0, 10)}</td>
@@ -628,9 +634,11 @@ export default function NcheGuildPaymentPage() {
                   </div>
                 )}
                 <div className="flex gap-[10px] justify-end items-center">
-                  <button className="btn btn-primary btn-lg" disabled={isSaving} onClick={handleSave}>
-                    <i className="lni lni-save"></i> {isSaving ? 'Saving…' : `Save ${CATEGORY_LABEL[category]} Payment`}
-                  </button>
+                  {permissions.add && (
+                    <button className="btn btn-primary btn-lg" disabled={isSaving} onClick={handleSave}>
+                      <i className="lni lni-save"></i> {isSaving ? 'Saving…' : `Save ${CATEGORY_LABEL[category]} Payment`}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

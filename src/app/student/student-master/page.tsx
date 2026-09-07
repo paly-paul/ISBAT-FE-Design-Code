@@ -14,6 +14,7 @@ import { useStudentsFilter, useStudentsFilterMulti, getStudentsFilterCombination
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
@@ -37,6 +38,7 @@ interface ColumnFilterState {
 const EMPTY_COLUMN_FILTERS: ColumnFilterState = { programGuid: [], semesterGuid: [], batchGuid: [] }
 
 export default function Page() {
+  const permissions = usePagePermissions()
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
@@ -201,8 +203,8 @@ export default function Page() {
                     <td>
                       <ActionMenu>
                         <button className="btn btn-neu btn-sm" onClick={() => handleView(r.studentGuid)}><i className="lni lni-eye"></i> View</button>
-                        <button className="btn btn-neu btn-sm" onClick={() => handleLearningMode(r.studentGuid)}><i className="lni lni-book"></i> Learning Mode</button>
-                        <button className="btn btn-neu btn-sm" onClick={() => handleRefugee(r.studentGuid, r.studentName)}><i className="lni lni-shield"></i> Refugee Status</button>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => handleLearningMode(r.studentGuid)}><i className="lni lni-book"></i> Learning Mode</button>}
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => handleRefugee(r.studentGuid, r.studentName)}><i className="lni lni-shield"></i> Refugee Status</button>}
                       </ActionMenu>
                     </td>
                     <td className="font-mono">{r.studentRegNo}</td>
