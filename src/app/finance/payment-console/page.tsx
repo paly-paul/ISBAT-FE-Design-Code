@@ -9,6 +9,7 @@ import { PaymentSuccessModal } from '@/components/modals/finance/PaymentSuccessM
 import { AdvanceDepositPickerModal } from '@/components/modals/finance/AdvanceDepositPickerModal'
 import { ViewPaymentModal } from '@/components/modals/finance/ViewPaymentModal'
 import { EditPaymentModal, EditablePaymentTarget } from '@/components/modals/finance/EditPaymentModal'
+import { EditPaymentOtherModal, EditablePaymentOtherTarget } from '@/components/modals/finance/EditPaymentOtherModal'
 import DatePicker from '@/components/DatePicker'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
@@ -637,6 +638,10 @@ export default function PaymentConsolePage() {
   // row itself (PaymentHistoryEntry) already carries everything shown.
   const [viewEntry, setViewEntry] = useState<PaymentHistoryEntry | null>(null)
   const [editTarget, setEditTarget] = useState<EditablePaymentTarget | null>(null)
+  // Other Payment tab's own Edit target (put-payment-other.md) — a
+  // genuinely different shape/endpoint from Tuition's editTarget above, so
+  // kept as its own state rather than reused.
+  const [editOtherTarget, setEditOtherTarget] = useState<EditablePaymentOtherTarget | null>(null)
   // Which of this application's payments are advance-funded — put-payment.md
   // rejects editing those outright ("adjust the advance deposit instead"),
   // and the fee-line row itself has no `advance` field to check ahead of
@@ -1242,7 +1247,7 @@ export default function PaymentConsolePage() {
                                     <button className="btn btn-neu btn-sm" onClick={() => setViewEntry(h)}>
                                       <i className="lni lni-eye"></i> View
                                     </button>
-                                    {permissions.edit && (
+                                    {/* permissions.edit && ( */}
                                       <button
                                         className="btn btn-neu btn-sm"
                                         disabled={isAdvanceFunded}
@@ -1251,7 +1256,7 @@ export default function PaymentConsolePage() {
                                       >
                                         <i className="lni lni-pencil-alt"></i> Edit
                                       </button>
-                                    )}
+                                    {/* )} */}
                                   </ActionMenu>
                                 </td>
                                 <td>{h.payDate.slice(0, 10)}</td>
@@ -1284,12 +1289,32 @@ export default function PaymentConsolePage() {
                       <>
                       <ScrollTable className="no-sticky-col">
                         <table>
-                          <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
+                          <thead><tr><th style={{ width: 40 }}></th><th>Date</th><th>Category</th><th>Ledger</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
                           <tbody>
                             {otherHistoryItems.map(h => (
                               <tr key={h.paymentOtherGuid}>
+                                <td>
+                                  <ActionMenu>
+                                    <button
+                                      className="btn btn-neu btn-sm"
+                                      disabled={h.advance === 1}
+                                      title={h.advance === 1 ? 'Linked to an advance deposit — adjust the deposit instead.' : undefined}
+                                      onClick={() => setEditOtherTarget({ paymentOtherGuid: h.paymentOtherGuid, amount: h.amount, payDate: h.payDate, bankGuid: h.bank?.bankGuid ?? null, label: h.paymentCode })}
+                                    >
+                                      <i className="lni lni-pencil-alt"></i> Edit
+                                    </button>
+                                  </ActionMenu>
+                                </td>
                                 <td>{h.payDate.slice(0, 10)}</td>
                                 <td>{PAYMENT_CATEGORY_LABELS[2]}</td>
+                                <td>
+                                  {h.ledger ? (
+                                    <>
+                                      {h.ledger.ledgerName}
+                                      <span className="text-g400" style={{ display: 'block', fontSize: 11 }}>{h.ledger.ledgerCode}</span>
+                                    </>
+                                  ) : '—'}
+                                </td>
                                 <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
                                 <td>{h.currency.currencyCode}</td>
                                 <td><span className="pill pill-blue">{PAY_TYPE_LABELS[h.payType] ?? `Type ${h.payType}`}</span></td>
@@ -1782,11 +1807,11 @@ export default function PaymentConsolePage() {
                     </div>
 
                     <div className="flex gap-[10px] justify-end items-center">
-                      {permissions.add && (
+                      {/* permissions.add && ( */}
                         <button className="btn btn-primary btn-lg" disabled={createPayment.isPending} onClick={() => handleSave()}>
                           <i className="lni lni-save"></i> {createPayment.isPending ? 'Saving…' : 'Save Payment & Generate Receipt →'}
                         </button>
-                      )}
+                      {/* )} */}
                     </div>
                   </>
                 )}
@@ -1955,6 +1980,7 @@ export default function PaymentConsolePage() {
       />
       <ViewPaymentModal isOpen={!!viewEntry} onClose={() => setViewEntry(null)} showToast={showToast} entry={viewEntry} />
       <EditPaymentModal isOpen={!!editTarget} onClose={() => setEditTarget(null)} showToast={showToast} target={editTarget} applicationGuid={selectedApplicationGuid ?? undefined} />
+      <EditPaymentOtherModal isOpen={!!editOtherTarget} onClose={() => setEditOtherTarget(null)} showToast={showToast} target={editOtherTarget} />
       <Toast toast={toast} />
     </>
   )

@@ -165,7 +165,19 @@ export default function PaymentConsoleAdjustmentsPage() {
   // endpoint/rendering Payment Console's Tuition tab uses. An adjustment
   // only ever settles tuition (per post-adjustment.md), so this is the
   // right "what's owed" view here, not the cross-category outstanding-all.
-  const { data: outstandingLedgers = [], isLoading: isLedgersLoading, isError: isLedgersError } = useOutstandingLedgers(selectedApplicationGuid, !!selectedApplicationGuid, studentGuid)
+  const { data: outstandingLedgersRaw = [], isLoading: isLedgersLoading, isError: isLedgersError } = useOutstandingLedgers(selectedApplicationGuid, !!selectedApplicationGuid, studentGuid)
+  // getOutstandingLedgers is documented as "current semester + carried-
+  // forward semester-1 registration fee" — same scoping as Payment
+  // Console's own getCurrentSemesterPayable — but confirmed live (a real
+  // response came back with all four of a programme's semesters' rows, not
+  // just the current one), l.semesterGuid is null/blank on every row in
+  // practice, so filtering by guid was a silent no-op. semesterName IS
+  // reliably populated on every row (it's what the table's own subtitle
+  // under each ledger name renders), so this filters by that string against
+  // the student's own resolved current semester name instead.
+  const outstandingLedgers = semName
+    ? outstandingLedgersRaw.filter(l => !l.semesterName || l.semesterName === semName)
+    : outstandingLedgersRaw
 
   // Advance balance strip — per-currency undrawn total (get-advance-balance.md),
   // informational only; the picker below is what actually drives a draw.
