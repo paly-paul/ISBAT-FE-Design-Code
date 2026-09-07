@@ -74,6 +74,7 @@ export interface BatchCreateInput {
   bInCharge: string
   intakeGuid: string
   pHead: string | null
+  active: number
 }
 
 // Confirmed: Update takes the identical shape as Create — a full replace,
