@@ -93,6 +93,20 @@ export function notificationVisual(typeCode: string): { icon: string; tone: stri
   return TYPE_VISUAL[typeCode] ?? DEFAULT_VISUAL
 }
 
+// Human-readable group heading for a typeCode (e.g. "PROGRAM_APPROVAL_REQUESTED"
+// → "Program Approval Requested") — generic title-casing rather than a
+// hardcoded map, same "sane fallback for any typeCode this frontend has
+// never seen" reasoning as DEFAULT_VISUAL above, so a new backend-added
+// type groups under a readable heading with no frontend change needed.
+export function notificationTypeLabel(typeCode: string): string {
+  return typeCode
+    .toLowerCase()
+    .split('_')
+    .filter(Boolean)
+    .map(w => w[0].toUpperCase() + w.slice(1))
+    .join(' ')
+}
+
 export interface NotificationListParams {
   page?: number
   size?: number

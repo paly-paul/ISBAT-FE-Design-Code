@@ -23,6 +23,7 @@ import {
   useCreateAdjustment,
 } from '@/hooks/finance/useAdvancePayment'
 import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
+import { useExchangeRatesByDate } from '@/hooks/finance/useExchangeRates'
 import { formatDate } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
 
@@ -61,6 +62,34 @@ function initialsFor(name: string) {
 function todayYmd() {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+// Same currency-conversion helper as Payment Console's own page.tsx (kept
+// as an identical copy rather than a shared import — the two pages don't
+// currently share a module for page-local helpers like this one, matching
+// fmtAmt/applicantName/etc. above already being duplicated the same way).
+// exRate is "this currency's units per 1 unit of the base currency"
+// (Currency Master's isDefault=1 row) — converting A→B always routes
+// through the base: amountInBase = amount / rateA, amountInB =
+// amountInBase * rateB. Returns null (not a fallback guess) when either
+// currency's rate can't be resolved, INCLUDING a rate of exactly 0 — that's
+// never a real "no rate available" (no currency trades at 0 units per 1
+// base), it's what the by-date board can return for a currency nobody has
+// entered today's rate for yet, and amount / 0 would otherwise produce
+// Infinity (then NaN once totalled) instead of a clean "can't convert".
+function convertAmount(
+  amount: number,
+  fromGuid: string | null | undefined,
+  toGuid: string | null,
+  baseGuid: string | null,
+  ratesByGuid: Map<string, number>,
+): number | null {
+  if (!fromGuid || !toGuid) return null
+  if (fromGuid === toGuid) return amount
+  const fromRate = fromGuid === baseGuid ? 1 : ratesByGuid.get(fromGuid)
+  const toRate = toGuid === baseGuid ? 1 : ratesByGuid.get(toGuid)
+  if (fromRate == null || toRate == null || fromRate <= 0 || toRate <= 0) return null
+  return (amount / fromRate) * toRate
 }
 
 export default function PaymentConsoleAdjustmentsPage() {
@@ -132,10 +161,6 @@ export default function PaymentConsoleAdjustmentsPage() {
   // only ever settles tuition (per post-adjustment.md), so this is the
   // right "what's owed" view here, not the cross-category outstanding-all.
   const { data: outstandingLedgers = [], isLoading: isLedgersLoading, isError: isLedgersError } = useOutstandingLedgers(selectedApplicationGuid, !!selectedApplicationGuid, studentGuid)
-  const outstandingTotals = outstandingLedgers.reduce<Record<string, number>>((acc, l) => {
-    if (l.outstanding > 0) acc[l.currencyName] = (acc[l.currencyName] ?? 0) + l.outstanding
-    return acc
-  }, {})
 
   // Advance balance strip — per-currency undrawn total (get-advance-balance.md),
   // informational only; the picker below is what actually drives a draw.
@@ -163,6 +188,29 @@ export default function PaymentConsoleAdjustmentsPage() {
     else if (!currencyGuid && currencies.length > 0) setCurrencyGuid(getDefaultFinanceCurrencyGuid(currencies))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDeposit?.currencyGuid, currencies])
+
+  // Outstanding Balance conversion — same approach as Payment Console's own
+  // page.tsx: convert every ledger's Scheduled Bill/Outstanding into
+  // whichever currency is picked below, using today's exchange-rate board.
+  // The "Currency" field in Apply Advance does double duty as the
+  // conversion target here too (same reasoning as Payment Console's
+  // Currency Received field) — there's no separate picker to keep in sync.
+  const { data: todayRates = [] } = useExchangeRatesByDate(todayYmd())
+  const ratesByGuid = new Map(todayRates.map(r => [r.currencyGuid, r.exRate]))
+  const baseCurrency = currencies.find(c => c.isDefault === 1)
+  const targetCurrency = currencies.find(c => c.currencyGuid === currencyGuid)
+  const targetCurrencyGuid = targetCurrency?.currencyGuid ?? null
+  const targetCurrencyName = targetCurrency?.currencyName ?? ''
+  // null on a given ledger means its own currency (or the target's) has no
+  // resolvable rate for today — shown as "—" rather than silently defaulting
+  // to the original, unconverted figure.
+  const convertedLedgers = outstandingLedgers.map(l => ({
+    ...l,
+    convScheduled: convertAmount(l.ledgerAmount, l.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid),
+    convOutstanding: convertAmount(l.outstanding, l.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid),
+  }))
+  const convertedTotalOutstanding = convertedLedgers.reduce((sum, l) => sum + (l.convOutstanding ?? 0), 0)
+  const hasUnconvertibleLedger = convertedLedgers.some(l => l.outstanding > 0 && l.convOutstanding === null)
 
   function resetForm() {
     setPaymentAdvanceGuid('')
@@ -391,30 +439,65 @@ export default function PaymentConsoleAdjustmentsPage() {
                   </div>
                 ) : (
                   <div>
-                    {outstandingLedgers.map((l, i) => {
-                      const isPaid = l.outstanding === 0
-                      return (
-                        <div className={`pc-ledger-item${isPaid ? ' paid' : ''}`} key={`${l.ledgerGuid ?? l.ledgerName}-${i}`}>
-                          <span className="pc-ledger-icon"><i className={isPaid ? 'lni lni-checkmark-circle' : 'lni lni-invoice'}></i></span>
-                          <div className="flex-1 min-w-0">
-                            <div className="pc-ledger-name truncate">{l.ledgerName}</div>
-                            {l.semesterName && <div className="pc-ledger-sub">{l.semesterName}</div>}
-                          </div>
-                          <span className="flex items-baseline gap-1.5 justify-end flex-shrink-0">
-                            <span className="text-g400 font-semibold" style={{ fontSize: 11 }}>{l.currencyName}</span>
-                            <span className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>
-                              {fmtAmt(isPaid ? l.paidAmount : l.outstanding)}
-                            </span>
-                          </span>
-                        </div>
-                      )
-                    })}
-                    {Object.entries(outstandingTotals).map(([currency, total]) => (
-                      <div className="pc-total-due" key={currency}>
-                        <span className="text-muted" style={{ fontSize: 12 }}>Total Outstanding ({currency})</span>
-                        <span className="font-bold text-amber" style={{ fontSize: 15 }}>{fmtAmt(total)}</span>
+                    {/* Same conversion presentation as Payment Console's own
+                        Outstanding Balance table — Scheduled Bill/Outstanding
+                        converted into whichever currency is picked in Apply
+                        Advance below (that field does double duty as the
+                        conversion target, same as Payment Console's Currency
+                        Received), while Scheduled Amt/Paid stay native to
+                        each ledger's own currency. convertAmount now treats
+                        a 0 rate the same as a missing one, so an
+                        unconvertible ledger cleanly shows "—" instead of the
+                        ∞/NaN this used to produce when today's rate for a
+                        currency hadn't been entered yet. */}
+                    <div className="text-g400 mb-2" style={{ fontSize: 11.5 }}>
+                      Converted to {targetCurrencyName || 'the currency picked below'} — set via <b>Currency</b> in Apply Advance.
+                    </div>
+                    {hasUnconvertibleLedger && (
+                      <div className="warn-box mb-3">
+                        <i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0, marginTop: 1 }}></i>
+                        <div>Some ledgers couldn&apos;t be converted to {targetCurrencyName || 'the selected currency'} — no exchange rate is on file for today for that currency. Those rows show <span className="font-mono">—</span> below; the total only includes what could be converted.</div>
                       </div>
-                    ))}
+                    )}
+                    <div className="recgrid">
+                      <div className="recgrid-row recgrid-hdr">
+                        <span>Ledger</span>
+                        <span>Scheduled Amt</span>
+                        <span>Scheduled Bill</span>
+                        <span>Paid</span>
+                        <span>Outstanding</span>
+                      </div>
+                      {convertedLedgers.map((l, i) => {
+                        const isPaid = l.outstanding === 0
+                        return (
+                          <div className="recgrid-row recgrid-body" key={`${l.ledgerGuid ?? l.ledgerName}-${i}`}>
+                            <span>
+                              {l.ledgerName}{l.ledgerNum ? ` (${l.ledgerNum})` : ''}
+                              {isPaid && <span className="text-green" style={{ fontSize: 11, fontWeight: 600, marginLeft: 6 }}>Paid</span>}
+                              {l.semesterName && <span className="pc-ledger-sub" style={{ display: 'block' }}>{l.semesterName}</span>}
+                            </span>
+                            <span data-label="Scheduled Amt">
+                              <span>
+                                {fmtAmt(l.ledgerAmount)}
+                                <span className="text-g400" style={{ display: 'block', fontSize: 11, fontWeight: 600 }}>({l.currencyName})</span>
+                              </span>
+                            </span>
+                            <span data-label="Scheduled Bill">{l.convScheduled != null ? fmtAmt(l.convScheduled) : '—'}</span>
+                            <span data-label="Paid" className="font-bold text-green">
+                              <span>
+                                {fmtAmt(l.paidAmount)}
+                                <span className="text-g400" style={{ display: 'block', fontSize: 11, fontWeight: 600 }}>({l.currencyName})</span>
+                              </span>
+                            </span>
+                            <span data-label="Outstanding" className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>{l.convOutstanding != null ? fmtAmt(l.convOutstanding) : '—'}</span>
+                          </div>
+                        )
+                      })}
+                      <div className="recgrid-foot recgrid-total">
+                        <span>Total Outstanding {targetCurrencyName && `(${targetCurrencyName})`}</span>
+                        <span style={{ color: 'var(--amber)' }}>{fmtAmt(convertedTotalOutstanding)}</span>
+                      </div>
+                    </div>
                   </div>
                 )}
 
