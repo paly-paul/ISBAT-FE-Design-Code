@@ -468,7 +468,6 @@ export function searchApplicationsForFiling(searchTerm: string, pageNumber = 1, 
       : mockSearchResults
     return Promise.resolve({ items, totalCount: items.length, pageNumber, pageSize })
   }
-<<<<<<< HEAD
   return getApplicationPayments(pageNumber, pageSize, intakeCode, searchTerm).then(res => ({
     items: res.items.map(mapApplicationPaymentToSearchResult),
     totalCount: res.totalCount,
@@ -500,14 +499,6 @@ export function getFilingApplicationsPage(pageNumber = 1, pageSize = 20, intakeC
     pageNumber,
     pageSize,
   }))
-=======
-  return getApplicationPayments(pageNumber, pageSize, intakeCode).then(res => {
-    const items = res.items
-      .map(mapApplicationPaymentToSearchResult)
-      .filter(a => !searchTerm.trim() || `${a.appRefNo} ${a.firstName} ${a.lastName ?? ''} ${a.emailId} ${a.phone}`.toLowerCase().includes(searchTerm.trim().toLowerCase()))
-    return { items, totalCount: items.length, pageNumber, pageSize }
-  })
->>>>>>> origin
 }
 
 export function saveGeneral(input: SaveGeneralInput): Promise<SaveGeneralResponse> {
