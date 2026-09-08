@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
@@ -213,6 +214,7 @@ interface ProgrammeModalProps extends ModalProps {
 }
 
 export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, initialCurrencyGuid, createProgramMaster, updateProgramMasterComplete }: ProgrammeModalProps) {
+  const router                    = useRouter()
   const [step, setStep]           = useState(1)
   const [saved, setSaved]         = useState(false)
   const [failure, setFailure]     = useState<string | null>(null)
@@ -872,6 +874,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     try {
       await updateProgramStep1.mutateAsync({ programGuid, input })
       showToast('Basic details updated successfully', 'success')
+      setStep(2)
     } catch (err) {
       const code = err instanceof AuthError ? err.code : undefined
       const msg =
@@ -922,6 +925,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     try {
       await updateProgramCourseUnits.mutateAsync({ programGuid, input })
       showToast('Course units updated successfully', 'success')
+      setStep(3)
     } catch (err) {
       const code = err instanceof AuthError ? err.code : undefined
       const msg =
@@ -947,7 +951,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
     const nonBlankStructures = feeStructures.filter(s => !feeStructureIsBlank(s))
     if (nonBlankStructures.length === 0) {
-      showToast('No fee structures to update', 'warn')
+      showToast('Programme updated successfully', 'success')
+      handleClose()
+      router.push('/academic/programme-master')
       return
     }
 
@@ -1012,7 +1018,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           await saveFeeStructureComplete.mutateAsync(input)
         }
       }
-      showToast('Fee structure updated successfully', 'success')
+      showToast('Programme updated successfully', 'success')
+      handleClose()
+      router.push('/academic/programme-master')
     } catch (err) {
       const code = err instanceof AuthError ? err.code : undefined
       const msg =

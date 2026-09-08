@@ -1,5 +1,9 @@
 'use client'
+<<<<<<< HEAD
 import { Fragment, useEffect, useState } from 'react'
+=======
+import { useEffect, useMemo, useRef, useState } from 'react'
+>>>>>>> origin
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -8,7 +12,11 @@ import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { FailurePopup } from '@/components/modals/shared/FailurePopup'
 import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { useCampuses } from '@/hooks/config/useCampuses'
+<<<<<<< HEAD
 import { useProgramMasterByGuid, useProgramMasters } from '@/hooks/academic/useProgramMaster'
+=======
+import { useProgramDropdown, useProgramMaster, useProgramMasters } from '@/hooks/academic/useProgramMaster'
+>>>>>>> origin
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 import { useBatch, useBatches } from '@/hooks/academic/useBatches'
@@ -339,8 +347,15 @@ export default function FilingPage() {
   function selectApplication(a: FilingApplicationSearchResult) {
     setSelectedApplication(a); setShowApplicantDropdown(false); setApplicantSearch('')
 
-    setFirstName(a.firstName?.trim() ?? '')
-    setLastName(a.lastName?.trim() ?? '')
+    let fName = a.firstName?.trim() ?? ''
+    let lName = a.lastName?.trim() ?? ''
+    if (fName && !lName && fName.includes(' ')) {
+      const parts = fName.split(/\s+/)
+      fName = parts[0]
+      lName = parts.slice(1).join(' ')
+    }
+    setFirstName(fName)
+    setLastName(lName)
     setGender(a.gender === 1 ? 'Male' : a.gender === 0 ? 'Female' : '')
     setDob(a.dob ? a.dob.slice(0, 10) : '')
     setCountryGuid(a.countryGuid ?? '')
@@ -405,6 +420,11 @@ export default function FilingPage() {
 
   const { data: campuses = [] }   = useCampuses()
   const { data: programs = [] }   = useProgramMasters()
+  const { data: programDropdown = [] } = useProgramDropdown()
+  const { data: singleProgram }   = useProgramMaster(
+    programGuid,
+    !!programGuid && !programs.some(p => p.programGuid === programGuid) && !programDropdown.some(p => p.programGuid === programGuid)
+  )
   const { data: semesters = [] }  = useSemestersForProgram(programGuid, !!programGuid)
   const { data: batchTimes = [] } = useBatchTimes()
   // Same payment-scoped Dropdowns/Batches.bru endpoint that turned out
@@ -447,10 +467,38 @@ export default function FilingPage() {
   const { data: selectedProgramFallback } = useProgramMasterByGuid(programGuid, missingSelectedProgram)
 
   const campusOptions    = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
+<<<<<<< HEAD
   const programOptions   = [
     ...programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` })),
     ...(selectedProgramFallback ? [{ value: selectedProgramFallback.programGuid, label: `${selectedProgramFallback.programName} (${selectedProgramFallback.programCode})` }] : []),
   ]
+=======
+  const programOptions   = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const p of programs) {
+      map.set(p.programGuid, `${p.programName} (${p.programCode})`)
+    }
+    for (const p of programDropdown) {
+      if (!map.has(p.programGuid)) {
+        map.set(p.programGuid, `${p.programName} (${p.programCode})`)
+      }
+    }
+    const currentProgGuid = programGuid || selectedApplication?.programGuid
+    if (currentProgGuid && !map.has(currentProgGuid)) {
+      const fallback = selectedApplication?.programName || singleProgram?.programName || 'Selected Programme'
+      map.set(currentProgGuid, fallback)
+    }
+    return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
+  }, [programs, programDropdown, singleProgram, programGuid, selectedApplication?.programGuid, selectedApplication?.programName])
+
+  const displayProgramName =
+    selectedApplication?.programName ||
+    singleProgram?.programName ||
+    programs.find(p => p.programGuid === (programGuid || selectedApplication?.programGuid))?.programName ||
+    programDropdown.find(p => p.programGuid === (programGuid || selectedApplication?.programGuid))?.programName ||
+    ''
+
+>>>>>>> origin
   const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
   const batchTimeOptions = batchTimes.map(bt => ({ value: bt.batchTimeGuid, label: bt.batchTime }))
   const batchOptions     = [
@@ -582,7 +630,18 @@ export default function FilingPage() {
     })
   }
 
+<<<<<<< HEAD
   function renderQualRow(row: QualRow, index: number) {
+=======
+  const allQualsSaved = qualRows.length > 0 && qualRows.every(r => r.savedId != null)
+
+  function handleSaveLastQual() {
+    const targetRow = qualRows.slice().reverse().find(r => r.savedId == null) || qualRows[qualRows.length - 1]
+    if (targetRow) handleSaveQualRow(targetRow)
+  }
+
+  function renderQualRow(row: QualRow) {
+>>>>>>> origin
     const saved = row.savedId != null
     return (
       <div key={row.id} className={`qual-card mb-3 p-3 rounded-lg border border-g200${saved ? ' saved' : ''}`}>
@@ -605,12 +664,15 @@ export default function FilingPage() {
           </Field>
         </div>
         <div className="flex justify-end items-center gap-2 mt-3">
-          {saved
-            ? <span className="badge badge-green"><i className="lni lni-checkmark-circle" /> Saved</span>
-            : <button className="btn text-xs" disabled={saveQualification.isPending || !permissions.add} onClick={() => handleSaveQualRow(row)}>
-                {saveQualification.isPending ? 'Saving…' : 'Save Qualification'}
-              </button>}
-          <button className="btn btn-neu text-xs" disabled={deleteQualification.isPending || (saved && !permissions.delete)} onClick={() => handleDeleteQualRow(row)}>
+          {saved && (
+            <span className="badge badge-green"><i className="lni lni-checkmark-circle" /> Saved</span>
+          )}
+          <button
+            type="button"
+            className="btn btn-neu text-xs"
+            disabled={deleteQualification.isPending || (saved && !permissions.delete)}
+            onClick={() => handleDeleteQualRow(row)}
+          >
             <i className="lni lni-trash-can" /> {saved ? 'Delete' : 'Remove'}
           </button>
         </div>
@@ -778,6 +840,7 @@ export default function FilingPage() {
           )}
         </div>
         {selectedApplication && (
+<<<<<<< HEAD
           // Save Status intentionally not shown here — requirements doc says
           // not to display it in the UI at all.
           <div className="applicant-profile-strip">
@@ -791,6 +854,15 @@ export default function FilingPage() {
                 <span className="text-xs text-g500 flex items-center gap-1"><i className="lni lni-envelope text-g400" /> {selectedApplication.emailId ?? '—'}</span>
                 <span className="text-xs text-g500 flex items-center gap-1"><i className="lni lni-phone text-g400" /> {selectedApplication.phone ?? '—'}</span>
               </div>
+=======
+          <div className="info-box mt-4">
+            {/* Save Status intentionally not shown here — requirements doc says
+                not to display it in the UI at all. */}
+            <div className="g3">
+              <div><span className="text-xs text-g400 block">Email</span><span className="text-sm font-semibold text-g800">{selectedApplication.emailId ?? '—'}</span></div>
+              <div><span className="text-xs text-g400 block">Phone</span><span className="text-sm font-semibold text-g800">{selectedApplication.phone ?? '—'}</span></div>
+              <div><span className="text-xs text-g400 block">Programme</span><span className="text-sm font-semibold text-g800">{displayProgramName || '—'}</span></div>
+>>>>>>> origin
             </div>
           </div>
         )}
@@ -969,6 +1041,7 @@ export default function FilingPage() {
               )}
 
               {activeTab === 'qualifications' && (
+<<<<<<< HEAD
                 <div className="filing-stage-layout">
                   {summaryPanel}
                   <div className="filing-form-col">
@@ -990,6 +1063,48 @@ export default function FilingPage() {
                       <button className="btn" onClick={() => setActiveTab('personal')}><i className="lni lni-arrow-left" /> Personal Info</button>
                       <button className="btn btn-primary" onClick={() => setActiveTab('documents')}>Next: Documents <i className="lni lni-arrow-right" /></button>
                     </div>
+=======
+                <div>
+                  <div className="sec-divider">Highest Qualification</div>
+                  {renderQualRow(qualRows[0])}
+                  {qualRows.length > 1 && (
+                    <>
+                      <div className="sec-divider mt-5">Additional Qualifications</div>
+                      {qualRows.slice(1).map(row => renderQualRow(row))}
+                    </>
+                  )}
+                  <div className="flex justify-end mt-3">
+                    <button
+                      type="button"
+                      className="btn btn-neu text-xs flex items-center gap-1.5 text-blue font-semibold"
+                      onClick={() => setQualRows(rows => [...rows, emptyQualRow(Date.now())])}
+                    >
+                      <i className="lni lni-plus" /> Add Row
+                    </button>
+                  </div>
+                  <div className="flex justify-between items-center mt-5">
+                    <button type="button" className="btn btn-neu" onClick={() => setActiveTab('personal')}>
+                      <i className="lni lni-arrow-left" /> Personal Info
+                    </button>
+                    {!allQualsSaved ? (
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={saveQualification.isPending || !permissions.add}
+                        onClick={handleSaveLastQual}
+                      >
+                        {saveQualification.isPending ? 'Saving…' : 'Save Qualification'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => setActiveTab('documents')}
+                      >
+                        Next: Documents <i className="lni lni-arrow-right" />
+                      </button>
+                    )}
+>>>>>>> origin
                   </div>
                 </div>
               )}

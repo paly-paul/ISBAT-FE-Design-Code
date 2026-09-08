@@ -6,6 +6,7 @@ import {
   getProgramMasterByGuid,
   getProgramMasterFullDetails,
   getProgramMasters,
+  getProgramDropdown,
   getProgramMastersByCampus,
   updateProgramMasterComplete,
   updateProgramMasterStep1,
@@ -93,6 +94,27 @@ export function useProgramMastersByCampus(campusGuid: string, enabled: boolean) 
     queryKey: [...PROGRAM_MASTERS_KEY, 'byCampus', campusGuid],
     queryFn: () => getProgramMastersByCampus(campusGuid),
     enabled: enabled && !!campusGuid,
+  })
+}
+
+// Full program master by GUID (single record query)
+export function useProgramMaster(programGuid?: string, enabled = true) {
+  return useQuery({
+    queryKey: [...PROGRAM_MASTERS_KEY, 'detail', programGuid ?? ''],
+    queryFn: () => (programGuid ? getProgramMasterByGuid(programGuid) : Promise.reject(new Error('No guid'))),
+    enabled: enabled && !!programGuid,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
+// Program dropdown query — hits /api/v1/academic/program-master/dropdown
+export function useProgramDropdown(facultyGuid?: string) {
+  return useQuery({
+    queryKey: [...PROGRAM_MASTERS_KEY, 'dropdown', facultyGuid ?? ''],
+    queryFn: () => getProgramDropdown(facultyGuid),
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
 }
 
