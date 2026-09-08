@@ -66,7 +66,7 @@ export interface FilingApplicationSearchResult {
   createdDate: string
 }
 
-interface FilingApplicationSearchResponse {
+export interface FilingApplicationSearchResponse {
   items: FilingApplicationSearchResult[]
   totalCount: number
   pageNumber: number
@@ -369,9 +369,14 @@ interface ApplicationPaymentListResponse {
 // confirmed), but callers should pass it whenever they have one — scoping
 // to the current intake instead of fetching every intake's payments at once
 // is the whole point.
-function getApplicationPayments(page = 1, pageSize = 10, intakeCode?: number | string): Promise<ApplicationPaymentListResponse> {
+// searchTerm is now ALSO a CONFIRMED real server-side param (2026-09-08) —
+// combining it with intakeCode in the same request isn't independently
+// verified, only each param on its own, but both are standard query filters
+// on the same list endpoint so they're assumed combinable here.
+function getApplicationPayments(page = 1, pageSize = 10, intakeCode?: number | string, searchTerm?: string): Promise<ApplicationPaymentListResponse> {
   const intakeParam = intakeCode != null ? `&intakeCode=${intakeCode}` : ''
-  return apiGet<ApplicationPaymentListResponse | null>(`/api/v1/admissions/application-payments?page=${page}&pageSize=${pageSize}${intakeParam}`)
+  const searchParam = searchTerm?.trim() ? `&searchTerm=${encodeURIComponent(searchTerm.trim())}` : ''
+  return apiGet<ApplicationPaymentListResponse | null>(`/api/v1/admissions/application-payments?page=${page}&pageSize=${pageSize}${intakeParam}${searchParam}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
@@ -445,8 +450,9 @@ function mapApplicationPaymentToSearchResult(r: ApplicationPaymentRecord): Filin
 // note on getApplicationPayments) — the caller passes the current academic
 // intake's code so this only ever pulls that one intake's payments (~hundreds
 // of rows per the live sample) instead of every intake ever recorded.
-// searchTerm still has no confirmed server-side param, so matching within
-// that scoped batch stays client-side.
+// searchTerm is now CONFIRMED real server-side too (see getApplicationPayments)
+// — passed straight through rather than re-filtered client-side, since the
+// server is the source of truth for what matches.
 export function searchApplicationsForFiling(searchTerm: string, pageNumber = 1, pageSize = 20, intakeCode?: number | string): Promise<FilingApplicationSearchResponse> {
   if (MOCK_AUTH) {
     const items = searchTerm.trim()
@@ -454,12 +460,37 @@ export function searchApplicationsForFiling(searchTerm: string, pageNumber = 1, 
       : mockSearchResults
     return Promise.resolve({ items, totalCount: items.length, pageNumber, pageSize })
   }
-  return getApplicationPayments(pageNumber, pageSize, intakeCode).then(res => {
-    const items = res.items
-      .map(mapApplicationPaymentToSearchResult)
-      .filter(a => !searchTerm.trim() || `${a.appRefNo} ${a.firstName} ${a.emailId} ${a.phone}`.toLowerCase().includes(searchTerm.trim().toLowerCase()))
-    return { items, totalCount: items.length, pageNumber, pageSize }
-  })
+  return getApplicationPayments(pageNumber, pageSize, intakeCode, searchTerm).then(res => ({
+    items: res.items.map(mapApplicationPaymentToSearchResult),
+    totalCount: res.totalCount,
+    pageNumber,
+    pageSize,
+  }))
+}
+
+// Real server page of application-payments, filtered server-side by
+// searchTerm (CONFIRMED — see getApplicationPayments) and mapped onto the
+// Filing search shape — backs the Filing page's applicant-search dropdown's
+// scroll-to-load-more (useSearchApplicationsForFilingInfinite), same
+// convention as useSearchCourseUnitsInfinite/useSearchStudentsInfinite
+// elsewhere in the app. This function's job is real pagination (page/
+// pageSize, CONFIRMED) plus the real searchTerm filter, fetched in small
+// pages instead of the old single pageSize=12000 "fetch nearly everything up
+// front, filter client-side" workaround that predates searchTerm being
+// confirmed.
+export function getFilingApplicationsPage(pageNumber = 1, pageSize = 20, intakeCode?: number | string, searchTerm?: string): Promise<FilingApplicationSearchResponse> {
+  if (MOCK_AUTH) {
+    const items = searchTerm?.trim()
+      ? mockSearchResults.filter(r => `${r.appRefNo} ${r.firstName} ${r.emailId} ${r.phone}`.toLowerCase().includes(searchTerm.trim().toLowerCase()))
+      : mockSearchResults
+    return Promise.resolve({ items, totalCount: items.length, pageNumber, pageSize })
+  }
+  return getApplicationPayments(pageNumber, pageSize, intakeCode, searchTerm).then(res => ({
+    items: res.items.map(mapApplicationPaymentToSearchResult),
+    totalCount: res.totalCount,
+    pageNumber,
+    pageSize,
+  }))
 }
 
 export function saveGeneral(input: SaveGeneralInput): Promise<SaveGeneralResponse> {

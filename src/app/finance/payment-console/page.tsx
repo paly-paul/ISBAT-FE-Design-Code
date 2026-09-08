@@ -16,7 +16,15 @@ import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
 import { useExchangeRatesByDate, useCreateExchangeRate, useUpdateExchangeRate, ExchangeRate } from '@/hooks/finance/useExchangeRates'
-import { PaymentAdvance, useAdvanceStatusByPayment, usePaymentAdvances } from '@/hooks/finance/usePayments'
+import { useAdvanceStatusByPayment } from '@/hooks/finance/usePayments'
+import {
+  useAdvanceDeposits,
+  useAdvanceBalance,
+  useAdjustmentsByAdvance,
+  useAdjustmentLedgerBreakdown,
+  useCreateAdjustment,
+  AdvanceDepositSummary,
+} from '@/hooks/finance/useAdvancePayment'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
@@ -39,7 +47,7 @@ import {
   PaymentHistoryEntry,
 } from '@/hooks/finance/usePaymentConsole'
 import { usePaymentOthersList } from '@/hooks/finance/usePaymentOthers'
-import { formatDateTime } from '@/lib/date'
+import { formatDate, formatDateTime } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -262,6 +270,15 @@ export default function PaymentConsolePage() {
   // payment form (selectStudent's resetPaymentForm call).
   const [activePayTab, setActivePayTab] = useState<PayCategory>('tuition')
 
+  // Semester Payment tab mode toggle — 'payment' is the regular tuition
+  // payment form (existing, below); 'adjustment' swaps in Payment Console
+  // Adjustments' own "Apply Advance" fields/functionality, moved here
+  // 2026-09-08 (that standalone page is retired — see its own git history
+  // for the original). Both modes share the same Outstanding Balance ledger
+  // table above the toggle; only the Payment Detail section below it swaps.
+  // Resets to 'payment' on every new student pick, same as activePayTab.
+  const [tuitionMode, setTuitionMode] = useState<'payment' | 'adjustment'>('payment')
+
   // Other Payment tab — same UI-first mock treatment NCHE/Guild had before
   // they were dropped from this page (they'll get their own pages later),
   // laid out after the matching legacy reference screen
@@ -279,9 +296,12 @@ export default function PaymentConsolePage() {
   //
   // otherIsAdvance mirrors the legacy form's "Advance Payment" checkbox —
   // now wired for real (2026-09-01) via AdvanceDepositPickerModal +
-  // get-payment-advances.md's list endpoint (already backing the Advanced
-  // Payments console page, usePaymentAdvances). Checking the box opens the
-  // picker instead of flipping the flag directly; otherIsAdvance/
+  // get-advance-deposits.md's per-application list (useAdvanceDeposits,
+  // same hook Payment Console Adjustments' own Apply Advance dropdown
+  // uses — switched 2026-09-08 from the studentGuid-scoped
+  // get-payment-advances.md list, see AdvanceDepositPickerModal's own
+  // comment for why). Checking the box opens the picker instead of
+  // flipping the flag directly; otherIsAdvance/
   // selectedAdvance are only set once a deposit is actually confirmed there
   // (see toggleAdvancePayment/confirmAdvanceSelection below), and unchecking
   // clears both. No separate "Advance Payment Date" field any more — the
@@ -292,7 +312,7 @@ export default function PaymentConsolePage() {
   const [otherLedger, setOtherLedger] = useState('')
   const [otherPayDate, setOtherPayDate] = useState(todayYmd)
   const [otherIsAdvance, setOtherIsAdvance] = useState(false)
-  const [selectedAdvance, setSelectedAdvance] = useState<PaymentAdvance | null>(null)
+  const [selectedAdvance, setSelectedAdvance] = useState<AdvanceDepositSummary | null>(null)
   const [showAdvancePicker, setShowAdvancePicker] = useState(false)
   const [otherPayType, setOtherPayType] = useState('1')
   // Narrowed to only the category CreatePaymentOther will accept for the
@@ -318,6 +338,25 @@ export default function PaymentConsolePage() {
   const [remarks, setRemarks] = useState('')
 
   const [receipt, setReceipt] = useState<ReceiptData | null>(null)
+
+  // ── Apply Advance (tuitionMode === 'adjustment') ────────────────────────
+  // Draws down one of this application's own advance deposits against its
+  // outstanding TUITION ledgers via the dedicated post-adjustment.md
+  // endpoint (port of the legacy T_InsertPaymentAdjustments_Advance
+  // procedure) — a genuinely different mechanism from Other Payment's own
+  // "Advance Payment" checkbox above (that one settles Other-category
+  // ledgers through the regular CreatePaymentOther endpoint with a
+  // paymentAdvanceGuid attached). Field names are prefixed adj*/paymentAdvanceGuid
+  // rather than reusing amount/currencyGuid above so switching tuitionMode
+  // never mixes up the two forms' state.
+  const [paymentAdvanceGuid, setPaymentAdvanceGuid] = useState('')
+  const [adjCurrencyGuid, setAdjCurrencyGuid] = useState('')
+  const [adjAmount, setAdjAmount] = useState('')
+  const [adjustmentDate, setAdjustmentDate] = useState(todayYmd)
+  const [adjRemarks, setAdjRemarks] = useState('')
+  // Ledger breakdown for one adjustment-history row, shown in a small modal
+  // on click (get-adjustment-ledger-breakdown.md) — fetched on demand.
+  const [breakdownGuid, setBreakdownGuid] = useState<string | null>(null)
 
   // Debounced so GetPayableLedgers isn't hit on every keystroke.
   const [debouncedAmount, setDebouncedAmount] = useState('')
@@ -402,15 +441,55 @@ export default function PaymentConsolePage() {
   const studentGuid = profile?.studentGuid ?? selectedStudentGuidHint ?? null
 
   // Re-added per request — hide the Other Payment tab's Advance Payment
-  // checkbox entirely when this student has zero advance deposits on record
-  // at all (matching AdvanceDepositPickerModal's own EmptyState condition,
-  // items.length === 0), rather than always showing it and letting the
-  // picker's empty state be the only place that says so. Fetched
-  // independently of the picker's own usePaymentAdvances call (that one only
-  // fires while the modal is open) so this gate is known before the
-  // checkbox even renders. pageSize: 1 is enough — only totalCount matters.
-  const { data: otherAdvancesCheck } = usePaymentAdvances(1, 1, !!studentGuid, studentGuid)
-  const hasAdvanceDeposits = (otherAdvancesCheck?.totalCount ?? 0) > 0
+  // checkbox entirely when this application has zero advance deposits on
+  // record at all (matching AdvanceDepositPickerModal's own EmptyState
+  // condition, rows.length === 0), rather than always showing it and
+  // letting the picker's empty state be the only place that says so.
+  // Scoped by applicationGuid, not studentGuid (2026-09-08 fix) — the
+  // earlier studentGuid-scoped check never fired at all for an applicant
+  // who hasn't been converted into an enrolled student yet, silently hiding
+  // the checkbox even when real deposits existed on their application (see
+  // AdvanceDepositPickerModal's own comment for the full story). Fetched
+  // independently of the picker's own useAdvanceDeposits call (that one
+  // only fires while the modal is open) so this gate is known before the
+  // checkbox even renders.
+  const { data: otherAdvancesCheck } = useAdvanceDeposits(selectedApplicationGuid, !!selectedApplicationGuid)
+  const hasAdvanceDeposits = (otherAdvancesCheck?.length ?? 0) > 0
+
+  // Semester Payment tab's "Apply Advance" mode reuses this same per-
+  // application deposit list (get-advance-deposits.md, not category-scoped)
+  // rather than firing a second identical query.
+  const deposits = otherAdvancesCheck ?? []
+  const selectedDeposit = deposits.find(d => d.paymentAdvanceGuid === paymentAdvanceGuid)
+
+  // Advance balance strip for Apply Advance — per-currency undrawn total
+  // (get-advance-balance.md), informational only; only fetched while that
+  // mode is actually active.
+  const { data: advanceBalances = [] } = useAdvanceBalance(
+    selectedApplicationGuid, !!selectedApplicationGuid && activePayTab === 'tuition' && tuitionMode === 'adjustment',
+  )
+
+  // This deposit's own adjustment history (get-adjustments-by-advance.md), unpaged.
+  const {
+    data: adjustmentHistory = [], isLoading: isAdjHistoryLoading, isError: isAdjHistoryError,
+  } = useAdjustmentsByAdvance(paymentAdvanceGuid || null, !!paymentAdvanceGuid)
+
+  const {
+    data: adjBreakdown = [], isLoading: isAdjBreakdownLoading, isError: isAdjBreakdownError,
+  } = useAdjustmentLedgerBreakdown(breakdownGuid, !!breakdownGuid)
+
+  const createAdjustment = useCreateAdjustment()
+
+  // Defaults the Apply Advance currency picker to the deposit's own currency
+  // as soon as it's picked (the common case is applying it in the currency
+  // it was deposited in, still freely changeable), falling back to
+  // Finance's own default before any deposit is picked rather than sitting
+  // blank — same convention as Other Payment's own currency effect above.
+  useEffect(() => {
+    if (selectedDeposit?.currencyGuid) setAdjCurrencyGuid(selectedDeposit.currencyGuid)
+    else if (!adjCurrencyGuid && currencies.length > 0) setAdjCurrencyGuid(getDefaultFinanceCurrencyGuid(currencies))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDeposit?.currencyGuid, currencies])
 
   // Discount-aware replacement for the old useOutstandingLedgers — same
   // current-semester scoping, but each ledger also carries its applicable
@@ -635,8 +714,25 @@ export default function PaymentConsolePage() {
   // endpoint has no Tuition rows to filter out, so there's nothing this
   // cross-category list adds there any more; it used to be shown there
   // unfiltered, spanning every category, which is what this change fixes).
-  const { data: paymentHistory = [], isLoading: isHistoryLoading, isError: isHistoryError } = usePaymentHistory(selectedApplicationGuid, !!selectedApplicationGuid && activePayTab === 'tuition')
+  // Also fetched (regardless of active tab) whenever this application has
+  // advance deposits — get-advance-deposits.md's own response normalizes
+  // every deposit to the base currency (originalAmount/balance/currencyGuid
+  // all in USD terms, confirmed live: a deposit made in 3,000,000 UGX comes
+  // back as baseAmount 810.81), with no native-currency figure of its own.
+  // getPaymentHistory's category-5 rows are the one place that native
+  // amount/currency still exists (paymentGuid there is the same guid as
+  // paymentAdvanceGuid) — advanceNativeByGuid below cross-references it so
+  // the picker can show what the cashier actually deposited, not just its
+  // base-currency equivalent.
+  const { data: paymentHistory = [], isLoading: isHistoryLoading, isError: isHistoryError } = usePaymentHistory(selectedApplicationGuid, !!selectedApplicationGuid && (activePayTab === 'tuition' || hasAdvanceDeposits))
   const tuitionPaymentHistory = useMemo(() => paymentHistory.filter(h => h.category === 1), [paymentHistory])
+  const advanceNativeByGuid = useMemo(() => {
+    const map = new Map<string, { amount: number; currencyName: string }>()
+    paymentHistory.forEach(h => {
+      if (h.category === 5) map.set(h.paymentGuid, { amount: h.amount, currencyName: h.currencyName })
+    })
+    return map
+  }, [paymentHistory])
   const [historyPage, setHistoryPage] = useState(1)
   // Reset to page 1 on a new student so the view doesn't get stranded on a
   // now out-of-range page.
@@ -740,6 +836,14 @@ export default function PaymentConsolePage() {
     setReceipt(null)
   }
 
+  function resetAdjustmentForm() {
+    setPaymentAdvanceGuid('')
+    setAdjCurrencyGuid(getDefaultFinanceCurrencyGuid(currencies))
+    setAdjAmount('')
+    setAdjustmentDate(todayYmd())
+    setAdjRemarks('')
+  }
+
   function resetOtherForm() {
     setOtherLedger('')
     setOtherPayDate(todayYmd())
@@ -772,7 +876,7 @@ export default function PaymentConsolePage() {
     else { setOtherIsAdvance(false); setSelectedAdvance(null) }
   }
 
-  function confirmAdvanceSelection(advance: PaymentAdvance) {
+  function confirmAdvanceSelection(advance: AdvanceDepositSummary) {
     setSelectedAdvance(advance)
     setOtherIsAdvance(true)
     setShowAdvancePicker(false)
@@ -780,7 +884,7 @@ export default function PaymentConsolePage() {
     // normally stay as-is (CreatePaymentOther draws down in the deposit's
     // own currency), Amount defaults to the full undrawn balance but a
     // cashier may want a partial draw-down instead.
-    if (advance.currency) setOtherCurrencyGuid(advance.currency.currencyGuid)
+    setOtherCurrencyGuid(advance.currencyGuid)
     setOtherAmount(String(advance.balance))
   }
 
@@ -857,7 +961,9 @@ export default function PaymentConsolePage() {
     setCommittedSearch('')
     setSearchFocused(false)
     setActivePayTab('tuition')
+    setTuitionMode('payment')
     resetPaymentForm()
+    resetAdjustmentForm()
     setOtherPayments([])
     resetOtherForm()
     setSuccessModal(null)
@@ -943,6 +1049,48 @@ export default function PaymentConsolePage() {
     )
   }
 
+  // Submit handler for Apply Advance (tuitionMode === 'adjustment') — ported
+  // as-is from the standalone Payment Console Adjustments page's own
+  // handleSubmit.
+  function handleSubmitAdjustment() {
+    if (!profile || !selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
+    if (!selectedDeposit) { showToast('Please select an advance deposit to draw from.', 'warn'); return }
+    if (!adjCurrencyGuid) { showToast('Please select a currency.', 'warn'); return }
+    const amt = parseFloat(adjAmount)
+    if (!adjAmount.trim() || isNaN(amt) || amt <= 0) { showToast('Amount must be greater than 0.', 'warn'); return }
+    if (!adjustmentDate) { showToast('Please select an adjustment date.', 'warn'); return }
+
+    createAdjustment.mutate(
+      {
+        paymentAdvanceGuid: selectedDeposit.paymentAdvanceGuid,
+        applicationGuid: selectedApplicationGuid,
+        input: { amount: amt, currencyGuid: adjCurrencyGuid, adjustmentDate, remarks: adjRemarks.trim() || null },
+      },
+      {
+        onSuccess: result => {
+          setSuccessModal({
+            title: 'Adjustment Recorded',
+            rows: [
+              ['Adjustment Code', result.adjustmentCode ?? '—'],
+              ['Applied', `${currencies.find(c => c.currencyGuid === adjCurrencyGuid)?.currencyName ?? ''} ${fmtAmt(result.adjustedAmount)}`.trim()],
+              ['Receipt', result.receipt],
+              ['Remaining Deposit Balance', `${selectedDeposit.currencyCode} ${fmtAmt(result.remainingAdvanceBalance)}`],
+            ],
+            notices: result.newAdvanceMessage ? [result.newAdvanceMessage] : undefined,
+          })
+          resetAdjustmentForm()
+        },
+        onError: (error: Error) => {
+          // Business-rule rejections (exhausted balance, missing exchange
+          // rate, nothing outstanding, concurrent settlement, …) all come
+          // back as a plain message on the generic-failure branch — surface
+          // it as-is rather than a generic "failed" toast.
+          showToast(error instanceof AuthError ? error.message : (error.message || 'Failed to record adjustment. Please try again.'), 'error')
+        },
+      },
+    )
+  }
+
   function handleClear() {
     setSelectedApplicationGuid(null)
     setSelectedStudentGuidHint(null)
@@ -950,6 +1098,8 @@ export default function PaymentConsolePage() {
     setCommittedSearch('')
     resetPaymentForm()
     setActivePayTab('tuition')
+    setTuitionMode('payment')
+    resetAdjustmentForm()
     setOtherPayments([])
     resetOtherForm()
     setSuccessModal(null)
@@ -1411,7 +1561,7 @@ export default function PaymentConsolePage() {
                       <div className="flex items-center justify-between gap-2 mt-2 p-2.5 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100">
                         <div style={{ fontSize: 12 }}>
                           Drawing from <span className="font-mono text-blue font-bold">{selectedAdvance.advPaymentCode}</span>
-                          <span className="text-g500"> · Balance {selectedAdvance.balance.toLocaleString()} {selectedAdvance.currency?.currencyCode ?? ''}</span>
+                          <span className="text-g500"> · Balance {selectedAdvance.balance.toLocaleString()} {selectedAdvance.currencyCode}</span>
                         </div>
                         <button type="button" className="btn btn-neu btn-sm" onClick={() => setShowAdvancePicker(true)}>Change</button>
                       </div>
@@ -1437,13 +1587,13 @@ export default function PaymentConsolePage() {
                     pairing as Tuition's own Currency/Amount row. */}
                 <div className="g2 mb-[14px]">
                   <div className="fg">
-                    <div className="lbl">Currency <span className="req">*</span></div>
-                    <SearchSelect
-                      placeholder="— Select Currency —"
-                      options={currencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))}
-                      value={otherCurrencyGuid}
-                      onChange={setOtherCurrencyGuid}
-                    />
+                    {/* View-only per request — Currency always follows
+                        Finance's own default (or the drawn-down deposit's
+                        own currency in Advance mode, set by
+                        confirmAdvanceSelection), never a separate cashier
+                        choice. */}
+                    <div className="lbl">Currency</div>
+                    <input className="ctrl" readOnly value={currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyName ?? ''} placeholder="—" />
                   </div>
                   <div className="fg">
                     <div className="lbl">Amount <span className="req">*</span></div>
@@ -1452,20 +1602,18 @@ export default function PaymentConsolePage() {
                       value={otherAmount} onChange={e => setOtherAmount(e.target.value)} />
                   </div>
                 </div>
-                {/* Payment Date + Payment Type paired — same pairing as
-                    Tuition's own Date/Method row. */}
+                {/* Payment Date + Payment Type paired — both view-only per
+                    request now (Date always today; Type stays Cash, its own
+                    default, since there's no picker left to change it to
+                    anything that would need Bank Name below). */}
                 <div className="g2 mb-[14px]">
                   <div className="fg">
-                    <div className="lbl">Payment Date <span className="req">*</span></div>
-                    <DatePicker value={otherPayDate} onChange={setOtherPayDate} />
+                    <div className="lbl">Payment Date</div>
+                    <input className="ctrl" readOnly value={formatDate(otherPayDate)} />
                   </div>
                   <div className="fg">
-                    <div className="lbl">Payment Type <span className="req">*</span></div>
-                    <SearchSelect
-                      options={Object.entries(PAY_TYPE_LABELS).map(([value, label]) => ({ value, label }))}
-                      value={otherPayType}
-                      onChange={val => { setOtherPayType(val); setOtherReceiptBookGuid('') }}
-                    />
+                    <div className="lbl">Payment Type</div>
+                    <input className="ctrl" readOnly value={PAY_TYPE_LABELS[Number(otherPayType)] ?? `Type ${otherPayType}`} />
                   </div>
                 </div>
 
@@ -1717,7 +1865,28 @@ export default function PaymentConsolePage() {
                     !isLedgersLoading too so the form doesn't flash visible
                     before that grid has had a chance to report empty. */}
                 {!receipt && (
-                  <div className="sec-divider">Payment Detail</div>
+                  <div className="sec-divider flex items-center justify-between flex-wrap gap-2">
+                    <span>Payment Detail</span>
+                    {/* Regular Payment / Apply Advance toggle — moved here
+                        from the standalone Payment Console Adjustments page
+                        (2026-09-08), which is retired now that this same
+                        "draw down one of this application's advance
+                        deposits against outstanding tuition" functionality
+                        lives right here. Same .tgl-group/.tgl-btn segmented
+                        control the rest of the app already uses for this
+                        kind of two-way switch, not a bespoke component.
+                        Switching modes doesn't touch the ledger table above
+                        — both modes settle the same outstanding tuition
+                        ledgers, just via a different funding source. */}
+                    <div className="tgl-group">
+                      <button type="button" className={`tgl-btn${tuitionMode === 'payment' ? ' tgl-active' : ''}`} onClick={() => setTuitionMode('payment')}>
+                        Regular Payment
+                      </button>
+                      <button type="button" className={`tgl-btn${tuitionMode === 'adjustment' ? ' tgl-active' : ''}`} onClick={() => setTuitionMode('adjustment')}>
+                        Apply Advance
+                      </button>
+                    </div>
+                  </div>
                 )}
                 {!receipt && isLedgersLoading && (
                   <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Checking outstanding balance…</div>
@@ -1729,7 +1898,7 @@ export default function PaymentConsolePage() {
                     <div className="text-g400 mt-1" style={{ fontSize: 12.5 }}>This application has no outstanding tuition ledgers — there is nothing to bill right now.</div>
                   </div>
                 )}
-                {!receipt && !isLedgersLoading && ledgers.length > 0 && (
+                {!receipt && !isLedgersLoading && ledgers.length > 0 && tuitionMode === 'payment' && (
                   <>
                     {/* Live summary strip — mirrors the amount/currency/date/
                         method already entered below back at the cashier as
@@ -1829,6 +1998,205 @@ export default function PaymentConsolePage() {
                       {/* )} */}
                     </div>
                   </>
+                )}
+
+                {/* Apply Advance — moved from the standalone Payment Console
+                    Adjustments page (2026-09-08); same fields/functionality/
+                    APIs, ported as-is. Draws down one of this application's
+                    own advance deposits against the outstanding tuition
+                    ledgers shown above, via the dedicated post-adjustment.md
+                    endpoint (see handleSubmitAdjustment/useCreateAdjustment).
+                    Gated the same way the regular form is (nothing to apply
+                    against once fully settled) plus its own "at least one
+                    drawable deposit" gate below, matching the original
+                    page's own reasoning: an empty picker plus a stack of
+                    disabled fields underneath it just repeats the same
+                    "nothing here" message four times over. */}
+                {!receipt && !isLedgersLoading && ledgers.length > 0 && tuitionMode === 'adjustment' && (
+                  <>
+                    {advanceBalances.length > 0 && (
+                      <div className="mb-[14px]">
+                        <div className="lbl">Undrawn Advance Balance</div>
+                        <div className="flex gap-4 flex-wrap">
+                          {advanceBalances.map(b => (
+                            <div className="pc-total-due" key={b.currencyGuid}>
+                              <span className="text-muted" style={{ fontSize: 12 }}>{b.currencyName}</span>
+                              <span className="font-bold text-blue" style={{ fontSize: 15 }}>{fmtAmt(b.balance)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {deposits.length === 0 ? (
+                      <div className="text-g400 text-center" style={{ padding: '12px 0', fontSize: 12.5 }}>
+                        No drawable advance deposits for this application — nothing to apply until one exists.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="g2 mb-[14px]">
+                          <div className="fg">
+                            <div className="lbl">Advance Deposit <span className="req">*</span></div>
+                            {/* get-advance-deposits.md's own balance/currencyCode are
+                                base-currency figures for every row (see
+                                AdvanceDepositPickerModal's own comment on this same
+                                endpoint) — a deposit actually made in USD still comes
+                                back here as its UGX equivalent. Cross-referenced
+                                against advanceNativeByGuid (paymentHistory's
+                                category-5 rows) the same way that modal already
+                                does, so the cashier picks the deposit by what they
+                                actually collected, not its base-currency figure. */}
+                            <SearchSelect
+                              placeholder="— Select a deposit —"
+                              options={deposits.map(d => {
+                                const native = advanceNativeByGuid.get(d.paymentAdvanceGuid)
+                                const nativeBalance = native && d.originalAmount > 0 ? native.amount * (d.balance / d.originalAmount) : null
+                                const label = native
+                                  ? `${d.advPaymentCode} — ${native.currencyName} ${fmtAmt(nativeBalance ?? native.amount)} available (${d.currencyCode} ${fmtAmt(d.balance)})`
+                                  : `${d.advPaymentCode} — ${d.currencyCode} ${fmtAmt(d.balance)} available`
+                                return { value: d.paymentAdvanceGuid, label }
+                              })}
+                              value={paymentAdvanceGuid}
+                              onChange={setPaymentAdvanceGuid}
+                            />
+                          </div>
+                          <div className="fg">
+                            <div className="lbl">Deposit Balance</div>
+                            {/* Same native-amount cross-reference as the dropdown
+                                above, styled after AdvanceDepositPickerModal's own
+                                native-primary/base-secondary table cell — the base
+                                figure (what Amount to Apply/Currency below actually
+                                operate in) stays visible underneath, just no longer
+                                the only figure shown. */}
+                            <div className="ctrl" style={{ minHeight: 33.4, display: 'flex', alignItems: 'center' }}>
+                              {selectedDeposit ? (() => {
+                                const native = advanceNativeByGuid.get(selectedDeposit.paymentAdvanceGuid)
+                                const nativeBalance = native && selectedDeposit.originalAmount > 0
+                                  ? native.amount * (selectedDeposit.balance / selectedDeposit.originalAmount)
+                                  : null
+                                return (
+                                  <div>
+                                    <span className="font-bold">{fmtAmt(native ? (nativeBalance ?? native.amount) : selectedDeposit.balance)}</span>
+                                    {' '}{native ? native.currencyName : selectedDeposit.currencyName}
+                                    {native && (
+                                      <div className="text-g400" style={{ fontSize: 11, fontWeight: 600 }}>
+                                        {fmtAmt(selectedDeposit.balance)} {selectedDeposit.currencyCode}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })() : <span className="text-g400">—</span>}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="g2 mb-[14px]">
+                          <div className="fg">
+                            <div className="lbl">Amount to Apply <span className="req">*</span></div>
+                            <input
+                              className="ctrl"
+                              type="number"
+                              placeholder="0.00"
+                              value={adjAmount}
+                              onChange={e => setAdjAmount(e.target.value)}
+                              disabled={!selectedDeposit}
+                            />
+                          </div>
+                          <div className="fg">
+                            {/* View-only per request — Currency always
+                                follows the selected deposit's own currency
+                                (see the effect defaulting adjCurrencyGuid
+                                above), never a separate cashier choice, so
+                                there's nothing here for a picker to actually
+                                let them change. */}
+                            <div className="lbl">Currency</div>
+                            <input
+                              className="ctrl"
+                              readOnly
+                              value={currencies.find(c => c.currencyGuid === adjCurrencyGuid)?.currencyName ?? ''}
+                              placeholder="—"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="g2 mb-[14px]">
+                          <div className="fg">
+                            {/* View-only per request — always today, same as
+                                every other "Adjustment Date" this endpoint
+                                would otherwise silently backdate/postdate if
+                                it were left editable. */}
+                            <div className="lbl">Adjustment Date</div>
+                            <input className="ctrl" readOnly value={formatDate(adjustmentDate)} />
+                          </div>
+                          <div className="fg">
+                            <div className="lbl">Remarks <span className="text-g400" style={{ fontWeight: 500 }}>(optional)</span></div>
+                            <textarea className="ctrl" rows={1} placeholder="Defaults to “Advance Adjustment”" value={adjRemarks} onChange={e => setAdjRemarks(e.target.value)} disabled={!selectedDeposit} />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-[10px] justify-end flex-wrap">
+                          <button className="btn btn-neu" onClick={resetAdjustmentForm}><i className="lni lni-close"></i> Cancel</button>
+                          <button className="btn btn-primary btn-lg" disabled={createAdjustment.isPending} onClick={handleSubmitAdjustment}>
+                            <i className="lni lni-checkmark"></i> {createAdjustment.isPending ? 'Submitting…' : 'Apply Advance'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Payment Adjustment History for the currently-picked deposit
+                (get-adjustments-by-advance.md) — full width, moved from the
+                standalone Payment Console Adjustments page. The endpoint
+                takes a paymentAdvanceGuid in its path — there's no "all
+                adjustments for this application" variant — so this genuinely
+                can't render (or fire its API call) before a deposit is
+                picked in Apply Advance above; these placeholders say so
+                instead of just leaving the space blank with no explanation. */}
+            {activePayTab === 'tuition' && tuitionMode === 'adjustment' && !paymentAdvanceGuid && deposits.length > 0 && (
+              <div className="card text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>
+                <i className="lni lni-folder" style={{ fontSize: 20, display: 'block', marginBottom: 6 }}></i>
+                Select an Advance Deposit above to see its Payment Adjustment History.
+              </div>
+            )}
+            {activePayTab === 'tuition' && tuitionMode === 'adjustment' && paymentAdvanceGuid && (
+              <div className="card">
+                <div className="card-hdr">
+                  <div className="card-title"><span className="ctitle-icon"><i className="lni lni-folder"></i></span> Payment Adjustment History</div>
+                  {selectedDeposit?.advPaymentCode && <span className="badge badge-grey">{selectedDeposit.advPaymentCode}</span>}
+                </div>
+                {isAdjHistoryLoading ? (
+                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading adjustment history…</div>
+                ) : isAdjHistoryError ? (
+                  <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load adjustment history.</div>
+                ) : adjustmentHistory.length === 0 ? (
+                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No adjustments recorded against this deposit yet.</div>
+                ) : (
+                  <ScrollTable className="no-sticky-col">
+                    <table>
+                      <thead><tr><th style={{ width: 40 }}></th><th>Adjustment Code</th><th>Amount</th><th>Currency</th><th>Date</th><th>Receipt</th></tr></thead>
+                      <tbody>
+                        {adjustmentHistory.map(a => (
+                          <tr key={a.adjustmentGuid}>
+                            <td>
+                              <ActionMenu>
+                                <button className="btn btn-neu btn-sm" onClick={() => setBreakdownGuid(a.adjustmentGuid)}>
+                                  <i className="lni lni-eye"></i> View
+                                </button>
+                              </ActionMenu>
+                            </td>
+                            <td className="font-mono text-blue">{a.adjustmentCode ?? '—'}</td>
+                            <td className="text-green font-bold">{fmtAmt(a.adjustedAmount)}</td>
+                            <td>{a.currencyName ?? '—'}</td>
+                            <td>{formatDate(a.adjustmentDate)}</td>
+                            <td className="font-mono">{a.receipt}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </ScrollTable>
                 )}
               </div>
             )}
@@ -1985,17 +2353,64 @@ export default function PaymentConsolePage() {
         onClose={() => setShowAdvancePicker(false)}
         onConfirm={confirmAdvanceSelection}
         showToast={showToast}
-        // Scopes the picker to the currently-loaded student instead of
-        // every deposit in the system (get-payment-advances.md's now-
-        // confirmed studentGuid filter, 2026-09-01). Falls back to the
-        // unfiltered list if the applicant hasn't registered as a student
-        // yet (no studentGuid) — not worth an applicationGuid filter too.
-        studentGuid={studentGuid}
+        // Scopes the picker to this application's own deposits
+        // (get-advance-deposits.md) — applicationGuid, not studentGuid
+        // (2026-09-08 fix): the old studentGuid-scoped list came back empty
+        // for an applicant who hasn't been converted into an enrolled
+        // student yet, which hid this feature entirely for exactly the
+        // applicants who most need to draw down an advance before
+        // enrolling. See AdvanceDepositPickerModal's own comment.
+        applicationGuid={selectedApplicationGuid}
         studentDisplayName={profile ? applicantName(profile) : undefined}
+        nativeAmounts={advanceNativeByGuid}
       />
       <ViewPaymentModal isOpen={!!viewEntry} onClose={() => setViewEntry(null)} showToast={showToast} entry={viewEntry} />
       <EditPaymentModal isOpen={!!editTarget} onClose={() => setEditTarget(null)} showToast={showToast} target={editTarget} applicationGuid={selectedApplicationGuid ?? undefined} />
       <EditPaymentOtherModal isOpen={!!editOtherTarget} onClose={() => setEditOtherTarget(null)} showToast={showToast} target={editOtherTarget} />
+
+      {/* Ledger breakdown for one Payment Adjustment History row
+          (get-adjustment-ledger-breakdown.md) — what the applied money
+          actually settled, ledger by ledger. Moved from the standalone
+          Payment Console Adjustments page as-is. */}
+      {breakdownGuid && (
+        <div className="modal-overlay open" onClick={() => setBreakdownGuid(null)}>
+          <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+            <div className="modal-hdr modal-hdr-blue">
+              <div className="modal-title"><i className="lni lni-list"></i> Adjustment Ledger Breakdown</div>
+              <button className="modal-close" onClick={() => setBreakdownGuid(null)}><i className="lni lni-close"></i></button>
+            </div>
+            {isAdjBreakdownLoading ? (
+              <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading breakdown…</div>
+            ) : isAdjBreakdownError ? (
+              <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load this adjustment&apos;s breakdown.</div>
+            ) : adjBreakdown.length === 0 ? (
+              <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No ledger lines found for this adjustment.</div>
+            ) : (
+              <ScrollTable className="no-sticky-col">
+                <table>
+                  <thead><tr><th>Ledger</th><th>Semester</th><th>Amount</th><th>Currency</th></tr></thead>
+                  <tbody>
+                    {adjBreakdown.map((l, i) => (
+                      <tr key={`${l.ledgerGuid}-${i}`}>
+                        <td>
+                          {l.isDiscountLine ? `${l.ledgerName} (Discount${l.discountName ? `: ${l.discountName}` : ''})` : l.isRoundingLine ? `${l.ledgerName} (Round-off)` : l.ledgerName}
+                        </td>
+                        <td>{l.semName ?? '—'}</td>
+                        <td className={l.isDiscountLine ? 'text-red font-bold' : 'font-bold'}>{fmtAmt(l.amount)}</td>
+                        <td>{l.currencyName}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </ScrollTable>
+            )}
+            <div className="modal-footer">
+              <button className="btn btn-neu" onClick={() => setBreakdownGuid(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Toast toast={toast} />
     </>
   )
