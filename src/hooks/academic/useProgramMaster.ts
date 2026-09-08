@@ -35,6 +35,26 @@ import {
 // instead of leaving it stale until the next hard reload.
 export const PROGRAM_MASTERS_KEY = ['programMasters']
 
+// Single-programme fetch, for when a real programGuid (e.g. prefilled from
+// another record, like Application Filing's locked Programme field) isn't
+// found in useProgramMasters()' own list — CONFIRMED live: a real
+// application-payments row's programGuid ("Aaron Tendo Magala",
+// f44b4f73-213b-43c7-9136-700940a9208f) resolved a real Fee Structure
+// (filtered client-side by that same programGuid) but had no matching entry
+// in useProgramMasters(), so the Programme dropdown rendered as unselected
+// — this fills that gap by fetching the one missing record directly instead
+// of guessing why the list omitted it (pagination cap, filtering, etc. —
+// unconfirmed).
+export function useProgramMasterByGuid(programGuid: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...PROGRAM_MASTERS_KEY, 'by-guid', programGuid],
+    queryFn: () => getProgramMasterByGuid(programGuid),
+    enabled: enabled && !!programGuid,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
 export function useProgramMasters() {
   return useQuery({
     queryKey: PROGRAM_MASTERS_KEY,
