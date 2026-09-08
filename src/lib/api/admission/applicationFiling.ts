@@ -35,6 +35,7 @@ export interface FilingApplicationSearchResult {
   enquiryGuid: string | null
   campusGuid: string | null
   programGuid: string | null
+  programName: string | null
   semesterGuid: string | null
   batchTimeGuid: string | null
   batchGuid: string | null
@@ -248,9 +249,10 @@ export interface SubmitApplicationResponse {
 
 const mockSearchResults: FilingApplicationSearchResult[] = [
   {
-    applicationGuid: 'mock-app-1', appRefNo: 'APP2026/1', firstName: 'Nakato Sarah', lastName: null,
+    applicationGuid: 'mock-app-1', appRefNo: 'APP2026/1', firstName: 'Sarah', lastName: 'Nakato',
     phone: '700000001', emailId: 'nakato.s@example.com', whatsApp: null,
     intakeCode: '20261', yearCode: '2026', intakeGuid: null, enquiryGuid: null, campusGuid: null, programGuid: null,
+    programName: 'Bachelor of Science in Information Technology',
     semesterGuid: null, batchTimeGuid: null, batchGuid: null, feeHdGuid: null,
     action: 1, saveStatus: 4, refugee: 0, refugeeId: '', studCategory: 1, gender: 0,
     nationalId: 'NATIONAL ID', idUserFileName: null, passportNo: '', passUserFileName: null, visaUserFileName: null,
@@ -325,6 +327,7 @@ export interface ApplicationPaymentRecord {
   remarks: string | null
   intProgram: number
   programGuid: string
+  programName?: string | null
   countryGuid: string
   mobile: number
   email: string
@@ -379,11 +382,15 @@ function getApplicationPayments(page = 1, pageSize = 10, intakeCode?: number | s
 // page already knows how to consume — every field this source genuinely
 // doesn't have (see the note above) comes through null rather than guessed.
 function mapApplicationPaymentToSearchResult(r: ApplicationPaymentRecord): FilingApplicationSearchResult {
+  const nameParts = (r.studentName || '').trim().split(/\s+/)
+  const firstName = nameParts[0] || null
+  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null
+
   return {
     applicationGuid: r.paymentGuid,
     appRefNo: r.appRefNo,
-    firstName: r.studentName,
-    lastName: null,
+    firstName,
+    lastName,
     phone: r.mobile != null ? String(r.mobile) : null,
     emailId: r.email,
     whatsApp: null,
@@ -393,6 +400,7 @@ function mapApplicationPaymentToSearchResult(r: ApplicationPaymentRecord): Filin
     enquiryGuid: null,
     campusGuid: r.campusGuid,
     programGuid: r.programGuid,
+    programName: r.programName ?? (r as any).programmeName ?? (r as any).program ?? null,
     semesterGuid: r.semesterGuid,
     batchTimeGuid: r.batchTimeGuid,
     batchGuid: r.batchGuid,
@@ -457,7 +465,7 @@ export function searchApplicationsForFiling(searchTerm: string, pageNumber = 1, 
   return getApplicationPayments(pageNumber, pageSize, intakeCode).then(res => {
     const items = res.items
       .map(mapApplicationPaymentToSearchResult)
-      .filter(a => !searchTerm.trim() || `${a.appRefNo} ${a.firstName} ${a.emailId} ${a.phone}`.toLowerCase().includes(searchTerm.trim().toLowerCase()))
+      .filter(a => !searchTerm.trim() || `${a.appRefNo} ${a.firstName} ${a.lastName ?? ''} ${a.emailId} ${a.phone}`.toLowerCase().includes(searchTerm.trim().toLowerCase()))
     return { items, totalCount: items.length, pageNumber, pageSize }
   })
 }
