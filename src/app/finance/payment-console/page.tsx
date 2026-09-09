@@ -1797,13 +1797,28 @@ export default function PaymentConsolePage() {
                     pairing as Tuition's own Currency/Amount row. */}
                 <div className="g2 mb-[14px]">
                   <div className="fg">
-                    {/* View-only per request — Currency always follows
-                        Finance's own default (or the drawn-down deposit's
-                        own currency in Advance mode, set by
-                        selectAdvanceDeposit), never a separate cashier
-                        choice. */}
-                    <div className="lbl">Currency</div>
-                    <input className="ctrl" readOnly value={currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyName ?? ''} placeholder="—" />
+                    {/* Editable again (2026-09-09, per request — was reported
+                        as "the dropdown not showing" even outside Advance
+                        mode). Locked read-only ONLY while otherIsAdvance is
+                        true, since Currency then has to follow the drawn-
+                        down deposit's own currency (set by
+                        selectAdvanceDeposit) rather than a free cashier
+                        pick — there's nothing to choose between in that
+                        case. Outside Advance mode there's no such
+                        constraint, so it's a real SearchSelect again,
+                        defaulting to Finance's own default currency the
+                        same way it always has (see the effect above). */}
+                    <div className="lbl">Currency <span className="req">*</span></div>
+                    {otherIsAdvance ? (
+                      <input className="ctrl" readOnly value={currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyName ?? ''} placeholder="—" />
+                    ) : (
+                      <SearchSelect
+                        placeholder="— Select Currency —"
+                        options={currencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))}
+                        value={otherCurrencyGuid}
+                        onChange={setOtherCurrencyGuid}
+                      />  
+                    )}
                   </div>
                   <div className="fg">
                     <div className="lbl">Amount <span className="req">*</span></div>
@@ -1812,10 +1827,12 @@ export default function PaymentConsolePage() {
                       value={otherAmount} onChange={e => setOtherAmount(e.target.value)} />
                   </div>
                 </div>
-                {/* Payment Date + Payment Type paired — both view-only per
-                    request now (Date always today; Type stays Cash, its own
-                    default, since there's no picker left to change it to
-                    anything that would need Bank Name below). */}
+                {/* Payment Date stays view-only (always today) either way —
+                    only Payment Type is editable again (2026-09-09, same
+                    reasoning as Currency above), locked to a plain "Advance
+                    Draw-down" label while otherIsAdvance is true (matches
+                    the live summary strip's own Method line above) since no
+                    new receipt/bank is actually claimed in that mode. */}
                 <div className="g2 mb-[14px]">
                   <div className="fg">
                     <div className="lbl">Payment Date</div>
@@ -1823,7 +1840,15 @@ export default function PaymentConsolePage() {
                   </div>
                   <div className="fg">
                     <div className="lbl">Payment Type</div>
-                    <input className="ctrl" readOnly value={PAY_TYPE_LABELS[Number(otherPayType)] ?? `Type ${otherPayType}`} />
+                    {otherIsAdvance ? (
+                      <input className="ctrl" readOnly value="Advance Draw-down" />
+                    ) : (
+                      <SearchSelect
+                        options={Object.entries(PAY_TYPE_LABELS).map(([value, label]) => ({ value, label }))}
+                        value={otherPayType}
+                        onChange={val => { setOtherPayType(val); setOtherReceiptBookGuid(''); setOtherProcBankGuid('') }}
+                      />
+                    )}
                   </div>
                 </div>
 
