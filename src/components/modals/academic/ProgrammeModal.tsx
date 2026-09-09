@@ -383,7 +383,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const facultyOptions = faculties.map(f => ({ value: f.facultyGuid, label: `${f.facultyCode} — ${f.facultyName}` }))
   const selectedFaculty = faculties.find(f => f.facultyGuid === facultyGuid)
 
-  const { data: currencies = [] } = useCurrencies()
+  const { data: currencies = [] } = useCurrencies(isOpen)
   // Lec/Cec/Acec (Lateral Entry/Credit Exemption/Aptech Credit Exemption Fee
   // Currency) still take Currency.intCurrency (a number) — those are NOT
   // confirmed to have switched to guids the way the top-level programme
@@ -398,7 +398,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // confirmed to want the same real currencyGuid too (see the
   // ProgramMasterInput.currencyGuid note), so this now backs the top-level
   // Currency picker in both modes.
-  const { data: financeCurrencies = [] } = useFinanceCurrencies()
+  const { data: financeCurrencies = [] } = useFinanceCurrencies(isOpen)
   // Merged with a fallback for any currencyGuid already on a loaded fee item
   // that's missing from the Finance Currency master list — see
   // withFallbackOptions below (a hoisted function declaration, safe to call
@@ -429,10 +429,10 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // unitType/unitCat send the guid directly (unitTypeGuid/unitCatGuid), the
   // same guid-based convention used elsewhere in this backend (e.g.
   // programLevelGuid, courseUnitRepetitionGuid).
-  const { data: unitTypes = [] } = useUnitTypes()
+  const { data: unitTypes = [] } = useUnitTypes(isOpen)
   const unitTypeOptions = unitTypes.map(t => ({ value: t.unitTypeGuid, label: t.unitTypeName }))
 
-  const { data: unitCategories = [] } = useUnitCategories()
+  const { data: unitCategories = [] } = useUnitCategories(isOpen)
   const unitCategoryOptions = unitCategories.map(c => ({ value: c.unitCatGuid, label: c.unitCatName }))
   // The per-unit specialization picker only makes sense for a unit whose
   // category is literally named "Specialization" in the real master — there's
@@ -442,7 +442,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     return !!cat && cat.unitCatName.trim().toLowerCase() === 'specialization'
   }
 
-  const { data: ledgers = [] } = useLedgers()
+  const { data: ledgers = [] } = useLedgers(isOpen)
   // Base options from the Ledger master list, PLUS a synthesized option for
   // any ledger/currency guid already sitting on a loaded fee item (from
   // full-details) that isn't in its respective master list — using the real
@@ -467,7 +467,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     item => ({ guid: item.ledger, name: item.ledgerName }),
   )
 
-  const { data: intakes = [] } = useIntakes()
+  const { data: intakes = [] } = useIntakes(isOpen)
   // Per-fee-structure Intake — a real intakeGuid in both modes now (see the
   // FeeStructure type comment on intakeGuid); the top-level programme Intake
   // (intakeGuid on ProgramMasterInput, Step 1) is a separate field entirely.
@@ -477,7 +477,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // always read-only: in Edit mode it shows whatever intake the structure
   // already has, in Create mode it's forced onto the Current Academic
   // Intake instead of offering a picker at all.
-  const { data: currentAcademicIntake } = useCurrentAcademicIntake()
+  const { data: currentAcademicIntake } = useCurrentAcademicIntake(isOpen)
 
   // Full course-unit/fee-structure breakdown for the programme being edited —
   // update-complete fully replaces both collections, so this is required to

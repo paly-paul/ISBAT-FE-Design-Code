@@ -6,7 +6,6 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Pagination } from '@/components/Pagination'
 import { PaymentSuccessModal } from '@/components/modals/finance/PaymentSuccessModal'
-import { AdvanceDepositPickerModal } from '@/components/modals/finance/AdvanceDepositPickerModal'
 import { ViewPaymentModal } from '@/components/modals/finance/ViewPaymentModal'
 import { EditPaymentModal, EditablePaymentTarget } from '@/components/modals/finance/EditPaymentModal'
 import { EditPaymentOtherModal, EditablePaymentOtherTarget } from '@/components/modals/finance/EditPaymentOtherModal'
@@ -295,25 +294,23 @@ export default function PaymentConsolePage() {
   // old mock form had.
   //
   // otherIsAdvance mirrors the legacy form's "Advance Payment" checkbox —
-  // now wired for real (2026-09-01) via AdvanceDepositPickerModal +
-  // get-advance-deposits.md's per-application list (useAdvanceDeposits,
-  // same hook Payment Console Adjustments' own Apply Advance dropdown
-  // uses — switched 2026-09-08 from the studentGuid-scoped
-  // get-payment-advances.md list, see AdvanceDepositPickerModal's own
-  // comment for why). Checking the box opens the picker instead of
-  // flipping the flag directly; otherIsAdvance/
-  // selectedAdvance are only set once a deposit is actually confirmed there
-  // (see toggleAdvancePayment/confirmAdvanceSelection below), and unchecking
-  // clears both. No separate "Advance Payment Date" field any more — the
-  // picker's own Deposit Date column already shows when the selected
-  // deposit was originally paid in; otherPayDate is the one date that
-  // actually reaches CreatePaymentOther (when this draw-down happens).
+  // now wired for real (2026-09-01) via get-advance-deposits.md's
+  // per-application list (useAdvanceDeposits, same hook Payment Console
+  // Adjustments' own Apply Advance dropdown uses — switched 2026-09-08 from
+  // the studentGuid-scoped get-payment-advances.md list). Checking the box
+  // reveals an inline deposit-picker table below it (see the "Advance
+  // Payment" block further down) rather than opening a popup — selecting a
+  // row there sets selectedAdvance (see selectAdvanceDeposit below), and
+  // unchecking clears both. No separate "Advance Payment Date" field any
+  // more — the picker table's own Deposit Date column already shows when
+  // the selected deposit was originally paid in; otherPayDate is the one
+  // date that actually reaches CreatePaymentOther (when this draw-down
+  // happens).
   const [otherPayments, setOtherPayments] = useState<{ id: string; code: string; receiptNo: string | null; payDate: string; ledgerName: string; amount: string; currencyCode: string }[]>([])
   const [otherLedger, setOtherLedger] = useState('')
   const [otherPayDate, setOtherPayDate] = useState(todayYmd)
   const [otherIsAdvance, setOtherIsAdvance] = useState(false)
   const [selectedAdvance, setSelectedAdvance] = useState<AdvanceDepositSummary | null>(null)
-  const [showAdvancePicker, setShowAdvancePicker] = useState(false)
   const [otherPayType, setOtherPayType] = useState('1')
   // Narrowed to only the category CreatePaymentOther will accept for the
   // currently-selected Payment Type — same reasoning as Tuition's own
@@ -442,18 +439,17 @@ export default function PaymentConsolePage() {
 
   // Re-added per request — hide the Other Payment tab's Advance Payment
   // checkbox entirely when this application has zero advance deposits on
-  // record at all (matching AdvanceDepositPickerModal's own EmptyState
+  // record at all (matching the inline picker table's own EmptyState
   // condition, rows.length === 0), rather than always showing it and
-  // letting the picker's empty state be the only place that says so.
+  // letting the table's empty state be the only place that says so.
   // Scoped by applicationGuid, not studentGuid (2026-09-08 fix) — the
   // earlier studentGuid-scoped check never fired at all for an applicant
   // who hasn't been converted into an enrolled student yet, silently hiding
-  // the checkbox even when real deposits existed on their application (see
-  // AdvanceDepositPickerModal's own comment for the full story). Fetched
-  // independently of the picker's own useAdvanceDeposits call (that one
-  // only fires while the modal is open) so this gate is known before the
-  // checkbox even renders.
-  const { data: otherAdvancesCheck } = useAdvanceDeposits(selectedApplicationGuid, !!selectedApplicationGuid)
+  // the checkbox even when real deposits existed on their application. This
+  // same query also backs the inline picker table itself (checking the box
+  // just reveals rows already sitting in cache, no second fetch) and
+  // Semester Payment's own Apply Advance dropdown below.
+  const { data: otherAdvancesCheck, isLoading: isAdvanceDepositsLoading, isError: isAdvanceDepositsError } = useAdvanceDeposits(selectedApplicationGuid, !!selectedApplicationGuid)
   const hasAdvanceDeposits = (otherAdvancesCheck?.length ?? 0) > 0
 
   // Semester Payment tab's "Apply Advance" mode reuses this same per-
@@ -490,6 +486,33 @@ export default function PaymentConsolePage() {
     else if (!adjCurrencyGuid && currencies.length > 0) setAdjCurrencyGuid(getDefaultFinanceCurrencyGuid(currencies))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDeposit?.currencyGuid, currencies])
+
+  // Apply Advance's own deposit picker — an inline selectable table now
+  // (2026-09-09, same move as Other Payment's own AdvanceDepositPickerModal
+  // → inline table), not a SearchSelect dropdown. Clicking the
+  // already-selected row again deselects it, same as Other Payment's own
+  // selectAdvanceDeposit; adjCurrencyGuid/adjAmount are cleared alongside
+  // (currency falls back to Finance's own default via the effect above once
+  // it's blank) rather than sitting on the abandoned deposit's own figures.
+  // Selecting a deposit now prefills both fields the same way Other
+  // Payment's own checkbox does (2026-09-09 per request) — Amount defaults
+  // to the full undrawn balance but stays freely editable for a partial
+  // draw-down, Currency to the deposit's own (the effect above would get
+  // there too, just one render later; setting it here directly avoids that
+  // flash). Both fields also stay whatever the cashier already typed if
+  // this fires again for the same deposit (only the guid-equality branch
+  // above touches previously-entered values).
+  function selectApplyAdvanceDeposit(deposit: AdvanceDepositSummary) {
+    if (deposit.paymentAdvanceGuid === paymentAdvanceGuid) {
+      setPaymentAdvanceGuid('')
+      setAdjCurrencyGuid('')
+      setAdjAmount('')
+      return
+    }
+    setPaymentAdvanceGuid(deposit.paymentAdvanceGuid)
+    setAdjCurrencyGuid(deposit.currencyGuid)
+    setAdjAmount(String(deposit.balance))
+  }
 
   // Discount-aware replacement for the old useOutstandingLedgers — same
   // current-semester scoping, but each ledger also carries its applicable
@@ -861,25 +884,34 @@ export default function PaymentConsolePage() {
   // way Tuition's does (see that tab's own currencyGuid effect) — just
   // Finance's own default (UGX) once the currency list loads, rather than
   // sitting blank. Only fires while nothing's been picked yet (an advance
-  // draw-down's own currency, set in confirmAdvanceSelection above, or a
+  // draw-down's own currency, set in selectAdvanceDeposit above, or a
   // manual pick both take priority).
   useEffect(() => {
     if (!otherCurrencyGuid && currencies.length > 0) setOtherCurrencyGuid(getDefaultFinanceCurrencyGuid(currencies))
   }, [otherCurrencyGuid, currencies])
 
-  // Checking the box opens the picker instead of flipping otherIsAdvance
-  // straight away — it only actually turns on once a deposit is confirmed
-  // there (confirmAdvanceSelection below). Unchecking clears both right
-  // away, no picker involved.
+  // Checking the box just flips the flag straight away now (2026-09-09 —
+  // moved from a popup picker to an inline table, see the "Advance Payment"
+  // block below) and reveals the deposit-picker table; nothing's selected
+  // yet until a row in it is clicked. Unchecking clears both right away.
   function toggleAdvancePayment(checked: boolean) {
-    if (checked) setShowAdvancePicker(true)
-    else { setOtherIsAdvance(false); setSelectedAdvance(null) }
+    setOtherIsAdvance(checked)
+    if (!checked) setSelectedAdvance(null)
   }
 
-  function confirmAdvanceSelection(advance: AdvanceDepositSummary) {
+  function selectAdvanceDeposit(advance: AdvanceDepositSummary) {
+    // Clicking the already-selected row again deselects it — the table has
+    // no separate "clear" affordance, so the same radio/row that picked a
+    // deposit is what un-picks it too. Currency/Amount go back to blank
+    // (the Currency effect below re-defaults it) rather than left sitting
+    // on the now-abandoned deposit's own figures.
+    if (advance.paymentAdvanceGuid === selectedAdvance?.paymentAdvanceGuid) {
+      setSelectedAdvance(null)
+      setOtherCurrencyGuid('')
+      setOtherAmount('')
+      return
+    }
     setSelectedAdvance(advance)
-    setOtherIsAdvance(true)
-    setShowAdvancePicker(false)
     // Prefilled from the deposit, both still editable: Currency should
     // normally stay as-is (CreatePaymentOther draws down in the deposit's
     // own currency), Amount defaults to the full undrawn balance but a
@@ -1542,28 +1574,105 @@ export default function PaymentConsolePage() {
                 {/* Advance Payment — no Tuition equivalent, Other-specific.
                     Moved directly below the Ledger field per request, ahead
                     of Currency/Amount, rather than down by Receipt Book/Bank.
-                    Checking it opens AdvanceDepositPickerModal rather than
-                    flipping otherIsAdvance straight away — see
-                    toggleAdvancePayment/confirmAdvanceSelection's own
-                    comments. Hidden entirely when hasAdvanceDeposits is false
-                    (re-added per request, reversing the 2026-09-02 "always
-                    shown, let the picker's own empty state explain it"
-                    decision) — there's nothing to draw from, so offering the
-                    checkbox at all just invites opening the picker only to
-                    find it empty. */}
+                    Checking it reveals the deposit picker inline as a table
+                    right below the checkbox (2026-09-09 — moved off a popup
+                    modal per request) instead of flipping otherIsAdvance
+                    straight away; selectAdvanceDeposit below only fires once
+                    a row is actually clicked. Hidden entirely when
+                    hasAdvanceDeposits is false (re-added per request,
+                    reversing the 2026-09-02 "always shown, let the picker's
+                    own empty state explain it" decision) — there's nothing
+                    to draw from, so offering the checkbox at all just
+                    invites opening the table only to find it empty. */}
                 {hasAdvanceDeposits && (
                   <div className="fg mb-[14px]">
                     <label className="flex items-center gap-2" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
                       <input type="checkbox" checked={otherIsAdvance} onChange={e => toggleAdvancePayment(e.target.checked)} />
                       Advance Payment
                     </label>
-                    {otherIsAdvance && selectedAdvance && (
-                      <div className="flex items-center justify-between gap-2 mt-2 p-2.5 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100">
-                        <div style={{ fontSize: 12 }}>
-                          Drawing from <span className="font-mono text-blue font-bold">{selectedAdvance.advPaymentCode}</span>
-                          <span className="text-g500"> · Balance {selectedAdvance.balance.toLocaleString()} {selectedAdvance.currencyCode}</span>
+                    {otherIsAdvance && (
+                      <div className="mt-2">
+                        {selectedAdvance && (
+                          <div className="flex items-center gap-2 mb-2 p-2.5 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100">
+                            <div style={{ fontSize: 12 }}>
+                              Drawing from <span className="font-mono text-blue font-bold">{selectedAdvance.advPaymentCode}</span>
+                              <span className="text-g500"> · Balance {selectedAdvance.balance.toLocaleString()} {selectedAdvance.currencyCode}</span>
+                            </div>
+                          </div>
+                        )}
+                        <div className="text-g500" style={{ fontSize: 12, marginBottom: 8 }}>
+                          {selectedAdvance ? 'Pick a different deposit to draw from instead —' : 'Pick a deposit to draw from —'} every row below still has an undrawn balance.
                         </div>
-                        <button type="button" className="btn btn-neu btn-sm" onClick={() => setShowAdvancePicker(true)}>Change</button>
+                        <ScrollTable>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th style={{ width: 36 }}></th>
+                                <th>Deposit Code</th><th>Deposit Date</th>
+                                <th>Deposited</th><th>Cur.</th><th>Remaining</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {isAdvanceDepositsLoading ? (
+                                <tr><td colSpan={999} className="text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading…</td></tr>
+                              ) : isAdvanceDepositsError ? (
+                                <tr><td colSpan={999} className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load advance deposits.</td></tr>
+                              ) : deposits.length === 0 ? (
+                                <tr><td colSpan={999} className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No advance deposits.</td></tr>
+                              ) : null}
+                              {!isAdvanceDepositsLoading && !isAdvanceDepositsError && deposits.map(r => {
+                                const isSelected = r.paymentAdvanceGuid === selectedAdvance?.paymentAdvanceGuid
+                                const native = advanceNativeByGuid.get(r.paymentAdvanceGuid)
+                                // Same fraction-of-original applies in either currency —
+                                // no exchange rate needed to carry the remaining balance
+                                // over to the native figure, just the ratio the
+                                // base-currency pair already implies.
+                                const nativeRemaining = native && r.originalAmount > 0 ? native.amount * (r.balance / r.originalAmount) : null
+                                return (
+                                  <tr
+                                    key={r.paymentAdvanceGuid}
+                                    style={{ cursor: 'pointer', background: isSelected ? 'var(--b50)' : undefined }}
+                                    onClick={() => selectAdvanceDeposit(r)}
+                                  >
+                                    <td>
+                                      <input
+                                        type="radio"
+                                        checked={isSelected}
+                                        onChange={() => selectAdvanceDeposit(r)}
+                                        // A native radio only fires onChange on an
+                                        // unchecked→checked transition — clicking an
+                                        // already-checked one to deselect it wouldn't
+                                        // otherwise do anything, so the toggle is
+                                        // driven from onClick instead (which fires on
+                                        // every click regardless of prior state).
+                                        onClick={e => { e.stopPropagation(); selectAdvanceDeposit(r) }}
+                                      />
+                                    </td>
+                                    <td className="font-mono text-blue" style={{ fontSize: 12 }}>{r.advPaymentCode}</td>
+                                    <td>{formatDate(r.payDate)}</td>
+                                    <td>
+                                      <span className="font-bold">{fmtAmt(native ? native.amount : r.originalAmount)}</span>
+                                      {native && (
+                                        <span className="text-g400" style={{ display: 'block', fontSize: 11, fontWeight: 600 }}>
+                                          {fmtAmt(r.originalAmount)} {r.currencyCode}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td><span className="badge badge-gold">{native ? native.currencyName : r.currencyCode}</span></td>
+                                    <td>
+                                      <span className="font-bold text-amber">{fmtAmt(nativeRemaining ?? r.balance)}</span>
+                                      {native && (
+                                        <span className="text-g400" style={{ display: 'block', fontSize: 11, fontWeight: 600 }}>
+                                          {fmtAmt(r.balance)} {r.currencyCode}
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </ScrollTable>
                       </div>
                     )}
                   </div>
@@ -1590,7 +1699,7 @@ export default function PaymentConsolePage() {
                     {/* View-only per request — Currency always follows
                         Finance's own default (or the drawn-down deposit's
                         own currency in Advance mode, set by
-                        confirmAdvanceSelection), never a separate cashier
+                        selectAdvanceDeposit), never a separate cashier
                         choice. */}
                     <div className="lbl">Currency</div>
                     <input className="ctrl" readOnly value={currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyName ?? ''} placeholder="—" />
@@ -1867,25 +1976,29 @@ export default function PaymentConsolePage() {
                 {!receipt && (
                   <div className="sec-divider flex items-center justify-between flex-wrap gap-2">
                     <span>Payment Detail</span>
-                    {/* Regular Payment / Apply Advance toggle — moved here
-                        from the standalone Payment Console Adjustments page
-                        (2026-09-08), which is retired now that this same
-                        "draw down one of this application's advance
-                        deposits against outstanding tuition" functionality
-                        lives right here. Same .tgl-group/.tgl-btn segmented
-                        control the rest of the app already uses for this
-                        kind of two-way switch, not a bespoke component.
+                    {/* Regular Payment / Apply Advance switch — a checkbox
+                        now (2026-09-09, matching Other Payment's own
+                        "Advance Payment" checkbox) rather than the
+                        .tgl-group segmented toggle this used before.
                         Switching modes doesn't touch the ledger table above
                         — both modes settle the same outstanding tuition
-                        ledgers, just via a different funding source. */}
-                    <div className="tgl-group">
-                      <button type="button" className={`tgl-btn${tuitionMode === 'payment' ? ' tgl-active' : ''}`} onClick={() => setTuitionMode('payment')}>
-                        Regular Payment
-                      </button>
-                      <button type="button" className={`tgl-btn${tuitionMode === 'adjustment' ? ' tgl-active' : ''}`} onClick={() => setTuitionMode('adjustment')}>
+                        ledgers, just via a different funding source. Hidden
+                        when hasAdvanceDeposits is false (nothing to draw
+                        from, same reasoning as Other Payment's own
+                        checkbox) or once tuition is already fully settled
+                        (ledgers.length === 0, "Fully settled" below) —
+                        there's nothing left to apply an advance against
+                        either way, regular or advance-funded. */}
+                    {hasAdvanceDeposits && !isLedgersLoading && ledgers.length > 0 && (
+                      <label className="flex items-center gap-2" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={tuitionMode === 'adjustment'}
+                          onChange={e => setTuitionMode(e.target.checked ? 'adjustment' : 'payment')}
+                        />
                         Apply Advance
-                      </button>
-                    </div>
+                      </label>
+                    )}
                   </div>
                 )}
                 {!receipt && isLedgersLoading && (
@@ -2014,6 +2127,10 @@ export default function PaymentConsolePage() {
                     "nothing here" message four times over. */}
                 {!receipt && !isLedgersLoading && ledgers.length > 0 && tuitionMode === 'adjustment' && (
                   <>
+                    {/* Undrawn Advance Balance strip — commented out per request
+                        (2026-09-09), left in place rather than deleted in case it
+                        comes back. advanceBalances/useAdvanceBalance above are
+                        still fetched as before; only this display is disabled.
                     {advanceBalances.length > 0 && (
                       <div className="mb-[14px]">
                         <div className="lbl">Undrawn Advance Balance</div>
@@ -2027,6 +2144,7 @@ export default function PaymentConsolePage() {
                         </div>
                       </div>
                     )}
+                    */}
 
                     {deposits.length === 0 ? (
                       <div className="text-g400 text-center" style={{ padding: '12px 0', fontSize: 12.5 }}>
@@ -2034,60 +2152,94 @@ export default function PaymentConsolePage() {
                       </div>
                     ) : (
                       <>
-                        <div className="g2 mb-[14px]">
-                          <div className="fg">
-                            <div className="lbl">Advance Deposit <span className="req">*</span></div>
-                            {/* get-advance-deposits.md's own balance/currencyCode are
-                                base-currency figures for every row (see
-                                AdvanceDepositPickerModal's own comment on this same
-                                endpoint) — a deposit actually made in USD still comes
-                                back here as its UGX equivalent. Cross-referenced
-                                against advanceNativeByGuid (paymentHistory's
-                                category-5 rows) the same way that modal already
-                                does, so the cashier picks the deposit by what they
-                                actually collected, not its base-currency figure. */}
-                            <SearchSelect
-                              placeholder="— Select a deposit —"
-                              options={deposits.map(d => {
-                                const native = advanceNativeByGuid.get(d.paymentAdvanceGuid)
-                                const nativeBalance = native && d.originalAmount > 0 ? native.amount * (d.balance / d.originalAmount) : null
-                                const label = native
-                                  ? `${d.advPaymentCode} — ${native.currencyName} ${fmtAmt(nativeBalance ?? native.amount)} available (${d.currencyCode} ${fmtAmt(d.balance)})`
-                                  : `${d.advPaymentCode} — ${d.currencyCode} ${fmtAmt(d.balance)} available`
-                                return { value: d.paymentAdvanceGuid, label }
-                              })}
-                              value={paymentAdvanceGuid}
-                              onChange={setPaymentAdvanceGuid}
-                            />
-                          </div>
-                          <div className="fg">
-                            <div className="lbl">Deposit Balance</div>
-                            {/* Same native-amount cross-reference as the dropdown
-                                above, styled after AdvanceDepositPickerModal's own
-                                native-primary/base-secondary table cell — the base
-                                figure (what Amount to Apply/Currency below actually
-                                operate in) stays visible underneath, just no longer
-                                the only figure shown. */}
-                            <div className="ctrl" style={{ minHeight: 33.4, display: 'flex', alignItems: 'center' }}>
-                              {selectedDeposit ? (() => {
-                                const native = advanceNativeByGuid.get(selectedDeposit.paymentAdvanceGuid)
-                                const nativeBalance = native && selectedDeposit.originalAmount > 0
-                                  ? native.amount * (selectedDeposit.balance / selectedDeposit.originalAmount)
-                                  : null
-                                return (
-                                  <div>
-                                    <span className="font-bold">{fmtAmt(native ? (nativeBalance ?? native.amount) : selectedDeposit.balance)}</span>
-                                    {' '}{native ? native.currencyName : selectedDeposit.currencyName}
-                                    {native && (
-                                      <div className="text-g400" style={{ fontSize: 11, fontWeight: 600 }}>
-                                        {fmtAmt(selectedDeposit.balance)} {selectedDeposit.currencyCode}
-                                      </div>
-                                    )}
-                                  </div>
-                                )
-                              })() : <span className="text-g400">—</span>}
+                        <div className="fg mb-[14px]">
+                          <div className="lbl">Advance Deposit <span className="req">*</span></div>
+                          {/* Inline selectable table — same move as Other Payment's
+                              own AdvanceDepositPickerModal → inline table
+                              (2026-09-09), replacing the SearchSelect dropdown +
+                              separate read-only "Deposit Balance" panel this used
+                              before. get-advance-deposits.md's own
+                              balance/currencyCode are base-currency figures for
+                              every row — a deposit actually made in USD still
+                              comes back here as its UGX equivalent. Cross-
+                              referenced against advanceNativeByGuid (paymentHistory's
+                              category-5 rows), same as Other Payment's table, so
+                              the cashier picks the deposit by what they actually
+                              collected, not its base-currency figure. */}
+                          {selectedDeposit && (
+                            <div className="flex items-center gap-2 mb-2 p-2.5 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100">
+                              <div style={{ fontSize: 12 }}>
+                                Applying from <span className="font-mono text-blue font-bold">{selectedDeposit.advPaymentCode}</span>
+                                <span className="text-g500"> · Balance {selectedDeposit.balance.toLocaleString()} {selectedDeposit.currencyCode}</span>
+                              </div>
                             </div>
-                          </div>
+                          )}
+                          <ScrollTable>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th style={{ width: 36 }}></th>
+                                  <th>Deposit Code</th><th>Deposit Date</th>
+                                  <th>Deposited</th><th>Cur.</th><th>Remaining</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {isAdvanceDepositsLoading ? (
+                                  <tr><td colSpan={999} className="text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading…</td></tr>
+                                ) : isAdvanceDepositsError ? (
+                                  <tr><td colSpan={999} className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load advance deposits.</td></tr>
+                                ) : null}
+                                {!isAdvanceDepositsLoading && !isAdvanceDepositsError && deposits.map(d => {
+                                  const isSelected = d.paymentAdvanceGuid === paymentAdvanceGuid
+                                  const native = advanceNativeByGuid.get(d.paymentAdvanceGuid)
+                                  // Same fraction-of-original applies in either currency —
+                                  // no exchange rate needed to carry the remaining balance
+                                  // over to the native figure, just the ratio the
+                                  // base-currency pair already implies.
+                                  const nativeRemaining = native && d.originalAmount > 0 ? native.amount * (d.balance / d.originalAmount) : null
+                                  return (
+                                    <tr
+                                      key={d.paymentAdvanceGuid}
+                                      style={{ cursor: 'pointer', background: isSelected ? 'var(--b50)' : undefined }}
+                                      onClick={() => selectApplyAdvanceDeposit(d)}
+                                    >
+                                      <td>
+                                        <input
+                                          type="radio"
+                                          checked={isSelected}
+                                          onChange={() => selectApplyAdvanceDeposit(d)}
+                                          // See Other Payment's own radio comment — a native
+                                          // radio doesn't fire onChange on a checked→checked
+                                          // click, so the deselect toggle is driven from
+                                          // onClick instead.
+                                          onClick={e => { e.stopPropagation(); selectApplyAdvanceDeposit(d) }}
+                                        />
+                                      </td>
+                                      <td className="font-mono text-blue" style={{ fontSize: 12 }}>{d.advPaymentCode}</td>
+                                      <td>{formatDate(d.payDate)}</td>
+                                      <td>
+                                        <span className="font-bold">{fmtAmt(native ? native.amount : d.originalAmount)}</span>
+                                        {native && (
+                                          <span className="text-g400" style={{ display: 'block', fontSize: 11, fontWeight: 600 }}>
+                                            {fmtAmt(d.originalAmount)} {d.currencyCode}
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td><span className="badge badge-gold">{native ? native.currencyName : d.currencyCode}</span></td>
+                                      <td>
+                                        <span className="font-bold text-amber">{fmtAmt(nativeRemaining ?? d.balance)}</span>
+                                        {native && (
+                                          <span className="text-g400" style={{ display: 'block', fontSize: 11, fontWeight: 600 }}>
+                                            {fmtAmt(d.balance)} {d.currencyCode}
+                                          </span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </ScrollTable>
                         </div>
 
                         <div className="g2 mb-[14px]">
@@ -2344,26 +2496,6 @@ export default function PaymentConsolePage() {
           notices={successModal.notices}
         />
       )}
-      <AdvanceDepositPickerModal
-        isOpen={showAdvancePicker}
-        // Cancelling the picker without confirming leaves otherIsAdvance
-        // however it was before (still off on a first check, unchanged on
-        // "Change" from an already-selected deposit) — only Confirm inside
-        // the modal (confirmAdvanceSelection) actually flips it.
-        onClose={() => setShowAdvancePicker(false)}
-        onConfirm={confirmAdvanceSelection}
-        showToast={showToast}
-        // Scopes the picker to this application's own deposits
-        // (get-advance-deposits.md) — applicationGuid, not studentGuid
-        // (2026-09-08 fix): the old studentGuid-scoped list came back empty
-        // for an applicant who hasn't been converted into an enrolled
-        // student yet, which hid this feature entirely for exactly the
-        // applicants who most need to draw down an advance before
-        // enrolling. See AdvanceDepositPickerModal's own comment.
-        applicationGuid={selectedApplicationGuid}
-        studentDisplayName={profile ? applicantName(profile) : undefined}
-        nativeAmounts={advanceNativeByGuid}
-      />
       <ViewPaymentModal isOpen={!!viewEntry} onClose={() => setViewEntry(null)} showToast={showToast} entry={viewEntry} />
       <EditPaymentModal isOpen={!!editTarget} onClose={() => setEditTarget(null)} showToast={showToast} target={editTarget} applicationGuid={selectedApplicationGuid ?? undefined} />
       <EditPaymentOtherModal isOpen={!!editOtherTarget} onClose={() => setEditOtherTarget(null)} showToast={showToast} target={editOtherTarget} />
