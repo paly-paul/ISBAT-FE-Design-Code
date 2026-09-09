@@ -28,8 +28,14 @@ const PAGE_SIZE = 20
 // already use (SearchSelect has no async/paged mode of its own).
 // searchTerm is CONFIRMED real server-side on this endpoint (2026-09-08,
 // see getUnconvertedEnquiries) — debounced 300ms, same as
-// CourseUnitSearchPicker, so it isn't fired on every keystroke; matching
-// happens server-side, not against whatever's already been paged in.
+// CourseUnitSearchPicker, so it isn't fired on every keystroke. Reported bug
+// (2026-09-09): typing a term didn't actually narrow the dropdown — traced
+// to searchTerm+intakeGuid combined not being independently verified (see
+// getUnconvertedEnquiries' own comment); the backend appears to silently
+// drop the search half once both are sent together. Now re-filtered
+// client-side on top of whatever the server sent back too (see the items
+// derivation below), same safety-net convention this app's other
+// unconfirmed-combination searches already use.
 export function EnquirySearchPicker({ intakeGuid, selectedLabel, onSelect, onClear, placeholder = '-- Select Enquiry --', disabled }: EnquirySearchPickerProps) {
   const [search, setSearch] = useState('')
   const [committedSearch, setCommittedSearch] = useState('')
@@ -54,9 +60,22 @@ export function EnquirySearchPicker({ intakeGuid, selectedLabel, onSelect, onCle
     data, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching, isError,
   } = useUnconvertedEnquiriesInfinite(intakeGuid, committedSearch, PAGE_SIZE, focused && !disabled)
 
-  // Server already filtered by committedSearch — no client-side re-filter.
-  const items = data?.pages.flatMap(p => p.items) ?? []
+  const rawItems = data?.pages.flatMap(p => p.items) ?? []
   const term = committedSearch
+  // Re-filter client-side on top of whatever the server sent back — same
+  // safety net this app's other list searches fall back on (e.g.
+  // programme-master's own rows filter, useRepetitionTagSearch) for a
+  // searchTerm param that's confirmed real on its own but whose behavior
+  // combined with another filter (here, intakeGuid) isn't independently
+  // verified (see getUnconvertedEnquiries' own comment). Without this,
+  // a backend that silently drops the search half of that combination
+  // shows the same unfiltered per-intake list back regardless of what was
+  // typed, which is exactly the reported bug — the dropdown never actually
+  // narrows as you type.
+  const termLower = term.trim().toLowerCase()
+  const items = termLower
+    ? rawItems.filter(e => `${e.studentName} ${e.enquiryCode} ${e.mobile ?? ''} ${e.email ?? ''}`.toLowerCase().includes(termLower))
+    : rawItems
 
   function handleScroll(e: React.UIEvent<HTMLDivElement>) {
     if (!hasNextPage || isFetchingNextPage) return
@@ -120,9 +139,16 @@ export function EnquirySearchPicker({ intakeGuid, selectedLabel, onSelect, onCle
                     <span className="font-bold truncate" style={{ fontSize: 12.5 }}>
                       {e.studentName} <span className="font-mono text-b700">({e.enquiryCode})</span>
                     </span>
+                    {/* Commented out for now (2026-09-09) — this endpoint's
+                        response never actually carries mobile/email (see
+                        getUnconvertedEnquiries' own comment: the shape looks
+                        like a narrower projection than the full Enquiry DTO),
+                        so every row rendered as a permanent "— · —" instead
+                        of real data.
                     <span className="text-g500 truncate" style={{ fontSize: 11 }}>
                       {e.mobile || '—'} · {e.email || '—'}
                     </span>
+                    */}
                   </span>
                 </div>
               ))}

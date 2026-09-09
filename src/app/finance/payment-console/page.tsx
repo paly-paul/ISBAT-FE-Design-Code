@@ -458,11 +458,17 @@ export default function PaymentConsolePage() {
   const deposits = otherAdvancesCheck ?? []
   const selectedDeposit = deposits.find(d => d.paymentAdvanceGuid === paymentAdvanceGuid)
 
-  // Advance balance strip for Apply Advance — per-currency undrawn total
-  // (get-advance-balance.md), informational only; only fetched while that
-  // mode is actually active.
+  // Advance balance strip — per-currency undrawn total (get-advance-balance.md),
+  // informational only. Backs Semester Payment's own Apply Advance mode and
+  // (2026-09-09, per request) Other Payment's Advance Payment checkbox too,
+  // same data either way since it's scoped by applicationGuid, not
+  // category — only fetched while one of those two flows is actually active.
   const { data: advanceBalances = [] } = useAdvanceBalance(
-    selectedApplicationGuid, !!selectedApplicationGuid && activePayTab === 'tuition' && tuitionMode === 'adjustment',
+    selectedApplicationGuid,
+    !!selectedApplicationGuid && (
+      (activePayTab === 'tuition' && tuitionMode === 'adjustment') ||
+      (activePayTab === 'other' && otherIsAdvance)
+    ),
   )
 
   // This deposit's own adjustment history (get-adjustments-by-advance.md), unpaged.
@@ -1592,6 +1598,25 @@ export default function PaymentConsolePage() {
                     </label>
                     {otherIsAdvance && (
                       <div className="mt-2">
+                        {/* Same Remaining Advance Balance strip as Semester
+                            Payment's own Apply Advance mode (2026-09-09, per
+                            request) — the minWidth keeps space-between from
+                            squashing label/amount together when sitting
+                            side-by-side in this flex-wrap row (see that
+                            strip's own comment). */}
+                        {advanceBalances.length > 0 && (
+                          <div className="mb-2">
+                            <div className="lbl">Remaining Advance Balance</div>
+                            <div className="flex gap-4 flex-wrap">
+                              {advanceBalances.map(b => (
+                                <div className="pc-total-due" style={{ minWidth: 170 }} key={b.currencyGuid}>
+                                  <span className="text-muted" style={{ fontSize: 12 }}>{b.currencyName}</span>
+                                  <span className="font-bold text-blue" style={{ fontSize: 15 }}>{fmtAmt(b.balance)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         {selectedAdvance && (
                           <div className="flex items-center gap-2 mb-2 p-2.5 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100">
                             <div style={{ fontSize: 12 }}>
@@ -2127,16 +2152,19 @@ export default function PaymentConsolePage() {
                     "nothing here" message four times over. */}
                 {!receipt && !isLedgersLoading && ledgers.length > 0 && tuitionMode === 'adjustment' && (
                   <>
-                    {/* Undrawn Advance Balance strip — commented out per request
-                        (2026-09-09), left in place rather than deleted in case it
-                        comes back. advanceBalances/useAdvanceBalance above are
-                        still fetched as before; only this display is disabled.
                     {advanceBalances.length > 0 && (
                       <div className="mb-[14px]">
-                        <div className="lbl">Undrawn Advance Balance</div>
+                        <div className="lbl">Remaining Advance Balance</div>
                         <div className="flex gap-4 flex-wrap">
+                          {/* .pc-total-due's justify-content: space-between only
+                              has room to work when it's the sole full-width block
+                              in its parent, the way the Tuition ledger card above
+                              uses it — side-by-side in this flex-wrap row, each
+                              card shrinks to fit its content instead, squashing
+                              label and amount together. A minWidth gives
+                              space-between something to actually distribute. */}
                           {advanceBalances.map(b => (
-                            <div className="pc-total-due" key={b.currencyGuid}>
+                            <div className="pc-total-due" style={{ minWidth: 170 }} key={b.currencyGuid}>
                               <span className="text-muted" style={{ fontSize: 12 }}>{b.currencyName}</span>
                               <span className="font-bold text-blue" style={{ fontSize: 15 }}>{fmtAmt(b.balance)}</span>
                             </div>
@@ -2144,7 +2172,6 @@ export default function PaymentConsolePage() {
                         </div>
                       </div>
                     )}
-                    */}
 
                     {deposits.length === 0 ? (
                       <div className="text-g400 text-center" style={{ padding: '12px 0', fontSize: 12.5 }}>
