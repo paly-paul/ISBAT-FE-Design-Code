@@ -17,6 +17,7 @@ import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput } from '@/lib/errorMessages'
 import { consumeFilingPrefillRef } from '@/lib/filingHandoff'
+import { getEnquiryById, getEnquiries } from '@/lib/api/admission/enquiry'
 import {
   FilingApplicationSearchResult,
   useDeleteQualification,
@@ -226,7 +227,6 @@ export default function FilingPage() {
     ? intakes.reduce((max, i) => (i.intakeCode > max ? i.intakeCode : max), intakes[0].intakeCode)
     : undefined
   const effectiveIntakeCode = currentAcademicIntake?.intakeCode ?? latestIntakeCode
-
   // searchTerm is CONFIRMED real server-side on this endpoint (2026-09-08) —
   // debounced the same 300ms as the other real-server-search pickers in this
   // app (CourseUnitSearchPicker, Payment Console's student search) so it
@@ -357,6 +357,30 @@ export default function FilingPage() {
     setPassportNo(a.passportNo ?? '')
     setIsRefugee(a.refugee === 1)
     setRefugeeId(a.refugeeId ?? '')
+
+    if (!a.dob) {
+      if (a.enquiryGuid) {
+        getEnquiryById(a.enquiryGuid)
+          .then(enq => {
+            if (enq.dob) setDob(enq.dob.slice(0, 10))
+            if (enq.countryGuid && !a.countryGuid) setCountryGuid(enq.countryGuid)
+          })
+          .catch(() => {})
+      } else if (a.phone || a.emailId) {
+        getEnquiries(1, 10, a.phone || a.emailId || '')
+          .then(res => {
+            const found = res.items.find(
+              e =>
+                (a.phone && e.mobile && e.mobile.replace(/\D/g, '').includes(a.phone.replace(/\D/g, ''))) ||
+                (a.emailId && e.email && e.email.toLowerCase() === a.emailId.toLowerCase()),
+            )
+            if (found && found.dob) {
+              setDob(found.dob.slice(0, 10))
+            }
+          })
+          .catch(() => {})
+      }
+    }
 
     setIntakeGuid(a.intakeGuid ?? '')
     setCampusGuid(a.campusGuid ?? '')
@@ -617,11 +641,69 @@ export default function FilingPage() {
     })
   }
 
-  const allQualsSaved = qualRows.length > 0 && qualRows.every(r => r.savedId != null)
+  const [isSavingAllQuals, setIsSavingAllQuals] = useState(false)
+  const unsavedCount = qualRows.filter(r => r.savedId == null).length
+  const allQualsSaved = qualRows.length > 0 && unsavedCount === 0
 
-  function handleSaveLastQual() {
-    const targetRow = qualRows.slice().reverse().find(r => r.savedId == null) || qualRows[qualRows.length - 1]
-    if (targetRow) handleSaveQualRow(targetRow)
+  async function handleSaveAllQualifications() {
+    if (!selectedApplication) {
+      showToast('Select an application above first', 'error')
+      return
+    }
+
+    const unsavedRows = qualRows.filter(r => r.savedId == null)
+    if (unsavedRows.length === 0) {
+      setActiveTab('documents')
+      return
+    }
+
+    // Validate all unsaved rows
+    for (let i = 0; i < qualRows.length; i++) {
+      const row = qualRows[i]
+      if (row.savedId != null) continue
+      const missing: string[] = []
+      if (!row.institution.trim()) missing.push('Institution')
+      if (!row.university.trim()) missing.push('University / Awarding Board')
+      if (!row.passYear) missing.push('Year')
+      if (!row.grade.trim()) missing.push('Grade')
+      if (!row.yearsTaken) missing.push('Duration')
+      if (!row.proofFile) missing.push('Proof Document')
+
+      if (missing.length > 0) {
+        showToast(`Qualification #${i + 1}: Please fill ${missing.join(', ')}`, 'error')
+        return
+      }
+    }
+
+    setIsSavingAllQuals(true)
+    try {
+      const results = await Promise.all(
+        unsavedRows.map(row =>
+          saveQualification.mutateAsync({
+            appRefNo: selectedApplication.appRefNo,
+            institution: row.institution.trim(),
+            university: row.university.trim(),
+            passYear: Number(row.passYear),
+            grade: row.grade.trim(),
+            yearsTaken: Number(row.yearsTaken),
+            proofFile: row.proofFile!,
+          }).then(res => ({ id: row.id, savedId: res.intApplicationQual }))
+        )
+      )
+
+      setQualRows(prev =>
+        prev.map(r => {
+          const match = results.find(res => res.id === r.id)
+          return match ? { ...r, savedId: match.savedId } : r
+        })
+      )
+
+      showToast(`${unsavedRows.length} qualification${unsavedRows.length > 1 ? 's' : ''} saved successfully`, 'success')
+    } catch (error: any) {
+      showToast(error?.message || 'Failed to save one or more qualifications', 'error')
+    } finally {
+      setIsSavingAllQuals(false)
+    }
   }
 
   function renderQualRow(row: QualRow, index: number) {
@@ -670,25 +752,50 @@ export default function FilingPage() {
   const uploadPhoto = useUploadPhoto()
   const submitApplication = useSubmitApplication()
 
+  useEffect(() => {
+    setPhotoSaved(!!selectedApplication?.studUserFileName)
+    setPhotoFile(null)
+  }, [selectedApplication])
+
+  const hasPhoto = photoSaved || !!selectedApplication?.studUserFileName
   const qualifiedCount = qualRows.filter(r => r.savedId != null).length
-  const canSubmit = generalSaved && intApplication != null && qualifiedCount > 0 && declarationAccepted
+  const canSubmit = generalSaved && intApplication != null && qualifiedCount > 0 && hasPhoto && declarationAccepted
   // Drives the progress strip under the pipeline — same four checkpoints as
   // the Documents tab's own "Application Status" checklist plus the final
   // declaration, so the two never disagree about what "done" means.
   const filingProgressPct = Math.round(
-    ([generalSaved, qualifiedCount > 0, photoSaved, declarationAccepted].filter(Boolean).length / 4) * 100,
+    ([generalSaved, qualifiedCount > 0, hasPhoto, declarationAccepted].filter(Boolean).length / 4) * 100,
   )
 
   function handleSavePhoto() {
-    if (!selectedApplication || !photoFile) return
+    if (!selectedApplication || !photoFile) {
+      showToast('Please select a photo file first', 'warn')
+      return
+    }
     uploadPhoto.mutate({ appRefNo: selectedApplication.appRefNo, photo: photoFile }, {
-      onSuccess: () => { setPhotoSaved(true); showToast('Photo uploaded', 'success') },
+      onSuccess: () => { setPhotoSaved(true); showToast('Photo uploaded successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to upload photo', 'error'),
     })
   }
 
   function handleSubmitApplication() {
-    if (!selectedApplication || intApplication == null) return
+    if (!selectedApplication || intApplication == null) {
+      showToast('Please save Personal & Programme Details first.', 'error')
+      return
+    }
+    if (qualifiedCount === 0) {
+      showToast('Please add and save at least one qualification before submitting.', 'error')
+      return
+    }
+    if (!hasPhoto) {
+      showToast('Applicant profile photo is required. Please upload the photo before submitting.', 'error')
+      return
+    }
+    if (!declarationAccepted) {
+      showToast('Please confirm the declaration checkbox before submitting.', 'warn')
+      return
+    }
+
     submitApplication.mutate({ intApplication, appRefNo: selectedApplication.appRefNo }, {
       // setSubmitted(true) both stops the unsaved-changes warning and
       // triggers the full-screen success popup below — the actual redirect
@@ -714,7 +821,20 @@ export default function FilingPage() {
       <div className="filing-summary-avatar-wrap">
         <div className="filing-summary-avatar">{initials(`${firstName} ${lastName}`.trim() || applicantName(selectedApplication))}</div>
         <label className="filing-summary-avatar-edit" title="Upload profile photo">
-          <input type="file" accept="image/*" />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={e => {
+              const file = e.target.files?.[0]
+              if (file && selectedApplication) {
+                setPhotoFile(file)
+                uploadPhoto.mutate({ appRefNo: selectedApplication.appRefNo, photo: file }, {
+                  onSuccess: () => { setPhotoSaved(true); showToast('Photo uploaded successfully', 'success') },
+                  onError: (error: Error) => showToast(error.message || 'Failed to upload photo', 'error'),
+                })
+              }
+            }}
+          />
           <i className="lni lni-camera-2" />
         </label>
       </div>
@@ -853,7 +973,7 @@ export default function FilingPage() {
             <div className="filing-stepper-wrap">
               <div className="filing-stepper">
                 {TABS.map((t, i) => {
-                  const tabDone = t.id === 'personal' ? generalSaved : t.id === 'qualifications' ? qualifiedCount > 0 : photoSaved && declarationAccepted
+                  const tabDone = t.id === 'personal' ? generalSaved : t.id === 'qualifications' ? qualifiedCount > 0 : hasPhoto && declarationAccepted
                   const isActive = activeTab === t.id
                   const currentIndex = TABS.findIndex(x => x.id === activeTab)
                   return (
@@ -1047,10 +1167,10 @@ export default function FilingPage() {
                         <button
                           type="button"
                           className="btn btn-primary"
-                          disabled={saveQualification.isPending || !permissions.add}
-                          onClick={handleSaveLastQual}
+                          disabled={isSavingAllQuals || saveQualification.isPending || !permissions.add}
+                          onClick={handleSaveAllQualifications}
                         >
-                          {saveQualification.isPending ? 'Saving…' : 'Save Qualification'}
+                          {isSavingAllQuals ? 'Saving Qualifications…' : `Save Qualification${unsavedCount > 1 ? `s (${unsavedCount})` : ''}`}
                         </button>
                       ) : (
                         <button
@@ -1075,9 +1195,19 @@ export default function FilingPage() {
                   <div className="filing-form-col">
                     <div className="sec-divider">Student Photo</div>
                     <div className="g2 mt-3">
-                      <Field label="Photo" req><FileZone hint="Click to upload passport-style photo (JPG/JPEG/PNG/BMP)" file={photoFile} onChange={setPhotoFile} /></Field>
+                      <Field label="Photo" req>
+                        <FileZone
+                          hint="Click to upload passport-style photo (JPG/JPEG/PNG/BMP)"
+                          file={photoFile}
+                          onChange={f => { setPhotoFile(f); if (f) setPhotoSaved(false) }}
+                        />
+                      </Field>
                       <div className="flex items-end">
-                        <button className="btn text-xs" disabled={!photoFile || uploadPhoto.isPending || photoSaved || !permissions.add} onClick={handleSavePhoto}>
+                        <button
+                          className="btn text-xs"
+                          disabled={!photoFile || uploadPhoto.isPending || (photoSaved && !photoFile) || !permissions.add}
+                          onClick={handleSavePhoto}
+                        >
                           {photoSaved ? <><i className="lni lni-checkmark-circle" /> Uploaded</> : uploadPhoto.isPending ? 'Uploading…' : 'Upload Photo'}
                         </button>
                       </div>
@@ -1107,10 +1237,10 @@ export default function FilingPage() {
                         <span className="flex-1 text-sm text-g700">Qualifications</span>
                         <span className="chk-status text-xs">{qualifiedCount} saved</span>
                       </div>
-                      <div className={`chk-item ${photoSaved ? 'pass' : 'pending'}`}>
-                        <i className={`lni ${photoSaved ? 'lni-checkmark-circle' : 'lni-timer'}`} />
+                      <div className={`chk-item ${hasPhoto ? 'pass' : 'pending'}`}>
+                        <i className={`lni ${hasPhoto ? 'lni-checkmark-circle' : 'lni-timer'}`} />
                         <span className="flex-1 text-sm text-g700">Student Photo</span>
-                        <span className="chk-status text-xs">{photoSaved ? 'Uploaded' : 'Pending'}</span>
+                        <span className="chk-status text-xs">{hasPhoto ? 'Uploaded' : 'Required — Pending'}</span>
                       </div>
                     </div>
 
@@ -1119,11 +1249,22 @@ export default function FilingPage() {
                       <span className="font-medium text-g700">I confirm the information provided is correct.</span>
                     </label>
 
-                    <div className="flex justify-between mt-5">
+                    <div className="flex justify-between items-center mt-5">
                       <button className="btn" onClick={() => setActiveTab('qualifications')}><i className="lni lni-arrow-left" /> Qualifications</button>
-                      <button className="btn btn-primary btn-submit-ready" disabled={!canSubmit || submitApplication.isPending || !permissions.add} onClick={handleSubmitApplication}>
-                        <i className="lni lni-checkmark" /> {submitApplication.isPending ? 'Submitting…' : 'Submit Application for Vetting'}
-                      </button>
+                      <div className="flex flex-col items-end gap-1">
+                        {!hasPhoto && (
+                          <span className="text-xs text-clr-red font-medium flex items-center gap-1">
+                            <i className="lni lni-warning" /> Applicant profile photo is required before submitting
+                          </span>
+                        )}
+                        <button
+                          className={`btn btn-primary btn-submit-ready${!canSubmit ? ' opacity-75' : ''}`}
+                          disabled={submitApplication.isPending || !permissions.add}
+                          onClick={handleSubmitApplication}
+                        >
+                          <i className="lni lni-checkmark" /> {submitApplication.isPending ? 'Submitting…' : 'Submit Application for Vetting'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

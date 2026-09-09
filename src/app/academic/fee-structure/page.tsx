@@ -215,19 +215,25 @@ export default function Page() {
         <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="fee structures" onPageChange={setPage} />
       </div>
 
-      <FeeStructureModal isOpen={openModals.has('new-fee-structure-modal')} onClose={() => closeModal('new-fee-structure-modal')} showToast={showToast} nav={nav} />
-      <FeeStructureModal isOpen={openModals.has('edit-fee-structure-modal')} onClose={() => closeModal('edit-fee-structure-modal')} showToast={showToast} nav={nav} mode="edit" editData={editRecord ?? undefined} />
-      <ViewFeeStructureModal 
-        isOpen={openModals.has('view-fee-structure-modal')} 
-        onClose={() => closeModal('view-fee-structure-modal')} 
-        showToast={showToast} 
-        feeStructure={viewRecord ?? undefined} 
-        onEdit={(r) => {
-          closeModal('view-fee-structure-modal')
-          setEditRecord(r)
-          openModal('edit-fee-structure-modal')
-        }}
-      />
+      {openModals.has('new-fee-structure-modal') && (
+        <FeeStructureModal isOpen onClose={() => closeModal('new-fee-structure-modal')} showToast={showToast} nav={nav} />
+      )}
+      {openModals.has('edit-fee-structure-modal') && (
+        <FeeStructureModal isOpen onClose={() => closeModal('edit-fee-structure-modal')} showToast={showToast} nav={nav} mode="edit" editData={editRecord ?? undefined} />
+      )}
+      {openModals.has('view-fee-structure-modal') && (
+        <ViewFeeStructureModal 
+          isOpen
+          onClose={() => closeModal('view-fee-structure-modal')} 
+          showToast={showToast} 
+          feeStructure={viewRecord ?? undefined} 
+          onEdit={(r) => {
+            closeModal('view-fee-structure-modal')
+            setEditRecord(r)
+            openModal('edit-fee-structure-modal')
+          }}
+        />
+      )}
       <Toast toast={toast} />
     </>
   )

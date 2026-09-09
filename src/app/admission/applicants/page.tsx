@@ -9,7 +9,7 @@ import { Pagination } from '@/components/Pagination'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { useApplications, useExportApplicationsCsv, ApplicationListItem } from '@/hooks/admission/useApplicationFiling'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { ViewApplicantModal } from '@/components/modals/admission/ViewApplicantModal'
 import { downloadBlob } from '@/lib/downloadBlob'
 import { AuthError } from '@/lib/api/client'
@@ -63,8 +63,8 @@ export default function ApplicantsPage() {
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
   // programName has no counterpart on this DTO at all — resolve it
-  // client-side, same fallback pattern as enquiry-list/page.tsx.
-  const { data: programs = [] } = useProgramMasters()
+  // client-side using the fast program dropdown endpoint.
+  const { data: programs = [] } = useProgramDropdown()
   function resolveProgramName(programGuid: string | null) {
     if (!programGuid) return '—'
     return programs.find(p => p.programGuid === programGuid)?.programName ?? '—'
@@ -167,14 +167,16 @@ export default function ApplicantsPage() {
         <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="applicants" onPageChange={setPage} />
       </div>
 
-      <ViewApplicantModal
-        isOpen={isViewModalOpen}
-        onClose={() => {
-          setIsViewModalOpen(false)
-          setSelectedApplicant(null)
-        }}
-        applicant={selectedApplicant}
-      />
+      {isViewModalOpen && (
+        <ViewApplicantModal
+          isOpen={isViewModalOpen}
+          onClose={() => {
+            setIsViewModalOpen(false)
+            setSelectedApplicant(null)
+          }}
+          applicant={selectedApplicant}
+        />
+      )}
       <Toast toast={toast} />
     </div>
   )

@@ -21,7 +21,8 @@ import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { useCountries } from '@/hooks/config/useCountries'
-import { useEnquiry } from '@/hooks/admission/useEnquiries'
+import { Country, dialCode } from '@/lib/api/academic/country'
+import { useEnquiry, useEnquiries } from '@/hooks/admission/useEnquiries'
 import {
   useApplicationPaymentExemptionTypes,
   useApplicationPaymentTypes,
@@ -91,6 +92,14 @@ interface FormData {
   bankGuid: string; remarks: string
 }
 
+function getTodayYmd(): string {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const initialForm: FormData = {
   intakeGuid: '', enquiryGuid: '',
   firstName: '', lastName: '', phoneCode: '+256', phone: '', email: '', countryGuid: '',
@@ -98,7 +107,7 @@ const initialForm: FormData = {
   feeHdGuid: '',
   exemptionTypeGuid: '', payType: '',
   receiptBookGuid: '', feeAmount: '', currencyGuid: '',
-  paymentDate: '',
+  paymentDate: getTodayYmd(),
   bankGuid: '', remarks: '',
 }
 
@@ -125,6 +134,61 @@ function PreviewRow({ label, value }: { label: string; value?: string }) {
   )
 }
 
+function findMatchingCountry(enquiry: any, countryList: Country[]): Country | undefined {
+  if (!countryList || countryList.length === 0) return undefined
+
+  // 1. Direct match by countryGuid or country_guid or nationalityGuid
+  const guid = enquiry.countryGuid || enquiry.country_guid || enquiry.nationalityGuid
+  if (guid) {
+    const match = countryList.find(c => c.countryGuid?.toLowerCase() === String(guid).toLowerCase())
+    if (match) return match
+  }
+
+  // 2. Match by country name or nationality
+  const rawName = (enquiry.countryName || enquiry.country || enquiry.country_name || enquiry.nationality || '')
+    .toString().trim().toLowerCase()
+  if (rawName) {
+    const match = countryList.find(c =>
+      c.countryName?.trim().toLowerCase() === rawName ||
+      c.nationality?.trim().toLowerCase() === rawName ||
+      c.countryName?.trim().toLowerCase().includes(rawName) ||
+      rawName.includes(c.countryName?.trim().toLowerCase() ?? '___')
+    )
+    if (match) return match
+  }
+
+  // 3. Match by country code or prefix (e.g. "UG", "UGA", "256", "ZM", "ZW", etc.)
+  const rawCode = (enquiry.countryCode || enquiry.country_code || enquiry.countryPrefix || '')
+    .toString().trim().toLowerCase().replace(/^\+/, '')
+  if (rawCode) {
+    const match = countryList.find(c => {
+      const code = c.countryCode?.trim().toLowerCase().replace(/^0+/, '')
+      const prefix = c.countryPrefix?.trim().toLowerCase().replace(/^\+/, '')
+      return (
+        c.countryCode?.trim().toLowerCase() === rawCode ||
+        code === rawCode.replace(/^0+/, '') ||
+        c.countryPrefix?.trim().toLowerCase() === rawCode ||
+        prefix === rawCode
+      )
+    })
+    if (match) return match
+  }
+
+  // 4. Match by phone dialing code if mobile phone is provided
+  const mobile = (enquiry.mobile || enquiry.phone || '').toString().trim()
+  if (mobile) {
+    for (const c of countryList) {
+      const dial = c.countryCode ? c.countryCode.replace(/^0+/, '') : ''
+      if (dial && (mobile.startsWith(`+${dial}`) || mobile.startsWith(dial))) {
+        return c
+      }
+    }
+  }
+
+  // 5. Default country (Uganda) fallback
+  return countryList.find(c => c.defaultCountry === 1) || countryList[0]
+}
+
 // Split out from the default export so useSearchParams() (below) can sit
 // behind a Suspense boundary, per Next.js App Router's requirement for any
 // client component that reads the URL's query string.
@@ -143,6 +207,7 @@ function PaymentPageContent() {
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const [form, setForm]         = useState<FormData>({ ...initialForm })
+  const [enquirySearch, setEnquirySearch] = useState('')
   const [payProofFile, setPayProofFile] = useState<File | null>(null)
   // Per Application_Payment_Change_Requests_Final_Updated.md #6 — Receipt
   // Type/No. are no longer user-entered; populated from the create
@@ -253,6 +318,7 @@ function PaymentPageContent() {
   // on Campus per #7; Enquiry depends on Intake per #1/#2).
   function setIntake(v: string) {
     setForm(prev => ({ ...prev, intakeGuid: v, enquiryGuid: '' }))
+    setEnquirySearch('')
     appliedEnquiryGuidRef.current = null
   }
   function setCampus(v: string) { setForm(prev => ({ ...prev, campusGuid: v, programGuid: '', semesterGuid: '', batchGuid: '', feeHdGuid: '' })) }
@@ -372,47 +438,60 @@ function PaymentPageContent() {
   }, [searchParams])
 
   useEffect(() => {
-    if (!selectedEnquiry || appliedEnquiryGuidRef.current === selectedEnquiry.enquiryGuid) return
-    appliedEnquiryGuidRef.current = selectedEnquiry.enquiryGuid
-    const [firstName, ...rest] = selectedEnquiry.studentName.trim().split(/\s+/)
-    // Case/whitespace-tolerant match — Enquiry.countryCode used to be
-    // confirmed 2-letter ISO alpha-2 back when online/ondesk-enquiry
-    // hardcoded 'UG' on create. Those forms now send a real countryGuid
-    // instead (see EnquiryInput.countryGuid in lib/api/admission/enquiry.ts),
-    // and the read side isn't confirmed to still echo back a code for every
-    // row — confirmed nullable the hard way (a real enquiry crashed here on
-    // .trim() of an undefined countryCode). Skip the match entirely rather
-    // than crash when it's missing; the Country Master's own countryCode
-    // VALUES have also never been confirmed against a real response (mock
-    // stand-ins use 3-letter alpha-3 codes like 'UGA') — if the real master
-    // turns out to also be alpha-3, this exact-ish match still won't find
-    // anything and Country/Phone Code will silently stay unmapped, same as
-    // before. Not guessing an alpha2→alpha3 conversion table here since a
-    // wrong guess would produce a silently WRONG country rather than just an
-    // empty field — verify the real /api/v1/users/countries countryCode
-    // format and fix this properly once confirmed.
-    const matchedCountry = selectedEnquiry.countryCode
-      ? countries.find(
-          c => c.countryCode.trim().toLowerCase() === selectedEnquiry.countryCode!.trim().toLowerCase(),
-        )
-      : undefined
-    setForm(prev => ({
-      ...prev,
-      intakeGuid: selectedEnquiry.intakeGuid || prev.intakeGuid,
-      campusGuid: selectedEnquiry.campusGuid || prev.campusGuid,
-      programGuid: selectedEnquiry.programGuid ?? '',
-      semesterGuid: '',
-      batchGuid: '',
-      feeHdGuid: '',
-      firstName: firstName ?? '',
-      lastName: rest.join(' '),
-      phone: selectedEnquiry.mobile ?? prev.phone,
-      email: selectedEnquiry.email ?? prev.email,
-      countryGuid: matchedCountry?.countryGuid ?? prev.countryGuid,
-      phoneCode: matchedCountry?.countryPrefix ?? prev.phoneCode,
-      remarks: selectedEnquiry.remarks ?? prev.remarks,
-    }))
-  }, [selectedEnquiry, countries])
+    if (!selectedEnquiry) return
+
+    const enquiryGuid = selectedEnquiry.enquiryGuid
+    const isNewEnquiry = appliedEnquiryGuidRef.current !== enquiryGuid
+
+    if (isNewEnquiry) {
+      appliedEnquiryGuidRef.current = enquiryGuid
+      const [firstName, ...rest] = (selectedEnquiry.studentName || '').trim().split(/\s+/)
+
+      const matchedCountry = findMatchingCountry(selectedEnquiry, countries)
+      const phoneDial = matchedCountry ? dialCode(matchedCountry) : undefined
+
+      setForm(prev => ({
+        ...prev,
+        intakeGuid: selectedEnquiry.intakeGuid || prev.intakeGuid,
+        campusGuid: selectedEnquiry.campusGuid || prev.campusGuid,
+        programGuid: selectedEnquiry.programGuid ?? '',
+        semesterGuid: '',
+        batchGuid: '',
+        feeHdGuid: '',
+        firstName: firstName ?? '',
+        lastName: rest.join(' '),
+        phone: selectedEnquiry.mobile ?? prev.phone,
+        email: selectedEnquiry.email ?? prev.email,
+        countryGuid: matchedCountry?.countryGuid ?? (selectedEnquiry as any).countryGuid ?? prev.countryGuid,
+        phoneCode: phoneDial ?? prev.phoneCode,
+        remarks: selectedEnquiry.remarks ?? prev.remarks,
+      }))
+    } else if (countries.length > 0 && !form.countryGuid) {
+      // In case countries finished loading after selectedEnquiry was processed
+      const matchedCountry = findMatchingCountry(selectedEnquiry, countries)
+      if (matchedCountry) {
+        setForm(prev => ({
+          ...prev,
+          countryGuid: matchedCountry.countryGuid,
+          phoneCode: prev.phoneCode || dialCode(matchedCountry),
+        }))
+      }
+    }
+  }, [selectedEnquiry, countries, form.countryGuid])
+
+  // Pre-select default country on page load once countries list is loaded
+  useEffect(() => {
+    if (countries.length > 0 && !form.countryGuid && !form.enquiryGuid) {
+      const defaultCountry = countries.find(c => c.defaultCountry === 1) || countries[0]
+      if (defaultCountry) {
+        setForm(prev => ({
+          ...prev,
+          countryGuid: defaultCountry.countryGuid,
+          phoneCode: dialCode(defaultCountry),
+        }))
+      }
+    }
+  }, [countries, form.countryGuid, form.enquiryGuid])
 
   // Label shown in EnquirySearchPicker's closed box once something's
   // selected — sourced from selectedEnquiry (the full-detail fetch above),
@@ -425,6 +504,20 @@ function PaymentPageContent() {
   const campusOptions   = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions  = programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   const countryOptions  = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
+  const phoneCodeOptions = countries.length
+    ? Array.from(
+        new Map(countries.map(c => [dialCode(c), `${dialCode(c)} · ${c.countryName}`])).entries(),
+      ).map(([value, label]) => ({ value, label }))
+    : COUNTRY_CODES
+
+  function handleCountryChange(guid: string) {
+    const match = countries.find(c => c.countryGuid === guid)
+    setForm(prev => ({
+      ...prev,
+      countryGuid: guid,
+      phoneCode: match ? dialCode(match) : prev.phoneCode,
+    }))
+  }
   const semesterOptions = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
   const batchTimeOptions = batchTimes.map(bt => ({ value: bt.batchTimeGuid, label: bt.batchTime }))
   const batchOptions    = batches.map(b => ({ value: b.batchGuid, label: b.batchCode }))
@@ -570,6 +663,7 @@ function PaymentPageContent() {
 
   function handleClear() {
     setForm({ ...initialForm }); setShowReceipt(false); setPayProofFile(null); setSavedReceipt({})
+    setEnquirySearch('')
     appliedEnquiryGuidRef.current = null
   }
 
@@ -696,7 +790,7 @@ function PaymentPageContent() {
               </Field>
               <Field label="Phone" req>
                 <div className="flex gap-2">
-                  <SearchSelect options={COUNTRY_CODES} value={form.phoneCode} onChange={v => set('phoneCode', v)} style={{ width: 108, flexShrink: 0 }} />
+                  <SearchSelect options={phoneCodeOptions.length ? phoneCodeOptions : COUNTRY_CODES} value={form.phoneCode} onChange={v => set('phoneCode', v)} style={{ width: 108, flexShrink: 0 }} />
                   <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="700 000 000" value={form.phone} onChange={e => set('phone', sanitizePhoneInput(e.target.value, false))} />
                 </div>
               </Field>
@@ -707,7 +801,7 @@ function PaymentPageContent() {
                 </div>
               </Field>
               <Field label="Country" req>
-                <SearchSelect options={countryOptions} value={form.countryGuid} placeholder="-- Select Country --" onChange={v => set('countryGuid', v)} />
+                <SearchSelect options={countryOptions} value={form.countryGuid} placeholder="-- Select Country --" onChange={handleCountryChange} />
               </Field>
               <Field label="Campus" req>
                 <SearchSelect options={campusOptions} value={form.campusGuid} placeholder="-- Select Campus --" onChange={setCampus} />

@@ -239,7 +239,7 @@ export default function Page() {
                   has no backing field in the real response, so it's dropped rather than left blank.
               <thead><tr><th style={{ width: 48 }}></th><th>Prog. Code</th><th>Programme Name</th>{fth('Group', 'group', ['BCA', 'BBA', 'MBA', '—'])}{fth('Programme Level', 'level', ["Bachelor's · 3yr / 6sem", "Master's · 2yr / 4sem", 'PhD · 3yr / 6sem'])}<th>Faculty → Campus</th><th>Accreditation Date</th><th>Expires</th><th>No IA</th><th>Specializations</th>{fth('Admission Status', 'admissionStatus', ['Active', 'Inactive'])}</tr></thead>
               */}
-              <thead><tr><th style={{ width: 48 }}></th><th>Prog. Code</th><th>Programme Name</th>{fth('Group', 'group', groupFilterOpts)}{fth('Programme Level', 'level', levelFilterOpts)}<th>Faculty → Campus</th><th>Accreditation Date</th><th>No IA</th><th>Specializations</th>{fth('Admission Status', 'admissionStatus', ['Active', 'Inactive'])}</tr></thead>
+              <thead><tr><th style={{ width: 48 }}></th><th>Prog. Code</th><th>Programme Name</th>{fth('Group', 'group', groupFilterOpts)}{fth('Programme Level', 'level', levelFilterOpts)}<th>Faculty → Campus</th><th>Accreditation Date</th><th>No IA</th>{fth('Admission Status', 'admissionStatus', ['Active', 'Inactive'])}</tr></thead>
               <tbody>
                 {(isLoading || searchPending)
                   ? <TableLoadingState colSpan={999} />
@@ -303,9 +303,6 @@ export default function Page() {
                         ? <span className="badge badge-amber"><i className="lni lni-checkmark"></i> No Internal Assessment</span>
                         : <span className="badge badge-grey">No</span>
                       }
-                    </td>
-                    <td>
-                      {r.specializations === '—' ? '—' : <span className="badge badge-blue">{r.specializations}</span>}
                     </td>
                     <td>
                       {/* Label text is just "Active"/"Inactive" — no "(New Admissions)"/

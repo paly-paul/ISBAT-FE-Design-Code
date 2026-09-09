@@ -376,7 +376,7 @@ interface ApplicationPaymentListResponse {
 // combining it with intakeCode in the same request isn't independently
 // verified, only each param on its own, but both are standard query filters
 // on the same list endpoint so they're assumed combinable here.
-function getApplicationPayments(page = 1, pageSize = 10, intakeCode?: number | string, searchTerm?: string): Promise<ApplicationPaymentListResponse> {
+function getApplicationPayments(page = 1, pageSize = 20, intakeCode?: number | string, searchTerm?: string): Promise<ApplicationPaymentListResponse> {
   const intakeParam = intakeCode != null ? `&intakeCode=${intakeCode}` : ''
   const searchParam = searchTerm?.trim() ? `&searchTerm=${encodeURIComponent(searchTerm.trim())}` : ''
   return apiGet<ApplicationPaymentListResponse | null>(`/api/v1/admissions/application-payments?page=${page}&pageSize=${pageSize}${intakeParam}${searchParam}`)
@@ -402,7 +402,7 @@ function mapApplicationPaymentToSearchResult(r: ApplicationPaymentRecord): Filin
     intakeCode: r.intakeCode != null ? String(r.intakeCode) : null,
     yearCode: null,
     intakeGuid: null,
-    enquiryGuid: null,
+    enquiryGuid: (r as any).enquiryGuid ?? (r as any).guidEnquiry ?? null,
     campusGuid: r.campusGuid,
     programGuid: r.programGuid,
     programName: r.programName ?? (r as any).programmeName ?? (r as any).program ?? null,
@@ -424,7 +424,7 @@ function mapApplicationPaymentToSearchResult(r: ApplicationPaymentRecord): Filin
     studUserFileName: null,
     countryGuid: r.countryGuid,
     universityEmail: null,
-    dob: null,
+    dob: (r as any).dob ?? (r as any).dateOfBirth ?? null,
     justificationReg: null,
     approveDateReg: null,
     intRegistrar: null,

@@ -348,6 +348,20 @@ function StudentProfileContent() {
   //   reader.readAsDataURL(file)
   // }
 
+  function handleIssueCard() {
+    if (!student) return
+    const isRenew = Boolean(currentCard)
+    const payloadJoining = joiningDate ? (joiningDate.includes('T') ? joiningDate : `${joiningDate}T00:00:00`) : null
+    const payloadExpiry = expiryDate ? (expiryDate.includes('T') ? expiryDate : `${expiryDate}T00:00:00`) : null
+    issueOrRenewIdCard.mutate(
+      { studentGuid: student.studentGuid, joiningDate: payloadJoining, expiryDate: payloadExpiry, remarks: cardRemarks || null, isRenewal: isRenew },
+      {
+        onSuccess: () => showToast(isRenew ? 'ID card renewed' : 'ID card issued', 'ok'),
+        onError: (err: any) => showToast(err?.message || 'Could not issue ID card', 'err'),
+      },
+    )
+  }
+
   function handleSaveCard() {
     if (!student) return
     if (currentCard) {
@@ -356,19 +370,34 @@ function StudentProfileContent() {
         { onSuccess: () => showToast('Card dates updated', 'ok'), onError: () => showToast('Could not update card dates', 'err') },
       )
     } else {
-      issueOrRenewIdCard.mutate(
-        { studentGuid: student.studentGuid, joiningDate: joiningDate || null, expiryDate: expiryDate || null, remarks: cardRemarks || null, isRenewal: false },
-        { onSuccess: () => showToast('ID card issued', 'ok'), onError: () => showToast('Could not issue ID card', 'err') },
-      )
+      handleIssueCard()
     }
   }
 
   function handleRenewCard() {
     if (!student) return
+    const payloadJoining = joiningDate ? (joiningDate.includes('T') ? joiningDate : `${joiningDate}T00:00:00`) : null
+    const payloadExpiry = expiryDate ? (expiryDate.includes('T') ? expiryDate : `${expiryDate}T00:00:00`) : null
     issueOrRenewIdCard.mutate(
-      { studentGuid: student.studentGuid, joiningDate: joiningDate || null, expiryDate: expiryDate || null, remarks: cardRemarks || null, isRenewal: true },
-      { onSuccess: () => showToast('Card renewed', 'ok'), onError: () => showToast('Could not renew card', 'err') },
+      { studentGuid: student.studentGuid, joiningDate: payloadJoining, expiryDate: payloadExpiry, remarks: cardRemarks || null, isRenewal: true },
+      { onSuccess: () => showToast('Card renewed', 'ok'), onError: (err: any) => showToast(err?.message || 'Could not renew card', 'err') },
     )
+  }
+
+  function handleDownloadCard() {
+    if (!student) return
+    const a = document.createElement('a')
+    a.href = getIdCardQrImageUrl(student.studentGuid)
+    a.download = `ID_Card_QR_${student.studentRegNo || student.studentNum || 'student'}.png`
+    a.target = '_blank'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    showToast('ID card QR downloaded', 'ok')
+  }
+
+  function handlePrintCard() {
+    window.print()
   }
 
   function handleSaveSponsor() {
@@ -653,13 +682,22 @@ function StudentProfileContent() {
                       <div className="fg"><label className="lbl">Remarks</label><textarea className="ctrl" rows={2} value={cardRemarks} onChange={e => setCardRemarks(e.target.value)} placeholder="Optional — only recorded on first issue" /></div>
                     )}
                     <div className="flex gap-2" style={{ marginTop: 8 }}>
-                      {currentCard ? (
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={handleIssueCard}
+                        disabled={issueOrRenewIdCard.isPending}
+                      >
+                        <i className="lni lni-credit-cards"></i> {issueOrRenewIdCard.isPending ? 'Issuing…' : 'Issue Card'}
+                      </button>
+                      {currentCard && (
                         <>
-                          <button className="btn btn-neu btn-sm" onClick={handleRenewCard} disabled={issueOrRenewIdCard.isPending}><i className="lni lni-reload"></i> Renew</button>
-                          {permissions.edit && <button className="btn btn-primary btn-sm" onClick={handleSaveCard} disabled={updateIdCardDates.isPending}><i className="lni lni-save"></i> Save Dates</button>}
+                          <button className="btn btn-neu btn-sm" onClick={handleRenewCard} disabled={issueOrRenewIdCard.isPending}>
+                            <i className="lni lni-reload"></i> Renew
+                          </button>
+                          <button className="btn btn-neu btn-sm" onClick={handleSaveCard} disabled={updateIdCardDates.isPending}>
+                            <i className="lni lni-save"></i> Save Dates
+                          </button>
                         </>
-                      ) : (
-                        permissions.edit && <button className="btn btn-primary btn-sm" onClick={handleSaveCard} disabled={issueOrRenewIdCard.isPending}><i className="lni lni-save"></i> Issue Card</button>
                       )}
                     </div>
                   </div>
@@ -734,8 +772,8 @@ function StudentProfileContent() {
                       </div>
                     </div>
                     <div className="flex gap-2" style={{ justifyContent: 'center', marginTop: 12 }}>
-                      <button className="btn btn-neu btn-sm"><i className="lni lni-download"></i> Download</button>
-                      <button className="btn btn-primary btn-sm"><i className="lni lni-printer"></i> Print</button>
+                      <button className="btn btn-neu btn-sm" onClick={handleDownloadCard}><i className="lni lni-download"></i> Download</button>
+                      <button className="btn btn-primary btn-sm" onClick={handlePrintCard}><i className="lni lni-printer"></i> Print</button>
                     </div>
                   </div>
                 </div>

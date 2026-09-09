@@ -7,7 +7,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { EnquiryUpdateInput } from '@/lib/api/admission/enquiry'
 import { useEnquiry } from '@/hooks/admission/useEnquiries'
 import { useEmployees } from '@/hooks/employee/useEmployees'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { AuthError } from '@/lib/api/client'
@@ -27,13 +27,13 @@ interface EnquiryAssignModalProps extends ModalProps {
 // see the note on EnquiryUpdateInput in lib/api/admission/enquiry.ts.
 export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, updateEnquiry }: EnquiryAssignModalProps) {
   const { data: enquiry, isLoading, isError, error } = useEnquiry(enquiryGuid, isOpen)
-  const { data: employees = [] } = useEmployees()
-  const { data: programs = [] }  = useProgramMasters()
-  const { data: campuses = [] }  = useCampuses()
+  const { data: employees = [] } = useEmployees(isOpen)
+  const { data: programs = [] }  = useProgramDropdown(undefined, isOpen)
+  const { data: campuses = [] }  = useCampuses(isOpen)
   // No intakeName/intakeCode field exists on the enquiry response itself —
   // resolve intakeGuid against the real Intake master, same client-side
   // resolution pattern as the enquiry-list page's own resolveProgramName.
-  const { data: intakes = [] }   = useIntakes()
+  const { data: intakes = [] }   = useIntakes(isOpen)
   function resolveIntakeLabel(guid: string | null) {
     if (!guid) return '—'
     const intake = intakes.find(i => i.intakeGuid === guid)

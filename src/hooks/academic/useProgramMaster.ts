@@ -55,10 +55,11 @@ export function useProgramMasterByGuid(programGuid: string, enabled: boolean) {
   })
 }
 
-export function useProgramMasters() {
+export function useProgramMasters(enabled = true) {
   return useQuery({
     queryKey: PROGRAM_MASTERS_KEY,
     queryFn: () => getProgramMasters(),
+    enabled,
     // Never treat the cached list as stale on its own — only refetch when a
     // mutation (create) explicitly invalidates this key below, instead of on
     // every remount/window focus.
@@ -109,10 +110,11 @@ export function useProgramMaster(programGuid?: string, enabled = true) {
 }
 
 // Program dropdown query — hits /api/v1/academic/program-master/dropdown
-export function useProgramDropdown(facultyGuid?: string) {
+export function useProgramDropdown(facultyGuid?: string, enabled = true) {
   return useQuery({
     queryKey: [...PROGRAM_MASTERS_KEY, 'dropdown', facultyGuid ?? ''],
     queryFn: () => getProgramDropdown(facultyGuid),
+    enabled,
     staleTime: Infinity,
     gcTime: Infinity,
   })
