@@ -12,7 +12,7 @@ import { EnquiryFormModal } from '@/components/modals/admission/EnquiryFormModal
 import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignModal'
 import { useEnquiries, useEnquiryCounts, useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -79,9 +79,9 @@ export default function EnquiryListPage() {
   // global totals.
   const { data: counts } = useEnquiryCounts({ intakeGuid: intakeGuid || undefined, sourceGuid: channel || undefined })
 
-  // programName comes back null on every row from the real API — resolve it
-  // client-side the same way faculty.ts's deanName fallback does.
-  const { data: programs = [] } = useProgramMasters()
+  // If programName is missing on any row, resolve it via lightweight dropdown lookup
+  const needsProgramLookup = rows.some(r => !r.programName && !!r.programGuid)
+  const { data: programs = [] } = useProgramDropdown(undefined, needsProgramLookup)
   function resolveProgramName(row: { programGuid: string | null; programName: string | null }) {
     if (row.programName) return row.programName
     if (!row.programGuid) return '—'
@@ -258,14 +258,18 @@ export default function EnquiryListPage() {
         )}
       </div>
 
-      <EnquiryFormModal isOpen={openModals.has('enquiry-form-modal')} onClose={() => closeModal('enquiry-form-modal')} showToast={showToast} />
-      <EnquiryAssignModal
-        isOpen={openModals.has('enquiry-assign-modal')}
-        onClose={() => closeModal('enquiry-assign-modal')}
-        showToast={showToast}
-        enquiryGuid={viewingGuid}
-        updateEnquiry={updateEnquiry}
-      />
+      {openModals.has('enquiry-form-modal') && (
+        <EnquiryFormModal isOpen onClose={() => closeModal('enquiry-form-modal')} showToast={showToast} />
+      )}
+      {openModals.has('enquiry-assign-modal') && (
+        <EnquiryAssignModal
+          isOpen
+          onClose={() => closeModal('enquiry-assign-modal')}
+          showToast={showToast}
+          enquiryGuid={viewingGuid}
+          updateEnquiry={updateEnquiry}
+        />
+      )}
       <Toast toast={toast} />
     </div>
   )

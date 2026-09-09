@@ -182,8 +182,8 @@ export default function KioskEnquiryPage() {
         <button className="btn btn-ghost" onClick={() => router.push('/admission/enquiry-list')}><i className="lni lni-arrow-left" /> Enquiry List</button>
       </div>
 
-      <div className="card max-w-3xl">
-        <div className="g2">
+      <div className="card w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="fg">
             <label className="lbl">First Name <span className="text-clr-red">*</span></label>
             <input className="ctrl" placeholder="e.g. Brian" value={firstName} onChange={e => { setFirstName(e.target.value); clearError('firstName') }} style={errors.firstName ? { borderColor: 'var(--red)' } : undefined} />
@@ -250,9 +250,9 @@ export default function KioskEnquiryPage() {
           {/* Preferred Study Mode had no counterpart on POST /api/v1/admissions/enquiries
               (Full-time/Weekend/Evening/ODL) — dropped rather than collecting data that
               goes nowhere, same as Online Enquiry's own note. */}
-          <div className="fg span2">
+          <div className="fg col-span-1 md:col-span-2 lg:col-span-3">
             <label className="lbl">Enquiry Notes</label>
-            <textarea className="ctrl" rows={3} placeholder="Additional notes about the enquiry..." value={notes} onChange={e => setNotes(e.target.value)} />
+            <textarea className="ctrl" rows={2} placeholder="Additional notes about the enquiry..." value={notes} onChange={e => setNotes(e.target.value)} />
           </div>
         </div>
         <div className="sec-divider" />

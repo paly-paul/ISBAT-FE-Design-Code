@@ -72,6 +72,8 @@ export interface Enquiry {
   // selectedEnquiry.countryCode.trim() for a real enquiry where this came
   // back undefined.
   countryCode: string | null
+  countryGuid?: string | null
+  countryName?: string | null
   dob: string
   remarks: string | null
   programGuid: string | null

@@ -29,11 +29,11 @@ function Field({ label, value, mono, wide }: { label: string; value: React.React
 
 export function ViewBatchModal({ isOpen, onClose, showToast, batchGuid, onEdit, canEdit }: ViewBatchModalProps) {
   const { data: batch, isLoading, isError, error } = useBatch(batchGuid, isOpen)
-  const { data: programs = [] }   = useProgramMasters()
-  const { data: intakes = [] }    = useIntakes()
+  const { data: programs = [] }   = useProgramMasters(isOpen)
+  const { data: intakes = [] }    = useIntakes(isOpen)
   const { data: streams = [] }    = useStreams()
   const { data: batchTimes = [] } = useBatchTimes()
-  const { data: employees = [] }  = useEmployees()
+  const { data: employees = [] }  = useEmployees(isOpen)
 
   const [programGuid, setProgramGuid] = useState('')
   const { data: semesters = [] } = useSemestersForProgram(programGuid, !!programGuid)

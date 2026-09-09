@@ -793,8 +793,22 @@ function ensureResitMaster(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+function stripLectureMaster(menu: MenuNode[]): MenuNode[] {
+  return menu.map(mod => {
+    const isLectureMatch = (name: string) => {
+      const n = name.trim().toLowerCase()
+      return n === 'lecture master' || n === 'lecturer master'
+    }
+    if (!mod.children.some(c => isLectureMatch(c.name))) return mod
+    return {
+      ...mod,
+      children: mod.children.filter(c => !isLectureMatch(c.name)),
+    }
+  })
+}
+
 export function getMenu(): Promise<MenuResult> {
-  if (MOCK_MENU) return Promise.resolve({ menu: mockMenu, isFallback: false })
+  if (MOCK_MENU) return Promise.resolve({ menu: stripLectureMaster(mockMenu), isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
     .then(data => {
       const menu = data ?? []
@@ -811,8 +825,9 @@ export function getMenu(): Promise<MenuResult> {
       const withConfig = mergeConfigSections(withCourseAllocation)
       const withProgApp = ensureProgrammeApproval(withConfig)
       const withAssMaster = ensureAssessmentMaster(withProgApp)
-      const finalMenu = ensureResitMaster(withAssMaster)
+      const withResit = ensureResitMaster(withAssMaster)
+      const finalMenu = stripLectureMaster(withResit)
       return { menu: finalMenu, isFallback: false }
     })
-    .catch(() => ({ menu: mockMenu, isFallback: true }))
+    .catch(() => ({ menu: stripLectureMaster(mockMenu), isFallback: true }))
 }

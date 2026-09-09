@@ -220,7 +220,9 @@ function BatchTransferContent() {
                   */}
                   <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                     <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                    {permissions.edit && <button className="btn btn-primary" disabled={!canExecute} onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Execute Transfer</button>}
+                    <button className="btn btn-primary" disabled={!canExecute} onClick={() => setConfirmOpen(true)}>
+                      <i className="lni lni-checkmark"></i> Execute Transfer
+                    </button>
                   </div>
                 </div>
               </div>

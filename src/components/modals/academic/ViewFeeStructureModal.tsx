@@ -17,7 +17,7 @@ interface ViewFeeStructureModalProps extends ModalProps {
 export function ViewFeeStructureModal({ isOpen, onClose, feeStructure, onEdit }: ViewFeeStructureModalProps) {
   const { data: feeLines = [], isLoading: feeLinesLoading, isError: feeLinesError, error: feeLinesErrorObj } = useProgramFeeLines(feeStructure?.feeHdGuid ?? null, isOpen && !!feeStructure)
 
-  const { data: programs = [] } = useProgramMasters()
+  const { data: programs = [] } = useProgramMasters(isOpen)
   // GET /api/v1/academic/program-master only ever lists approved programmes
   // (see programme-approval/page.tsx — a programme sits under the separate
   // not-approved list until someone approves it). A fee structure can
@@ -27,7 +27,7 @@ export function ViewFeeStructureModal({ isOpen, onClose, feeStructure, onEdit }:
   // giving up, same guid shape either way.
   const { data: notApprovedData } = useProgramApprovals(1, 1000)
   const notApprovedPrograms = notApprovedData?.items ?? []
-  const { data: intakes = [] } = useIntakes()
+  const { data: intakes = [] } = useIntakes(isOpen)
   const { data: semesters = [] } = useSemestersForProgram(feeStructure?.programGuid ?? '', isOpen && !!feeStructure?.programGuid)
 
   const [activeSection, setActiveSection] = useState<'details' | 'discounts' | 'semesters'>('details')

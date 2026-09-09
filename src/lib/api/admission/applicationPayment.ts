@@ -193,12 +193,16 @@ interface UnconvertedEnquiriesResult {
 // isn't independently verified, only each param on its own, but both are
 // standard query filters on the same list endpoint so they're assumed
 // combinable here.
-export function getUnconvertedEnquiries(intakeGuid: string, page = 1, pageSize = 10, searchTerm?: string): Promise<UnconvertedEnquiriesResult> {
+export function getUnconvertedEnquiries(intakeGuid: string, page = 1, pageSize = 100, searchTerm?: string): Promise<UnconvertedEnquiriesResult> {
   if (MOCK_AUTH) return Promise.resolve({ items: [], totalCount: 0, pageNumber: page, pageSize })
-  const searchParam = searchTerm?.trim() ? `&searchTerm=${encodeURIComponent(searchTerm.trim())}` : ''
+  const term = searchTerm?.trim()
+  const searchParam = term ? `&searchTerm=${encodeURIComponent(term)}&search=${encodeURIComponent(term)}` : ''
   return apiGet<UnconvertedEnquiriesResult | null>(
     `/api/v1/admissions/application-payments/unconverted-enquiries?intakeGuid=${intakeGuid}&page=${page}&pageSize=${pageSize}${searchParam}`,
-  ).then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+  ).then(data => {
+    if (Array.isArray(data)) return { items: data, totalCount: data.length, pageNumber: page, pageSize }
+    return data ?? { items: [], totalCount: 0, pageNumber: page, pageSize }
+  })
 }
 
 export function getApplicationPaymentBatches(programGuid: string, semesterGuid: string, batchTimeGuid: string): Promise<BatchInfoDto[]> {

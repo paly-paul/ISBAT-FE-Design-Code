@@ -6,13 +6,14 @@ const CAMPUSES_KEY = ['campuses']
 // Load enough rows to cover the full campus list in one request.
 const CAMPUSES_PAGE_SIZE = 1000
 
-export function useCampuses() {
+export function useCampuses(enabled = true) {
   return useQuery({
     queryKey: CAMPUSES_KEY,
     queryFn: () => getCampuses(1, CAMPUSES_PAGE_SIZE),
     // Keep the list cached until a mutation invalidates it.
     staleTime: Infinity,
     gcTime: Infinity,
+    enabled,
   })
 }
 

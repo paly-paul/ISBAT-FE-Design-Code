@@ -6,13 +6,14 @@ const COUNTRIES_KEY = ['countries']
 // Load enough rows to cover the full country list in one request.
 const COUNTRIES_PAGE_SIZE = 1000
 
-export function useCountries() {
+export function useCountries(enabled = true) {
   return useQuery({
     queryKey: COUNTRIES_KEY,
     queryFn: () => getCountries(1, COUNTRIES_PAGE_SIZE),
     // Keep the list cached until a mutation invalidates it.
     staleTime: Infinity,
     gcTime: Infinity,
+    enabled,
   })
 }
 

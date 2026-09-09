@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { ApplicationListItem } from '@/hooks/admission/useApplicationFiling'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useCountries } from '@/hooks/config/useCountries'
 import { applicantProfileHref } from '@/lib/applicantProfileLink'
@@ -73,9 +73,9 @@ function Field({
 export function ViewApplicantModal({ isOpen, onClose, applicant }: ViewApplicantModalProps) {
   const [activeTab, setActiveTab] = useState<'personal' | 'application' | 'documents'>('personal')
 
-  const { data: programs = [] } = useProgramMasters()
-  const { data: campuses = [] } = useCampuses()
-  const { data: countries = [] } = useCountries()
+  const { data: programs = [] } = useProgramDropdown(undefined, isOpen && !!applicant)
+  const { data: campuses = [] } = useCampuses(isOpen && !!applicant)
+  const { data: countries = [] } = useCountries(isOpen && !!applicant)
 
   if (!isOpen || !applicant) return null
 

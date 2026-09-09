@@ -8,6 +8,7 @@ interface SearchSelectProps {
   options: (string | Opt)[]
   value?: string
   onChange?: (val: string) => void
+  onSearch?: (search: string) => void
   placeholder?: string
   className?: string
   style?: React.CSSProperties
@@ -22,6 +23,7 @@ export function SearchSelect({
   options,
   value,
   onChange,
+  onSearch,
   placeholder,
   className,
   style,
@@ -45,8 +47,13 @@ export function SearchSelect({
   const current  = controlled ? value! : internal
   const selected = normalised.find(o => o.value === current)
 
-  const visible = search.trim()
-    ? normalised.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
+  const searchTokens = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const visible = searchTokens.length > 0
+    ? normalised.filter(o => {
+        const labelLower = (o.label ?? '').toLowerCase()
+        const valueLower = (o.value ?? '').toLowerCase()
+        return searchTokens.every(token => labelLower.includes(token) || valueLower.includes(token))
+      })
     : normalised
 
   function calcPos() {
@@ -78,9 +85,13 @@ export function SearchSelect({
   }
 
   useEffect(() => {
-    if (open) inputRef.current?.focus()
-    else setSearch('')
-  }, [open])
+    if (open) {
+      inputRef.current?.focus()
+    } else {
+      setSearch('')
+      onSearch?.('')
+    }
+  }, [open, onSearch])
 
   // Long option lists (e.g. DatePicker's year picker — 111 entries) always
   // rendered starting from the top on open, with no indication the currently
@@ -193,8 +204,19 @@ export function SearchSelect({
               style={{ fontSize: 12, height: 28, padding: '4px 8px' }}
               placeholder="Search…"
               value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}
+              onChange={e => {
+                const val = e.target.value
+                setSearch(val)
+                onSearch?.(val)
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Escape') setOpen(false)
+                if (e.key === 'Enter' && visible.length > 0) {
+                  e.preventDefault()
+                  const first = visible.find(o => !o.disabled)
+                  if (first) select(first.value)
+                }
+              }}
               onClick={e => e.stopPropagation()}
             />
           </div>

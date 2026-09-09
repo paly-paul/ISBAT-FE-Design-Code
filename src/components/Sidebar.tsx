@@ -110,6 +110,17 @@ function orderIndex(item: MenuNode): number {
   return i === -1 ? ORDER_PRIORITY.length : i
 }
 
+const HIDDEN_SECTION_NAMES = new Set<string>([
+  'lecture master',
+  'lecturer master',
+])
+
+function isHiddenMenuNode(node: MenuNode): boolean {
+  if (HIDDEN_SECTION_NAMES.has(node.name.trim().toLowerCase())) return true
+  if (node.url && HIDDEN_ITEM_IDS.has(idFromUrl(node.url))) return true
+  return false
+}
+
 // railId scopes ORDER_PRIORITY's re-sort to Finance only — several other
 // modules have their own "Dashboard" leaf sharing the exact slug ORDER_
 // PRIORITY matches on, and re-sorting every module just because Finance's
@@ -117,7 +128,7 @@ function orderIndex(item: MenuNode): number {
 // to change. The hide-filter has no such collision risk (HIDDEN_ITEM_IDS is
 // currently Finance-only anyway) so it stays applied everywhere.
 function visibleChildren(children: MenuNode[], railId: RailId): MenuNode[] {
-  const filtered = children.filter(c => !c.url || !HIDDEN_ITEM_IDS.has(idFromUrl(c.url)))
+  const filtered = children.filter(c => !isHiddenMenuNode(c))
   if (railId !== 'finance') return filtered
   // Array.prototype.sort is a stable sort in every engine this app ships
   // to (spec-guaranteed since ES2019) — items tied on orderIndex (i.e.

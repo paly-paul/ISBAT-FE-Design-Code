@@ -280,7 +280,6 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
             </button>
             <button className="btn btn-danger w-full justify-center" onClick={onReject}><i className="lni lni-close" /> Reject Application</button>
           </div>
-          <p className="text-xs text-g400 text-center">Sets T_Application.Action = 0 (Wait) / 2 (Approved) / 3 (Rejected)</p>
         </div>
       </div>
     </div>

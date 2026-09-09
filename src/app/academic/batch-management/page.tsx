@@ -247,30 +247,36 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="batches" onPageChange={setPage} />
         </div>
       </div>
-      <BatchFormModal
-        mode="new"
-        isOpen={openModals.has('new-batch-modal')}
-        onClose={() => closeModal('new-batch-modal')}
-        showToast={showToast}
-        batchGuid={null}
-        createBatch={createBatch}
-        updateBatch={updateBatch}
-      />
-      <BatchFormModal
-        mode="edit"
-        isOpen={openModals.has('edit-batch-modal')}
-        onClose={() => closeModal('edit-batch-modal')}
-        showToast={showToast}
-        batchGuid={editingBatchGuid}
-        createBatch={createBatch}
-        updateBatch={updateBatch}
-      />
-      <ViewBatchModal canEdit={permissions.edit} onEdit={() => { closeModal('view-batch-modal'); openEditModal(editingBatchGuid || '') }}
-        isOpen={openModals.has('view-batch-modal')}
-        onClose={() => closeModal('view-batch-modal')}
-        showToast={showToast}
-        batchGuid={editingBatchGuid}
-      />
+      {openModals.has('new-batch-modal') && (
+        <BatchFormModal
+          mode="new"
+          isOpen
+          onClose={() => closeModal('new-batch-modal')}
+          showToast={showToast}
+          batchGuid={null}
+          createBatch={createBatch}
+          updateBatch={updateBatch}
+        />
+      )}
+      {openModals.has('edit-batch-modal') && (
+        <BatchFormModal
+          mode="edit"
+          isOpen
+          onClose={() => closeModal('edit-batch-modal')}
+          showToast={showToast}
+          batchGuid={editingBatchGuid}
+          createBatch={createBatch}
+          updateBatch={updateBatch}
+        />
+      )}
+      {openModals.has('view-batch-modal') && (
+        <ViewBatchModal canEdit={permissions.edit} onEdit={() => { closeModal('view-batch-modal'); openEditModal(editingBatchGuid || '') }}
+          isOpen
+          onClose={() => closeModal('view-batch-modal')}
+          showToast={showToast}
+          batchGuid={editingBatchGuid}
+        />
+      )}
       <Toast toast={toast} />
 
       {deleteTarget && (
