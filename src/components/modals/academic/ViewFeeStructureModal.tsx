@@ -4,7 +4,7 @@ import { ModalProps } from '../types'
 import { useProgramFeeLines, ProgramFeeStructureHeader } from '@/hooks/academic/useProgramFeeStructure'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useProgramApprovals } from '@/hooks/academic/useProgramApproval'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useIntakesByGuids } from '@/hooks/academic/useIntakes'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { FailurePopup } from '../shared/FailurePopup'
 import { AuthError } from '@/lib/api/client'
@@ -27,7 +27,10 @@ export function ViewFeeStructureModal({ isOpen, onClose, feeStructure, onEdit }:
   // giving up, same guid shape either way.
   const { data: notApprovedData } = useProgramApprovals(1, 1000)
   const notApprovedPrograms = notApprovedData?.items ?? []
-  const { data: intakes = [] } = useIntakes(isOpen)
+  // Resolves just this one record's own intakeGuid (2026-09-10) instead of
+  // useIntakes(isOpen)'s full 1000-row snapshot fetched just to look up a
+  // single guid — same batched-by-guid convention as ViewProgrammeModal.
+  const intakesByGuid = useIntakesByGuids(feeStructure?.intakeGuid ? [feeStructure.intakeGuid] : [])
   const { data: semesters = [] } = useSemestersForProgram(feeStructure?.programGuid ?? '', isOpen && !!feeStructure?.programGuid)
 
   const [activeSection, setActiveSection] = useState<'details' | 'discounts' | 'semesters'>('details')
@@ -53,7 +56,7 @@ export function ViewFeeStructureModal({ isOpen, onClose, feeStructure, onEdit }:
     ?? notApprovedPrograms.find(p => p.programGuid === feeStructure.programGuid)
   const programName = matchedProgram?.programName || '—'
   const programCode = matchedProgram?.programCode || '—'
-  const intakeName = intakes.find(i => i.intakeGuid === feeStructure.intakeGuid)?.description || '—'
+  const intakeName = (feeStructure.intakeGuid ? intakesByGuid.get(feeStructure.intakeGuid) : undefined)?.description || '—'
 
   return (
     <div className="modal-overlay open" id="view-feestruct-modal">

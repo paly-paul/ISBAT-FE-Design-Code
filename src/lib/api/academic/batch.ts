@@ -21,6 +21,19 @@ export interface Batch {
   active: number
   bInCharge?: string
   pHead?: string | null
+  // Pre-resolved display names — confirmed live on GET /api/v1/academic/batches
+  // (2026-09-09), present on every row in a real sample. batch-management's
+  // own page used to resolve all of these via separate lookups (a full
+  // Programme Master/Streams/Batch Times fetch each, plus a genuinely N+1
+  // per-programme semester fetch for semesterName specifically) — prefer
+  // these instead wherever present, falling back to the client-side lookup
+  // only if a row ever comes back without one, same "prefer server, fall
+  // back to client resolve" convention used throughout this app.
+  programName?: string | null
+  semesterName?: string | null
+  streamName?: string | null
+  batchTimeName?: string | null
+  batchTimeCode?: string | null
 }
 
 interface BatchListResult {

@@ -24,9 +24,6 @@ import {
   useCreateAdjustment,
   AdvanceDepositSummary,
 } from '@/hooks/finance/useAdvancePayment'
-import { useCampuses } from '@/hooks/config/useCampuses'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
-import { useBatches } from '@/hooks/academic/useBatches'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import {
   useSearchStudentsInfinite,
@@ -812,26 +809,21 @@ export default function PaymentConsolePage() {
   const otherHistoryItems = otherPaymentHistory?.items ?? []
   const otherHistoryTotalPages = Math.max(1, Math.ceil((otherPaymentHistory?.totalCount ?? 0) / HISTORY_PAGE_SIZE))
 
-  // Client-side name resolution for the profile's guid FKs — same fallback
-  // pattern used throughout the app (faculty.ts's deanName, enquiry-list's
-  // resolveProgramName), but only as a fallback now: a real live
-  // student-profile response confirms the server pre-resolves these names
-  // itself (programName, levelName, batchCode, semesterName, feeCode) —
-  // prefer those and only fall back to the client-side lookup when the
-  // server sends null, which it does for some of these on some
-  // applications (programName/batchCode/semesterName were null on an
-  // otherwise fully-resolved sample).
-  const { data: campuses = [] } = useCampuses()
-  const { data: programs = [] } = useProgramMasters()
-  const { data: allBatchesData } = useBatches(1, 1000)
-  const batches = allBatchesData?.items ?? []
+  // Campus/Programme/Batch client-side fallback lookups (useCampuses/
+  // useProgramMasters/useBatches) dropped entirely (2026-09-09, per
+  // request) — they existed only to cover the rare case of the server
+  // sending null for its own pre-resolved programName/batchCode (and, for
+  // Campus, because the DTO never carried a name at all), at the cost of
+  // three full-list fetches. Now reading straight off profile's own fields;
+  // Campus has nothing to read since it was never anything but that lookup,
+  // so it's dropped from the hero card below rather than left permanently
+  // blank. Semester keeps its own fallback (useSemestersForProgram) — that
+  // one wasn't part of this request and is scoped to just this student's
+  // programme, not a full-list fetch.
   const { data: semesters = [] } = useSemestersForProgram(profile?.programGuid ?? '', !!profile?.programGuid)
 
-  // campusName has no server-resolved counterpart on the DTO — always
-  // client-resolved.
-  const campusName = campuses.find(c => c.campusGuid === profile?.campusGuid)?.campusName
-  const programName = profile?.programName ?? programs.find(p => p.programGuid === profile?.programGuid)?.programName
-  const batchCode = profile?.batchCode ?? batches.find(b => b.batchGuid === profile?.batchGuid)?.batchCode
+  const programName = profile?.programName
+  const batchCode = profile?.batchCode
   const semName = profile?.semesterName ?? semesters.find(s => s.semesterGuid === profile?.semesterGuid)?.semName
 
   const selectedCurrency = currencies.find(c => c.currencyGuid === currencyGuid)
@@ -1386,10 +1378,11 @@ export default function PaymentConsolePage() {
                           hover tooltip when it's long enough to be
                           ellipsis-truncated by pc-hero-fact-val, without
                           letting a long value wrap and break the grid's row
-                          alignment (confirmed live: wrapping "ISBAT
-                          University - Main Campus" etc. staggered every row
-                          after it out of alignment). */}
-                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val" title={campusName ?? '—'}>{campusName ?? '—'}</span></div>
+                          alignment (confirmed live: wrapping a long value
+                          staggered every row after it out of alignment).
+                          Campus dropped entirely (2026-09-09, per request) —
+                          it only ever existed via the useCampuses() fallback
+                          lookup that's now gone, nothing left to show here. */}
                       <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Semester</span><span className="pc-hero-fact-val" title={semName ?? '—'}>{semName ?? '—'}</span></div>
                       {/* Guards against the literal string "null" —
                           confirmed live on an application with no intake

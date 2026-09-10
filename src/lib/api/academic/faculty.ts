@@ -55,7 +55,7 @@ export type FacultyInput = {
   deanEmployeeGuid: string | null
 }
 
-interface FacultyListResponse {
+export interface FacultyListResponse {
   items: Faculty[]
   totalCount: number
   pageNumber: number
@@ -69,9 +69,44 @@ const mockFaculties: Faculty[] = [
 ]
 let mockFacultySeq = mockFaculties.length + 1
 
-export function getFaculties(page = 1, pageSize = 10): Promise<Faculty[]> {
+// search forwarded to the backend's own ?search= param (confirmed live
+// 2026-09-10, same as programs/intakes) rather than filtered client-side —
+// omitted from the query string entirely when blank.
+export function getFaculties(page = 1, pageSize = 10, search = ''): Promise<Faculty[]> {
   if (MOCK_AUTH) return Promise.resolve(mockFaculties)
-  return apiGet<FacultyListResponse | null>(`/api/v1/academic/faculties?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (search.trim()) params.set('search', search.trim())
+  return apiGet<FacultyListResponse | null>(`/api/v1/academic/faculties?${params.toString()}`).then(data => data?.items ?? [])
+}
+
+// Real server-side pagination variant (2026-09-10), for FacultySearchPicker's
+// infinite scroll — keeps the totalCount/pageNumber/pageSize envelope
+// getFaculties() above discards, same convention as getProgramMastersPage/
+// getIntakesPaged.
+export function getFacultiesPaged(page = 1, pageSize = 10, search = ''): Promise<FacultyListResponse> {
+  if (MOCK_AUTH) {
+    const q = search.trim().toLowerCase()
+    const filtered = q ? mockFaculties.filter(f => f.facultyName.toLowerCase().includes(q) || f.facultyCode.toLowerCase().includes(q)) : mockFaculties
+    const start = (page - 1) * pageSize
+    return Promise.resolve({ items: filtered.slice(start, start + pageSize), totalCount: filtered.length, pageNumber: page, pageSize })
+  }
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (search.trim()) params.set('search', search.trim())
+  return apiGet<FacultyListResponse | null>(`/api/v1/academic/faculties?${params.toString()}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+}
+
+// Confirmed live (2026-09-10) — GET /api/v1/academic/faculties/:facultyGuid.
+// Backs FacultySearchPicker's label resolution for an already-picked
+// facultyGuid (e.g. prefilled from an Edit-mode record) without holding the
+// whole faculty list in memory.
+export function getFacultyById(guid: string): Promise<Faculty> {
+  if (MOCK_AUTH) {
+    const found = mockFaculties.find(f => f.facultyGuid === guid)
+    if (!found) return Promise.reject(new Error('Faculty not found'))
+    return Promise.resolve(found)
+  }
+  return apiGet<Faculty>(`/api/v1/academic/faculties/${guid}`)
 }
 
 export function createFaculty(input: FacultyInput): Promise<Faculty> {

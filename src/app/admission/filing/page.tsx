@@ -20,6 +20,7 @@ import { consumeFilingPrefillRef } from '@/lib/filingHandoff'
 import { getEnquiryById, getEnquiries } from '@/lib/api/admission/enquiry'
 import {
   FilingApplicationSearchResult,
+  useApplicationByGuid,
   useDeleteQualification,
   useSaveGeneral,
   useSaveQualification,
@@ -539,6 +540,54 @@ export default function FilingPage() {
   const [spCountryGuid, setSpCountryGuid] = useState('')
   const [spPhone, setSpPhone] = useState('')
 
+  // Best-effort enrichment from GET /application-filling/{applicationGuid}
+  // (get-application-by-guid.md) — the search source above (application-
+  // payments) doesn't carry every personal-detail field (see
+  // FilingApplicationSearchResult's own notes), and this endpoint's full
+  // ApplicationDetailDto can fill in what it left null. Confirmed by the
+  // backend team (2026-09-10) to be a genuinely narrow window: it only
+  // returns data while the application's Action == Submitted. It 400s both
+  // for the ordinary "still being filled in" case this page mostly handles
+  // AND for one that has already been vetted/rejected/registered — so this
+  // realistically only ever enriches an applicant who was fully filed and
+  // submitted in a prior session and hasn't been vetted yet. Either 400 is
+  // expected and handled as "nothing to enrich with", not an error. NOTE:
+  // selectedApplication.applicationGuid is also actually backed by the
+  // payment record's paymentGuid, not a confirmed application-filling guid
+  // (see mapApplicationPaymentToSearchResult's own comment) — so this call
+  // may 400 for that reason too, indistinguishable from either status gap
+  // above. Whatever the cause, the fallback is the same: leave whatever
+  // selectApplication() already prefilled untouched.
+  const {
+    data: applicationDetail,
+    isError: applicationDetailFailed,
+    isFetched: applicationDetailFetched,
+  } = useApplicationByGuid(selectedApplication?.applicationGuid, !!selectedApplication)
+  const [enrichedForGuid, setEnrichedForGuid] = useState<string | null>(null)
+  useEffect(() => {
+    if (!selectedApplication || !applicationDetailFetched) return
+    if (enrichedForGuid === selectedApplication.applicationGuid) return
+    setEnrichedForGuid(selectedApplication.applicationGuid)
+
+    if (applicationDetail) {
+      if (!dob && applicationDetail.dob) setDob(applicationDetail.dob.slice(0, 10))
+      if (!gender && applicationDetail.gender != null) setGender(applicationDetail.gender === 1 ? 'Male' : 'Female')
+      if (!countryGuid && applicationDetail.countryGuid) setCountryGuid(applicationDetail.countryGuid)
+      if (!nationalId && applicationDetail.nationalId) setNationalId(applicationDetail.nationalId)
+      if (!passportNo && applicationDetail.passportNo) setPassportNo(applicationDetail.passportNo)
+      if (!isRefugee && applicationDetail.refugee === 1) {
+        setIsRefugee(true)
+        setRefugeeId(applicationDetail.refugeeId ?? '')
+      }
+    } else if (applicationDetailFailed) {
+      // Quiet, non-blocking — this is the expected outcome for the vast
+      // majority of selections (still-mid-filing applications), not a
+      // real failure the counsellor needs to act on.
+      showToast('No prior completed application record found to pull extra details from', 'info')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedApplication, applicationDetail, applicationDetailFailed, applicationDetailFetched, enrichedForGuid])
+
   const saveGeneral = useSaveGeneral()
 
   function handleSaveGeneralAndAdvance() {
@@ -835,7 +884,12 @@ export default function FilingPage() {
               }
             }}
           />
-          <i className="lni lni-camera-2" />
+          {/* lni-camera-2 isn't a real LineIcons 4.0 class (confirmed: every
+              other camera icon in this app — profile/page.tsx,
+              odel-student-preview/page.tsx — uses plain lni-camera and
+              renders) — the glyph never painted, leaving a blank white
+              circle with no visible cue that this was an upload control. */}
+          <i className="lni lni-camera" />
         </label>
       </div>
       <div className="filing-summary-name">{`${firstName} ${lastName}`.trim() || applicantName(selectedApplication) || 'Applicant'}</div>
@@ -1202,14 +1256,29 @@ export default function FilingPage() {
                           onChange={f => { setPhotoFile(f); if (f) setPhotoSaved(false) }}
                         />
                       </Field>
-                      <div className="flex items-end">
+                      <div className="flex flex-col items-start justify-end gap-1">
+                        {/* Was a bare `btn text-xs` with no color variant — this page's
+                            other primary actions (Save & Continue, Submit Application)
+                            all use btn-primary, so next to those this one read as plain
+                            text rather than a clickable button. Users picked a photo in
+                            the FileZone above and had no visual cue that a second click
+                            here was still needed to actually save it. btn-success once a
+                            file is picked (not yet saved) draws the eye to the pending
+                            action; falls back to btn-neu once there's nothing to do. */}
                         <button
-                          className="btn text-xs"
+                          className={`btn btn-sm${photoSaved ? ' btn-neu' : photoFile ? ' btn-success' : ' btn-neu'}`}
                           disabled={!photoFile || uploadPhoto.isPending || (photoSaved && !photoFile) || !permissions.add}
                           onClick={handleSavePhoto}
                         >
-                          {photoSaved ? <><i className="lni lni-checkmark-circle" /> Uploaded</> : uploadPhoto.isPending ? 'Uploading…' : 'Upload Photo'}
+                          {photoSaved
+                            ? <><i className="lni lni-checkmark-circle" /> Uploaded</>
+                            : uploadPhoto.isPending
+                            ? <><i className="lni lni-reload" /> Uploading…</>
+                            : <><i className="lni lni-cloud-upload" /> Upload Photo</>}
                         </button>
+                        {photoFile && !photoSaved && !uploadPhoto.isPending && (
+                          <span className="text-xs text-g400">Click Upload Photo to save it</span>
+                        )}
                       </div>
                     </div>
 

@@ -15,12 +15,11 @@ import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
-import { useCreateProgramMaster, useDeleteProgramMasterComplete, useProgramMasters, useProgramMasterSearch, useUpdateProgramMasterComplete } from '@/hooks/academic/useProgramMaster'
+import { useCreateProgramMaster, useDeleteProgramMasterComplete, useProgramMastersPaged, useUpdateProgramMasterComplete } from '@/hooks/academic/useProgramMaster'
 import { useProgramGroups } from '@/hooks/academic/useProgramGroups'
 import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
-import { useFaculties } from '@/hooks/config/useFaculties'
-import { useStreams } from '@/hooks/config/useStreams'
+import { useFacultiesByGuids } from '@/hooks/config/useFaculties'
+import { useStreamsByGuids } from '@/hooks/config/useStreams'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatDate } from '@/lib/date'
 
@@ -93,36 +92,62 @@ export default function Page() {
   //   { progCode: 'PHD-CS-2023', progName: 'Doctor of Philosophy — CS 2023',       group: '—',   level: 'PhD · 3yr / 6sem',       faculty: 'FCT → Main Campus', accredDate: 'Jun 2023', expires: 'Jun 2028',         expiresBadge: 'badge-green', expiresIcon: '',                        noIA: 'Yes', specializations: '—',                    admissionStatus: 'Active',   admissionBadge: 'badge-green', rowClass: '', variant: 'edit' },
   // ]
 
-  // Real list + the lookups needed to resolve the guids it returns into
-  // display names (the list endpoint itself only echoes back guids).
-  const { data: programs = [], isLoading } = useProgramMasters()
-  const { data: programGroups = [] } = useProgramGroups()
+  // Real server-side pagination (2026-09-10) — only PAGE_SIZE rows are ever
+  // requested for the page on screen (see useProgramMastersPaged), not the
+  // whole table in one 1000-row shot. Trade-off: the Group/Programme Level
+  // column filters, plus the Level/Status filter dropdowns further down,
+  // can now only narrow the rows already on the current page, not the full
+  // dataset — same "server search/paging, client filters stay page-scoped"
+  // trade-off enquiry-list's own filters made.
+  const [page, setPage] = useState(1)
+  // programGroups backs the table's own Group column (the list endpoint only
+  // echoes back a guid, no name) — gated on the Add/Edit modal being open
+  // (2026-09-10, per request) rather than fetched on every page load,
+  // accepting that column shows blank until the modal has been opened at
+  // least once. Once it has, the fetch lands in react-query's cache
+  // (staleTime: Infinity) and stays there — the table keeps showing resolved
+  // names after the modal closes, it just isn't the modal's own fetch's job
+  // to feed the table, both happen to read the same cached query.
+  // ProgrammeModal's own call to this same hook is gated on its own isOpen
+  // prop for the same reason — see that component. Not confirmed to support
+  // real server-side pagination (see the same note there), so stays a
+  // full-list fetch rather than a batched-by-guid lookup.
+  const isProgModalOpen = openModals.has('new-prog-modal') || openModals.has('view-prog-modal')
+  const { data: programGroups = [] } = useProgramGroups(isProgModalOpen)
+  // programLevels backs both the table's Level column AND the standalone
+  // Level filter dropdown further down (levelDropdownOpts) — the latter
+  // needs the full set of level names regardless of what's on the current
+  // page/whether a modal's ever been opened, so this stays an unconditional
+  // full fetch (also not confirmed to support real pagination) rather than
+  // gated or batched-by-guid.
   const { data: programLevels = [] } = useProgramLevels()
-  const { data: faculties = [] } = useFaculties()
-  const { data: streams = [] } = useStreams()
 
-  // Debounced so the backend's ?search= isn't hit on every keystroke, and
-  // held at '' (falling back to the unfiltered list) until MIN_SEARCH_CHARS
-  // is met — same convention as the other academic master pages.
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  useEffect(() => {
-    const trimmed = search.trim()
-    if (trimmed.length < MIN_SEARCH_CHARS) { setDebouncedSearch(''); return }
-    const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
-    return () => clearTimeout(t)
-  }, [search])
-
-  const { data: searchResults, isFetching: isSearching } = useProgramMasterSearch(debouncedSearch)
-  const basePrograms = debouncedSearch ? (searchResults ?? []) : programs
   const searchTrimmed = search.trim()
-  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isSearching)
+  const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
+  const { data, isLoading, isFetching } = useProgramMastersPaged(page, PAGE_SIZE, activeSearch)
+  const programs = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && isFetching
 
-  const rows = basePrograms.map(p => {
+  // Faculty/Specialization names back the table's Faculty/Specializations
+  // columns — confirmed live (2026-09-10) that both
+  // /api/v1/academic/faculties and /api/v1/academic/specializations support
+  // real server-side pagination+search, so rather than a capped 1000-row
+  // snapshot gated behind the Add/Edit modal, these resolve only the guids
+  // actually referenced by the current page of programmes — a small, bounded
+  // set that's ready the moment the table itself loads, no modal required.
+  const facultyGuidsOnPage = programs.map(p => p.facultyGuid)
+  const facultiesByGuid = useFacultiesByGuids(facultyGuidsOnPage)
+  const streamGuidsOnPage = programs.flatMap(p => p.streamGuids ?? [])
+  const streamsByGuid = useStreamsByGuids(streamGuidsOnPage)
+
+  const rows = programs.map(p => {
     const group = programGroups.find(g => g.programGroupGuid === p.programGroupGuid)
     const level = programLevels.find(l => l.programLevelGuid === p.programLevelGuid)
-    const faculty = faculties.find(f => f.facultyGuid === p.facultyGuid)
+    const faculty = facultiesByGuid.get(p.facultyGuid)
     const specializationNames = (p.streamGuids || [])
-      .map(guid => streams.find(s => s.streamGuid === guid)?.streamName)
+      .map(guid => streamsByGuid.get(guid)?.streamName)
       .filter((name): name is string => !!name)
     return {
       programGuid: p.programGuid,
@@ -163,13 +188,14 @@ export default function Page() {
     if (levelFilter && !r.level.startsWith(levelFilter)) return false
     if (statusFilter && r.admissionStatus !== statusFilter) return false
     // Re-filter client-side on top of whatever the server sent back — rows
-    // is already search-scoped via basePrograms, but this keeps results
-    // correct even if the backend doesn't actually honor ?search=.
+    // is already search-scoped (see useProgramMastersPaged above), but this
+    // keeps results correct even if the backend doesn't actually honor
+    // ?search=.
     if (searchTrimmed.length >= MIN_SEARCH_CHARS && !`${r.progCode} ${r.progName}`.toLowerCase().includes(searchTrimmed.toLowerCase())) return false
     return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   })
 
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+  const pageItems = filteredRows
 
   function fth(label: string, col: string, opts: string[]) {
     return (
@@ -210,7 +236,7 @@ export default function Page() {
                 className="w-56"
                 placeholder="Search by code or name…"
                 value={search}
-                onChange={setSearch}
+                onChange={v => { setSearch(v); setPage(1) }}
                 results={searchMatches.map(r => ({ id: r.programGuid, primary: r.progCode, secondary: r.progName }))}
                 loading={searchPending}
                 minChars={MIN_SEARCH_CHARS}
@@ -221,14 +247,14 @@ export default function Page() {
                 placeholder="All Levels"
                 options={levelDropdownOpts}
                 value={levelFilter}
-                onChange={setLevelFilter}
+                onChange={v => { setLevelFilter(v); setPage(1) }}
               />
               <SearchSelect
                 className="w-auto text-[var(--fs-sm)]"
                 placeholder="All Statuses"
                 options={['Active', 'Inactive']}
                 value={statusFilter}
-                onChange={setStatusFilter}
+                onChange={v => { setStatusFilter(v); setPage(1) }}
               />
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>
@@ -244,7 +270,7 @@ export default function Page() {
                 {(isLoading || searchPending)
                   ? <TableLoadingState colSpan={999} />
                   : filteredRows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => { setFilters({}); setPage(1) }} />
                     : null}
                 {!(isLoading || searchPending) && pageItems.map(r => (
                   <tr key={r.programGuid}>

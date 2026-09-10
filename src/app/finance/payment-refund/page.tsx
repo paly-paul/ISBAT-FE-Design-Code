@@ -21,6 +21,7 @@ import {
   useCreateRefund,
 } from '@/hooks/finance/usePaymentRefund'
 import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
+import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { formatDate } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
 
@@ -122,11 +123,21 @@ export default function PaymentRefundPage() {
   const { data: allBatchesData } = useBatches(1, 1000)
   const batches = allBatchesData?.items ?? []
   const { data: semesters = [] } = useSemestersForProgram(profile?.programGuid ?? '', !!profile?.programGuid)
+  // Same fallback need as programName/batchCode/semName below — a live
+  // sample confirms profile.feeCode can come back null even though the
+  // structure itself genuinely exists (feeHdGuid was populated), which was
+  // showing as a blank "Fee Code" fact on the profile card. Scoped to this
+  // student's own programme rather than the whole university's fee
+  // structures, same "just enough to resolve one label" scoping
+  // useSemestersForProgram above already uses.
+  const { data: feeStructuresData } = useProgramFeeStructures(1, 1000, profile?.programGuid || undefined)
+  const feeStructures = feeStructuresData?.items ?? []
 
   const campusName = campuses.find(c => c.campusGuid === profile?.campusGuid)?.campusName
   const programName = profile?.programName ?? programs.find(p => p.programGuid === profile?.programGuid)?.programName
   const batchCode = profile?.batchCode ?? batches.find(b => b.batchGuid === profile?.batchGuid)?.batchCode
   const semName = profile?.semesterName ?? semesters.find(s => s.semesterGuid === profile?.semesterGuid)?.semName
+  const feeCode = profile?.feeCode ?? feeStructures.find(f => f.feeHdGuid === profile?.feeHdGuid)?.feeCode
 
   // Refund Details — this application's own refund history
   // (get-refunds-by-application.md), unpaged: at most one row per ledger,
@@ -344,8 +355,18 @@ export default function PaymentRefundPage() {
               ) : isProfileError || !profile ? (
                 <div className="card text-clr-red text-center" style={{ padding: 24, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load this student&apos;s profile.</div>
               ) : (
-                <div className="card p-0 overflow-hidden">
-                  <div className="pc-hero">
+                // h-full + flex flex-col on the card, flex:1 on .pc-hero —
+                // .pc-body is a grid, which stretches this card's own flex
+                // column wrapper to match the Refund form's height on the
+                // right by default, but nothing inside was set up to
+                // actually grow into that extra space (2026-09-09, per
+                // request — the card was still just as tall as its own
+                // content, leaving a gap under it). .pc-hero has nothing
+                // else in this card to share the space with here, so it can
+                // safely take all of it — the gradient background then
+                // extends to fill instead of stopping short.
+                <div className="card p-0 overflow-hidden h-full flex flex-col">
+                  <div className="pc-hero" style={{ flex: 1 }}>
                     <div className="pc-hero-top">
                       <div className="pc-hero-avatar">{initialsFor(applicantName(profile))}</div>
                       <div className="flex-1 min-w-0">
@@ -354,11 +375,28 @@ export default function PaymentRefundPage() {
                         <span className="pc-hero-badge"><i className="lni lni-bookmark"></i> {profile.appRefNo}</span>
                       </div>
                     </div>
+                    {/* Rounded out with Intake/Year/Reg No/Phone/Email —
+                        fields StudentProfile already carries but this card
+                        wasn't showing (2026-09-09, per request) — both to
+                        surface more of what's actually on file and so this
+                        card's height tracks the Refund form's on the right,
+                        the way Payment Console's/NCHE & Guild's own fuller
+                        hero-facts grid already does. Intake guards against
+                        the literal string "null", same live quirk NCHE &
+                        Guild's own Intake tile guards against. */}
                     <div className="pc-hero-facts">
                       <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val" title={campusName ?? '—'}>{campusName ?? '—'}</span></div>
                       <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Semester</span><span className="pc-hero-fact-val" title={semName ?? '—'}>{semName ?? '—'}</span></div>
-                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Fee Code</span><span className="pc-hero-fact-val" title={profile.feeCode ?? '—'}>{profile.feeCode ?? '—'}</span></div>
+                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Intake</span><span className="pc-hero-fact-val" title={profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}>{profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}</span></div>
+                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Fee Code</span><span className="pc-hero-fact-val" title={feeCode ?? '—'}>{feeCode ?? '—'}</span></div>
                       <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={batchCode ?? '—'}>{batchCode ?? '—'}</span></div>
+                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Year</span><span className="pc-hero-fact-val" title={profile.yearCode ?? '—'}>{profile.yearCode ?? '—'}</span></div>
+                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Reg No</span><span className="pc-hero-fact-val" title={profile.studentRegNo ?? '—'}>{profile.studentRegNo ?? '—'}</span></div>
+                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Phone</span><span className="pc-hero-fact-val" title={profile.phone ?? '—'}>{profile.phone ?? '—'}</span></div>
+                      <div className="pc-hero-fact pc-hero-fact-span2">
+                        <span className="pc-hero-fact-lbl">Email</span>
+                        <span className="pc-hero-fact-val truncate" title={profile.emailId ?? profile.universityEmail ?? '—'}>{profile.emailId ?? profile.universityEmail ?? '—'}</span>
+                      </div>
                     </div>
                   </div>
                 </div>

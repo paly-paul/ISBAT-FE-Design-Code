@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, useInfiniteQuery, useQueries, keepPreviousData } from '@tanstack/react-query'
 import {
   createProgramMaster,
   createProgramMasterStep1,
@@ -6,6 +6,7 @@ import {
   getProgramMasterByGuid,
   getProgramMasterFullDetails,
   getProgramMasters,
+  getProgramMastersPage,
   getProgramDropdown,
   getProgramMastersByCampus,
   updateProgramMasterComplete,
@@ -55,6 +56,36 @@ export function useProgramMasterByGuid(programGuid: string, enabled: boolean) {
   })
 }
 
+// Batched-by-guid lookup — same convention as useCourseUnitsByGuids/
+// useIntakesByGuids/useFacultiesByGuids, used to resolve display labels for
+// a bounded set of specific programGuids (e.g. just the ones referenced by
+// the current page of the standalone Fee Structure page's own table)
+// without holding the whole programme list in memory. Shares the same
+// query key as useProgramMasterByGuid above, so a guid already resolved by
+// one is reused by the other.
+//
+// Unlike the other useXByGuids hooks in this app, this one also reports
+// isLoading — the Fee Structure page uses it to decide whether a guid this
+// endpoint came back without (a programme still pending approval — see GET
+// /api/v1/academic/program-master's own "approved only" note) is a genuine
+// gap worth falling back to the separate not-approved list for, or just
+// this batch still being in flight.
+export function useProgramMastersByGuids(guids: string[]) {
+  const unique = Array.from(new Set(guids.filter(Boolean)))
+  const results = useQueries({
+    queries: unique.map(guid => ({
+      queryKey: [...PROGRAM_MASTERS_KEY, 'by-guid', guid],
+      queryFn: () => getProgramMasterByGuid(guid),
+      staleTime: Infinity,
+      gcTime: Infinity,
+    })),
+  })
+  const byGuid = new Map<string, ProgramMaster>()
+  results.forEach((r, i) => { if (r.data) byGuid.set(unique[i], r.data) })
+  const isLoading = results.some(r => r.isLoading)
+  return { byGuid, isLoading }
+}
+
 export function useProgramMasters(enabled = true) {
   return useQuery({
     queryKey: PROGRAM_MASTERS_KEY,
@@ -81,6 +112,45 @@ export function useProgramMasterSearch(search: string) {
     queryKey: [...PROGRAM_MASTERS_KEY, 'search', q],
     queryFn: () => getProgramMasters(q),
     enabled: q.length > 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
+// Real server-side pagination (2026-09-10) for Programme Master's own
+// table — replaces the useProgramMasters()/useProgramMasterSearch() pair
+// (a full 1000-row fetch + a separate page-1-only search query) with one
+// hook, same consolidation useBatches/useLecturerSkills already went
+// through. Reuses getProgramMastersPage, confirmed to genuinely support
+// page/pageSize/search together (built for ProgramSearchPicker's own
+// infinite scroll). useProgramMasters() above stays untouched — programme-
+// master's own name-resolution consumers elsewhere (ProgrammeModal,
+// ViewProgrammeModal, course-allocation, etc.) still need the full list.
+export function useProgramMastersPaged(page: number, pageSize: number, search: string) {
+  return useQuery({
+    queryKey: [...PROGRAM_MASTERS_KEY, 'paged', page, pageSize, search],
+    queryFn: () => getProgramMastersPage(page, pageSize, search),
+    placeholderData: keepPreviousData,
+  })
+}
+
+// Search-as-you-type/scroll picker (2026-09-09), backing ProgramSearchPicker
+// — same useInfiniteQuery + fetch-next-on-scroll pattern
+// useSearchCourseUnitsInfinite (useCourseUnits.ts) uses. Replaces the
+// Course Units page's own "All Programmes" filter, which used a plain
+// SearchSelect over useProgramMasters()' capped 1000-row snapshot. Confirmed
+// the endpoint genuinely supports page/pageSize/search together, unlike
+// getProgramMasters()'s own hardcoded pageSize=1000 — see getProgramMastersPage.
+export function useSearchProgramMastersInfinite(search: string, pageSize: number, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...PROGRAM_MASTERS_KEY, 'search-infinite', search, pageSize],
+    queryFn: ({ pageParam }) => getProgramMastersPage(pageParam, pageSize, search),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const fetched = allPages.reduce((sum, p) => sum + p.items.length, 0)
+      return fetched < lastPage.totalCount ? allPages.length + 1 : undefined
+    },
+    enabled,
     staleTime: Infinity,
     gcTime: Infinity,
   })

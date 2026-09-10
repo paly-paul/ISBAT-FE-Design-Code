@@ -367,6 +367,41 @@ export function getProgramMasters(search = ''): Promise<ProgramMaster[]> {
     })
 }
 
+export interface ProgramMasterListResponse {
+  items: ProgramMaster[]
+  totalCount: number
+  pageNumber: number
+  pageSize: number
+}
+
+// Real page/pageSize/search variant (2026-09-09, confirmed the endpoint
+// supports all three) — for the Course Units page's own "All Programmes"
+// filter, which used to read off getProgramMasters()' capped 1000-row
+// snapshot. That plain function above stays as-is for its other callers
+// (programme-master's own table, ProgrammeModal, etc.), which don't need
+// scroll-to-load-more. Backs useSearchProgramMastersInfinite below.
+export function getProgramMastersPage(page = 1, pageSize = 20, search = ''): Promise<ProgramMasterListResponse> {
+  const q = search.trim()
+  if (MOCK_AUTH) {
+    const filtered = q
+      ? mockProgramMasters.filter(p => `${p.programCode} ${p.programName}`.toLowerCase().includes(q.toLowerCase()))
+      : mockProgramMasters
+    const start = (page - 1) * pageSize
+    return Promise.resolve({ items: filtered.slice(start, start + pageSize), totalCount: filtered.length, pageNumber: page, pageSize })
+  }
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (q) params.set('search', q)
+  return apiGet<any>(`/api/v1/academic/program-master?${params.toString()}`).then(data => {
+    const items: ProgramMaster[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
+    return {
+      items,
+      totalCount: typeof data?.totalCount === 'number' ? data.totalCount : items.length,
+      pageNumber: data?.pageNumber ?? page,
+      pageSize: data?.pageSize ?? pageSize,
+    }
+  })
+}
+
 export interface ProgramDropdownItem {
   programGuid: string
   programCode: string

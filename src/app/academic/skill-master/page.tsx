@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
@@ -9,10 +9,9 @@ import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
 import { LecturerSkillFormModal } from '@/components/modals/academic/LecturerSkillFormModal'
 import { ViewLecturerSkillModal } from '@/components/modals/academic/ViewLecturerSkillModal'
-import { useLecturerSkills, useLecturerSkillSearch, useCreateLecturerSkill, useUpdateLecturerSkill, useDeleteLecturerSkill, LecturerSkill } from '@/hooks/academic/useLecturerSkills'
+import { useLecturerSkills, useCreateLecturerSkill, useUpdateLecturerSkill, useDeleteLecturerSkill, LecturerSkill } from '@/hooks/academic/useLecturerSkills'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatDate } from '@/lib/date'
@@ -85,7 +84,28 @@ export default function Page() {
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  const { data: skills = [], isLoading } = useLecturerSkills()
+  // Attempted real server-side pagination (2026-09-09), rolled back to a
+  // client-side slice the same day: GET /api/v1/users/skills accepts a
+  // pageSize param but doesn't actually enforce it — a real pageSize=10
+  // request came back with every row for several employees at once (well
+  // over 10), and since it's unconfirmed whether `page` is honored
+  // correctly either, layering our own (page-1)*PAGE_SIZE slice on top of
+  // whatever each `page` value happens to return risks double-paginating
+  // incorrectly. Safer to always fetch one large page (LOAD_SIZE) and do
+  // the actual pagination ourselves against that single fetched list, same
+  // convention as this app's other still-client-paginated master pages —
+  // revisit once pageSize is confirmed to actually work server-side.
+  // Search still goes to the server either way (confirmed real elsewhere).
+  const LOAD_SIZE = 1000
+  const [page, setPage] = useState(1)
+  const searchTrimmed = search.trim()
+  const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
+  const { data, isLoading, isFetching } = useLecturerSkills(1, LOAD_SIZE, activeSearch)
+  const allSkills = data?.items ?? []
+  // Dataset-wide count for the stat card below — independent of the column
+  // filter/pagination math further down, which operates on filteredRows.
+  const totalCount = data?.totalCount ?? allSkills.length
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && isFetching
   const { data: employees = [] } = useEmployees()
   const employeeNameByGuid = useMemo(
     () => new Map(employees.map(e => [e.employeeGuid, `${e.empName} (${e.shortCode})`])),
@@ -93,25 +113,12 @@ export default function Page() {
   )
   function employeeLabel(guid: string) { return employeeNameByGuid.get(guid) ?? guid }
 
-  // Debounced so the backend's ?search= isn't hit on every keystroke, and
-  // held at '' (falling back to the unfiltered list) until MIN_SEARCH_CHARS
-  // is met — same convention as Intake Master's search box.
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  useEffect(() => {
-    const trimmed = search.trim()
-    if (trimmed.length < MIN_SEARCH_CHARS) { setDebouncedSearch(''); return }
-    const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
-    return () => clearTimeout(t)
-  }, [search])
-
-  const { data: searchResults, isFetching: isSearching } = useLecturerSkillSearch(debouncedSearch)
-  // Newest first. There's no date field on LecturerSkill to sort by — the
-  // API returns rows in creation order (oldest first, per a real sample),
-  // so reversing it is the only way to get newest-first without a backend
-  // change.
-  const baseRows = [...(debouncedSearch ? (searchResults ?? []) : skills)].reverse()
-  const searchTrimmed = search.trim()
-  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isSearching)
+  // Newest first, across the full dataset — there's no date field on
+  // LecturerSkill to sort by, the API returns rows in creation order (oldest
+  // first, per a real sample), so reversing the whole list before paging is
+  // the only way to get true newest-first order without a backend change
+  // (reversing after slicing to a page would only reorder within that page).
+  const baseRows = [...allSkills].reverse()
 
   const createSkill = useCreateLecturerSkill()
   const updateSkill = useUpdateLecturerSkill()
@@ -148,14 +155,31 @@ export default function Page() {
   // minChars gate on when the dropdown is even allowed to open.
   const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? baseRows.slice(0, 8) : []
 
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+  // Paginated last, over the full filtered/sorted dataset — matches the
+  // pre-rollback usePagination(filteredRows, PAGE_SIZE) semantics exactly.
+  // filteredCount (not the dataset-wide totalCount above) is what
+  // Pagination itself renders, same as that hook's own totalCount return —
+  // it reflects the column filter, unlike the stat card's totalCount.
+  const filteredCount = filteredRows.length
+  const totalPages = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pageItems = filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
+  // Only reflects the current page now (server-paginated above), not the
+  // whole table — same trade-off as everywhere else stats/filters were
+  // derived from a now-paginated list. No dedicated counts endpoint exists
+  // for this domain (unlike get-enquiries-counts.md) to keep these
+  // dataset-wide instead.
+  // Computed off allSkills (the full loaded list), not the current page's
+  // own skills slice — accurate across the whole dataset now that the
+  // client-side pagination rollback above means the full list is already
+  // sitting in memory anyway.
   const stats = useMemo(() => ({
-    total: skills.length,
-    approved: skills.filter(s => s.approvalStatus === 'Approved').length,
-    pending: skills.filter(s => s.approvalStatus === 'Pending').length,
-    employees: new Set(skills.map(s => s.employeeGuid)).size,
-  }), [skills])
+    total: totalCount,
+    approved: allSkills.filter(s => s.approvalStatus === 'Approved').length,
+    pending: allSkills.filter(s => s.approvalStatus === 'Pending').length,
+    employees: new Set(allSkills.map(s => s.employeeGuid)).size,
+  }), [allSkills, totalCount])
 
   function fth(label: string, col: string, opts: string[]) {
     return (
@@ -200,7 +224,7 @@ export default function Page() {
               className="w-56"
               placeholder="Search skill or employee ID…"
               value={search}
-              onChange={setSearch}
+              onChange={v => { setSearch(v); setPage(1) }}
               results={searchMatches.map(s => ({ id: s.lecturerSkillGuid, primary: s.skillName || 'Unnamed skill', secondary: employeeLabel(s.employeeGuid) }))}
               loading={searchPending}
               minChars={MIN_SEARCH_CHARS}
@@ -224,7 +248,7 @@ export default function Page() {
                 {(isLoading || searchPending)
                   ? <TableLoadingState colSpan={999} />
                   : filteredRows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={!!search || Object.values(filters).some(v => v.length > 0)} onClearFilters={() => { setSearch(''); setFilters({}) }} />
+                    ? <EmptyState colSpan={999} hasFilters={!!search || Object.values(filters).some(v => v.length > 0)} onClearFilters={() => { setSearch(''); setFilters({}); setPage(1) }} />
                     : null}
                 {!(isLoading || searchPending) && pageItems.map(s => (
                   <tr key={s.lecturerSkillGuid}>
@@ -258,7 +282,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
-          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="skills" onPageChange={setPage} />
+          <Pagination page={safePage} totalPages={totalPages} totalCount={filteredCount} itemLabel="skills" onPageChange={setPage} />
         </div>
       </div>
 

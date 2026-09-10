@@ -158,7 +158,7 @@ export default function ApplicantsPage() {
                   <td className="py-2.5">{resolveProgramName(a.programGuid)}</td>
                   <td className="py-2.5 text-g600">{a.intakeCode || '—'}</td>
                   <td className="py-2.5">{saveStatusBadge(a.saveStatus)}</td>
-                  <td className="py-2.5 text-g500 text-xs">{a.createdDate.slice(0, 10)}</td>
+                  <td className="py-2.5 text-g500 text-xs">{a.createdDate ? a.createdDate.slice(0, 10) : '—'}</td>
                 </tr>
               ))}
             </tbody>
