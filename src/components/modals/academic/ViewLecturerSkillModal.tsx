@@ -32,7 +32,7 @@ function Field({ label, value, mono, wide }: { label: string; value: React.React
 
 export function ViewLecturerSkillModal({ isOpen, onClose, showToast, lecturerSkillGuid, onEdit, canEdit }: ViewLecturerSkillModalProps) {
   const { data: skill, isLoading, isError, error } = useLecturerSkill(lecturerSkillGuid, isOpen)
-  const { data: employees = [] } = useEmployees()
+  const { data: employees = [] } = useEmployees(isOpen)
   const [employeeGuid, setEmployeeGuid] = useState('')
   const [skillName, setSkillName] = useState('')
   const [proficiency, setProficiency] = useState('1')

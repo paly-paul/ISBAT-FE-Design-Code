@@ -37,13 +37,12 @@ export function useFilingCountries() {
   })
 }
 
-// intakeCode scopes the fetch to one intake (see the note on
-// searchApplicationsForFiling) — pass the current academic intake's code so
-// this doesn't pull every intake's applications at once.
-export function useSearchApplicationsForFiling(searchTerm: string, pageNumber: number, pageSize: number, enabled: boolean, intakeCode?: number | string) {
+// Backed by payment-search (see searchApplicationsForFiling's own comment) —
+// intentionally unscoped by intake, searches across every intake.
+export function useSearchApplicationsForFiling(searchTerm: string, pageNumber: number, pageSize: number, enabled: boolean) {
   return useQuery({
-    queryKey: [...FILING_KEY, 'search', searchTerm, pageNumber, pageSize, intakeCode ?? ''],
-    queryFn: () => searchApplicationsForFiling(searchTerm, pageNumber, pageSize, intakeCode),
+    queryKey: [...FILING_KEY, 'search', searchTerm, pageNumber, pageSize],
+    queryFn: () => searchApplicationsForFiling(searchTerm, pageNumber, pageSize),
     enabled,
   })
 }
@@ -52,15 +51,16 @@ export function useSearchApplicationsForFiling(searchTerm: string, pageNumber: n
 // interactive applicant-search dropdown — same useInfiniteQuery +
 // fetch-next-on-scroll mechanism as useSearchCourseUnitsInfinite
 // (useCourseUnits.ts) and useSearchStudentsInfinite (usePaymentConsole.ts).
-// searchTerm is CONFIRMED real server-side (2026-09-08, see
-// getApplicationPayments) and part of the query key, same convention as
-// those two — each typed term's pages are cached separately rather than
-// re-filtered client-side. intakeCode still scopes every page server-side
-// too, combined with whatever term is typed.
-export function useSearchApplicationsForFilingInfinite(searchTerm: string, pageSize: number, enabled: boolean, intakeCode?: number | string) {
+// Backed by GET /api/v1/admissions/application-payments/current-intake,
+// which scopes to the current academic intake server-side and matches
+// searchTerm against both name and AppRefNo — no client-passed intakeCode
+// needed any more (see getApplicationPaymentsCurrentIntake). searchTerm is
+// part of the query key, same convention as those two hooks — each typed
+// term's pages are cached separately rather than re-filtered client-side.
+export function useSearchApplicationsForFilingInfinite(searchTerm: string, pageSize: number, enabled: boolean) {
   return useInfiniteQuery({
-    queryKey: [...FILING_KEY, 'search-infinite', searchTerm, pageSize, intakeCode ?? ''],
-    queryFn: ({ pageParam }) => getFilingApplicationsPage(pageParam, pageSize, intakeCode, searchTerm),
+    queryKey: [...FILING_KEY, 'search-infinite', searchTerm, pageSize],
+    queryFn: ({ pageParam }) => getFilingApplicationsPage(pageParam, pageSize, searchTerm),
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
       const fetched = allPages.reduce((sum, p) => sum + p.items.length, 0)

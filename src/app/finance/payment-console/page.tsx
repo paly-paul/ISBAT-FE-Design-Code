@@ -304,16 +304,36 @@ export default function PaymentConsolePage() {
   // date that actually reaches CreatePaymentOther (when this draw-down
   // happens).
   const [otherPayments, setOtherPayments] = useState<{ id: string; code: string; receiptNo: string | null; payDate: string; ledgerName: string; amount: string; currencyCode: string }[]>([])
-  const [otherLedger, setOtherLedger] = useState('')
-  // Amount to Apply — sits next to the Ledger field (2026-09-09, per
-  // request), digits-only. Purely a staging value: typing here doesn't
-  // touch otherAmount by itself, it's only read once a deposit is actually
-  // picked in the table below (see selectAdvanceDeposit), where it takes
-  // priority over defaulting otherAmount to the deposit's full balance —
-  // lets a cashier key in the intended draw-down amount before they've
-  // even found the right deposit to draw it from. Has no effect on a
-  // regular (non-advance) Other Payment.
-  const [otherAdvanceAmount, setOtherAdvanceAmount] = useState('')
+  // Multi-row Ledger/Ledger Amount table (2026-09-10, per request) — replaces
+  // the old single Ledger + "Amount to Apply" pair. CreatePaymentOther itself
+  // still only ever accepts one ledgerOthersGuid + one amount per call (see
+  // PaymentOtherInput's own comment — no batch/array support on the real
+  // endpoint), so this is purely a staging table: otherSaveEntry() below
+  // loops it and fires one real payment call per row with a valid ledger +
+  // amount, sharing the rest of the form's fields (currency/date/receipt
+  // book/bank/remarks) across every call. Starts with one blank row, same
+  // "at least one entry" convention as calendarEntries on the Intake form.
+  interface OtherLedgerRow { id: number; ledgerOthersGuid: string; amount: string }
+  const [otherLedgerRows, setOtherLedgerRows] = useState<OtherLedgerRow[]>([{ id: 1, ledgerOthersGuid: '', amount: '' }])
+  const nextOtherRowIdRef = useRef(2)
+  function addOtherLedgerRow() {
+    setOtherLedgerRows(prev => [...prev, { id: nextOtherRowIdRef.current++, ledgerOthersGuid: '', amount: '' }])
+  }
+  function removeOtherLedgerRow(id: number) {
+    setOtherLedgerRows(prev => prev.length <= 1 ? prev : prev.filter(r => r.id !== id))
+  }
+  function updateOtherLedgerRow(id: number, field: 'ledgerOthersGuid' | 'amount', value: string) {
+    setOtherLedgerRows(prev => prev.map(r => r.id === id ? { ...r, [field]: field === 'amount' ? value.replace(/[^0-9.]/g, '') : value } : r))
+  }
+  // Sum of every row's amount, in the one shared Currency picked below —
+  // drives both the Total row under the table and the "Amount to Collect"
+  // summary strip (this replaced the old single free-typed Amount field, so
+  // there's no separate figure to keep in sync with it any more).
+  const otherLedgerRowsTotal = otherLedgerRows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0)
+  // Guards the whole submit loop in otherSaveEntry() — createPaymentOther's
+  // own isPending flag briefly drops back to false BETWEEN each row's call,
+  // which would let the button re-enable mid-loop without this.
+  const [isSavingOtherBatch, setIsSavingOtherBatch] = useState(false)
   const [otherPayDate, setOtherPayDate] = useState(todayYmd)
   const [otherIsAdvance, setOtherIsAdvance] = useState(false)
   const [selectedAdvance, setSelectedAdvance] = useState<AdvanceDepositSummary | null>(null)
@@ -324,7 +344,8 @@ export default function PaymentConsolePage() {
   const otherReceiptBooks = activeReceiptBooks.filter(r => r.category === PAY_TYPE_TO_RECEIPT_CATEGORY[Number(otherPayType)])
   const [otherReceiptBookGuid, setOtherReceiptBookGuid] = useState('')
   const [otherProcBankGuid, setOtherProcBankGuid] = useState('')
-  const [otherAmount, setOtherAmount] = useState('')
+  // No more standalone Amount field — otherLedgerRowsTotal (summed from the
+  // Ledger/Ledger Amount table above) is what's shown/collected now.
   const [otherCurrencyGuid, setOtherCurrencyGuid] = useState('')
   const [otherRemarks, setOtherRemarks] = useState('')
 
@@ -875,15 +896,13 @@ export default function PaymentConsolePage() {
   }
 
   function resetOtherForm() {
-    setOtherLedger('')
-    setOtherAdvanceAmount('')
+    setOtherLedgerRows([{ id: nextOtherRowIdRef.current++, ledgerOthersGuid: '', amount: '' }])
     setOtherPayDate(todayYmd())
     setOtherIsAdvance(false)
     setSelectedAdvance(null)
     setOtherPayType('1')
     setOtherReceiptBookGuid('')
     setOtherProcBankGuid('')
-    setOtherAmount('')
     setOtherCurrencyGuid(getDefaultFinanceCurrencyGuid(currencies))
     setOtherRemarks('')
   }
@@ -910,35 +929,59 @@ export default function PaymentConsolePage() {
   function selectAdvanceDeposit(advance: AdvanceDepositSummary) {
     // Clicking the already-selected row again deselects it — the table has
     // no separate "clear" affordance, so the same radio/row that picked a
-    // deposit is what un-picks it too. Currency/Amount go back to blank
-    // (the Currency effect below re-defaults it) rather than left sitting
-    // on the now-abandoned deposit's own figures.
+    // deposit is what un-picks it too. Currency goes back to blank (the
+    // Currency effect below re-defaults it) rather than left sitting on the
+    // now-abandoned deposit's own currency.
     if (advance.paymentAdvanceGuid === selectedAdvance?.paymentAdvanceGuid) {
       setSelectedAdvance(null)
       setOtherCurrencyGuid('')
-      setOtherAmount('')
       return
     }
     setSelectedAdvance(advance)
-    // Prefilled from the deposit, both still editable: Currency should
-    // normally stay as-is (CreatePaymentOther draws down in the deposit's
-    // own currency). Amount defaults to whatever's already staged in
-    // otherAdvanceAmount (the field next to Ledger, per request) if the
-    // cashier typed one ahead of picking a deposit; otherwise falls back to
-    // the full undrawn balance, same as before.
+    // Currency should normally stay as-is (CreatePaymentOther draws down in
+    // the deposit's own currency) — the amount to draw is whatever the
+    // cashier has already keyed into the Ledger/Ledger Amount table's rows
+    // (otherLedgerRowsTotal), validated against this deposit's balance at
+    // submit time in otherSaveEntry() rather than pre-filled here.
     setOtherCurrencyGuid(advance.currencyGuid)
-    setOtherAmount(otherAdvanceAmount.trim() || String(advance.balance))
   }
 
   // No edit/delete here, unlike Tuition's receipt — the legacy Other
   // Payment reference screen's own "Paid Fee Details" table has no edit/
   // delete affordance, so this stays a flat append-only log to match; each
   // successful submit appends the real result (post-payment-other.md) to it.
-  function otherSaveEntry() {
+  // Loops the Ledger/Ledger Amount table, firing one real
+  // CreatePaymentOther call per valid row (ledger picked + amount > 0) —
+  // the endpoint itself has no multi-line support (see PaymentOtherInput's
+  // own comment), so N rows means N sequential calls sharing every other
+  // field (currency/date/receipt book/bank/remarks). Sequential rather than
+  // Promise.all so a mid-batch failure stops cleanly instead of leaving a
+  // partial, hard-to-reconcile set of receipts firing concurrently; rows
+  // that already succeeded stay recorded (both here and on the server) even
+  // if a later row fails — only the table itself is left as-is for the
+  // cashier to fix and retry the remainder.
+  async function otherSaveEntry() {
     if (!profile || !selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
-    if (!otherLedger) { showToast('Please select a ledger.', 'warn'); return }
-    const amt = parseFloat(otherAmount)
-    if (!otherAmount.trim() || isNaN(amt) || amt <= 0) { showToast('Amount must be greater than 0.', 'warn'); return }
+
+    const validRows = otherLedgerRows.filter(r => r.ledgerOthersGuid && parseFloat(r.amount) > 0)
+    const ledgerNoAmount = otherLedgerRows.find(r => r.ledgerOthersGuid && !(parseFloat(r.amount) > 0))
+    const amountNoLedger = otherLedgerRows.find(r => !r.ledgerOthersGuid && parseFloat(r.amount) > 0)
+    // Backstop only — the dropdown already excludes a ledger picked in
+    // another row, so this shouldn't normally be reachable.
+    const seenLedgers = new Set<string>()
+    const duplicateLedger = validRows.find(r => {
+      if (seenLedgers.has(r.ledgerOthersGuid)) return true
+      seenLedgers.add(r.ledgerOthersGuid)
+      return false
+    })
+    if (validRows.length === 0) { showToast('Add at least one ledger with an amount greater than 0.', 'warn'); return }
+    if (duplicateLedger) {
+      const name = ledgerOthers.find(l => l.ledgerOthersGuid === duplicateLedger.ledgerOthersGuid)?.ledgerName ?? 'That ledger'
+      showToast(`${name} is added more than once — each ledger can only appear in one row.`, 'warn')
+      return
+    }
+    if (ledgerNoAmount) { showToast('Every ledger row needs an amount greater than 0.', 'warn'); return }
+    if (amountNoLedger) { showToast('Every amount entered needs a ledger selected.', 'warn'); return }
     if (!otherCurrencyGuid) { showToast('Please select a currency.', 'warn'); return }
     if (!otherPayDate) { showToast('Please select a payment date.', 'warn'); return }
     const payTypeNum = Number(otherPayType)
@@ -948,52 +991,63 @@ export default function PaymentConsolePage() {
     // paymentAdvanceGuid instead of claiming a new receipt — no receipt
     // book/bank needed (the money was already receipted when the advance
     // was deposited), same reasoning PaymentOtherInput's own comment gives.
+    // Checked against the TABLE'S TOTAL now, since every row draws from the
+    // same single deposit.
     if (otherIsAdvance) {
       if (!selectedAdvance) { showToast('Please select an advance deposit to draw from.', 'warn'); return }
-      if (amt > selectedAdvance.balance) { showToast(`Amount exceeds this deposit's remaining balance (${selectedAdvance.balance.toLocaleString()}).`, 'warn'); return }
+      if (otherLedgerRowsTotal > selectedAdvance.balance) { showToast(`Total exceeds this deposit's remaining balance (${selectedAdvance.balance.toLocaleString()}).`, 'warn'); return }
     } else {
       if (!otherReceiptBookGuid) { showToast('Please select a receipt book.', 'warn'); return }
       if (showOtherBankFields && !otherProcBankGuid) { showToast('Please select a bank.', 'warn'); return }
     }
 
     const currencyCode = currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyCode ?? ''
-    const ledgerName = ledgerOthers.find(l => l.ledgerOthersGuid === otherLedger)?.ledgerName ?? '—'
 
-    createPaymentOther.mutate(
-      {
-        applicationGuid: selectedApplicationGuid,
-        studentGuid,
-        ledgerOthersGuid: otherLedger,
-        amount: amt,
-        currencyGuid: otherCurrencyGuid,
-        payDate: otherPayDate,
-        payType: payTypeNum,
-        remarks: otherRemarks.trim() || null,
-        receiptBookGuid: otherIsAdvance ? null : otherReceiptBookGuid,
-        procBankGuid: otherIsAdvance ? null : (showOtherBankFields ? otherProcBankGuid : null),
-        paymentAdvanceGuid: otherIsAdvance ? selectedAdvance?.paymentAdvanceGuid ?? null : null,
-      },
-      {
-        onSuccess: result => {
-          setOtherPayments(prev => [...prev, {
-            id: result.paymentOtherGuid,
-            code: result.paymentCode,
-            receiptNo: result.receipt,
-            payDate: otherPayDate, ledgerName, amount: String(result.amount), currencyCode,
-          }])
-          setSuccessModal({
-            title: 'Other Payment Recorded',
-            rows: [
-              ['Ledger', ledgerName],
-              ['Receipt', result.receipt ?? '—'],
-              ['Amount', `${result.amount.toLocaleString()} ${currencyCode}`],
-            ],
-          })
-          resetOtherForm()
-        },
-        onError: (error: Error) => showToast(error.message || 'Failed to save other payment. Please try again.', 'error'),
-      },
-    )
+    setIsSavingOtherBatch(true)
+    const successRows: [string, string][] = []
+    const succeededIds: number[] = []
+    try {
+      for (const row of validRows) {
+        const ledgerName = ledgerOthers.find(l => l.ledgerOthersGuid === row.ledgerOthersGuid)?.ledgerName ?? '—'
+        const result = await createPaymentOther.mutateAsync({
+          applicationGuid: selectedApplicationGuid,
+          studentGuid,
+          ledgerOthersGuid: row.ledgerOthersGuid,
+          amount: parseFloat(row.amount),
+          currencyGuid: otherCurrencyGuid,
+          payDate: otherPayDate,
+          payType: payTypeNum,
+          remarks: otherRemarks.trim() || null,
+          receiptBookGuid: otherIsAdvance ? null : otherReceiptBookGuid,
+          procBankGuid: otherIsAdvance ? null : (showOtherBankFields ? otherProcBankGuid : null),
+          paymentAdvanceGuid: otherIsAdvance ? selectedAdvance?.paymentAdvanceGuid ?? null : null,
+        })
+        succeededIds.push(row.id)
+        setOtherPayments(prev => [...prev, {
+          id: result.paymentOtherGuid,
+          code: result.paymentCode,
+          receiptNo: result.receipt,
+          payDate: otherPayDate, ledgerName, amount: String(result.amount), currencyCode,
+        }])
+        successRows.push([ledgerName, `${result.amount.toLocaleString()} ${currencyCode} — Receipt ${result.receipt ?? '—'}`])
+      }
+      setSuccessModal({
+        title: validRows.length > 1 ? `${validRows.length} Other Payments Recorded` : 'Other Payment Recorded',
+        rows: successRows,
+      })
+      resetOtherForm()
+    } catch (error) {
+      // Drop only the rows that already succeeded before the failure —
+      // whatever's left (the failed row plus anything after it) stays in
+      // the table so the cashier can fix and retry just those.
+      setOtherLedgerRows(prev => {
+        const remaining = prev.filter(r => !succeededIds.includes(r.id))
+        return remaining.length > 0 ? remaining : [{ id: nextOtherRowIdRef.current++, ledgerOthersGuid: '', amount: '' }]
+      })
+      showToast(error instanceof Error ? error.message : 'Failed to save other payment. Please try again.', 'error')
+    } finally {
+      setIsSavingOtherBatch(false)
+    }
   }
 
   function selectStudent(applicationGuid: string, name: string, studentGuidHint: string | null) {
@@ -1581,39 +1635,78 @@ export default function PaymentConsolePage() {
                   )}
                 </div>
 
-                {/* Ledger moved to the top of the form, ahead of the
-                    Currency/Amount pair — picking the ledger first is the
-                    natural order for Other Payment (its outstanding-items
-                    list is keyed by ledger). Real catalogue now
-                    (get-ledger-others.md) — value is the ledgerOthersGuid
-                    CreatePaymentOther needs, not a display label. Paired
-                    (2026-09-09, per request) with Amount to Apply — a
-                    staging field for the intended advance draw-down amount,
-                    typed here before the cashier has even found the right
-                    deposit in the table below; see otherAdvanceAmount's own
-                    comment and selectAdvanceDeposit for how it's used. Has
-                    no effect on a regular (non-advance) payment. */}
-                <div className="g2 mb-[14px]">
-                  <div className="fg">
-                    <div className="lbl">Ledger <span className="req">*</span></div>
-                    <SearchSelect
-                      placeholder="— Select Ledger —"
-                      options={ledgerOthers.map(l => ({ value: l.ledgerOthersGuid, label: l.ledgerName }))}
-                      value={otherLedger}
-                      onChange={setOtherLedger}
-                    />
+                {/* Ledger/Ledger Amount table (2026-09-10, per request) —
+                    replaces the old single Ledger + "Amount to Apply" pair
+                    with a repeatable table, one row per ledger the cashier
+                    wants to collect against in this visit, same
+                    add-row/Total-footer shape as Semester Payment's own
+                    Outstanding Balance table above (just two editable
+                    columns here instead of that one's read-only five). Real
+                    catalogue (get-ledger-others.md) — each row's value is
+                    the ledgerOthersGuid CreatePaymentOther needs, not a
+                    display label. Only two grid columns per the request —
+                    the remove-row control lives inside the Ledger Amount
+                    cell itself rather than as its own column. otherSaveEntry
+                    fires one real payment call per valid row (see its own
+                    comment); the Total below is otherLedgerRowsTotal, also
+                    what the "Amount to Collect" summary strip and (in
+                    Advance mode) the deposit-balance check further down use. */}
+                <div className="mb-[14px]">
+                  <div className="recgrid" style={{ gridTemplateColumns: '1.6fr 1fr' }}>
+                    <div className="recgrid-row recgrid-hdr">
+                      <span style={{ textAlign: 'left' }}>Ledger</span>
+                      <span>Ledger Amount</span>
+                    </div>
+                    {otherLedgerRows.map(row => (
+                      <div className="recgrid-row recgrid-body" key={row.id}>
+                        <span style={{ textAlign: 'left' }}>
+                          <SearchSelect
+                            placeholder="— Select Ledger —"
+                            // Excludes whatever's already picked in every OTHER
+                            // row (this row's own current value stays in its
+                            // own list) — a ledger can't be added twice, so
+                            // there's no dropdown path to a duplicate, not just
+                            // a submit-time rejection of one.
+                            options={ledgerOthers
+                              .filter(l => l.ledgerOthersGuid === row.ledgerOthersGuid || !otherLedgerRows.some(r => r.id !== row.id && r.ledgerOthersGuid === l.ledgerOthersGuid))
+                              .map(l => ({ value: l.ledgerOthersGuid, label: l.ledgerName }))}
+                            value={row.ledgerOthersGuid}
+                            onChange={v => updateOtherLedgerRow(row.id, 'ledgerOthersGuid', v)}
+                          />
+                        </span>
+                        <span>
+                          <div className="flex items-center gap-2 justify-end">
+                            <input
+                              className="ctrl"
+                              style={{ textAlign: 'right' }}
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="0.00"
+                              value={row.amount}
+                              onChange={e => updateOtherLedgerRow(row.id, 'amount', e.target.value)}
+                            />
+                            {otherLedgerRows.length > 1 && (
+                              <button
+                                type="button"
+                                title="Remove row"
+                                onClick={() => removeOtherLedgerRow(row.id)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--g300)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                              >
+                                <i className="lni lni-trash-can"></i>
+                              </button>
+                            )}
+                          </div>
+                        </span>
+                      </div>
+                    ))}
+                    <div className="recgrid-foot recgrid-total">
+                      <span style={{ gridColumn: '1 / 2' }}>Total</span>
+                      <span>{fmtAmt(otherLedgerRowsTotal)}</span>
+                    </div>
                   </div>
-                  <div className="fg">
-                    <div className="lbl">Ledger Amount</div>
-                    <input
-                      className="ctrl"
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="0.00"
-                      value={otherAdvanceAmount}
-                      onChange={e => setOtherAdvanceAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-                    />
-                  </div>
+                  <button type="button" className="btn btn-neu btn-sm" onClick={addOtherLedgerRow}>
+                    <i className="lni lni-plus"></i> Add Row
+                  </button>
                 </div>
 
                 {/* Advance Payment deposit table — the checkbox that gates
@@ -1773,12 +1866,14 @@ export default function PaymentConsolePage() {
                 )}
 
                 {/* Live summary strip — same treatment as Tuition's own,
-                    purely derived from this form's state. */}
-                {otherAmount.trim() && (
+                    now sourced from the Ledger Amount table's own Total
+                    (otherLedgerRowsTotal) rather than a separately-typed
+                    Amount field. */}
+                {otherLedgerRowsTotal > 0 && (
                   <div className="pc-pay-summary">
                     <div>
                       <div className="pc-pay-lbl">Amount to Collect</div>
-                      <div className="pc-pay-amt">{currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyCode ?? ''} {(parseFloat(otherAmount) || 0).toLocaleString()}</div>
+                      <div className="pc-pay-amt">{currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyCode ?? ''} {otherLedgerRowsTotal.toLocaleString()}</div>
                     </div>
                     <div className="pc-pay-meta">
                       <div><span>Date</span><b>{otherPayDate}</b></div>
@@ -1814,10 +1909,14 @@ export default function PaymentConsolePage() {
                     )}
                   </div>
                   <div className="fg">
-                    <div className="lbl">Amount <span className="req">*</span></div>
-                    <input type="number" min={0} step={0.01} className="amt-val-input" placeholder="0.00"
-                      style={{ fontSize: 18, fontWeight: 700 }}
-                      value={otherAmount} onChange={e => setOtherAmount(e.target.value)} />
+                    {/* Read-only now — the amount to collect is the Ledger
+                        Amount table's own Total above (otherLedgerRowsTotal),
+                        not a separately-typed figure that could drift out of
+                        sync with what the rows actually add up to. */}
+                    <div className="lbl">Amount</div>
+                    <input className="amt-val-input" readOnly
+                      style={{ fontSize: 18, fontWeight: 700, color: 'var(--g700)', cursor: 'not-allowed' }}
+                      value={fmtAmt(otherLedgerRowsTotal)} />
                   </div>
                 </div>
                 {/* Payment Date stays view-only (always today) either way —
@@ -1883,8 +1982,8 @@ export default function PaymentConsolePage() {
                 </div>
 
                 <div className="flex gap-[10px] justify-end items-center mb-5">
-                  <button className="btn btn-primary btn-lg" disabled={createPaymentOther.isPending} onClick={otherSaveEntry}>
-                    <i className="lni lni-save"></i> {createPaymentOther.isPending ? 'Saving…' : 'Add Payment'}
+                  <button className="btn btn-primary btn-lg" disabled={isSavingOtherBatch} onClick={otherSaveEntry}>
+                    <i className="lni lni-save"></i> {isSavingOtherBatch ? 'Saving…' : 'Add Payment'}
                   </button>
                 </div>
 

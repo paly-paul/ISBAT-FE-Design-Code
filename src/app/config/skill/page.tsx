@@ -8,10 +8,9 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
 import { SkillFormModal } from '@/components/modals/config/SkillFormModal'
 import { ViewSkillModal } from '@/components/modals/config/ViewSkillModal'
-import { useSkillMasters, useCreateSkillMaster, useUpdateSkillMaster, useDeleteSkillMaster, SkillMaster } from '@/hooks/config/useSkillMaster'
+import { useSkillMastersPaged, useCreateSkillMaster, useUpdateSkillMaster, useDeleteSkillMaster, SkillMaster } from '@/hooks/config/useSkillMaster'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -41,23 +40,22 @@ export default function Page() {
   const [viewingSkill, setViewingSkill] = useState<SkillMaster | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<SkillMaster | null>(null)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
 
-  const { data, isLoading } = useSkillMasters()
+  const searchTrimmed = search.trim()
+  const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
+  const { data, isLoading, isFetching } = useSkillMastersPaged(page, PAGE_SIZE, activeSearch)
   const rows = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pageItems = rows
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && isFetching
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? rows.slice(0, 8) : []
+
   const createSkill = useCreateSkillMaster()
   const updateSkill = useUpdateSkillMaster()
   const deleteSkill = useDeleteSkillMaster()
-
-  const searchTrimmed = search.trim()
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? rows.filter(r => r.skillName.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
-    : []
-
-  const filteredRows = rows.filter(r =>
-    searchTrimmed.length < MIN_SEARCH_CHARS || r.skillName.toLowerCase().includes(searchTrimmed.toLowerCase())
-  )
-
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -105,8 +103,9 @@ export default function Page() {
                 className="w-56"
                 placeholder="Search by code or name…"
                 value={search}
-                onChange={setSearch}
+                onChange={v => { setSearch(v); setPage(1) }}
                 results={searchMatches.map(r => ({ id: r.skillGuid, primary: r.skillName }))}
+                loading={searchPending}
                 minChars={MIN_SEARCH_CHARS}
                 onSelect={(res) => { const row = rows.find(x => x.skillGuid === res.id); if (row) openViewModal(row) }}
               />
@@ -121,12 +120,12 @@ export default function Page() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading
+                {(isLoading || searchPending)
                   ? <TableLoadingState colSpan={999} />
-                  : filteredRows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
+                  : pageItems.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={!!searchTrimmed} onClearFilters={() => { setSearch(''); setPage(1) }} />
                     : null}
-                {pageItems.map((r) => (
+                {!isLoading && !searchPending && pageItems.map((r) => (
                   <tr key={r.skillGuid}>
                     <td>
                       {(true) && (
@@ -153,7 +152,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
-          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="skills" onPageChange={setPage} />
+          <Pagination page={safePage} totalPages={totalPages} totalCount={totalCount} itemLabel="skills" onPageChange={pageNum => { setPage(pageNum) }} />
         </div>
       </div>
       <SkillFormModal

@@ -9,14 +9,23 @@ interface SearchSelectProps {
   value?: string
   onChange?: (val: string) => void
   onSearch?: (search: string) => void
+  onOpenChange?: (open: boolean) => void
   placeholder?: string
   className?: string
   style?: React.CSSProperties
   disabled?: boolean
+  hasNextPage?: boolean
+  isFetchingNextPage?: boolean
+  onLoadMore?: () => void
 }
 
 function normalise(raw: (string | Opt)[]): Opt[] {
-  return raw.map(o => (typeof o === 'string' ? { value: o, label: o } : o))
+  const unique = new Map<string, Opt>()
+  raw.forEach(o => {
+    const option = typeof o === 'string' ? { value: o, label: o } : o
+    if (!unique.has(option.value)) unique.set(option.value, option)
+  })
+  return [...unique.values()]
 }
 
 export function SearchSelect({
@@ -24,10 +33,14 @@ export function SearchSelect({
   value,
   onChange,
   onSearch,
+  onOpenChange,
   placeholder,
   className,
   style,
   disabled,
+  hasNextPage = false,
+  isFetchingNextPage = false,
+  onLoadMore,
 }: SearchSelectProps) {
   const normalised = normalise(options)
 
@@ -56,6 +69,12 @@ export function SearchSelect({
       })
     : normalised
 
+  function handleOptionsScroll(e: React.UIEvent<HTMLDivElement>) {
+    if (!hasNextPage || isFetchingNextPage || !onLoadMore) return
+    const el = e.currentTarget
+    if (el.scrollTop > 0 && el.scrollHeight - el.scrollTop - el.clientHeight < 48) onLoadMore()
+  }
+
   function calcPos() {
     if (!triggerRef.current) return
     const r = triggerRef.current.getBoundingClientRect()
@@ -82,6 +101,7 @@ export function SearchSelect({
   function openDrop() {
     calcPos()
     setOpen(true)
+    onOpenChange?.(true)
   }
 
   useEffect(() => {
@@ -113,8 +133,10 @@ export function SearchSelect({
     if (!open) return
     function handle(e: MouseEvent) {
       const t = e.target as Node
-      if (!triggerRef.current?.contains(t) && !dropRef.current?.contains(t))
-        setOpen(false)
+        if (!triggerRef.current?.contains(t) && !dropRef.current?.contains(t)) {
+          setOpen(false)
+          onOpenChange?.(false)
+        }
     }
     function updatePos() {
       calcPos()
@@ -132,18 +154,20 @@ export function SearchSelect({
       document.removeEventListener('scroll', onScroll, true)
       observer.disconnect()
     }
-  }, [open])
+  }, [open, onOpenChange])
 
   function select(val: string) {
     if (controlled) onChange?.(val)
     else setInternal(val)
     setOpen(false)
+    onOpenChange?.(false)
   }
 
   function clear() {
     if (controlled) onChange?.('')
     else setInternal('')
     setOpen(false)
+    onOpenChange?.(false)
   }
 
   const displayLabel = selected?.label ?? placeholder ?? (normalised[0]?.label ?? '')
@@ -210,7 +234,7 @@ export function SearchSelect({
                 onSearch?.(val)
               }}
               onKeyDown={e => {
-                if (e.key === 'Escape') setOpen(false)
+                if (e.key === 'Escape') { setOpen(false); onOpenChange?.(false) }
                 if (e.key === 'Enter' && visible.length > 0) {
                   e.preventDefault()
                   const first = visible.find(o => !o.disabled)
@@ -220,7 +244,7 @@ export function SearchSelect({
               onClick={e => e.stopPropagation()}
             />
           </div>
-          <div className="ss-opts" ref={optsRef} style={{ maxHeight: pos.maxHeight }}>
+          <div className="ss-opts" ref={optsRef} style={{ maxHeight: pos.maxHeight }} onScroll={handleOptionsScroll}>
             {visible.length === 0
               ? <div className="ss-no-match">No matches</div>
               : visible.map(o => (
@@ -235,6 +259,11 @@ export function SearchSelect({
                 ))
             }
           </div>
+          {isFetchingNextPage && (
+            <div className="ss-no-match" style={{ borderTop: '1px solid var(--g100)', background: 'var(--g50)' }}>
+              Loading more…
+            </div>
+          )}
         </div>,
         document.body
       )}

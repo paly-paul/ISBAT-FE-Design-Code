@@ -1,5 +1,6 @@
 import { QueryClient, useMutation, useQuery, useQueryClient, useInfiniteQuery, useQueries, keepPreviousData } from '@tanstack/react-query'
 import { createIntake, CreateIntakeInput, deleteIntake, getCurrentIntake, getIntakeById, getIntakes, getIntakesPaged, Intake, updateIntake } from '@/lib/api/academic/intake'
+import { getNextPageParam } from '@/lib/pagination'
 
 const INTAKES_KEY = ['intakes']
 
@@ -67,10 +68,7 @@ export function useSearchIntakesInfinite(search: string, pageSize: number, enabl
     queryKey: [...INTAKES_KEY, 'search-infinite', search, pageSize],
     queryFn: ({ pageParam }) => getIntakesPaged(pageParam, pageSize, search),
     initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) => {
-      const fetched = allPages.reduce((sum, p) => sum + p.items.length, 0)
-      return fetched < lastPage.totalCount ? allPages.length + 1 : undefined
-    },
+    getNextPageParam,
     enabled,
     staleTime: Infinity,
     gcTime: Infinity,
@@ -110,43 +108,15 @@ export function useIntake(intakeGuid: string | null, enabled: boolean) {
   })
 }
 
-// Two hero-card queries for the top of Intake Master, also reused well
-// beyond the hero cards now (ProgrammeModal/FeeStructureModal auto-fill their
-// Create-mode Intake field from this). Used to scan useIntakes()' whole
-// pageSize=1000 list client-side for whichever row is flagged current — but
-// now that GET /api/v1/academic/intakes is confirmed (2026-09-10) to support
-// filtering server-side via ?currentIntake=true/?currentAdmissionIntake=true
-// (see getCurrentIntake), that full-list fetch+scan is no longer needed at
-// all, even in callers (like ProgrammeModal) that don't otherwise hold the
-// full intake list in memory. Only one intake can ever be flagged current for
-// each, so the single returned row is the one to show — but it only carries
-// the same abbreviated academicCalendar as every other list row (see the
-// note on getIntakeById above: only the by-guid endpoint fully populates it),
-// which left the Academic card's Sem Start/Term 1 End/Sem End chips stuck on
-// "—" even once the card itself resolved. Re-fetching the match by guid gives
-// the hero cards the fully populated record to read date fields off.
-// react-query rejects a queryFn that resolves to `undefined` ("Query data
-// cannot be undefined") — null is the explicit "no current intake found"
-// value instead.
-//
-// The by-guid re-fetch goes through queryClient's own cache (ensureQueryData)
-// using the same query key useIntake() uses, so it's deduped/shared with
-// anything else that's already resolved (or resolving) the same intakeGuid.
-async function fetchCurrentIntake(queryClient: QueryClient, flag: 'currentIntake' | 'currentAdmissionIntake'): Promise<Intake | null> {
-  const match = await getCurrentIntake(flag)
-  if (!match) return null
-  return queryClient.ensureQueryData({
-    queryKey: [...INTAKES_KEY, match.intakeGuid],
-    queryFn: () => getIntakeById(match.intakeGuid),
-    staleTime: Infinity,
-  })
-}
-
+// Two hero-card queries for the top of Intake Master. They intentionally stay
+// lightweight: the page only needs the current intake summary to render the
+// cards, not the fully expanded calendar payload from the by-guid detail API.
+// Keeping this as a direct current-intake query avoids the extra GUID fetch on
+// page load while still populating the card labels and status.
 export function useCurrentAcademicIntake(enabled = true) {
-  const queryClient = useQueryClient()
   return useQuery({
     queryKey: [...INTAKES_KEY, 'current-academic'],
-    queryFn: () => fetchCurrentIntake(queryClient, 'currentIntake'),
+    queryFn: () => getCurrentIntake('currentIntake'),
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,
@@ -154,10 +124,9 @@ export function useCurrentAcademicIntake(enabled = true) {
 }
 
 export function useCurrentAdmissionIntake(enabled = true) {
-  const queryClient = useQueryClient()
   return useQuery({
     queryKey: [...INTAKES_KEY, 'current-admission'],
-    queryFn: () => fetchCurrentIntake(queryClient, 'currentAdmissionIntake'),
+    queryFn: () => getCurrentIntake('currentAdmissionIntake'),
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,

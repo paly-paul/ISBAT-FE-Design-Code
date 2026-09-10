@@ -29,6 +29,7 @@ import {
   FeeLineUpdateInput,
   FeeStructureUpdateInput,
 } from '@/lib/api/academic/programMaster'
+import { getNextPageParam } from '@/lib/pagination'
 
 // Exported so other mutations that affect the Programme Master list from
 // elsewhere — e.g. useUpdateProgramApproval, which approves/rejects a
@@ -146,10 +147,7 @@ export function useSearchProgramMastersInfinite(search: string, pageSize: number
     queryKey: [...PROGRAM_MASTERS_KEY, 'search-infinite', search, pageSize],
     queryFn: ({ pageParam }) => getProgramMastersPage(pageParam, pageSize, search),
     initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) => {
-      const fetched = allPages.reduce((sum, p) => sum + p.items.length, 0)
-      return fetched < lastPage.totalCount ? allPages.length + 1 : undefined
-    },
+    getNextPageParam,
     enabled,
     staleTime: Infinity,
     gcTime: Infinity,

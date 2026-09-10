@@ -8,13 +8,22 @@ interface MultiSelectProps {
   options: (string | Opt)[]
   value: string[]
   onChange: (vals: string[]) => void
+  onSearch?: (search: string) => void
   placeholder?: string
   className?: string
   style?: React.CSSProperties
+  hasNextPage?: boolean
+  isFetchingNextPage?: boolean
+  onLoadMore?: () => void
 }
 
 function normalise(raw: (string | Opt)[]): Opt[] {
-  return raw.map(o => (typeof o === 'string' ? { value: o, label: o } : o))
+  const unique = new Map<string, Opt>()
+  raw.forEach(o => {
+    const option = typeof o === 'string' ? { value: o, label: o } : o
+    if (!unique.has(option.value)) unique.set(option.value, option)
+  })
+  return [...unique.values()]
 }
 
 // Checkbox-driven sibling of SearchSelect — same trigger/portal-dropdown
@@ -22,7 +31,7 @@ function normalise(raw: (string | Opt)[]): Opt[] {
 // list is the checkbox pattern already used by FilterTh's column filters
 // (.col-filter-select-all/.col-filter-opt-row), since that's the only
 // multi-pick UI this app already has a shared, correct behavior for.
-export function MultiSelect({ options, value, onChange, placeholder, className, style }: MultiSelectProps) {
+export function MultiSelect({ options, value, onChange, onSearch, placeholder, className, style, hasNextPage = false, isFetchingNextPage = false, onLoadMore }: MultiSelectProps) {
   const normalised = normalise(options)
 
   const [open, setOpen]     = useState(false)
@@ -41,6 +50,12 @@ export function MultiSelect({ options, value, onChange, placeholder, className, 
 
   const allVisibleChecked = visible.length > 0 && visible.every(o => value.includes(o.value))
 
+  function handleOptionsScroll(e: React.UIEvent<HTMLDivElement>) {
+    if (!hasNextPage || isFetchingNextPage || !onLoadMore) return
+    const el = e.currentTarget
+    if (el.scrollTop > 0 && el.scrollHeight - el.scrollTop - el.clientHeight < 48) onLoadMore()
+  }
+
   function openDrop() {
     if (triggerRef.current) {
       const r = triggerRef.current.getBoundingClientRect()
@@ -51,8 +66,8 @@ export function MultiSelect({ options, value, onChange, placeholder, className, 
 
   useEffect(() => {
     if (open) inputRef.current?.focus()
-    else setSearch('')
-  }, [open])
+    else { setSearch(''); onSearch?.('') }
+  }, [open, onSearch])
 
   useEffect(() => {
     if (!open) return
@@ -140,7 +155,7 @@ export function MultiSelect({ options, value, onChange, placeholder, className, 
               style={{ fontSize: 12, height: 28, padding: '4px 8px' }}
               placeholder="Search…"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => { setSearch(e.target.value); onSearch?.(e.target.value) }}
               onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}
               onClick={e => e.stopPropagation()}
             />
@@ -151,7 +166,7 @@ export function MultiSelect({ options, value, onChange, placeholder, className, 
               Select All
             </label>
           )}
-          <div className="ss-opts">
+          <div className="ss-opts" onScroll={handleOptionsScroll}>
             {visible.length === 0
               ? <div className="ss-no-match">No matches</div>
               : visible.map(o => (
@@ -165,6 +180,11 @@ export function MultiSelect({ options, value, onChange, placeholder, className, 
                 ))
             }
           </div>
+          {isFetchingNextPage && (
+            <div className="ss-no-match" style={{ borderTop: '1px solid var(--g100)', background: 'var(--g50)' }}>
+              Loading more…
+            </div>
+          )}
         </div>,
         document.body
       )}

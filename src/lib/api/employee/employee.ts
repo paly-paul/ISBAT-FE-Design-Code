@@ -107,6 +107,25 @@ export function getEmployees(page = 1, pageSize = 10, search = ''): Promise<Empl
   return apiGet<EmployeeListResponse | null>(`/api/v1/users/employees?${params}`).then(data => data?.items ?? [])
 }
 
+// Preserve the response envelope for server-side infinite dropdowns while
+// keeping getEmployees() compatible with existing list consumers.
+export function getEmployeesPaged(page = 1, pageSize = 10, search = ''): Promise<EmployeeListResponse> {
+  if (MOCK_AUTH) {
+    const q = search.trim().toLowerCase()
+    const filtered = q ? mockEmployees.filter(e => e.empName.toLowerCase().includes(q) || e.shortCode.toLowerCase().includes(q)) : mockEmployees
+    const start = (page - 1) * pageSize
+    return Promise.resolve({ items: filtered.slice(start, start + pageSize), totalCount: filtered.length, pageNumber: page, pageSize })
+  }
+  const q = search.trim()
+  // The employee endpoints in deployed environments have used both names:
+  // keep them in sync so an infinite dropdown cannot silently receive page 1
+  // again when the server reads pageNumber instead of page.
+  const params = new URLSearchParams({ page: String(page), pageNumber: String(page), pageSize: String(pageSize) })
+  if (q) params.set('search', q)
+  return apiGet<EmployeeListResponse | null>(`/api/v1/users/employees?${params}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+}
+
 export interface EmployeeDropdownItemDto {
   employeeGuid: string
   displayName: string

@@ -38,16 +38,19 @@ const CATEGORY_CARD_STYLE: CSSProperties = {
   borderRadius: '10px',
 }
 
-// Financial Year / Exam Year are both restricted to a 3-year window relative
-// to today's real calendar year — Previous/Current/Next — rather than a free
-// number input. `existing` (the loaded intake's own current value, Edit
-// only) is added as an extra option when it falls outside that window, so
-// editing an older record never silently blanks the field just because its
-// year isn't one of the three "current" choices.
-function relativeYearOptions(existing?: string): { value: string; label: string }[] {
+// Financial Year / Exam Year are both restricted to a small window relative
+// to today's real calendar year — Current/Next (Exam Year also keeps
+// Previous) — rather than a free number input. `existing` (the loaded
+// intake's own current value, Edit only) is added as an extra option when it
+// falls outside that window, so editing an older record never silently
+// blanks the field just because its year isn't one of the "current" choices.
+// includePrevious defaults to true (Exam Year's behavior); Financial Year
+// passes false to drop "Previous Year" per request, 2026-09-10 — a new
+// intake's financial year should never realistically be set to a past year.
+function relativeYearOptions(existing?: string, includePrevious = true): { value: string; label: string }[] {
   const current = new Date().getFullYear()
   const options = [
-    { value: String(current - 1), label: `Previous Year (${current - 1})` },
+    ...(includePrevious ? [{ value: String(current - 1), label: `Previous Year (${current - 1})` }] : []),
     { value: String(current), label: `Current Year (${current})` },
     { value: String(current + 1), label: `Next Year (${current + 1})` },
   ]
@@ -264,6 +267,72 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
     return new Date(Date.UTC(year, month - 1, day))
   }
 
+  // Live cross-field check for the two Grievance date pickers — called from
+  // both fields' onChange (not just validate()'s on-submit pass) so the
+  // error shows up the moment the offending date is picked, using whatever
+  // the OTHER field's just-set/current value is passed in as `start`/`end`.
+  function grievanceOrderError(start: string, end: string): string {
+    const s = parseDate(start)
+    const e = parseDate(end)
+    return s && e && e < s ? 'Grievance End Date must be on or after the Grievance Start Date' : ''
+  }
+
+  // Same idea as grievanceOrderError, for the five date-order pairs on a
+  // Semester Planning Calendar entry (semester start/end, admission,
+  // re-entry, resit, final exam). Shared by both updateEntry() (live, as the
+  // user types/picks — a field only appears here when both sides of its
+  // pair are actually filled in) and validate()'s on-submit step-2 pass, so
+  // the two can never drift into different messages for the same rule.
+  function computeOrderErrors(entry: CalendarEntryForm, idx: number): Partial<Record<keyof Omit<CalendarEntryForm, 'id'>, string>> {
+    const out: Partial<Record<keyof Omit<CalendarEntryForm, 'id'>, string>> = {}
+
+    const startDate = parseDate(entry.semStart)
+    const endDate   = parseDate(entry.term2End)
+    // No client-side cap on how far term2End can be from semStart — the
+    // backend enforces its own max-end-date rule (semesterStartDate +
+    // (durationInWeeks - 2) weeks), but durationInWeeks itself is derived
+    // from the first entry's own dates (see calcDurationWeeks() / handleSave),
+    // so that check is satisfied by construction. A validation_error would
+    // still surface via the failure screen if the backend ever disagrees.
+    if (startDate && endDate && endDate < startDate) {
+      out.term2End = `Semester ${idx + 1} end date must be on or after its start date`
+    }
+
+    const admissionStart   = parseDate(entry.admissionStartDate)
+    const admissionLateFee = parseDate(entry.admissionLateFeeDate)
+    const admissionEnd     = parseDate(entry.admissionEndDate)
+    if (admissionStart && admissionLateFee && admissionLateFee < admissionStart) {
+      out.admissionLateFeeDate = 'Admission late fee date must be on or after the admission start date'
+    }
+    if (admissionLateFee && admissionEnd && admissionEnd < admissionLateFee) {
+      out.admissionEndDate = 'Admission end date must be on or after the admission late fee date'
+    }
+
+    const reentryStart   = parseDate(entry.reentryStartDate)
+    const reentryLateFee = parseDate(entry.reentryLateFeeDate)
+    const reentryEnd     = parseDate(entry.reentryEndDate)
+    if (reentryStart && reentryLateFee && reentryLateFee < reentryStart) {
+      out.reentryLateFeeDate = 'Re-entry late fee date must be on or after the re-entry start date'
+    }
+    if (reentryStart && reentryEnd && reentryEnd < reentryStart) {
+      out.reentryEndDate = 'Re-entry end date must be on or after the re-entry start date'
+    }
+
+    const resitStart = parseDate(entry.resitStartDate)
+    const resitEnd   = parseDate(entry.resitEndDate)
+    if (resitStart && resitEnd && resitEnd < resitStart) {
+      out.resitEndDate = 'Resit end date must be on or after the resit start date'
+    }
+
+    const finalExamStart = parseDate(entry.finalExamStartDate)
+    const finalExamEnd   = parseDate(entry.finalExamEndDate)
+    if (finalExamStart && finalExamEnd && finalExamEnd < finalExamStart) {
+      out.finalExamEndDate = 'Final exam end date must be on or after the final exam start date'
+    }
+
+    return out
+  }
+
   // Empty date inputs are sent as null so the API accepts them.
   function toApiDate(value: string): string | null {
     const trimmed = value.trim()
@@ -311,9 +380,33 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
   }
 
   function updateEntry(id: number, field: keyof Omit<CalendarEntryForm, 'id'>, value: string) {
-    setCalendarEntries(prev => prev.map(en => en.id === id ? { ...en, [field]: value } : en))
-    const key = errKey(id, field)
-    if (errors[key]) setErrors(p => { const next = { ...p }; delete next[key]; return next })
+    let idx = -1
+    let updatedEntry: CalendarEntryForm | null = null
+    setCalendarEntries(prev => prev.map((en, i) => {
+      if (en.id !== id) return en
+      idx = i
+      updatedEntry = { ...en, [field]: value }
+      return updatedEntry
+    }))
+
+    // Clear the just-edited field's own error (required or otherwise), then
+    // live-recompute this entry's five date-order pairs against the new
+    // value — same rules validate() applies on submit, just re-run on every
+    // change so a pair error shows up (or clears) the moment the offending
+    // date is picked instead of only after clicking Continue/Save.
+    setErrors(p => {
+      const next = { ...p }
+      delete next[errKey(id, field)]
+      if (updatedEntry) {
+        const orderErrors = computeOrderErrors(updatedEntry, idx)
+        ;(Object.keys(orderErrors) as (keyof Omit<CalendarEntryForm, 'id'>)[]).forEach(f => {
+          const orderKey = errKey(id, f)
+          if (orderErrors[f]) next[orderKey] = orderErrors[f]!
+          else delete next[orderKey]
+        })
+      }
+      return next
+    })
   }
 
   function validate(stepNumber = step) {
@@ -330,60 +423,30 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
       if (!lastDateForReRegistration) e.lastDateForReRegistration = 'Last Date for Re-registration is required'
       if (!grievanceStartDate)        e.grievanceStartDate        = 'Grievance Start Date is required'
       if (!grievanceEndDate)          e.grievanceEndDate          = 'Grievance End Date is required'
+
+      const grievanceStart = parseDate(grievanceStartDate)
+      const grievanceEnd   = parseDate(grievanceEndDate)
+      if (grievanceStart && grievanceEnd && grievanceEnd < grievanceStart) {
+        e.grievanceEndDate = 'Grievance End Date must be on or after the Grievance Start Date'
+      }
     }
 
     if (stepNumber === 2) {
       calendarEntries.forEach((entry, idx) => {
-        const startDate = parseDate(entry.semStart)
-        const endDate   = parseDate(entry.term2End)
-
         if (!entry.semStart)      e[errKey(entry.id, 'semStart')]      = `Semester ${idx + 1} start date is required`
         if (!entry.term1EndDate)  e[errKey(entry.id, 'term1EndDate')]  = `Semester ${idx + 1} term 1 end date is required`
         if (!entry.term2StartDate) e[errKey(entry.id, 'term2StartDate')] = `Semester ${idx + 1} term 2 start date is required`
         if (!entry.term2End)      e[errKey(entry.id, 'term2End')]      = `Semester ${idx + 1} end date is required`
 
-        // No client-side cap on how far term2End can be from semStart — the
-        // backend enforces its own max-end-date rule (semesterStartDate +
-        // (durationInWeeks - 2) weeks), but durationInWeeks itself is
-        // derived from the first entry's own dates (see calcDurationWeeks()
-        // / handleSave), so that check is satisfied by construction. A
-        // validation_error would still surface via the failure screen if the
-        // backend ever disagrees.
-        if (startDate && endDate && endDate < startDate) {
-          e[errKey(entry.id, 'term2End')] = `Semester ${idx + 1} end date must be on or after its start date`
-        }
-
-        const admissionStart   = parseDate(entry.admissionStartDate)
-        const admissionLateFee = parseDate(entry.admissionLateFeeDate)
-        const admissionEnd     = parseDate(entry.admissionEndDate)
-        if (admissionStart && admissionLateFee && admissionLateFee < admissionStart) {
-          e[errKey(entry.id, 'admissionLateFeeDate')] = 'Admission late fee date must be on or after the admission start date'
-        }
-        if (admissionLateFee && admissionEnd && admissionEnd < admissionLateFee) {
-          e[errKey(entry.id, 'admissionEndDate')] = 'Admission end date must be on or after the admission late fee date'
-        }
-
-        const reentryStart   = parseDate(entry.reentryStartDate)
-        const reentryLateFee = parseDate(entry.reentryLateFeeDate)
-        const reentryEnd     = parseDate(entry.reentryEndDate)
-        if (reentryStart && reentryLateFee && reentryLateFee < reentryStart) {
-          e[errKey(entry.id, 'reentryLateFeeDate')] = 'Re-entry late fee date must be on or after the re-entry start date'
-        }
-        if (reentryStart && reentryEnd && reentryEnd < reentryStart) {
-          e[errKey(entry.id, 'reentryEndDate')] = 'Re-entry end date must be on or after the re-entry start date'
-        }
-
-        const resitStart = parseDate(entry.resitStartDate)
-        const resitEnd   = parseDate(entry.resitEndDate)
-        if (resitStart && resitEnd && resitEnd < resitStart) {
-          e[errKey(entry.id, 'resitEndDate')] = 'Resit end date must be on or after the resit start date'
-        }
-
-        const finalExamStart = parseDate(entry.finalExamStartDate)
-        const finalExamEnd   = parseDate(entry.finalExamEndDate)
-        if (finalExamStart && finalExamEnd && finalExamEnd < finalExamStart) {
-          e[errKey(entry.id, 'finalExamEndDate')] = 'Final exam end date must be on or after the final exam start date'
-        }
+        // Same five date-order pairs updateEntry() already checks live as
+        // the user types/picks — re-run here too as the on-submit backstop
+        // (e.g. a pair left in a bad state from before this page had live
+        // validation, or restored from Edit's initial load).
+        const orderErrors = computeOrderErrors(entry, idx)
+        ;(Object.keys(orderErrors) as (keyof Omit<CalendarEntryForm, 'id'>)[]).forEach(f => {
+          const msg = orderErrors[f]
+          if (msg) e[errKey(entry.id, f)] = msg
+        })
       })
     }
 
@@ -538,7 +601,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
                   placeholder="Select financial year…"
                   value={financialYear}
                   onChange={v => { setFinancialYear(v); if (errors.financialYear) setErrors(p => ({ ...p, financialYear: '' })) }}
-                  options={relativeYearOptions(isEdit ? financialYear : undefined)}
+                  options={relativeYearOptions(isEdit ? financialYear : undefined, false)}
                 />
                 {errors.financialYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.financialYear}</p>}
               </div>
@@ -625,12 +688,34 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
               </div>
               <div className="fg">
                 <div className="lbl">Grievance Start Date <span className="req">*</span></div>
-                <DatePicker value={grievanceStartDate} onChange={v => { setGrievanceStartDate(v); if (errors.grievanceStartDate) setErrors(p => ({ ...p, grievanceStartDate: '' })) }} hasError={!!errors.grievanceStartDate} />
+                <DatePicker
+                  value={grievanceStartDate}
+                  onChange={v => {
+                    setGrievanceStartDate(v)
+                    // Also re-checks the End Date field against this new
+                    // Start Date — but only when End already has a value; an
+                    // empty End Date's own "required" error (only ever set
+                    // by validate() on submit) is left untouched here.
+                    setErrors(p => ({
+                      ...p,
+                      grievanceStartDate: '',
+                      grievanceEndDate: grievanceEndDate ? grievanceOrderError(v, grievanceEndDate) : p.grievanceEndDate,
+                    }))
+                  }}
+                  hasError={!!errors.grievanceStartDate}
+                />
                 {errors.grievanceStartDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.grievanceStartDate}</p>}
               </div>
               <div className="fg">
                 <div className="lbl">Grievance End Date <span className="req">*</span></div>
-                <DatePicker value={grievanceEndDate} onChange={v => { setGrievanceEndDate(v); if (errors.grievanceEndDate) setErrors(p => ({ ...p, grievanceEndDate: '' })) }} hasError={!!errors.grievanceEndDate} />
+                <DatePicker
+                  value={grievanceEndDate}
+                  onChange={v => {
+                    setGrievanceEndDate(v)
+                    setErrors(p => ({ ...p, grievanceEndDate: v ? grievanceOrderError(grievanceStartDate, v) : '' }))
+                  }}
+                  hasError={!!errors.grievanceEndDate}
+                />
                 {errors.grievanceEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.grievanceEndDate}</p>}
               </div>
             </div>

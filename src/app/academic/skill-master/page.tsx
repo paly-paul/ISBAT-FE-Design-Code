@@ -12,7 +12,7 @@ import { Pagination } from '@/components/Pagination'
 import { LecturerSkillFormModal } from '@/components/modals/academic/LecturerSkillFormModal'
 import { ViewLecturerSkillModal } from '@/components/modals/academic/ViewLecturerSkillModal'
 import { useLecturerSkills, useCreateLecturerSkill, useUpdateLecturerSkill, useDeleteLecturerSkill, LecturerSkill } from '@/hooks/academic/useLecturerSkills'
-import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatDate } from '@/lib/date'
 
@@ -84,41 +84,29 @@ export default function Page() {
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  // Attempted real server-side pagination (2026-09-09), rolled back to a
-  // client-side slice the same day: GET /api/v1/users/skills accepts a
-  // pageSize param but doesn't actually enforce it — a real pageSize=10
-  // request came back with every row for several employees at once (well
-  // over 10), and since it's unconfirmed whether `page` is honored
-  // correctly either, layering our own (page-1)*PAGE_SIZE slice on top of
-  // whatever each `page` value happens to return risks double-paginating
-  // incorrectly. Safer to always fetch one large page (LOAD_SIZE) and do
-  // the actual pagination ourselves against that single fetched list, same
-  // convention as this app's other still-client-paginated master pages —
-  // revisit once pageSize is confirmed to actually work server-side.
-  // Search still goes to the server either way (confirmed real elsewhere).
-  const LOAD_SIZE = 1000
+  // The backend's own pagination is now trusted for this list: the page does
+  // not need to pull a 1000-row snapshot just to render the current page.
+  // Search is still server-side when the term is long enough; the table itself
+  // stays page-scoped to the current page size.
   const [page, setPage] = useState(1)
   const searchTrimmed = search.trim()
   const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
-  const { data, isLoading, isFetching } = useLecturerSkills(1, LOAD_SIZE, activeSearch)
-  const allSkills = data?.items ?? []
+  const { data, isLoading, isFetching } = useLecturerSkills(page, PAGE_SIZE, activeSearch)
+  const rows = data?.items ?? []
   // Dataset-wide count for the stat card below — independent of the column
   // filter/pagination math further down, which operates on filteredRows.
-  const totalCount = data?.totalCount ?? allSkills.length
+  const totalCount = data?.totalCount ?? 0
   const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && isFetching
-  const { data: employees = [] } = useEmployees()
+  const { data: employees = [] } = useEmployeeDropdown()
   const employeeNameByGuid = useMemo(
-    () => new Map(employees.map(e => [e.employeeGuid, `${e.empName} (${e.shortCode})`])),
+    () => new Map(employees.map(e => [e.employeeGuid, e.displayName.replace(/\s*\([^)]*\)\s*$/, '')])),
     [employees],
   )
-  function employeeLabel(guid: string) { return employeeNameByGuid.get(guid) ?? guid }
+  function employeeLabel(guid: string) { return employeeNameByGuid.get(guid) ?? '—' }
 
-  // Newest first, across the full dataset — there's no date field on
-  // LecturerSkill to sort by, the API returns rows in creation order (oldest
-  // first, per a real sample), so reversing the whole list before paging is
-  // the only way to get true newest-first order without a backend change
-  // (reversing after slicing to a page would only reorder within that page).
-  const baseRows = [...allSkills].reverse()
+  // The list is already ordered by the backend for the current page, so we
+  // don't re-fetch a 1000-row snapshot just to reverse it client-side.
+  const baseRows = rows
 
   const createSkill = useCreateLecturerSkill()
   const updateSkill = useUpdateLecturerSkill()
@@ -176,10 +164,10 @@ export default function Page() {
   // sitting in memory anyway.
   const stats = useMemo(() => ({
     total: totalCount,
-    approved: allSkills.filter(s => s.approvalStatus === 'Approved').length,
-    pending: allSkills.filter(s => s.approvalStatus === 'Pending').length,
-    employees: new Set(allSkills.map(s => s.employeeGuid)).size,
-  }), [allSkills, totalCount])
+    approved: rows.filter(s => s.approvalStatus === 'Approved').length,
+    pending: rows.filter(s => s.approvalStatus === 'Pending').length,
+    employees: new Set(rows.map(s => s.employeeGuid)).size,
+  }), [rows, totalCount])
 
   function fth(label: string, col: string, opts: string[]) {
     return (
@@ -225,7 +213,7 @@ export default function Page() {
               placeholder="Search skill or employee ID…"
               value={search}
               onChange={v => { setSearch(v); setPage(1) }}
-              results={searchMatches.map(s => ({ id: s.lecturerSkillGuid, primary: s.skillName || 'Unnamed skill', secondary: employeeLabel(s.employeeGuid) }))}
+              results={searchMatches.map(s => ({ id: s.lecturerSkillGuid, primary: s.skillName || 'Unnamed skill' }))}
               loading={searchPending}
               minChars={MIN_SEARCH_CHARS}
               onSelect={(r) => openViewModal(r.id)}

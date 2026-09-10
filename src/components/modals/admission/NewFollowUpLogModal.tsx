@@ -144,7 +144,7 @@ function todayAtMidnight() {
 // by the actual masters), but the value actually sent for these five fields
 // is that option's 1-based position in its list, not a confirmed id.
 export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp }: NewFollowUpLogModalProps) {
-  const { data: employees = [] }        = useEmployees()
+  const { data: employees = [] }        = useEmployees(isOpen)
   const { data: followUpStatuses = [] } = useFollowUpStatuses()
   const { data: followUpModes = [] }    = useFollowUpModes()
   const { data: enquiryStatuses = [] }  = useEnquiryStatuses()

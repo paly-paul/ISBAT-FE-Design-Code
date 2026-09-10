@@ -5,7 +5,6 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
-import { ProgramSearchPicker } from '@/components/ProgramSearchPicker'
 import { CourseUnitFormModal } from '@/components/modals/academic/CourseUnitFormModal'
 import { ViewCourseUnitModal } from '@/components/modals/academic/ViewCourseUnitModal'
 import { ElectiveSelectModal } from '@/components/modals/academic/ElectiveSelectModal'
@@ -16,9 +15,11 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useCourseUnits, useAllCourseUnits, useCreateCourseUnit, useUpdateCourseUnit, useDeleteCourseUnit, CourseUnit } from '@/hooks/academic/useCourseUnits'
 import { useProgramCourseUnits } from '@/hooks/academic/useProgramCourseUnits'
+import { useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
 import { getCourseUnitById } from '@/lib/api/academic/courseUnit'
 import { openDocumentForViewing, downloadDocument } from '@/lib/documentViewer'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { flattenUniquePages } from '@/lib/pagination'
 
 const PAGE_SIZE = 10
 // Don't hit the search endpoint (or open the results dropdown) until the
@@ -35,11 +36,12 @@ export default function Page() {
   // The filter state is kept for future table filtering, but the current view does not need it yet.
   const [search, setSearch] = useState('')
   const [programFilter, setProgramFilter] = useState('')
-  // Label for the currently-picked programme filter, shown in
-  // ProgramSearchPicker's closed box — set directly from whatever the picker
-  // handed back at selection time, since this page no longer keeps a full
-  // programme list around to resolve a guid back into a name from.
+  // Label for the currently-picked programme filter, preserved independently
+  // of the currently loaded server-search page.
   const [programFilterLabel, setProgramFilterLabel] = useState<string | null>(null)
+  const [programPickerOpen, setProgramPickerOpen] = useState(false)
+  const [programSearch, setProgramSearch] = useState('')
+  const [committedProgramSearch, setCommittedProgramSearch] = useState('')
   const [page, setPage] = useState(1)
   const [editingCourseUnitGuid, setEditingCourseUnitGuid] = useState<string | null>(null)
   const [viewingCourseUnitGuid, setViewingCourseUnitGuid] = useState<string | null>(null)
@@ -104,6 +106,11 @@ export default function Page() {
     return () => clearTimeout(t)
   }, [search])
 
+  useEffect(() => {
+    const t = setTimeout(() => setCommittedProgramSearch(programSearch.trim()), 300)
+    return () => clearTimeout(t)
+  }, [programSearch])
+
   // Real server-side pagination AND search — fetches PAGE_SIZE (10) rows at
   // a time instead of the whole table up front, refetching the next 10 only
   // when the user actually pages forward, and `debouncedSearch` is a real
@@ -126,11 +133,15 @@ export default function Page() {
   // course-unit guids are actually assigned to that programme. Mock mode
   // always returns [] here (see programCourseUnits.ts), so the filter has
   // no matches to show under NEXT_PUBLIC_AUTH_MOCK=true. The filter's own
-  // options now come from ProgramSearchPicker (2026-09-09, per request) —
-  // real server search + scroll-to-load-more instead of a SearchSelect over
-  // a capped 1000-row useProgramMasters() snapshot, so no full programme
-  // list needs to be kept around here at all.
+  // options now come from a lazy SearchSelect-backed server search with
+  // scroll-to-load-more, so no full programme list needs to be kept here.
   const { data: programCourseUnits = [], isLoading: isProgramCourseUnitsLoading } = useProgramCourseUnits(programFilter || null, !!programFilter)
+  const programQuery = useSearchProgramMastersInfinite(committedProgramSearch, 20, programPickerOpen)
+  const programOptions = flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid)
+    .map(p => ({ value: p.programGuid, label: `${p.programCode} — ${p.programName}` }))
+  if (programFilter && programFilterLabel && !programOptions.some(p => p.value === programFilter)) {
+    programOptions.unshift({ value: programFilter, label: programFilterLabel })
+  }
   const programCourseUnitGuids = useMemo(() => new Set(programCourseUnits.map(u => u.courseUnitGuid)), [programCourseUnits])
 
   // Only the programme filter still needs the whole table in memory — course
@@ -238,12 +249,21 @@ export default function Page() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-book"></i></span> Course Unit Master</div>
             <div className="flex gap-2">
-              <ProgramSearchPicker
+              <SearchSelect
                 className="w-auto text-[var(--fs-sm)]"
                 placeholder="All Programmes"
-                selectedLabel={programFilter ? programFilterLabel : null}
-                onSelect={p => { setProgramFilter(p.programGuid); setProgramFilterLabel(`${p.programCode} — ${p.programName}`) }}
-                onClear={() => { setProgramFilter(''); setProgramFilterLabel(null) }}
+                options={programOptions}
+                value={programFilter}
+                onSearch={setProgramSearch}
+                onOpenChange={setProgramPickerOpen}
+                hasNextPage={programQuery.hasNextPage}
+                isFetchingNextPage={programQuery.isFetchingNextPage}
+                onLoadMore={() => programQuery.fetchNextPage()}
+                onChange={value => {
+                  const selected = programOptions.find(option => option.value === value)
+                  setProgramFilter(value)
+                  setProgramFilterLabel(selected?.label ?? null)
+                }}
               />
               <SearchSelect
                 className="w-auto text-[var(--fs-sm)]"

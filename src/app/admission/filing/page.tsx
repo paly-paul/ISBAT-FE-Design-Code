@@ -6,7 +6,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { FailurePopup } from '@/components/modals/shared/FailurePopup'
-import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
+import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramDropdown, useProgramMaster, useProgramMasterByGuid, useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
@@ -208,26 +208,7 @@ export default function FilingPage() {
   const [showApplicantDropdown, setShowApplicantDropdown] = useState(false)
   const [selectedApplication, setSelectedApplication] = useState<FilingApplicationSearchResult | null>(null)
   const [submitted, setSubmitted] = useState(false)
-  // Scoped to the current academic intake — intakeCode is a CONFIRMED real
-  // filter on the underlying /application-payments endpoint (a live
-  // ?intakeCode=20261 request came back properly scoped, ~hundreds of rows
-  // instead of the 442+ that one intake alone already had).
-  //
-  // currentAcademicIntake comes back null whenever no intake in the live
-  // data is flagged currentIntake — CONFIRMED the same real data gap that
-  // broke the Intake dropdown on the enquiry forms earlier (see
-  // online-enquiry/ondesk-enquiry/kiosk-enquiry's own fallback). Without a
-  // fallback here, intakeCode silently never made it into the request at
-  // all. Falls back to the intake with the highest intakeCode (a
-  // year+sequence value like 20261 — the most recently created intake) as
-  // a best-guess "current" one, same "prefer the real flag, never leave the
-  // feature fully broken because of it" approach as the enquiry forms fix.
   const { data: intakes = [] }    = useIntakes()
-  const { data: currentAcademicIntake } = useCurrentAcademicIntake()
-  const latestIntakeCode = intakes.length
-    ? intakes.reduce((max, i) => (i.intakeCode > max ? i.intakeCode : max), intakes[0].intakeCode)
-    : undefined
-  const effectiveIntakeCode = currentAcademicIntake?.intakeCode ?? latestIntakeCode
   // searchTerm is CONFIRMED real server-side on this endpoint (2026-09-08) —
   // debounced the same 300ms as the other real-server-search pickers in this
   // app (CourseUnitSearchPicker, Payment Console's student search) so it
@@ -251,7 +232,7 @@ export default function FilingPage() {
     data: applicantPages, fetchNextPage: fetchNextApplicantPage, hasNextPage: hasMoreApplicants,
     isFetchingNextPage: isFetchingMoreApplicants, isFetching: isSearchingApplicants, isError: isApplicantSearchError,
   } = useSearchApplicationsForFilingInfinite(
-    committedApplicantSearch, APPLICANT_PAGE_SIZE, showApplicantDropdown && !!committedApplicantSearch, effectiveIntakeCode,
+    committedApplicantSearch, APPLICANT_PAGE_SIZE, showApplicantDropdown && !!committedApplicantSearch,
   )
   const loadedApplicants = applicantPages?.pages.flatMap(p => p.items) ?? []
   // Server already filtered by committedApplicantSearch — no client-side
@@ -601,14 +582,10 @@ export default function FilingPage() {
     isFetched: applicationDetailFetched,
   } = useApplicationByGuid(
     selectedApplication?.applicationGuid,
-    // Disabled per request (2026-09-10) — GET /application-filling/{guid} is
-    // pending a backend-team update; not calling it for now. Flip back to
-    // `!!selectedApplication` once that's confirmed live. The enrichment
-    // effect below is untouched — with this permanently unfetched,
-    // applicationDetailFetched just never flips true, so it silently no-ops
-    // instead of enriching (the same no-op the "still mid-filing" 400 case
-    // already produced).
-    false,
+    // Re-enabled (2026-09-10) per request. Still expected to 400 for the
+    // vast majority of selections (see the comment above) — that's handled
+    // as a quiet no-op by the enrichment effect below, not a real failure.
+    !!selectedApplication,
   )
   const [enrichedForGuid, setEnrichedForGuid] = useState<string | null>(null)
   useEffect(() => {

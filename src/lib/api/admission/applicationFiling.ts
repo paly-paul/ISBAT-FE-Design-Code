@@ -474,62 +474,70 @@ function mapApplicationPaymentToSearchResult(r: ApplicationPaymentRecord): Filin
   }
 }
 
-// Was payment-search (see the note above for why this changed) — kept
-// commented rather than deleted in case the new source's missing fields
-// (personal details, applicationGuid, enquiryGuid) turn out to matter more
-// than the guid fields it gains.
-// export function searchApplicationsForFiling(searchTerm: string, pageNumber = 1, pageSize = 20): Promise<FilingApplicationSearchResponse> {
-//   if (MOCK_AUTH) {
-//     const items = searchTerm.trim()
-//       ? mockSearchResults.filter(r => `${r.appRefNo} ${r.firstName} ${r.emailId} ${r.phone}`.toLowerCase().includes(searchTerm.toLowerCase()))
-//       : mockSearchResults
-//     return Promise.resolve({ items, totalCount: items.length, pageNumber, pageSize })
-//   }
-//   return apiGet<FilingApplicationSearchResponse | null>(
-//     `/api/v1/admissions/application-filling/payment-search?searchTerm=${encodeURIComponent(searchTerm)}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
-//   ).then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
-// }
+// Dedicated "current intake" search endpoint — the backend scopes to the
+// current academic intake itself, so no intakeCode param is sent (or
+// needed) here. Backs only the Filing page's interactive applicant-search
+// dropdown (via getFilingApplicationsPage below), which was already meant
+// to be current-intake-scoped client-side via effectiveIntakeCode before
+// this endpoint existed. Deliberately NOT used for the appRefNo-prefill
+// lookup (searchApplicationsForFiling/getApplicationPayments) — that path
+// intentionally searches across every intake (see its own comment on why
+// scoping it broke prefill for an older-intake application), and this
+// endpoint's auto-scoping would reintroduce exactly that bug. searchTerm
+// param name/shape assumed to match the sibling /application-payments
+// endpoint's own CONFIRMED searchTerm convention — not independently
+// confirmed against a real response yet.
+function getApplicationPaymentsCurrentIntake(page = 1, pageSize = 20, searchTerm?: string): Promise<ApplicationPaymentListResponse> {
+  const searchParam = searchTerm?.trim() ? `&searchTerm=${encodeURIComponent(searchTerm.trim())}` : ''
+  return apiGet<ApplicationPaymentListResponse | null>(`/api/v1/admissions/application-payments/current-intake?page=${page}&pageSize=${pageSize}${searchParam}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+}
 
-// intakeCode scopes the fetch to one intake (CONFIRMED real filter — see the
-// note on getApplicationPayments) — the caller passes the current academic
-// intake's code so this only ever pulls that one intake's payments (~hundreds
-// of rows per the live sample) instead of every intake ever recorded.
-// searchTerm is now CONFIRMED real server-side too (see getApplicationPayments)
-// — passed straight through rather than re-filtered client-side, since the
-// server is the source of truth for what matches.
-export function searchApplicationsForFiling(searchTerm: string, pageNumber = 1, pageSize = 20, intakeCode?: number | string): Promise<FilingApplicationSearchResponse> {
+// Reinstated payment-search for the appRefNo-prefill lookup only (per the
+// user, 2026-09-10) — this endpoint doesn't carry the academic guids
+// (campusGuid/programGuid/semesterGuid/batchTimeGuid/batchGuid/feeHdGuid)
+// that /application-payments has, so Academic Details no longer locks for
+// an applicant sourced through this path; those fields simply come back
+// null/editable instead. Traded deliberately for payment-search's richer
+// personal-detail fields (dob/gender/nationalId/passportNo/refugee, split
+// firstName/lastName) and native FilingApplicationSearchResult shape — no
+// mapping step needed, unlike the /application-payments-backed path below.
+// Deliberately NOT switched for the interactive dropdown search
+// (getFilingApplicationsPage/getApplicationPaymentsCurrentIntake) — that one
+// still needs the academic guids to lock Academic Details on selection.
+// intakeCode is intentionally NOT passed here — this lookup searches across
+// every intake (see the comment on its caller for the bug this fixed when
+// it was scoped to one intake).
+export function searchApplicationsForFiling(searchTerm: string, pageNumber = 1, pageSize = 20): Promise<FilingApplicationSearchResponse> {
   if (MOCK_AUTH) {
     const items = searchTerm.trim()
       ? mockSearchResults.filter(r => `${r.appRefNo} ${r.firstName} ${r.emailId} ${r.phone}`.toLowerCase().includes(searchTerm.toLowerCase()))
       : mockSearchResults
     return Promise.resolve({ items, totalCount: items.length, pageNumber, pageSize })
   }
-  return getApplicationPayments(pageNumber, pageSize, intakeCode, searchTerm).then(res => ({
-    items: res.items.map(mapApplicationPaymentToSearchResult),
-    totalCount: res.totalCount,
-    pageNumber,
-    pageSize,
-  }))
+  return apiGet<FilingApplicationSearchResponse | null>(
+    `/api/v1/admissions/application-filling/payment-search?searchTerm=${encodeURIComponent(searchTerm)}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
+  ).then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }
 
-// Real server page of application-payments, filtered server-side by
-// searchTerm (CONFIRMED — see getApplicationPayments) and mapped onto the
-// Filing search shape — backs the Filing page's applicant-search dropdown's
-// scroll-to-load-more (useSearchApplicationsForFilingInfinite), same
-// convention as useSearchCourseUnitsInfinite/useSearchStudentsInfinite
-// elsewhere in the app. This function's job is real pagination (page/
-// pageSize, CONFIRMED) plus the real searchTerm filter, fetched in small
-// pages instead of the old single pageSize=12000 "fetch nearly everything up
-// front, filter client-side" workaround that predates searchTerm being
-// confirmed.
-export function getFilingApplicationsPage(pageNumber = 1, pageSize = 20, intakeCode?: number | string, searchTerm?: string): Promise<FilingApplicationSearchResponse> {
+// Real server page of application-payments/current-intake, filtered
+// server-side by searchTerm (name and AppRefNo both match, per the backend
+// team) and mapped onto the Filing search shape — backs the Filing page's
+// applicant-search dropdown's scroll-to-load-more
+// (useSearchApplicationsForFilingInfinite), same convention as
+// useSearchCourseUnitsInfinite/useSearchStudentsInfinite elsewhere in the
+// app. No intakeCode param — the /current-intake endpoint scopes to the
+// current academic intake itself now, replacing the old client-computed
+// effectiveIntakeCode fallback (see getApplicationPaymentsCurrentIntake's
+// own comment).
+export function getFilingApplicationsPage(pageNumber = 1, pageSize = 20, searchTerm?: string): Promise<FilingApplicationSearchResponse> {
   if (MOCK_AUTH) {
     const items = searchTerm?.trim()
       ? mockSearchResults.filter(r => `${r.appRefNo} ${r.firstName} ${r.emailId} ${r.phone}`.toLowerCase().includes(searchTerm.trim().toLowerCase()))
       : mockSearchResults
     return Promise.resolve({ items, totalCount: items.length, pageNumber, pageSize })
   }
-  return getApplicationPayments(pageNumber, pageSize, intakeCode, searchTerm).then(res => ({
+  return getApplicationPaymentsCurrentIntake(pageNumber, pageSize, searchTerm).then(res => ({
     items: res.items.map(mapApplicationPaymentToSearchResult),
     totalCount: res.totalCount,
     pageNumber,
