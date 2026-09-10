@@ -42,6 +42,8 @@ export function useExchangeRateHistory(params: ExchangeRateHistoryParams) {
   return useQuery({
     queryKey: [...EXCHANGE_RATES_KEY, 'history', params],
     queryFn: () => getExchangeRateHistory(params),
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
   })
 }
 

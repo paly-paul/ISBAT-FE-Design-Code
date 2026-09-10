@@ -13,6 +13,7 @@ import { StudentDto, normalizeStudentDetail } from '@/lib/api/student/student'
 import { useStudent } from '@/hooks/student/useStudents'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { useIntakes } from '@/hooks/academic/useIntakes'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
   useLearningModeOptions,
   useStudentLearningModeDetail,
@@ -38,6 +39,7 @@ const REPORT_PAGE_SIZE = 10
 // Router) — see the wrapping default export at the bottom of this file,
 // same split Student Profile uses for the same reason.
 function LearningModeContent() {
+  const permissions = usePagePermissions()
   const router = useRouter()
   const searchParams = useSearchParams()
   // Student Profile's action menu links here as
@@ -50,13 +52,17 @@ function LearningModeContent() {
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
   const [student, setStudent] = useState<StudentDto | null>(null)
-  const effectiveStudentGuid = student?.studentGuid ?? studentGuidParam
-  const { data: guidLoadedStudent } = useStudent(effectiveStudentGuid ?? null, !!effectiveStudentGuid)
+  // Deep-link fetch: only run if the page opened with a ?studentGuid= param
+  // and we haven't already seeded the student state (e.g. from StudentLookup).
+  // Once student is loaded via StudentLookup, student is already present and
+  // studentGuidParam is null, so this hook remains disabled, avoiding a
+  // redundant GET /api/v1/students/{guid} on top of learning-mode detail.
+  const { data: guidLoadedStudent } = useStudent(studentGuidParam, !student && !!studentGuidParam)
   // Once the deep-linked guid's detail resolves, seed `student` from it —
   // same effect Profile itself uses for its own ?studentGuid= param.
   useEffect(() => {
-    if (!student && studentGuidParam && guidLoadedStudent) setStudent(normalizeStudentDetail(guidLoadedStudent, effectiveStudentGuid))
-  }, [student, studentGuidParam, guidLoadedStudent, effectiveStudentGuid])
+    if (!student && studentGuidParam && guidLoadedStudent) setStudent(normalizeStudentDetail(guidLoadedStudent, studentGuidParam))
+  }, [student, studentGuidParam, guidLoadedStudent])
 
   const { data: detail, isLoading: isDetailLoading } = useStudentLearningModeDetail(student?.studentGuid ?? null)
   const { data: options = [] } = useLearningModeOptions()
@@ -80,7 +86,7 @@ function LearningModeContent() {
   }
 
   function handleApply() {
-    if (!student) return
+    if (!permissions.edit || !student) return
     const modeNum = Number(selectedMode)
     if (!selectedMode || !modeNum) { showToast('Please select a learning mode.', 'warn'); return }
     updateLearningMode.mutate(
@@ -150,7 +156,7 @@ function LearningModeContent() {
               </div>
               <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                 <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                <button className="btn btn-primary" disabled={updateLearningMode.isPending} onClick={handleApply}>
+                <button className="btn btn-primary" disabled={updateLearningMode.isPending || !permissions.edit} onClick={handleApply}>
                   <i className="lni lni-checkmark"></i> {updateLearningMode.isPending ? 'Saving…' : 'Apply Mode Change'}
                 </button>
               </div>

@@ -24,7 +24,7 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
   // CountryGuid — confirmed (post-assign-refugee-status.md) as a real guid
   // field on the student entity, not a legacy numeric code, so the option's
   // own countryGuid is sent as-is; no index/position workaround needed.
-  const { data: countries = [] } = useCountries()
+  const { data: countries = [] } = useCountries(isOpen)
   const countryOptions = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
 
   const [countryGuid, setCountryGuid] = useState('')

@@ -1,38 +1,23 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
+import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
+import { useStudentStatementSearch, useStudentStatement, useStudentFeeSummary } from '@/hooks/student/useStudentStatement'
+import { getStudentStatementPdfUrl } from '@/lib/api/student/studentStatement'
+import { PAYMENT_CATEGORY_LABELS } from '@/lib/api/finance/paymentConsole'
 
-interface DemoStudent { name: string; sno: string; programme: string; email: string }
-
-const DEMO_STUDENTS: DemoStudent[] = [
-  { name: 'Tumukunde Alice Grace', sno: 'ISB/2026/0021', programme: 'Diploma in Nursing', email: 'alice.t@students.isbat.ac.ug' },
-  { name: 'Okello James Patrick', sno: 'ISB/2026/0022', programme: 'MBA Business Admin (ODL)', email: 'okello.j@students.isbat.ac.ug' },
-  { name: 'Nakato Sarah Bridget', sno: 'ISB/2026/0023', programme: 'BSc. Computer Science', email: 'nakato.s@students.isbat.ac.ug' },
-  { name: 'Nampijja Grace Miriam', sno: 'ISB/2026/0019', programme: 'BCom. Accounting', email: 'nampijja.g@students.isbat.ac.ug' },
-  { name: 'Mugisha David Kalisa', sno: 'ISB/2026/0020', programme: 'BSc. Information Technology', email: 'mugisha.d@students.isbat.ac.ug' },
-]
-
-interface FeeLine { label: string; amount: string; currency: 'USD' | 'UGX'; status: 'paid' | 'outstanding' }
-
-// Same fee-line template applied to whichever demo student is generated —
-// the reference design only ever specified one worked example (Tumukunde
-// Alice Grace's statement), so every student's statement mirrors its shape.
-const FEE_LINES: FeeLine[] = [
-  { label: 'Admission Fee', amount: '50,000', currency: 'UGX', status: 'paid' },
-  { label: 'Registration Fee', amount: '250', currency: 'USD', status: 'paid' },
-  { label: 'Tuition — S1', amount: '750', currency: 'USD', status: 'outstanding' },
-  { label: 'NCHE Fee (Annual)', amount: '20,000', currency: 'UGX', status: 'outstanding' },
-  { label: 'Guild Fee (Semester)', amount: '10,000', currency: 'UGX', status: 'outstanding' },
-]
-
-function totalOutstanding(lines: FeeLine[]): string {
-  const parts: string[] = []
-  const usd = lines.filter(l => l.status === 'outstanding' && l.currency === 'USD')
-    .reduce((sum, l) => sum + Number(l.amount.replace(/,/g, '')), 0)
-  const ugx = lines.filter(l => l.status === 'outstanding' && l.currency === 'UGX')
-    .reduce((sum, l) => sum + Number(l.amount.replace(/,/g, '')), 0)
-  if (usd > 0) parts.push(`USD ${usd.toLocaleString()}`)
-  if (ugx > 0) parts.push(`UGX ${ugx.toLocaleString()}`)
+function sumByCurrency<T extends { currencyName: string | null; amount?: number; outstanding?: number }>(
+  rows: T[],
+  field: 'amount' | 'outstanding'
+): string {
+  const byCurrency = new Map<string, number>()
+  for (const r of rows) {
+    const cur = r.currencyName ?? '—'
+    const val = (field === 'amount' ? r.amount : r.outstanding) ?? 0
+    byCurrency.set(cur, (byCurrency.get(cur) ?? 0) + val)
+  }
+  const parts = [...byCurrency.entries()].filter(([, v]) => v > 0).map(([cur, v]) => `${cur} ${v.toLocaleString()}`)
   return parts.join(' + ') || '—'
 }
 
@@ -40,18 +25,29 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  const [search, setSearch] = useState('')
-  const [student, setStudent] = useState<DemoStudent>(DEMO_STUDENTS[0])
+  const [term, setTerm] = useState('')
+  const [selectedGuid, setSelectedGuid] = useState<string | null>(null)
 
-  const outstanding = useMemo(() => totalOutstanding(FEE_LINES), [])
+  const {
+    data: searchPages,
+    isLoading: isSearching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useStudentStatementSearch(term, !selectedGuid)
+  const matches = searchPages?.pages.flatMap(p => p.items) ?? []
 
-  function handleGenerate() {
-    const q = search.trim().toLowerCase()
-    if (!q) { showToast('Enter a student number or name.', 'warn'); return }
-    const found = DEMO_STUDENTS.find(s => s.sno.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
-    if (!found) { showToast('Student not found.', 'warn'); return }
-    setStudent(found)
-    showToast('Statement generated for student.', 'success')
+  const { data: statement, isLoading: isStatementLoading, isError: isStatementError, error: statementError } = useStudentStatement(selectedGuid)
+  const header = statement?.header
+  const paymentHistory = statement?.paymentHistory ?? []
+  const outstandingItems = statement?.outstandingItems ?? []
+
+  const { data: feeSummary } = useStudentFeeSummary(selectedGuid)
+
+  function handleSelect(guid: string) {
+    setSelectedGuid(guid)
+    const found = matches.find(m => m.studentGuid === guid)
+    if (found) setTerm(found.studentName ?? '')
   }
 
   return (
@@ -60,74 +56,167 @@ export default function Page() {
         <div className="pg-hdr">
           <div>
             <div className="pg-title">Student Financial Statements</div>
-            <div className="pg-sub">Generate individual student statements · Full ledger view · Print or email</div>
+            <div className="pg-sub">Fee ledger, outstanding balance, and payment history per student</div>
           </div>
-        </div>
-
-        <div className="card" style={{ maxWidth: 680 }}>
-          <div className="card-hdr">
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-search-alt"></i></span> Search Student</div>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <div className="inp-wrap" style={{ flex: 1, minWidth: 180 }}>
-              <span className="inp-icon"><i className="lni lni-search-alt"></i></span>
-              <input
-                className="ctrl" type="text" placeholder="Student number or name"
-                value={search} onChange={e => setSearch(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleGenerate() }}
-              />
-            </div>
-            <button className="btn btn-primary" onClick={handleGenerate}>
-              <i className="lni lni-files"></i> Generate
+          <div className="flex gap-2">
+            <button className="btn btn-neu btn-sm" onClick={() => window.print()} disabled={!selectedGuid}>
+              <i className="lni lni-printer"></i> Print
+            </button>
+            <button
+              className="btn btn-neu btn-sm"
+              onClick={() => {
+                if (selectedGuid) {
+                  window.open(getStudentStatementPdfUrl(selectedGuid), '_blank')
+                  showToast('Opening official statement PDF…', 'success')
+                }
+              }}
+              disabled={!selectedGuid}
+            >
+              <i className="lni lni-download"></i> PDF
             </button>
           </div>
         </div>
 
-        <div className="card mt-[18px]" style={{ maxWidth: 680 }}>
-          <div className="text-center mb-4 pb-3 border-b border-g200">
-            <h3 className="font-bold text-g900" style={{ fontSize: 'var(--fs-lg)' }}>ISBAT University</h3>
-            <p className="text-g500" style={{ fontSize: 'var(--fs-xs)' }}>Institute of Skill Development And Training</p>
-            <p className="text-g500" style={{ fontSize: 'var(--fs-xs)' }}>Kampala, Uganda · erp.isbatuniversity.ac.ug</p>
-            <div className="font-mono font-bold text-blue mt-2" style={{ fontSize: 14 }}>STMT-{student.sno}</div>
-            <div className="text-g400 uppercase font-bold mt-1" style={{ fontSize: 10, letterSpacing: '.06em' }}>
-              Student Financial Statement — Spring 2026
-            </div>
-          </div>
-
-          <div className="receipt-row"><span className="text-muted">Student Name</span><span className="font-bold">{student.name}</span></div>
-          <div className="receipt-row"><span className="text-muted">Student Number</span><span className="font-mono text-blue">{student.sno}</span></div>
-          <div className="receipt-row"><span className="text-muted">Programme</span><span>{student.programme} · Semester 1</span></div>
-          <div className="receipt-row"><span className="text-muted">Fee Structure</span><span>Local Student</span></div>
-
-          <div style={{ height: 1, background: 'var(--g100)', margin: '10px 0' }}></div>
-
-          {FEE_LINES.map((l, i) => (
-            <div key={i} className="receipt-row">
-              <span className="text-muted">{l.label}</span>
-              <span className={`font-bold ${l.status === 'paid' ? 'text-green' : 'text-amber'}`}>
-                {l.currency} {l.amount} {l.status === 'paid' ? '✓ Paid' : '— Outstanding'}
-              </span>
-            </div>
-          ))}
-
-          <div className="receipt-total"><span>Total Outstanding</span><span className="text-amber">{outstanding}</span></div>
-
-          <div className="text-center text-g400 mt-3 pt-3 border-t border-dashed border-g300" style={{ fontSize: 10 }}>
-            Fee Clearance Status: <strong>50% — Term 1 Assessment Access Granted</strong><br />
-            Statement generated: 09 May 2026 · Finance Office · ISBAT University
-          </div>
+        <div className="card" style={{ marginBottom: 16 }}>
+          <TableSearch
+            value={term}
+            onChange={v => { setTerm(v); setSelectedGuid(null) }}
+            placeholder="Search student by name or reg. no…"
+            loading={isSearching}
+            emptyLabel="No students found"
+            minChars={0}
+            results={matches.map(m => ({ id: m.studentGuid, primary: m.studentName ?? '—', secondary: [m.studentRegNo, m.programName].filter(Boolean).join(' · ') }))}
+            onSelect={r => handleSelect(r.id)}
+            onLoadMore={() => hasNextPage && fetchNextPage()}
+            hasMore={hasNextPage}
+            loadingMore={isFetchingNextPage}
+          />
         </div>
 
-        <div className="flex gap-2 mt-3 flex-wrap" style={{ maxWidth: 680 }}>
-          <button className="btn btn-neu flex-1 justify-center" onClick={() => window.print()}>
-            <i className="lni lni-printer"></i> Print Statement
-          </button>
-          <button className="btn btn-primary flex-1 justify-center" onClick={() => showToast(`Statement emailed to ${student.email}`, 'success')}>
-            <i className="lni lni-envelope"></i> Email to Student
-          </button>
-        </div>
+        {!selectedGuid ? (
+          <div className="empty">
+            <div className="empty-icon"><i className="lni lni-files"></i></div>
+            <div className="empty-title">No Student Loaded</div>
+            <div className="empty-sub">Search for a student above and pick them from the results to view their complete financial statement.</div>
+          </div>
+        ) : isStatementLoading ? (
+          <div className="text-g400 text-center" style={{ padding: 24 }}>Loading statement…</div>
+        ) : isStatementError || !header ? (
+          <div className="text-clr-red text-center" style={{ padding: 24 }}>
+            <i className="lni lni-warning"></i> {statementError instanceof Error && statementError.message && statementError.message !== 'not_found' ? statementError.message : "Couldn't load this student's statement."}
+          </div>
+        ) : (
+          <>
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }} className="text-xs">
+                <div><span className="text-muted">Reg No: </span><span className="font-bold font-mono text-blue">{header.studentRegNo ?? '—'}</span></div>
+                <div><span className="text-muted">Student Name: </span><span className="font-bold">{header.studentName ?? '—'}</span></div>
+                <div><span className="text-muted">Batch: </span><span className="font-bold">{header.batchCode ?? '—'}</span></div>
+                <div><span className="text-muted">Programme: </span><span className="font-bold">{header.programName ?? '—'}</span></div>
+                <div><span className="text-muted">Semester: </span><span className="font-bold">{header.semesterName ?? '—'}</span></div>
+              </div>
+            </div>
+
+            <div className="stats-row">
+              <div className="stat-card">
+                <div className="stat-lbl">Admission Type</div>
+                <div className="stat-num" style={{ fontSize: 18, color: 'var(--b700)' }}>{header.admissionTypeLabel ?? '—'}</div>
+                <div className="stat-sub">{header.appRefNo ?? '—'}</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-lbl">Total to Pay</div>
+                <div className="stat-num">{feeSummary?.totalAmountToPay != null ? feeSummary.totalAmountToPay.toLocaleString() : '—'}</div>
+                <div className="stat-sub">Overall charged</div>
+              </div>
+              <div className="stat-card [--b700:var(--green)] [--b400:#34d399]">
+                <div className="stat-lbl">Total Paid</div>
+                <div className="stat-num" style={{ color: 'var(--green)' }}>{feeSummary?.amountPaid != null ? feeSummary.amountPaid.toLocaleString() : '—'}</div>
+                <div className="stat-sub up">{paymentHistory.length} payments</div>
+              </div>
+              <div className="stat-card [--b700:var(--red)] [--b400:#f87171]">
+                <div className="stat-lbl">Outstanding</div>
+                <div className="stat-num" style={{ color: 'var(--red)' }}>{feeSummary?.pendingFee != null ? feeSummary.pendingFee.toLocaleString() : '—'}</div>
+                <div className="stat-sub warn">{outstandingItems.length} items</div>
+              </div>
+            </div>
+
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-hdr">
+                <div className="card-title"><i className="lni lni-wallet"></i> Outstanding Balance</div>
+                <span className="badge badge-amber">{sumByCurrency(outstandingItems, 'outstanding')} outstanding</span>
+              </div>
+              {outstandingItems.length === 0 ? (
+                <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Fully settled — nothing outstanding.</div>
+              ) : (
+                <ScrollTable className="no-sticky-col">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style={{ width: 56 }}>Sl. No</th>
+                        <th>Category</th>
+                        <th>Description</th>
+                        <th>Currency</th>
+                        <th>Outstanding</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {outstandingItems.map(o => (
+                        <tr key={`${o.ledgerGuid ?? o.description}-${o.slNo}`}>
+                          <td className="text-g500">{o.slNo}</td>
+                          <td>{PAYMENT_CATEGORY_LABELS[o.category] ?? `Category ${o.category}`}</td>
+                          <td>{o.description ?? '—'}</td>
+                          <td>{o.currencyName ?? '—'}</td>
+                          <td><strong style={{ color: 'var(--red)' }}>{o.outstanding.toLocaleString()}</strong></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </ScrollTable>
+              )}
+            </div>
+
+            <div className="card">
+              <div className="card-hdr">
+                <div className="card-title"><i className="lni lni-files"></i> Payment History — {header.studentName}</div>
+              </div>
+              {paymentHistory.length === 0 ? (
+                <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No payment history for this student.</div>
+              ) : (
+                <ScrollTable className="no-sticky-col">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style={{ width: 56 }}>Sl. No</th>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th>Method</th>
+                        <th>Currency</th>
+                        <th>Amount</th>
+                        <th>Receipt</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paymentHistory.map(p => (
+                        <tr key={p.paymentGuid}>
+                          <td className="text-g500">{p.slNo}</td>
+                          <td>{p.payDate.slice(0, 10)}</td>
+                          <td>{PAYMENT_CATEGORY_LABELS[p.category] ?? `Category ${p.category}`}</td>
+                          <td><span className="pill pill-blue">{p.payType ?? '—'}</span></td>
+                          <td>{p.currencyName ?? '—'}</td>
+                          <td className="text-green font-bold">{p.amount.toLocaleString()}</td>
+                          <td className="font-mono text-blue">{p.receipt ?? p.paymentCode ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </ScrollTable>
+              )}
+            </div>
+          </>
+        )}
       </div>
       <Toast toast={toast} />
     </>
   )
 }
+

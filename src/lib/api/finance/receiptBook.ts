@@ -102,8 +102,15 @@ export function createReceiptBook(input: CreateReceiptBookInput): Promise<Receip
   return apiPost<ReceiptBook>('/api/v1/finance/receipt-books', input)
 }
 
-// No GetByGuid endpoint exists for receipt books — the Edit modal is seeded
-// from the row already loaded in the list, not fetched by guid.
+export function getReceiptBookById(guid: string): Promise<ReceiptBook> {
+  if (MOCK_AUTH) {
+    const existing = mockReceiptBooks.find(b => b.receiptBookGuid === guid)
+    if (!existing) return Promise.reject(new Error('Receipt book not found'))
+    return Promise.resolve(existing)
+  }
+  return apiGet<ReceiptBook>(`/api/v1/finance/receipt-books/by-guid/${guid}`)
+}
+
 export function updateReceiptBook(guid: string, input: UpdateReceiptBookInput): Promise<ReceiptBook> {
   if (MOCK_AUTH) {
     const existing = mockReceiptBooks.find(b => b.receiptBookGuid === guid)

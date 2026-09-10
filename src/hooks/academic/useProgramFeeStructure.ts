@@ -21,10 +21,13 @@ const PROGRAM_FEE_STRUCTURES_KEY = ['programFeeStructures']
 // Payment/Payment Refund's cross-reference lookups), unlike the standalone
 // /academic/fee-structure page's own table, which now uses
 // useProgramFeeStructuresPaged below instead of paginating this client-side.
-export function useProgramFeeStructures(pageNumber = 1, pageSize = 1000, programGuid?: string) {
+export function useProgramFeeStructures(pageNumber = 1, pageSize = 1000, programGuid?: string, enabled = true) {
   return useQuery({
     queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, pageNumber, pageSize, programGuid ?? null],
     queryFn: () => getProgramFeeStructures(pageNumber, pageSize, programGuid),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
   })
 }
 

@@ -143,9 +143,9 @@ function StudentProfileContent() {
   const [sponsorRequested, setSponsorRequested] = useState(false)
   const { data: sponsorDetail, error: sponsorError } = useSponsorDetails(student?.studentGuid ?? null, !!student && sponsorRequested)
   const sponsorRestricted = !!sponsorError
-  const { data: sponsorCategoriesPage } = useSponsorCategories()
-  const assignSponsorCategory = useAssignSponsorCategory()
   const [editingSponsor, setEditingSponsor] = useState(false)
+  const { data: sponsorCategoriesPage } = useSponsorCategories(editingSponsor)
+  const assignSponsorCategory = useAssignSponsorCategory()
   const [sponsorChoice, setSponsorChoice] = useState('')
 
   // Real refugee-status record — GET /students/refugee/{guid}, resolves to
@@ -160,12 +160,12 @@ function StudentProfileContent() {
   const { data: refugeeDetail, isFetching: isRefugeeChecking } = useStudentRefugeeDetails(student?.studentGuid ?? null, !!student && refugeeRequested)
   const assignRefugeeStatus = useAssignRefugeeStatus()
   const removeRefugeeStatus = useRemoveRefugeeStatus()
+  const [refugeeModalOpen, setRefugeeModalOpen] = useState(false)
   // CountryGuid — confirmed (post-assign-refugee-status.md) as a real guid
   // field on the student entity, not a legacy numeric code, so the option's
   // own countryGuid is sent as-is; no index/position workaround needed.
-  const { data: refugeeCountries = [] } = useCountries()
+  const { data: refugeeCountries = [] } = useCountries(refugeeModalOpen)
   const refugeeCountryOptions = refugeeCountries.map(c => ({ value: c.countryGuid, label: c.countryName }))
-  const [refugeeModalOpen, setRefugeeModalOpen] = useState(false)
   const [refugeeCountryGuid, setRefugeeCountryGuid] = useState('')
   const [refugeeIdInput, setRefugeeIdInput] = useState('')
   const [refugeeDocFile, setRefugeeDocFile] = useState<File | null>(null)
@@ -182,7 +182,7 @@ function StudentProfileContent() {
   // management modal.
   const [discountModalOpen, setDiscountModalOpen] = useState(false)
   const { data: discountDetail } = useStudentDiscount(student?.studentGuid ?? null, !!student && discountModalOpen)
-  const { data: discountCatalogue = [] } = useDiscounts()
+  const { data: discountCatalogue = [] } = useDiscounts(discountModalOpen)
   const assignStudentDiscount = useAssignStudentDiscount()
   const updateStudentDiscount = useUpdateStudentDiscount()
   const cancelStudentDiscount = useCancelStudentDiscount()

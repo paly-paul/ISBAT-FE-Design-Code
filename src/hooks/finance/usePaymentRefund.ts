@@ -20,6 +20,8 @@ export function useLedgerOptions(applicationGuid: string | null, enabled: boolea
     queryKey: [...LEDGER_OPTIONS_KEY, applicationGuid],
     queryFn: () => getLedgerOptions(applicationGuid as string),
     enabled: enabled && !!applicationGuid,
+    staleTime: 5 * 60 * 1000,
+    gcTime: Infinity,
   })
 }
 
@@ -30,6 +32,8 @@ export function useTotalPaid(applicationGuid: string | null, ledgerGuid: string 
     queryKey: [...TOTAL_PAID_KEY, applicationGuid, ledgerGuid],
     queryFn: () => getTotalPaid(applicationGuid as string, ledgerGuid as string),
     enabled: enabled && !!applicationGuid && !!ledgerGuid,
+    staleTime: 5 * 60 * 1000,
+    gcTime: Infinity,
   })
 }
 
@@ -40,6 +44,8 @@ export function useRefundsByApplication(applicationGuid: string | null, enabled:
     queryKey: [...REFUNDS_BY_APPLICATION_KEY, applicationGuid],
     queryFn: () => getRefundsByApplication(applicationGuid as string),
     enabled: enabled && !!applicationGuid,
+    staleTime: 5 * 60 * 1000,
+    gcTime: Infinity,
   })
 }
 
