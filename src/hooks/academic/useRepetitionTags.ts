@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRepetitionTag, deleteRepetitionTag, getRepetitionTagById, getRepetitionTags, RepetitionTag, RepetitionTagInput, updateRepetitionTag } from '@/lib/api/academic/repetitionTag'
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { createRepetitionTag, deleteRepetitionTag, getRepetitionTagById, getRepetitionTags, getRepetitionTagsPaged, RepetitionTag, RepetitionTagInput, updateRepetitionTag } from '@/lib/api/academic/repetitionTag'
 
 const REPETITION_TAGS_KEY = ['repetitionTags']
 
@@ -44,6 +44,20 @@ export function useRepetitionTagSearch(search: string) {
     enabled: q.length > 0,
     staleTime: Infinity,
     gcTime: Infinity,
+  })
+}
+
+// Real server-side pagination (2026-09-09) for Repetition Tag's own table —
+// see getRepetitionTagsPaged's own comment. keepPreviousData avoids the
+// table flashing to a loading state on every page/search change; the old
+// page's rows stay on screen (isFetching still flips true) until the new
+// page resolves, same UX enquiry-list's own useEnquiries gets from
+// react-query's default placeholderData behavior on a stable queryKey shape.
+export function useRepetitionTagsPaged(page: number, pageSize: number, search: string) {
+  return useQuery({
+    queryKey: [...REPETITION_TAGS_KEY, 'paged', page, pageSize, search],
+    queryFn: () => getRepetitionTagsPaged(page, pageSize, search),
+    placeholderData: keepPreviousData,
   })
 }
 

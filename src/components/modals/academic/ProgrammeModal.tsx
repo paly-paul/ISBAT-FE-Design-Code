@@ -6,17 +6,17 @@ import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
-import { MultiSelect } from '@/components/MultiSelect'
+import { StreamMultiSearchPicker } from '@/components/StreamMultiSearchPicker'
 import { ProgramMasterInput } from '@/lib/api/academic/programMaster'
 import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
 import { useProgramGroups } from '@/hooks/academic/useProgramGroups'
-import { useFaculties } from '@/hooks/config/useFaculties'
 import { useCurrencies } from '@/hooks/finance/useCurrencies'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
-import { useStreams } from '@/hooks/config/useStreams'
+import { useStreamsByGuids } from '@/hooks/config/useStreams'
 import { useCourseUnit, useCourseUnitsByGuids } from '@/hooks/academic/useCourseUnits'
 import { CourseUnitSearchPicker, CourseUnitPickOption } from '@/components/CourseUnitSearchPicker'
-import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
+import { useIntakesByGuids, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
+import { IntakeSearchPicker } from '@/components/IntakeSearchPicker'
 import { useUnitTypes } from '@/hooks/config/useUnitTypes'
 import { useUnitCategories } from '@/hooks/config/useUnitCategories'
 import { useLedgers } from '@/hooks/finance/useLedgers'
@@ -372,16 +372,30 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // see validateStep2 / Program_Master_Change_Requests_Final.md.
   const [step2Error, setStep2Error] = useState<string | null>(null)
 
-  const { data: programLevels = [] } = useProgramLevels()
+  // Gated on isOpen (2026-09-10, per request) — these back this modal's own
+  // Programme Level/Group dropdowns and previously fired the moment
+  // programme-master/page.tsx mounted regardless of whether Add/Edit was
+  // ever opened (safe/deduped at the time only because that page's own table
+  // also fetched them unconditionally at the same query key — now that the
+  // page's own fetch is gated the same way, this modal's calls are what
+  // actually determines whether/when the request fires). Neither endpoint is
+  // confirmed to support real server-side pagination the way
+  // programs/intakes/faculties/specializations do, so both stay full-list
+  // fetches rather than infinite-scroll pickers.
+  const { data: programLevels = [] } = useProgramLevels(isOpen)
   const programLevelOptions = programLevels.map(p => ({ value: p.programLevelGuid, label: p.levelName }))
   const selectedProgramLevel = programLevels.find(p => p.programLevelGuid === programLevelGuid)
 
-  const { data: programGroups = [] } = useProgramGroups()
+  const { data: programGroups = [] } = useProgramGroups(isOpen)
   const programGroupOptions = programGroups.map(g => ({ value: g.programGroupGuid, label: `${g.groupCode} — ${g.groupName}` }))
 
-  const { data: faculties = [] } = useFaculties()
-  const facultyOptions = faculties.map(f => ({ value: f.facultyGuid, label: `${f.facultyCode} — ${f.facultyName}` }))
-  const selectedFaculty = faculties.find(f => f.facultyGuid === facultyGuid)
+  // facultyGuid itself is still submitted on save (carried through from
+  // fullDetails in Edit mode — see the prefill effect below), but this modal
+  // has no actual Faculty picker in its UI (Step 1 never renders one), so
+  // there's nothing here to feed a facultyOptions dropdown — useFaculties()'s
+  // full list used to be fetched unconditionally (later gated to isOpen) for
+  // no reason at all. Dropped entirely per "no need to fallback" — see the
+  // same call this session already removed from Payment Console.
 
   const { data: currencies = [] } = useCurrencies(isOpen)
   // Lec/Cec/Acec (Lateral Entry/Credit Exemption/Aptech Credit Exemption Fee
@@ -408,10 +422,20 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     item => ({ guid: item.currencyGuid, name: item.currencyName }),
   )
 
-  const { data: streams = [] } = useStreams()
-  const streamOptions = streams.map(s => ({ value: s.streamGuid, label: `${s.streamCode} — ${s.streamName}` }))
-  // Step 2's per-semester picker only offers what was picked in Step 1.
-  const semesterStreamOptions = streamOptions.filter(o => streamGuids.includes(o.value))
+  // Specialization(s) is now StreamMultiSearchPicker's own infinite-scroll
+  // search (2026-09-10) instead of a MultiSelect fed by useStreams(isOpen)'s
+  // capped 1000-row snapshot — confirmed live that GET
+  // /api/v1/academic/specializations genuinely supports page/pageSize/search
+  // together. Step 2's per-semester picker only offers what was picked in
+  // Step 1, which is always a small, bounded set regardless — resolved via
+  // the same batched-by-guid lookup StreamMultiSearchPicker itself uses for
+  // its selected-chip labels, rather than holding the whole stream list here
+  // too.
+  const streamsByGuid = useStreamsByGuids(streamGuids)
+  const semesterStreamOptions = streamGuids.map(guid => {
+    const s = streamsByGuid.get(guid)
+    return { value: guid, label: s ? `${s.streamCode} — ${s.streamName}` : guid }
+  })
 
 
   // Syllabus/Outline/Taught By detail panel (Step 2's "Additional Feature")
@@ -467,17 +491,28 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     item => ({ guid: item.ledger, name: item.ledgerName }),
   )
 
-  const { data: intakes = [] } = useIntakes(isOpen)
-  // Per-fee-structure Intake — a real intakeGuid in both modes now (see the
-  // FeeStructure type comment on intakeGuid); the top-level programme Intake
-  // (intakeGuid on ProgramMasterInput, Step 1) is a separate field entirely.
-  const programIntakeOptions = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   // Per Fee_Structure_Change_Requests.md #3/#4 (mirrored from the standalone
   // /academic/fee-structure page) — Step 3's per-structure Intake is now
   // always read-only: in Edit mode it shows whatever intake the structure
   // already has, in Create mode it's forced onto the Current Academic
   // Intake instead of offering a picker at all.
   const { data: currentAcademicIntake } = useCurrentAcademicIntake(isOpen)
+
+  // Resolves the display label ("intakeCode — description") for the
+  // top-level Programme Intake plus whichever intake each fee structure
+  // already carries — a bounded batched-by-guid lookup (useIntakesByGuids)
+  // instead of holding the whole intake list in memory just to look labels
+  // up, now that this modal's Intake pickers are IntakeSearchPicker's own
+  // search/scroll fetch rather than a plain SearchSelect over a full list.
+  const intakesByGuid = useIntakesByGuids([intakeGuid, ...feeStructures.map(s => s.intakeGuid)])
+  function intakeLabel(guid: string): string | null {
+    if (!guid) return null
+    if (currentAcademicIntake && currentAcademicIntake.intakeGuid === guid) {
+      return `${currentAcademicIntake.intakeCode} — ${currentAcademicIntake.description}`
+    }
+    const found = intakesByGuid.get(guid)
+    return found ? `${found.intakeCode} — ${found.description}` : null
+  }
 
   // Full course-unit/fee-structure breakdown for the programme being edited —
   // update-complete fully replaces both collections, so this is required to
@@ -1733,17 +1768,17 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
                 <div className="fg">
                   <div className="lbl">Intake</div>
-                  <SearchSelect
+                  <IntakeSearchPicker
                     placeholder="— Select intake —"
-                    value={intakeGuid}
-                    options={programIntakeOptions}
-                    onChange={v => { setIntakeGuid(v); if (step1Errors.intakeGuid) setStep1Errors(p => ({ ...p, intakeGuid: '' })) }}
+                    selectedLabel={intakeLabel(intakeGuid)}
+                    onSelect={i => { setIntakeGuid(i.intakeGuid); if (step1Errors.intakeGuid) setStep1Errors(p => ({ ...p, intakeGuid: '' })) }}
+                    onClear={() => setIntakeGuid('')}
                   />
                   {step1Errors.intakeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.intakeGuid}</p>}
                 </div>
                 <div className="fg span2">
                   <div className="lbl">Specialization(s)</div>
-                  <MultiSelect
+                  <StreamMultiSearchPicker
                     placeholder="— Select specialization(s) —"
                     value={streamGuids}
                     onChange={vals => {
@@ -1751,11 +1786,10 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                       // Drop any per-unit pick (Step 2) that's no longer part of this selection.
                       setSemUnits(prev => prev.map(units => units.map(u => (u.streamGuid && vals.includes(u.streamGuid)) ? u : { ...u, streamGuid: '' })))
                     }}
-                    options={streamOptions}
                   />
                   {streamGuids.length > 0 && (
                     <div className="flex flex-wrap gap-2" style={{ marginTop: 8 }}>
-                      {streamOptions.filter(o => streamGuids.includes(o.value)).map(o => (
+                      {semesterStreamOptions.map(o => (
                         <span key={o.value} className="badge badge-blue">{o.label}</span>
                       ))}
                     </div>
@@ -1970,11 +2004,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                       back to an editable picker in exactly that case. */}
                   <div className="fg m-0">
                     <div className="lbl">Intake</div>
-                    <SearchSelect
+                    <IntakeSearchPicker
                       placeholder={mode === 'edit' ? '— Select intake —' : (currentAcademicIntake ? undefined : '— Select intake —')}
-                      value={activeFeeStruct.intakeGuid}
-                      options={programIntakeOptions}
-                      onChange={val => updateFeeStructureMeta('intakeGuid', val)}
+                      selectedLabel={intakeLabel(activeFeeStruct.intakeGuid)}
+                      onSelect={i => updateFeeStructureMeta('intakeGuid', i.intakeGuid)}
+                      onClear={() => updateFeeStructureMeta('intakeGuid', '')}
                       disabled={mode === 'edit' || !!currentAcademicIntake}
                     />
                   </div>

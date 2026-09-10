@@ -9220,24 +9220,27 @@ body {
 
 #page-filing .filing-summary-avatar-edit {
   position: absolute;
-  bottom: -2px;
-  right: -2px;
-  width: 30px;
-  height: 30px;
+  bottom: -4px;
+  right: -4px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: #fff;
   color: var(--b600);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 18px;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, .2);
+  border: 2.5px solid var(--b500);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
   transition: var(--tr);
 }
 
 #page-filing .filing-summary-avatar-edit:hover {
-  transform: scale(1.08);
+  transform: scale(1.1);
+  background: var(--b600);
+  color: #fff;
 }
 
 #page-filing .filing-summary-avatar-edit input {

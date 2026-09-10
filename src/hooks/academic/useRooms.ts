@@ -3,7 +3,11 @@ import { createRoom, deleteRoom, getRoomById, getRooms, Room, RoomInput, updateR
 
 const ROOMS_KEY = ['rooms']
 
-export function useRooms() {
+// enabled defaults to true so every existing call site keeps eagerly
+// fetching exactly as before — only a caller that shouldn't hit the network
+// until it's actually needed (e.g. a modal that's always mounted regardless
+// of isOpen) needs to pass enabled={isOpen}.
+export function useRooms(enabled = true) {
   return useQuery({
     queryKey: ROOMS_KEY,
     queryFn: () => getRooms(),
@@ -11,6 +15,7 @@ export function useRooms() {
     // refetch once a create/update/delete mutation invalidates this key.
     staleTime: Infinity,
     gcTime: Infinity,
+    enabled,
   })
 }
 

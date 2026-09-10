@@ -30,7 +30,7 @@ const mockProgramGroups: ProgramGroup[] = [
 ]
 
 // Response wrapper for the paginated programme group list endpoint.
-interface ProgramGroupListResponse {
+export interface ProgramGroupListResponse {
   items: ProgramGroup[]
   totalCount: number
   pageNumber: number
@@ -53,6 +53,29 @@ export function getProgramGroups(page = 1, pageSize = 10, search = ''): Promise<
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (q) params.set('search', q)
   return apiGet<ProgramGroupListResponse | null>(`/api/v1/academic/program-groups?${params.toString()}`).then(data => data?.items ?? [])
+}
+
+// Real server-side pagination variant (2026-09-09) — for Programme Group's
+// own table, which used to call getProgramGroups() above at
+// PROGRAM_GROUPS_PAGE_SIZE (1000) and paginate/search client-side. The plain
+// function above stays as-is for programme-master/ProgrammeModal/
+// ViewProgrammeModal, which genuinely need the full unpaginated list to
+// resolve group names for their own tables/dropdowns. This one keeps the
+// real totalCount/pageNumber/pageSize the endpoint already returns
+// (ProgramGroupListResponse) instead of discarding it down to just items.
+export function getProgramGroupsPaged(page = 1, pageSize = 10, search = ''): Promise<ProgramGroupListResponse> {
+  const q = search.trim()
+  if (MOCK_AUTH) {
+    const filtered = q
+      ? mockProgramGroups.filter(g => g.groupCode.toLowerCase().includes(q.toLowerCase()) || g.groupName.toLowerCase().includes(q.toLowerCase()))
+      : mockProgramGroups
+    const start = (page - 1) * pageSize
+    return Promise.resolve({ items: filtered.slice(start, start + pageSize), totalCount: filtered.length, pageNumber: page, pageSize })
+  }
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (q) params.set('search', q)
+  return apiGet<ProgramGroupListResponse | null>(`/api/v1/academic/program-groups?${params.toString()}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
 // Payload used when creating or updating a programme group.

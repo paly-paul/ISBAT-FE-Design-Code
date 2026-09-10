@@ -5,6 +5,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
+import { ProgramSearchPicker } from '@/components/ProgramSearchPicker'
 import { CourseUnitFormModal } from '@/components/modals/academic/CourseUnitFormModal'
 import { ViewCourseUnitModal } from '@/components/modals/academic/ViewCourseUnitModal'
 import { ElectiveSelectModal } from '@/components/modals/academic/ElectiveSelectModal'
@@ -14,7 +15,6 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useCourseUnits, useAllCourseUnits, useCreateCourseUnit, useUpdateCourseUnit, useDeleteCourseUnit, CourseUnit } from '@/hooks/academic/useCourseUnits'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useProgramCourseUnits } from '@/hooks/academic/useProgramCourseUnits'
 import { getCourseUnitById } from '@/lib/api/academic/courseUnit'
 import { openDocumentForViewing, downloadDocument } from '@/lib/documentViewer'
@@ -35,6 +35,11 @@ export default function Page() {
   // The filter state is kept for future table filtering, but the current view does not need it yet.
   const [search, setSearch] = useState('')
   const [programFilter, setProgramFilter] = useState('')
+  // Label for the currently-picked programme filter, shown in
+  // ProgramSearchPicker's closed box — set directly from whatever the picker
+  // handed back at selection time, since this page no longer keeps a full
+  // programme list around to resolve a guid back into a name from.
+  const [programFilterLabel, setProgramFilterLabel] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [editingCourseUnitGuid, setEditingCourseUnitGuid] = useState<string | null>(null)
   const [viewingCourseUnitGuid, setViewingCourseUnitGuid] = useState<string | null>(null)
@@ -120,8 +125,11 @@ export default function Page() {
   // ProgrammeModal's Curriculum view uses — which lists exactly which
   // course-unit guids are actually assigned to that programme. Mock mode
   // always returns [] here (see programCourseUnits.ts), so the filter has
-  // no matches to show under NEXT_PUBLIC_AUTH_MOCK=true.
-  const { data: programs = [] } = useProgramMasters()
+  // no matches to show under NEXT_PUBLIC_AUTH_MOCK=true. The filter's own
+  // options now come from ProgramSearchPicker (2026-09-09, per request) —
+  // real server search + scroll-to-load-more instead of a SearchSelect over
+  // a capped 1000-row useProgramMasters() snapshot, so no full programme
+  // list needs to be kept around here at all.
   const { data: programCourseUnits = [], isLoading: isProgramCourseUnitsLoading } = useProgramCourseUnits(programFilter || null, !!programFilter)
   const programCourseUnitGuids = useMemo(() => new Set(programCourseUnits.map(u => u.courseUnitGuid)), [programCourseUnits])
 
@@ -133,14 +141,19 @@ export default function Page() {
   // matter how large the real table gets, without a client-side row cap.
   const usingFullList = !!programFilter
 
-  // Fetched eagerly on mount (no `enabled` gate) so picking a programme
-  // doesn't pay for a cold fetch on the first click — this list is still
-  // capped at 1000 rows (ALL_COURSE_UNITS_PAGE_SIZE), which is a real,
-  // known gap for programme filtering once the table exceeds that (same
-  // class of bug search just had) — not fixed here since there's no
-  // server-side "filter by programme" query param on this endpoint to
-  // switch to instead.
-  const { data: allCourseUnits = [], isLoading: isAllCourseUnitsLoading } = useAllCourseUnits()
+  // Gated on usingFullList (2026-09-09, per request — this endpoint was
+  // firing twice on every page load: this 1000-row fetch plus useCourseUnits'
+  // own 10-row page above, when the Programme filter is hit on the vast
+  // majority of visits) rather than fetched eagerly on mount. Trade-off:
+  // picking a programme for the first time now pays for a cold fetch instead
+  // of it already being warm — accepted in exchange for not paying that
+  // 1000-row cost on every single page load regardless of whether the filter
+  // is ever touched. Still capped at 1000 rows (ALL_COURSE_UNITS_PAGE_SIZE)
+  // once it does fire, which is a real, known gap for programme filtering
+  // once the table exceeds that (same class of bug search just had) — not
+  // fixed here since there's no server-side "filter by programme" query
+  // param on this endpoint to switch to instead.
+  const { data: allCourseUnits = [], isLoading: isAllCourseUnitsLoading } = useAllCourseUnits(usingFullList)
   const rows = data?.items ?? []
   const searchRows = usingFullList ? allCourseUnits : rows
   const createCourseUnit = useCreateCourseUnit()
@@ -225,12 +238,12 @@ export default function Page() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-book"></i></span> Course Unit Master</div>
             <div className="flex gap-2">
-              <SearchSelect
+              <ProgramSearchPicker
                 className="w-auto text-[var(--fs-sm)]"
                 placeholder="All Programmes"
-                value={programFilter}
-                onChange={setProgramFilter}
-                options={programs.map(p => ({ value: p.programGuid, label: p.programName }))}
+                selectedLabel={programFilter ? programFilterLabel : null}
+                onSelect={p => { setProgramFilter(p.programGuid); setProgramFilterLabel(`${p.programCode} — ${p.programName}`) }}
+                onClear={() => { setProgramFilter(''); setProgramFilterLabel(null) }}
               />
               <SearchSelect
                 className="w-auto text-[var(--fs-sm)]"
@@ -264,7 +277,7 @@ export default function Page() {
                 {loading
                   ? <TableLoadingState colSpan={999} />
                   : pageItems.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0) || !!programFilter} onClearFilters={() => { setFilters({}); setProgramFilter('') }} />
+                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0) || !!programFilter} onClearFilters={() => { setFilters({}); setProgramFilter(''); setProgramFilterLabel(null) }} />
                     : null}
                 {!loading && pageItems.map((r) => (
                   <tr key={r.courseUnitGuid}>

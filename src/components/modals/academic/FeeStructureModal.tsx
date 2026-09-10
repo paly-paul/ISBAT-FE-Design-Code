@@ -5,7 +5,8 @@ import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
-import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
+import { useIntakesByGuids, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
+import { IntakeSearchPicker } from '@/components/IntakeSearchPicker'
 import { useCurrencies } from '@/hooks/finance/useCurrencies'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
@@ -86,7 +87,6 @@ let nextStructId = 100
 
 export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }: ModalProps & { mode?: 'edit'; editData?: ProgramFeeStructureHeader }) {
   const { data: programs = [] }   = useProgramMasters(isOpen)
-  const { data: intakes = [] }    = useIntakes(isOpen)
   const { data: currencies = [] } = useCurrencies(isOpen)
   const saveFeeStructureComplete   = useSaveProgramFeeStructureComplete()
   const updateFeeStructureComplete = useUpdateProgramFeeStructureComplete()
@@ -98,11 +98,12 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   const { data: feeLines, isLoading: feeLinesLoading, isError: feeLinesError } = useProgramFeeLines(editData?.feeHdGuid ?? null, isOpen && mode === 'edit' && !!editData)
   // Copy Fee Code — real now: sourced from every existing fee structure via
   // the same GET-all endpoint the main page's table uses, not the old
-  // session-only "other structures added in this modal" list. Fetched
-  // unconditionally (matches useProgramMasters above) — safe because it
-  // shares the exact same query key/args as the fee-structure page's own
-  // useProgramFeeStructures(1, FEE_STRUCTURES_LOAD_SIZE) call, so this just
-  // reuses that cached fetch instead of firing a second request on mount.
+  // session-only "other structures added in this modal" list. The
+  // fee-structure page's own table now uses useProgramFeeStructuresPaged
+  // (real server-side pagination, 2026-09-10) instead of this full 1000-row
+  // fetch, so this is its own separate request rather than reusing the
+  // page's cached one — genuinely needed here since Copy Fee Code has to
+  // offer every structure across every programme, not just the current page.
   const { data: allFeeStructuresData } = useProgramFeeStructures(1, 1000)
   const allFeeStructures = allFeeStructuresData?.items ?? []
   // Per-source-guid on-demand fetch of the picked structure's real fee
@@ -118,10 +119,6 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   const { data: currentAcademicIntake } = useCurrentAcademicIntake(isOpen)
 
   const programOptions = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
-  // Same real intakeGuid convention as ProgrammeModal's Intake step. Still
-  // needed even though the field is now always read-only — SearchSelect
-  // resolves the display label for the selected guid from this list.
-  const intakeOptions  = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   // Currency.intCurrency (a number) is what the header payload's Lec/Cec/Acec
   // fields need — unconfirmed for save-complete specifically (the sample
   // payload showed them all null), kept as-is to match the one confirmed
@@ -134,6 +131,24 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   const [structures, setStructures] = useState<Structure[]>(() => makeDefaultStructures())
   const [activeIdx, setActiveIdx]   = useState(0)
   const [activeAcc, setActiveAcc]   = useState(0)
+
+  // Intake is now IntakeSearchPicker's own infinite-scroll search (2026-09-10)
+  // instead of a SearchSelect fed by useIntakes(isOpen)'s capped 1000-row
+  // snapshot — confirmed live that GET /api/v1/academic/intakes genuinely
+  // supports page/pageSize/search together. Every structure's own picked
+  // intakeGuid still needs a label to display in the closed trigger though —
+  // resolved via a bounded batched-by-guid lookup (only however many
+  // distinct intakes are actually in play across this modal's structures),
+  // same convention as ProgrammeModal's own intakeLabel.
+  const intakesByGuid = useIntakesByGuids(structures.map(s => s.intake))
+  function intakeLabel(guid: string): string | null {
+    if (!guid) return null
+    if (currentAcademicIntake && currentAcademicIntake.intakeGuid === guid) {
+      return `${currentAcademicIntake.intakeCode} — ${currentAcademicIntake.description}`
+    }
+    const found = intakesByGuid.get(guid)
+    return found ? `${found.intakeCode} — ${found.description}` : null
+  }
 
   // Guards this prefill against running more than once per open-session —
   // same fix as ProgrammeModal's own fullDetails effect: neither
@@ -638,11 +653,11 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                   Intake is a normal editable picker in both Create and Edit. */}
               <div className="fg m-0">
                 <div className="lbl">Intake</div>
-                <SearchSelect
+                <IntakeSearchPicker
                   placeholder="— Select intake —"
-                  value={active.intake}
-                  onChange={v => updateStructureMeta('intake', v)}
-                  options={intakeOptions}
+                  selectedLabel={intakeLabel(active.intake)}
+                  onSelect={i => updateStructureMeta('intake', i.intakeGuid)}
+                  onClear={() => updateStructureMeta('intake', '')}
                 />
               </div>
               <div className="fg m-0">

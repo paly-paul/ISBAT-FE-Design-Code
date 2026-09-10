@@ -97,7 +97,7 @@ export function ViewApplicantModal({ isOpen, onClose, applicant }: ViewApplicant
     email: applicant.emailId ?? undefined,
     intake: applicant.intakeCode ?? undefined,
     campus: campusName !== '—' ? campusName : undefined,
-    submitted: applicant.createdDate,
+    submitted: applicant.createdDate ?? undefined,
   })
 
   return (

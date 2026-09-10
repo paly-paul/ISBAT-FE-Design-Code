@@ -1,12 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createProgramGroup, deleteProgramGroup, getProgramGroupById, getProgramGroups, ProgramGroup, ProgramGroupInput, updateProgramGroup } from '@/lib/api/academic/programGroup'
+import { useMutation, useQuery, useQueryClient, useQueries, keepPreviousData } from '@tanstack/react-query'
+import { createProgramGroup, deleteProgramGroup, getProgramGroupById, getProgramGroups, getProgramGroupsPaged, ProgramGroup, ProgramGroupInput, updateProgramGroup } from '@/lib/api/academic/programGroup'
 
 const PROGRAM_GROUPS_KEY = ['programGroups']
 
 // Fetch a large page so the full list is available without client-side pagination.
 const PROGRAM_GROUPS_PAGE_SIZE = 1000
 
-export function useProgramGroups() {
+// enabled defaults to true so every existing call site keeps eagerly
+// fetching exactly as before — only a caller that shouldn't hit the network
+// until it's actually needed needs to pass enabled explicitly.
+export function useProgramGroups(enabled = true) {
   return useQuery({
     queryKey: PROGRAM_GROUPS_KEY,
     queryFn: () => getProgramGroups(1, PROGRAM_GROUPS_PAGE_SIZE),
@@ -15,6 +18,7 @@ export function useProgramGroups() {
     // yet — this hook is GET-only for now).
     staleTime: Infinity,
     gcTime: Infinity,
+    enabled,
   })
 }
 
@@ -35,6 +39,37 @@ export function useProgramGroupSearch(search: string) {
     staleTime: Infinity,
     gcTime: Infinity,
   })
+}
+
+// Real server-side pagination (2026-09-09) for Programme Group's own table —
+// see getProgramGroupsPaged's own comment.
+export function useProgramGroupsPaged(page: number, pageSize: number, search: string) {
+  return useQuery({
+    queryKey: [...PROGRAM_GROUPS_KEY, 'paged', page, pageSize, search],
+    queryFn: () => getProgramGroupsPaged(page, pageSize, search),
+    placeholderData: keepPreviousData,
+  })
+}
+
+// Batched-by-guid lookup — same convention as useCourseUnitsByGuids/
+// useIntakesByGuids/useFacultiesByGuids, used to resolve display labels for
+// a bounded set of specific programGroupGuids (e.g. just the ones referenced
+// by the current page of Programme Master's own table, or a single record's
+// programGroupGuid in a View modal) without holding the whole programme
+// group list in memory.
+export function useProgramGroupsByGuids(guids: string[]) {
+  const unique = Array.from(new Set(guids.filter(Boolean)))
+  const results = useQueries({
+    queries: unique.map(guid => ({
+      queryKey: [...PROGRAM_GROUPS_KEY, guid],
+      queryFn: () => getProgramGroupById(guid),
+      staleTime: Infinity,
+      gcTime: Infinity,
+    })),
+  })
+  const byGuid = new Map<string, ProgramGroup>()
+  results.forEach((r, i) => { if (r.data) byGuid.set(unique[i], r.data) })
+  return byGuid
 }
 
 export function useCreateProgramGroup() {

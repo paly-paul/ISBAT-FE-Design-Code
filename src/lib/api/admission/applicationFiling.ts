@@ -148,7 +148,7 @@ export interface ApplicationListItem {
   accLetterDate: string | null
   studCategory: number | null
   universityEmail: string | null
-  createdDate: string
+  createdDate: string | null
   modifiedDate: string | null
 }
 
@@ -160,6 +160,42 @@ interface ApplicationListResponse {
 }
 
 const mockApplications: ApplicationListItem[] = []
+
+// Per get-application-by-guid.md — GET /api/v1/admissions/application-filling/{applicationGuid}
+// (GetCompletedApplicationByIdQuery). The doc describes the response only as
+// "the full record: identifiers, personal details, identity documents, visa
+// dates, academic placement and status" without enumerating every field, so
+// this reuses ApplicationListItem's already-confirmed shape (same underlying
+// application entity, the admin "all applications" list) as the base and
+// adds only what the doc explicitly calls out beyond that: `actionLabel`.
+// NOT independently confirmed field-by-field against a real completed-
+// application response — if a real call comes back missing/renaming
+// something here, trust the live response over this interface.
+export interface ApplicationDetailDto extends ApplicationListItem {
+  actionLabel: string | null
+}
+
+// Only ever returns data for an application whose Action == Submitted — a
+// narrower window than "completed" might suggest. Confirmed by the backend
+// team (2026-09-10): an application still being filled in 400s here, AND so
+// does one that has already moved past Submitted (vetted/rejected/
+// registered) — both come back as the same "not found or not completed."
+// message (see get-application-by-guid.md), indistinguishable from each
+// other or from a bad guid. Callers should treat any rejection here as
+// "nothing to enrich with", not a hard failure — this is a best-effort
+// prefill source usable only in that narrow submitted-but-not-yet-vetted
+// window, never a general "fetch this application" lookup.
+export function getApplicationByGuid(applicationGuid: string): Promise<ApplicationDetailDto> {
+  if (MOCK_AUTH) {
+    // Nothing in this UI-only prototype's mock data represents a genuinely
+    // completed application (mockApplications is empty, mockSearchResults'
+    // entries are mid-filing) — reject the same way the real endpoint does
+    // for an incomplete/unknown guid, so callers exercise the same
+    // best-effort fallback path in mock mode as they will for real.
+    return Promise.reject(new Error('Application not found or not completed.'))
+  }
+  return apiGet<ApplicationDetailDto>(`/api/v1/admissions/application-filling/${applicationGuid}`)
+}
 
 // Confirmed via Application-Filling/SaveGeneral.bru — countryGuid/
 // spCountryGuid ARE real fields ("countryGuid replaces old intCountry +

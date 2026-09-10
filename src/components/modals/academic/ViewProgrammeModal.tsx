@@ -2,10 +2,10 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { useProgramMasterFullDetails } from '@/hooks/academic/useProgramMaster'
-import { useProgramGroups } from '@/hooks/academic/useProgramGroups'
-import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
-import { useFaculties } from '@/hooks/config/useFaculties'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useProgramGroup } from '@/hooks/academic/useProgramGroups'
+import { useProgramLevel } from '@/hooks/academic/useProgramLevels'
+import { useFacultiesByGuids } from '@/hooks/config/useFaculties'
+import { useIntakesByGuids } from '@/hooks/academic/useIntakes'
 import { useLedgers } from '@/hooks/finance/useLedgers'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { AuthError } from '@/lib/api/client'
@@ -25,10 +25,17 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid, onEdit }: Vie
   const [feeAccordion, setFeeAccordion] = useState(0)
   const [unitsAccordion, setUnitsAccordion] = useState(0)
 
-  const { data: programGroups = [] } = useProgramGroups()
-  const { data: programLevels = [] } = useProgramLevels()
-  const { data: faculties = [] } = useFaculties()
-  const { data: intakes = [] } = useIntakes(isOpen)
+  // Resolves display labels for just this one programme's own
+  // programGroupGuid/programLevelGuid/facultyGuid/intakeGuid — replaces the
+  // full 1000-row useProgramGroups(isOpen)/useProgramLevels(isOpen)/
+  // useFaculties(isOpen)/useIntakes(isOpen) snapshots (2026-09-10) this modal
+  // used to fetch just to look up a handful of guids for one record. Each
+  // only fires once `program` itself has resolved (enabled below), same
+  // fetch-by-guid convention as every other real Edit/View modal in this app.
+  const { data: programGroup } = useProgramGroup(program?.programGroupGuid ?? null, isOpen && !!program)
+  const { data: programLevel } = useProgramLevel(program?.programLevelGuid ?? null, isOpen && !!program)
+  const facultiesByGuid = useFacultiesByGuids(program?.facultyGuid ? [program.facultyGuid] : [])
+  const intakesByGuid = useIntakesByGuids(program?.intakeGuid ? [program.intakeGuid] : [])
   const { data: ledgers = [] } = useLedgers(isOpen)
   const { data: financeCurrencies = [] } = useFinanceCurrencies(isOpen)
 
@@ -69,10 +76,10 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid, onEdit }: Vie
     )
   }
 
-  const groupName = programGroups.find(g => g.programGroupGuid === program.programGroupGuid)?.groupName || '—'
-  const levelName = programLevels.find(l => l.programLevelGuid === program.programLevelGuid)?.levelName || '—'
-  const facultyName = faculties.find(f => f.facultyGuid === program.facultyGuid)?.facultyName || '—'
-  const intakeName = intakes.find(i => i.intakeGuid === program.intakeGuid)?.description || '—'
+  const groupName = programGroup?.groupName || '—'
+  const levelName = programLevel?.levelName || '—'
+  const facultyName = facultiesByGuid.get(program.facultyGuid)?.facultyName || '—'
+  const intakeName = (program.intakeGuid ? intakesByGuid.get(program.intakeGuid) : undefined)?.description || '—'
 
   const activeFeeStruct = program.feeStructures?.[activeFeeIdx]
 
