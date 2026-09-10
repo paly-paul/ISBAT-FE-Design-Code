@@ -17,7 +17,7 @@ import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 import { useBatches } from '@/hooks/academic/useBatches'
-import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
+import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { useCountries } from '@/hooks/config/useCountries'
@@ -575,6 +575,20 @@ function PaymentPageContent() {
     }
   }, [form.receiptBookGuid, matchingReceiptBooks])
 
+  // Defaults the Currency picker to Finance's own default currency (UGX) as
+  // soon as the list loads, same convention Payment Console's own currency
+  // picker uses (getDefaultFinanceCurrencyGuid) — previously nothing ever
+  // set form.currencyGuid, so this field always started blank and had to be
+  // picked by hand on every application, even though a sensible default was
+  // available all along. Only runs while nothing's been picked yet (a
+  // manual pick, or a value already on the form from some other source,
+  // both take priority) — same "don't fight the user's own choice" guard as
+  // that page's effect.
+  useEffect(() => {
+    if (!form.currencyGuid && currencies.length > 0) set('currencyGuid', getDefaultFinanceCurrencyGuid(currencies))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currencies])
+
   function handleSubmit() {
     const missing: string[] = []
     if (!form.enquiryGuid) missing.push('Enquiry')
@@ -952,8 +966,17 @@ function PaymentPageContent() {
             </div>
           </div>
 
-          {/* Generated receipt */}
-          {showReceipt && (
+        </div>
+
+        {/* Right — Live Preview while filling out the form; swaps to the
+            Generated Receipt once a payment's been saved (moved here from
+            below the form, 2026-09-10 per request) — the live preview has
+            nothing left to show at that point anyway (the form resets to
+            blank right after a successful save, see onSuccess above), so
+            showing it there was just dead space next to the one thing that
+            actually matters post-save. */}
+        <div>
+          {showReceipt ? (
             <div className="card pmt-card tab-panel-in">
               <div className="flex items-center gap-2 mb-4">
                 <i className="lni lni-ticket-alt text-clr-green" style={{ fontSize: 18 }} />
@@ -1003,51 +1026,48 @@ function PaymentPageContent() {
                 </button>
               </div>
             </div>
+          ) : (
+            <div className="card">
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-g100">
+                <div className="flex items-center gap-2">
+                  <i className="lni lni-eye text-b500" style={{ fontSize: 16 }} />
+                  <div className="card-title">Live Application Preview</div>
+                </div>
+                <span className={`text-[11px] px-2 py-0.5 rounded-md font-semibold ${formReady ? 'badge-green' : 'badge-blue'}`}>{formReady ? 'Ready to submit' : `${formCompletePct}% filled`}</span>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <PreviewRow label="Intake"            value={labelFor(intakeOptions, form.intakeGuid)} />
+                <PreviewRow label="First Name"         value={form.firstName} />
+                <PreviewRow label="Last Name"          value={form.lastName} />
+                <PreviewRow label="Phone"              value={form.phone ? `${form.phoneCode} ${form.phone}` : ''} />
+                <PreviewRow label="Email"              value={form.email} />
+                <PreviewRow label="Campus"             value={labelFor(campusOptions, form.campusGuid)} />
+                <PreviewRow label="Programme"          value={labelFor(programOptions, form.programGuid)} />
+                <PreviewRow label="Fee Structure"      value={labelFor(feeOptions, form.feeHdGuid)} />
+                <PreviewRow label="Semester"           value={labelFor(semesterOptions, form.semesterGuid)} />
+                <PreviewRow label="Batch Time"         value={labelFor(batchTimeOptions, form.batchTimeGuid)} />
+                <PreviewRow label="Batch"              value={labelFor(batchOptions, form.batchGuid)} />
+              </div>
+
+              <hr className="border-g200 my-4" />
+
+              <div className="flex flex-col gap-2">
+                <div className="prev-row">
+                  <span className="prev-lbl">Fee Status</span>
+                  <span className="prev-sep">:</span>
+                  <span className="prev-val text-clr-green font-bold">
+                    {isWaived ? 'Waived' : `${selectedCurrency?.currencyCode ?? ''} ${parseInt(form.feeAmount || '0').toLocaleString()}`}
+                  </span>
+                </div>
+                <div className="prev-row">
+                  <span className="prev-lbl">Receipt No.</span>
+                  <span className="prev-sep">:</span>
+                  <span className="prev-val">{savedReceipt.receiptNo || '—'}</span>
+                </div>
+              </div>
+            </div>
           )}
-        </div>
-
-        {/* Right — Live Preview */}
-        <div>
-          <div className="card">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-g100">
-              <div className="flex items-center gap-2">
-                <i className="lni lni-eye text-b500" style={{ fontSize: 16 }} />
-                <div className="card-title">Live Application Preview</div>
-              </div>
-              <span className={`text-[11px] px-2 py-0.5 rounded-md font-semibold ${formReady ? 'badge-green' : 'badge-blue'}`}>{formReady ? 'Ready to submit' : `${formCompletePct}% filled`}</span>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <PreviewRow label="Intake"            value={labelFor(intakeOptions, form.intakeGuid)} />
-              <PreviewRow label="First Name"         value={form.firstName} />
-              <PreviewRow label="Last Name"          value={form.lastName} />
-              <PreviewRow label="Phone"              value={form.phone ? `${form.phoneCode} ${form.phone}` : ''} />
-              <PreviewRow label="Email"              value={form.email} />
-              <PreviewRow label="Campus"             value={labelFor(campusOptions, form.campusGuid)} />
-              <PreviewRow label="Programme"          value={labelFor(programOptions, form.programGuid)} />
-              <PreviewRow label="Fee Structure"      value={labelFor(feeOptions, form.feeHdGuid)} />
-              <PreviewRow label="Semester"           value={labelFor(semesterOptions, form.semesterGuid)} />
-              <PreviewRow label="Batch Time"         value={labelFor(batchTimeOptions, form.batchTimeGuid)} />
-              <PreviewRow label="Batch"              value={labelFor(batchOptions, form.batchGuid)} />
-            </div>
-
-            <hr className="border-g200 my-4" />
-
-            <div className="flex flex-col gap-2">
-              <div className="prev-row">
-                <span className="prev-lbl">Fee Status</span>
-                <span className="prev-sep">:</span>
-                <span className="prev-val text-clr-green font-bold">
-                  {isWaived ? 'Waived' : `${selectedCurrency?.currencyCode ?? ''} ${parseInt(form.feeAmount || '0').toLocaleString()}`}
-                </span>
-              </div>
-              <div className="prev-row">
-                <span className="prev-lbl">Receipt No.</span>
-                <span className="prev-sep">:</span>
-                <span className="prev-val">{savedReceipt.receiptNo || '—'}</span>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
