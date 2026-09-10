@@ -1181,14 +1181,17 @@ export default function FilingPage() {
                       <p className="text-g400 mt-2" style={{ fontSize: 'var(--fs-xs)' }}>Applies to non-Ugandan nationals — select a Nationality above to unlock.</p>
                     ) : (
                       <>
-                        <div className="g2 mt-3">
+                        {/* One consistent 3-column grid for the whole
+                            section (was a 2-col Passport row followed by a
+                            separate 3-col Visa row — uneven, and the odd
+                            column count out of step with the rest of the
+                            form's own g3 rows). */}
+                        <div className="g3 mt-3">
                           <Field label="Passport Number"><Input placeholder="AB1234567" value={passportNo} onChange={setPassportNo} /></Field>
                           <Field label="Passport Copy"><FileZone file={passportFile} onChange={setPassportFile} /></Field>
                           {/* <Field label="Passport Expiry"><Input type="date" /></Field><Field label="Country of Issue"><Select options={COUNTRIES_OF_ISSUE} /></Field>
                           <Field label="Visa Number"><Input placeholder="VIS-XXXX" /></Field>
                           <Field label="Visa Type"><Select options={['Student', 'Work', 'Tourist', 'Diplomatic']} /></Field> */}
-                        </div>
-                        <div className="g3 mt-3">
                           <Field label="Visa Start Date"><Input type="date" value={vStartDate} onChange={setVStartDate} /></Field>
                           <Field label="Visa Expiry"><Input type="date" value={vEndDate} onChange={setVEndDate} /></Field>
                           <Field label="Visa Copy"><FileZone file={visaFile} onChange={setVisaFile} /></Field>

@@ -225,14 +225,16 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
     return Number(financialYear) * 10 + Number(intakeSeq)
   }
 
-  // Auto-suggests "{Spring/Fall} {Financial Year} Intake" — only while
-  // descriptionTouched is false, so it never overwrites the record's own
-  // saved description (Edit) or anything the user has typed.
+  // Auto-suggests "{Spring/Fall} {Financial Year}" (per request, 2026-09-10 —
+  // dropped the trailing " Intake", redundant on a page whose every row is
+  // already an intake) — only while descriptionTouched is false, so it
+  // never overwrites the record's own saved description (Edit) or anything
+  // the user has typed.
   useEffect(() => {
     if (descriptionTouched || !financialYear || !intakeSeq) return
     const label = INTAKE_SEQUENCES.find(s => s.value === intakeSeq)?.label
     if (!label) return
-    setDescription(`${label} ${financialYear} Intake`)
+    setDescription(`${label} ${financialYear}`)
   }, [financialYear, intakeSeq, descriptionTouched])
 
   // Estimate the visible duration in weeks from the first semester's dates —
