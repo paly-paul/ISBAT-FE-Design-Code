@@ -55,7 +55,7 @@ const mockSkills: SkillMaster[] = [
 // useSkillMaster.ts) and paginated/searched client-side instead, same "load
 // it all" convention as every other small Config master in this app
 // (useStreams/useFaculties/etc.).
-export function getSkillMasters(pageNumber = 1, pageSize = 1000): Promise<SkillMasterListResponse> {
+export function getSkillMasters(pageNumber = 1, pageSize = 10): Promise<SkillMasterListResponse> {
   if (MOCK_AUTH) {
     return Promise.resolve({ items: mockSkills, totalCount: mockSkills.length, pageNumber, pageSize })
   }

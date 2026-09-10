@@ -12,7 +12,7 @@ import { Pagination } from '@/components/Pagination'
 import { LecturerSkillFormModal } from '@/components/modals/academic/LecturerSkillFormModal'
 import { ViewLecturerSkillModal } from '@/components/modals/academic/ViewLecturerSkillModal'
 import { useLecturerSkills, useCreateLecturerSkill, useUpdateLecturerSkill, useDeleteLecturerSkill, LecturerSkill } from '@/hooks/academic/useLecturerSkills'
-import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatDate } from '@/lib/date'
 
@@ -106,9 +106,9 @@ export default function Page() {
   // filter/pagination math further down, which operates on filteredRows.
   const totalCount = data?.totalCount ?? allSkills.length
   const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && isFetching
-  const { data: employees = [] } = useEmployees()
+  const { data: employees = [] } = useEmployeeDropdown()
   const employeeNameByGuid = useMemo(
-    () => new Map(employees.map(e => [e.employeeGuid, `${e.empName} (${e.shortCode})`])),
+    () => new Map(employees.map(e => [e.employeeGuid, e.displayName])),
     [employees],
   )
   function employeeLabel(guid: string) { return employeeNameByGuid.get(guid) ?? guid }

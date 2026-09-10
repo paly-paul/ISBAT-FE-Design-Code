@@ -5,8 +5,8 @@ import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { MultiSelect } from '@/components/MultiSelect'
-import { useEmployees } from '@/hooks/employee/useEmployees'
-import { useSkillMasters } from '@/hooks/config/useSkillMaster'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
+import { useAllSkillMasters } from '@/hooks/config/useSkillMaster'
 import { useLecturerSkill } from '@/hooks/academic/useLecturerSkills'
 import { CreateLecturerSkillInput } from '@/lib/api/users/skills'
 import { AuthError } from '@/lib/api/client'
@@ -37,8 +37,8 @@ interface LecturerSkillFormModalProps extends ModalProps {
 export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lecturerSkillGuid, createSkill, updateSkill }: LecturerSkillFormModalProps) {
   const isEdit = mode === 'edit'
   const { data: skill, isLoading, isError, error } = useLecturerSkill(lecturerSkillGuid, isOpen && isEdit)
-  const { data: employees = [] } = useEmployees()
-  const { data: skillMasterData } = useSkillMasters(isOpen)
+  const { data: employees = [] } = useEmployeeDropdown(isOpen)
+  const { data: skillMasterData } = useAllSkillMasters(isOpen)
   const skillMasters = skillMasterData?.items ?? []
 
   const [saved, setSaved]           = useState(false)
@@ -67,7 +67,7 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
 
   if (!isOpen) return null
 
-  const employeeOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
+  const employeeOptions = employees.map(e => ({ value: e.employeeGuid, label: e.displayName }))
   const skillOptions = skillMasters.map(s => ({ value: s.skillGuid, label: s.skillName }))
 
   function handleClose() {

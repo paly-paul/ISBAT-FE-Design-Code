@@ -493,6 +493,16 @@ function PaymentPageContent() {
     }
   }, [countries, form.countryGuid, form.enquiryGuid])
 
+  // Pre-select default currency on page load once currencies list is loaded
+  useEffect(() => {
+    if (currencies.length > 0 && !form.currencyGuid) {
+      setForm(prev => ({
+        ...prev,
+        currencyGuid: getDefaultFinanceCurrencyGuid(currencies),
+      }))
+    }
+  }, [currencies, form.currencyGuid])
+
   // Label shown in EnquirySearchPicker's closed box once something's
   // selected — sourced from selectedEnquiry (the full-detail fetch above),
   // not the picker's own paged list, so a ?enquiryGuid= handoff from
@@ -666,7 +676,7 @@ function PaymentPageContent() {
           })
           setShowReceipt(true)
           setShowSuccessPopup(true)
-          setForm({ ...initialForm })
+          setForm({ ...initialForm, currencyGuid: getDefaultFinanceCurrencyGuid(currencies) })
           setPayProofFile(null)
           appliedEnquiryGuidRef.current = null
         },
@@ -676,7 +686,7 @@ function PaymentPageContent() {
   }
 
   function handleClear() {
-    setForm({ ...initialForm }); setShowReceipt(false); setPayProofFile(null); setSavedReceipt({})
+    setForm({ ...initialForm, currencyGuid: getDefaultFinanceCurrencyGuid(currencies) }); setShowReceipt(false); setPayProofFile(null); setSavedReceipt({})
     setEnquirySearch('')
     appliedEnquiryGuidRef.current = null
   }

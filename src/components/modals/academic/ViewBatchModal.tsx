@@ -9,7 +9,7 @@ import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useStreams } from '@/hooks/config/useStreams'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
-import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
 
 interface ViewBatchModalProps extends ModalProps {
@@ -33,7 +33,7 @@ export function ViewBatchModal({ isOpen, onClose, showToast, batchGuid, onEdit, 
   const { data: intakes = [] }    = useIntakes(isOpen)
   const { data: streams = [] }    = useStreams()
   const { data: batchTimes = [] } = useBatchTimes()
-  const { data: employees = [] }  = useEmployees(isOpen)
+  const { data: employees = [] }  = useEmployeeDropdown(isOpen)
 
   const [programGuid, setProgramGuid] = useState('')
   const { data: semesters = [] } = useSemestersForProgram(programGuid, !!programGuid)
@@ -122,8 +122,8 @@ export function ViewBatchModal({ isOpen, onClose, showToast, batchGuid, onEdit, 
 
             <div style={{ gridColumn: '1 / -1', height: '1px', background: 'var(--g200)', margin: '8px 0' }} />
 
-            <Field label="Batch In-Charge" value={employees.find(e => e.employeeGuid === batch.bInCharge)?.empName || '—'} />
-            <Field label="Programme Head" value={employees.find(e => e.employeeGuid === batch.pHead)?.empName || '—'} />
+            <Field label="Batch In-Charge" value={employees.find(e => e.employeeGuid === batch.bInCharge)?.displayName || '—'} />
+            <Field label="Programme Head" value={employees.find(e => e.employeeGuid === batch.pHead)?.displayName || '—'} />
           </div>
         </div>
 
