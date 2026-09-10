@@ -150,15 +150,15 @@ export default function RegistrationPage() {
                 <tr key={r.applicationGuid} className="border-b border-g100 hover:bg-g50">
                   <td>
                     <ActionMenu>
-                      {r.regPaid ? (
-                        <button className="btn btn-neu btn-sm" onClick={() => handleRegister(r.applicationGuid)}>
-                          <i className="lni lni-graduation" /> Register
-                        </button>
-                      ) : (
-                        <button className="btn btn-neu btn-sm" disabled>
-                          Awaiting Payment
-                        </button>
-                      )}
+                      {/* Register is no longer gated on r.regPaid (per
+                          request, 2026-09-10) — every application in this
+                          list can be registered regardless of Reg. Fee
+                          status. The Reg. Fee column below still shows
+                          Paid/Not Paid as information, just no longer
+                          blocks the action. */}
+                      <button className="btn btn-neu btn-sm" onClick={() => handleRegister(r.applicationGuid)}>
+                        <i className="lni lni-graduation" /> Register
+                      </button>
                     </ActionMenu>
                   </td>
                   <td className="py-2.5 font-mono text-xs text-b600">{r.appRefNo}</td>
