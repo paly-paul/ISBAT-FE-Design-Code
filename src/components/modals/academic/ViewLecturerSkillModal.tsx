@@ -4,7 +4,7 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
-import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { useLecturerSkill } from '@/hooks/academic/useLecturerSkills'
 import { CreateLecturerSkillInput } from '@/lib/api/users/skills'
 import { AuthError } from '@/lib/api/client'
@@ -32,7 +32,7 @@ function Field({ label, value, mono, wide }: { label: string; value: React.React
 
 export function ViewLecturerSkillModal({ isOpen, onClose, showToast, lecturerSkillGuid, onEdit, canEdit }: ViewLecturerSkillModalProps) {
   const { data: skill, isLoading, isError, error } = useLecturerSkill(lecturerSkillGuid, isOpen)
-  const { data: employees = [] } = useEmployees(isOpen)
+  const { data: employees = [] } = useEmployeeDropdown(isOpen)
   const [employeeGuid, setEmployeeGuid] = useState('')
   const [skillName, setSkillName] = useState('')
   const [proficiency, setProficiency] = useState('1')
@@ -48,7 +48,7 @@ export function ViewLecturerSkillModal({ isOpen, onClose, showToast, lecturerSki
 
   if (!isOpen) return null
 
-  const employeeOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
+  const employeeOptions = employees.map(e => ({ value: e.employeeGuid, label: e.displayName }))
 
   function handleClose() {
     onClose()

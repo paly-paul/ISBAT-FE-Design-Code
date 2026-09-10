@@ -51,11 +51,11 @@ const mockSkills: SkillMaster[] = [
 
 // Real pagination — a live sample returned totalCount: 12 against only 10
 // items in a pageSize=10 page, so this is a genuinely server-paginated
-// endpoint despite the master being small. The page/search params are now
-// forwarded through to the backend so callers can fetch only what they need
-// rather than loading the whole list at once.
-export function getSkillMasters(pageNumber = 1, pageSize = 1000, search = ''): Promise<SkillMasterListResponse> {
-  const q = search.trim()
+// endpoint despite the master being small. Fetched at a large pageSize (see
+// useSkillMaster.ts) and paginated/searched client-side instead, same "load
+// it all" convention as every other small Config master in this app
+// (useStreams/useFaculties/etc.).
+export function getSkillMasters(pageNumber = 1, pageSize = 10): Promise<SkillMasterListResponse> {
   if (MOCK_AUTH) {
     const filtered = q
       ? mockSkills.filter(s => s.skillName.toLowerCase().includes(q.toLowerCase()))

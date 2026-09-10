@@ -11,14 +11,25 @@ import { getNextPageParam } from '@/lib/pagination'
 
 const SKILL_MASTERS_KEY = ['skillMasters']
 
-// Kept for callers that still need the full first-page snapshot (e.g. some
-// modal dropdowns) without forcing them to adopt the new infinite pattern.
-// enabled defaults to true so every existing call site keeps eagerly
-// fetching exactly as before — only a caller that shouldn't hit the network
-// until it's actually open (e.g. a modal) needs to pass enabled={isOpen}.
-export function useSkillMasters(enabled = true) {
+// Fetched once at a large pageSize and paginated/searched client-side —
+// same "load it all" convention as the other small Config masters
+// (useStreams/useFaculties/etc.), even though this endpoint is genuinely
+// server-paginated (unlike most of its Config siblings, which return a
+// plain unpaginated array).
+export function useSkillMasters(pageNumber = 1, pageSize = 10, enabled = true) {
   return useQuery({
-    queryKey: SKILL_MASTERS_KEY,
+    queryKey: [...SKILL_MASTERS_KEY, pageNumber, pageSize],
+    queryFn: () => getSkillMasters(pageNumber, pageSize),
+    staleTime: 5000,
+    gcTime: Infinity,
+    enabled,
+  })
+}
+
+// For dropdown pickers where the complete list is needed at once
+export function useAllSkillMasters(enabled = true) {
+  return useQuery({
+    queryKey: [...SKILL_MASTERS_KEY, 'all'],
     queryFn: () => getSkillMasters(1, 1000),
     staleTime: Infinity,
     gcTime: Infinity,

@@ -67,7 +67,6 @@ export default function SessionMovementPage() {
 
   const [intakeGuid, setIntakeGuid] = useState('')
   const [campusGuid, setCampusGuid] = useState('')
-  const [term, setTerm] = useState('')
   const [page, setPage] = useState(1)
 
   // Default to whichever intake is flagged current, once intakes load — same
@@ -196,7 +195,7 @@ export default function SessionMovementPage() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-calendar"></i></span> Session Management</div>
           </div>
-          <div className="g3">
+          <div className="g2">
             <div className="fg">
               <div className="lbl">Academic Session <span className="req">*</span></div>
               <SearchSelect
@@ -213,10 +212,6 @@ export default function SessionMovementPage() {
                 value={campusGuid}
                 onChange={setCampusGuid}
               />
-            </div>
-            <div className="fg">
-              <div className="lbl">Term</div>
-              <SearchSelect placeholder="-Select-" options={[]} value={term} onChange={setTerm} disabled />
             </div>
           </div>
         </div>

@@ -22,13 +22,10 @@ const MIN_SEARCH_CHARS = 2
 // TEMPORARY BOOTSTRAP OVERRIDE: after a DB reset there is no permission
 // group yet, so /me/menu correctly comes back with add:false/edit:false for
 // this page - nobody has been granted the right to create one yet. Force
-// both on here, same convention as src/app/config/permission-master/page.tsx
-// and the "TEMPORARY" overrides in src/lib/api/users/menu.ts. Remove once
-// real permission groups exist and normal /me/menu-driven gating can take
-// back over.
+// both true until the permission-catalog seed runs against the real DB.
 const BOOTSTRAP_FORCE_PERMISSIONS = true
 
-export default function Page() {
+export default function SkillPage() {
   const router = useRouter()
   const realPermissions = usePagePermissions()
   const permissions = BOOTSTRAP_FORCE_PERMISSIONS
@@ -42,20 +39,23 @@ export default function Page() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
 
-  const searchTrimmed = search.trim()
-  const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
-  const { data, isLoading, isFetching } = useSkillMastersPaged(page, PAGE_SIZE, activeSearch)
-  const rows = data?.items ?? []
+  const { data, isLoading } = useSkillMasters(page, PAGE_SIZE)
+  const pageItems = data?.items ?? []
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  const safePage = Math.min(page, totalPages)
-  const pageItems = rows
-  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && isFetching
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? rows.slice(0, 8) : []
 
   const createSkill = useCreateSkillMaster()
   const updateSkill = useUpdateSkillMaster()
   const deleteSkill = useDeleteSkillMaster()
+
+  const searchTrimmed = search.trim()
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? pageItems.filter(r => r.skillName.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
+    : []
+
+  const displayItems = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? pageItems.filter(r => r.skillName.toLowerCase().includes(searchTrimmed.toLowerCase()))
+    : pageItems
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -107,7 +107,7 @@ export default function Page() {
                 results={searchMatches.map(r => ({ id: r.skillGuid, primary: r.skillName }))}
                 loading={searchPending}
                 minChars={MIN_SEARCH_CHARS}
-                onSelect={(res) => { const row = rows.find(x => x.skillGuid === res.id); if (row) openViewModal(row) }}
+                onSelect={(res) => { const row = pageItems.find(x => x.skillGuid === res.id); if (row) openViewModal(row) }}
               />
             </div>
           </div>
@@ -122,10 +122,10 @@ export default function Page() {
               <tbody>
                 {(isLoading || searchPending)
                   ? <TableLoadingState colSpan={999} />
-                  : pageItems.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={!!searchTrimmed} onClearFilters={() => { setSearch(''); setPage(1) }} />
+                  : displayItems.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
                     : null}
-                {!isLoading && !searchPending && pageItems.map((r) => (
+                {displayItems.map((r) => (
                   <tr key={r.skillGuid}>
                     <td>
                       {(true) && (

@@ -12,7 +12,7 @@ import { useIntakes } from '@/hooks/academic/useIntakes'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useStreams } from '@/hooks/config/useStreams'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
-import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
 
 // Create and Edit share this form — same fields, just different prefill,
@@ -40,7 +40,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   const { data: intakes = [] }    = useIntakes(isOpen)
   const { data: streams = [] }    = useStreams()
   const { data: batchTimes = [] } = useBatchTimes()
-  const { data: employees = [] }  = useEmployees(isOpen)
+  const { data: employees = [] }  = useEmployeeDropdown(isOpen)
 
   const [programGuid, setProgramGuid] = useState('')
   const { data: semesters = [] } = useSemestersForProgram(programGuid, !!programGuid)
@@ -50,7 +50,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
   const streamOptions    = streams.map(s => ({ value: s.streamGuid, label: s.streamName }))
   const batchTimeOptions = batchTimes.map(b => ({ value: b.batchTimeGuid, label: b.batchTime }))
-  const advisorOptions   = employees.map(e => ({ value: e.employeeGuid, label: e.empName }))
+  const advisorOptions   = employees.map(e => ({ value: e.employeeGuid, label: e.displayName }))
 
   const [saved, setSaved]     = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
