@@ -282,29 +282,66 @@ export default function FilingPage() {
   // where this previously needed pageSize=12000 to reliably find it via
   // client-side filtering over a near-complete unfiltered fetch.
   const [prefillRef, setPrefillRef] = useState<string | null>(null)
+  // Retry budget for the lookup effect below — see its own comment for why
+  // this exists at all.
+  const [prefillAttempt, setPrefillAttempt] = useState(0)
+  const PREFILL_MAX_ATTEMPTS = 4
+  const PREFILL_RETRY_MS = 900
   useEffect(() => {
     const ref = consumeFilingPrefillRef()
     if (!ref) return
     setPrefillRef(ref)
+    setPrefillAttempt(0)
     setApplicantSearch(ref)
     setShowApplicantDropdown(true)
   }, [])
 
-  const { data: prefillResults } = useSearchApplicationsForFiling(
-    prefillRef ?? '', 1, 20, !!prefillRef, effectiveIntakeCode,
+  // Deliberately unscoped by intake, unlike the interactive dropdown above —
+  // this is a direct lookup of one already-known appRefNo handed off from a
+  // just-created payment (see lib/filingHandoff.ts), not a browse. Passing
+  // effectiveIntakeCode here was the actual bug behind the "Could not find
+  // application… yet" toast below: effectiveIntakeCode falls back to
+  // whichever intake has the highest intakeCode when none is flagged
+  // current (see that constant's own comment), so a payment just recorded
+  // against an OLDER intake (e.g. appRefNo APP20242/7144 — intake 20242)
+  // was being filtered out by a newer intake's ?intakeCode= scope every
+  // single time, not just occasionally — no amount of "try again in a
+  // moment" would ever have found it.
+  const { data: prefillResults, refetch: refetchPrefill } = useSearchApplicationsForFiling(
+    prefillRef ?? '', 1, 20, !!prefillRef,
   )
   // Once the search this triggers actually comes back, auto-select the
   // matching row so the counsellor lands straight on a filled Personal Info
-  // tab instead of still having to click it from the dropdown. If nothing
-  // matches (e.g. the backend hasn't indexed the new payment yet), surface
-  // that plainly rather than leaving an empty dropdown with no explanation.
+  // tab instead of still having to click it from the dropdown.
+  //
+  // Confirmed live (2026-09-10): this lookup can genuinely lose a
+  // read-after-write race against the backend right after Payment's POST
+  // resolves — it fires immediately, with no debounce, while the
+  // interactive dropdown search just above it (committedApplicantSearch)
+  // is debounced 300ms and can end up finding the same application a beat
+  // later. Firing once and giving up produced exactly that: the toast
+  // below telling the user to "try searching again in a moment" while the
+  // dropdown, searching a moment later on its own, already had. Retry a
+  // few times ourselves instead of just suggesting it — only surface the
+  // toast once the retry budget is actually exhausted.
   useEffect(() => {
     if (!prefillRef || !prefillResults) return
     const ref = prefillRef
-    setPrefillRef(null)
     const match = prefillResults.items.find(a => a.appRefNo === ref)
-    if (match) selectApplication(match)
-    else showToast(`Could not find application ${ref} yet — try searching again in a moment, or check the reference number`, 'error')
+    if (match) {
+      setPrefillRef(null)
+      selectApplication(match)
+      return
+    }
+    if (prefillAttempt < PREFILL_MAX_ATTEMPTS) {
+      const t = setTimeout(() => {
+        setPrefillAttempt(a => a + 1)
+        refetchPrefill()
+      }, PREFILL_RETRY_MS)
+      return () => clearTimeout(t)
+    }
+    setPrefillRef(null)
+    showToast(`Could not find application ${ref} yet — try searching again in a moment, or check the reference number`, 'error')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefillResults])
 
@@ -562,7 +599,17 @@ export default function FilingPage() {
     data: applicationDetail,
     isError: applicationDetailFailed,
     isFetched: applicationDetailFetched,
-  } = useApplicationByGuid(selectedApplication?.applicationGuid, !!selectedApplication)
+  } = useApplicationByGuid(
+    selectedApplication?.applicationGuid,
+    // Disabled per request (2026-09-10) — GET /application-filling/{guid} is
+    // pending a backend-team update; not calling it for now. Flip back to
+    // `!!selectedApplication` once that's confirmed live. The enrichment
+    // effect below is untouched — with this permanently unfetched,
+    // applicationDetailFetched just never flips true, so it silently no-ops
+    // instead of enriching (the same no-op the "still mid-filing" 400 case
+    // already produced).
+    false,
+  )
   const [enrichedForGuid, setEnrichedForGuid] = useState<string | null>(null)
   useEffect(() => {
     if (!selectedApplication || !applicationDetailFetched) return
@@ -865,53 +912,57 @@ export default function FilingPage() {
   // null before an application is selected, but that's fine: every place
   // this is actually rendered already sits behind its own `!selectedApplication`
   // guard.
-  const summaryPanel = selectedApplication && (
-    <aside className="filing-summary-panel">
-      <div className="filing-summary-avatar-wrap">
-        <div className="filing-summary-avatar">{initials(`${firstName} ${lastName}`.trim() || applicantName(selectedApplication))}</div>
-        <label className="filing-summary-avatar-edit" title="Upload profile photo">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={e => {
-              const file = e.target.files?.[0]
-              if (file && selectedApplication) {
-                setPhotoFile(file)
-                uploadPhoto.mutate({ appRefNo: selectedApplication.appRefNo, photo: file }, {
-                  onSuccess: () => { setPhotoSaved(true); showToast('Photo uploaded successfully', 'success') },
-                  onError: (error: Error) => showToast(error.message || 'Failed to upload photo', 'error'),
-                })
-              }
-            }}
-          />
-          {/* lni-camera-2 isn't a real LineIcons 4.0 class (confirmed: every
-              other camera icon in this app — profile/page.tsx,
-              odel-student-preview/page.tsx — uses plain lni-camera and
-              renders) — the glyph never painted, leaving a blank white
-              circle with no visible cue that this was an upload control. */}
-          <i className="lni lni-camera" />
-        </label>
-      </div>
-      <div className="filing-summary-name">{`${firstName} ${lastName}`.trim() || applicantName(selectedApplication) || 'Applicant'}</div>
-      <span className="badge badge-blue">{selectedApplication.appRefNo}</span>
+  // Commented out per request (2026-09-10) — the student card is hidden on
+  // Application Filing for now. Left in place, not deleted, so it's a
+  // one-line revert (just uncomment the JSX below and drop the `null`).
+  const summaryPanel = null
+  // selectedApplication && (
+  //   <aside className="filing-summary-panel">
+  //     <div className="filing-summary-avatar-wrap">
+  //       <div className="filing-summary-avatar">{initials(`${firstName} ${lastName}`.trim() || applicantName(selectedApplication))}</div>
+  //       <label className="filing-summary-avatar-edit" title="Upload profile photo">
+  //         <input
+  //           type="file"
+  //           accept="image/*"
+  //           onChange={e => {
+  //             const file = e.target.files?.[0]
+  //             if (file && selectedApplication) {
+  //               setPhotoFile(file)
+  //               uploadPhoto.mutate({ appRefNo: selectedApplication.appRefNo, photo: file }, {
+  //                 onSuccess: () => { setPhotoSaved(true); showToast('Photo uploaded successfully', 'success') },
+  //                 onError: (error: Error) => showToast(error.message || 'Failed to upload photo', 'error'),
+  //               })
+  //             }
+  //           }}
+  //         />
+  //         {/* lni-camera-2 isn't a real LineIcons 4.0 class (confirmed: every
+  //             other camera icon in this app — profile/page.tsx,
+  //             odel-student-preview/page.tsx — uses plain lni-camera and
+  //             renders) — the glyph never painted, leaving a blank white
+  //             circle with no visible cue that this was an upload control. */}
+  //         <i className="lni lni-camera" />
+  //       </label>
+  //     </div>
+  //     <div className="filing-summary-name">{`${firstName} ${lastName}`.trim() || applicantName(selectedApplication) || 'Applicant'}</div>
+  //     <span className="badge badge-blue">{selectedApplication.appRefNo}</span>
 
-      <div className="filing-summary-meta">
-        <div className="filing-summary-meta-row"><i className="lni lni-envelope" /> <span>{email || '—'}</span></div>
-        <div className="filing-summary-meta-row"><i className="lni lni-phone" /> <span>{phone ? `${phoneCode} ${phone}` : '—'}</span></div>
-      </div>
+  //     <div className="filing-summary-meta">
+  //       <div className="filing-summary-meta-row"><i className="lni lni-envelope" /> <span>{email || '—'}</span></div>
+  //       <div className="filing-summary-meta-row"><i className="lni lni-phone" /> <span>{phone ? `${phoneCode} ${phone}` : '—'}</span></div>
+  //     </div>
 
-      <div className="filing-summary-facts">
-        <div className="filing-summary-fact"><span>Nationality</span><strong>{countryOptions.find(c => c.value === countryGuid)?.label ?? '—'}</strong></div>
-        <div className="filing-summary-fact"><span>Campus</span><strong>{campusOptions.find(c => c.value === campusGuid)?.label ?? '—'}</strong></div>
-        <div className="filing-summary-fact"><span>Programme</span><strong>{programOptions.find(p => p.value === programGuid)?.label ?? '—'}</strong></div>
-      </div>
+  //     <div className="filing-summary-facts">
+  //       <div className="filing-summary-fact"><span>Nationality</span><strong>{countryOptions.find(c => c.value === countryGuid)?.label ?? '—'}</strong></div>
+  //       <div className="filing-summary-fact"><span>Campus</span><strong>{campusOptions.find(c => c.value === campusGuid)?.label ?? '—'}</strong></div>
+  //       <div className="filing-summary-fact"><span>Programme</span><strong>{programOptions.find(p => p.value === programGuid)?.label ?? '—'}</strong></div>
+  //     </div>
 
-      <div className="filing-summary-progress">
-        <div className="prog-bar-track"><div className="prog-bar-fill" style={{ width: `${filingProgressPct}%` }} /></div>
-        <span className="filing-progress-label">{filingProgressPct}% complete</span>
-      </div>
-    </aside>
-  )
+  //     <div className="filing-summary-progress">
+  //       <div className="prog-bar-track"><div className="prog-bar-fill" style={{ width: `${filingProgressPct}%` }} /></div>
+  //       <span className="filing-progress-label">{filingProgressPct}% complete</span>
+  //     </div>
+  //   </aside>
+  // )
 
   return (
     <div id="page-filing">

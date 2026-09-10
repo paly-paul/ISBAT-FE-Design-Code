@@ -9180,7 +9180,14 @@ body {
 ═══════════════════════════════════════ */
 #page-filing .filing-stage-layout {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  /* Back to the old single-column layout (2026-09-10) — summaryPanel is
+     commented out in page.tsx for now (student card hidden per request),
+     so with only .filing-form-col left as a grid child, the 240px 1fr
+     split would auto-place it into the narrow 240px track instead of
+     filling the row, squeezing the whole form. Restore the 240px 1fr
+     split (and re-enable summaryPanel above) together when the card comes
+     back. */
+  grid-template-columns: 1fr;
   gap: 28px;
   align-items: start;
 }
