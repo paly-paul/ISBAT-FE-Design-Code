@@ -94,7 +94,7 @@ export function useStudentsFilterMulti(combos: StudentColumnFilters[], enabled: 
 // Kept as its own hook rather than a mode on useStudents above since a
 // paginated table (page/setPage, Pagination component) and an
 // append-as-you-scroll dropdown want fundamentally different query shapes.
-export function useStudentsInfinite(searchTerm: string, pageSize: number) {
+export function useStudentsInfinite(searchTerm: string, pageSize: number, enabled = true) {
   return useInfiniteQuery({
     queryKey: [...STUDENTS_LIST_KEY, 'infinite', pageSize, searchTerm],
     queryFn: ({ pageParam }) => getStudents(pageParam, pageSize, { searchTerm: searchTerm || undefined }),
@@ -103,6 +103,7 @@ export function useStudentsInfinite(searchTerm: string, pageSize: number) {
       const fetched = allPages.reduce((sum, p) => sum + p.items.length, 0)
       return fetched < lastPage.totalCount ? allPages.length + 1 : undefined
     },
+    enabled: enabled && Boolean(searchTerm && searchTerm.trim()),
     staleTime: Infinity,
     gcTime: Infinity,
   })

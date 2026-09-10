@@ -131,6 +131,8 @@ export function usePaymentHistoryList(pageNumber: number, pageSize: number) {
   return useQuery({
     queryKey: [...PAYMENT_CONSOLE_KEY, 'payment-history-list', pageNumber, pageSize],
     queryFn: () => getPaymentHistoryList(pageNumber, pageSize),
+    staleTime: 60 * 1000,
+    gcTime: Infinity,
   })
 }
 

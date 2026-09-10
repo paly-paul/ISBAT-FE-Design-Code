@@ -25,6 +25,7 @@ export function useStudentLearningModeDetail(studentGuid: string | null) {
     queryKey: [...LEARNING_MODE_KEY, 'detail', studentGuid],
     queryFn: () => getStudentLearningModeDetail(studentGuid as string),
     enabled: !!studentGuid,
+    staleTime: 5 * 60 * 1000,
   })
 }
 
@@ -48,6 +49,7 @@ export function useLearningModeReport(filters: LearningModeReportFilters | null,
     queryKey: [...LEARNING_MODE_KEY, 'report', filters, pageNumber, pageSize],
     queryFn: () => getLearningModeReport(filters as LearningModeReportFilters, pageNumber, pageSize),
     enabled: !!filters?.campusGuid,
+    staleTime: 60 * 1000,
   })
 }
 

@@ -54,6 +54,7 @@ export function usePaymentAdvances(page: number, pageSize: number, enabled = tru
     queryKey: [...PAYMENTS_KEY, 'advances', page, pageSize, studentGuid ?? null],
     queryFn: () => getPaymentAdvances(page, pageSize, studentGuid),
     enabled,
+    staleTime: 60 * 1000,
   })
 }
 
