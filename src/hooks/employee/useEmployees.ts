@@ -32,12 +32,13 @@ export function useEmployees(enabled = true) {
   })
 }
 
-export function useEmployeeDropdown() {
+export function useEmployeeDropdown(enabled = true) {
   return useQuery({
     queryKey: [...EMPLOYEES_KEY, 'dropdown'],
     queryFn: () => getEmployeeDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
+    enabled,
   })
 }
 

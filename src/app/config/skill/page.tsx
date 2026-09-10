@@ -8,7 +8,6 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
 import { SkillFormModal } from '@/components/modals/config/SkillFormModal'
 import { ViewSkillModal } from '@/components/modals/config/ViewSkillModal'
 import { useSkillMasters, useCreateSkillMaster, useUpdateSkillMaster, useDeleteSkillMaster, SkillMaster } from '@/hooks/config/useSkillMaster'
@@ -23,13 +22,10 @@ const MIN_SEARCH_CHARS = 2
 // TEMPORARY BOOTSTRAP OVERRIDE: after a DB reset there is no permission
 // group yet, so /me/menu correctly comes back with add:false/edit:false for
 // this page - nobody has been granted the right to create one yet. Force
-// both on here, same convention as src/app/config/permission-master/page.tsx
-// and the "TEMPORARY" overrides in src/lib/api/users/menu.ts. Remove once
-// real permission groups exist and normal /me/menu-driven gating can take
-// back over.
+// both true until the permission-catalog seed runs against the real DB.
 const BOOTSTRAP_FORCE_PERMISSIONS = true
 
-export default function Page() {
+export default function SkillPage() {
   const router = useRouter()
   const realPermissions = usePagePermissions()
   const permissions = BOOTSTRAP_FORCE_PERMISSIONS
@@ -41,23 +37,25 @@ export default function Page() {
   const [viewingSkill, setViewingSkill] = useState<SkillMaster | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<SkillMaster | null>(null)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
 
-  const { data, isLoading } = useSkillMasters()
-  const rows = data?.items ?? []
+  const { data, isLoading } = useSkillMasters(page, PAGE_SIZE)
+  const pageItems = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+
   const createSkill = useCreateSkillMaster()
   const updateSkill = useUpdateSkillMaster()
   const deleteSkill = useDeleteSkillMaster()
 
   const searchTrimmed = search.trim()
   const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? rows.filter(r => r.skillName.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
+    ? pageItems.filter(r => r.skillName.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
     : []
 
-  const filteredRows = rows.filter(r =>
-    searchTrimmed.length < MIN_SEARCH_CHARS || r.skillName.toLowerCase().includes(searchTrimmed.toLowerCase())
-  )
-
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+  const displayItems = searchTrimmed.length >= MIN_SEARCH_CHARS
+    ? pageItems.filter(r => r.skillName.toLowerCase().includes(searchTrimmed.toLowerCase()))
+    : pageItems
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -108,7 +106,7 @@ export default function Page() {
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.skillGuid, primary: r.skillName }))}
                 minChars={MIN_SEARCH_CHARS}
-                onSelect={(res) => { const row = rows.find(x => x.skillGuid === res.id); if (row) openViewModal(row) }}
+                onSelect={(res) => { const row = pageItems.find(x => x.skillGuid === res.id); if (row) openViewModal(row) }}
               />
             </div>
           </div>
@@ -123,10 +121,10 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : filteredRows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
+                  : displayItems.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
                     : null}
-                {pageItems.map((r) => (
+                {displayItems.map((r) => (
                   <tr key={r.skillGuid}>
                     <td>
                       {(true) && (

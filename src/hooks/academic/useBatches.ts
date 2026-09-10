@@ -3,16 +3,6 @@ import { createBatch, deleteBatch, getBatchById, getBatches, getStudentCountsByB
 
 const BATCHES_KEY = ['batches']
 
-// search added (2026-09-09) so Batch Management's own table can page through
-// real server-side search results instead of the separate page-1-only
-// useBatchSearch below — every existing call site passes just the first two
-// args, so this stays a no-op default for them. enabled defaults to true so
-// they also keep eagerly fetching exactly as before — only a caller that
-// shouldn't hit the network until it's actually needed (e.g. a rare
-// client-side fallback lookup, only consulted once a profile's own
-// pre-resolved batchCode comes back null) needs to pass it explicitly.
-// keepPreviousData avoids a loading flash between pages/searches, same
-// convention as useCourseUnits/useEnquiries.
 export function useBatches(pageNumber: number, pageSize: number, search = '', enabled = true) {
   return useQuery({
     queryKey: [...BATCHES_KEY, pageNumber, pageSize, search],
@@ -21,6 +11,25 @@ export function useBatches(pageNumber: number, pageSize: number, search = '', en
     gcTime: Infinity,
     enabled,
     placeholderData: keepPreviousData,
+  })
+}
+
+// Server-side search for Batch Management's search box — hits the same list
+// endpoint with the backend's own ?search= param instead of filtering the
+// already-fetched full list client-side. Kept as its own hook/query key so
+// useBatches() above still stays the plain unfiltered, cached list — only
+// enabled while the search box actually has a query in it, at which point
+// the page falls back to that shared unfiltered list instead of issuing a
+// redundant identical request. Not confirmed against a spec (see the note on
+// getBatches), so the caller re-filters client-side too.
+export function useBatchSearch(search: string, pageSize: number) {
+  const q = search.trim()
+  return useQuery({
+    queryKey: [...BATCHES_KEY, 'search', q],
+    queryFn: () => getBatches(1, pageSize, q),
+    enabled: q.length > 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
 }
 
