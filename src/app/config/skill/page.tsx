@@ -10,7 +10,7 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { SkillFormModal } from '@/components/modals/config/SkillFormModal'
 import { ViewSkillModal } from '@/components/modals/config/ViewSkillModal'
-import { useSkillMasters, useCreateSkillMaster, useUpdateSkillMaster, useDeleteSkillMaster, SkillMaster } from '@/hooks/config/useSkillMaster'
+import { useSkillMastersPaged, useCreateSkillMaster, useUpdateSkillMaster, useDeleteSkillMaster, SkillMaster } from '@/hooks/config/useSkillMaster'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -103,8 +103,9 @@ export default function SkillPage() {
                 className="w-56"
                 placeholder="Search by code or name…"
                 value={search}
-                onChange={setSearch}
+                onChange={v => { setSearch(v); setPage(1) }}
                 results={searchMatches.map(r => ({ id: r.skillGuid, primary: r.skillName }))}
+                loading={searchPending}
                 minChars={MIN_SEARCH_CHARS}
                 onSelect={(res) => { const row = pageItems.find(x => x.skillGuid === res.id); if (row) openViewModal(row) }}
               />
@@ -119,7 +120,7 @@ export default function SkillPage() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading
+                {(isLoading || searchPending)
                   ? <TableLoadingState colSpan={999} />
                   : displayItems.length === 0
                     ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
@@ -151,7 +152,7 @@ export default function SkillPage() {
               </tbody>
             </table>
           </ScrollTable>
-          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="skills" onPageChange={setPage} />
+          <Pagination page={safePage} totalPages={totalPages} totalCount={totalCount} itemLabel="skills" onPageChange={pageNum => { setPage(pageNum) }} />
         </div>
       </div>
       <SkillFormModal

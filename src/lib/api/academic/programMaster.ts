@@ -389,7 +389,9 @@ export function getProgramMastersPage(page = 1, pageSize = 20, search = ''): Pro
     const start = (page - 1) * pageSize
     return Promise.resolve({ items: filtered.slice(start, start + pageSize), totalCount: filtered.length, pageNumber: page, pageSize })
   }
-  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  // Deployed programme-master builds have used both page and pageNumber;
+  // keep them synchronized so infinite scrolling cannot receive page 1 again.
+  const params = new URLSearchParams({ page: String(page), pageNumber: String(page), pageSize: String(pageSize) })
   if (q) params.set('search', q)
   return apiGet<any>(`/api/v1/academic/program-master?${params.toString()}`).then(data => {
     const items: ProgramMaster[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []

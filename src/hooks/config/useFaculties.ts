@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery, useQueries } from '@tanstack/react-query'
 import { Faculty, FacultyInput, createFaculty, deleteFaculty, getFaculties, getFacultiesPaged, getFacultyById, updateFaculty } from '@/lib/api/academic/faculty'
+import { getNextPageParam } from '@/lib/pagination'
 
 const FACULTIES_KEY = ['faculties']
 
@@ -34,10 +35,7 @@ export function useSearchFacultiesInfinite(search: string, pageSize: number, ena
     queryKey: [...FACULTIES_KEY, 'search-infinite', search, pageSize],
     queryFn: ({ pageParam }) => getFacultiesPaged(pageParam, pageSize, search),
     initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) => {
-      const fetched = allPages.reduce((sum, p) => sum + p.items.length, 0)
-      return fetched < lastPage.totalCount ? allPages.length + 1 : undefined
-    },
+    getNextPageParam,
     enabled,
     staleTime: Infinity,
     gcTime: Infinity,

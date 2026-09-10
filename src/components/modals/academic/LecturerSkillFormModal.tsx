@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
@@ -10,6 +10,7 @@ import { useAllSkillMasters } from '@/hooks/config/useSkillMaster'
 import { useLecturerSkill } from '@/hooks/academic/useLecturerSkills'
 import { CreateLecturerSkillInput } from '@/lib/api/users/skills'
 import { AuthError } from '@/lib/api/client'
+import { flattenUniquePages } from '@/lib/pagination'
 
 // Add and Edit both mutate the same CreateLecturerSkillInput shape, just
 // with different UI: Add lets a user attach several skills to one faculty
@@ -49,15 +50,24 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
   const [proficiency, setProficiency] = useState('1')
   const [errors, setErrors]         = useState<Record<string, string>>({})
 
-  // GetByGuid returns a real employeeGuid, so it prefills directly.
-  // skillId still has to be resolved indirectly — GetByGuid returns
-  // skillName, not skillGuid, so it's matched back against the master list.
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedEmployeeSearch(employeeSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [employeeSearch])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedSkillSearch(skillSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [skillSearch])
+
   useEffect(() => {
     if (!isOpen) return
     if (isEdit && skill) {
       setEmployeeGuid(skill.employeeGuid || '')
-      const master = skillMasters.find(s => s.skillName === skill.skillName)
-      setSkillIds(master ? [master.skillGuid] : [])
+      const master = skill.skillGuid && !skill.skillGuid.startsWith('00000000-')
+        ? skill.skillGuid
+        : skillMasters.find(s => s.skillName === skill.skillName)?.skillGuid
+      setSkillIds(master ? [master] : [])
       setProficiency(String(skill.proficiency || 1))
       setErrors({})
     } else if (!isEdit) {
@@ -69,6 +79,9 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
 
   const employeeOptions = employees.map(e => ({ value: e.employeeGuid, label: e.displayName }))
   const skillOptions = skillMasters.map(s => ({ value: s.skillGuid, label: s.skillName }))
+  if (isEdit && skillIds[0] && !skillOptions.some(o => o.value === skillIds[0])) {
+    skillOptions.unshift({ value: skillIds[0], label: skill?.skillName || skillIds[0] })
+  }
 
   function handleClose() {
     setSaved(false); setFailure(null)
@@ -183,6 +196,10 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
             placeholder="— Select faculty member —"
             options={employeeOptions}
             value={employeeGuid}
+            onSearch={setEmployeeSearch}
+            hasNextPage={employeeQuery.hasNextPage}
+            isFetchingNextPage={employeeQuery.isFetchingNextPage}
+            onLoadMore={() => employeeQuery.fetchNextPage()}
             onChange={v => { setEmployeeGuid(v); clearError('employeeGuid') }}
           />
           {errors.employeeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.employeeGuid}</p>}
@@ -198,6 +215,10 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
                   placeholder="— Select skill —"
                   options={skillOptions}
                   value={skillIds[0] ?? ''}
+                  onSearch={setSkillSearch}
+                  hasNextPage={skillQuery.hasNextPage}
+                  isFetchingNextPage={skillQuery.isFetchingNextPage}
+                  onLoadMore={() => skillQuery.fetchNextPage()}
                   onChange={v => { setSkillIds([v]); clearError('skillId') }}
                 />
                 {errors.skillId && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.skillId}</p>}
@@ -217,6 +238,10 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
                 placeholder="— Select skills —"
                 options={skillOptions}
                 value={skillIds}
+                onSearch={setSkillSearch}
+                hasNextPage={skillQuery.hasNextPage}
+                isFetchingNextPage={skillQuery.isFetchingNextPage}
+                onLoadMore={() => skillQuery.fetchNextPage()}
                 onChange={handleSkillIdsChange}
               />
               {errors.skillIds && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.skillIds}</p>}
