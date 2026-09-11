@@ -6,6 +6,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
   useSearchStudents,
   useCreateAdvanceDeposit,
@@ -39,6 +40,7 @@ interface DepositResult {
 // is triggered from advanced-payments' "New Deposit" button rather than a
 // dedicated page.
 export function NewAdvanceDepositModal({ isOpen, onClose, showToast }: ModalProps) {
+  const permissions = usePagePermissions()
   const [search, setSearch] = useState('')
   const [committedSearch, setCommittedSearch] = useState('')
   const [selectedApplicationGuid, setSelectedApplicationGuid] = useState<string | null>(null)
@@ -55,10 +57,10 @@ export function NewAdvanceDepositModal({ isOpen, onClose, showToast }: ModalProp
 
   const [result, setResult] = useState<DepositResult | null>(null)
 
-  const { data: currencies = [] } = useFinanceCurrencies()
-  const { data: allReceiptBooks = [] } = useReceiptBooks()
+  const { data: currencies = [] } = useFinanceCurrencies(isOpen)
+  const { data: allReceiptBooks = [] } = useReceiptBooks(isOpen)
   const activeReceiptBooks = allReceiptBooks.filter(r => r.status === 1)
-  const { data: allProcBanks = [] } = useProcBanks()
+  const { data: allProcBanks = [] } = useProcBanks(isOpen)
   const banks = allProcBanks.filter(b => b.status === 2)
   const receiptBooks = activeReceiptBooks.filter(r => r.category === PAY_TYPE_TO_RECEIPT_CATEGORY[Number(payType)])
   const showBankFields = Number(payType) > 1
@@ -114,7 +116,7 @@ export function NewAdvanceDepositModal({ isOpen, onClose, showToast }: ModalProp
   }
 
   function handleSave() {
-    if (!selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
+    if (!permissions.create || !selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
     const amt = parseFloat(amount) || 0
     if (amt <= 0) { showToast('Amount must be greater than 0.', 'warn'); return }
     if (!selectedCurrency) { showToast('Please select a currency.', 'warn'); return }
@@ -276,7 +278,7 @@ export function NewAdvanceDepositModal({ isOpen, onClose, showToast }: ModalProp
         {!result && (
           <div className="modal-footer" style={{ flexShrink: 0 }}>
             <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-            <button className="btn btn-primary" disabled={!selectedApplicationGuid || createAdvanceDeposit.isPending} onClick={handleSave}>
+            <button className="btn btn-primary" disabled={!selectedApplicationGuid || createAdvanceDeposit.isPending || !permissions.create} onClick={handleSave}>
               <i className="lni lni-save"></i> {createAdvanceDeposit.isPending ? 'Saving…' : 'Save Deposit'}
             </button>
           </div>

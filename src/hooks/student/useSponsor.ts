@@ -12,12 +12,13 @@ import {
 const SPONSOR_CATEGORIES_KEY = ['sponsor-categories']
 const SPONSOR_DETAILS_KEY = ['sponsor-details']
 
-export function useSponsorCategories() {
+export function useSponsorCategories(enabled = true) {
   return useQuery({
     queryKey: SPONSOR_CATEGORIES_KEY,
     queryFn: () => getSponsorCategories(),
     staleTime: Infinity,
     gcTime: Infinity,
+    enabled,
   })
 }
 
