@@ -8,18 +8,18 @@ import {
   ProgramPlanningDto,
   ProgramPlanningInput,
   ProgramPlanningListParams,
+  ProgramPlanningListResult,
 } from '@/lib/api/academic/programPlanning'
 
 const PROGRAM_PLANNINGS_KEY = ['program-plannings']
 
-// No pagination on this endpoint (confirmed via get-program-plannings.md —
-// "No pagination", full list every time) — filters are optional and purely
-// server-side scoping, not a page cursor. Backs Course Allocation's own
-// list/search, which stays client-side over whatever this returns.
-export function useProgramPlannings(params: ProgramPlanningListParams = {}) {
-  return useQuery({
-    queryKey: [...PROGRAM_PLANNINGS_KEY, params],
-    queryFn: () => getProgramPlannings(params),
+// Course Allocation now reads a paged result envelope from the API (or a
+// local emulation in mock mode) so the table can page through the backend's
+// own list rather than loading the full catalog and slicing it client-side.
+export function useProgramPlannings(params: ProgramPlanningListParams = {}, pageNumber = 1, pageSize = 10) {
+  return useQuery<ProgramPlanningListResult>({
+    queryKey: [...PROGRAM_PLANNINGS_KEY, params, pageNumber, pageSize],
+    queryFn: () => getProgramPlannings(params, pageNumber, pageSize),
     staleTime: Infinity,
     gcTime: Infinity,
   })

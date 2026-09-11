@@ -11,6 +11,13 @@ export interface Room {
   capacity: number | null
 }
 
+export interface RoomListResult {
+  items: Room[]
+  totalCount: number
+  pageNumber: number
+  pageSize: number
+}
+
 const mockRooms: Room[] = [
   { roomGuid: '1', roomCode: 'RM-FCT-001', location: 'Main Campus — Kampala, Block A', capacity: 40 },
   { roomGuid: '2', roomCode: 'RM-FCT-002', location: 'Main Campus — Kampala, Block A', capacity: 30 },
@@ -21,20 +28,50 @@ const mockRooms: Room[] = [
   { roomGuid: '7', roomCode: 'RM-FEN-001', location: 'Main Campus — Kampala, Block D', capacity: 50 },
 ]
 
-// GET /api/v1/academic/rooms — unpaged, filtered only by `search` (partial
-// match against room code/location per get-rooms.md). Omit search to get
-// every room back in one call.
-export function getRooms(search = ''): Promise<Room[]> {
+// GET /api/v1/academic/rooms — paged with optional `search` support. The
+// page itself now owns page/pageSize so it can request a single window from
+// the server instead of fetching and slicing the entire room catalog.
+export function getRooms(search = '', pageNumber = 1, pageSize = 1000): Promise<RoomListResult> {
   const q = search.trim()
   if (MOCK_AUTH) {
-    if (!q) return Promise.resolve(mockRooms)
-    const needle = q.toLowerCase()
-    return Promise.resolve(mockRooms.filter(r => r.roomCode.toLowerCase().includes(needle) || (r.location ?? '').toLowerCase().includes(needle)))
+    const filtered = q
+      ? mockRooms.filter(r => r.roomCode.toLowerCase().includes(q.toLowerCase()) || (r.location ?? '').toLowerCase().includes(q.toLowerCase()))
+      : mockRooms
+    const start = (pageNumber - 1) * pageSize
+    return Promise.resolve({
+      items: filtered.slice(start, start + pageSize),
+      totalCount: filtered.length,
+      pageNumber,
+      pageSize,
+    })
   }
-  const params = new URLSearchParams()
+
+  const params = new URLSearchParams({
+    page: String(pageNumber),
+    pageNumber: String(pageNumber),
+    pageSize: String(pageSize),
+  })
   if (q) params.set('search', q)
-  const qs = params.toString()
-  return apiGet<Room[] | null>(`/api/v1/academic/rooms${qs ? `?${qs}` : ''}`).then(data => data ?? [])
+
+  return apiGet<RoomListResult | Room[] | null>(`/api/v1/academic/rooms?${params.toString()}`)
+    .then(data => {
+      const items = Array.isArray(data)
+        ? data
+        : data && typeof data === 'object' && Array.isArray((data as { items?: Room[] }).items)
+          ? (data as { items: Room[] }).items
+          : []
+
+      const envelope = data && typeof data === 'object' && !Array.isArray(data)
+        ? (data as Partial<RoomListResult>)
+        : null
+
+      return {
+        items,
+        totalCount: typeof envelope?.totalCount === 'number' ? envelope.totalCount : items.length,
+        pageNumber: typeof envelope?.pageNumber === 'number' ? envelope.pageNumber : pageNumber,
+        pageSize: typeof envelope?.pageSize === 'number' ? envelope.pageSize : pageSize,
+      }
+    })
 }
 
 export function getRoomById(guid: string): Promise<Room> {

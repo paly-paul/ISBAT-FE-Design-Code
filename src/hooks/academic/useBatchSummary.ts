@@ -1,15 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
-import { getBatchSummary, BatchSummaryItem } from '@/lib/api/academic/batchSummary'
+import { getBatchSummary, BatchSummaryItem, BatchSummaryListResult } from '@/lib/api/academic/batchSummary'
 
 const BATCH_SUMMARY_KEY = ['batchSummary']
 
-// Refetches whenever the campus filter changes — the endpoint itself does
-// the filtering (?campusGuid=...), so there's no client-side re-filtering
-// needed on top of this, unlike the search-based approach it replaces.
-export function useBatchSummary(campusGuid: string | null) {
-  return useQuery({
-    queryKey: [...BATCH_SUMMARY_KEY, campusGuid ?? ''],
-    queryFn: () => getBatchSummary(campusGuid),
+// Refetches on the campus filter plus the page window — the real endpoint is
+// now expected to handle the pagination itself instead of the UI slicing an
+// already-fetched array.
+export function useBatchSummary(campusGuid: string | null, pageNumber = 1, pageSize = 10) {
+  return useQuery<BatchSummaryListResult>({
+    queryKey: [...BATCH_SUMMARY_KEY, campusGuid ?? '', pageNumber, pageSize],
+    queryFn: () => getBatchSummary(campusGuid, pageNumber, pageSize),
   })
 }
 

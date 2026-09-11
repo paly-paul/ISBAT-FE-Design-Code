@@ -1,18 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoom, deleteRoom, getRoomById, getRooms, Room, RoomInput, updateRoom } from '@/lib/api/academic/room'
+import { createRoom, deleteRoom, getRoomById, getRooms, Room, RoomInput, RoomListResult, updateRoom } from '@/lib/api/academic/room'
 
 const ROOMS_KEY = ['rooms']
 
-// enabled defaults to true so every existing call site keeps eagerly
-// fetching exactly as before — only a caller that shouldn't hit the network
-// until it's actually needed (e.g. a modal that's always mounted regardless
-// of isOpen) needs to pass enabled={isOpen}.
+// Original unpaged room list used by the modal/other consumers that expect a
+// flat Room[] payload.
 export function useRooms(enabled = true) {
-  return useQuery({
-    queryKey: ROOMS_KEY,
-    queryFn: () => getRooms(),
-    // The endpoint is unpaged and returns the full list every time — only
-    // refetch once a create/update/delete mutation invalidates this key.
+  return useQuery<Room[]>({
+    queryKey: [...ROOMS_KEY, 'flat'],
+    queryFn: () => getRooms('', 1, 1000).then(data => data.items),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}
+
+// Paged room list for the Room Management table itself.
+export function useRoomsPaged(enabled = true, pageNumber = 1, pageSize = 10) {
+  return useQuery<RoomListResult>({
+    queryKey: [...ROOMS_KEY, 'paged', pageNumber, pageSize],
+    queryFn: () => getRooms('', pageNumber, pageSize),
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,
@@ -22,14 +29,14 @@ export function useRooms(enabled = true) {
 // Server-side search for Room Management's search box — hits the same list
 // endpoint with the real, confirmed ?search= param (get-rooms.md) instead of
 // filtering the already-fetched full list client-side. Kept as its own
-// hook/query key so useRooms() above stays the plain unfiltered, cached list
-// — only enabled while the search box actually has a query in it.
+// hook/query key so the main table can stay paged independently.
 export function useRoomSearch(search: string) {
   const q = search.trim()
   return useQuery({
-    queryKey: [...ROOMS_KEY, 'search', q],
-    queryFn: () => getRooms(q),
+    queryKey: [...ROOMS_KEY, 'search', q, 1, 8],
+    queryFn: () => getRooms(q, 1, 8),
     enabled: q.length > 0,
+    select: (data: RoomListResult) => data.items,
     staleTime: Infinity,
     gcTime: Infinity,
   })

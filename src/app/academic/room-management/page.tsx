@@ -9,8 +9,7 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
-import { useRooms, useRoomSearch, useCreateRoom, useUpdateRoom, useDeleteRoom, Room } from '@/hooks/academic/useRooms'
+import { useRoomsPaged, useRoomSearch, useCreateRoom, useUpdateRoom, useDeleteRoom, Room } from '@/hooks/academic/useRooms'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -27,12 +26,17 @@ export default function Page() {
   const [viewingRoomGuid, setViewingRoomGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Room | null>(null)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
 
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  const { data: rows = [], isLoading } = useRooms()
+  const { data, isLoading } = useRoomsPaged(true, page, PAGE_SIZE)
+  const rows = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
 
   // Debounced so the backend's confirmed ?search= (get-rooms.md) isn't hit
   // on every keystroke, and held at '' (falling back to the unfiltered list)
@@ -47,12 +51,6 @@ export default function Page() {
   }, [search])
 
   const { data: searchResults, isFetching: isSearching } = useRoomSearch(debouncedSearch)
-  // RoomDto carries no createdDate (see get-rooms.md) to sort by, so newest-
-  // first is approximated by reversing the list the API returns — rooms are
-  // append-only (create has no reordering operation) and the backend sends
-  // them back in ascending insertion order, so the last entry is the most
-  // recently created.
-  const baseRows = [...rows].reverse()
   const searchTrimmed = search.trim()
   const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isSearching)
 
@@ -75,9 +73,9 @@ export default function Page() {
 
   // Re-filter client-side is removed per ACA-020 — search box now operates
   // completely independently of the table content below it.
-  const filteredRows = baseRows
-
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage)
+  }, [page, safePage])
 
   function openEditModal(guid: string) {
     setEditingRoomGuid(guid)
@@ -140,10 +138,10 @@ export default function Page() {
               <tbody>
                 {(isLoading || searchPending)
                   ? <TableLoadingState colSpan={999} />
-                  : filteredRows.length === 0
+                  : rows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
                     : null}
-                {!(isLoading || searchPending) && pageItems.map((r) => (
+                {!(isLoading || searchPending) && rows.map((r) => (
                   <tr key={r.roomGuid}>
                     <td>
                       <ActionMenu>
@@ -166,7 +164,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
-          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="rooms" onPageChange={setPage} />
+          <Pagination page={safePage} totalPages={totalPages} totalCount={totalCount} itemLabel="rooms" onPageChange={setPage} />
         </div>
       </div>
 

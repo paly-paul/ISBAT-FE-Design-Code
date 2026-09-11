@@ -322,15 +322,21 @@ export function getOutstandingLedgers(applicationGuid: string, studentGuid?: str
 // getOutstandingLedgers alone can't show since it carries no discount
 // fields at all.
 //
-// 2026-09-03 backend change: the response used to be a
-// CurrentSemesterPayableResultDto wrapper ({ ledgers, totals }) with a
-// server-computed per-currency totals[] block. That wrapper and the totals
-// block are both gone — the endpoint now returns a flat
-// List<CurrentSemesterPayableLedgerDto> (one row per ledger, ordered by
-// semester code then ledgerNum) with no totals of any kind; callers sum
-// client-side, per currency (see the page's own ledgerTotals useMemo).
-// currencyCode and the discount detail fields below (discountCalcType
-// through discountWarning) are new in the same change.
+// 2026-09-11 correction: a real live response shows this endpoint never
+// actually dropped its wrapper the way the 2026-09-03 note below claimed —
+// it's back to (or never stopped being) a
+// { ledgers, upcomingSemesters, totalProgramAmount, totalProgramOutstanding,
+// paidPercentage, remainingPercentage } object, just reshaped from the old
+// { ledgers, totals } pair: upcomingSemesters carries the same per-semester
+// breakdown totals used to (now with each semester's own ledgers +
+// semesterOutstanding, not a per-currency total), and the four
+// totalProgram*/*Percentage fields are new — a whole-programme progress
+// figure, not scoped to the current semester the way everything else on
+// this DTO is. getCurrentSemesterPayable below normalizes either this
+// shape or a bare array (kept for whichever environment's backend is still
+// on the flat-list version the 2026-09-03 note described) into one
+// CurrentSemesterPayableResult so callers don't need to know which shape
+// actually came back.
 export interface CurrentSemesterPayableLedger {
   ledgerGuid: string | null
   semesterGuid: string | null
@@ -381,19 +387,70 @@ export interface CurrentSemesterPayableTotal {
   totalNetPayable: number
 }
 
+// One row of the upcomingSemesters breakdown — purely informational
+// (nothing on the page reads this yet), kept typed for whenever it's
+// surfaced rather than left as an untyped blob on CurrentSemesterPayableResult.
+export interface CurrentSemesterUpcomingSemester {
+  semesterGuid: string
+  semesterName: string
+  semCode: number
+  ledgers: CurrentSemesterPayableLedger[]
+  semesterOutstanding: number
+}
+
+// The actual live response shape — see the 2026-09-11 note above
+// CurrentSemesterPayableLedger. totalProgramAmount/totalProgramOutstanding/
+// paidPercentage/remainingPercentage are whole-programme figures (every
+// semester, not just the current one) — the Outstanding Balance card's own
+// per-semester ledgers/totals stay scoped to just `ledgers` above them.
+export interface CurrentSemesterPayableResult {
+  ledgers: CurrentSemesterPayableLedger[]
+  upcomingSemesters: CurrentSemesterUpcomingSemester[]
+  totalProgramAmount: number
+  totalProgramOutstanding: number
+  paidPercentage: number
+  remainingPercentage: number
+}
+
+const EMPTY_CURRENT_SEMESTER_PAYABLE: CurrentSemesterPayableResult = {
+  ledgers: [],
+  upcomingSemesters: [],
+  totalProgramAmount: 0,
+  totalProgramOutstanding: 0,
+  paidPercentage: 0,
+  remainingPercentage: 0,
+}
+
 // studentGuid is optional, same reasoning as getOutstandingLedgers' own —
 // without it the handler can't resolve the student's discount assignment or
 // academic status and falls back to the application's own semester.
-export function getCurrentSemesterPayable(applicationGuid: string, studentGuid?: string | null): Promise<CurrentSemesterPayableLedger[]> {
-  if (MOCK_AUTH) return Promise.resolve([])
+export function getCurrentSemesterPayable(applicationGuid: string, studentGuid?: string | null): Promise<CurrentSemesterPayableResult> {
+  if (MOCK_AUTH) return Promise.resolve(EMPTY_CURRENT_SEMESTER_PAYABLE)
   const qs = studentGuid ? `?studentGuid=${encodeURIComponent(studentGuid)}` : ''
-  return apiGet<CurrentSemesterPayableLedger[] | null>(`/api/v1/finance/payment-console/current-semester-payable/${applicationGuid}${qs}`)
-    .then(data => data ?? [])
+  return apiGet<CurrentSemesterPayableResult | CurrentSemesterPayableLedger[] | null>(`/api/v1/finance/payment-console/current-semester-payable/${applicationGuid}${qs}`)
+    // Normalizes either the object shape above or a bare ledger array (kept
+    // for whichever environment's backend is still on the flat-list version
+    // an earlier note here described) into one shape — apiGet does no
+    // runtime validation of its own, so a caller reading straight off a
+    // mismatched shape would otherwise blow up on the first .map (see
+    // effectiveLedgers in the page).
+    .then(data => {
+      if (!data) return EMPTY_CURRENT_SEMESTER_PAYABLE
+      if (Array.isArray(data)) return { ...EMPTY_CURRENT_SEMESTER_PAYABLE, ledgers: data }
+      return {
+        ledgers: data.ledgers ?? [],
+        upcomingSemesters: data.upcomingSemesters ?? [],
+        totalProgramAmount: data.totalProgramAmount ?? 0,
+        totalProgramOutstanding: data.totalProgramOutstanding ?? 0,
+        paidPercentage: data.paidPercentage ?? 0,
+        remainingPercentage: data.remainingPercentage ?? 0,
+      }
+    })
     // Same "empty result surfaces as a 404" behavior as getOutstandingLedgers
     // — "No outstanding ledgers found" here means fully paid, a normal
     // state, not an error (see the doc's own Errors table).
     .catch(err => {
-      if (err instanceof AuthError && err.code === 'not_found') return []
+      if (err instanceof AuthError && err.code === 'not_found') return EMPTY_CURRENT_SEMESTER_PAYABLE
       throw err
     })
 }
@@ -713,11 +770,20 @@ export function getLedgerOthers(): Promise<LedgerOthersDto[]> {
 // instead of flipping a local-only flag (2026-09-01); a real
 // paymentAdvanceGuid is only ever set once a deposit row is actually picked
 // there, so this field is never fabricated.
+//
+// 2026-09-10 backend change: the flat ledgerOthersGuid/amount pair on this
+// request was replaced by `lines: [{ ledgerOthersGuid, amount }]` (one or
+// more) — a single payment/receipt can now cover several ledgers at once.
+// The page's own otherSaveEntry still calls this once per table row (see
+// its own comment) rather than batching every valid row into one `lines`
+// array/one receipt — that's a real behavior choice the multi-line support
+// now makes possible but wasn't asked for, so it's left as-is pending
+// confirmation. Each call here sends exactly one line either way, which is
+// still valid per the doc's own "one or more" wording.
 export interface PaymentOtherInput {
   applicationGuid: string
   studentGuid: string | null
-  ledgerOthersGuid: string
-  amount: number
+  lines: { ledgerOthersGuid: string; amount: number }[]
   currencyGuid: string
   payDate: string
   payType: number
@@ -736,6 +802,9 @@ export interface PaymentOtherResult {
   paymentCode: string
   // null in advance mode — no receipt is claimed there.
   receipt: string | null
+  // Sum of all `lines` sent, not any single line's own amount (see the doc's
+  // Response 201 note) — for a single-line call (this page's own usage
+  // today) that's the same number either way.
   amount: number
 }
 
@@ -745,7 +814,7 @@ export function createPaymentOther(input: PaymentOtherInput): Promise<PaymentOth
       paymentOtherGuid: `mock-other-${mockPaymentSeq}`,
       paymentCode: `OTH-MOCK-${mockPaymentSeq++}`,
       receipt: input.paymentAdvanceGuid ? null : `RCP-MOCK-${Date.now()}`,
-      amount: input.amount,
+      amount: input.lines.reduce((sum, l) => sum + l.amount, 0),
     })
   }
   // Was '/api/v1/finance/payment-console/payment-other' — stale per

@@ -185,7 +185,17 @@ export interface ApplicationDetailDto extends ApplicationListItem {
 // "nothing to enrich with", not a hard failure — this is a best-effort
 // prefill source usable only in that narrow submitted-but-not-yet-vetted
 // window, never a general "fetch this application" lookup.
-export function getApplicationByGuid(applicationGuid: string): Promise<ApplicationDetailDto> {
+//
+// 2026-09-11: moved from GET /application-filling/{applicationGuid} to GET
+// /application-filling/by-payment/{paymentGuid} — the Filing page's own
+// search source (application-payments, see mapApplicationPaymentToSearchResult)
+// only ever has a paymentGuid to offer, not a real application-filling guid;
+// that value was previously sent to the {applicationGuid} route disguised
+// as one (via FilingApplicationSearchResult.applicationGuid), which "worked"
+// only in the sense that a mismatched guid and a not-yet-submitted
+// application both 400 identically here — this dedicated by-payment route
+// removes that guesswork instead of relying on the coincidence.
+export function getApplicationByPaymentGuid(paymentGuid: string): Promise<ApplicationDetailDto> {
   if (MOCK_AUTH) {
     // Nothing in this UI-only prototype's mock data represents a genuinely
     // completed application (mockApplications is empty, mockSearchResults'
@@ -194,7 +204,7 @@ export function getApplicationByGuid(applicationGuid: string): Promise<Applicati
     // best-effort fallback path in mock mode as they will for real.
     return Promise.reject(new Error('Application not found or not completed.'))
   }
-  return apiGet<ApplicationDetailDto>(`/api/v1/admissions/application-filling/${applicationGuid}`)
+  return apiGet<ApplicationDetailDto>(`/api/v1/admissions/application-filling/by-payment/${paymentGuid}`)
 }
 
 // Confirmed via Application-Filling/SaveGeneral.bru — countryGuid/
