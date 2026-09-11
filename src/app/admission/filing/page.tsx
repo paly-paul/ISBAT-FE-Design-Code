@@ -493,7 +493,7 @@ export default function FilingPage() {
   // real fee structures) — use the generic, already-confirmed-correct
   // Programme Fee Structure list filtered client-side instead, same fix as
   // applied there.
-  const { data: allFeeStructuresData } = useProgramFeeStructures(1, 20, undefined, '', !!selectedApplication)
+  const { data: allFeeStructuresData } = useProgramFeeStructures(1, 20, undefined, !!selectedApplication)
   const fees = (allFeeStructuresData?.items ?? []).filter(f => f.programGuid === programGuid && f.status)
   const { data: countries = [] }  = useCountries(!!selectedApplication || countryPickerOpen)
 
