@@ -9,9 +9,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignModal'
 import { NewFollowUpLogModal } from '@/components/modals/admission/NewFollowUpLogModal'
-import { useEnquiryFollowUps, useEnquiryFollowUpsCount, useCreateEnquiryFollowUp } from '@/hooks/admission/useEnquiryFollowUps'
+import { useEnquiryFollowUps, useCreateEnquiryFollowUp } from '@/hooks/admission/useEnquiryFollowUps'
 import { useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -72,21 +71,11 @@ export default function EnquiryFollowupMasterPage() {
     setPage(1)
   }, [debouncedSearch])
 
-  // Decoupled from the table's own (now paginated) rows and the search box
-  // above — pageSize=1 so it doesn't pull real row data, just totalCount for
-  // the stat tile.
-  const { data: countData } = useEnquiryFollowUpsCount()
-
   const updateEnquiry = useUpdateEnquiry()
   const createFollowUp = useCreateEnquiryFollowUp()
 
-  // programName comes back null on every row from the real API — resolve it
-  // client-side, same fallback pattern as enquiry-list/page.tsx.
-  const { data: programs = [] } = useProgramMasters()
   function resolveProgramName(row: { programGuid: string | null; programName: string | null }) {
-    if (row.programName) return row.programName
-    if (!row.programGuid) return '—'
-    return programs.find(p => p.programGuid === row.programGuid)?.programName ?? '—'
+    return row.programName ?? '—'
   }
 
   const pageItems = rows
@@ -129,7 +118,7 @@ export default function EnquiryFollowupMasterPage() {
       <div className="stats-row">
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-1"><i className="lni lni-users text-b500" /><span className="text-sm text-g500">Total Follow-ups</span></div>
-          <p className="text-2xl font-semibold text-g900">{(countData?.totalCount ?? 0).toLocaleString()}</p>
+          <p className="text-2xl font-semibold text-g900">{totalCount.toLocaleString()}</p>
         </div>
       </div>
 

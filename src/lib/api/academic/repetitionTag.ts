@@ -75,7 +75,10 @@ export function getRepetitionTagsPaged(page = 1, pageSize = 10, search = ''): Pr
     const start = (page - 1) * pageSize
     return Promise.resolve({ items: filtered.slice(start, start + pageSize), totalCount: filtered.length, pageNumber: page, pageSize })
   }
-  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  // Keep both pagination parameter conventions synchronized. Some deployed
+  // builds read pageNumber while others read page; sending both prevents the
+  // infinite dropdown from receiving page 1 again on every scroll.
+  const params = new URLSearchParams({ page: String(page), pageNumber: String(page), pageSize: String(pageSize) })
   if (q) params.set('search', q)
   return apiGet<any>(`/api/v1/academic/course-unit-repetitions?${params.toString()}`).then(data => {
     const items: RepetitionTag[] = Array.isArray(data) ? data

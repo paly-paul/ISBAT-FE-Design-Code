@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -13,9 +13,10 @@ import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignM
 import { useEnquiries, useEnquiryCounts, useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { flattenUniquePages } from '@/lib/pagination'
 
 // Real server-side pagination — only DISPLAY_PAGE_SIZE rows are ever
 // requested for the page currently on screen (see useEnquiries), not the
@@ -56,6 +57,14 @@ export default function EnquiryListPage() {
   const [channel, setChannel] = useState('')
   const [intakeGuid, setIntakeGuid] = useState('')
   const [page, setPage] = useState(1)
+  const [intakeSearch, setIntakeSearch] = useState('')
+  const [committedIntakeSearch, setCommittedIntakeSearch] = useState('')
+  const [intakePickerOpen, setIntakePickerOpen] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedIntakeSearch(intakeSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [intakeSearch])
 
   const searchTrimmed = search.trim()
   // Server-side search (see getEnquiries) — only actually queried once the
@@ -88,12 +97,11 @@ export default function EnquiryListPage() {
     return programs.find(p => p.programGuid === row.programGuid)?.programName ?? '—'
   }
 
-  // intakeGuid is a real field directly on the enquiry row (unlike
-  // programName/campusName), so this filters against the actual guid rather
-  // than a resolved display string — full Intake master list, not just
-  // what's on the current page, same "real master, not page-derived"
-  // treatment as resolveProgramName's own source list.
-  const { data: intakes = [] } = useIntakes()
+  const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, intakePickerOpen)
+  const intakes = useMemo(
+    () => flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid),
+    [intakeQuery.data],
+  )
   const intakeOptions = [
     { value: '', label: 'All Intakes' },
     ...intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })),
@@ -206,7 +214,18 @@ export default function EnquiryListPage() {
               onSelect={permissions.edit ? (r) => openViewModal(r.id) : undefined}
             />
             <SearchSelect className="w-36" options={channelOptions} value={channel} onChange={v => { setChannel(v); setPage(1) }} />
-            <SearchSelect className="w-40" options={intakeOptions} value={intakeGuid} onChange={v => { setIntakeGuid(v); setPage(1) }} />
+            <SearchSelect
+              className="w-40"
+              options={intakeOptions}
+              value={intakeGuid}
+              onChange={v => { setIntakeGuid(v); setPage(1) }}
+              onSearch={setIntakeSearch}
+              onOpenChange={setIntakePickerOpen}
+              isLoading={intakeQuery.isLoading}
+              hasNextPage={intakeQuery.hasNextPage}
+              isFetchingNextPage={intakeQuery.isFetchingNextPage}
+              onLoadMore={() => intakeQuery.fetchNextPage()}
+            />
           </div>
         </div>
         <ScrollTable>

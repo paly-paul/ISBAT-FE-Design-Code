@@ -9,6 +9,7 @@ import {
   getProgramMastersPage,
   getProgramDropdown,
   getProgramMastersByCampus,
+  getProgramMastersByCampusPaged,
   updateProgramMasterComplete,
   updateProgramMasterStep1,
   ProgramMaster,
@@ -166,6 +167,18 @@ export function useProgramMastersByCampus(campusGuid: string, enabled: boolean) 
   })
 }
 
+export function useSearchProgramMastersByCampusInfinite(campusGuid: string, search: string, pageSize: number, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...PROGRAM_MASTERS_KEY, 'byCampusInfinite', campusGuid, search, pageSize],
+    queryFn: ({ pageParam }) => getProgramMastersByCampusPaged(campusGuid, pageParam, pageSize, search),
+    initialPageParam: 1,
+    getNextPageParam,
+    enabled: enabled && !!campusGuid,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
 // Full program master by GUID (single record query)
 export function useProgramMaster(programGuid?: string, enabled = true) {
   return useQuery({
@@ -189,10 +202,8 @@ export function useProgramDropdown(facultyGuid?: string, enabled = true) {
 }
 
 export function useCreateProgramMaster() {
-  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: ProgramMasterInput) => createProgramMaster(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRAM_MASTERS_KEY }),
   })
 }
 
@@ -202,34 +213,8 @@ export function useCreateProgramMaster() {
 // single shot; this one creates only the bare programme record so Steps
 // 2/3 can follow with their own calls using the semesterGuids it returns.
 export function useCreateProgramMasterStep1() {
-  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: ProgramMasterCreateInput) => createProgramMasterStep1(input),
-    // Was invalidateQueries(PROGRAM_MASTERS_KEY) — refetched the ENTIRE
-    // Programme Master list (a "get all") in the background the instant Step
-    // 1 finishes and the wizard advances to Step 2, just to reflect the one
-    // new row. Fetches that single new programme by its own guid instead
-    // (get-program-by-guid.md's GET /program-master/{guid} — "get by id",
-    // via getProgramMasterByGuid) and merges it straight into the cached
-    // unfiltered list, so the Programme Master page shows it the moment the
-    // user navigates back without paying for a full-list round trip. Any
-    // already-cached search-key variants (PROGRAM_MASTERS_KEY, 'search', q)
-    // are left alone rather than patched — same tradeoff as before, they'll
-    // just refetch fresh next time that search term is actually typed again.
-    onSuccess: async (created) => {
-      try {
-        const full = await getProgramMasterByGuid(created.programGuid)
-        queryClient.setQueryData<ProgramMaster[]>(
-          PROGRAM_MASTERS_KEY,
-          old => old ? [full, ...old.filter(p => p.programGuid !== full.programGuid)] : old,
-        )
-      } catch {
-        // get-by-id failed (e.g. a transient error right after create) —
-        // fall back to the old behavior rather than leaving the list
-        // permanently stale with no way to recover short of a hard reload.
-        queryClient.invalidateQueries({ queryKey: PROGRAM_MASTERS_KEY })
-      }
-    },
   })
 }
 

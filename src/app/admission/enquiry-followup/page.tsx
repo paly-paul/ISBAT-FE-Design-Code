@@ -10,7 +10,6 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignModal'
 import { useEnquiryFollowUpsByAdvisor } from '@/hooks/admission/useEnquiryFollowUps'
 import { useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { usePagination } from '@/hooks/usePagination'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -41,13 +40,8 @@ export default function EnquiryFollowupPage() {
   const allRows = data?.items ?? []
   const updateEnquiry = useUpdateEnquiry()
 
-  // programName comes back null on every row from the real API — resolve it
-  // client-side, same fallback pattern as enquiry-list/enquiry-followup-master.
-  const { data: programs = [] } = useProgramMasters()
-  function resolveProgramName(row: { programGuid: string | null; programName: string | null }) {
-    if (row.programName) return row.programName
-    if (!row.programGuid) return '—'
-    return programs.find(p => p.programGuid === row.programGuid)?.programName ?? '—'
+  function resolveProgramName(row: { programName: string | null; programCode: string | null }) {
+    return row.programName ?? row.programCode ?? '—'
   }
 
   function matchesSearch(r: typeof allRows[number], term: string) {

@@ -102,18 +102,22 @@ export interface ProgramMaster {
   pgmStatus: boolean
   noIa: boolean
   programGroupGuid: string
+  programGroupName?: string
   unitCount: number
   programLevelGuid: string
+  programLevelName?: string
   yearCount: number
   semCount: number
   facultyGuid: string
-  dateAcc: string
+  facultyName?: string
+  dateAcc: string | null
   accLetter: string | null
   appFee: number
   lateFee: number
   currencyGuid: string | null
   intakeGuid: string
   streamGuids: string[]
+  streams?: { streamGuid: string; streamName: string }[]
   semesters: unknown[]
 }
 
@@ -447,6 +451,21 @@ export function getProgramMastersByCampus(campusGuid: string): Promise<ProgramMa
     .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
+export function getProgramMastersByCampusPaged(campusGuid: string, page = 1, pageSize = 20, search = ''): Promise<ProgramMasterListResponse> {
+  if (MOCK_AUTH) {
+    const query = search.trim().toLowerCase()
+    const filtered = mockProgramMasters.filter(p => !query || `${p.programCode} ${p.programName}`.toLowerCase().includes(query))
+    const start = (page - 1) * pageSize
+    return Promise.resolve({ items: filtered.slice(start, start + pageSize), totalCount: filtered.length, pageNumber: page, pageSize })
+  }
+  const params = new URLSearchParams({ page: String(page), pageNumber: String(page), pageSize: String(pageSize) })
+  if (search.trim()) params.set('search', search.trim())
+  return apiGet<any>(`/api/v1/academic/program-master/by-campus/${campusGuid}?${params.toString()}`).then(data => {
+    const items: ProgramMaster[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
+    return { items, totalCount: typeof data?.totalCount === 'number' ? data.totalCount : items.length, pageNumber: data?.pageNumber ?? page, pageSize: data?.pageSize ?? pageSize }
+  })
+}
+
 // --- Full details / Update / Delete ---------------------------------------
 // Confirmed via Program-Master/GetFullDetails.bru — full course-unit and
 // fee-structure breakdown for one programme, used to prefill the Edit
@@ -523,12 +542,14 @@ export interface ProgramMasterFullDetails {
   pgmStatus: boolean
   noIa: boolean
   programGroupGuid: string
+  programGroupName?: string | null
   unitCount: number
   programLevelGuid: string
+  programLevelName?: string | null
   yearCount: number
   semCount: number
   facultyGuid: string
-  dateAcc: string
+  dateAcc: string | null
   accLetter: string | null
   appFee: number
   lateFee: number
@@ -542,6 +563,7 @@ export interface ProgramMasterFullDetails {
   currencyName?: string | null
   intakeGuid: string | null
   streamGuids: string[]
+  streamNames?: string[]
   semesters: ProgramSemesterDetail[]
   programUnits: ProgramUnitDetail[]
   feeStructures: FeeStructureDetail[]

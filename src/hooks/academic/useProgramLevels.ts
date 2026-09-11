@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient, useQueries } from '@tanstack/react-query'
-import { createProgramLevel, deleteProgramLevel, getProgramLevelById, getProgramLevels, ProgramLevel, ProgramLevelInput, updateProgramLevel } from '@/lib/api/academic/programLevel'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, useQueries, keepPreviousData } from '@tanstack/react-query'
+import { createProgramLevel, deleteProgramLevel, getProgramLevelById, getProgramLevels, getProgramLevelsPaged, ProgramLevel, ProgramLevelInput, updateProgramLevel } from '@/lib/api/academic/programLevel'
+import { getNextPageParam } from '@/lib/pagination'
 
 const PROGRAM_LEVELS_KEY = ['programLevels']
 
@@ -37,6 +38,28 @@ export function useProgramLevelSearch(search: string) {
   })
 }
 
+export function useProgramLevelsPaged(page: number, pageSize: number, search = '') {
+  return useQuery({
+    queryKey: [...PROGRAM_LEVELS_KEY, 'paged', page, pageSize, search],
+    queryFn: () => getProgramLevelsPaged(page, pageSize, search),
+    placeholderData: keepPreviousData,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
+export function useSearchProgramLevelsInfinite(search: string, pageSize: number, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...PROGRAM_LEVELS_KEY, 'search-infinite', search, pageSize],
+    queryFn: ({ pageParam }) => getProgramLevelsPaged(pageParam, pageSize, search),
+    initialPageParam: 1,
+    getNextPageParam,
+    enabled,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
 // Batched-by-guid lookup — same convention as useCourseUnitsByGuids/
 // useIntakesByGuids/useFacultiesByGuids, used to resolve display labels for
 // a bounded set of specific programLevelGuids (e.g. just the ones referenced
@@ -59,10 +82,8 @@ export function useProgramLevelsByGuids(guids: string[]) {
 }
 
 export function useCreateProgramLevel() {
-  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: ProgramLevelInput) => createProgramLevel(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRAM_LEVELS_KEY }),
   })
 }
 

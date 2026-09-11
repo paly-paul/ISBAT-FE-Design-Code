@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
@@ -8,11 +8,10 @@ import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { StreamMultiSearchPicker } from '@/components/StreamMultiSearchPicker'
 import { ProgramMasterInput } from '@/lib/api/academic/programMaster'
-import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
-import { useProgramGroups } from '@/hooks/academic/useProgramGroups'
-import { useCurrencies } from '@/hooks/finance/useCurrencies'
+import { useSearchProgramLevelsInfinite } from '@/hooks/academic/useProgramLevels'
+import { useSearchProgramGroupsInfinite } from '@/hooks/academic/useProgramGroups'
+import { useSearchCurrenciesInfinite } from '@/hooks/finance/useCurrencies'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
-import { useStreamsByGuids } from '@/hooks/config/useStreams'
 import { useCourseUnit, useCourseUnitsByGuids } from '@/hooks/academic/useCourseUnits'
 import { CourseUnitSearchPicker, CourseUnitPickOption } from '@/components/CourseUnitSearchPicker'
 import { useIntakesByGuids, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
@@ -39,6 +38,7 @@ import {
   ProgramFeeStructureUpdateInput,
 } from '@/hooks/academic/useProgramFeeStructure'
 import { AuthError } from '@/lib/api/client'
+import { flattenUniquePages } from '@/lib/pagination'
 
 // Toggle between UGX and USD.
 const LOCAL_OR_FOREIGN_OPTS = [
@@ -311,6 +311,18 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const [programName, setProgramName] = useState('')
   const [programGroupGuid, setProgramGroupGuid] = useState('')
   const [programLevelGuid, setProgramLevelGuid] = useState('')
+  const [programGroupSearch, setProgramGroupSearch] = useState('')
+  const [programLevelSearch, setProgramLevelSearch] = useState('')
+  const [committedProgramGroupSearch, setCommittedProgramGroupSearch] = useState('')
+  const [committedProgramLevelSearch, setCommittedProgramLevelSearch] = useState('')
+  const [programGroupPickerOpen, setProgramGroupPickerOpen] = useState(false)
+  const [programLevelPickerOpen, setProgramLevelPickerOpen] = useState(false)
+  const [programGroupLabel, setProgramGroupLabel] = useState('')
+  const [programLevelLabel, setProgramLevelLabel] = useState('')
+  const [streamNames, setStreamNames] = useState<Record<string, string>>({})
+  const [currencySearch, setCurrencySearch] = useState('')
+  const [committedCurrencySearch, setCommittedCurrencySearch] = useState('')
+  const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false)
   const [facultyGuid, setFacultyGuid] = useState('')
   const [appFee, setAppFee] = useState('')
   const [lateFee, setLateFee] = useState('')
@@ -372,21 +384,49 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // see validateStep2 / Program_Master_Change_Requests_Final.md.
   const [step2Error, setStep2Error] = useState<string | null>(null)
 
-  // Gated on isOpen (2026-09-10, per request) — these back this modal's own
-  // Programme Level/Group dropdowns and previously fired the moment
-  // programme-master/page.tsx mounted regardless of whether Add/Edit was
-  // ever opened (safe/deduped at the time only because that page's own table
-  // also fetched them unconditionally at the same query key — now that the
-  // page's own fetch is gated the same way, this modal's calls are what
-  // actually determines whether/when the request fires). Neither endpoint is
-  // confirmed to support real server-side pagination the way
-  // programs/intakes/faculties/specializations do, so both stay full-list
-  // fetches rather than infinite-scroll pickers.
-  const { data: programLevels = [] } = useProgramLevels(isOpen)
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedProgramGroupSearch(programGroupSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [programGroupSearch])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedProgramLevelSearch(programLevelSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [programLevelSearch])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedCurrencySearch(currencySearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [currencySearch])
+
+  const programGroupQuery = useSearchProgramGroupsInfinite(
+    committedProgramGroupSearch,
+    20,
+    isOpen && programGroupPickerOpen,
+  )
+  const programLevelQuery = useSearchProgramLevelsInfinite(
+    committedProgramLevelSearch,
+    20,
+    isOpen && programLevelPickerOpen,
+  )
+  const currencyQuery = useSearchCurrenciesInfinite(committedCurrencySearch, 20, isOpen && currencyPickerOpen)
+
+  const programGroups = useMemo(() => {
+    const items = flattenUniquePages(programGroupQuery.data?.pages ?? [], g => g.programGroupGuid)
+    if (programGroupGuid && programGroupLabel && !items.some(g => g.programGroupGuid === programGroupGuid)) {
+      items.unshift({ programGroupGuid, groupCode: '', groupName: programGroupLabel, programLevelGuid } as typeof items[number])
+    }
+    return items
+  }, [programGroupGuid, programGroupLabel, programGroupQuery.data, programLevelGuid])
+  const programLevels = useMemo(() => {
+    const items = flattenUniquePages(programLevelQuery.data?.pages ?? [], p => p.programLevelGuid)
+    if (programLevelGuid && programLevelLabel && !items.some(p => p.programLevelGuid === programLevelGuid)) {
+      items.unshift({ programLevelGuid, levelName: programLevelLabel } as typeof items[number])
+    }
+    return items
+  }, [programLevelGuid, programLevelLabel, programLevelQuery.data])
   const programLevelOptions = programLevels.map(p => ({ value: p.programLevelGuid, label: p.levelName }))
   const selectedProgramLevel = programLevels.find(p => p.programLevelGuid === programLevelGuid)
-
-  const { data: programGroups = [] } = useProgramGroups(isOpen)
   const programGroupOptions = programGroups.map(g => ({ value: g.programGroupGuid, label: `${g.groupCode} — ${g.groupName}` }))
 
   // facultyGuid itself is still submitted on save (carried through from
@@ -397,7 +437,10 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // no reason at all. Dropped entirely per "no need to fallback" — see the
   // same call this session already removed from Payment Console.
 
-  const { data: currencies = [] } = useCurrencies(isOpen)
+  const currencies = useMemo(
+    () => flattenUniquePages(currencyQuery.data?.pages ?? [], c => String(c.intCurrency)),
+    [currencyQuery.data],
+  )
   // Lec/Cec/Acec (Lateral Entry/Credit Exemption/Aptech Credit Exemption Fee
   // Currency) still take Currency.intCurrency (a number) — those are NOT
   // confirmed to have switched to guids the way the top-level programme
@@ -431,10 +474,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // the same batched-by-guid lookup StreamMultiSearchPicker itself uses for
   // its selected-chip labels, rather than holding the whole stream list here
   // too.
-  const streamsByGuid = useStreamsByGuids(streamGuids)
   const semesterStreamOptions = streamGuids.map(guid => {
-    const s = streamsByGuid.get(guid)
-    return { value: guid, label: s ? `${s.streamCode} — ${s.streamName}` : guid }
+    return { value: guid, label: streamNames[guid] ?? guid }
   })
 
 
@@ -453,10 +494,10 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // unitType/unitCat send the guid directly (unitTypeGuid/unitCatGuid), the
   // same guid-based convention used elsewhere in this backend (e.g.
   // programLevelGuid, courseUnitRepetitionGuid).
-  const { data: unitTypes = [] } = useUnitTypes(isOpen)
+  const { data: unitTypes = [] } = useUnitTypes(isOpen && step === 2)
   const unitTypeOptions = unitTypes.map(t => ({ value: t.unitTypeGuid, label: t.unitTypeName }))
 
-  const { data: unitCategories = [] } = useUnitCategories(isOpen)
+  const { data: unitCategories = [] } = useUnitCategories(isOpen && step === 2)
   const unitCategoryOptions = unitCategories.map(c => ({ value: c.unitCatGuid, label: c.unitCatName }))
   // The per-unit specialization picker only makes sense for a unit whose
   // category is literally named "Specialization" in the real master — there's
@@ -466,7 +507,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     return !!cat && cat.unitCatName.trim().toLowerCase() === 'specialization'
   }
 
-  const { data: ledgers = [] } = useLedgers(isOpen)
+  const { data: ledgers = [] } = useLedgers(isOpen && step === 3)
   // Base options from the Ledger master list, PLUS a synthesized option for
   // any ledger/currency guid already sitting on a loaded fee item (from
   // full-details) that isn't in its respective master list — using the real
@@ -496,7 +537,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // always read-only: in Edit mode it shows whatever intake the structure
   // already has, in Create mode it's forced onto the Current Academic
   // Intake instead of offering a picker at all.
-  const { data: currentAcademicIntake } = useCurrentAcademicIntake(isOpen)
+  const { data: currentAcademicIntake } = useCurrentAcademicIntake(isOpen && mode !== 'edit')
 
   // Resolves the display label ("intakeCode — description") for the
   // top-level Programme Intake plus whichever intake each fee structure
@@ -596,7 +637,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setProgramCode(fullDetails.programCode)
     setProgramName(fullDetails.programName)
     setProgramGroupGuid(fullDetails.programGroupGuid)
+    setProgramGroupLabel(fullDetails.programGroupName ?? '')
     setProgramLevelGuid(fullDetails.programLevelGuid)
+    setProgramLevelLabel(fullDetails.programLevelName ?? '')
     setFacultyGuid(fullDetails.facultyGuid)
     // Confirmed live (2026-09-07) that full-details DOES return a real
     // currencyGuid — overrides whatever the initialCurrencyGuid-driven
@@ -611,6 +654,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     // field only accepts one (see the streamGuids state comment above), but
     // that's just the top-level field's limit, not this multi-select's.
     setStreamGuids(fullDetails.streamGuids ?? [])
+    setStreamNames(Object.fromEntries((fullDetails.streamGuids ?? []).map((guid, i) => [guid, fullDetails.streamNames?.[i] ?? ''])))
     setIntakeGuid(fullDetails.intakeGuid ?? '')
     setPgmStatus(fullDetails.pgmStatus)
     setNoIa(fullDetails.noIa)
@@ -1687,6 +1731,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     value={programGroupGuid}
                     onChange={selectProgramGroup}
                     options={programGroupOptions}
+                    onSearch={setProgramGroupSearch}
+                    onOpenChange={setProgramGroupPickerOpen}
+                    hasNextPage={programGroupQuery.hasNextPage}
+                    isFetchingNextPage={programGroupQuery.isFetchingNextPage}
+                    onLoadMore={() => programGroupQuery.fetchNextPage()}
                   />
                   {step1Errors.programGroupGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programGroupGuid}</p>}
                 </div>
@@ -1708,7 +1757,17 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                       )}
                     </span>
                   </div>
-                  <SearchSelect placeholder="— Select level —" value={programLevelGuid} onChange={selectProgramLevel} options={programLevelOptions} />
+                  <SearchSelect
+                    placeholder="— Select level —"
+                    value={programLevelGuid}
+                    onChange={selectProgramLevel}
+                    options={programLevelOptions}
+                    onSearch={setProgramLevelSearch}
+                    onOpenChange={setProgramLevelPickerOpen}
+                    hasNextPage={programLevelQuery.hasNextPage}
+                    isFetchingNextPage={programLevelQuery.isFetchingNextPage}
+                    onLoadMore={() => programLevelQuery.fetchNextPage()}
+                  />
                   {step1Errors.programLevelGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programLevelGuid}</p>}
                   <div className="flex gap-2 flex-wrap mt-2">
                     <span className="lvl-chip"><span className="lvl-chip-lbl">No. of Years</span><span className="lvl-chip-val">{selectedProgramLevel?.yearCount ?? '—'}</span></span>
@@ -2074,7 +2133,17 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                         edit. */}
                     <div className="fg m-0">
                       <div className="lbl">Currency <span className="text-g400 font-normal normal-case">(Lateral Entry / Credit Exemption / Aptech Credit Exemption)</span></div>
-                      <SearchSelect placeholder="Currency" options={currencyIntOptions} value={activeFeeStruct.lateralEntryFeeCurrency} onChange={updateSharedFeeCurrency} />
+                      <SearchSelect
+                        placeholder="Currency"
+                        options={currencyIntOptions}
+                        value={activeFeeStruct.lateralEntryFeeCurrency}
+                        onChange={updateSharedFeeCurrency}
+                        onSearch={setCurrencySearch}
+                        onOpenChange={setCurrencyPickerOpen}
+                        hasNextPage={currencyQuery.hasNextPage}
+                        isFetchingNextPage={currencyQuery.isFetchingNextPage}
+                        onLoadMore={() => currencyQuery.fetchNextPage()}
+                      />
                     </div>
                   </div>
                 </div>

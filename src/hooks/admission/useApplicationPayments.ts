@@ -1,35 +1,13 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query'
 import {
   ApplicationPaymentInput,
   createApplicationPayment,
-  getApplicationPaymentBanks,
-  getApplicationPaymentBatches,
   getApplicationPaymentExemptionTypes,
-  getApplicationPaymentFees,
   getApplicationPaymentTypes,
   getUnconvertedEnquiries,
 } from '@/lib/api/admission/applicationPayment'
 
 const APPLICATION_PAYMENTS_KEY = ['application-payments']
-
-export function useApplicationPaymentBanks() {
-  return useQuery({
-    queryKey: [...APPLICATION_PAYMENTS_KEY, 'banks'],
-    queryFn: () => getApplicationPaymentBanks(),
-    staleTime: Infinity,
-    gcTime: Infinity,
-  })
-}
-
-// Scoped to a program/semester/batch time — only enabled once all three are
-// picked, same convention as useSemestersForProgram.
-export function useApplicationPaymentBatches(programGuid: string, semesterGuid: string, batchTimeGuid: string, enabled: boolean) {
-  return useQuery({
-    queryKey: [...APPLICATION_PAYMENTS_KEY, 'batches', programGuid, semesterGuid, batchTimeGuid],
-    queryFn: () => getApplicationPaymentBatches(programGuid, semesterGuid, batchTimeGuid),
-    enabled: enabled && !!programGuid && !!semesterGuid && !!batchTimeGuid,
-  })
-}
 
 export function useApplicationPaymentExemptionTypes() {
   return useQuery({
@@ -37,15 +15,6 @@ export function useApplicationPaymentExemptionTypes() {
     queryFn: () => getApplicationPaymentExemptionTypes(),
     staleTime: Infinity,
     gcTime: Infinity,
-  })
-}
-
-// Scoped to a program — only enabled once one is picked.
-export function useApplicationPaymentFees(programGuid: string, enabled: boolean) {
-  return useQuery({
-    queryKey: [...APPLICATION_PAYMENTS_KEY, 'fees', programGuid],
-    queryFn: () => getApplicationPaymentFees(programGuid),
-    enabled: enabled && !!programGuid,
   })
 }
 
@@ -93,10 +62,8 @@ export function useApplicationPaymentTypes() {
 }
 
 export function useCreateApplicationPayment() {
-  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: ApplicationPaymentInput) => createApplicationPayment(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: APPLICATION_PAYMENTS_KEY }),
   })
 }
 

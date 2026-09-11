@@ -34,10 +34,8 @@ export function useBatchSearch(search: string, pageSize: number) {
 }
 
 export function useCreateBatch() {
-  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: BatchCreateInput) => createBatch(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: BATCHES_KEY }),
   })
 }
 

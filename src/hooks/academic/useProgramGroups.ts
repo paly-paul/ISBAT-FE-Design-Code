@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient, useQueries, keepPreviousData } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, useQueries, keepPreviousData } from '@tanstack/react-query'
 import { createProgramGroup, deleteProgramGroup, getProgramGroupById, getProgramGroups, getProgramGroupsPaged, ProgramGroup, ProgramGroupInput, updateProgramGroup } from '@/lib/api/academic/programGroup'
+import { getNextPageParam } from '@/lib/pagination'
 
 const PROGRAM_GROUPS_KEY = ['programGroups']
 
@@ -51,6 +52,18 @@ export function useProgramGroupsPaged(page: number, pageSize: number, search: st
   })
 }
 
+export function useSearchProgramGroupsInfinite(search: string, pageSize: number, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...PROGRAM_GROUPS_KEY, 'search-infinite', search, pageSize],
+    queryFn: ({ pageParam }) => getProgramGroupsPaged(pageParam, pageSize, search),
+    initialPageParam: 1,
+    getNextPageParam,
+    enabled,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
 // Batched-by-guid lookup — same convention as useCourseUnitsByGuids/
 // useIntakesByGuids/useFacultiesByGuids, used to resolve display labels for
 // a bounded set of specific programGroupGuids (e.g. just the ones referenced
@@ -73,10 +86,8 @@ export function useProgramGroupsByGuids(guids: string[]) {
 }
 
 export function useCreateProgramGroup() {
-  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: ProgramGroupInput) => createProgramGroup(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRAM_GROUPS_KEY }),
   })
 }
 

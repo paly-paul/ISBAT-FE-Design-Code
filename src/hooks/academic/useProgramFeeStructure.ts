@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import {
   getProgramFeeStructures,
   getProgramFeeLines,
@@ -12,6 +12,7 @@ import {
   ProgramFeeStructureUpdateInput,
 } from '@/lib/api/academic/programFeeStructure'
 import { PROGRAM_MASTERS_KEY } from './useProgramMaster'
+import { getNextPageParam } from '@/lib/pagination'
 
 const PROGRAM_FEE_STRUCTURES_KEY = ['programFeeStructures']
 
@@ -47,6 +48,18 @@ export function useProgramFeeStructuresPaged(page: number, pageSize: number, sea
   })
 }
 
+export function useSearchProgramFeeStructuresInfinite(search: string, pageSize: number, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, 'search-infinite', search, pageSize],
+    queryFn: ({ pageParam }) => getProgramFeeStructures(pageParam, pageSize, undefined, search),
+    initialPageParam: 1,
+    getNextPageParam,
+    enabled,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
 // Fetch-by-guid convention, same as the rest of the app's real Edit modals —
 // backs FeeStructureModal's Edit mode prefill. The header fields (feeCode,
 // calcType, lef/cef/ace, intakeGuid, etc.) come from the list row the page
@@ -65,8 +78,7 @@ export function useSaveProgramFeeStructureComplete() {
   return useMutation({
     mutationFn: (input: ProgramFeeStructureSaveCompleteInput) => saveProgramFeeStructureComplete(input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PROGRAM_FEE_STRUCTURES_KEY })
-      queryClient.invalidateQueries({ queryKey: ['programMasters'] })
+      queryClient.invalidateQueries({ queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, 'paged'] })
     },
   })
 }
@@ -76,8 +88,7 @@ export function useUpdateProgramFeeStructureComplete() {
   return useMutation({
     mutationFn: ({ feeHdGuid, input }: { feeHdGuid: string; input: ProgramFeeStructureUpdateInput }) => updateProgramFeeStructureComplete(feeHdGuid, input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PROGRAM_FEE_STRUCTURES_KEY })
-      queryClient.invalidateQueries({ queryKey: ['programMasters'] })
+      queryClient.invalidateQueries({ queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, 'paged'] })
     },
   })
 }

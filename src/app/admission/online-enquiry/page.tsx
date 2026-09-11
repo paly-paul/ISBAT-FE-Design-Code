@@ -1,20 +1,21 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { FailurePopup } from '@/components/modals/shared/FailurePopup'
-import { useIntakes } from '@/hooks/academic/useIntakes'
-import { useCampuses } from '@/hooks/config/useCampuses'
-import { useCountries } from '@/hooks/config/useCountries'
+import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
+import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
+import { useSearchCountriesInfinite } from '@/hooks/config/useCountries'
 import { dialCode } from '@/lib/api/academic/country'
-import { useProgramMastersByCampus } from '@/hooks/academic/useProgramMaster'
+import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
 import { useCreateEnquiry } from '@/hooks/admission/useEnquiries'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
 import { sanitizePhoneInput } from '@/lib/errorMessages'
+import { flattenUniquePages } from '@/lib/pagination'
 
 // Today's date at midnight, formatted the same way the confirmed payload
 // sample uses (no timezone offset) — matches enquiryDate/dob's "T00:00:00" shape.
@@ -32,10 +33,7 @@ export default function OnlineEnquiryPage() {
   const [saved, setSaved] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
 
-  const { data: intakes = [] }             = useIntakes()
-  const { data: campuses = [] }            = useCampuses()
   const { data: enquirySources = [] }      = useEnquirySourceMasters()
-  const { data: countries = [] }           = useCountries()
   const createEnquiry = useCreateEnquiry()
 
   const [firstName, setFirstName] = useState('')
@@ -71,11 +69,49 @@ export default function OnlineEnquiryPage() {
   const [notes, setNotes]         = useState('')
   const [errors, setErrors]       = useState<Record<string, string>>({})
 
+  const [intakeSearch, setIntakeSearch] = useState('')
+  const [campusSearch, setCampusSearch] = useState('')
+  const [programSearch, setProgramSearch] = useState('')
+  const [countrySearch, setCountrySearch] = useState('')
+  const [committedIntakeSearch, setCommittedIntakeSearch] = useState('')
+  const [committedCampusSearch, setCommittedCampusSearch] = useState('')
+  const [committedProgramSearch, setCommittedProgramSearch] = useState('')
+  const [committedCountrySearch, setCommittedCountrySearch] = useState('')
+  const [intakePickerOpen, setIntakePickerOpen] = useState(false)
+  const [campusPickerOpen, setCampusPickerOpen] = useState(false)
+  const [programPickerOpen, setProgramPickerOpen] = useState(false)
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false)
+  const [phoneCodePickerOpen, setPhoneCodePickerOpen] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedIntakeSearch(intakeSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [intakeSearch])
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedCampusSearch(campusSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [campusSearch])
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedProgramSearch(programSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [programSearch])
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedCountrySearch(countrySearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [countrySearch])
+
+  const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, intakePickerOpen)
+  const campusQuery = useSearchCampusesInfinite(committedCampusSearch, 20, campusPickerOpen)
+  const programQuery = useSearchProgramMastersByCampusInfinite(campusGuid, committedProgramSearch, 20, programPickerOpen)
+  const countryQuery = useSearchCountriesInfinite(committedCountrySearch, 20, countryPickerOpen || phoneCodePickerOpen)
+  const intakes = useMemo(() => flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid), [intakeQuery.data])
+  const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
+  const programsByCampus = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
+  const countries = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
+
   // Same "programmes scoped to the selected campus" convention as the
   // Payment and Filing pages — a programme belongs to one campus, so the
   // list is empty/disabled until a Campus is chosen.
-  const { data: programsByCampus = [] } = useProgramMastersByCampus(campusGuid, !!campusGuid)
-
   // Only offer intakes that are actually "live" right now — flagged as the
   // current academic intake and/or the current admission intake — rather
   // than every intake the backend has ever recorded (which includes past
@@ -203,7 +239,18 @@ export default function OnlineEnquiryPage() {
           <div className="fg">
             <label className="lbl">Phone <span className="text-clr-red">*</span></label>
             <div className="flex gap-2">
-              <SearchSelect options={phoneCodeOptions} value={phoneCode} onChange={setPhoneCode} style={{ width: 108, flexShrink: 0 }} />
+              <SearchSelect
+                options={phoneCodeOptions}
+                value={phoneCode}
+                onChange={setPhoneCode}
+                onSearch={setCountrySearch}
+                onOpenChange={setPhoneCodePickerOpen}
+                isLoading={countryQuery.isLoading}
+                hasNextPage={countryQuery.hasNextPage}
+                isFetchingNextPage={countryQuery.isFetchingNextPage}
+                onLoadMore={() => countryQuery.fetchNextPage()}
+                style={{ width: 108, flexShrink: 0 }}
+              />
               <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="7XX XXX XXX" value={phone} onChange={e => { setPhone(sanitizePhoneInput(e.target.value, false)); clearError('phone') }} style={errors.phone ? { borderColor: 'var(--red)' } : undefined} />
             </div>
             {errors.phone && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.phone}</p>}
@@ -225,7 +272,7 @@ export default function OnlineEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Campus <span className="text-clr-red">*</span></label>
-            <SearchSelect placeholder="— select —" options={campusOptions} value={campusGuid} onChange={setCampus} />
+            <SearchSelect placeholder="— select —" options={campusOptions} value={campusGuid} onChange={setCampus} onSearch={setCampusSearch} onOpenChange={setCampusPickerOpen} isLoading={campusQuery.isLoading} hasNextPage={campusQuery.hasNextPage} isFetchingNextPage={campusQuery.isFetchingNextPage} onLoadMore={() => campusQuery.fetchNextPage()} />
             {errors.campusGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campusGuid}</p>}
           </div>
           <div className="fg">
@@ -236,11 +283,17 @@ export default function OnlineEnquiryPage() {
               value={programGuid}
               onChange={setProgramGuid}
               disabled={!campusGuid}
+              onSearch={setProgramSearch}
+              onOpenChange={setProgramPickerOpen}
+              isLoading={programQuery.isLoading}
+              hasNextPage={programQuery.hasNextPage}
+              isFetchingNextPage={programQuery.isFetchingNextPage}
+              onLoadMore={() => programQuery.fetchNextPage()}
             />
           </div>
           <div className="fg">
             <label className="lbl">Preferred Intake <span className="text-clr-red">*</span></label>
-            <SearchSelect placeholder="— select —" options={intakeOptions} value={intakeGuid} onChange={val => { setIntakeGuid(val); clearError('intakeGuid') }} />
+            <SearchSelect placeholder="— select —" options={intakeOptions} value={intakeGuid} onChange={val => { setIntakeGuid(val); clearError('intakeGuid') }} onSearch={setIntakeSearch} onOpenChange={setIntakePickerOpen} isLoading={intakeQuery.isLoading} hasNextPage={intakeQuery.hasNextPage} isFetchingNextPage={intakeQuery.isFetchingNextPage} onLoadMore={() => intakeQuery.fetchNextPage()} />
             {errors.intakeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
           </div>
           <div className="fg">
@@ -250,7 +303,7 @@ export default function OnlineEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Country <span className="text-clr-red">*</span></label>
-            <SearchSelect placeholder="— select —" options={countryOptions} value={countryGuid} onChange={selectCountry} />
+            <SearchSelect placeholder="— select —" options={countryOptions} value={countryGuid} onChange={selectCountry} onSearch={setCountrySearch} onOpenChange={setCountryPickerOpen} isLoading={countryQuery.isLoading} hasNextPage={countryQuery.hasNextPage} isFetchingNextPage={countryQuery.isFetchingNextPage} onLoadMore={() => countryQuery.fetchNextPage()} />
             {errors.countryGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.countryGuid}</p>}
           </div>
           {/* Preferred Study Mode had no counterpart on POST /api/v1/admissions/enquiries

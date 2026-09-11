@@ -6,18 +6,18 @@ import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { FailurePopup } from '@/components/modals/shared/FailurePopup'
-import { useIntakes } from '@/hooks/academic/useIntakes'
-import { useCampuses } from '@/hooks/config/useCampuses'
-import { useProgramDropdown, useProgramMaster, useProgramMasterByGuid, useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
+import { useProgramMaster, useProgramMasterByGuid, useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 import { useBatch, useBatches } from '@/hooks/academic/useBatches'
-import { useCountries } from '@/hooks/config/useCountries'
+import { useCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput } from '@/lib/errorMessages'
 import { consumeFilingPrefillRef } from '@/lib/filingHandoff'
 import { getEnquiryById, getEnquiries } from '@/lib/api/admission/enquiry'
+import { flattenUniquePages } from '@/lib/pagination'
 import {
   FilingApplicationSearchResult,
   useApplicationByGuid,
@@ -208,7 +208,9 @@ export default function FilingPage() {
   const [showApplicantDropdown, setShowApplicantDropdown] = useState(false)
   const [selectedApplication, setSelectedApplication] = useState<FilingApplicationSearchResult | null>(null)
   const [submitted, setSubmitted] = useState(false)
-  const { data: intakes = [] }    = useIntakes()
+  const [countrySearch, setCountrySearch] = useState('')
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false)
+  const [committedCountrySearch, setCommittedCountrySearch] = useState('')
   // searchTerm is CONFIRMED real server-side on this endpoint (2026-09-08) —
   // debounced the same 300ms as the other real-server-search pickers in this
   // app (CourseUnitSearchPicker, Payment Console's student search) so it
@@ -218,6 +220,10 @@ export default function FilingPage() {
     const t = setTimeout(() => setCommittedApplicantSearch(applicantSearch.trim()), 300)
     return () => clearTimeout(t)
   }, [applicantSearch])
+  useEffect(() => {
+    const t = setTimeout(() => setCommittedCountrySearch(countrySearch.trim()), 300)
+    return () => clearTimeout(t)
+  }, [countrySearch])
 
   // Real server-paginated, scroll-to-load-more applicant search — replaces
   // the old single pageSize=12000 "fetch nearly everything up front, filter
@@ -453,20 +459,23 @@ export default function FilingPage() {
   const [generalSaved, setGeneralSaved] = useState(false)
   const [intApplication, setIntApplication] = useState<number | null>(null)
 
-  const { data: campuses = [] }   = useCampuses()
-  const { data: programs = [] }   = useProgramMasters()
-  const { data: programDropdown = [] } = useProgramDropdown()
+  const countryQuery = useSearchCountriesInfinite(committedCountrySearch, 20, countryPickerOpen)
+  const countrySearchResults = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
+  const campusQuery = useSearchCampusesInfinite('', 20, !!selectedApplication)
+  const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
+  const programQuery = useSearchProgramMastersInfinite('', 20, !!selectedApplication)
+  const programs = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
   const { data: singleProgram }   = useProgramMaster(
     programGuid,
-    !!programGuid && !programs.some(p => p.programGuid === programGuid) && !programDropdown.some(p => p.programGuid === programGuid)
+    !!programGuid && !programs.some(p => p.programGuid === programGuid)
   )
   const { data: semesters = [] }  = useSemestersForProgram(programGuid, !!programGuid)
-  const { data: batchTimes = [] } = useBatchTimes()
+  const { data: batchTimes = [] } = useBatchTimes(!!selectedApplication)
   // Same payment-scoped Dropdowns/Batches.bru endpoint that turned out
   // unreliable on the Payment page (200 with an empty array for
   // combinations that do have a matching batch) — use the generic,
   // already-confirmed-correct Batches list filtered client-side instead.
-  const { data: allBatchesData }  = useBatches(1, 1000)
+  const { data: allBatchesData }  = useBatches(1, 20, '', !!selectedApplication)
   const batches = (allBatchesData?.items ?? []).filter(b =>
     b.programGuid === programGuid && b.semesterGuid === semesterGuid && b.batchTimeGuid === batchTimeGuid,
   )
@@ -484,9 +493,9 @@ export default function FilingPage() {
   // real fee structures) — use the generic, already-confirmed-correct
   // Programme Fee Structure list filtered client-side instead, same fix as
   // applied there.
-  const { data: allFeeStructuresData } = useProgramFeeStructures(1, 1000)
+  const { data: allFeeStructuresData } = useProgramFeeStructures(1, 20, undefined, '', !!selectedApplication)
   const fees = (allFeeStructuresData?.items ?? []).filter(f => f.programGuid === programGuid && f.status)
-  const { data: countries = [] }  = useCountries()
+  const { data: countries = [] }  = useCountries(!!selectedApplication || countryPickerOpen)
 
   // CONFIRMED live: a real selected application's programGuid (locked/
   // prefilled from the payment record, see selectApplication above) can
@@ -513,11 +522,6 @@ export default function FilingPage() {
     for (const p of programs) {
       map.set(p.programGuid, `${p.programName} (${p.programCode})`)
     }
-    for (const p of programDropdown) {
-      if (!map.has(p.programGuid)) {
-        map.set(p.programGuid, `${p.programName} (${p.programCode})`)
-      }
-    }
     if (selectedProgramFallback && !map.has(selectedProgramFallback.programGuid)) {
       map.set(selectedProgramFallback.programGuid, `${selectedProgramFallback.programName} (${selectedProgramFallback.programCode})`)
     }
@@ -527,7 +531,7 @@ export default function FilingPage() {
       map.set(currentProgGuid, fallback)
     }
     return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
-  }, [programs, programDropdown, selectedProgramFallback, singleProgram, programGuid, selectedApplication?.programGuid, selectedApplication?.programName])
+  }, [programs, selectedProgramFallback, singleProgram, programGuid, selectedApplication?.programGuid, selectedApplication?.programName])
 
   const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
   const batchTimeOptions = batchTimes.map(bt => ({ value: bt.batchTimeGuid, label: bt.batchTime }))
@@ -536,7 +540,14 @@ export default function FilingPage() {
     ...(selectedBatchFallback ? [{ value: selectedBatchFallback.batchGuid, label: selectedBatchFallback.batchCode }] : []),
   ]
   const feeOptions       = fees.map(f => ({ value: f.feeHdGuid, label: `${f.feeDesc} (${f.feeCode})` }))
-  const countryOptions   = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
+  const countryOptions   = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const c of countries) map.set(c.countryGuid, c.countryName)
+    for (const c of countrySearchResults) {
+      if (!map.has(c.countryGuid)) map.set(c.countryGuid, c.countryName)
+    }
+    return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
+  }, [countries, countrySearchResults])
 
   // Passport/Visa/Refugee sections only apply to non-home-country nationals.
   const isForeign = countryGuid !== '' && !countries.find(c => c.countryGuid === countryGuid)?.defaultCountry
@@ -627,17 +638,15 @@ export default function FilingPage() {
     }
     if (isRefugee && !refugeeId.trim()) { showToast('Refugee ID is required for refugee students', 'error'); return }
 
-    // Intake.intakeCode is a number on the wire (e.g. 20264) — this API's
-    // intakeCode field is a plain string (e.g. "2026"), so stringify it.
-    const selectedIntake = intakes.find(i => i.intakeGuid === intakeGuid)
-
+    // The selected application already carries the real intakeCode from the
+    // server-side search response; no separate intake list lookup is needed.
     saveGeneral.mutate(
       {
         appRefNo: selectedApplication.appRefNo,
         // Always null now — see the note above this component's state
         // declarations for why the field itself was dropped.
         enquiryGuid: null,
-        intakeCode: selectedIntake ? String(selectedIntake.intakeCode) : null,
+        intakeCode: selectedApplication.intakeCode ? String(selectedApplication.intakeCode) : null,
         emailId: email.trim() || null,
         dob: dob || null,
         firstName: firstName.trim() || null,
@@ -1099,7 +1108,20 @@ export default function FilingPage() {
                     </div>
                     <div className="g3 mt-3">
                       <Field label="Date of Birth" req><Input type="date" value={dob} onChange={setDob} /></Field>
-                      <Field label="Nationality" req><SearchSelect options={countryOptions} value={countryGuid} placeholder="-- Select Country --" onChange={setCountryGuid} /></Field>
+                      <Field label="Nationality" req>
+                        <SearchSelect
+                          options={countryOptions}
+                          value={countryGuid}
+                          placeholder="-- Select Country --"
+                          onChange={setCountryGuid}
+                          onSearch={setCountrySearch}
+                          onOpenChange={setCountryPickerOpen}
+                          isLoading={countryQuery.isLoading}
+                          hasNextPage={countryQuery.hasNextPage}
+                          isFetchingNextPage={countryQuery.isFetchingNextPage}
+                          onLoadMore={() => countryQuery.fetchNextPage()}
+                        />
+                      </Field>
                       <Field label="National ID"><Input placeholder="CM-XXXXX-XXXX" value={nationalId} onChange={setNationalId} /></Field>
                     </div>
                     <div className="g3 mt-3">
@@ -1204,7 +1226,20 @@ export default function FilingPage() {
                       <Field label="Sponsor Email"><Input type="email" placeholder="sponsor@email.com" value={spEmail} onChange={setSpEmail} /></Field>
                     </div>
                     <div className="g3 mt-3">
-                      <Field label="Sponsor Country"><SearchSelect options={countryOptions} value={spCountryGuid} placeholder="-- Select Country --" onChange={setSpCountryGuid} /></Field>
+                      <Field label="Sponsor Country">
+                        <SearchSelect
+                          options={countryOptions}
+                          value={spCountryGuid}
+                          placeholder="-- Select Country --"
+                          onChange={setSpCountryGuid}
+                          onSearch={setCountrySearch}
+                          onOpenChange={setCountryPickerOpen}
+                          isLoading={countryQuery.isLoading}
+                          hasNextPage={countryQuery.hasNextPage}
+                          isFetchingNextPage={countryQuery.isFetchingNextPage}
+                          onLoadMore={() => countryQuery.fetchNextPage()}
+                        />
+                      </Field>
                       <div className="fg" />
                       <div className="fg" />
                     </div>

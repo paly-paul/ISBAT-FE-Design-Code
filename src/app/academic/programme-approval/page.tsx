@@ -16,7 +16,6 @@ import { useProgramApprovals, useUpdateProgramApproval } from '@/hooks/academic/
 import { useDeleteProgramMasterComplete } from '@/hooks/academic/useProgramMaster'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatDate } from '@/lib/date'
-import { useStreams } from '@/hooks/config/useStreams'
 
 const PAGE_SIZE = 10
 // Don't hit the search endpoint (or open the search dropdown) until the
@@ -51,14 +50,14 @@ export default function Page() {
     return () => clearTimeout(t)
   }, [search])
 
-  const { data: approvalsData, isLoading, isFetching } = useProgramApprovals(1, 1000, debouncedSearch)
+  const [page, setPage] = useState(1)
+  const { data: approvalsData, isLoading, isFetching } = useProgramApprovals(page, PAGE_SIZE, debouncedSearch)
   const programs = approvalsData?.items || []
   const searchTrimmed = search.trim()
   const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isFetching)
 
   const updateProgramApproval = useUpdateProgramApproval()
   const deleteProgramMasterComplete = useDeleteProgramMasterComplete()
-  const { data: streams = [] } = useStreams()
 
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
@@ -95,10 +94,6 @@ export default function Page() {
   }, [])
 
   const rows = programs.map(p => {
-    const specializationNames = ((p as any).streamGuids || [])
-      .map((guid: string) => streams.find(s => s.streamGuid === guid)?.streamName)
-      .filter((name: any): name is string => !!name)
-
     return {
       programGuid: p.programGuid,
       progCode: p.programCode,
@@ -109,7 +104,6 @@ export default function Page() {
       dateAccRaw: p.dateAcc,
       accredDate: p.dateAcc ? formatDate(p.dateAcc) : '—',
       noIA: p.noIa ? 'Yes' : 'No',
-      specializations: specializationNames.length > 0 ? specializationNames.join(', ') : '—',
       admissionStatus: 'Not Approved'
     }
   }).sort((a, b) => new Date(b.dateAccRaw || 0).getTime() - new Date(a.dateAccRaw || 0).getTime())
@@ -133,8 +127,6 @@ export default function Page() {
     return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   })
 
-  const [page, setPage] = useState(1)
-
   // Reset back to page 1 whenever the (debounced) search term or level
   // filter changes — the previous page offset almost never lands on a valid
   // page of the newly-filtered result set.
@@ -143,9 +135,9 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, levelFilter])
 
-  const totalCount = filteredRows.length
+  const totalCount = approvalsData?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  const pageItems = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const pageItems = filteredRows
 
   function fth(label: string, col: string, opts: string[]) {
     return (

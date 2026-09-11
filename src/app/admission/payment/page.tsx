@@ -1,5 +1,5 @@
 'use client'
-import React, { Suspense, useState, useRef, useEffect } from 'react'
+import React, { Suspense, useState, useRef, useEffect, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
@@ -10,9 +10,10 @@ import { ImportOdelModal } from '@/components/modals/admission/ImportOdelModal'
 import { SearchSelect } from '@/components/SearchSelect'
 import { EnquirySearchPicker } from '@/components/EnquirySearchPicker'
 import DatePicker from '@/components/DatePicker'
-import { useIntakes } from '@/hooks/academic/useIntakes'
-import { useCampuses } from '@/hooks/config/useCampuses'
-import { useProgramMastersByCampus } from '@/hooks/academic/useProgramMaster'
+import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
+import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
+import { useSearchCountriesInfinite } from '@/hooks/config/useCountries'
+import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
@@ -20,7 +21,6 @@ import { useBatches } from '@/hooks/academic/useBatches'
 import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
-import { useCountries } from '@/hooks/config/useCountries'
 import { Country, dialCode } from '@/lib/api/academic/country'
 import { useEnquiry, useEnquiries } from '@/hooks/admission/useEnquiries'
 import {
@@ -32,6 +32,7 @@ import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput } from '@/lib/errorMessages'
 import { formatDate } from '@/lib/date'
 import { setFilingPrefillRef } from '@/lib/filingHandoff'
+import { flattenUniquePages } from '@/lib/pagination'
 
 const PIPELINE = [
   { label: 'App. Payment',  desc: 'Current step', status: 'active' },
@@ -208,6 +209,19 @@ function PaymentPageContent() {
   const [failure, setFailure] = useState<string | null>(null)
   const [form, setForm]         = useState<FormData>({ ...initialForm })
   const [enquirySearch, setEnquirySearch] = useState('')
+  const [intakeSearch, setIntakeSearch] = useState('')
+  const [campusSearch, setCampusSearch] = useState('')
+  const [programSearch, setProgramSearch] = useState('')
+  const [countrySearch, setCountrySearch] = useState('')
+  const [committedIntakeSearch, setCommittedIntakeSearch] = useState('')
+  const [committedCampusSearch, setCommittedCampusSearch] = useState('')
+  const [committedProgramSearch, setCommittedProgramSearch] = useState('')
+  const [committedCountrySearch, setCommittedCountrySearch] = useState('')
+  const [intakePickerOpen, setIntakePickerOpen] = useState(false)
+  const [campusPickerOpen, setCampusPickerOpen] = useState(false)
+  const [programPickerOpen, setProgramPickerOpen] = useState(false)
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false)
+  const [phoneCodePickerOpen, setPhoneCodePickerOpen] = useState(false)
   const [payProofFile, setPayProofFile] = useState<File | null>(null)
   // Per Application_Payment_Change_Requests_Final_Updated.md #6 — Receipt
   // Type/No. are no longer user-entered; populated from the create
@@ -326,6 +340,23 @@ function PaymentPageContent() {
   function setSemester(v: string) { setForm(prev => ({ ...prev, semesterGuid: v, batchGuid: '' })) }
   function setBatchTime(v: string) { setForm(prev => ({ ...prev, batchTimeGuid: v, batchGuid: '' })) }
 
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedIntakeSearch(intakeSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [intakeSearch])
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedCampusSearch(campusSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [campusSearch])
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedProgramSearch(programSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [programSearch])
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedCountrySearch(countrySearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [countrySearch])
+
   // ── Real data ──────────────────────────────────────────────────────────
   // enquiryGuid is CONFIRMED required on Create (the .bru docs mark it
   // "optional" but a real 400 reproduced by removing only this field from
@@ -339,12 +370,16 @@ function PaymentPageContent() {
   // EnquirySearchPicker's own real server-paginated, scroll-to-load-more
   // hook (useUnconvertedEnquiriesInfinite) rather than a single capped
   // pageSize=1000 snapshot of the whole intake.
-  const { data: intakes = [] }       = useIntakes()
-  const { data: campuses = [] }      = useCampuses()
-  // Per #7 — scoped to the selected Campus instead of every programme.
-  const { data: programsByCampus = [] } = useProgramMastersByCampus(form.campusGuid, !!form.campusGuid)
-  const { data: semesters = [] }     = useSemestersForProgram(form.programGuid, !!form.programGuid)
-  const { data: batchTimes = [] }    = useBatchTimes()
+  const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, intakePickerOpen)
+  const campusQuery = useSearchCampusesInfinite(committedCampusSearch, 20, campusPickerOpen)
+  const programQuery = useSearchProgramMastersByCampusInfinite(form.campusGuid, committedProgramSearch, 20, programPickerOpen)
+  const countryQuery = useSearchCountriesInfinite(committedCountrySearch, 20, countryPickerOpen || phoneCodePickerOpen)
+  const intakes = useMemo(() => flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid), [intakeQuery.data])
+  const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
+  const programsByCampus = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
+  const countries = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
+  const { data: semesters = [] } = useSemestersForProgram(form.programGuid, !!form.programGuid)
+  const { data: batchTimes = [] } = useBatchTimes()
   // The payment-scoped Dropdowns/Batches.bru endpoint returns a real 200
   // with an empty array for combinations that do have a matching batch in
   // the generic Batches list — its filtering logic looks broken server-side,
@@ -390,6 +425,9 @@ function PaymentPageContent() {
   const { data: allReceiptBooks = [] } = useReceiptBooks()
   const receiptBooks = allReceiptBooks.filter(r => r.status === 1)
 
+  // Country and phone-code dropdowns now use the server-backed search/scroll
+  // list, same pattern as the public enquiry pages, instead of a one-shot
+  // full-page fetch of the whole country catalog.
   const PAY_TYPE_TO_RECEIPT_CATEGORY: Record<number, number> = {
     1: 0, // Cash
     2: 1, // Cheque
@@ -402,11 +440,6 @@ function PaymentPageContent() {
     ? receiptBooks.filter(r => r.category === PAY_TYPE_TO_RECEIPT_CATEGORY[selectedPayType])
     : receiptBooks
   const receiptBookOptions = matchingReceiptBooks.map(r => ({ value: r.receiptBookGuid, label: r.bookCode }))
-  // No dedicated Countries dropdown under Application-Payments — reuses the
-  // same real, guid-bearing Country source as Country Master and Filing
-  // (GET /api/v1/users/countries), confirmed end-to-end via a real
-  // successful payment.
-  const { data: countries = [] }     = useCountries()
   const createPayment = useCreateApplicationPayment()
 
   // Fetch full detail for the selected enquiry (fresh fields — intake/
@@ -789,7 +822,18 @@ function PaymentPageContent() {
 
             <div className="g2 mb-4">
               <Field label="Intake" req>
-                <SearchSelect options={intakeOptions} value={form.intakeGuid} placeholder="-- Select Intake --" onChange={setIntake} />
+                <SearchSelect
+                  options={intakeOptions}
+                  value={form.intakeGuid}
+                  placeholder="-- Select Intake --"
+                  onChange={setIntake}
+                  onSearch={setIntakeSearch}
+                  onOpenChange={setIntakePickerOpen}
+                  isLoading={intakeQuery.isLoading}
+                  hasNextPage={intakeQuery.hasNextPage}
+                  isFetchingNextPage={intakeQuery.isFetchingNextPage}
+                  onLoadMore={() => intakeQuery.fetchNextPage()}
+                />
               </Field>
               <Field label="Enquiry" req>
                 <EnquirySearchPicker
@@ -814,7 +858,18 @@ function PaymentPageContent() {
               </Field>
               <Field label="Phone" req>
                 <div className="flex gap-2">
-                  <SearchSelect options={phoneCodeOptions.length ? phoneCodeOptions : COUNTRY_CODES} value={form.phoneCode} onChange={v => set('phoneCode', v)} style={{ width: 108, flexShrink: 0 }} />
+                  <SearchSelect
+                    options={phoneCodeOptions.length ? phoneCodeOptions : COUNTRY_CODES}
+                    value={form.phoneCode}
+                    onChange={v => set('phoneCode', v)}
+                    onSearch={setCountrySearch}
+                    onOpenChange={setPhoneCodePickerOpen}
+                    isLoading={countryQuery.isLoading}
+                    hasNextPage={countryQuery.hasNextPage}
+                    isFetchingNextPage={countryQuery.isFetchingNextPage}
+                    onLoadMore={() => countryQuery.fetchNextPage()}
+                    style={{ width: 108, flexShrink: 0 }}
+                  />
                   <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="700 000 000" value={form.phone} onChange={e => set('phone', sanitizePhoneInput(e.target.value, false))} />
                 </div>
               </Field>
@@ -825,10 +880,32 @@ function PaymentPageContent() {
                 </div>
               </Field>
               <Field label="Country" req>
-                <SearchSelect options={countryOptions} value={form.countryGuid} placeholder="-- Select Country --" onChange={handleCountryChange} />
+                <SearchSelect
+                  options={countryOptions}
+                  value={form.countryGuid}
+                  placeholder="-- Select Country --"
+                  onChange={handleCountryChange}
+                  onSearch={setCountrySearch}
+                  onOpenChange={setCountryPickerOpen}
+                  isLoading={countryQuery.isLoading}
+                  hasNextPage={countryQuery.hasNextPage}
+                  isFetchingNextPage={countryQuery.isFetchingNextPage}
+                  onLoadMore={() => countryQuery.fetchNextPage()}
+                />
               </Field>
               <Field label="Campus" req>
-                <SearchSelect options={campusOptions} value={form.campusGuid} placeholder="-- Select Campus --" onChange={setCampus} />
+                <SearchSelect
+                  options={campusOptions}
+                  value={form.campusGuid}
+                  placeholder="-- Select Campus --"
+                  onChange={setCampus}
+                  onSearch={setCampusSearch}
+                  onOpenChange={setCampusPickerOpen}
+                  isLoading={campusQuery.isLoading}
+                  hasNextPage={campusQuery.hasNextPage}
+                  isFetchingNextPage={campusQuery.isFetchingNextPage}
+                  onLoadMore={() => campusQuery.fetchNextPage()}
+                />
               </Field>
               <Field label="Interested Programme" req>
                 <SearchSelect
@@ -837,6 +914,12 @@ function PaymentPageContent() {
                   placeholder={form.campusGuid ? '-- Select Programme --' : '-- Select Campus First --'}
                   onChange={setProgram}
                   disabled={!form.campusGuid}
+                  onSearch={setProgramSearch}
+                  onOpenChange={setProgramPickerOpen}
+                  isLoading={programQuery.isLoading}
+                  hasNextPage={programQuery.hasNextPage}
+                  isFetchingNextPage={programQuery.isFetchingNextPage}
+                  onLoadMore={() => programQuery.fetchNextPage()}
                 />
               </Field>
               <Field label="Fee Structure" req>

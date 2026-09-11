@@ -14,6 +14,7 @@ interface SearchSelectProps {
   className?: string
   style?: React.CSSProperties
   disabled?: boolean
+  isLoading?: boolean
   hasNextPage?: boolean
   isFetchingNextPage?: boolean
   onLoadMore?: () => void
@@ -38,6 +39,7 @@ export function SearchSelect({
   className,
   style,
   disabled,
+  isLoading = false,
   hasNextPage = false,
   isFetchingNextPage = false,
   onLoadMore,
@@ -245,7 +247,9 @@ export function SearchSelect({
             />
           </div>
           <div className="ss-opts" ref={optsRef} style={{ maxHeight: pos.maxHeight }} onScroll={handleOptionsScroll}>
-            {visible.length === 0
+            {isLoading
+              ? <div className="ss-no-match"><i className="lni lni-spinner-arrow" /> Loading results…</div>
+              : visible.length === 0
               ? <div className="ss-no-match">No matches</div>
               : visible.map(o => (
                   <div

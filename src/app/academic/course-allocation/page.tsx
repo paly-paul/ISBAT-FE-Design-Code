@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -9,12 +9,13 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { CourseUnitSearchPicker, CourseUnitPickOption } from '@/components/CourseUnitSearchPicker'
 import { usePagination } from '@/hooks/usePagination'
-import { useIntakes } from '@/hooks/academic/useIntakes'
-import { useEmployees } from '@/hooks/employee/useEmployees'
-import { useFaculties } from '@/hooks/config/useFaculties'
+import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
+import { useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
+import { useSearchFacultiesInfinite } from '@/hooks/config/useFaculties'
 import { useProgramPlannings, useCreateProgramPlanning, useDeleteProgramPlanning } from '@/hooks/academic/useProgramPlannings'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
+import { flattenUniquePages } from '@/lib/pagination'
 
 // Confirmed via allocation/*.md — real endpoints now (was UI-only mock
 // against the legacy ISMS "Course Allottee" screen this page was first
@@ -37,15 +38,6 @@ export default function CourseAllocationPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  const { data: intakes = [] } = useIntakes()
-  const intakeOptions = intakes.map(i => ({ value: i.intakeGuid, label: `${i.description} (${i.intakeCode})` }))
-
-  const { data: employees = [] } = useEmployees()
-  const lecturerOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
-
-  const { data: faculties = [] } = useFaculties()
-  const facultyOptions = faculties.map(f => ({ value: f.facultyGuid, label: `${f.facultyCode} — ${f.facultyName}` }))
-
   const [intakeGuid, setIntakeGuid] = useState('')
   const [term, setTerm] = useState('')
   const [lecturerGuid, setLecturerGuid] = useState('')
@@ -53,6 +45,40 @@ export default function CourseAllocationPage() {
   const [courseUnit, setCourseUnit] = useState<CourseUnitPickOption | null>(null)
   const [load, setLoad] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [intakePickerOpen, setIntakePickerOpen] = useState(false)
+  const [lecturerPickerOpen, setLecturerPickerOpen] = useState(false)
+  const [facultyPickerOpen, setFacultyPickerOpen] = useState(false)
+  const [intakeSearch, setIntakeSearch] = useState('')
+  const [lecturerSearch, setLecturerSearch] = useState('')
+  const [facultySearch, setFacultySearch] = useState('')
+  const [committedIntakeSearch, setCommittedIntakeSearch] = useState('')
+  const [committedLecturerSearch, setCommittedLecturerSearch] = useState('')
+  const [committedFacultySearch, setCommittedFacultySearch] = useState('')
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedIntakeSearch(intakeSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [intakeSearch])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedLecturerSearch(lecturerSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [lecturerSearch])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedFacultySearch(facultySearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [facultySearch])
+
+  const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, intakePickerOpen)
+  const lecturerQuery = useSearchEmployeesInfinite(committedLecturerSearch, 20, lecturerPickerOpen)
+  const facultyQuery = useSearchFacultiesInfinite(committedFacultySearch, 20, facultyPickerOpen)
+  const intakes = useMemo(() => flattenUniquePages(intakeQuery.data?.pages ?? [], intake => intake.intakeGuid), [intakeQuery.data])
+  const employees = useMemo(() => flattenUniquePages(lecturerQuery.data?.pages ?? [], employee => employee.employeeGuid), [lecturerQuery.data])
+  const faculties = useMemo(() => flattenUniquePages(facultyQuery.data?.pages ?? [], faculty => faculty.facultyGuid), [facultyQuery.data])
+  const intakeOptions = intakes.map(i => ({ value: i.intakeGuid, label: `${i.description} (${i.intakeCode})` }))
+  const lecturerOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
+  const facultyOptions = faculties.map(f => ({ value: f.facultyGuid, label: `${f.facultyCode} — ${f.facultyName}` }))
 
   const { data: rows = [], isLoading } = useProgramPlannings()
   const createPlanning = useCreateProgramPlanning()
@@ -172,6 +198,11 @@ export default function CourseAllocationPage() {
               placeholder="— Select Academic Session —"
               options={intakeOptions}
               value={intakeGuid}
+              onSearch={setIntakeSearch}
+              onOpenChange={setIntakePickerOpen}
+              hasNextPage={intakeQuery.hasNextPage}
+              isFetchingNextPage={intakeQuery.isFetchingNextPage}
+              onLoadMore={() => intakeQuery.fetchNextPage()}
               onChange={val => { setIntakeGuid(val); if (errors.intakeGuid) setErrors(p => ({ ...p, intakeGuid: '' })) }}
             />
             {errors.intakeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
@@ -191,6 +222,11 @@ export default function CourseAllocationPage() {
               placeholder="— Select School / Faculty —"
               options={facultyOptions}
               value={schoolGuid}
+              onSearch={setFacultySearch}
+              onOpenChange={setFacultyPickerOpen}
+              hasNextPage={facultyQuery.hasNextPage}
+              isFetchingNextPage={facultyQuery.isFetchingNextPage}
+              onLoadMore={() => facultyQuery.fetchNextPage()}
               onChange={val => { setSchoolGuid(val); if (errors.schoolGuid) setErrors(p => ({ ...p, schoolGuid: '' })) }}
             />
             {errors.schoolGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.schoolGuid}</p>}
@@ -201,6 +237,11 @@ export default function CourseAllocationPage() {
               placeholder="— Select Lecturer —"
               options={lecturerOptions}
               value={lecturerGuid}
+              onSearch={setLecturerSearch}
+              onOpenChange={setLecturerPickerOpen}
+              hasNextPage={lecturerQuery.hasNextPage}
+              isFetchingNextPage={lecturerQuery.isFetchingNextPage}
+              onLoadMore={() => lecturerQuery.fetchNextPage()}
               onChange={val => { setLecturerGuid(val); if (errors.lecturerGuid) setErrors(p => ({ ...p, lecturerGuid: '' })) }}
             />
             {errors.lecturerGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lecturerGuid}</p>}

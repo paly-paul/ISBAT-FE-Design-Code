@@ -16,10 +16,6 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useCreateProgramMaster, useDeleteProgramMasterComplete, useProgramMastersPaged, useUpdateProgramMasterComplete } from '@/hooks/academic/useProgramMaster'
-import { useProgramGroups } from '@/hooks/academic/useProgramGroups'
-import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
-import { useFacultiesByGuids } from '@/hooks/config/useFaculties'
-import { useStreamsByGuids } from '@/hooks/config/useStreams'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatDate } from '@/lib/date'
 
@@ -112,16 +108,6 @@ export default function Page() {
   // prop for the same reason — see that component. Not confirmed to support
   // real server-side pagination (see the same note there), so stays a
   // full-list fetch rather than a batched-by-guid lookup.
-  const isProgModalOpen = openModals.has('new-prog-modal') || openModals.has('view-prog-modal')
-  const { data: programGroups = [] } = useProgramGroups(isProgModalOpen)
-  // programLevels backs both the table's Level column AND the standalone
-  // Level filter dropdown further down (levelDropdownOpts) — the latter
-  // needs the full set of level names regardless of what's on the current
-  // page/whether a modal's ever been opened, so this stays an unconditional
-  // full fetch (also not confirmed to support real pagination) rather than
-  // gated or batched-by-guid.
-  const { data: programLevels = [] } = useProgramLevels()
-
   const searchTrimmed = search.trim()
   const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
   const { data, isLoading, isFetching } = useProgramMastersPaged(page, PAGE_SIZE, activeSearch)
@@ -130,32 +116,15 @@ export default function Page() {
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && isFetching
 
-  // Faculty/Specialization names back the table's Faculty/Specializations
-  // columns — confirmed live (2026-09-10) that both
-  // /api/v1/academic/faculties and /api/v1/academic/specializations support
-  // real server-side pagination+search, so rather than a capped 1000-row
-  // snapshot gated behind the Add/Edit modal, these resolve only the guids
-  // actually referenced by the current page of programmes — a small, bounded
-  // set that's ready the moment the table itself loads, no modal required.
-  const facultyGuidsOnPage = programs.map(p => p.facultyGuid)
-  const facultiesByGuid = useFacultiesByGuids(facultyGuidsOnPage)
-  const streamGuidsOnPage = programs.flatMap(p => p.streamGuids ?? [])
-  const streamsByGuid = useStreamsByGuids(streamGuidsOnPage)
-
   const rows = programs.map(p => {
-    const group = programGroups.find(g => g.programGroupGuid === p.programGroupGuid)
-    const level = programLevels.find(l => l.programLevelGuid === p.programLevelGuid)
-    const faculty = facultiesByGuid.get(p.facultyGuid)
-    const specializationNames = (p.streamGuids || [])
-      .map(guid => streamsByGuid.get(guid)?.streamName)
-      .filter((name): name is string => !!name)
+    const specializationNames = (p.streams ?? []).map(stream => stream.streamName).filter(Boolean)
     return {
       programGuid: p.programGuid,
       progCode: p.programCode,
       progName: p.programName,
-      group: group?.groupCode ?? '—',
-      level: level ? `${level.levelName} · ${p.yearCount}yr / ${p.semCount}sem` : `${p.yearCount}yr / ${p.semCount}sem`,
-      faculty: faculty ? `${faculty.facultyCode} → ${faculty.campusName}` : '—',
+      group: p.programGroupName ?? '—',
+      level: p.programLevelName ? `${p.programLevelName} · ${p.yearCount}yr / ${p.semCount}sem` : `${p.yearCount}yr / ${p.semCount}sem`,
+      faculty: p.facultyName ?? '—',
       // Kept alongside the display string below — dateAcc is the only real
       // date field the list endpoint returns (no created/updated timestamp),
       // so it's what "newest to oldest" sorts on.
@@ -165,11 +134,15 @@ export default function Page() {
       specializations: specializationNames.length > 0 ? specializationNames.join(', ') : '—',
       admissionStatus: p.pgmStatus ? 'Active' : 'Inactive',
     }
-  }).sort((a, b) => new Date(b.dateAccRaw).getTime() - new Date(a.dateAccRaw).getTime())
+  }).sort((a, b) => {
+    const aTime = a.dateAccRaw ? new Date(a.dateAccRaw).getTime() : 0
+    const bTime = b.dateAccRaw ? new Date(b.dateAccRaw).getTime() : 0
+    return bTime - aTime
+  })
 
   const groupFilterOpts = Array.from(new Set(rows.map(r => r.group)))
   const levelFilterOpts = Array.from(new Set(rows.map(r => r.level)))
-  const levelDropdownOpts = Array.from(new Set(programLevels.map(l => l.levelName)))
+  const levelDropdownOpts = Array.from(new Set(rows.map(r => r.level.split(' · ')[0])))
 
   // Live preview shown in the search dropdown as the user types — matches
   // the same code/name test as the table's own search filter below, just

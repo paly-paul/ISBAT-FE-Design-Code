@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Campus, CampusInput, createCampus, deleteCampus, getCampusDropdown, getCampuses, updateCampus } from '@/lib/api/academic/campus'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Campus, CampusInput, createCampus, deleteCampus, getCampusDropdown, getCampuses, getCampusesPaged, updateCampus } from '@/lib/api/academic/campus'
+import { getNextPageParam } from '@/lib/pagination'
 
 const CAMPUSES_KEY = ['campuses']
 
@@ -14,6 +15,18 @@ export function useCampuses(enabled = true) {
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,
+  })
+}
+
+export function useSearchCampusesInfinite(search: string, pageSize: number, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...CAMPUSES_KEY, 'search-infinite', search, pageSize],
+    queryFn: ({ pageParam }) => getCampusesPaged(pageParam, pageSize, search),
+    initialPageParam: 1,
+    getNextPageParam,
+    enabled,
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
 }
 

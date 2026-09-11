@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
@@ -7,13 +7,18 @@ import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { BatchCreateInput, BatchUpdateInput, EMPTY_GUID } from '@/lib/api/academic/batch'
 import { useBatch } from '@/hooks/academic/useBatches'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useProgramMasterByGuid, useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
+import { useIntake, useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
-import { useStreams } from '@/hooks/config/useStreams'
+import { useSearchStreamsInfinite, useStream } from '@/hooks/config/useStreams'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
+<<<<<<< HEAD
+import { useEmployee, useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
+=======
 import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
+>>>>>>> 46ec705f9fb29ac5c8a74d4c26df4d464e046dbc
 import { AuthError } from '@/lib/api/client'
+import { flattenUniquePages } from '@/lib/pagination'
 
 // Create and Edit share this form — same fields, just different prefill,
 // locked fields, and which mutation runs on submit.
@@ -36,34 +41,128 @@ interface BatchFormModalProps extends ModalProps {
 export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, createBatch, updateBatch }: BatchFormModalProps) {
   const isEdit = mode === 'edit'
   const { data: batch, isLoading, isError, error } = useBatch(batchGuid, isOpen && isEdit)
+<<<<<<< HEAD
+=======
   const { data: programs = [] }   = useProgramMasters(isOpen)
   const { data: intakes = [] }    = useIntakes(isOpen)
   const { data: streams = [] }    = useStreams()
   const { data: batchTimes = [] } = useBatchTimes()
   const { data: employees = [] }  = useEmployeeDropdown(isOpen)
 
+>>>>>>> 46ec705f9fb29ac5c8a74d4c26df4d464e046dbc
   const [programGuid, setProgramGuid] = useState('')
+  const [intakeGuid, setIntakeGuid] = useState('')
+  const [semesterGuid, setSemesterGuid] = useState('')
+  const [streamGuid, setStreamGuid] = useState('')
+  const [batchTimeGuid, setBatchTimeGuid] = useState('')
+  const [inChargeGuid, setInChargeGuid] = useState('')
+  const [pHeadGuid, setPHeadGuid] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [active, setActive] = useState(1)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [programSearch, setProgramSearch] = useState('')
+  const [committedProgramSearch, setCommittedProgramSearch] = useState('')
+  const [programPickerOpen, setProgramPickerOpen] = useState(false)
+  const [intakeSearch, setIntakeSearch] = useState('')
+  const [committedIntakeSearch, setCommittedIntakeSearch] = useState('')
+  const [intakePickerOpen, setIntakePickerOpen] = useState(false)
+  const [streamSearch, setStreamSearch] = useState('')
+  const [committedStreamSearch, setCommittedStreamSearch] = useState('')
+  const [streamPickerOpen, setStreamPickerOpen] = useState(false)
+  const [employeeSearch, setEmployeeSearch] = useState('')
+  const [committedEmployeeSearch, setCommittedEmployeeSearch] = useState('')
+  const [employeePickerOpen, setEmployeePickerOpen] = useState(false)
+
+  const selectedProgram = useProgramMasterByGuid(programGuid, isOpen && !!programGuid)
+  const selectedIntake = useIntake(intakeGuid, isOpen && !!intakeGuid)
+  const selectedStream = useStream(streamGuid, isOpen && !!streamGuid)
+  const selectedEmployee = useEmployee(inChargeGuid || null)
+  const selectedHead = useEmployee(pHeadGuid || null)
+
+  const programQuery = useSearchProgramMastersInfinite(committedProgramSearch, 20, isOpen && programPickerOpen)
+  const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, isOpen && intakePickerOpen)
+  const streamQuery = useSearchStreamsInfinite(committedStreamSearch, 20, isOpen && streamPickerOpen)
+  const employeeQuery = useSearchEmployeesInfinite(committedEmployeeSearch, 20, isOpen && employeePickerOpen)
+
+  const programOptions = useMemo(() => {
+    const arr = flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid)
+      .map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
+    if (programGuid && !arr.some(option => option.value === programGuid) && selectedProgram.data) {
+      arr.unshift({ value: programGuid, label: `${selectedProgram.data.programName} (${selectedProgram.data.programCode})` })
+    }
+    return arr
+  }, [programGuid, programQuery.data, selectedProgram.data])
+
+  const intakeOptions = useMemo(() => {
+    const arr = flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid)
+      .map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
+    if (intakeGuid && !arr.some(option => option.value === intakeGuid) && selectedIntake.data) {
+      arr.unshift({ value: intakeGuid, label: `${selectedIntake.data.intakeCode} — ${selectedIntake.data.description}` })
+    }
+    return arr
+  }, [intakeGuid, intakeQuery.data, selectedIntake.data])
+
+  const streamOptions = useMemo(() => {
+    const arr = flattenUniquePages(streamQuery.data?.pages ?? [], s => s.streamGuid)
+      .map(s => ({ value: s.streamGuid, label: s.streamName }))
+    if (streamGuid && !arr.some(option => option.value === streamGuid) && selectedStream.data) {
+      arr.unshift({ value: streamGuid, label: selectedStream.data.streamName })
+    }
+    return arr
+  }, [streamGuid, streamQuery.data, selectedStream.data])
+
+  const advisorOptions = useMemo(() => {
+    const arr = flattenUniquePages(employeeQuery.data?.pages ?? [], e => e.employeeGuid)
+      .map(e => ({ value: e.employeeGuid, label: e.empName }))
+    if (inChargeGuid && !arr.some(option => option.value === inChargeGuid) && selectedEmployee.data) {
+      arr.unshift({ value: inChargeGuid, label: selectedEmployee.data.empName })
+    }
+    if (pHeadGuid && !arr.some(option => option.value === pHeadGuid) && selectedHead.data) {
+      arr.unshift({ value: pHeadGuid, label: selectedHead.data.empName })
+    }
+    return arr
+  }, [employeeQuery.data, inChargeGuid, pHeadGuid, selectedEmployee.data, selectedHead.data])
+
   const { data: semesters = [] } = useSemestersForProgram(programGuid, !!programGuid)
 
+<<<<<<< HEAD
+  const { data: batchTimes = [] } = useBatchTimes(isOpen)
+=======
   const programOptions   = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   const intakeOptions    = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
   const streamOptions    = streams.map(s => ({ value: s.streamGuid, label: s.streamName }))
   const batchTimeOptions = batchTimes.map(b => ({ value: b.batchTimeGuid, label: b.batchTime }))
   const advisorOptions   = employees.map(e => ({ value: e.employeeGuid, label: e.displayName }))
+>>>>>>> 46ec705f9fb29ac5c8a74d4c26df4d464e046dbc
 
-  const [saved, setSaved]     = useState(false)
+  const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
+  const batchTimeOptions = batchTimes.map(b => ({ value: b.batchTimeGuid, label: b.batchTime }))
+  const advisorOptionsList = advisorOptions
+
+  const [saved, setSaved] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
-  const [intakeGuid, setIntakeGuid]       = useState('')
-  const [semesterGuid, setSemesterGuid]   = useState('')
-  const [streamGuid, setStreamGuid]       = useState('')
-  const [batchTimeGuid, setBatchTimeGuid] = useState('')
-  const [inChargeGuid, setInChargeGuid]   = useState('')
-  const [pHeadGuid, setPHeadGuid]         = useState('')
-  const [startDate, setStartDate]         = useState('')
-  const [endDate, setEndDate]             = useState('')
-  const [active, setActive]               = useState(1)
-  const [errors, setErrors]               = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedProgramSearch(programSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [programSearch])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedIntakeSearch(intakeSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [intakeSearch])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedStreamSearch(streamSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [streamSearch])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedEmployeeSearch(employeeSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [employeeSearch])
 
   // Every field prefills from the fetched record on Edit — GET returns real
   // guids for all of Programme/Semester/Stream/Batch Time/Intake/In-Charge.
@@ -124,8 +223,15 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
       pHead: pHeadGuid || null,
       active,
     }
-    const onSuccess = () => { showToast(isEdit ? 'Batch updated successfully' : 'Batch created successfully', 'success'); handleClose() }
-    const onError = (error: Error) => { showToast(error.message || `Failed to ${isEdit ? 'update' : 'create'} batch. Please try again.`, 'danger') }
+    const onSuccess = () => {
+      setSaved(true)
+      showToast(isEdit ? 'Batch updated successfully' : 'Batch created successfully', 'success')
+    }
+    const onError = (error: Error) => {
+      const message = error.message || `Failed to ${isEdit ? 'update' : 'create'} batch. Please try again.`
+      setFailure(message)
+      showToast(message, 'danger')
+    }
 
     if (isEdit && batchGuid) {
       updateBatch.mutate({ guid: batchGuid, input }, { onSuccess, onError })
@@ -135,6 +241,34 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   }
 
   const isPending = isEdit ? updateBatch.isPending : createBatch.isPending
+
+  if (saved) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <SuccessPopup
+            title={isEdit ? 'Batch Updated!' : 'Batch Added!'}
+            subtitle={isEdit ? 'The batch details have been saved successfully.' : 'The new batch has been added successfully.'}
+            onClose={handleClose}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (failure) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup
+            title={isEdit ? "Couldn't Update Batch" : "Couldn't Add Batch"}
+            subtitle={failure}
+            onClose={() => setFailure(null)}
+          />
+        </div>
+      </div>
+    )
+  }
 
   if (isEdit && isError) {
     return (
@@ -186,7 +320,18 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               just not user-editable. */}
           <div className="fg">
             <div className="lbl">Intake <span className="req">*</span></div>
-            <SearchSelect placeholder="— Select intake —" options={intakeOptions} value={intakeGuid} disabled={isEdit} onChange={isEdit ? undefined : (val => { setIntakeGuid(val); if (errors.intakeGuid) setErrors(p => ({ ...p, intakeGuid: '' })) })} />
+            <SearchSelect
+              placeholder="— Select intake —"
+              options={intakeOptions}
+              value={intakeGuid}
+              disabled={isEdit}
+              onSearch={setIntakeSearch}
+              onOpenChange={setIntakePickerOpen}
+              hasNextPage={intakeQuery.hasNextPage}
+              isFetchingNextPage={intakeQuery.isFetchingNextPage}
+              onLoadMore={() => intakeQuery.fetchNextPage()}
+              onChange={isEdit ? undefined : (val => { setIntakeGuid(val); if (errors.intakeGuid) setErrors(p => ({ ...p, intakeGuid: '' })) })}
+            />
             {errors.intakeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
           </div>
           <div className="fg">
@@ -196,6 +341,11 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               options={programOptions}
               value={programGuid}
               disabled={isEdit}
+              onSearch={setProgramSearch}
+              onOpenChange={setProgramPickerOpen}
+              hasNextPage={programQuery.hasNextPage}
+              isFetchingNextPage={programQuery.isFetchingNextPage}
+              onLoadMore={() => programQuery.fetchNextPage()}
               onChange={isEdit ? undefined : (val => { setProgramGuid(val); setSemesterGuid(''); if (errors.programGuid) setErrors(p => ({ ...p, programGuid: '' })) })}
             />
             {errors.programGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programGuid}</p>}
@@ -207,7 +357,17 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
           </div>
           <div className="fg">
             <div className="lbl">Specialization <span className="req">*</span></div>
-            <SearchSelect placeholder="— Select specialization —" options={streamOptions} value={streamGuid} onChange={val => { setStreamGuid(val); if (errors.streamGuid) setErrors(p => ({ ...p, streamGuid: '' })) }} />
+            <SearchSelect
+              placeholder="— Select specialization —"
+              options={streamOptions}
+              value={streamGuid}
+              onSearch={setStreamSearch}
+              onOpenChange={setStreamPickerOpen}
+              hasNextPage={streamQuery.hasNextPage}
+              isFetchingNextPage={streamQuery.isFetchingNextPage}
+              onLoadMore={() => streamQuery.fetchNextPage()}
+              onChange={val => { setStreamGuid(val); if (errors.streamGuid) setErrors(p => ({ ...p, streamGuid: '' })) }}
+            />
             {errors.streamGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.streamGuid}</p>}
           </div>
           <div className="fg">
@@ -217,12 +377,32 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
           </div>
           <div className="fg">
             <div className="lbl">Batch In-Charge <span className="req">*</span></div>
-            <SearchSelect placeholder="— Select faculty member —" options={advisorOptions} value={inChargeGuid} onChange={val => { setInChargeGuid(val); if (errors.inChargeGuid) setErrors(p => ({ ...p, inChargeGuid: '' })) }} />
+            <SearchSelect
+              placeholder="— Select faculty member —"
+              options={advisorOptionsList}
+              value={inChargeGuid}
+              onSearch={setEmployeeSearch}
+              onOpenChange={setEmployeePickerOpen}
+              hasNextPage={employeeQuery.hasNextPage}
+              isFetchingNextPage={employeeQuery.isFetchingNextPage}
+              onLoadMore={() => employeeQuery.fetchNextPage()}
+              onChange={val => { setInChargeGuid(val); if (errors.inChargeGuid) setErrors(p => ({ ...p, inChargeGuid: '' })) }}
+            />
             {errors.inChargeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.inChargeGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Programme Head</div>
-            <SearchSelect placeholder="— Select faculty member —" options={advisorOptions} value={pHeadGuid} onChange={setPHeadGuid} />
+            <SearchSelect
+              placeholder="— Select faculty member —"
+              options={advisorOptionsList}
+              value={pHeadGuid}
+              onSearch={setEmployeeSearch}
+              onOpenChange={setEmployeePickerOpen}
+              hasNextPage={employeeQuery.hasNextPage}
+              isFetchingNextPage={employeeQuery.isFetchingNextPage}
+              onLoadMore={() => employeeQuery.fetchNextPage()}
+              onChange={setPHeadGuid}
+            />
           </div>
           <div className="fg"><div className="lbl">Start Date</div><DatePicker value={startDate} onChange={setStartDate} /></div>
           <div className="fg"><div className="lbl">End Date</div><DatePicker value={endDate} onChange={setEndDate} /></div>

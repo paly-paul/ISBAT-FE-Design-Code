@@ -25,7 +25,7 @@ function Field({ label, value, mono, wide }: { label: string; value: React.React
 
 export function ViewProgrammeGroupModal({ isOpen, onClose, programGroupGuid, onEdit, canEdit }: ViewProgrammeGroupModalProps) {
   const { data: programGroup, isLoading, isError, error } = useProgramGroup(programGroupGuid, isOpen)
-  const { data: programLevels = [] } = useProgramLevels()
+  const { data: programLevels = [] } = useProgramLevels(isOpen)
 
   if (!isOpen) return null
 

@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
@@ -7,8 +7,9 @@ import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ProgramGroupInput } from '@/lib/api/academic/programGroup'
 import { useProgramGroup } from '@/hooks/academic/useProgramGroups'
-import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
+import { useSearchProgramLevelsInfinite } from '@/hooks/academic/useProgramLevels'
 import { AuthError } from '@/lib/api/client'
+import { flattenUniquePages } from '@/lib/pagination'
 
 // Add and Edit share this form — differ in prefill, the post-save redirect
 // (Add only), and which mutation runs.
@@ -38,10 +39,22 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
   const [groupCode, setGroupCode]     = useState('')
   const [groupName, setGroupName]     = useState('')
   const [programLevel, setProgramLevel] = useState('')
+  const [levelSearch, setLevelSearch] = useState('')
+  const [committedLevelSearch, setCommittedLevelSearch] = useState('')
+  const [levelPickerOpen, setLevelPickerOpen] = useState(false)
   const [errors, setErrors]           = useState<Record<string, string>>({})
 
-  const { data: programLevels = [] } = useProgramLevels()
+  const levelQuery = useSearchProgramLevelsInfinite(committedLevelSearch, 20, isOpen && levelPickerOpen)
+  const programLevels = useMemo(
+    () => flattenUniquePages(levelQuery.data?.pages ?? [], level => level.programLevelGuid),
+    [levelQuery.data],
+  )
   const programLevelOptions = programLevels.map(l => ({ value: l.programLevelGuid, label: l.levelName }))
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedLevelSearch(levelSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [levelSearch])
 
   // Prefill on edit once the group loads; re-runs per guid since react-query resets `programGroup` to undefined between them.
   useEffect(() => {
@@ -57,6 +70,10 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
   }, [isOpen, isEdit, programGroup])
 
   if (!isOpen) return null
+
+  if (isEdit && programGroup && programLevel && !programLevelOptions.some(option => option.value === programLevel)) {
+    programLevelOptions.unshift({ value: programLevel, label: programGroup.programLevelName || 'Selected programme level' })
+  }
 
   function handleClose() {
     setSaved(false); setFailure(null)
@@ -183,6 +200,11 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
                 placeholder="Select programme level…"
                 options={programLevelOptions}
                 value={programLevel}
+                onSearch={setLevelSearch}
+                onOpenChange={setLevelPickerOpen}
+                hasNextPage={levelQuery.hasNextPage}
+                isFetchingNextPage={levelQuery.isFetchingNextPage}
+                onLoadMore={() => levelQuery.fetchNextPage()}
                 onChange={v => { setProgramLevel(v); clearError('programLevel') }}
               />
               {errors.programLevel && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programLevel}</p>}
@@ -217,6 +239,11 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
                 placeholder="Select programme level…"
                 options={programLevelOptions}
                 value={programLevel}
+                onSearch={setLevelSearch}
+                onOpenChange={setLevelPickerOpen}
+                hasNextPage={levelQuery.hasNextPage}
+                isFetchingNextPage={levelQuery.isFetchingNextPage}
+                onLoadMore={() => levelQuery.fetchNextPage()}
                 onChange={v => { setProgramLevel(v); clearError('programLevel') }}
               />
               {errors.programLevel && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programLevel}</p>}
