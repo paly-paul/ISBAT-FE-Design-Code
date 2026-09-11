@@ -52,11 +52,10 @@ function BatchTransferContent() {
   const [remarks, setRemarks] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  const effectiveStudentGuid = student?.studentGuid ?? studentGuidParam
-  const { data: guidLoadedStudent } = useStudent(effectiveStudentGuid ?? null, !!effectiveStudentGuid)
+  const { data: guidLoadedStudent } = useStudent(studentGuidParam, !student && !!studentGuidParam)
   useEffect(() => {
-    if (!student && studentGuidParam && guidLoadedStudent) setStudent(normalizeStudentDetail(guidLoadedStudent, effectiveStudentGuid))
-  }, [student, studentGuidParam, guidLoadedStudent, effectiveStudentGuid])
+    if (!student && studentGuidParam && guidLoadedStudent) setStudent(normalizeStudentDetail(guidLoadedStudent, studentGuidParam))
+  }, [student, studentGuidParam, guidLoadedStudent])
 
   const { data: detail, isLoading: detailLoading } = useBatchTransferDetail(
     student?.studentGuid ?? null,
@@ -220,7 +219,7 @@ function BatchTransferContent() {
                   */}
                   <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                     <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                    <button className="btn btn-primary" disabled={!canExecute} onClick={() => setConfirmOpen(true)}>
+                    <button className="btn btn-primary" disabled={!canExecute || !permissions.edit} onClick={() => setConfirmOpen(true)}>
                       <i className="lni lni-checkmark"></i> Execute Transfer
                     </button>
                   </div>

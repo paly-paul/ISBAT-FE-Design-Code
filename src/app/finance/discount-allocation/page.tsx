@@ -135,18 +135,18 @@ export default function DiscountAllocationPage() {
   // Client-side name resolution for the profile's guid FKs — same fallback
   // pattern as Payment Console (prefer the server-resolved name, fall back
   // to the client-side lookup only when the server sends null).
-  const { data: campuses = [] } = useCampuses()
-  const { data: programs = [] } = useProgramMasters()
-  const { data: allBatchesData } = useBatches(1, 1000)
+  const { data: campuses = [] } = useCampuses(!!profile)
+  const { data: programs = [] } = useProgramMasters(!profile?.programName && !!profile)
+  const { data: allBatchesData } = useBatches(1, 1000, '', !profile?.batchCode && !!profile)
   const batches = allBatchesData?.items ?? []
-  const { data: semesters = [] } = useSemestersForProgram(profile?.programGuid ?? '', !!profile?.programGuid)
+  const { data: semesters = [] } = useSemestersForProgram(profile?.programGuid ?? '', !profile?.semesterName && !!profile?.programGuid)
   const campusName = campuses.find(c => c.campusGuid === profile?.campusGuid)?.campusName
   const programName = profile?.programName ?? programs.find(p => p.programGuid === profile?.programGuid)?.programName
   const batchCode = profile?.batchCode ?? batches.find(b => b.batchGuid === profile?.batchGuid)?.batchCode
   const semName = profile?.semesterName ?? semesters.find(s => s.semesterGuid === profile?.semesterGuid)?.semName
 
   // ── Discount catalogue + this student's current assignment. ──
-  const { data: discountCatalogue = [] } = useDiscounts()
+  const { data: discountCatalogue = [] } = useDiscounts(!!selectedApplicationGuid)
   const { data: discountDetail, isLoading: isDiscountLoading, isError: isDiscountError } = useStudentDiscount(studentGuid, !!selectedApplicationGuid && !!studentGuid)
   const assignDiscount = useAssignStudentDiscount()
   const updateDiscount = useUpdateStudentDiscount()
@@ -155,7 +155,7 @@ export default function DiscountAllocationPage() {
   // (/finance/cooperates) rather than free text — the value stored/sent as
   // `cop` is the cooperate's GUID (confirmed 2026-09-02 — a cooperate NAME
   // sent as `cop` 400'd on assign; the field wants cooperateGuid).
-  const { data: cooperates = [] } = useCooperates()
+  const { data: cooperates = [] } = useCooperates(!!selectedApplicationGuid)
 
   const [editing, setEditing] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
@@ -208,6 +208,7 @@ export default function DiscountAllocationPage() {
   }
 
   function handleAssign() {
+    if (!permissions.add) { showToast('You do not have permission to assign discounts.', 'warn'); return }
     if (!profile || !selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
     if (!studentGuid) { showToast("This applicant hasn't been registered as a student yet — discounts can only be assigned to enrolled students.", 'warn'); return }
     if (!discountChoice) { showToast('Please select a discount.', 'warn'); return }
@@ -246,7 +247,7 @@ export default function DiscountAllocationPage() {
   }
 
   function handleSaveEdit() {
-    if (!studentGuid) return
+    if (!permissions.edit || !studentGuid) return
     const amt = amtPer.trim() ? Number(amtPer) : null
     // Same UpdateStudentDiscountCommandValidator rules as assign — see the
     // comment in handleAssign above.
@@ -264,7 +265,7 @@ export default function DiscountAllocationPage() {
   }
 
   function handleCancelDiscount(includeCurrentSemester: boolean) {
-    if (!studentGuid) return
+    if (!permissions.delete || !studentGuid) return
     cancelDiscount.mutate(
       { studentGuid, includeCurrentSemester },
       {
@@ -536,11 +537,11 @@ export default function DiscountAllocationPage() {
                     </div>
 
                     <div className="flex gap-[10px] justify-end">
-                      {/* permissions.add && ( */}
+                      {permissions.add && (
                         <button className="btn btn-primary btn-lg" disabled={assignDiscount.isPending} onClick={handleAssign}>
                           <i className="lni lni-checkmark"></i> {assignDiscount.isPending ? 'Assigning…' : 'Assign Discount'}
                         </button>
-                      {/* )} */}
+                      )}
                     </div>
                   </>
                 ) : !editing ? (
@@ -567,8 +568,8 @@ export default function DiscountAllocationPage() {
                     </div>
 
                     <div className="flex gap-[10px] justify-end mt-4">
-                      <button className="btn btn-neu" disabled={busy} onClick={() => setShowCancelConfirm(true)}><i className="lni lni-close"></i> Cancel Discount</button>
-                      {/* {permissions.edit && <button className="btn btn-primary" disabled={busy} onClick={startEdit}><i className="lni lni-pencil"></i> Edit Discount</button>} */}
+                      {permissions.delete && <button className="btn btn-neu" disabled={busy} onClick={() => setShowCancelConfirm(true)}><i className="lni lni-close"></i> Cancel Discount</button>}
+                      {permissions.edit && <button className="btn btn-primary" disabled={busy} onClick={startEdit}><i className="lni lni-pencil"></i> Edit Discount</button>}
                     </div>
                   </>
                 ) : (
@@ -613,11 +614,11 @@ export default function DiscountAllocationPage() {
                     </div>
                     <div className="flex gap-[10px] justify-end">
                       <button className="btn btn-neu" disabled={updateDiscount.isPending} onClick={() => setEditing(false)}>Discard</button>
-                      {/* permissions.edit && ( */}
+                      {permissions.edit && (
                         <button className="btn btn-primary" disabled={updateDiscount.isPending} onClick={handleSaveEdit}>
                           <i className="lni lni-checkmark"></i> {updateDiscount.isPending ? 'Saving…' : 'Save Changes'}
                         </button>
-                      {/* )} */}
+                      )}
                     </div>
                   </>
                 )}

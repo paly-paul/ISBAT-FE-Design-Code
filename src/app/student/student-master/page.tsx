@@ -62,7 +62,7 @@ export default function Page() {
   function handleView(studentGuid: string) { router.push('/student/profile?studentGuid=' + studentGuid) }
   function handleLearningMode(studentGuid: string) { router.push('/student/learning-mode?studentGuid=' + studentGuid) }
   function handleRefugee(studentGuid: string, studentName: string) { setSelectedStudentGuid(studentGuid); setSelectedStudentName(studentName); openModal('refugee-status-modal') }
-  function updateSearch(value: string) { setSearch(value); setPage(1) }
+  function updateSearch(value?: string) { setSearch(value ?? ''); setPage(1) }
   // Closes whichever column popover is open — every call site here is a
   // committed choice (OK or Reset inside GuidColumnFilter), same as
   // FilterTh's own onSelect/onClear handlers closing the filter themselves.
@@ -94,7 +94,8 @@ export default function Page() {
   // switches to useStudentsFilterMulti, which fetches each combination in
   // full and merges/paginates client-side — see that hook's own comment in
   // useStudents.ts for why.
-  const combos = getStudentsFilterCombinations(colFilters, search.trim() || undefined)
+  const normalizedSearch = (search || '').trim()
+  const combos = getStudentsFilterCombinations(colFilters, normalizedSearch || undefined)
   const isMultiCombo = combos.length > 1
 
   const singleQuery = useStudentsFilter(page, PAGE_SIZE, combos[0], !isMultiCombo)
@@ -111,8 +112,8 @@ export default function Page() {
   // aren't filtered by the guid columns above, so it's suppressed the
   // moment any column filter is active rather than showing unfiltered
   // "quick jump" results alongside a filtered table.
-  const searchDropdownQuery = useStudentsInfinite(search.trim(), 15)
-  const searchMatches = search.trim() && !hasColFilters
+  const searchDropdownQuery = useStudentsInfinite(normalizedSearch, 15)
+  const searchMatches = normalizedSearch && !hasColFilters
     ? searchDropdownQuery.data?.pages.flatMap(p => p.items) ?? []
     : []
 
@@ -135,7 +136,12 @@ export default function Page() {
                 onLoadMore={() => searchDropdownQuery.fetchNextPage()}
                 hasMore={!!searchDropdownQuery.hasNextPage}
                 loadingMore={searchDropdownQuery.isFetchingNextPage}
-                results={searchMatches.map(r => ({ id: r.studentGuid, primary: r.studentNum, secondary: r.studentName }))}
+                results={searchMatches.map(r => ({
+                  id: r.studentGuid,
+                  primary: r.studentName || r.studentRegNo || r.studentNum || '',
+                  secondary: [r.studentRegNo, r.studentNum].filter(Boolean).join(' · '),
+                }))}
+                onSelect={r => updateSearch(r.primary)}
               />
             </div>
           </div>
@@ -196,7 +202,7 @@ export default function Page() {
                 {isLoading
                   ? <TableLoadingState colSpan={6} />
                   : items.length === 0
-                    ? <EmptyState colSpan={6} hasFilters={!!search.trim() || hasColFilters} onClearFilters={() => { setSearch(''); clearColFilters() }} />
+                    ? <EmptyState colSpan={6} hasFilters={!!normalizedSearch || hasColFilters} onClearFilters={() => { setSearch(''); clearColFilters() }} />
                     : null}
                 {items.map(r => (
                   <tr key={r.studentGuid}>

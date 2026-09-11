@@ -16,6 +16,8 @@ export function useDropoutStudents(enabled: boolean) {
     queryKey: DROPOUT_LIST_KEY,
     queryFn: getDropoutStudents,
     enabled,
+    staleTime: 5 * 60 * 1000,
+    gcTime: Infinity,
   })
 }
 
@@ -26,6 +28,8 @@ export function useRejoinCandidate(studentGuid: string | null, enabled: boolean)
     queryKey: [...REJOIN_CANDIDATE_KEY, studentGuid],
     queryFn: () => getRejoinCandidate(studentGuid as string),
     enabled: enabled && !!studentGuid,
+    staleTime: 5 * 60 * 1000,
+    gcTime: Infinity,
   })
 }
 
@@ -38,6 +42,8 @@ export function useRejoinBatches(studentGuid: string | null, semesterGuid: strin
     queryKey: [...REJOIN_BATCHES_KEY, studentGuid, semesterGuid, batchTimeGuid],
     queryFn: () => getRejoinBatches(studentGuid as string, semesterGuid as string, batchTimeGuid as string),
     enabled: enabled && !!studentGuid && !!semesterGuid && !!batchTimeGuid,
+    staleTime: 5 * 60 * 1000,
+    gcTime: Infinity,
   })
 }
 

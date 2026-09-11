@@ -40,7 +40,7 @@ export default function Page() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage
-  } = useStudentStatementSearch(term)
+  } = useStudentStatementSearch(term, !selectedGuid)
   const matches = searchPages?.pages.flatMap(p => p.items) ?? []
 
   const { data: statement, isLoading: isStatementLoading, isError: isStatementError, error: statementError } = useStudentStatement(selectedGuid)
@@ -61,7 +61,9 @@ export default function Page() {
       <div className="pg-hdr">
         <div><div className="pg-title">Student Statement</div><div className="pg-sub">Fee ledger and payment history per student</div></div>
         <div className="flex gap-2">
-          <button className="btn btn-neu btn-sm"><i className="lni lni-printer"></i> Print</button>
+          <button className="btn btn-neu btn-sm" onClick={() => window.print()} disabled={!selectedGuid}>
+            <i className="lni lni-printer"></i> Print
+          </button>
           <button className="btn btn-neu btn-sm" onClick={() => selectedGuid && window.open(getStudentStatementPdfUrl(selectedGuid), '_blank')} disabled={!selectedGuid}>
             <i className="lni lni-download"></i> PDF
           </button>

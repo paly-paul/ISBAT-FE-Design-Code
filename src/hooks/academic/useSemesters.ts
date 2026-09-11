@@ -7,6 +7,8 @@ export function useSemestersForProgram(programGuid: string | null, enabled: bool
     queryKey: ['semesters', 'forProgram', programGuid],
     queryFn: () => getSemestersForProgram(programGuid as string),
     enabled: enabled && !!programGuid,
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
 }
 

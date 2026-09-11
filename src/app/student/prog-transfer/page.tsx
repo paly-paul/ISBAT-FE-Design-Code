@@ -18,6 +18,7 @@ import {
   useProgramTransferHistory,
   usePostProgramTransfer,
 } from '@/hooks/student/useProgramTransfer'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Ported from isbat_student_module.html's Programme Transfer page, then
 // rewired to the real students/program-transfer/*.md endpoints (2026-08-18/
@@ -71,20 +72,25 @@ function ProgTransferContent() {
   // deep-link convention Student Master's own "View" action uses to reach
   // Profile itself.
   const studentGuidParam = searchParams.get('studentGuid')
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [student, setStudent] = useState<StudentDto | null>(null)
-  const effectiveStudentGuid = student?.studentGuid ?? studentGuidParam
-  const { data: detail } = useStudent(effectiveStudentGuid ?? null, !!effectiveStudentGuid)
+  // Deep-link fetch: only run if the page opened with a ?studentGuid= param
+  // and we haven't already seeded the student state (e.g. from StudentLookup).
+  // Once student is loaded via StudentLookup, student is already present and
+  // studentGuidParam is null, so this hook remains disabled, avoiding a
+  // redundant GET /api/v1/students/{guid} on top of program-transfer/detail.
+  const { data: detail } = useStudent(studentGuidParam, !student && !!studentGuidParam)
   // Once the deep-linked guid's detail resolves, seed `student` from it —
   // same effect Profile itself uses for its own ?studentGuid= param.
   useEffect(() => {
-    if (!student && studentGuidParam && detail) setStudent(normalizeStudentDetail(detail, effectiveStudentGuid))
-  }, [student, studentGuidParam, detail, effectiveStudentGuid])
+    if (!student && studentGuidParam && detail) setStudent(normalizeStudentDetail(detail, studentGuidParam))
+  }, [student, studentGuidParam, detail])
   const { data: transferDetail } = useProgramTransferDetail(student?.studentGuid ?? null)
   const { data: history = [] } = useProgramTransferHistory(student?.studentGuid ?? null)
   const postProgramTransfer = usePostProgramTransfer()
 
-  const { data: programmes = [] } = useProgramMasters()
+  const { data: programmes = [] } = useProgramMasters(!!student)
   const programOptions = programmes.length > 0
     ? programmes.map(p => ({ value: p.programGuid, label: p.programName }))
     : TARGET_PROGRAMMES_FALLBACK
@@ -120,7 +126,7 @@ function ProgTransferContent() {
   const targetBatchLabel = batches.find(b => b.batchGuid === targetBatch)?.batchCode ?? ''
 
   function executeTransfer() {
-    if (!student || !targetProg || !targetBatch || !targetSemester || !targetFeeStructure) return
+    if (!permissions.edit || !student || !targetProg || !targetBatch || !targetSemester || !targetFeeStructure) return
     postProgramTransfer.mutate(
       { studentGuid: student.studentGuid, input: { newProgramGuid: targetProg, newBatchGuid: targetBatch, newSemesterGuid: targetSemester, newFeeGuid: targetFeeStructure, remarks: remarks.trim() || null } },
       {
@@ -192,7 +198,7 @@ function ProgTransferContent() {
                 <div className="fg"><label className="lbl">Remarks</label><textarea className="ctrl" rows={3} maxLength={100} placeholder="Reason for programme transfer… (max 100 chars)" value={remarks} onChange={e => setRemarks(e.target.value)} /></div>
                 <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                   <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                  <button className="btn btn-primary" disabled={!targetProg || !targetSemester || !targetBatch || !targetFeeStructure} onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Execute Transfer</button>
+                  <button className="btn btn-primary" disabled={!targetProg || !targetSemester || !targetBatch || !targetFeeStructure || !permissions.edit} onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Execute Transfer</button>
                 </div>
               </div>
               <div className="card">
@@ -244,7 +250,7 @@ function ProgTransferContent() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-neu" onClick={() => setConfirmOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={executeTransfer} disabled={postProgramTransfer.isPending}>
+              <button className="btn btn-primary" onClick={executeTransfer} disabled={postProgramTransfer.isPending || !permissions.edit}>
                 <i className="lni lni-checkmark"></i> {postProgramTransfer.isPending ? 'Executing…' : 'Confirm & Execute'}
               </button>
             </div>

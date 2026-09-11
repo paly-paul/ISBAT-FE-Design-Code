@@ -72,11 +72,11 @@ export function EditPaymentModal({ isOpen, onClose, showToast, target, applicati
   const [receiptBookGuid, setReceiptBookGuid] = useState('')
   const [procBankGuid, setProcBankGuid] = useState('')
 
-  const { data: currencies = [] } = useFinanceCurrencies()
-  const { data: allReceiptBooks = [] } = useReceiptBooks()
+  const { data: currencies = [] } = useFinanceCurrencies(isOpen)
+  const { data: allReceiptBooks = [] } = useReceiptBooks(isOpen)
   const activeReceiptBooks = allReceiptBooks.filter(r => r.status === 1)
   const receiptBooks = activeReceiptBooks.filter(r => r.category === PAY_TYPE_TO_RECEIPT_CATEGORY[Number(payType)])
-  const { data: allProcBanks = [] } = useProcBanks()
+  const { data: allProcBanks = [] } = useProcBanks(isOpen)
   const banks = allProcBanks.filter(b => b.status === 2)
   const showBankField = Number(payType) > 1
 

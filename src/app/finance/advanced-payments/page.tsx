@@ -11,6 +11,7 @@ import { NewAdvanceDepositModal } from '@/components/modals/finance/NewAdvanceDe
 import { usePaymentAdvances, PaymentAdvance } from '@/hooks/finance/usePayments'
 import { getStudentProfile } from '@/lib/api/finance/paymentConsole'
 import { PAY_TYPE_LABELS } from '@/hooks/finance/usePaymentConsole'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatDate } from '@/lib/date'
 
 const PAGE_SIZE = 10
@@ -41,6 +42,7 @@ function depositStatus(balance: number, amount: number): { label: string; badge:
 }
 
 export default function Page() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -120,9 +122,11 @@ export default function Page() {
             <div className="pg-title">Advanced Payments &amp; Deposits</div>
             <div className="pg-sub">Pre-payment deposits · Lock favorable exchange rates · Offset against future ledgers</div>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowNewDeposit(true)}>
-            <i className="lni lni-plus"></i> New Deposit
-          </button>
+          {permissions.create && (
+            <button className="btn btn-primary" onClick={() => setShowNewDeposit(true)}>
+              <i className="lni lni-plus"></i> New Deposit
+            </button>
+          )}
         </div>
 
         <div className="card">

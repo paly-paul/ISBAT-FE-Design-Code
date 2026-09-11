@@ -24,6 +24,7 @@ import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/fin
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { formatDate } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Reference: a legacy ISMS screen ("Payment Console - Refund" —
 // frmPaymentConsoleRefund.aspx) for issuing a refund against a payment a
@@ -40,10 +41,11 @@ import { AuthError } from '@/lib/api/client'
 // page's own Profile Details + payment form.
 
 function fmtAmt(n: number) {
-  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return n.toLocaleString('en-US', { maximumFractionDigits: 2 })
 }
 
-function applicantName(a: { firstName: string | null; lastName: string | null }) {
+function applicantName(a: { firstName: string | null; lastName: string | null } | undefined | null) {
+  if (!a) return '—'
   return `${a.firstName ?? ''}${a.lastName ? ` ${a.lastName}` : ''}`.trim() || '—'
 }
 
@@ -62,6 +64,7 @@ function todayYmd() {
 }
 
 export default function PaymentRefundPage() {
+  const permissions = usePagePermissions()
   const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
@@ -118,11 +121,11 @@ export default function PaymentRefundPage() {
   // Client-side name resolution for the profile's guid FKs — same fallback
   // pattern Payment Console uses: prefer the server's own pre-resolved
   // names, fall back to a client-side lookup only when the server sends null.
-  const { data: campuses = [] } = useCampuses()
-  const { data: programs = [] } = useProgramMasters()
-  const { data: allBatchesData } = useBatches(1, 1000)
+  const { data: campuses = [] } = useCampuses(!!profile)
+  const { data: programs = [] } = useProgramMasters(!profile?.programName && !!profile)
+  const { data: allBatchesData } = useBatches(1, 1000, '', !profile?.batchCode && !!profile)
   const batches = allBatchesData?.items ?? []
-  const { data: semesters = [] } = useSemestersForProgram(profile?.programGuid ?? '', !!profile?.programGuid)
+  const { data: semesters = [] } = useSemestersForProgram(profile?.programGuid ?? '', !profile?.semesterName && !!profile?.programGuid)
   // Same fallback need as programName/batchCode/semName below — a live
   // sample confirms profile.feeCode can come back null even though the
   // structure itself genuinely exists (feeHdGuid was populated), which was
@@ -130,7 +133,7 @@ export default function PaymentRefundPage() {
   // student's own programme rather than the whole university's fee
   // structures, same "just enough to resolve one label" scoping
   // useSemestersForProgram above already uses.
-  const { data: feeStructuresData } = useProgramFeeStructures(1, 1000, profile?.programGuid || undefined)
+  const { data: feeStructuresData } = useProgramFeeStructures(1, 1000, profile?.programGuid || undefined, !profile?.feeCode && !!profile?.programGuid)
   const feeStructures = feeStructuresData?.items ?? []
 
   const campusName = campuses.find(c => c.campusGuid === profile?.campusGuid)?.campusName
@@ -158,7 +161,7 @@ export default function PaymentRefundPage() {
   // exact figure the create endpoint validates the refund amount against.
   const { data: totalPaid, isLoading: isTotalPaidLoading } = useTotalPaid(selectedApplicationGuid, ledgerGuid || null, !!ledgerGuid)
 
-  const { data: currencies = [] } = useFinanceCurrencies()
+  const { data: currencies = [] } = useFinanceCurrencies(!!selectedApplicationGuid)
   const [currencyGuid, setCurrencyGuid] = useState('')
   const [refundAmount, setRefundAmount] = useState('')
   const [refundDate, setRefundDate] = useState(todayYmd)
@@ -215,6 +218,7 @@ export default function PaymentRefundPage() {
   const selectedCurrency = currencies.find(c => c.currencyGuid === currencyGuid)
 
   function handleSubmit() {
+    if (!permissions.create) { showToast('You do not have permission to create refunds.', 'warn'); return }
     if (!profile || !selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
     if (!selectedLedger) { showToast('Please select a ledger to refund.', 'warn'); return }
     if (!currencyGuid) { showToast('Please select a currency.', 'warn'); return }
@@ -479,7 +483,7 @@ export default function PaymentRefundPage() {
 
                 <div className="flex gap-[10px] justify-end flex-wrap">
                   <button className="btn btn-neu" onClick={handleCancel}><i className="lni lni-close"></i> Cancel</button>
-                  <button className="btn btn-primary btn-lg" disabled={createRefund.isPending} onClick={handleSubmit}>
+                  <button className="btn btn-primary btn-lg" disabled={createRefund.isPending || !permissions.create} onClick={handleSubmit}>
                     <i className="lni lni-checkmark"></i> {createRefund.isPending ? 'Submitting…' : 'Submit'}
                   </button>
                 </div>

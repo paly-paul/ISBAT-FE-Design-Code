@@ -58,7 +58,7 @@ export default function Page() {
   const canExecute = !!(student && targetFeeStructure && remarks.trim() && !executeTransfer.isPending)
 
   function handleSubmit() {
-    if (!canExecute || !student) return
+    if (!permissions.edit || !canExecute || !student) return
     executeTransfer.mutate({
       studentGuid: student.studentGuid,
       payload: {

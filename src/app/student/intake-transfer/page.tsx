@@ -113,7 +113,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
   // Admission's own filing form uses, not something the candidate response
   // carries. Sits ahead of Target Batch in the form since get-rejoin-batches.md
   // needs both the semester and this before it can return anything.
-  const { data: batchTimes = [] } = useBatchTimes()
+  const { data: batchTimes = [] } = useBatchTimes(!!selectedGuid)
   // The real batch dropdown for this form (get-rejoin-batches.md) — replaces
   // candidate.availableBatches entirely rather than falling back to it, since
   // that list isn't scoped to a batch time at all. Only fires once both
@@ -151,7 +151,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
   const canExecute = !!(targetSemester && targetBatch && targetFeeHead)
 
   function executeRejoin() {
-    if (!candidate || !canExecute) return
+    if (!permissions.edit || !candidate || !canExecute) return
     rejoin.mutate(
       { studentGuid: candidate.studentGuid, payload: { newSemesterGuid: targetSemester, newBatchGuid: targetBatch, newFeeGuid: targetFeeHead } },
       {
@@ -305,7 +305,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
             </div>
             <div className="modal-footer">
               <button className="btn btn-neu" onClick={() => setConfirmOpen(false)} disabled={rejoin.isPending}>Cancel</button>
-              <button className="btn btn-danger" onClick={executeRejoin} disabled={rejoin.isPending}><i className="lni lni-checkmark"></i> {rejoin.isPending ? 'Rejoining…' : 'Confirm & Rejoin'}</button>
+              <button className="btn btn-danger" onClick={executeRejoin} disabled={rejoin.isPending || !permissions.edit}><i className="lni lni-checkmark"></i> {rejoin.isPending ? 'Rejoining…' : 'Confirm & Rejoin'}</button>
             </div>
           </div>
         </div>
