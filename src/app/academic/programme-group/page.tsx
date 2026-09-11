@@ -13,7 +13,6 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useCreateProgramGroup, useDeleteProgramGroup, useProgramGroupsPaged, useUpdateProgramGroup, ProgramGroup } from '@/hooks/academic/useProgramGroups'
-import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -53,7 +52,6 @@ export default function Page() {
   // whole table in one 1000-row shot. Trade-off: the Programme Level column
   // filter below can now only narrow the rows already on the current page.
   const [page, setPage] = useState(1)
-  const { data: programLevels = [] } = useProgramLevels()
   const searchTrimmed = search.trim()
   const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
   const { data, isLoading, isFetching } = useProgramGroupsPaged(page, PAGE_SIZE, activeSearch)
@@ -156,7 +154,7 @@ export default function Page() {
                   <th style={{ width: 48 }}></th>
                   <th>Group Code</th>
                   <th>Group Name</th>
-                  {fth('Programme Level', 'programLevelName', programLevels.map(l => l.levelName))}
+                  {fth('Programme Level', 'programLevelName', Array.from(new Set(rows.map(r => r.programLevelName).filter(Boolean) as string[])))}
                   {/* Not part of the confirmed GET /api/v1/academic/program-groups
                   response — kept for reference until/unless the backend adds them.
                   <th>Active Versions</th>

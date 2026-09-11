@@ -4,7 +4,7 @@ import { ModalProps } from '../types'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { applicantProfileHref } from '@/lib/applicantProfileLink'
-import { useRegistrationDetail, useRegistrationTypes, useRegisterStudent, RegisterStudentResponse } from '@/hooks/admission/useRegistrarDesk'
+import { useRegistrationDetail, useRegisterStudent, RegisterStudentResponse } from '@/hooks/admission/useRegistrarDesk'
 import { AuthError } from '@/lib/api/client'
 
 interface Props extends ModalProps {
@@ -26,7 +26,6 @@ function fmtDate(iso: string | null): string {
 // Refugee ID — the actual POST /register body.
 export function CompleteRegistrationModal({ isOpen, onClose, showToast, applicationGuid, onRegistered }: Props) {
   const { data: detail, isLoading, isError, error } = useRegistrationDetail(applicationGuid, isOpen && !!applicationGuid)
-  const { data: registrationTypes = [] } = useRegistrationTypes()
   const registerStudent = useRegisterStudent()
 
   const [registrationTypeId, setRegistrationTypeId] = useState('')
@@ -53,7 +52,7 @@ export function CompleteRegistrationModal({ isOpen, onClose, showToast, applicat
     onClose()
   }
 
-  const registrationTypeOptions = registrationTypes.map(t => ({ value: String(t.intType), label: t.registrationType }))
+  const registrationTypeOptions = (detail?.admissionTypes ?? []).map(t => ({ value: String(t.intType), label: t.registrationType }))
 
   function handleSubmit() {
     if (!applicationGuid) return

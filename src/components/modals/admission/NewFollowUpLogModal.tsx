@@ -1,12 +1,13 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { EnquiryFollowUpInput } from '@/lib/api/admission/enquiryFollowUp'
-import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
+import { flattenUniquePages } from '@/lib/pagination'
 import { useFollowUpStatuses } from '@/hooks/config/useFollowUpStatuses'
 import { useFollowUpModes } from '@/hooks/admission/useFollowUpModes'
 import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
@@ -23,11 +24,8 @@ interface NewFollowUpLogModalProps extends ModalProps {
 const ENQUIRY_PICKER_PAGE_SIZE = 20
 
 // Enquiry picker — scroll-to-load-more (via useEnquiryFollowUpsInfinite)
-// instead of a SearchSelect over a capped 1000-row snapshot, but the value
-// it hands back is still that enquiry's 1-based *position* within the
-// canonical fetch order (see EnquiryFollowUpInput.intEnquiry's own long
-// note — the real backend id mapping is unconfirmed, so position is the
-// existing guess this preserves rather than fixes). Reuses SearchSelect's
+// instead of a SearchSelect over a capped 1000-row snapshot. The picker
+// stores and submits the selected enquiry's real GUID. Reuses SearchSelect's
 // own CSS classes (.ss-trigger, .ss-opts, etc.) for a matching look without
 // duplicating its styles. The search box here only filters what's already
 // loaded — client-side, purely for display — it never asks the server to
@@ -51,7 +49,7 @@ function EnquiryPicker({ value, onChange, enabled, hasError }: { value: string; 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching } = useEnquiryFollowUpsInfinite(ENQUIRY_PICKER_PAGE_SIZE, enabled)
 
   const allItems = data?.pages.flatMap(p => p.items) ?? []
-  const selected = value ? allItems[Number(value)] : undefined
+  const selected = value ? allItems.find(item => item.enquiryGuid === value) : undefined
 
   const term = filterText.trim().toLowerCase()
   const filtered = allItems
@@ -67,8 +65,8 @@ function EnquiryPicker({ value, onChange, enabled, hasError }: { value: string; 
     if (el.scrollTop > 0 && el.scrollHeight - el.scrollTop - el.clientHeight < 48) fetchNextPage()
   }
 
-  function pick(absIndex: number) {
-    onChange(String(absIndex))
+  function pick(enquiryGuid: string) {
+    onChange(enquiryGuid)
     setOpen(false)
     setFilterText('')
   }
@@ -113,8 +111,8 @@ function EnquiryPicker({ value, onChange, enabled, hasError }: { value: string; 
                 {filtered.map(({ item, absIndex }) => (
                   <div
                     key={item.enquiryGuid}
-                    className={`col-filter-opt${value === String(absIndex) ? ' fil-active' : ''}`}
-                    onClick={() => pick(absIndex)}
+                    className={`col-filter-opt${value === item.enquiryGuid ? ' fil-active' : ''}`}
+                    onClick={() => pick(item.enquiryGuid)}
                   >
                     {item.enquiryCode} — {item.studentName}
                   </div>
@@ -138,17 +136,27 @@ function todayAtMidnight() {
   return `${y}-${m}-${d}T00:00:00`
 }
 
-// intEnquiry/followUpStatus/followUpMode/enquiryStatus/interestLevel are all
-// unconfirmed numbers — see the long note on EnquiryFollowUpInput in
-// lib/api/admission/enquiryFollowUp.ts. Each dropdown here is real (backed
-// by the actual masters), but the value actually sent for these five fields
-// is that option's 1-based position in its list, not a confirmed id.
+// followUpStatus/followUpMode/enquiryStatus/interestLevel remain numeric
+// fields whose mapping is still pending backend confirmation. The enquiry
+// itself is sent by its real GUID.
 export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp }: NewFollowUpLogModalProps) {
-  const { data: employees = [] }        = useEmployees(isOpen)
-  const { data: followUpStatuses = [] } = useFollowUpStatuses()
-  const { data: followUpModes = [] }    = useFollowUpModes()
-  const { data: enquiryStatuses = [] }  = useEnquiryStatuses()
-  const { data: interestLevels = [] }   = useInterestLevels()
+  const { data: followUpStatuses = [] } = useFollowUpStatuses(isOpen)
+  const { data: followUpModes = [] }   = useFollowUpModes(isOpen)
+  const { data: enquiryStatuses = [] } = useEnquiryStatuses(isOpen)
+  const { data: interestLevels = [] }  = useInterestLevels(isOpen)
+
+  const [employeeSearch, setEmployeeSearch] = useState('')
+  const [committedEmployeeSearch, setCommittedEmployeeSearch] = useState('')
+  const [employeePickerOpen, setEmployeePickerOpen] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedEmployeeSearch(employeeSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [employeeSearch])
+  const employeeQuery = useSearchEmployeesInfinite(committedEmployeeSearch, 20, isOpen && employeePickerOpen)
+  const employees = useMemo(
+    () => flattenUniquePages(employeeQuery.data?.pages ?? [], e => e.employeeGuid),
+    [employeeQuery.data],
+  )
 
   const advisorOptions      = employees.map(e => ({ value: e.employeeGuid, label: e.empName }))
   const followUpStatusOptions = followUpStatuses.map((s, i) => ({ value: String(i), label: s.followUpStatusName }))
@@ -158,7 +166,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
 
   const [saved, setSaved]     = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
-  const [enquiryIdx, setEnquiryIdx]           = useState('')
+  const [enquiryGuid, setEnquiryGuid]         = useState('')
   const [advisorGuid, setAdvisorGuid]         = useState('')
   const [followUpDate, setFollowUpDate]       = useState(() => todayAtMidnight().slice(0, 10))
   const [statusIdx, setStatusIdx]             = useState('')
@@ -173,7 +181,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
 
   function handleClose() {
     setSaved(false); setFailure(null)
-    setEnquiryIdx(''); setAdvisorGuid(''); setFollowUpDate(todayAtMidnight().slice(0, 10))
+    setEnquiryGuid(''); setAdvisorGuid(''); setFollowUpDate(todayAtMidnight().slice(0, 10))
     setStatusIdx(''); setModeIdx(''); setEnquiryStatusIdx(''); setLevelIdx('')
     setNextFollowDate(''); setRemarks(''); setErrors({})
     onClose()
@@ -181,7 +189,9 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
 
   function validate() {
     const e: Record<string, string> = {}
-    if (!enquiryIdx)       e.enquiryIdx = 'Please select an Enquiry'
+    if (!enquiryGuid || enquiryGuid === '0' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(enquiryGuid)) {
+      e.enquiryIdx = 'Please select a valid Enquiry'
+    }
     if (!advisorGuid)      e.advisorGuid = 'Please select an Advisor'
     if (!followUpDate)     e.followUpDate = 'Follow-up Date is required'
     if (!statusIdx)        e.statusIdx = 'Please select a Follow-up Status'
@@ -196,7 +206,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
     if (!validate()) return
     createFollowUp.mutate(
       {
-        intEnquiry: Number(enquiryIdx) + 1,
+        enquiryGuid,
         advisorGuid,
         followUpDate: `${followUpDate}T00:00:00`,
         followUpStatus: Number(statusIdx) + 1,
@@ -244,12 +254,23 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
         <div className="g2">
           <div className="fg" style={{ gridColumn: 'span 2' }}>
             <div className="lbl">Enquiry <span className="req">*</span></div>
-            <EnquiryPicker value={enquiryIdx} onChange={setEnquiryIdx} enabled={isOpen} hasError={!!errors.enquiryIdx} />
+            <EnquiryPicker value={enquiryGuid} onChange={setEnquiryGuid} enabled={isOpen} hasError={!!errors.enquiryIdx} />
             {errors.enquiryIdx && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryIdx}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Advisor <span className="req">*</span></div>
-            <SearchSelect placeholder="— select —" options={advisorOptions} value={advisorGuid} onChange={setAdvisorGuid} />
+            <SearchSelect
+              placeholder="— select —"
+              options={advisorOptions}
+              value={advisorGuid}
+              onChange={setAdvisorGuid}
+              onSearch={setEmployeeSearch}
+              onOpenChange={setEmployeePickerOpen}
+              isLoading={employeeQuery.isLoading}
+              hasNextPage={employeeQuery.hasNextPage}
+              isFetchingNextPage={employeeQuery.isFetchingNextPage}
+              onLoadMore={() => employeeQuery.fetchNextPage()}
+            />
             {errors.advisorGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.advisorGuid}</p>}
           </div>
           <div className="fg">

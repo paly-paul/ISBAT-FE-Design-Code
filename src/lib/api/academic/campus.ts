@@ -54,7 +54,7 @@ export interface Campus {
 export type CampusInput = Omit<Campus, 'campusGuid'>
 
 // Response wrapper for the paginated campus list endpoint.
-interface CampusListResponse {
+export interface CampusListResponse {
   items: Campus[]
   totalCount: number
   pageNumber: number
@@ -72,6 +72,21 @@ let mockCampusSeq = mockCampuses.length + 1
 export function getCampuses(page = 1, pageSize = 10): Promise<Campus[]> {
   if (MOCK_AUTH) return Promise.resolve(mockCampuses)
   return apiGet<CampusListResponse | null>(`/api/v1/academic/campus?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
+}
+
+export function getCampusesPaged(page = 1, pageSize = 20, search = ''): Promise<CampusListResponse> {
+  if (MOCK_AUTH) {
+    const query = search.trim().toLowerCase()
+    const filtered = query
+      ? mockCampuses.filter(c => `${c.campusCode} ${c.campusName} ${c.location}`.toLowerCase().includes(query))
+      : mockCampuses
+    const start = (page - 1) * pageSize
+    return Promise.resolve({ items: filtered.slice(start, start + pageSize), totalCount: filtered.length, pageNumber: page, pageSize })
+  }
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (search.trim()) params.set('search', search.trim())
+  return apiGet<CampusListResponse | null>(`/api/v1/academic/campus?${params.toString()}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
 // Lightweight data used for campus dropdowns.

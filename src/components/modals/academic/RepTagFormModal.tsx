@@ -1,13 +1,14 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { RepetitionTagInput } from '@/lib/api/academic/repetitionTag'
 import { useRepetitionTag } from '@/hooks/academic/useRepetitionTags'
-import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
+import { useSearchProgramLevelsInfinite } from '@/hooks/academic/useProgramLevels'
 import { AuthError } from '@/lib/api/client'
+import { flattenUniquePages } from '@/lib/pagination'
 
 // Add and Edit share this form — differ in prefill and which mutation runs.
 interface RepTagFormModalProps extends ModalProps {
@@ -26,6 +27,15 @@ interface RepTagFormModalProps extends ModalProps {
 export function RepTagFormModal({ isOpen, onClose, showToast, mode, courseUnitRepetitionGuid, createRepetitionTag, updateRepetitionTag }: RepTagFormModalProps) {
   const isEdit = mode === 'edit'
   const { data: tag, isLoading, isError, error } = useRepetitionTag(courseUnitRepetitionGuid, isOpen && isEdit)
+  const [levelSearch, setLevelSearch] = useState('')
+  const [committedLevelSearch, setCommittedLevelSearch] = useState('')
+  const [levelPickerOpen, setLevelPickerOpen] = useState(false)
+  const LEVEL_PAGE_SIZE = 20
+  const levelQuery = useSearchProgramLevelsInfinite(committedLevelSearch, LEVEL_PAGE_SIZE, isOpen && levelPickerOpen)
+  const programLevels = useMemo(
+    () => flattenUniquePages(levelQuery.data?.pages ?? [], level => level.programLevelGuid),
+    [levelQuery.data],
+  )
 
   const [tagCode, setTagCode] = useState('')
   const [tagName, setTagName] = useState('')
@@ -34,8 +44,10 @@ export function RepTagFormModal({ isOpen, onClose, showToast, mode, courseUnitRe
   const [failure, setFailure] = useState<string | null>(null)
   const [errors, setErrors]   = useState<Record<string, string>>({})
 
-  const { data: programLevels = [] } = useProgramLevels(isOpen)
-  const programLevelOptions = programLevels.map(p => ({ value: p.programLevelGuid, label: p.levelName }))
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedLevelSearch(levelSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [levelSearch])
 
   // Fill the form when the tag loads on edit, recovering the linked programme level; blank on fresh create.
   useEffect(() => {
@@ -43,7 +55,9 @@ export function RepTagFormModal({ isOpen, onClose, showToast, mode, courseUnitRe
     if (isEdit && tag) {
       setTagCode(tag.tagCode)
       setTagName(tag.tagName)
-      setProgramLevelGuid(programLevels.find(p => p.levelCode === tag.levelCode)?.programLevelGuid ?? '')
+      setLevelSearch(tag.levelCode)
+      const matchingLevel = programLevels.find(p => p.levelCode === tag.levelCode)
+      setProgramLevelGuid(matchingLevel?.programLevelGuid ?? '')
       setErrors({})
     } else if (!isEdit) {
       setTagCode(''); setTagName(''); setProgramLevelGuid(''); setErrors({})
@@ -51,6 +65,11 @@ export function RepTagFormModal({ isOpen, onClose, showToast, mode, courseUnitRe
   }, [isOpen, isEdit, tag, programLevels])
 
   if (!isOpen) return null
+
+  const programLevelOptions = programLevels.map(p => ({ value: p.programLevelGuid, label: p.levelName }))
+  if (isEdit && programLevelGuid && !programLevelOptions.some(option => option.value === programLevelGuid)) {
+    programLevelOptions.unshift({ value: programLevelGuid, label: tag?.levelName || tag?.levelCode || programLevelGuid })
+  }
 
   function handleClose() {
     setSaved(false); setFailure(null)
@@ -169,6 +188,11 @@ export function RepTagFormModal({ isOpen, onClose, showToast, mode, courseUnitRe
             <SearchSelect
               placeholder="Select level…"
               value={programLevelGuid}
+              onSearch={setLevelSearch}
+              onOpenChange={setLevelPickerOpen}
+              hasNextPage={levelQuery.hasNextPage}
+              isFetchingNextPage={levelQuery.isFetchingNextPage}
+              onLoadMore={() => levelQuery.fetchNextPage()}
               onChange={v => { setProgramLevelGuid(v); clearError('programLevelGuid') }}
               options={programLevelOptions}
             />

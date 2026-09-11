@@ -1,21 +1,22 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
 import { useIntakesByGuids, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { IntakeSearchPicker } from '@/components/IntakeSearchPicker'
-import { useCurrencies } from '@/hooks/finance/useCurrencies'
+import { useSearchCurrenciesInfinite } from '@/hooks/finance/useCurrencies'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useLedgers } from '@/hooks/finance/useLedgers'
+import { flattenUniquePages } from '@/lib/pagination'
 import {
   useSaveProgramFeeStructureComplete,
   useUpdateProgramFeeStructureComplete,
   useProgramFeeLines,
-  useProgramFeeStructures,
+  useSearchProgramFeeStructuresInfinite,
   ProgramFeeLineSaveInput,
   ProgramFeeStructureHeader,
 } from '@/hooks/academic/useProgramFeeStructure'
@@ -86,26 +87,28 @@ let nextId = 200
 let nextStructId = 100
 
 export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }: ModalProps & { mode?: 'edit'; editData?: ProgramFeeStructureHeader }) {
-  const { data: programs = [] }   = useProgramMasters(isOpen)
-  const { data: currencies = [] } = useCurrencies(isOpen)
+  const [programSearch, setProgramSearch] = useState('')
+  const [committedProgramSearch, setCommittedProgramSearch] = useState('')
+  const [programPickerOpen, setProgramPickerOpen] = useState(false)
+  const [copySearch, setCopySearch] = useState('')
+  const [committedCopySearch, setCommittedCopySearch] = useState('')
+  const [copyPickerOpen, setCopyPickerOpen] = useState(false)
+  const [currencySearch, setCurrencySearch] = useState('')
+  const [committedCurrencySearch, setCommittedCurrencySearch] = useState('')
+  const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false)
   const saveFeeStructureComplete   = useSaveProgramFeeStructureComplete()
   const updateFeeStructureComplete = useUpdateProgramFeeStructureComplete()
+  const programQuery = useSearchProgramMastersInfinite(committedProgramSearch, 20, isOpen && programPickerOpen)
+  const copyQuery = useSearchProgramFeeStructuresInfinite(committedCopySearch, 20, isOpen && copyPickerOpen)
+  const currencyQuery = useSearchCurrenciesInfinite(committedCurrencySearch, 20, isOpen && currencyPickerOpen)
   // Real fetch-by-guid now — GET fee-lines/:feeHdGuid, same convention as
   // the rest of the app's real Edit modals. Header fields (feeCode,
   // calcType, lef/cef/ace, intakeGuid, etc.) come from editData itself (the
   // list row the page already fetched), not from this endpoint — it only
   // ever returns the line items.
   const { data: feeLines, isLoading: feeLinesLoading, isError: feeLinesError } = useProgramFeeLines(editData?.feeHdGuid ?? null, isOpen && mode === 'edit' && !!editData)
-  // Copy Fee Code — real now: sourced from every existing fee structure via
-  // the same GET-all endpoint the main page's table uses, not the old
-  // session-only "other structures added in this modal" list. The
-  // fee-structure page's own table now uses useProgramFeeStructuresPaged
-  // (real server-side pagination, 2026-09-10) instead of this full 1000-row
-  // fetch, so this is its own separate request rather than reusing the
-  // page's cached one — genuinely needed here since Copy Fee Code has to
-  // offer every structure across every programme, not just the current page.
-  const { data: allFeeStructuresData } = useProgramFeeStructures(1, 1000)
-  const allFeeStructures = allFeeStructuresData?.items ?? []
+  const programs = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
+  const allFeeStructures = useMemo(() => flattenUniquePages(copyQuery.data?.pages ?? [], f => f.feeHdGuid), [copyQuery.data])
   // Per-source-guid on-demand fetch of the picked structure's real fee
   // lines — the GET-all list only ever returns header fields, never the
   // lines themselves (see programFeeStructure.ts's ProgramFeeStructureHeader
@@ -123,7 +126,23 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   // fields need — unconfirmed for save-complete specifically (the sample
   // payload showed them all null), kept as-is to match the one confirmed
   // header contract (ProgramFeeStructureHeaderInput) rather than guessed.
-  const currencyIntOptions = currencies.map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` }))
+  const currencyIntOptions = useMemo(
+    () => flattenUniquePages(currencyQuery.data?.pages ?? [], c => String(c.intCurrency)).map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` })),
+    [currencyQuery.data],
+  )
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedProgramSearch(programSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [programSearch])
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedCopySearch(copySearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [copySearch])
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedCurrencySearch(currencySearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [currencySearch])
 
   const [saved, setSaved]           = useState(false)
   const [failure, setFailure]       = useState<string | null>(null)
@@ -594,6 +613,11 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                 onChange={val => { updateStructureMeta('programme', val); setCopySourceId(''); appliedCopyRef.current = null }}
                 options={programOptions}
                 disabled={mode === 'edit'}
+                onSearch={setProgramSearch}
+                onOpenChange={setProgramPickerOpen}
+                hasNextPage={programQuery.hasNextPage}
+                isFetchingNextPage={programQuery.isFetchingNextPage}
+                onLoadMore={() => programQuery.fetchNextPage()}
               />
             </div>
 
@@ -646,6 +670,11 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                   value={copySourceId}
                   onChange={setCopySourceId}
                   options={copySourceOptions}
+                  onSearch={setCopySearch}
+                  onOpenChange={setCopyPickerOpen}
+                  hasNextPage={copyQuery.hasNextPage}
+                  isFetchingNextPage={copyQuery.isFetchingNextPage}
+                  onLoadMore={() => copyQuery.fetchNextPage()}
                 />
               </div>
               {/* Was always read-only (Fee_Structure_Change_Requests.md #3/#4)
@@ -709,7 +738,16 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                     ProgrammeModal's identical section. */}
                 <div className="fg m-0">
                   <div className="lbl">Currency <span className="text-g400 font-normal normal-case">(Lateral Entry / Credit Exemption / Aptech Credit Exemption)</span></div>
-                  <SearchSelect options={currencyIntOptions} value={active.lefCurrency} onChange={updateSharedFeeCurrency} />
+                  <SearchSelect
+                    options={currencyIntOptions}
+                    value={active.lefCurrency}
+                    onChange={updateSharedFeeCurrency}
+                    onSearch={setCurrencySearch}
+                    onOpenChange={setCurrencyPickerOpen}
+                    hasNextPage={currencyQuery.hasNextPage}
+                    isFetchingNextPage={currencyQuery.isFetchingNextPage}
+                    onLoadMore={() => currencyQuery.fetchNextPage()}
+                  />
                 </div>
               </div>
             </div>

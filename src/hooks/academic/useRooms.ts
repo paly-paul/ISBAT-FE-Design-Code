@@ -36,10 +36,8 @@ export function useRoomSearch(search: string) {
 }
 
 export function useCreateRoom() {
-  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: RoomInput) => createRoom(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ROOMS_KEY }),
   })
 }
 

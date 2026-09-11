@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
@@ -7,10 +7,11 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { EnquiryUpdateInput } from '@/lib/api/admission/enquiry'
 import { useEnquiry } from '@/hooks/admission/useEnquiries'
 import { useEmployees } from '@/hooks/employee/useEmployees'
-import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
+import { useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { AuthError } from '@/lib/api/client'
+import { flattenUniquePages } from '@/lib/pagination'
 
 interface EnquiryAssignModalProps extends ModalProps {
   enquiryGuid: string | null
@@ -28,7 +29,6 @@ interface EnquiryAssignModalProps extends ModalProps {
 export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, updateEnquiry }: EnquiryAssignModalProps) {
   const { data: enquiry, isLoading, isError, error } = useEnquiry(enquiryGuid, isOpen)
   const { data: employees = [] } = useEmployees(isOpen)
-  const { data: programs = [] }  = useProgramDropdown(undefined, isOpen)
   const { data: campuses = [] }  = useCampuses(isOpen)
   // No intakeName/intakeCode field exists on the enquiry response itself —
   // resolve intakeGuid against the real Intake master, same client-side
@@ -55,6 +55,23 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
   const [programGuid, setProgramGuid] = useState('')
   const [campusGuid, setCampusGuid]   = useState('')
   const [errors, setErrors]   = useState<Record<string, string>>({})
+  const [programSearch, setProgramSearch] = useState('')
+  const [committedProgramSearch, setCommittedProgramSearch] = useState('')
+  const [programPickerOpen, setProgramPickerOpen] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedProgramSearch(programSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [programSearch])
+
+  const programQuery = useSearchProgramMastersInfinite(committedProgramSearch, 20, isOpen && programPickerOpen)
+  const programs = useMemo(() => {
+    const items = flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid)
+    if (enquiry?.programGuid && enquiry.programName && !items.some(p => p.programGuid === enquiry.programGuid)) {
+      items.unshift({ programGuid: enquiry.programGuid, programName: enquiry.programName, programCode: enquiry.programCode ?? '' } as typeof items[number])
+    }
+    return items
+  }, [enquiry?.programCode, enquiry?.programGuid, enquiry?.programName, programQuery.data])
 
   const advisorOptions = employees.map(e => ({ value: e.employeeGuid, label: e.empName }))
   const programOptions = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
@@ -188,7 +205,18 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
             </div>
             <div className="fg">
               <div className="lbl">Programme</div>
-              <SearchSelect placeholder="— select —" options={programOptions} value={programGuid} onChange={setProgramGuid} />
+              <SearchSelect
+                placeholder="— select —"
+                options={programOptions}
+                value={programGuid}
+                onChange={setProgramGuid}
+                onSearch={setProgramSearch}
+                onOpenChange={setProgramPickerOpen}
+                isLoading={programQuery.isLoading}
+                hasNextPage={programQuery.hasNextPage}
+                isFetchingNextPage={programQuery.isFetchingNextPage}
+                onLoadMore={() => programQuery.fetchNextPage()}
+              />
             </div>
             <div className="fg">
               <div className="lbl">Campus <span className="req">*</span></div>

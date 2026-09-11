@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { createRepetitionTag, deleteRepetitionTag, getRepetitionTagById, getRepetitionTags, getRepetitionTagsPaged, RepetitionTag, RepetitionTagInput, updateRepetitionTag } from '@/lib/api/academic/repetitionTag'
+import { getNextPageParam } from '@/lib/pagination'
 
 const REPETITION_TAGS_KEY = ['repetitionTags']
 
@@ -20,10 +21,8 @@ export function useRepetitionTags(enabled = true) {
 }
 
 export function useCreateRepetitionTag() {
-  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: RepetitionTagInput) => createRepetitionTag(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: REPETITION_TAGS_KEY }),
   })
 }
 
@@ -58,6 +57,18 @@ export function useRepetitionTagsPaged(page: number, pageSize: number, search: s
     queryKey: [...REPETITION_TAGS_KEY, 'paged', page, pageSize, search],
     queryFn: () => getRepetitionTagsPaged(page, pageSize, search),
     placeholderData: keepPreviousData,
+  })
+}
+
+export function useSearchRepetitionTagsInfinite(search: string, pageSize: number, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...REPETITION_TAGS_KEY, 'search-infinite', search, pageSize],
+    queryFn: ({ pageParam }) => getRepetitionTagsPaged(pageParam, pageSize, search),
+    initialPageParam: 1,
+    getNextPageParam,
+    enabled,
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
 }
 

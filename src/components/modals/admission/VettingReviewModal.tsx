@@ -5,7 +5,6 @@ import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { applicantProfileHref } from '@/lib/applicantProfileLink'
 import { useVettingApplicationDetail, useWaitApplication } from '@/hooks/admission/useVetting'
-import { useIntakes } from '@/hooks/academic/useIntakes'
 import { VetApplicationInput } from '@/lib/api/admission/vetting'
 import { AuthError } from '@/lib/api/client'
 
@@ -30,16 +29,9 @@ interface Props extends ModalProps {
 export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid, vetApplication, onReject }: Props) {
   const { data: detail, isLoading, isError, error } = useVettingApplicationDetail(applicationGuid, isOpen)
   const waitApplication = useWaitApplication()
-  const { data: intakes = [] } = useIntakes()
-
-  function resolveIntakeLabel(guid?: string | null) {
-    if (!guid) return ''
-    const found = intakes.find(i => i.intakeGuid === guid)
-    return found ? (found.description ? `${found.intakeCode} — ${found.description}` : String(found.intakeCode)) : ''
-  }
 
   const intakeDisplay = detail
-    ? String(detail.intakeName || detail.intakeCode || detail.intake || resolveIntakeLabel(detail.intakeGuid) || '—')
+    ? String(detail.intakeName || detail.intakeCode || detail.intake || '—')
     : '—'
 
   const [remarks, setRemarks] = useState('')

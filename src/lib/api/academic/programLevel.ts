@@ -50,6 +50,37 @@ export function getProgramLevels(search = ''): Promise<ProgramLevel[]> {
   return apiGet<ProgramLevel[] | null>(`/api/v1/academic/program-levels${query}`).then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
+export interface ProgramLevelListResponse {
+  items: ProgramLevel[]
+  totalCount: number
+  pageNumber: number
+  pageSize: number
+}
+
+// Server-paged/searchable variant for dropdowns. The plain list function
+// above remains unchanged for existing table and resolver consumers.
+export function getProgramLevelsPaged(page = 1, pageSize = 20, search = ''): Promise<ProgramLevelListResponse> {
+  const q = search.trim()
+  if (MOCK_AUTH) {
+    const filtered = q
+      ? mockProgramLevels.filter(level => `${level.levelCode} ${level.levelName}`.toLowerCase().includes(q.toLowerCase()))
+      : mockProgramLevels
+    const start = (page - 1) * pageSize
+    return Promise.resolve({ items: filtered.slice(start, start + pageSize), totalCount: filtered.length, pageNumber: page, pageSize })
+  }
+  const params = new URLSearchParams({ page: String(page), pageNumber: String(page), pageSize: String(pageSize) })
+  if (q) params.set('search', q)
+  return apiGet<any>(`/api/v1/academic/program-levels?${params.toString()}`).then(data => {
+    const items: ProgramLevel[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
+    return {
+      items,
+      totalCount: typeof data?.totalCount === 'number' ? data.totalCount : items.length,
+      pageNumber: data?.pageNumber ?? page,
+      pageSize: data?.pageSize ?? pageSize,
+    }
+  })
+}
+
 // Payload used when creating or updating a programme level.
 // Confirmed via real testing: the backend rejects intCurrency (Currency
 // Master's legacy int) with "Currency is required" — it wants currencyGuid

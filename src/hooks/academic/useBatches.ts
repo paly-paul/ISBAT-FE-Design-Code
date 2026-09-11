@@ -25,10 +25,8 @@ export function useBatches(pageNumber: number, pageSize: number, search = '', en
 }
 
 export function useCreateBatch() {
-  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: BatchCreateInput) => createBatch(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: BATCHES_KEY }),
   })
 }
 

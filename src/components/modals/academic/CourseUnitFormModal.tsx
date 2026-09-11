@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
@@ -8,8 +8,9 @@ import { CourseUnit, CourseUnitInput, getCourseUnitById } from '@/lib/api/academ
 import { UpsertCourseUnitOutlineInput } from '@/lib/api/academic/courseUnitOutlines'
 import { openDocumentForViewing, downloadDocument } from '@/lib/documentViewer'
 import { useCourseUnit, useUpsertCourseUnitOutlines } from '@/hooks/academic/useCourseUnits'
-import { useRepetitionTags } from '@/hooks/academic/useRepetitionTags'
+import { useSearchRepetitionTagsInfinite } from '@/hooks/academic/useRepetitionTags'
 import { AuthError } from '@/lib/api/client'
+import { flattenUniquePages } from '@/lib/pagination'
 
 // Add and Edit share this form — differ in prefill, whether Step 1 POSTs or
 // PUTs the unit details, and whether there's an existing-syllabus panel to show.
@@ -69,6 +70,9 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
   const [numChapters, setNumChapters]   = useState('')
   const [credits, setCredits]           = useState('')
   const [repetitionTagGuid, setRepetitionTagGuid] = useState('')
+  const [repetitionTagSearch, setRepetitionTagSearch] = useState('')
+  const [committedRepetitionTagSearch, setCommittedRepetitionTagSearch] = useState('')
+  const [repetitionTagPickerOpen, setRepetitionTagPickerOpen] = useState(false)
   const [syllabusFile, setSyllabusFile] = useState<File | null>(null)
   const [syllabusLinkLoading, setSyllabusLinkLoading] = useState(false)
   const [errors, setErrors]               = useState<Record<string, string>>({})
@@ -89,8 +93,20 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
   const [cbtFinal, setCbtFinal]         = useState('15')
   const [ueFinal, setUeFinal]           = useState('70')
 
-  const { data: repetitionTags = [] } = useRepetitionTags(isOpen)
-  const repetitionTagOptions = repetitionTags.map(t => ({ value: t.courseUnitRepetitionGuid, label: `${t.tagCode} — ${t.tagName}` }))
+  const repetitionTagQuery = useSearchRepetitionTagsInfinite(
+    committedRepetitionTagSearch,
+    20,
+    isOpen && repetitionTagPickerOpen,
+  )
+  const repetitionTags = useMemo(
+    () => flattenUniquePages(repetitionTagQuery.data?.pages ?? [], tag => tag.courseUnitRepetitionGuid),
+    [repetitionTagQuery.data],
+  )
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedRepetitionTagSearch(repetitionTagSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [repetitionTagSearch])
 
   const finalTotal = (includeCW ? (+cwFinal || 0) : 0) + (includeCBT ? (+cbtFinal || 0) : 0) + (+ueFinal || 0)
   const totalOk    = finalTotal === 100
@@ -296,6 +312,11 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
 
   if (!isOpen) return null
 
+  const repetitionTagOptions = repetitionTags.map(t => ({ value: t.courseUnitRepetitionGuid, label: `${t.tagCode} — ${t.tagName}` }))
+  if (isEdit && repetitionTagGuid && !repetitionTagOptions.some(option => option.value === repetitionTagGuid)) {
+    repetitionTagOptions.unshift({ value: repetitionTagGuid, label: courseUnit?.courseUnitRepetitionName || 'Selected repetition tag' })
+  }
+
   function handleClose() {
     prefilledForRef.current = null
     setSaved(false); setFailure(null); setStep(1); setChapters([blankChapter()]); setActiveChapterIdx(0); setErrors({}); setChapterErrors([])
@@ -456,8 +477,9 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
         mid: includeMid ? 1 : 0,
         cw: includeCW ? 1 : 0,
         ca: includeCBT ? 1 : 0,
-        // No UI control yet — defaults new units to approved.
-        approved: 1,
+        // No UI control yet — leave the backend's approval/default handling
+        // untouched rather than forcing a hardcoded status on create.
+        approved: null,
         cbtWeightage: +cbtFinal || 0,
         cwWeightage: +cwFinal || 0,
         ueWeightage: +ueFinal || 0,
@@ -675,6 +697,11 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
               <SearchSelect
                 placeholder="— Select repetition tag —"
                 value={repetitionTagGuid}
+                onSearch={setRepetitionTagSearch}
+                onOpenChange={setRepetitionTagPickerOpen}
+                hasNextPage={repetitionTagQuery.hasNextPage}
+                isFetchingNextPage={repetitionTagQuery.isFetchingNextPage}
+                onLoadMore={() => repetitionTagQuery.fetchNextPage()}
                 onChange={setRepetitionTagGuid}
                 options={repetitionTagOptions}
               />

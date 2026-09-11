@@ -100,10 +100,8 @@ export function useCourseUnitsByGuids(guids: string[]) {
 }
 
 export function useCreateCourseUnit() {
-  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: CourseUnitInput) => createCourseUnit(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: COURSE_UNITS_KEY }),
   })
 }
 

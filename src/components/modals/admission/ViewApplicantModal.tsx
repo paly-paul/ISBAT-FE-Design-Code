@@ -3,8 +3,6 @@ import { useState } from 'react'
 import { ModalProps } from '../types'
 import { ApplicationListItem } from '@/hooks/admission/useApplicationFiling'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
-import { useCampuses } from '@/hooks/config/useCampuses'
-import { useCountries } from '@/hooks/config/useCountries'
 import { applicantProfileHref } from '@/lib/applicantProfileLink'
 
 interface ViewApplicantModalProps extends Partial<ModalProps> {
@@ -74,16 +72,14 @@ export function ViewApplicantModal({ isOpen, onClose, applicant }: ViewApplicant
   const [activeTab, setActiveTab] = useState<'personal' | 'application' | 'documents'>('personal')
 
   const { data: programs = [] } = useProgramDropdown(undefined, isOpen && !!applicant)
-  const { data: campuses = [] } = useCampuses(isOpen && !!applicant)
-  const { data: countries = [] } = useCountries(isOpen && !!applicant)
 
   if (!isOpen || !applicant) return null
 
   const fullName = `${applicant.firstName ?? ''}${applicant.lastName ? ` ${applicant.lastName}` : ''}`.trim() || '—'
   const programName = programs.find(p => p.programGuid === applicant.programGuid)?.programName ?? '—'
-  const campusName = campuses.find(c => c.campusGuid === applicant.campusGuid)?.campusName ?? '—'
-  const countryName = countries.find(c => c.countryGuid === applicant.countryGuid)?.countryName ?? '—'
-  const spCountryName = countries.find(c => c.countryGuid === applicant.spCountryGuid)?.countryName ?? '—'
+  const campusName = applicant.campusGuid || '—'
+  const countryName = applicant.countryGuid || '—'
+  const spCountryName = applicant.spCountryGuid || '—'
 
   const profileUrl = applicantProfileHref({
     ref: applicant.appRefNo,

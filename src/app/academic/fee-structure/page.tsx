@@ -60,12 +60,12 @@ export default function Page() {
   // showed as "—" for. Only fall back to the (still full-list, no by-guid
   // endpoint exists to batch it) not-approved list once the batched lookup
   // above has actually finished and a row is still unresolved, instead of
-  // always fetching all 1000 not-approved rows on every load — including
+  // always fetching all pending not-approved rows on every load — including
   // while that batch is simply still in flight, which would otherwise fire
   // this fallback on every fresh page load regardless of whether it's ever
   // actually needed.
   const needsNotApprovedFallback = !programsByGuidLoading && records.some(r => !programsByGuid.has(r.programGuid))
-  const { data: notApprovedData } = useProgramApprovals(1, 1000, '', needsNotApprovedFallback)
+  const { data: notApprovedData } = useProgramApprovals(1, PAGE_SIZE, '', needsNotApprovedFallback)
   const notApprovedPrograms = notApprovedData?.items ?? []
 
   function nav(id: string) { router.push('/academic/' + id) }

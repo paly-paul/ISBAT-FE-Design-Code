@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Currency, CurrencyInput, createCurrency, deleteCurrency, getCurrencies, getCurrencyById, updateCurrency } from '@/lib/api/finance/currencyMaster'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Currency, CurrencyInput, createCurrency, deleteCurrency, getCurrencies, getCurrenciesPaged, getCurrencyById, updateCurrency } from '@/lib/api/finance/currencyMaster'
+import { getNextPageParam } from '@/lib/pagination'
 
 const CURRENCIES_KEY = ['currencies']
 
@@ -17,6 +18,18 @@ export function useCurrencies(enabled = true) {
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,
+  })
+}
+
+export function useSearchCurrenciesInfinite(search: string, pageSize: number, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...CURRENCIES_KEY, 'search-infinite', search, pageSize],
+    queryFn: ({ pageParam }) => getCurrenciesPaged(pageParam, pageSize, search),
+    initialPageParam: 1,
+    getNextPageParam,
+    enabled,
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
 }
 

@@ -1,5 +1,5 @@
 'use client'
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -12,8 +12,9 @@ import { OnboardModal } from '@/components/modals/admission/OnboardModal'
 import { CompleteRegistrationModal } from '@/components/modals/admission/CompleteRegistrationModal'
 import { Pagination } from '@/components/Pagination'
 import { useRegistrarDeskApplications, useRegistrarDeskCounts, RegisterStudentResponse } from '@/hooks/admission/useRegistrarDesk'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { flattenUniquePages } from '@/lib/pagination'
 
 const PAGE_SIZE = 10
 
@@ -40,6 +41,9 @@ export default function RegistrationPage() {
   const [search, setSearch] = useState('')
   const [filterIntake, setFilterIntake] = useState('all')
   const [page, setPage] = useState(1)
+  const [intakeSearch, setIntakeSearch] = useState('')
+  const [committedIntakeSearch, setCommittedIntakeSearch] = useState('')
+  const [intakePickerOpen, setIntakePickerOpen] = useState(false)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -48,7 +52,16 @@ export default function RegistrationPage() {
   function updateSearch(value: string) { setSearch(value); setPage(1) }
   function updateIntakeFilter(value: string) { setFilterIntake(value); setPage(1) }
 
-  const { data: intakes = [] } = useIntakes()
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedIntakeSearch(intakeSearch.trim()), 250)
+    return () => clearTimeout(timer)
+  }, [intakeSearch])
+
+  const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, intakePickerOpen)
+  const intakes = useMemo(
+    () => flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid),
+    [intakeQuery.data],
+  )
   const intakeOptions = [{ value: 'all', label: 'All Intakes' }, ...intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))]
 
   const searchTrimmed = search.trim()
@@ -129,7 +142,17 @@ export default function RegistrationPage() {
               onChange={updateSearch}
               results={searchMatches.map(r => ({ id: r.applicationGuid, primary: r.appRefNo, secondary: r.studentName }))}
             />
-            <SearchSelect options={intakeOptions} value={filterIntake} onChange={updateIntakeFilter} />
+            <SearchSelect
+              options={intakeOptions}
+              value={filterIntake}
+              onChange={updateIntakeFilter}
+              onSearch={setIntakeSearch}
+              onOpenChange={setIntakePickerOpen}
+              isLoading={intakeQuery.isLoading}
+              hasNextPage={intakeQuery.hasNextPage}
+              isFetchingNextPage={intakeQuery.isFetchingNextPage}
+              onLoadMore={() => intakeQuery.fetchNextPage()}
+            />
           </div>
         </div>
         <ScrollTable>

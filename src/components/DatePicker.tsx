@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { SearchSelect } from '@/components/SearchSelect'
 
 interface Props {
@@ -62,6 +63,7 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
   const [viewDate, setViewDate] = useState<Date>(ymdToDate(value) ?? new Date())
   const ref = useRef<HTMLDivElement | null>(null)
   const [error, setError] = useState('')
+  const [popoverPos, setPopoverPos] = useState<{ top?: number; bottom?: number; left: number }>({ top: 0, left: 0 })
 
   useEffect(() => setDisplay(toDisplay(value)), [value])
   useEffect(() => setViewDate(ymdToDate(value) ?? new Date()), [value])
@@ -75,12 +77,38 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
       // component's own wrapper div. Without this check, that "outside"
       // click closed the whole calendar before the month/year selection
       // ever registered.
-      if (target.closest('.ss-drop')) return
+      if (target.closest('.ss-drop') || target.closest('.date-picker-popover')) return
       if (ref.current && !ref.current.contains(target)) setOpen(false)
     }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
+
+  function updatePopoverPosition() {
+    const anchor = ref.current
+    if (!anchor) return
+    const bounds = anchor.getBoundingClientRect()
+    const popoverHeight = 310
+    const spaceBelow = window.innerHeight - bounds.bottom - 10
+    const spaceAbove = bounds.top - 10
+    if (spaceBelow < popoverHeight && spaceAbove > spaceBelow) {
+      setPopoverPos({ bottom: window.innerHeight - bounds.top + 4, left: bounds.left })
+    } else {
+      setPopoverPos({ top: bounds.bottom + 6, left: bounds.left })
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return
+    updatePopoverPosition()
+    function reposition() { updatePopoverPosition() }
+    window.addEventListener('resize', reposition)
+    document.addEventListener('scroll', reposition, true)
+    return () => {
+      window.removeEventListener('resize', reposition)
+      document.removeEventListener('scroll', reposition, true)
+    }
+  }, [open])
 
   function prevMonth() { const d = new Date(viewDate); d.setMonth(d.getMonth() - 1); setViewDate(d) }
   function nextMonth() { const d = new Date(viewDate); d.setMonth(d.getMonth() + 1); setViewDate(d) }
@@ -173,9 +201,12 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
           onFocus={() => setOpen(false)}
           style={{ minWidth: 120, width: '100%', paddingRight: 30, borderColor: hasError ? 'var(--red)' : undefined }}
         />
-        <button
+          <button
           type="button"
-          onClick={() => setOpen(v => !v)}
+          onClick={() => {
+            if (!open) updatePopoverPosition()
+            setOpen(v => !v)
+          }}
           aria-label="Open calendar"
           style={{
             position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
@@ -188,9 +219,10 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
         </button>
       </div>
 
-      {open && (
+      {open && typeof window !== 'undefined' && createPortal(
         <div
-          style={{ position: 'absolute', zIndex: 60, marginTop: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.12)', background: 'white', borderRadius: 8 }}
+          className="date-picker-popover"
+          style={{ position: 'fixed', top: popoverPos.top, bottom: popoverPos.bottom, left: popoverPos.left, zIndex: 9999, boxShadow: '0 6px 18px rgba(0,0,0,0.12)', background: 'white', borderRadius: 8 }}
           onMouseDown={e => e.stopPropagation()}
         >
           {/* Fixed width, not just a minWidth — previously the popup had no
@@ -256,7 +288,8 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
               })}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       </div>
       {error && <div style={{ color: '#dc2626', fontSize: 12, marginTop: 6 }}>{error}</div>}

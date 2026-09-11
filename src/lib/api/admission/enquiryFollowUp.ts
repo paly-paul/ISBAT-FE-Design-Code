@@ -69,7 +69,8 @@ export function getEnquiryFollowUpsByAdvisor(page = 1, pageSize = 10): Promise<E
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
-// Confirmed via Create.bru. intEnquiry/followUpStatus/followUpMode/
+// Confirmed via the live create validation contract: enquiryGuid is required.
+// followUpStatus/followUpMode/
 // enquiryStatus/interestLevel are all typed as numbers on the wire, but
 // none of the corresponding masters (Enquiry, FollowUpStatus, FollowUpMode,
 // EnquiryStatus, InterestLevel) expose a numeric id anywhere confirmed —
@@ -81,7 +82,7 @@ export function getEnquiryFollowUpsByAdvisor(page = 1, pageSize = 10): Promise<E
 // so treat anything created through this form as unverified until the
 // real mapping is confirmed.
 export interface EnquiryFollowUpInput {
-  intEnquiry: number
+  enquiryGuid: string
   advisorGuid: string
   followUpDate: string
   followUpStatus: number
