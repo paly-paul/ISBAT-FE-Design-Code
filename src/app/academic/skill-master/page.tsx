@@ -99,7 +99,7 @@ export default function Page() {
   const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && isFetching
   const { data: employees = [] } = useEmployeeDropdown()
   const employeeNameByGuid = useMemo(
-    () => new Map(employees.map(e => [e.employeeGuid, e.displayName.replace(/\s*\([^)]*\)\s*$/, '')])),
+    () => new Map(employees.map(e => [e.employeeGuid, e.displayName])),
     [employees],
   )
   function employeeLabel(guid: string) { return employeeNameByGuid.get(guid) ?? '—' }

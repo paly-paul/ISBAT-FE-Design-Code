@@ -38,19 +38,39 @@ const CATEGORY_CARD_STYLE: CSSProperties = {
   borderRadius: '10px',
 }
 
-// Financial Year / Exam Year are both restricted to a small window relative
-// to today's real calendar year — Current/Next (Exam Year also keeps
-// Previous) — rather than a free number input. `existing` (the loaded
-// intake's own current value, Edit only) is added as an extra option when it
-// falls outside that window, so editing an older record never silently
-// blanks the field just because its year isn't one of the "current" choices.
-// includePrevious defaults to true (Exam Year's behavior); Financial Year
-// passes false to drop "Previous Year" per request, 2026-09-10 — a new
-// intake's financial year should never realistically be set to a past year.
-function relativeYearOptions(existing?: string, includePrevious = true): { value: string; label: string }[] {
+// Financial Year / Exam Year options (ACA-036):
+// - Previous Year is removed from both dropdowns.
+// - Financial Year displays Current Year and Next Year (plus existing in Edit mode).
+// - When Financial Year is selected (e.g. Current Year), Exam Year only displays that selected year.
+function getFinancialYearOptions(existing?: string): { value: string; label: string }[] {
   const current = new Date().getFullYear()
   const options = [
-    ...(includePrevious ? [{ value: String(current - 1), label: `Previous Year (${current - 1})` }] : []),
+    { value: String(current), label: `Current Year (${current})` },
+    { value: String(current + 1), label: `Next Year (${current + 1})` },
+  ]
+  if (existing && !options.some(o => o.value === existing)) {
+    options.unshift({ value: existing, label: existing })
+  }
+  return options
+}
+
+function getExamYearOptions(financialYear?: string, existing?: string): { value: string; label: string }[] {
+  const current = new Date().getFullYear()
+  if (financialYear) {
+    let label = financialYear
+    if (financialYear === String(current)) {
+      label = `Current Year (${current})`
+    } else if (financialYear === String(current + 1)) {
+      label = `Next Year (${current + 1})`
+    }
+    const options = [{ value: financialYear, label }]
+    if (existing && existing !== financialYear && !options.some(o => o.value === existing)) {
+      options.push({ value: existing, label: existing })
+    }
+    return options
+  }
+
+  const options = [
     { value: String(current), label: `Current Year (${current})` },
     { value: String(current + 1), label: `Next Year (${current + 1})` },
   ]
@@ -600,8 +620,17 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
                 <SearchSelect
                   placeholder="Select financial year…"
                   value={financialYear}
-                  onChange={v => { setFinancialYear(v); if (errors.financialYear) setErrors(p => ({ ...p, financialYear: '' })) }}
-                  options={relativeYearOptions(isEdit ? financialYear : undefined, false)}
+                  onChange={v => {
+                    setFinancialYear(v)
+                    if (v) {
+                      setExamYear(v)
+                      if (errors.examYear) setErrors(p => ({ ...p, examYear: '' }))
+                    } else {
+                      setExamYear('')
+                    }
+                    if (errors.financialYear) setErrors(p => ({ ...p, financialYear: '' }))
+                  }}
+                  options={getFinancialYearOptions(isEdit ? financialYear : undefined)}
                 />
                 {errors.financialYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.financialYear}</p>}
               </div>
@@ -644,7 +673,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
                   placeholder="Select exam year…"
                   value={examYear}
                   onChange={v => { setExamYear(v); if (errors.examYear) setErrors(p => ({ ...p, examYear: '' })) }}
-                  options={relativeYearOptions(isEdit ? examYear : undefined)}
+                  options={getExamYearOptions(financialYear, isEdit ? examYear : undefined)}
                 />
                 {errors.examYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.examYear}</p>}
               </div>

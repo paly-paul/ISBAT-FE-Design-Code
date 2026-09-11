@@ -12,7 +12,11 @@ import { useIntake, useSearchIntakesInfinite } from '@/hooks/academic/useIntakes
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useSearchStreamsInfinite, useStream } from '@/hooks/config/useStreams'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
+<<<<<<< HEAD
 import { useEmployee, useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
+=======
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
+>>>>>>> 46ec705f9fb29ac5c8a74d4c26df4d464e046dbc
 import { AuthError } from '@/lib/api/client'
 import { flattenUniquePages } from '@/lib/pagination'
 
@@ -37,6 +41,15 @@ interface BatchFormModalProps extends ModalProps {
 export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, createBatch, updateBatch }: BatchFormModalProps) {
   const isEdit = mode === 'edit'
   const { data: batch, isLoading, isError, error } = useBatch(batchGuid, isOpen && isEdit)
+<<<<<<< HEAD
+=======
+  const { data: programs = [] }   = useProgramMasters(isOpen)
+  const { data: intakes = [] }    = useIntakes(isOpen)
+  const { data: streams = [] }    = useStreams()
+  const { data: batchTimes = [] } = useBatchTimes()
+  const { data: employees = [] }  = useEmployeeDropdown(isOpen)
+
+>>>>>>> 46ec705f9fb29ac5c8a74d4c26df4d464e046dbc
   const [programGuid, setProgramGuid] = useState('')
   const [intakeGuid, setIntakeGuid] = useState('')
   const [semesterGuid, setSemesterGuid] = useState('')
@@ -113,7 +126,16 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
 
   const { data: semesters = [] } = useSemestersForProgram(programGuid, !!programGuid)
 
+<<<<<<< HEAD
   const { data: batchTimes = [] } = useBatchTimes(isOpen)
+=======
+  const programOptions   = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
+  const intakeOptions    = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
+  const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
+  const streamOptions    = streams.map(s => ({ value: s.streamGuid, label: s.streamName }))
+  const batchTimeOptions = batchTimes.map(b => ({ value: b.batchTimeGuid, label: b.batchTime }))
+  const advisorOptions   = employees.map(e => ({ value: e.employeeGuid, label: e.displayName }))
+>>>>>>> 46ec705f9fb29ac5c8a74d4c26df4d464e046dbc
 
   const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
   const batchTimeOptions = batchTimes.map(b => ({ value: b.batchTimeGuid, label: b.batchTime }))

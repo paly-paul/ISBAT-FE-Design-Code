@@ -10,18 +10,18 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useBatches, useCreateBatch, useUpdateBatch, useDeleteBatch, useBatchStudentCount, Batch } from '@/hooks/academic/useBatches'
-import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 // bStartDate/bEndDate come back as "2024-02-12T00:00:00" — display as
 // "12 Feb 2024" rather than the raw ISO date.
-function formatDisplayDate(iso: string | null): string {
-  if (!iso) return '—'
-  const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
-  if (!y || !m || !d) return '—'
-  return `${d} ${MONTHS[m - 1]} ${y}`
+function formatDisplayDate(dateStr?: string | null) {
+  if (!dateStr) return '—'
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return dateStr
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
 }
 
 // 10 rows/page — same convention as the other master pages (Intake
@@ -38,6 +38,7 @@ export default function Page() {
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [editingBatchGuid, setEditingBatchGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Batch | null>(null)
 
@@ -51,7 +52,6 @@ export default function Page() {
   // already on the current page, not the full dataset — same "server
   // search/paging, client work stays page-scoped" trade-off enquiry-list's
   // own filters made.
-  const [page, setPage] = useState(1)
   const searchTrimmed = search.trim()
   const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
   const { data, isLoading, isFetching } = useBatches(page, PAGE_SIZE, activeSearch)
@@ -65,26 +65,13 @@ export default function Page() {
   )
   const filteredRows = sortedRows
   const pageItems = filteredRows
+
   const createBatch = useCreateBatch()
   const updateBatch = useUpdateBatch()
   const deleteBatch = useDeleteBatch()
 
-  // Programme/Stream/Batch Time names come straight off each row (confirmed
-  // live on GET /api/v1/academic/batches, 2026-09-09 — see the Batch type's
-  // own comment) — read directly, no client-side fallback lookup at all
-  // (per request: trust the batches API for these instead of hedging with
-  // program-master/specializations/batchtimes fetches "just in case").
-  // bInCharge/pHead are a different story from those three, though — the
-  // Batch type's own comment confirms they only ever come back from the
-  // by-guid endpoint, never the list this table reads (2026-09-09, confirmed
-  // against a real list response with neither field present at all). So on
-  // this page r.bInCharge/r.pHead are always undefined, employeeName() below
-  // always falls through to '—' regardless of what's loaded, and this fetch
-  // was pure dead weight — gated the same way as the other three so it
-  // naturally stops firing, and picks back up for real if the list endpoint
-  // ever starts returning those guids.
   const needsEmployeeLookup = pageItems.some(r => r.bInCharge || r.pHead)
-  const { data: employees = [] } = useEmployees(needsEmployeeLookup)
+  const { data: employees = [] } = useEmployeeDropdown(needsEmployeeLookup)
 
   function programName(r: Batch) {
     return r.programName ?? '—'
@@ -105,7 +92,7 @@ export default function Page() {
   }
   function employeeName(guid?: string | null) {
     if (!guid || guid === '00000000-0000-0000-0000-000000000000') return '—'
-    return employees.find(e => e.employeeGuid === guid)?.empName || '—'
+    return employees.find(e => e.employeeGuid === guid)?.displayName || '—'
   }
 
   // Rows are already server-filtered by activeSearch — this just previews
@@ -190,8 +177,8 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : filteredRows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
+                  : pageItems.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
                     : null}
                 {!isLoading && pageItems.map(r => (
                   <tr key={r.batchGuid}>

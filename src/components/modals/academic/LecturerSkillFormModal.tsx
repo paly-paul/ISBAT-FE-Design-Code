@@ -5,8 +5,8 @@ import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { MultiSelect } from '@/components/MultiSelect'
-import { useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
-import { useSearchSkillMastersInfinite } from '@/hooks/config/useSkillMaster'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
+import { useAllSkillMasters } from '@/hooks/config/useSkillMaster'
 import { useLecturerSkill } from '@/hooks/academic/useLecturerSkills'
 import { CreateLecturerSkillInput } from '@/lib/api/users/skills'
 import { AuthError } from '@/lib/api/client'
@@ -38,15 +38,9 @@ interface LecturerSkillFormModalProps extends ModalProps {
 export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lecturerSkillGuid, createSkill, updateSkill }: LecturerSkillFormModalProps) {
   const isEdit = mode === 'edit'
   const { data: skill, isLoading, isError, error } = useLecturerSkill(lecturerSkillGuid, isOpen && isEdit)
-  const [employeeSearch, setEmployeeSearch] = useState('')
-  const [skillSearch, setSkillSearch] = useState('')
-  const [committedEmployeeSearch, setCommittedEmployeeSearch] = useState('')
-  const [committedSkillSearch, setCommittedSkillSearch] = useState('')
-  const PICKER_PAGE_SIZE = 20
-  const employeeQuery = useSearchEmployeesInfinite(committedEmployeeSearch, PICKER_PAGE_SIZE, isOpen)
-  const skillQuery = useSearchSkillMastersInfinite(committedSkillSearch, PICKER_PAGE_SIZE, isOpen)
-  const employees = useMemo(() => flattenUniquePages(employeeQuery.data?.pages ?? [], item => item.employeeGuid), [employeeQuery.data])
-  const skillMasters = useMemo(() => flattenUniquePages(skillQuery.data?.pages ?? [], item => item.skillGuid), [skillQuery.data])
+  const { data: employees = [] } = useEmployeeDropdown(isOpen)
+  const { data: skillMasterData } = useAllSkillMasters(isOpen)
+  const skillMasters = skillMasterData?.items ?? []
 
   const [saved, setSaved]           = useState(false)
   const [failure, setFailure]       = useState<string | null>(null)
@@ -83,10 +77,7 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
 
   if (!isOpen) return null
 
-  const employeeOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
-  if (isEdit && skill?.employeeGuid && !employeeOptions.some(o => o.value === skill.employeeGuid)) {
-    employeeOptions.unshift({ value: skill.employeeGuid, label: skill.employeeGuid })
-  }
+  const employeeOptions = employees.map(e => ({ value: e.employeeGuid, label: e.displayName }))
   const skillOptions = skillMasters.map(s => ({ value: s.skillGuid, label: s.skillName }))
   if (isEdit && skillIds[0] && !skillOptions.some(o => o.value === skillIds[0])) {
     skillOptions.unshift({ value: skillIds[0], label: skill?.skillName || skillIds[0] })
