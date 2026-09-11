@@ -5,8 +5,8 @@ import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { MultiSelect } from '@/components/MultiSelect'
-import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
-import { useAllSkillMasters } from '@/hooks/config/useSkillMaster'
+import { useEmployee, useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
+import { useSearchSkillMastersInfinite } from '@/hooks/config/useSkillMaster'
 import { useLecturerSkill } from '@/hooks/academic/useLecturerSkills'
 import { CreateLecturerSkillInput } from '@/lib/api/users/skills'
 import { AuthError } from '@/lib/api/client'
@@ -38,9 +38,6 @@ interface LecturerSkillFormModalProps extends ModalProps {
 export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lecturerSkillGuid, createSkill, updateSkill }: LecturerSkillFormModalProps) {
   const isEdit = mode === 'edit'
   const { data: skill, isLoading, isError, error } = useLecturerSkill(lecturerSkillGuid, isOpen && isEdit)
-  const { data: employees = [] } = useEmployeeDropdown(isOpen)
-  const { data: skillMasterData } = useAllSkillMasters(isOpen)
-  const skillMasters = skillMasterData?.items ?? []
 
   const [saved, setSaved]           = useState(false)
   const [failure, setFailure]       = useState<string | null>(null)
@@ -49,6 +46,14 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
   const [skillIds, setSkillIds]     = useState<string[]>([])
   const [proficiency, setProficiency] = useState('1')
   const [errors, setErrors]         = useState<Record<string, string>>({})
+  const [employeeSearch, setEmployeeSearch] = useState('')
+  const [committedEmployeeSearch, setCommittedEmployeeSearch] = useState('')
+  const [skillSearch, setSkillSearch] = useState('')
+  const [committedSkillSearch, setCommittedSkillSearch] = useState('')
+
+  const selectedEmployee = useEmployee(employeeGuid || null)
+  const employeeQuery = useSearchEmployeesInfinite(committedEmployeeSearch, 20, isOpen)
+  const skillQuery = useSearchSkillMastersInfinite(committedSkillSearch, 20, isOpen)
 
   useEffect(() => {
     const timer = setTimeout(() => setCommittedEmployeeSearch(employeeSearch.trim()), 300)
@@ -66,22 +71,34 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
       setEmployeeGuid(skill.employeeGuid || '')
       const master = skill.skillGuid && !skill.skillGuid.startsWith('00000000-')
         ? skill.skillGuid
-        : skillMasters.find(s => s.skillName === skill.skillName)?.skillGuid
+        : undefined
       setSkillIds(master ? [master] : [])
       setProficiency(String(skill.proficiency || 1))
       setErrors({})
     } else if (!isEdit) {
       setEmployeeGuid(''); setSkillIds([]); setProficiency('1'); setErrors({})
     }
-  }, [isOpen, isEdit, skill, skillMasters])
+  }, [isOpen, isEdit, skill])
+
+  const employeeOptions = useMemo(() => {
+    const arr = flattenUniquePages(employeeQuery.data?.pages ?? [], e => e.employeeGuid)
+      .map(e => ({ value: e.employeeGuid, label: e.empName }))
+    if (employeeGuid && !arr.some(option => option.value === employeeGuid) && selectedEmployee.data) {
+      arr.unshift({ value: employeeGuid, label: selectedEmployee.data.empName })
+    }
+    return arr
+  }, [employeeGuid, employeeQuery.data, selectedEmployee.data])
+
+  const skillOptions = useMemo(() => {
+    const arr = flattenUniquePages(skillQuery.data?.pages ?? [], s => s.skillGuid)
+      .map(s => ({ value: s.skillGuid, label: s.skillName }))
+    if (skillIds[0] && !arr.some(option => option.value === skillIds[0])) {
+      arr.unshift({ value: skillIds[0], label: skill?.skillName || skillIds[0] })
+    }
+    return arr
+  }, [skillIds, skillQuery.data, skill])
 
   if (!isOpen) return null
-
-  const employeeOptions = employees.map(e => ({ value: e.employeeGuid, label: e.displayName }))
-  const skillOptions = skillMasters.map(s => ({ value: s.skillGuid, label: s.skillName }))
-  if (isEdit && skillIds[0] && !skillOptions.some(o => o.value === skillIds[0])) {
-    skillOptions.unshift({ value: skillIds[0], label: skill?.skillName || skillIds[0] })
-  }
 
   function handleClose() {
     setSaved(false); setFailure(null)
