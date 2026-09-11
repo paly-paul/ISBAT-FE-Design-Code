@@ -39,23 +39,20 @@ export default function SkillPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
 
-  const { data, isLoading } = useSkillMasters(page, PAGE_SIZE)
+  const searchTrimmed = search.trim()
+  const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
+  const { data, isLoading, isFetching } = useSkillMastersPaged(page, PAGE_SIZE, activeSearch)
   const pageItems = data?.items ?? []
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && isFetching
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? pageItems.slice(0, 8) : []
+  const displayItems = pageItems
 
   const createSkill = useCreateSkillMaster()
   const updateSkill = useUpdateSkillMaster()
   const deleteSkill = useDeleteSkillMaster()
-
-  const searchTrimmed = search.trim()
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? pageItems.filter(r => r.skillName.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
-    : []
-
-  const displayItems = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? pageItems.filter(r => r.skillName.toLowerCase().includes(searchTrimmed.toLowerCase()))
-    : pageItems
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
