@@ -8,7 +8,6 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { CourseUnitSearchPicker, CourseUnitPickOption } from '@/components/CourseUnitSearchPicker'
-import { usePagination } from '@/hooks/usePagination'
 import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
 import { useSearchFacultiesInfinite } from '@/hooks/config/useFaculties'
@@ -80,7 +79,14 @@ export default function CourseAllocationPage() {
   const lecturerOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
   const facultyOptions = faculties.map(f => ({ value: f.facultyGuid, label: `${f.facultyCode} — ${f.facultyName}` }))
 
-  const { data: rows = [], isLoading } = useProgramPlannings()
+  const [search, setSearch] = useState('')
+  const searchTrimmed = search.trim().toLowerCase()
+  const [page, setPage] = useState(1)
+  const { data, isLoading } = useProgramPlannings({ search: searchTrimmed || undefined }, page, PAGE_SIZE)
+  const rows = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
   const createPlanning = useCreateProgramPlanning()
   const deletePlanning = useDeleteProgramPlanning()
   const [deleteTarget, setDeleteTarget] = useState<(typeof rows)[number] | null>(null)
@@ -103,12 +109,13 @@ export default function CourseAllocationPage() {
   // that might not preserve the server's original row order.
   const sortedRows = [...rows].sort((a, b) => (b.intakeCode ?? 0) - (a.intakeCode ?? 0))
 
-  const [search, setSearch] = useState('')
-  const searchTrimmed = search.trim().toLowerCase()
-  const filteredRows = searchTrimmed
-    ? sortedRows.filter(r => `${r.employeeName ?? ''} ${r.courseUnitCode ?? ''} ${r.courseUnitName ?? ''}`.toLowerCase().includes(searchTrimmed))
-    : sortedRows
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage)
+  }, [page, safePage])
+
+  useEffect(() => {
+    setPage(1)
+  }, [searchTrimmed])
 
   function validate() {
     const e: Record<string, string> = {}
@@ -323,10 +330,10 @@ export default function CourseAllocationPage() {
             <tbody>
               {isLoading
                 ? <TableLoadingState colSpan={999} />
-                : filteredRows.length === 0
+                : sortedRows.length === 0
                   ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
                   : null}
-              {!isLoading && pageItems.map(r => (
+              {!isLoading && sortedRows.map(r => (
                 <tr key={r.programPlanGuid}>
                   <td className="font-medium text-g800">{r.employeeName ?? '—'}</td>
                   <td>
@@ -347,7 +354,7 @@ export default function CourseAllocationPage() {
             </tbody>
           </table>
         </ScrollTable>
-        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="allocations" onPageChange={setPage} />
+        <Pagination page={safePage} totalPages={totalPages} totalCount={totalCount} itemLabel="allocations" onPageChange={setPage} />
       </div>
 
       {deleteTarget && (

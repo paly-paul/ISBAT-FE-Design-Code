@@ -5,7 +5,6 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { useBatchSummary } from '@/hooks/academic/useBatchSummary'
 
@@ -51,15 +50,25 @@ const PAGE_SIZE = 10
 export default function Page() {
   const [intake, setIntake] = useState('Spring 2026')
   const [campusGuid, setCampusGuid] = useState('')
+  const [page, setPage] = useState(1)
   const { data: campuses = [] } = useCampusDropdown()
-  const { data: rows = [], isLoading } = useBatchSummary(campusGuid || null)
-  const stats = useMemo(() => statsFromRows(rows), [rows])
+  const { data, isLoading } = useBatchSummary(campusGuid || null, page, PAGE_SIZE)
 
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(rows, PAGE_SIZE)
+  const rows = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const stats = useMemo(() => statsFromRows(rows), [rows])
 
   // Land back on page 1 whenever the campus filter changes — the previous
   // page offset almost never lands on a valid page of the newly-filtered set.
-  useEffect(() => { setPage(1) }, [campusGuid, setPage])
+  useEffect(() => { setPage(1) }, [campusGuid])
+
+  // Keep the page state clamped if the backend-reported totalCount drops
+  // (for example after a stricter campus filter).
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage)
+  }, [page, safePage])
 
   return (
     <div className="page active" id="page-batch-summary">
@@ -108,17 +117,17 @@ export default function Page() {
             <tbody>
               {isLoading
                 ? <TableLoadingState colSpan={6} />
-                : pageItems.length === 0
+                : rows.length === 0
                   ? <EmptyState colSpan={6} hasFilters={!!campusGuid} onClearFilters={() => setCampusGuid('')} />
-                  : pageItems.map((r, i) => (
+                  : rows.map((r, i) => (
                     // batchGuid alone isn't a safe key — the real endpoint's
                     // field names aren't confirmed yet (see file header) and
                     // a live response has been seen leaving it blank/
                     // duplicated across rows; the absolute row index (page-
                     // qualified, matching the Sl. No column) is always
                     // unique regardless of what the guid comes back as.
-                    <tr key={`${r.batchGuid || 'row'}-${(page - 1) * PAGE_SIZE + i}`}>
-                      <td className="text-g500">{r.slNo ?? (page - 1) * PAGE_SIZE + i + 1}</td>
+                    <tr key={`${r.batchGuid || 'row'}-${(safePage - 1) * PAGE_SIZE + i}`}>
+                      <td className="text-g500">{r.slNo ?? (safePage - 1) * PAGE_SIZE + i + 1}</td>
                       <td><span className="font-bold font-mono text-blue">{r.batchCode}</span></td>
                       <td>{r.programName}</td>
                       <td>{semesterLabelFromCode(r.semCode)}</td>
@@ -129,7 +138,7 @@ export default function Page() {
             </tbody>
           </table>
         </ScrollTable>
-        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="batches" onPageChange={setPage} />
+        <Pagination page={safePage} totalPages={totalPages} totalCount={totalCount} itemLabel="batches" onPageChange={setPage} />
       </div>
     </div>
   )

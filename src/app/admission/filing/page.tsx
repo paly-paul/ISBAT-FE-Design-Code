@@ -20,7 +20,7 @@ import { getEnquiryById, getEnquiries } from '@/lib/api/admission/enquiry'
 import { flattenUniquePages } from '@/lib/pagination'
 import {
   FilingApplicationSearchResult,
-  useApplicationByGuid,
+  useApplicationByPaymentGuid,
   useDeleteQualification,
   useSaveGeneral,
   useSaveQualification,
@@ -569,29 +569,30 @@ export default function FilingPage() {
   const [spCountryGuid, setSpCountryGuid] = useState('')
   const [spPhone, setSpPhone] = useState('')
 
-  // Best-effort enrichment from GET /application-filling/{applicationGuid}
-  // (get-application-by-guid.md) — the search source above (application-
-  // payments) doesn't carry every personal-detail field (see
-  // FilingApplicationSearchResult's own notes), and this endpoint's full
-  // ApplicationDetailDto can fill in what it left null. Confirmed by the
-  // backend team (2026-09-10) to be a genuinely narrow window: it only
-  // returns data while the application's Action == Submitted. It 400s both
-  // for the ordinary "still being filled in" case this page mostly handles
-  // AND for one that has already been vetted/rejected/registered — so this
-  // realistically only ever enriches an applicant who was fully filed and
-  // submitted in a prior session and hasn't been vetted yet. Either 400 is
-  // expected and handled as "nothing to enrich with", not an error. NOTE:
-  // selectedApplication.applicationGuid is also actually backed by the
-  // payment record's paymentGuid, not a confirmed application-filling guid
-  // (see mapApplicationPaymentToSearchResult's own comment) — so this call
-  // may 400 for that reason too, indistinguishable from either status gap
-  // above. Whatever the cause, the fallback is the same: leave whatever
-  // selectApplication() already prefilled untouched.
+  // Best-effort enrichment from GET
+  // /application-filling/by-payment/{paymentGuid} (get-application-by-guid.md)
+  // — the search source above (application-payments) doesn't carry every
+  // personal-detail field (see FilingApplicationSearchResult's own notes),
+  // and this endpoint's full ApplicationDetailDto can fill in what it left
+  // null. Confirmed by the backend team (2026-09-10) to be a genuinely
+  // narrow window: it only returns data while the application's Action ==
+  // Submitted. It 400s both for the ordinary "still being filled in" case
+  // this page mostly handles AND for one that has already been vetted/
+  // rejected/registered — so this realistically only ever enriches an
+  // applicant who was fully filed and submitted in a prior session and
+  // hasn't been vetted yet. Either 400 is expected and handled as "nothing
+  // to enrich with", not an error. selectedApplication.applicationGuid is
+  // actually backed by the payment record's paymentGuid, not a real
+  // application-filling guid (see mapApplicationPaymentToSearchResult's own
+  // comment) — this by-payment route is what that value is genuinely meant
+  // for, replacing an earlier call to the plain {applicationGuid} route that
+  // only "worked" by coincidence (a mismatched guid there 400s the same way
+  // a not-yet-submitted application does).
   const {
     data: applicationDetail,
     isError: applicationDetailFailed,
     isFetched: applicationDetailFetched,
-  } = useApplicationByGuid(
+  } = useApplicationByPaymentGuid(
     selectedApplication?.applicationGuid,
     // Re-enabled (2026-09-10) per request. Still expected to 400 for the
     // vast majority of selections (see the comment above) — that's handled
@@ -605,15 +606,69 @@ export default function FilingPage() {
     setEnrichedForGuid(selectedApplication.applicationGuid)
 
     if (applicationDetail) {
+      // Backend quirk confirmed live (2026-09-11): some nullable string
+      // fields come back as the literal string "null" instead of a real
+      // JSON null (spName/spEmail/spPhone/refugeeId seen so far) — treated
+      // the same as an actual null here so an "only fill if empty" guard
+      // below doesn't end up prefilling a field with the text "null".
+      const orNull = (s: string | null | undefined) => (s && s !== 'null' ? s : null)
+
+      if (!firstName && orNull(applicationDetail.firstName)) setFirstName(applicationDetail.firstName as string)
+      if (!lastName && orNull(applicationDetail.lastName)) setLastName(applicationDetail.lastName as string)
+      if (!email && orNull(applicationDetail.emailId)) setEmail(applicationDetail.emailId as string)
+      if (!phone && orNull(applicationDetail.phone)) setPhone(applicationDetail.phone as string)
       if (!dob && applicationDetail.dob) setDob(applicationDetail.dob.slice(0, 10))
       if (!gender && applicationDetail.gender != null) setGender(applicationDetail.gender === 1 ? 'Male' : 'Female')
-      if (!countryGuid && applicationDetail.countryGuid) setCountryGuid(applicationDetail.countryGuid)
-      if (!nationalId && applicationDetail.nationalId) setNationalId(applicationDetail.nationalId)
-      if (!passportNo && applicationDetail.passportNo) setPassportNo(applicationDetail.passportNo)
+      if (!countryGuid && orNull(applicationDetail.countryGuid)) setCountryGuid(applicationDetail.countryGuid as string)
+      if (!nationalId && orNull(applicationDetail.nationalId)) setNationalId(applicationDetail.nationalId as string)
+      if (!passportNo && orNull(applicationDetail.passportNo)) setPassportNo(applicationDetail.passportNo as string)
+      // Visa dates — ApplicationListItem-only fields (not on
+      // FilingApplicationSearchResult, so selectApplication() above never
+      // had these to prefill from) — first genuinely new data this
+      // enrichment call adds rather than just filling a gap selectApplication
+      // already tried to.
+      if (!vStartDate && applicationDetail.vStartDate) setVStartDate(applicationDetail.vStartDate.slice(0, 10))
+      if (!vEndDate && applicationDetail.vEndDate) setVEndDate(applicationDetail.vEndDate.slice(0, 10))
       if (!isRefugee && applicationDetail.refugee === 1) {
         setIsRefugee(true)
-        setRefugeeId(applicationDetail.refugeeId ?? '')
+        setRefugeeId(orNull(applicationDetail.refugeeId) ?? '')
       }
+      // Sponsor (Family tab) — same "genuinely new, not on
+      // FilingApplicationSearchResult" case as the visa dates above.
+      if (!spName && orNull(applicationDetail.spName)) setSpName(applicationDetail.spName as string)
+      if (!spEmail && orNull(applicationDetail.spEmail)) setSpEmail(applicationDetail.spEmail as string)
+      if (!spCountryGuid && orNull(applicationDetail.spCountryGuid)) setSpCountryGuid(applicationDetail.spCountryGuid as string)
+      if (!spPhone && orNull(applicationDetail.spPhone)) setSpPhone(applicationDetail.spPhone as string)
+      // Programme Details — the locked/disabled Campus/Programme/Fee
+      // Structure/Semester/Batch Time/Batch dropdowns (see
+      // handleSaveGeneralAndAdvance's own comment) read straight off this
+      // state, normally set by selectApplication() from the payment-search
+      // result. Confirmed live (2026-09-11) that source can come back with
+      // these still null even though this by-payment endpoint has the real
+      // guids — filled in here the same "only if still empty" way, using
+      // the raw setters (not setProgramGuid/setSemesterGuid/
+      // setBatchTimeGuid, which cascade-clear the fields below them and
+      // would fight each other run back-to-back here).
+      if (!intakeGuid && orNull(applicationDetail.intakeGuid)) setIntakeGuid(applicationDetail.intakeGuid as string)
+      if (!campusGuid && orNull(applicationDetail.campusGuid)) setCampusGuid(applicationDetail.campusGuid as string)
+      if (!programGuid && orNull(applicationDetail.programGuid)) setProgramGuidState(applicationDetail.programGuid as string)
+      if (!semesterGuid && orNull(applicationDetail.semesterGuid)) setSemesterGuidState(applicationDetail.semesterGuid as string)
+      if (!batchTimeGuid && orNull(applicationDetail.batchTimeGuid)) setBatchTimeGuidState(applicationDetail.batchTimeGuid as string)
+      if (!batchGuid && orNull(applicationDetail.batchGuid)) setBatchGuid(applicationDetail.batchGuid as string)
+      if (!feeHdGuid && orNull(applicationDetail.feeHdGuid)) setFeeHdGuid(applicationDetail.feeHdGuid as string)
+      // Previously-uploaded document file names — merged onto
+      // selectedApplication itself (not its own form state) since the
+      // Documents tab's DocRow reads savedName straight off
+      // selectedApplication.*UserFileName; FilingApplicationSearchResult
+      // (the payment record this came from) never carries these, so they're
+      // always empty until this enrichment fills them in.
+      setSelectedApplication(prev => (prev ? {
+        ...prev,
+        idUserFileName: prev.idUserFileName ?? orNull(applicationDetail.idUserFileName),
+        passUserFileName: prev.passUserFileName ?? orNull(applicationDetail.passUserFileName),
+        visaUserFileName: prev.visaUserFileName ?? orNull(applicationDetail.visaUserFileName),
+        studUserFileName: prev.studUserFileName ?? orNull(applicationDetail.studUserFileName),
+      } : prev))
     } else if (applicationDetailFailed) {
       // Quiet, non-blocking — this is the expected outcome for the vast
       // majority of selections (still-mid-filing applications), not a

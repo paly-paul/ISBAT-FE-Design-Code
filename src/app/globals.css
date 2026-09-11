@@ -1302,6 +1302,24 @@ body {
   }
 }
 
+/* Payment Console's Programme Progress row (Total Outstanding/Paid/
+   Remaining) — same 3-tile case as Batch Summary above, same fix. */
+#page-payment-console .stats-row {
+  grid-template-columns: repeat(3, 1fr)
+}
+
+@media(max-width:600px) {
+  #page-payment-console .stats-row {
+    grid-template-columns: 1fr 1fr
+  }
+}
+
+@media(max-width:420px) {
+  #page-payment-console .stats-row {
+    grid-template-columns: 1fr
+  }
+}
+
 @media(max-width:900px) {
   #page-enquiry-list .stats-row {
     grid-template-columns: repeat(3, 1fr)
@@ -3877,6 +3895,25 @@ th:hover .th-fi {
   display: grid;
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
+}
+
+/* Compact 4-column variant — Ledger/Scheduled Amt/Paid/Outstanding, no
+   Scheduled Bill. Payment Console's Upcoming Semesters modal (opened from
+   the Programme Progress "Total Outstanding" stat card) reuses this same
+   grid look for its own future-semester ledger tables, but those ledgers
+   are never run through the Currency Received conversion step the main
+   Outstanding Balance table's Scheduled Bill column shows — nothing is
+   being paid from this modal. Carrying that column along regardless would
+   either fake a conversion that never happened or just repeat Scheduled
+   Amt under a second name, and reads as a copy-pasted table rather than
+   its own view. .recgrid-foot's label span is re-spanned to match (3
+   columns instead of 4) so its value still lands under Outstanding. */
+.recgrid.recgrid-4col {
+  grid-template-columns: 2fr repeat(2, 1fr) 1.2fr;
+}
+
+.recgrid-4col .recgrid-foot>span:first-child {
+  grid-column: 1 / 4;
 }
 
 .recgrid-hdr {

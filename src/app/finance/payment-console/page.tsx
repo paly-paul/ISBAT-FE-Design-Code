@@ -6,6 +6,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Pagination } from '@/components/Pagination'
 import { PaymentSuccessModal } from '@/components/modals/finance/PaymentSuccessModal'
+import { UpcomingSemestersModal } from '@/components/modals/finance/UpcomingSemestersModal'
 import { ViewPaymentModal } from '@/components/modals/finance/ViewPaymentModal'
 import { EditPaymentModal, EditablePaymentTarget } from '@/components/modals/finance/EditPaymentModal'
 import { EditPaymentOtherModal, EditablePaymentOtherTarget } from '@/components/modals/finance/EditPaymentOtherModal'
@@ -556,7 +557,13 @@ export default function PaymentConsolePage() {
   // semester-grouping/picking step left to do the way the old
   // ledgerGroups/currentSemesterGroup had to.
   const { data: currentSemesterPayable, isLoading: isLedgersLoading } = useCurrentSemesterPayable(selectedApplicationGuid, !!selectedApplicationGuid, studentGuid)
-  const ledgers = currentSemesterPayable ?? []
+  const ledgers = currentSemesterPayable?.ledgers ?? []
+  // Whole-programme progress (every semester, not just the current one) —
+  // shown alongside the current semester's own ledger table below, not
+  // folded into ledgerTotals/convertedLedgers which stay scoped to `ledgers`.
+  const totalProgramOutstanding = currentSemesterPayable?.totalProgramOutstanding ?? 0
+  const paidPercentage = currentSemesterPayable?.paidPercentage ?? 0
+  const remainingPercentage = currentSemesterPayable?.remainingPercentage ?? 0
   // Business rule (2026-09-04, per request): the discount is documented as
   // conditional on "this group is paid in full" (see discountMessage's own
   // wording), but this endpoint always shows it unconditionally — it has no
@@ -802,6 +809,7 @@ export default function PaymentConsolePage() {
   // row itself (PaymentHistoryEntry) already carries everything shown.
   const [viewEntry, setViewEntry] = useState<PaymentHistoryEntry | null>(null)
   const [editTarget, setEditTarget] = useState<EditablePaymentTarget | null>(null)
+  const [showUpcomingSemesters, setShowUpcomingSemesters] = useState(false)
   // Other Payment tab's own Edit target (put-payment-other.md) — a
   // genuinely different shape/endpoint from Tuition's editTarget above, so
   // kept as its own state rather than reused.
@@ -951,15 +959,18 @@ export default function PaymentConsolePage() {
   // delete affordance, so this stays a flat append-only log to match; each
   // successful submit appends the real result (post-payment-other.md) to it.
   // Loops the Ledger/Ledger Amount table, firing one real
-  // CreatePaymentOther call per valid row (ledger picked + amount > 0) —
-  // the endpoint itself has no multi-line support (see PaymentOtherInput's
-  // own comment), so N rows means N sequential calls sharing every other
-  // field (currency/date/receipt book/bank/remarks). Sequential rather than
-  // Promise.all so a mid-batch failure stops cleanly instead of leaving a
-  // partial, hard-to-reconcile set of receipts firing concurrently; rows
-  // that already succeeded stay recorded (both here and on the server) even
-  // if a later row fails — only the table itself is left as-is for the
-  // cashier to fix and retry the remainder.
+  // CreatePaymentOther call per valid row (ledger picked + amount > 0) — N
+  // rows means N sequential calls sharing every other field (currency/date/
+  // receipt book/bank/remarks), each sent as its own single-entry `lines`
+  // array (see PaymentOtherInput's own comment: the endpoint itself now
+  // accepts several lines under one call/receipt, as of 2026-09-10, but
+  // this page still claims one receipt per row rather than batching every
+  // valid row into one call). Sequential rather than Promise.all so a
+  // mid-batch failure stops cleanly instead of leaving a partial,
+  // hard-to-reconcile set of receipts firing concurrently; rows that
+  // already succeeded stay recorded (both here and on the server) even if a
+  // later row fails — only the table itself is left as-is for the cashier
+  // to fix and retry the remainder.
   async function otherSaveEntry() {
     if (!profile || !selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
 
@@ -1012,8 +1023,7 @@ export default function PaymentConsolePage() {
         const result = await createPaymentOther.mutateAsync({
           applicationGuid: selectedApplicationGuid,
           studentGuid,
-          ledgerOthersGuid: row.ledgerOthersGuid,
-          amount: parseFloat(row.amount),
+          lines: [{ ledgerOthersGuid: row.ledgerOthersGuid, amount: parseFloat(row.amount) }],
           currencyGuid: otherCurrencyGuid,
           payDate: otherPayDate,
           payType: payTypeNum,
@@ -1652,6 +1662,16 @@ export default function PaymentConsolePage() {
                     what the "Amount to Collect" summary strip and (in
                     Advance mode) the deposit-balance check further down use. */}
                 <div className="mb-[14px]">
+                  {/* Moved above the table, right-aligned (2026-09-11, per
+                      request) — was a plain button below the Total footer
+                      row; same action, just placed where a "row-adding"
+                      control on a table conventionally sits, next to what
+                      it's adding to instead of trailing after the totals. */}
+                  <div className="flex justify-end mb-2">
+                    <button type="button" className="btn btn-neu btn-sm" onClick={addOtherLedgerRow}>
+                      <i className="lni lni-plus"></i> Add Row
+                    </button>
+                  </div>
                   <div className="recgrid" style={{ gridTemplateColumns: '1.6fr 1fr' }}>
                     <div className="recgrid-row recgrid-hdr">
                       <span style={{ textAlign: 'left' }}>Ledger</span>
@@ -1704,9 +1724,6 @@ export default function PaymentConsolePage() {
                       <span>{fmtAmt(otherLedgerRowsTotal)}</span>
                     </div>
                   </div>
-                  <button type="button" className="btn btn-neu btn-sm" onClick={addOtherLedgerRow}>
-                    <i className="lni lni-plus"></i> Add Row
-                  </button>
                 </div>
 
                 {/* Advance Payment deposit table — the checkbox that gates
@@ -2027,6 +2044,47 @@ export default function PaymentConsolePage() {
                 {/* "Outstanding Balance" card-hdr label removed per request
                     (2026-09-04) — the table below already makes clear
                     what's being shown. */}
+                {/* Whole-programme progress (2026-09-11) — every semester's
+                    ledgers, not just the current semester's own ledgers in
+                    the table below. Shown whenever the query has actually
+                    resolved a real programme total, independent of whether
+                    the current semester itself has anything outstanding
+                    (ledgers.length === 0 below) — a fully-settled semester
+                    can still sit inside a programme that isn't fully paid
+                    off yet. Same .stats-row/.stat-card/.prog-bar-track
+                    classes as the Finance dashboard's own stat cards, not a
+                    bespoke box. Total Outstanding is a button — the only
+                    place upcomingSemesters (everything beyond the current
+                    semester) is surfaced, since nothing else on the page
+                    needs it. */}
+                {!isLedgersLoading && currentSemesterPayable && currentSemesterPayable.totalProgramAmount > 0 && (
+                  <div className="stats-row mb-4">
+                    <button
+                      type="button"
+                      className="stat-card [--b700:var(--amber)] [--b400:#fbbf24] text-left"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setShowUpcomingSemesters(true)}
+                    >
+                      <div className="stat-lbl">Total Outstanding (Programme)</div>
+                      <div className="stat-num text-amber">{fmtAmt(totalProgramOutstanding)}</div>
+                      <div className="stat-sub warn"><i className="lni lni-eye"></i> View upcoming semesters</div>
+                    </button>
+                    <div className="stat-card [--b700:var(--green)] [--b400:#34d399]">
+                      <div className="stat-lbl">Paid</div>
+                      <div className="stat-num text-green">{paidPercentage.toFixed(2)}%</div>
+                      <div className="prog-bar-track" style={{ marginTop: 8 }}>
+                        <div className="prog-bar-fill" style={{ width: `${Math.min(100, Math.max(0, paidPercentage))}%`, background: 'var(--green)' }}></div>
+                      </div>
+                    </div>
+                    <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]">
+                      <div className="stat-lbl">Remaining</div>
+                      <div className="stat-num text-amber">{remainingPercentage.toFixed(2)}%</div>
+                      <div className="prog-bar-track" style={{ marginTop: 8 }}>
+                        <div className="prog-bar-fill" style={{ width: `${Math.min(100, Math.max(0, remainingPercentage))}%`, background: 'var(--amber)' }}></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {
                   isLedgersLoading ? (
                     <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading ledgers…</div>
@@ -2753,6 +2811,13 @@ export default function PaymentConsolePage() {
       <ViewPaymentModal isOpen={!!viewEntry} onClose={() => setViewEntry(null)} showToast={showToast} entry={viewEntry} />
       <EditPaymentModal isOpen={!!editTarget} onClose={() => setEditTarget(null)} showToast={showToast} target={editTarget} applicationGuid={selectedApplicationGuid ?? undefined} />
       <EditPaymentOtherModal isOpen={!!editOtherTarget} onClose={() => setEditOtherTarget(null)} showToast={showToast} target={editOtherTarget} />
+      <UpcomingSemestersModal
+        isOpen={showUpcomingSemesters}
+        onClose={() => setShowUpcomingSemesters(false)}
+        showToast={showToast}
+        upcomingSemesters={currentSemesterPayable?.upcomingSemesters ?? []}
+        totalProgramOutstanding={totalProgramOutstanding}
+      />
 
       {/* Ledger breakdown for one Payment Adjustment History row
           (get-adjustment-ledger-breakdown.md) — what the applied money
