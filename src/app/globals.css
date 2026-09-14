@@ -8,6 +8,18 @@
   html {
     font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
   }
+
+  /* Global removal of native up/down scrolling arrows from all number inputs */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
 }
 
 :root {
@@ -2074,6 +2086,18 @@ select.ctrl {
 textarea.ctrl {
   resize: vertical;
   min-height: 80px
+}
+
+/* Global: Remove native up/down stepper/scrolling arrows from all number inputs */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
 }
 
 .inp-wrap {
@@ -9423,3 +9447,52 @@ body {
     justify-content: flex-start;
   }
 }
+
+/* ── Print Media Optimization ── */
+@media print {
+  aside,
+  nav,
+  header,
+  .sb,
+  .sidebar,
+  .rail,
+  .pg-hdr,
+  button,
+  input,
+  select,
+  .toast-container,
+  .no-print {
+    display: none !important;
+  }
+
+  body,
+  .page,
+  main {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #e2e8f0 !important;
+    page-break-inside: avoid;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  th,
+  td {
+    border-bottom: 1px solid #cbd5e1 !important;
+    padding: 6px 8px !important;
+  }
+}
+

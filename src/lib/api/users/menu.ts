@@ -72,7 +72,7 @@ const FINANCE_PAYMENT_SECTIONS: MenuNode[] = [
   ]),
   section('Reports & Statements', [
     leaf('Financial Reports', 'bar-chart', 'financial-reports'),
-    leaf('Student Statements', 'files', 'student-statements'),
+    leaf('Student Statement', 'files', 'student-statements'),
   ]),
 ]
 
@@ -280,7 +280,6 @@ const mockMenu: MenuNode[] = [
   module_('Student', 'user', [
     section('Student Records', [
       leaf('Student Master', 'graduation', '/student/student-master'),
-      leaf('Student Statement', 'files', '/student/statement'),
     ]),
     ...STUDENT_OPERATIONS_SECTIONS,
   ]),
@@ -400,14 +399,10 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
   const recordsIdx = studentModule.children.findIndex(c => c.name === 'Student Records')
   if (recordsIdx !== -1) {
     const recordsSection = studentModule.children[recordsIdx]
-    const orderedRecordsLeaves = recordsSection.children.filter(l => l.name !== 'Batch Summary')
-    const existingLeaves = new Set(orderedRecordsLeaves.map(l => l.name))
-    const missingLeaves = [
-      leaf('Student Statement', 'files', '/student/statement'),
-    ].filter(l => !existingLeaves.has(l.name))
-    if (orderedRecordsLeaves.length !== recordsSection.children.length || missingLeaves.length > 0) {
+    const orderedRecordsLeaves = recordsSection.children.filter(l => l.name !== 'Batch Summary' && l.name !== 'Student Statement')
+    if (orderedRecordsLeaves.length !== recordsSection.children.length) {
       const children = [...studentModule.children]
-      children[recordsIdx] = { ...recordsSection, children: [...orderedRecordsLeaves, ...missingLeaves] }
+      children[recordsIdx] = { ...recordsSection, children: orderedRecordsLeaves }
       studentModule = { ...studentModule, children }
     }
   }

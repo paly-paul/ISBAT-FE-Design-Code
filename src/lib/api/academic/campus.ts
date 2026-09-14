@@ -48,6 +48,9 @@ export interface Campus {
   location: string
   address: string
   contact: string
+  intCampus?: number
+  campusId?: number
+  id?: string | number
 }
 
 // Payload used when creating or updating a campus.
@@ -93,6 +96,31 @@ export function getCampusesPaged(page = 1, pageSize = 20, search = ''): Promise<
 export interface CampusDropdownItem {
   campusGuid: string
   campusName: string
+  campusCode?: string
+  intCampus?: number
+  campusId?: number
+  id?: string | number
+}
+
+// Extract or derive the integer ID for a campus record across live API, mock, or fallback index.
+export function getCampusId(campus: Campus | CampusDropdownItem, index = 0): number {
+  const anyCampus = campus as any
+  if (typeof anyCampus.intCampus === 'number' && anyCampus.intCampus > 0) {
+    return anyCampus.intCampus
+  }
+  if (typeof anyCampus.campusId === 'number' && anyCampus.campusId > 0) {
+    return anyCampus.campusId
+  }
+  if (typeof anyCampus.id === 'number' && anyCampus.id > 0) {
+    return anyCampus.id
+  }
+  if (typeof anyCampus.campusCode === 'string' && anyCampus.campusCode.trim()) {
+    const parsed = parseInt(anyCampus.campusCode.trim(), 10)
+    if (!Number.isNaN(parsed) && parsed > 0) return parsed
+  }
+  const guidParsed = parseInt(campus.campusGuid, 10)
+  if (!Number.isNaN(guidParsed) && guidParsed > 0) return guidParsed
+  return index + 1
 }
 
 export function getCampusDropdown(): Promise<CampusDropdownItem[]> {

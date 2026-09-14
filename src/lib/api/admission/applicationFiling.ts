@@ -150,6 +150,18 @@ export interface ApplicationListItem {
   universityEmail: string | null
   createdDate: string | null
   modifiedDate: string | null
+  actionLabel?: string | null
+  saveStatusLabel?: string | null
+  programName?: string | null
+  intakeName?: string | null
+  campusName?: string | null
+  countryName?: string | null
+  genderLabel?: string | null
+  refugeeLabel?: string | null
+  docVerifiedLabel?: string | null
+  admLetterSendLabel?: string | null
+  provLetterSendLabel?: string | null
+  accLetterSendLabel?: string | null
 }
 
 interface ApplicationListResponse {

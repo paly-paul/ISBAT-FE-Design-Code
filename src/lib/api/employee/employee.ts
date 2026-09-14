@@ -44,6 +44,7 @@ export interface Employee {
   isApproved?: boolean
   intDept?: number | null
   intDesignation?: number | null
+  campusIds?: number[]
 }
 
 // Payload used when creating a new employee.
@@ -65,6 +66,7 @@ export interface CreateEmployeeInput {
   maritalStatus: number
   intDept: number
   intDesignation: number
+  campusIds?: number[]
 }
 
 // In-memory employee list used while mock auth is enabled.
@@ -184,6 +186,7 @@ export function getEmployee(id: string): Promise<Employee> {
       isApproved: listItem.isApproved,
       intDept: 1,
       intDesignation: 1,
+      campusIds: [1],
     }
     return Promise.resolve(employee)
   }
@@ -215,6 +218,7 @@ export function createEmployee(input: CreateEmployeeInput): Promise<Employee> {
       isApproved: false,
       intDept: input.intDept,
       intDesignation: input.intDesignation,
+      campusIds: input.campusIds ?? [1],
     }
     mockEmployees.push({
       employeeGuid: employee.employeeGuid,
@@ -298,6 +302,7 @@ export function updateEmployee(id: string, input: CreateEmployeeInput): Promise<
       isApproved: listItem.isApproved,
       intDept: input.intDept,
       intDesignation: input.intDesignation,
+      campusIds: input.campusIds ?? [1],
     }
     return Promise.resolve(employee)
   }

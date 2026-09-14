@@ -72,3 +72,4 @@ export function useDeleteCampus() {
 }
 
 export type { Campus, CampusInput, CampusDropdownItem } from '@/lib/api/academic/campus'
+export { getCampusId } from '@/lib/api/academic/campus'
