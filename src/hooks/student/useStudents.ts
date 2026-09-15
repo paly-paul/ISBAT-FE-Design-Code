@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
-import { StudentDto, StudentListFilters, StudentColumnFilters, getStudentByGuid, getStudents, getStudentsFilter } from '@/lib/api/student/student'
+import { StudentDto, StudentDetailDto, StudentListFilters, StudentColumnFilters, getStudentByGuid, getStudents, getStudentsFilter } from '@/lib/api/student/student'
 
 const STUDENTS_LIST_KEY = ['students-list']
 const STUDENT_DETAIL_KEY = ['student-detail']
@@ -117,6 +117,36 @@ export function useStudent(studentGuid: string | null, enabled: boolean) {
     queryFn: () => getStudentByGuid(studentGuid as string),
     enabled: enabled && !!studentGuid,
   })
+}
+
+// Batched studentGuid → applicationGuid resolver — same useQueries-per-guid
+// convention as useIntakesByGuids (useIntakes.ts). Backs Payment Console →
+// Refund's Passout/Library-Deposit and Fake-Certificate-Termination search
+// tabs: both eligibility-search DTOs carry only studentGuid, but the refund
+// endpoints (ledger-details-batch, POST /refund/applications/{applicationGuid},
+// the bulk endpoint) all key off applicationGuid — resolved here via
+// StudentDetailDto.applicationSummary.applicationGuid, since there's no
+// dedicated studentGuid→applicationGuid lookup endpoint.
+export function useStudentsByGuids(guids: string[], enabled = true) {
+  const unique = Array.from(new Set(guids.filter(Boolean)))
+  const results = useQueries({
+    queries: unique.map(guid => ({
+      queryKey: [...STUDENT_DETAIL_KEY, guid],
+      queryFn: () => getStudentByGuid(guid),
+      enabled,
+      staleTime: 5 * 60 * 1000,
+    })),
+  })
+  return useMemo(() => {
+    const byGuid = new Map<string, StudentDetailDto>()
+    results.forEach((r, i) => { if (r.data) byGuid.set(unique[i], r.data) })
+    return {
+      byGuid,
+      isLoading: results.some(r => r.isLoading),
+      isError: results.some(r => r.isError),
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results])
 }
 
 export type { StudentDto, StudentDetailDto, StudentListFilters, StudentColumnFilters, PagedResult } from '@/lib/api/student/student'

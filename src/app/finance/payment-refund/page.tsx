@@ -1,67 +1,64 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
-import { ScrollTable } from '@/components/ScrollTable'
 import { PaymentSuccessModal } from '@/components/modals/finance/PaymentSuccessModal'
-import DatePicker from '@/components/DatePicker'
-import { SearchSelect } from '@/components/SearchSelect'
-import { useCampuses } from '@/hooks/config/useCampuses'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
-import { useBatches } from '@/hooks/academic/useBatches'
-import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
-import {
-  useSearchStudentsInfinite,
-  useStudentProfile,
-} from '@/hooks/finance/usePaymentConsole'
-import {
-  useLedgerOptions,
-  useTotalPaid,
-  useRefundsByApplication,
-  useCreateRefund,
-} from '@/hooks/finance/usePaymentRefund'
-import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
-import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
-import { formatDate } from '@/lib/date'
-import { AuthError } from '@/lib/api/client'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { RejectedTab } from './_components/RejectedTab'
+import { PassoutLibraryDepositTab } from './_components/PassoutLibraryDepositTab'
+import { FakeCertTab } from './_components/FakeCertTab'
 
-// Reference: a legacy ISMS screen ("Payment Console - Refund" —
-// frmPaymentConsoleRefund.aspx) for issuing a refund against a payment a
-// student has already made. Rebuilt 2026-09-05 against the refund/ doc set
-// (repo root) — the backend was ported 1:1 from the legacy
-// T_InsertPaymentConsole_Refund stored procedure and the model changed from
-// "refund a specific tuition payment" to "refund a (applicationGuid,
-// ledgerGuid) pair": pick a LEDGER (from this application's own paid
-// ledgers), not a payment — a refund here doesn't reverse any ledger line,
-// isn't linked to any payment, and an application can be refunded at most
-// once per ledger, ever. Student search and the profile summary still reuse
-// Payment Console's own real hooks/components (useSearchStudentsInfinite/
-// useStudentProfile, the pc-hero card), same 50/50 pc-body split as that
-// page's own Profile Details + payment form.
+// Dev-only toggle between real API data and the seeded, in-memory mock data
+// in ./_components/mockData.ts — separate from the app-wide, build-time
+// NEXT_PUBLIC_AUTH_MOCK flag, so the whole 3-tab refund flow can be clicked
+// through with no backend at all (useful when the dev gateway doesn't have
+// the right seed data for one of the three refund-eligibility categories
+// yet). Never rendered in production. Persisted in localStorage purely as a
+// per-browser dev convenience — never a source of truth, so every read is
+// wrapped in try/catch and falls back to API mode on any failure (private
+// browsing, blocked storage, etc.).
+const MOCK_MODE_STORAGE_KEY = 'isbat_payment_refund_mock_mode'
+const SHOW_MOCK_TOGGLE = process.env.NODE_ENV !== 'production'
 
-function fmtAmt(n: number) {
-  return n.toLocaleString('en-US', { maximumFractionDigits: 2 })
+function readStoredMockMode(): boolean {
+  if (!SHOW_MOCK_TOGGLE || typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem(MOCK_MODE_STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
 }
 
-function applicantName(a: { firstName: string | null; lastName: string | null } | undefined | null) {
-  if (!a) return '—'
-  return `${a.firstName ?? ''}${a.lastName ? ` ${a.lastName}` : ''}`.trim() || '—'
-}
+// Rebuilt 2026-09-15 against the Refund-Eligibility Search API set (repo
+// root) — the page changed from one flat "search any student, pick a
+// ledger" form into three distinct eligibility-search tabs, one per refund
+// category the business actually works from:
+//   1. Rejected by Registrar     — refund whatever a rejected applicant
+//                                  paid before rejection (main ledger).
+//   2. Passout / Library Deposit — bulk-refund Library Deposit lines for
+//                                  students who have passed out.
+//   3. Fake-Certificate Termination — refund students terminated
+//                                  mid-program for a fabricated certificate.
+// Each category has its own search endpoint (its own DTO shape — none of
+// them return the same fields), so a single generic search box could no
+// longer cover all three. Categories 1 and 3 share the single-application,
+// pick-one-ledger-line flow (RefundLedgerPicker in ./_components/shared);
+// Category 2 is a bulk, multi-student flow with its own component.
 
-function searchResultName(a: { studentName: string | null; firstName: string | null }) {
-  return a.studentName || a.firstName || '—'
-}
+// Permission gating on this page's Submit/bulk-refund buttons is commented
+// out per request — every tab's `permissionsCreate` prop below is hardcoded
+// `true` instead of reading `permissions.add`, in both Mock Data and Live
+// API mode (the toggle only ever swapped what feeds the data, never touched
+// this permission source, so the same override covers both). Restore real
+// gating by swapping the commented line back in below.
+const FORCE_ENABLE_REFUND_BUTTONS = true
 
-function initialsFor(name: string) {
-  const parts = name.trim().split(/\s+/)
-  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '—'
-}
-
-function todayYmd() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-}
+type Tab = 'rejected' | 'passout' | 'fake-cert'
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'rejected',  label: 'Rejected by Registrar',      icon: 'lni-close-circle' },
+  { id: 'passout',   label: 'Passout / Library Deposit',  icon: 'lni-graduation' },
+  { id: 'fake-cert', label: 'Fake-Certificate Termination', icon: 'lni-shield' },
+]
 
 export default function PaymentRefundPage() {
   const permissions = usePagePermissions()
@@ -69,208 +66,24 @@ export default function PaymentRefundPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  // Success confirmation for a submitted refund — same PaymentSuccessModal
-  // Payment Console uses for its own Tuition/Other submits, replacing a
-  // plain success toast. Errors still use showToast.
   const [successModal, setSuccessModal] = useState<{ title: string; rows: [string, string][] } | null>(null)
-
-  // ── Student search — same live-typing infinite-scroll dropdown as Payment
-  // Console's own Student Search (useSearchStudentsInfinite): opens on focus
-  // (browsing everything when the box is empty), narrows as you type,
-  // debounced so the real search endpoint isn't hit on every keystroke. ──
-  const [search, setSearch] = useState('')
-  const [committedSearch, setCommittedSearch] = useState('')
-  const [searchFocused, setSearchFocused] = useState(false)
-  const searchBoxRef = useRef<HTMLDivElement>(null)
-  const [selectedApplicationGuid, setSelectedApplicationGuid] = useState<string | null>(null)
-  const [selectedStudentGuidHint, setSelectedStudentGuidHint] = useState<string | null>(null)
-
-  useEffect(() => {
-    const t = setTimeout(() => setCommittedSearch(search.trim()), 400)
-    return () => clearTimeout(t)
-  }, [search])
-
-  useEffect(() => {
-    if (!searchFocused) return
-    function handle(e: MouseEvent) {
-      if (!searchBoxRef.current?.contains(e.target as Node)) setSearchFocused(false)
-    }
-    document.addEventListener('mousedown', handle)
-    return () => document.removeEventListener('mousedown', handle)
-  }, [searchFocused])
-
-  const searchTermLen = committedSearch.trim().length
-  const {
-    data: searchPages, fetchNextPage, hasNextPage, isFetchingNextPage,
-    isFetching: isSearching, isError: isSearchError,
-  } = useSearchStudentsInfinite(
-    committedSearch, 20,
-    searchFocused && (searchTermLen === 0 || searchTermLen >= 2),
-  )
-  const matches = searchPages?.pages.flatMap(p => p.items) ?? []
-
-  function handleSearchResultsScroll(e: React.UIEvent<HTMLDivElement>) {
-    if (!hasNextPage || isFetchingNextPage) return
-    const el = e.currentTarget
-    if (el.scrollTop > 0 && el.scrollHeight - el.scrollTop - el.clientHeight < 48) fetchNextPage()
+  function handleRefunded(rows: [string, string][]) {
+    setSuccessModal({ title: 'Refund Recorded', rows })
   }
 
-  const { data: profile, isLoading: isProfileLoading, isError: isProfileError } = useStudentProfile(selectedApplicationGuid, !!selectedApplicationGuid, selectedStudentGuidHint)
-  const studentGuid = profile?.studentGuid ?? selectedStudentGuidHint ?? null
+  const [activeTab, setActiveTab] = useState<Tab>('rejected')
 
-  // Client-side name resolution for the profile's guid FKs — same fallback
-  // pattern Payment Console uses: prefer the server's own pre-resolved
-  // names, fall back to a client-side lookup only when the server sends null.
-  const { data: campuses = [] } = useCampuses(!!profile)
-  const { data: programs = [] } = useProgramMasters(!profile?.programName && !!profile)
-  const { data: allBatchesData } = useBatches(1, 1000, '', !profile?.batchCode && !!profile)
-  const batches = allBatchesData?.items ?? []
-  const { data: semesters = [] } = useSemestersForProgram(profile?.programGuid ?? '', !profile?.semesterName && !!profile?.programGuid)
-  // Same fallback need as programName/batchCode/semName below — a live
-  // sample confirms profile.feeCode can come back null even though the
-  // structure itself genuinely exists (feeHdGuid was populated), which was
-  // showing as a blank "Fee Code" fact on the profile card. Scoped to this
-  // student's own programme rather than the whole university's fee
-  // structures, same "just enough to resolve one label" scoping
-  // useSemestersForProgram above already uses.
-  const { data: feeStructuresData } = useProgramFeeStructures(1, 1000, profile?.programGuid || undefined, !profile?.feeCode && !!profile?.programGuid)
-  const feeStructures = feeStructuresData?.items ?? []
+  // Starts false on every render (server and first client render must
+  // match) and is corrected from localStorage right after mount — avoids a
+  // hydration mismatch from reading window.localStorage during render.
+  const [useMock, setUseMock] = useState(false)
+  useEffect(() => { setUseMock(readStoredMockMode()) }, [])
 
-  const campusName = campuses.find(c => c.campusGuid === profile?.campusGuid)?.campusName
-  const programName = profile?.programName ?? programs.find(p => p.programGuid === profile?.programGuid)?.programName
-  const batchCode = profile?.batchCode ?? batches.find(b => b.batchGuid === profile?.batchGuid)?.batchCode
-  const semName = profile?.semesterName ?? semesters.find(s => s.semesterGuid === profile?.semesterGuid)?.semName
-  const feeCode = profile?.feeCode ?? feeStructures.find(f => f.feeHdGuid === profile?.feeHdGuid)?.feeCode
-
-  // Refund Details — this application's own refund history
-  // (get-refunds-by-application.md), unpaged: at most one row per ledger,
-  // ever, so there's nothing to page through.
-  const {
-    data: refundHistory = [], isLoading: isRefundHistoryLoading, isError: isRefundHistoryError,
-  } = useRefundsByApplication(selectedApplicationGuid, !!selectedApplicationGuid)
-  // Ledgers already refunded are permanently locked out of a second refund
-  // (post-refund.md: "at most once per ledger, ever") — excluded from the
-  // picker below rather than left to fail on submit.
-  const refundedLedgerGuids = new Set(refundHistory.map(r => r.ledgerGuid))
-
-  // Ledger picker — this application's own paid ledgers (get-ledger-options.md).
-  const { data: ledgerOptions = [], isLoading: isLedgersLoading, isError: isLedgersError } = useLedgerOptions(selectedApplicationGuid, !!selectedApplicationGuid)
-  const [ledgerGuid, setLedgerGuid] = useState('')
-
-  // Total already paid into the picked ledger (get-total-paid.md) — the
-  // exact figure the create endpoint validates the refund amount against.
-  const { data: totalPaid, isLoading: isTotalPaidLoading } = useTotalPaid(selectedApplicationGuid, ledgerGuid || null, !!ledgerGuid)
-
-  const { data: currencies = [] } = useFinanceCurrencies(!!selectedApplicationGuid)
-  const [currencyGuid, setCurrencyGuid] = useState('')
-  const [refundAmount, setRefundAmount] = useState('')
-  const [refundDate, setRefundDate] = useState(todayYmd)
-  const [remarks, setRemarks] = useState('')
-
-  // Default the currency picker to the ledger's own paid currency as soon as
-  // it's known — the common case is refunding in the same currency it was
-  // paid in; still freely changeable (the create endpoint accepts any
-  // currency, only USD/UGX get a cross-check — see post-refund.md). Before
-  // a ledger is picked (or if its paid currency can't be resolved), falls
-  // back to Finance's own default (UGX) rather than sitting blank.
-  useEffect(() => {
-    if (totalPaid?.currencyGuid) setCurrencyGuid(totalPaid.currencyGuid)
-    else if (!currencyGuid && currencies.length > 0) setCurrencyGuid(getDefaultFinanceCurrencyGuid(currencies))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalPaid?.currencyGuid, currencies])
-
-  function resetForm() {
-    setLedgerGuid('')
-    setCurrencyGuid(getDefaultFinanceCurrencyGuid(currencies))
-    setRefundAmount('')
-    setRefundDate(todayYmd())
-    setRemarks('')
-  }
-
-  const createRefund = useCreateRefund()
-
-  function selectStudent(applicationGuid: string, name: string, studentGuidHint: string | null) {
-    setSelectedApplicationGuid(applicationGuid)
-    setSelectedStudentGuidHint(studentGuidHint)
-    setSearch(name)
-    setCommittedSearch('')
-    setSearchFocused(false)
-    resetForm()
-    setSuccessModal(null)
-    showToast(`Loaded: ${name}`, 'success')
-  }
-
-  function handleCancel() {
-    resetForm()
-  }
-
-  function handleClear() {
-    setSelectedApplicationGuid(null)
-    setSelectedStudentGuidHint(null)
-    setSearch('')
-    setCommittedSearch('')
-    resetForm()
-    setSuccessModal(null)
-    showToast('Form cleared.', 'warn')
-  }
-
-  const selectedLedger = ledgerOptions.find(l => l.ledgerGuid === ledgerGuid)
-  const selectedCurrency = currencies.find(c => c.currencyGuid === currencyGuid)
-
-  function handleSubmit() {
-    if (!permissions.create) { showToast('You do not have permission to create refunds.', 'warn'); return }
-    if (!profile || !selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
-    if (!selectedLedger) { showToast('Please select a ledger to refund.', 'warn'); return }
-    if (!currencyGuid) { showToast('Please select a currency.', 'warn'); return }
-    const amt = parseFloat(refundAmount)
-    if (!refundAmount.trim() || isNaN(amt) || amt <= 0) { showToast('Refund amount must be greater than 0.', 'warn'); return }
-    // Only checked client-side when refunding in the same currency it was
-    // paid in — matches post-refund.md's own rule (the amount-vs-total-paid
-    // check only runs then; a currency mismatch skips straight to the
-    // USD/UGX cross-check server-side, which needs an exchange rate this
-    // page doesn't have).
-    if (totalPaid && currencyGuid === totalPaid.currencyGuid && amt > totalPaid.amount) {
-      showToast(`Refund amount exceeds the total paid into this ledger (${fmtAmt(totalPaid.amount)}).`, 'warn')
-      return
-    }
-    if (!refundDate) { showToast('Please select a refund date.', 'warn'); return }
-
-    createRefund.mutate(
-      {
-        applicationGuid: selectedApplicationGuid,
-        input: {
-          ledgerGuid: selectedLedger.ledgerGuid,
-          currencyGuid,
-          amount: amt,
-          refundDate,
-          studentGuid,
-          remarks: remarks.trim() || null,
-        },
-      },
-      {
-        // The response is just { refundGuid } now — an internal id, not
-        // something to surface to the user, so the modal below is built
-        // entirely from what was submitted rather than the result.
-        onSuccess: () => {
-          setSuccessModal({
-            title: 'Refund Recorded',
-            rows: [
-              ['Ledger', selectedLedger.ledgerName],
-              ['Amount', `${selectedCurrency?.currencyName ?? ''} ${fmtAmt(amt)}`.trim()],
-              ['Refund Date', formatDate(refundDate)],
-            ],
-          })
-          resetForm()
-        },
-        onError: (error: Error) => {
-          // Business-rule rejections ("Refund already exists.", over the
-          // total-paid amount, missing ledger/currency, …) all come back as
-          // a plain message on the generic-failure branch — surface it
-          // as-is rather than a generic "failed" toast.
-          showToast(error instanceof AuthError ? error.message : (error.message || 'Failed to record refund. Please try again.'), 'error')
-        },
-      },
-    )
+  function toggleMockMode() {
+    const next = !useMock
+    setUseMock(next)
+    try { window.localStorage.setItem(MOCK_MODE_STORAGE_KEY, String(next)) } catch { /* best-effort only */ }
+    showToast(next ? 'Using mock data (dev only) — no API calls will be made.' : 'Using live API data.', next ? 'warn' : 'success')
   }
 
   return (
@@ -279,254 +92,66 @@ export default function PaymentRefundPage() {
         <div className="pg-hdr">
           <div>
             <div className="pg-title">Payment Console - Refund</div>
-            <div className="pg-sub">Search student → pick a ledger → record the refund</div>
+            <div className="pg-sub">Search a refund-eligible category → pick a payment → record the refund</div>
           </div>
-          <button className="btn btn-neu" onClick={() => router.push('/finance/dashboard')}><i className="lni lni-arrow-left"></i> Back</button>
-        </div>
-
-        {/* Student Search — same bar/dropdown shell as Payment Console's own
-            Student Search card. */}
-        <div className="card">
-          <div className="card-hdr">
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-search-alt"></i></span> Student Search</div>
-          </div>
-          <div className="fg" style={{ marginBottom: 0, position: 'relative' }} ref={searchBoxRef}>
-            <div className="lbl">Search by Applicant Name, Ref No, Phone, or Email <span className="req">*</span></div>
-            <div className="flex gap-2 flex-wrap">
-              <div className="inp-wrap" style={{ flex: 1, minWidth: 180 }}>
-                <span className="inp-icon"><i className="lni lni-search-alt"></i></span>
-                <input
-                  className="ctrl"
-                  type="text"
-                  placeholder="e.g. APP20222/667 or Tumukunde Alice"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  onFocus={() => setSearchFocused(true)}
-                  onKeyDown={e => { if (e.key === 'Enter') setCommittedSearch(search.trim()) }}
-                />
-              </div>
-              {selectedApplicationGuid && (
-                <button className="btn btn-neu" onClick={handleClear}><i className="lni lni-close"></i> Clear</button>
-              )}
-            </div>
-
-            {searchFocused && (
-              <div
-                className="mt-1"
-                style={{
-                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
-                  background: 'var(--white)', border: '1.5px solid var(--b200)', borderRadius: 'var(--rsm)',
-                  boxShadow: 'var(--neu-out)', maxHeight: 260, overflowY: 'auto',
-                }}
-                onScroll={handleSearchResultsScroll}
+          <div className="flex items-center gap-3">
+            {SHOW_MOCK_TOGGLE && (
+              <label
+                className="flex items-center gap-2 cursor-pointer"
+                style={{ fontSize: 12, color: 'var(--g500)' }}
+                title="Dev only — switches every search/refund action on this page between the real API and seeded, in-memory mock data. Never shown in production."
               >
-                {isSearching && matches.length === 0 ? (
-                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Searching…</div>
-                ) : isSearchError ? (
-                  <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Search failed. Please try again.</div>
-                ) : matches.length === 0 ? (
-                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No matching applications found.</div>
-                ) : (
-                  <>
-                    {matches.map(a => (
-                      <div
-                        key={a.applicationGuid}
-                        className="cursor-pointer px-3 py-2 hover:bg-b50 border-b border-g100 last:border-b-0"
-                        onMouseDown={() => selectStudent(a.applicationGuid, searchResultName(a), a.studentGuid)}
-                      >
-                        <div className="font-bold">{searchResultName(a)}</div>
-                        <div className="text-g500" style={{ fontSize: 11 }}>{a.appRefNo}{a.phone ? ` · ${a.phone}` : ''}{a.emailId ? ` · ${a.emailId}` : ''}</div>
-                      </div>
-                    ))}
-                    {isFetchingNextPage && (
-                      <div className="text-g400 text-center" style={{ padding: 10, fontSize: 11.5 }}>Loading more…</div>
-                    )}
-                  </>
-                )}
-              </div>
+                <span>{useMock ? 'Mock Data' : 'Live API'}</span>
+                <span
+                  role="switch"
+                  aria-checked={useMock}
+                  onClick={toggleMockMode}
+                  style={{
+                    position: 'relative', width: 36, height: 20, borderRadius: 999, cursor: 'pointer',
+                    background: useMock ? 'var(--amber)' : 'var(--g300)', transition: 'background .15s',
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute', top: 2, left: useMock ? 18 : 2, width: 16, height: 16, borderRadius: '50%',
+                    background: 'var(--white)', transition: 'left .15s', boxShadow: 'var(--neu-sm)',
+                  }} />
+                </span>
+              </label>
             )}
+            <button className="btn btn-neu" onClick={() => router.push('/finance/dashboard')}><i className="lni lni-arrow-left"></i> Back</button>
           </div>
         </div>
 
-        {/* LEFT: Profile Details (pc-hero) · RIGHT: Refund form — same
-            50/50 pc-body split and profile-card treatment as Payment
-            Console's own Profile Details + payment form. */}
-        {selectedApplicationGuid && (
-          <div className="pc-body">
-            <div className="flex flex-col gap-5 min-w-0">
-              {isProfileLoading ? (
-                <div className="card text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>Loading profile…</div>
-              ) : isProfileError || !profile ? (
-                <div className="card text-clr-red text-center" style={{ padding: 24, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load this student&apos;s profile.</div>
-              ) : (
-                // h-full + flex flex-col on the card, flex:1 on .pc-hero —
-                // .pc-body is a grid, which stretches this card's own flex
-                // column wrapper to match the Refund form's height on the
-                // right by default, but nothing inside was set up to
-                // actually grow into that extra space (2026-09-09, per
-                // request — the card was still just as tall as its own
-                // content, leaving a gap under it). .pc-hero has nothing
-                // else in this card to share the space with here, so it can
-                // safely take all of it — the gradient background then
-                // extends to fill instead of stopping short.
-                <div className="card p-0 overflow-hidden h-full flex flex-col">
-                  <div className="pc-hero" style={{ flex: 1 }}>
-                    <div className="pc-hero-top">
-                      <div className="pc-hero-avatar">{initialsFor(applicantName(profile))}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="pc-hero-name truncate">{applicantName(profile)}</div>
-                        <div className="pc-hero-sub truncate">{programName ?? '—'}</div>
-                        <span className="pc-hero-badge"><i className="lni lni-bookmark"></i> {profile.appRefNo}</span>
-                      </div>
-                    </div>
-                    {/* Rounded out with Intake/Year/Reg No/Phone/Email —
-                        fields StudentProfile already carries but this card
-                        wasn't showing (2026-09-09, per request) — both to
-                        surface more of what's actually on file and so this
-                        card's height tracks the Refund form's on the right,
-                        the way Payment Console's/NCHE & Guild's own fuller
-                        hero-facts grid already does. Intake guards against
-                        the literal string "null", same live quirk NCHE &
-                        Guild's own Intake tile guards against. */}
-                    <div className="pc-hero-facts">
-                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val" title={campusName ?? '—'}>{campusName ?? '—'}</span></div>
-                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Semester</span><span className="pc-hero-fact-val" title={semName ?? '—'}>{semName ?? '—'}</span></div>
-                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Intake</span><span className="pc-hero-fact-val" title={profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}>{profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}</span></div>
-                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Fee Code</span><span className="pc-hero-fact-val" title={feeCode ?? '—'}>{feeCode ?? '—'}</span></div>
-                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={batchCode ?? '—'}>{batchCode ?? '—'}</span></div>
-                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Year</span><span className="pc-hero-fact-val" title={profile.yearCode ?? '—'}>{profile.yearCode ?? '—'}</span></div>
-                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Reg No</span><span className="pc-hero-fact-val" title={profile.studentRegNo ?? '—'}>{profile.studentRegNo ?? '—'}</span></div>
-                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Phone</span><span className="pc-hero-fact-val" title={profile.phone ?? '—'}>{profile.phone ?? '—'}</span></div>
-                      <div className="pc-hero-fact pc-hero-fact-span2">
-                        <span className="pc-hero-fact-lbl">Email</span>
-                        <span className="pc-hero-fact-val truncate" title={profile.emailId ?? profile.universityEmail ?? '—'}>{profile.emailId ?? profile.universityEmail ?? '—'}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-5 min-w-0">
-              <div className="card">
-                <div className="card-hdr">
-                  <div className="card-title"><span className="ctitle-icon"><i className="lni lni-reload"></i></span> Refund</div>
-                </div>
-
-                <div className="g2 mb-[14px]">
-                  <div className="fg">
-                    <div className="lbl">Ledger to Refund <span className="req">*</span></div>
-                    <SearchSelect
-                      placeholder="— Select a ledger —"
-                      options={ledgerOptions.map(l => ({
-                        value: l.ledgerGuid,
-                        label: refundedLedgerGuids.has(l.ledgerGuid) ? `${l.ledgerName} (already refunded)` : l.ledgerName,
-                        disabled: refundedLedgerGuids.has(l.ledgerGuid),
-                      }))}
-                      value={ledgerGuid}
-                      onChange={setLedgerGuid}
-                      disabled={isLedgersLoading || ledgerOptions.length === 0}
-                    />
-                    {isLedgersLoading ? (
-                      <div className="text-g400 mt-1" style={{ fontSize: 11 }}>Loading paid ledgers…</div>
-                    ) : isLedgersError ? (
-                      <div className="text-clr-red mt-1" style={{ fontSize: 11 }}><i className="lni lni-warning"></i> Couldn&apos;t load paid ledgers.</div>
-                    ) : ledgerOptions.length === 0 ? (
-                      <div className="text-g400 mt-1" style={{ fontSize: 11 }}>No paid ledgers found for this application.</div>
-                    ) : null}
-                  </div>
-                  <div className="fg">
-                    <div className="lbl">Total Paid</div>
-                    <input
-                      className="ctrl"
-                      readOnly
-                      value={isTotalPaidLoading ? 'Loading…' : totalPaid ? `${totalPaid.currencyName} ${fmtAmt(totalPaid.amount)}` : ''}
-                      placeholder="—"
-                    />
-                  </div>
-                </div>
-
-                <div className="g2 mb-[14px]">
-                  <div className="fg">
-                    <div className="lbl">Refund Amount <span className="req">*</span></div>
-                    <input
-                      className="ctrl"
-                      type="number"
-                      placeholder="0.00"
-                      value={refundAmount}
-                      onChange={e => setRefundAmount(e.target.value)}
-                      disabled={!selectedLedger}
-                    />
-                  </div>
-                  <div className="fg">
-                    <div className="lbl">Currency <span className="req">*</span></div>
-                    <SearchSelect
-                      placeholder="— Select currency —"
-                      options={currencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))}
-                      value={currencyGuid}
-                      onChange={setCurrencyGuid}
-                      disabled={!selectedLedger}
-                    />
-                  </div>
-                </div>
-
-                <div className="g2 mb-[14px]">
-                  <div className="fg">
-                    <div className="lbl">Refund Date <span className="req">*</span></div>
-                    <DatePicker value={refundDate} onChange={setRefundDate} />
-                  </div>
-                  <div className="fg">
-                    <div className="lbl">Remarks</div>
-                    <textarea className="ctrl" rows={1} placeholder="Reason for this refund" value={remarks} onChange={e => setRemarks(e.target.value)} disabled={!selectedLedger} />
-                  </div>
-                </div>
-
-                <div className="flex gap-[10px] justify-end flex-wrap">
-                  <button className="btn btn-neu" onClick={handleCancel}><i className="lni lni-close"></i> Cancel</button>
-                  <button className="btn btn-primary btn-lg" disabled={createRefund.isPending || !permissions.create} onClick={handleSubmit}>
-                    <i className="lni lni-checkmark"></i> {createRefund.isPending ? 'Submitting…' : 'Submit'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+        {SHOW_MOCK_TOGGLE && useMock && (
+          <div className="info-box mb-5"><i className="lni lni-warning"></i> Mock Data mode is on (dev only) — every search/refund action below uses seeded, in-memory data, not the real API.</div>
         )}
 
-        {/* Refund Details — full width history table below the 2-column
-            body. Unpaged (get-refunds-by-application.md): at most one row
-            per ledger, ever, so no Pagination here. No Payment Code column
-            any more either — a refund isn't linked to a payment. */}
-        {selectedApplicationGuid && (
-          <div className="card">
-            <div className="card-hdr">
-              <div className="card-title"><span className="ctitle-icon"><i className="lni lni-folder"></i></span> Refund Details</div>
-            </div>
-            {isRefundHistoryLoading ? (
-              <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading refund history…</div>
-            ) : isRefundHistoryError ? (
-              <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load refund history.</div>
-            ) : refundHistory.length === 0 ? (
-              <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No records found.</div>
-            ) : (
-              <ScrollTable className="no-sticky-col">
-                <table>
-                  <thead><tr><th>Ledger</th><th>Amount</th><th>Currency</th><th>Refund Date</th><th>Remarks</th></tr></thead>
-                  <tbody>
-                    {refundHistory.map(r => (
-                      <tr key={r.refundGuid}>
-                        <td>{r.ledgerName}</td>
-                        <td className="text-green font-bold">{fmtAmt(r.amount)}</td>
-                        <td>{r.currencyName}</td>
-                        <td>{formatDate(r.refundDate)}</td>
-                        <td>{r.remarks || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </ScrollTable>
-            )}
-          </div>
-        )}
+        {/* .pc-tabs/.pc-tab-btn — same pill switcher Payment Console uses
+            for its own Semester Payment / Other Payment tabs, in place of
+            the generic .tab-bar sliding-indicator style used elsewhere. */}
+        <div className="pc-tabs">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              className={`pc-tab-btn${activeTab === t.id ? ' active' : ''}`}
+              onClick={() => setActiveTab(t.id)}
+            >
+              <i className={`lni ${t.icon}`}></i> {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div key={activeTab} className="tab-panel-in">
+          {activeTab === 'rejected' && (
+            <RejectedTab showToast={showToast} permissionsCreate={FORCE_ENABLE_REFUND_BUTTONS /* was: permissions.add */} onRefunded={handleRefunded} useMock={useMock} />
+          )}
+          {activeTab === 'passout' && (
+            <PassoutLibraryDepositTab showToast={showToast} permissionsCreate={FORCE_ENABLE_REFUND_BUTTONS /* was: permissions.add */} useMock={useMock} />
+          )}
+          {activeTab === 'fake-cert' && (
+            <FakeCertTab showToast={showToast} permissionsCreate={FORCE_ENABLE_REFUND_BUTTONS /* was: permissions.add */} onRefunded={handleRefunded} useMock={useMock} />
+          )}
+        </div>
       </div>
 
       <PaymentSuccessModal

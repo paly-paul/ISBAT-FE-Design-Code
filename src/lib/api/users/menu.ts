@@ -94,6 +94,9 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
     // as the page's only mode).
     leaf('Dropout Rejoin', 'calendar', '/student/intake-transfer'),
     leaf('Fee Structure Transfer', 'dollar', '/student/fee-structure-transfer'),
+    // POST /students/{studentGuid}/terminate (student-termination/
+    // post-terminate-student.md) — added 2026-09-15.
+    leaf('Terminate Student', 'shield', '/student/terminate-student'),
   ]),
   // Services section hidden from the sidebar per request, 2026-09-02 — its
   // one leaf (Student Services) still exists at /student/services, just not
@@ -108,6 +111,10 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
   ]),
   section('Settings', [
     leaf('Specialization Management', 'graduation', '/student/specialization'),
+    // M_TERMINATION_REASON master (termination-reasons/*.md) — the reason
+    // picker behind POST /students/{studentGuid}/terminate. Added 2026-09-15
+    // alongside the Refund-Eligibility Search work.
+    leaf('Termination Reason Master', 'shield', '/student/termination-reasons'),
   ]),
 ]
 
@@ -469,6 +476,7 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
     const existingSettingsLeaves = new Set(orderedLeaves.map(l => l.name))
     const missingSettingsLeaves = [
       leaf('Specialization Management', 'graduation', '/student/specialization'),
+      leaf('Termination Reason Master', 'shield', '/student/termination-reasons'),
     ].filter(l => !existingSettingsLeaves.has(l.name))
     if (orderedLeaves.length !== settingsSection.children.length || missingSettingsLeaves.length > 0) {
       const children = [...studentModule.children]

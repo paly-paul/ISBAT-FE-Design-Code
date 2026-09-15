@@ -1302,24 +1302,6 @@ body {
   }
 }
 
-/* Payment Console's Programme Progress row (Total Outstanding/Paid/
-   Remaining) — same 3-tile case as Batch Summary above, same fix. */
-#page-payment-console .stats-row {
-  grid-template-columns: repeat(3, 1fr)
-}
-
-@media(max-width:600px) {
-  #page-payment-console .stats-row {
-    grid-template-columns: 1fr 1fr
-  }
-}
-
-@media(max-width:420px) {
-  #page-payment-console .stats-row {
-    grid-template-columns: 1fr
-  }
-}
-
 @media(max-width:900px) {
   #page-enquiry-list .stats-row {
     grid-template-columns: repeat(3, 1fr)
@@ -2300,34 +2282,6 @@ textarea.ctrl {
   }
 }
 
-/* Redesigned body: a left column (Profile Details + Payment History)
-   beside a wider right column (the active Payment Category's outstanding/
-   form/receipt content) — matches the sketch's proportions (left column
-   narrower than right), unlike .g2's even split above.
-
-   minmax(320px, 420px) rather than a flat 320px cap: at 320px flat, the
-   Payment History table (Date/Category/Amount/Cur./Method/Receipt# — 6
-   columns) never fit and needed ScrollTable's horizontal scroll arrows
-   even on a wide desktop viewport, which read as "too small" (confirmed
-   live). Letting the track grow up to 420px as space allows fixes that on
-   typical desktop widths while the 320px floor still holds it back from
-   crowding the right column on a narrower one; the two breakpoints below
-   step it down further as the viewport shrinks, then collapse to one
-   column outright once neither side has room to be useful side-by-side.
-   minmax(0, ...) on the right track for the same overflow-safety reason as
-   .g2/.g3 elsewhere on this page. */
-#page-payment-console > .pc-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px
-}
-
-@media(max-width:1200px) {
-  #page-payment-console > .pc-body {
-    grid-template-columns: 1fr
-  }
-}
-
 /* Same .pc-body two-column split as Payment Console above, reused for the
    NCHE/Guild page's own UI-parity pass (per request, 2026-09-01) — a
    separate page-scoped id rather than sharing #page-payment-console's,
@@ -2462,6 +2416,28 @@ textarea.ctrl {
   }
 }
 
+/* Tuition tab's own 2-column split (2026-09-11, per request) — Outstanding
+   Balance table (+ the Advance Deposit table, in Apply Advance mode) on the
+   left; Payment Detail's own fields on the right. Scoped to just that
+   card's "there's something outstanding" content, not the id-scoped
+   .pc-body grid the page used to split its whole body with (removed —
+   see its own former comment). minmax(320px, 1fr) on the right track for
+   the same reason .g2/.g3/.pc-body elsewhere on this page all use it —
+   guards the payment fields from shrinking illegibly narrow before the
+   whole grid collapses to one column at 1100px. */
+.pc-tuition-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media(max-width:1100px) {
+  .pc-tuition-split {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ═══════════════════════════════════════
    PAYMENT CONSOLE — hero profile card, pill tabs,
    ledger item rows, live payment-summary strip.
@@ -2548,6 +2524,88 @@ textarea.ctrl {
   align-items: center;
   gap: 5px;
   margin-top: 8px;
+}
+
+/* Card-level action buttons on the Payment Console student card (Total
+   Outstanding / Payment History) — translucent-white pills, same family as
+   .pc-hero-badge above, just clickable and holding more than a bare code
+   string. */
+.pc-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Top-right variant — third child of .pc-hero-top, pushed to the row's
+   right edge by the name block's own flex-1 next to it (no
+   justify-content needed on the row itself). Side-by-side (2026-09-11, per
+   request — was stacked in a column). flex-shrink:0 so a long applicant
+   name truncating (it already does, via .truncate) never squeezes these
+   instead. */
+.pc-hero-actions-top {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+/* .pc-hero-top has no wrap by default (fine for every other page sharing
+   .pc-hero — just an avatar + name block, which truncates instead of
+   overflowing) — scoped to Payment Console specifically, since it's the
+   only page putting a 3rd, non-shrinking item in that row. Below this
+   width the actions cluster drops under the avatar/name instead of
+   squeezing them; width:100%/justify-content spreads the two buttons out
+   on that now-own-line row instead of leaving them stuck at the left edge. */
+@media(max-width:640px) {
+  #page-payment-console .pc-hero-top {
+    flex-wrap: wrap;
+  }
+  #page-payment-console .pc-hero-actions-top {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+/* Solid white pill, not translucent-on-translucent (2026-09-11 — a
+   border+14%-opacity fill over an already-blue gradient read as a badge,
+   not a clickable button, confirmed live). Same affordance language as
+   .btn-primary elsewhere (solid fill, real drop shadow, hover lift/darken),
+   just color-inverted since the surface here is already blue instead of
+   white. */
+.pc-hero-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #fff;
+  border: none;
+  color: var(--b700);
+  padding: 9px 15px;
+  border-radius: var(--rxs);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .18);
+  transition: var(--tr);
+}
+
+.pc-hero-action:hover {
+  background: var(--b50);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, .24);
+  transform: translateY(-1px);
+}
+
+.pc-hero-action:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .18);
+}
+
+.pc-hero-action strong {
+  font-weight: 800;
+  margin-left: 2px;
+  color: var(--amber);
 }
 
 /* 2 columns, not 4 — paired so each row holds two fields of similar length
