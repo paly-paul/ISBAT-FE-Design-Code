@@ -2128,13 +2128,23 @@ textarea.ctrl {
   grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr)
 }
 
+/* Solid background (2026-09-15, per request) — was a gradient fading to
+   fully transparent over its own bottom 15% (`rgba(240, 244, 248, 0)`), a
+   decorative "soft edge" meant for the static, unscrolled state. Once this
+   bar actually sticks and content (the "% complete" progress bar directly
+   below it, .pmt-progress) scrolls up underneath, that transparent tail let
+   the scrolling content bleed through instead of being cleanly hidden —
+   reported as the progress bar "overlapping" the sticky header rather than
+   disappearing behind it. A flat var(--bg) still matches the page
+   background seamlessly in the static state, and now fully occludes
+   whatever scrolls underneath once stuck. */
 #page-payment .pmt-sticky-top {
   position: sticky;
   top: 0;
   z-index: 20;
   margin: -24px -28px 18px;
   padding: 18px 28px 10px;
-  background: linear-gradient(to bottom, var(--bg) 0%, var(--bg) 85%, rgba(240, 244, 248, 0) 100%);
+  background: var(--bg);
   backdrop-filter: saturate(1.1);
 }
 

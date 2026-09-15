@@ -48,7 +48,7 @@ export interface Designation {
 export type DesignationInput = Omit<Designation, 'intDesignation'>
 
 // Response wrapper used by the paginated designation list endpoint.
-interface DesignationListResponse {
+export interface DesignationListResponse {
   items: Designation[]
   totalCount: number
   pageNumber: number
@@ -69,6 +69,20 @@ let mockDesignationSeq = mockDesignations.length + 1
 export function getDesignations(page = 1, pageSize = 10): Promise<Designation[]> {
   if (MOCK_AUTH) return Promise.resolve(mockDesignations)
   return apiGet<DesignationListResponse | null>(`/api/v1/users/designations?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
+}
+
+// Same list endpoint, envelope kept intact — backs a server-paginated
+// infinite-scroll picker (useSearchDesignationsInfinite) in place of loading
+// the whole list in one eager fetch. get-designations.md documents no
+// `search` param and no department-filter param either, so this can't be
+// narrowed server-side by either text or department — only page/pageSize.
+export function getDesignationsPaged(page = 1, pageSize = 20): Promise<DesignationListResponse> {
+  if (MOCK_AUTH) {
+    const start = (page - 1) * pageSize
+    return Promise.resolve({ items: mockDesignations.slice(start, start + pageSize), totalCount: mockDesignations.length, pageNumber: page, pageSize })
+  }
+  return apiGet<DesignationListResponse | null>(`/api/v1/users/designations?page=${page}&pageSize=${pageSize}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
 // Create a new designation and return the saved record.

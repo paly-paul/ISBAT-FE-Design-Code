@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createDepartment, deleteDepartment, Department, DepartmentInput, getDepartments, updateDepartment } from '@/lib/api/academic/department'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { createDepartment, deleteDepartment, Department, DepartmentInput, getDepartments, getDepartmentsPaged, updateDepartment } from '@/lib/api/academic/department'
+import { getNextPageParam } from '@/lib/pagination'
 
 const DEPARTMENTS_KEY = ['departments']
 
@@ -11,6 +12,27 @@ export function useDepartments() {
     queryKey: DEPARTMENTS_KEY,
     queryFn: () => getDepartments(1, DEPARTMENTS_PAGE_SIZE),
     // Keep the list cached until a mutation invalidates it.
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
+// Server-paginated, load-more-on-scroll picker (2026-09-15) — backs
+// EmployeeFormModal's Department dropdown, same convention as Intake/
+// Campus/Country's own useSearchXInfinite hooks, in place of useDepartments()'
+// single eager 1000-row fetch. get-departments.md documents no `search`
+// query param on this endpoint, so there's no server-side text filter to
+// wire up here — SearchSelect's own built-in client-side filter still
+// narrows whatever pages have loaded so far.
+const DEPARTMENTS_SEARCH_PAGE_SIZE = 20
+
+export function useSearchDepartmentsInfinite(enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...DEPARTMENTS_KEY, 'search-infinite'],
+    queryFn: ({ pageParam }) => getDepartmentsPaged(pageParam, DEPARTMENTS_SEARCH_PAGE_SIZE),
+    initialPageParam: 1,
+    getNextPageParam,
+    enabled,
     staleTime: Infinity,
     gcTime: Infinity,
   })

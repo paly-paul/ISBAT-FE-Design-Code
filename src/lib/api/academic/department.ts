@@ -49,7 +49,7 @@ export interface Department {
 
 export type DepartmentInput = Omit<Department, 'intDept'>
 
-interface DepartmentListResponse {
+export interface DepartmentListResponse {
   items: Department[]
   totalCount: number
   pageNumber: number
@@ -69,6 +69,21 @@ let mockDeptSeq = mockDepartments.length + 1
 export function getDepartments(page = 1, pageSize = 10): Promise<Department[]> {
   if (MOCK_AUTH) return Promise.resolve(mockDepartments)
   return apiGet<DepartmentListResponse | null>(`/api/v1/users/departments?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
+}
+
+// Same list endpoint, envelope kept intact (not reduced to just .items) —
+// backs a server-paginated infinite-scroll picker (useSearchDepartmentsInfinite)
+// in place of loading the whole list in one eager fetch. get-departments.md
+// documents no `search` query param on this endpoint ("No search param —
+// unlike Faculty/Intake, this endpoint has no server-side filtering"), so
+// there's no text to forward server-side here — only page/pageSize.
+export function getDepartmentsPaged(page = 1, pageSize = 20): Promise<DepartmentListResponse> {
+  if (MOCK_AUTH) {
+    const start = (page - 1) * pageSize
+    return Promise.resolve({ items: mockDepartments.slice(start, start + pageSize), totalCount: mockDepartments.length, pageNumber: page, pageSize })
+  }
+  return apiGet<DepartmentListResponse | null>(`/api/v1/users/departments?page=${page}&pageSize=${pageSize}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
 export function createDepartment(input: DepartmentInput): Promise<Department> {

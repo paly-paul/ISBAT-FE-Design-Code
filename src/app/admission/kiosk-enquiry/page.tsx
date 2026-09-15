@@ -38,6 +38,16 @@ export default function KioskEnquiryPage() {
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName]   = useState('')
+  // UI-only for now (2026-09-15, per request) — EnquiryInput (lib/api/
+  // admission/enquiry.ts) is confirmed field-for-field against a real
+  // Create.bru payload and has no gender field, unlike Application Filing's
+  // own confirmed gender byte (0=Female/1=Male). Captured here but
+  // deliberately NOT sent on save (see handleSave below) until a gender
+  // field is confirmed on the real Enquiry create endpoint — same
+  // "don't collect data that goes nowhere" caution this page's own dropped
+  // Preferred Study Mode field already applied, just kept instead of
+  // dropped this time, per request.
+  const [gender, setGender] = useState('')
   // Split the same way Payment's own Phone field does — a cosmetic
   // country-code dropdown sourced from the same countries master, plus a
   // raw-digits box. phoneCode is NOT concatenated into `mobile` on save —
@@ -152,7 +162,7 @@ export default function KioskEnquiryPage() {
   }
 
   function resetForm() {
-    setFirstName(''); setLastName(''); setPhoneCode('+256'); setPhone(''); setEmail(''); setDob('')
+    setFirstName(''); setLastName(''); setGender(''); setPhoneCode('+256'); setPhone(''); setEmail(''); setDob('')
     setEnquiryDate(todayAtMidnight().slice(0, 10))
     setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setSourceGuid(''); setCountryGuid(''); setNotes('')
     setErrors({})
@@ -174,6 +184,7 @@ export default function KioskEnquiryPage() {
         dob: `${dob}T00:00:00`,
         remarks: notes.trim() || null,
         programGuid: programGuid || null,
+        // gender intentionally omitted — see the note on its useState above.
         // No Isbat Enquiry Source picker on this form yet — see the note in
         // lib/api/admission/enquiry.ts.
         isbatSourceGuid: null,
@@ -216,6 +227,10 @@ export default function KioskEnquiryPage() {
             <label className="lbl">Last Name <span className="text-clr-red">*</span></label>
             <input className="ctrl" placeholder="e.g. Kamya" value={lastName} onChange={e => { setLastName(e.target.value); clearError('lastName') }} style={errors.lastName ? { borderColor: 'var(--red)' } : undefined} />
             {errors.lastName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lastName}</p>}
+          </div>
+          <div className="fg">
+            <label className="lbl">Gender</label>
+            <SearchSelect placeholder="— select —" options={['Male', 'Female']} value={gender} onChange={setGender} />
           </div>
           <div className="fg">
             <label className="lbl">Phone <span className="text-clr-red">*</span></label>

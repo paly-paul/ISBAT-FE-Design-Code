@@ -1,8 +1,6 @@
 'use client'
 import { ModalProps } from '../types'
 import { useEmployee } from '@/hooks/employee/useEmployees'
-import { useDepartments } from '@/hooks/config/useDepartments'
-import { useDesignations } from '@/hooks/config/useDesignations'
 import { formatDate } from '@/lib/date'
 
 const SEXES: Record<number, string> = { 1: 'Male', 2: 'Female', 3: 'Others' }
@@ -26,13 +24,14 @@ function Field({ label, value, mono, wide }: { label: string; value: React.React
 
 export function ViewEmployeeModal({ isOpen, onClose, employeeGuid, onEdit, canEdit }: ViewEmployeeModalProps) {
   const { data: employee, isLoading } = useEmployee(employeeGuid)
-  const { data: departments = [] } = useDepartments()
-  const { data: designations = [] } = useDesignations()
 
   if (!isOpen) return null
 
-  const deptName = employee?.intDept != null ? departments.find(d => String(d.intDept) === String(employee.intDept))?.deptName ?? '—' : '—'
-  const designationName = employee?.intDesignation != null ? designations.find(d => String(d.intDesignation) === String(employee.intDesignation))?.designationName ?? '—' : '—'
+  // Server-resolved directly on the record now (2026-09-15) — no more
+  // client-side int-keyed lookup against the Department/Designation
+  // masters needed for display.
+  const deptName = employee?.departmentName ?? '—'
+  const designationName = employee?.designationName ?? '—'
 
   if (isLoading || !employee) {
     return (
