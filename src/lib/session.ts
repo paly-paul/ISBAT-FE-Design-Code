@@ -36,6 +36,8 @@ const IDENTITY_KEY = 'isbat_session_identity'
 
 export interface SessionIdentity {
   displayName: string
+  employeeGuid?: string
+  userGuid?: string
 }
 
 export function getSessionIdentity(): SessionIdentity | null {
