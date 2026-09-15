@@ -885,7 +885,6 @@ export default function FilingPage() {
   // ── Documents / Photo / Submit ──────────────────────────────────────────
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoSaved, setPhotoSaved] = useState(false)
-  const [declarationAccepted, setDeclarationAccepted] = useState(false)
   const uploadPhoto = useUploadPhoto()
   const submitApplication = useSubmitApplication()
 
@@ -896,12 +895,13 @@ export default function FilingPage() {
 
   const hasPhoto = photoSaved || !!selectedApplication?.studUserFileName
   const qualifiedCount = qualRows.filter(r => r.savedId != null).length
-  const canSubmit = generalSaved && intApplication != null && qualifiedCount > 0 && hasPhoto && declarationAccepted
-  // Drives the progress strip under the pipeline — same four checkpoints as
-  // the Documents tab's own "Application Status" checklist plus the final
-  // declaration, so the two never disagree about what "done" means.
+  const canSubmit = generalSaved && intApplication != null && qualifiedCount > 0 && hasPhoto
+  // Drives the progress strip under the pipeline — same three checkpoints as
+  // the Documents tab's own "Application Status" checklist, so the two
+  // never disagree about what "done" means. Was four checkpoints including
+  // a declaration/consent checkbox, removed 2026-09-15 per request.
   const filingProgressPct = Math.round(
-    ([generalSaved, qualifiedCount > 0, hasPhoto, declarationAccepted].filter(Boolean).length / 4) * 100,
+    ([generalSaved, qualifiedCount > 0, hasPhoto].filter(Boolean).length / 3) * 100,
   )
 
   function handleSavePhoto() {
@@ -926,10 +926,6 @@ export default function FilingPage() {
     }
     if (!hasPhoto) {
       showToast('Applicant profile photo is required. Please upload the photo before submitting.', 'error')
-      return
-    }
-    if (!declarationAccepted) {
-      showToast('Please confirm the declaration checkbox before submitting.', 'warn')
       return
     }
 
@@ -1119,7 +1115,7 @@ export default function FilingPage() {
             <div className="filing-stepper-wrap">
               <div className="filing-stepper">
                 {TABS.map((t, i) => {
-                  const tabDone = t.id === 'personal' ? generalSaved : t.id === 'qualifications' ? qualifiedCount > 0 : hasPhoto && declarationAccepted
+                  const tabDone = t.id === 'personal' ? generalSaved : t.id === 'qualifications' ? qualifiedCount > 0 : hasPhoto
                   const isActive = activeTab === t.id
                   const currentIndex = TABS.findIndex(x => x.id === activeTab)
                   return (
@@ -1433,11 +1429,6 @@ export default function FilingPage() {
                         <span className="chk-status text-xs">{hasPhoto ? 'Uploaded' : 'Required — Pending'}</span>
                       </div>
                     </div>
-
-                    <label className="flex items-center gap-2 mt-5" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={declarationAccepted} onChange={e => setDeclarationAccepted(e.target.checked)} style={{ width: 16, height: 16 }} />
-                      <span className="font-medium text-g700">I confirm the information provided is correct.</span>
-                    </label>
 
                     <div className="flex justify-between items-center mt-5">
                       <button className="btn" onClick={() => setActiveTab('qualifications')}><i className="lni lni-arrow-left" /> Qualifications</button>

@@ -2,9 +2,7 @@
 import { useMemo } from 'react'
 import { ModalProps } from '../types'
 import { useEmployee } from '@/hooks/employee/useEmployees'
-import { useDepartments } from '@/hooks/config/useDepartments'
-import { useDesignations } from '@/hooks/config/useDesignations'
-import { useCampuses, getCampusId } from '@/hooks/config/useCampuses'
+import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { formatDate } from '@/lib/date'
 
 const SEXES: Record<number, string> = { 1: 'Male', 2: 'Female', 3: 'Others' }
@@ -28,27 +26,24 @@ function Field({ label, value, mono, wide }: { label: string; value: React.React
 
 export function ViewEmployeeModal({ isOpen, onClose, employeeGuid, onEdit, canEdit }: ViewEmployeeModalProps) {
   const { data: employee, isLoading } = useEmployee(employeeGuid)
-  const { data: departments = [] } = useDepartments()
-  const { data: designations = [] } = useDesignations()
-  const { data: campuses = [] } = useCampuses(isOpen)
-
-  const campusMap = useMemo(() => {
-    const map = new Map<number, string>()
-    campuses.forEach((c, i) => {
-      map.set(getCampusId(c, i), c.campusName)
-    })
-    return map
-  }, [campuses])
-
+  // Campus assignment is guid-only on the record (Employee.campusGuids) —
+  // resolved to display names against the same GET /academic/campus/dropdown
+  // list EmployeeFormModal's own Campus Assignment picker uses.
+  const { data: campuses = [] } = useCampusDropdown()
   const campusDisplay = useMemo(() => {
-    if (!employee?.campusIds || employee.campusIds.length === 0) return '—'
-    return employee.campusIds.map(id => campusMap.get(id) || `Campus #${id}`).join(', ')
-  }, [employee?.campusIds, campusMap])
+    const guids = employee?.campusGuids ?? []
+    if (guids.length === 0) return '—'
+    const names = guids.map(g => campuses.find(c => c.campusGuid === g)?.campusName ?? g)
+    return names.join(', ')
+  }, [employee?.campusGuids, campuses])
 
   if (!isOpen) return null
 
-  const deptName = employee?.intDept != null ? departments.find(d => String(d.intDept) === String(employee.intDept))?.deptName ?? '—' : '—'
-  const designationName = employee?.intDesignation != null ? designations.find(d => String(d.intDesignation) === String(employee.intDesignation))?.designationName ?? '—' : '—'
+  // Server-resolved directly on the record now (2026-09-15) — no more
+  // client-side int-keyed lookup against the Department/Designation
+  // masters needed for display.
+  const deptName = employee?.departmentName ?? '—'
+  const designationName = employee?.designationName ?? '—'
 
   if (isLoading || !employee) {
     return (

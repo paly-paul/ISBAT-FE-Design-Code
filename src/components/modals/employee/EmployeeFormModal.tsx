@@ -7,10 +7,11 @@ import { MultiSelect } from '@/components/MultiSelect'
 import DatePicker from '@/components/DatePicker'
 import { CreateEmployeeInput } from '@/lib/api/employee/employee'
 import { useEmployee, useCreateEmployee, useUpdateEmployee } from '@/hooks/employee/useEmployees'
-import { useDepartments } from '@/hooks/config/useDepartments'
-import { useDesignations } from '@/hooks/config/useDesignations'
+import { useSearchDepartmentsInfinite } from '@/hooks/config/useDepartments'
+import { useSearchDesignationsInfinite } from '@/hooks/config/useDesignations'
 import { useCountries } from '@/hooks/config/useCountries'
-import { useCampuses, getCampusId } from '@/hooks/config/useCampuses'
+import { useCampusDropdown } from '@/hooks/config/useCampuses'
+import { flattenUniquePages } from '@/lib/pagination'
 
 // Add and Edit share this form — differ in prefill and which mutation runs.
 
@@ -59,7 +60,21 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
   const [saved, setSaved] = useState(false)
   const [department, setDepartment] = useState('')
   const [designation, setDesignation] = useState('')
-  const [selectedCampusIds, setSelectedCampusIds] = useState<string[]>([])
+  // The actual guids to submit (2026-09-15) — deptGuid/designationGuid are
+  // now the confirmed CreateEmployeeInput fields, but the Department/
+  // Designation MASTER lists (useDepartments/useDesignations below) only
+  // expose int ids, never a guid. The only place a real deptGuid/
+  // designationGuid is ever available is an employee record already
+  // carrying one (Employee.deptGuid/designationGuid, from GET
+  // /employees/{guid}) — round-tripped here on Edit as long as the
+  // Department/Designation selection isn't changed away from what that
+  // record already had. There is no guid source at all for a freshly
+  // picked department/designation (Add Employee, or picking a *different*
+  // one on Edit) — those cases leave this null and validate() blocks
+  // submit rather than sending a value the backend's own "must resolve to
+  // an existing department" check would just reject anyway.
+  const [deptGuidValue, setDeptGuidValue] = useState<string | null>(null)
+  const [designationGuidValue, setDesignationGuidValue] = useState<string | null>(null)
 
   // These fields match the employee create/update payload.
   const [category, setCategory] = useState(CATEGORIES[0].label)
@@ -70,49 +85,64 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
   const [sex, setSex] = useState('')
   const [birthDate, setBirthDate] = useState('')
   const [placeOfBirth, setPlaceOfBirth] = useState('')
-  const [country, setCountry] = useState('')
+  // Real guid now (2026-09-15) — countryGuid replaced the old intCountryCode
+  // position-index hack on both Employee and CreateEmployeeInput (confirmed
+  // via get-employee-by-guid.md / post-employee.md's 2026-09-11 changelog
+  // entry); the Country master (useCountries()) already returns real
+  // countryGuid values, so this can bind directly with no client-side
+  // index mapping any more.
+  const [countryGuid, setCountryGuid] = useState('')
   const [natId, setNatId] = useState('')
   const [nationalId, setNationalId] = useState('')
   const [emailId, setEmailId] = useState('')
   const [religion, setReligion] = useState('')
   const [maritalStatus, setMaritalStatus] = useState('')
+  // Real field now (2026-09-15) — campusGuids is confirmed on
+  // CreateEmployeeInput (post-employee.md/put-employee.md, 2026-09-11: "the
+  // employee can be assigned to one or more campuses simultaneously").
+  const [campusGuids, setCampusGuids] = useState<string[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const { data: employee } = useEmployee(isEdit ? employeeGuid : null)
   const createEmployee = useCreateEmployee()
   const updateEmployee = useUpdateEmployee()
-  const { data: departments = [] } = useDepartments()
-  const { data: designations = [] } = useDesignations()
-  const { data: countries = [] } = useCountries()
-  const { data: campuses = [] } = useCampuses(isOpen)
-  const campusOptions = useMemo(() => {
-    return campuses.map((c, i) => ({
-      value: String(getCampusId(c, i)),
-      label: c.campusName,
-    }))
-  }, [campuses])
-  // Employee's own intCountryCode has no confirmed mapping back to a real country guid, so it's
-  // sent as the option's 1-based list position — flagged, not a confirmed id (see country.ts).
-  const defaultCountryIndex = countries.findIndex(c => c.defaultCountry === 1)
-  const defaultCountryCode = defaultCountryIndex >= 0 ? defaultCountryIndex + 1 : 1
-  const departmentOptions = departments.map(d => d.deptName)
-  const selectedDept = departments.find(d => d.deptName === department)
-  const designationOptions = selectedDept ? designations.filter(d => String(d.intDept) === String(selectedDept.intDept)).map(d => d.designationName) : []
-  const selectedDesignation = selectedDept
-    ? designations.find(d => d.designationName === designation && String(d.intDept) === String(selectedDept.intDept))
-    : undefined
 
-  // If the employee's saved intCountryCode falls outside the current list's
-  // position range, show their stored country name as a fallback rather
-  // than a blank/mismatched selection.
-  const countryOptions = useMemo(() => {
-    const opts = countries.map((c, i) => ({ value: String(i + 1), label: c.countryName }))
-    const savedCode = employee?.intCountryCode
-    if (savedCode != null && employee?.countryName && (savedCode < 1 || savedCode > countries.length)) {
-      opts.push({ value: String(savedCode), label: employee.countryName })
-    }
-    return opts
-  }, [countries, employee])
+  // Server-paginated, load-more-on-scroll pickers (2026-09-15, per request)
+  // — same convention as Intake/Campus/Country's own useSearchXInfinite
+  // hooks, in place of useDepartments()/useDesignations()' single eager
+  // 1000-row fetch. Enabled on both Add and Edit (2026-09-15, per request —
+  // was Edit-only). Designation is no longer scoped to the selected
+  // department — per request, since get-designations.md has no
+  // department-filter param to keep that scoping correct once designations
+  // load progressively.
+  const [deptPickerOpen, setDeptPickerOpen] = useState(false)
+  const [designationPickerOpen, setDesignationPickerOpen] = useState(false)
+  const deptQuery = useSearchDepartmentsInfinite(isOpen && deptPickerOpen)
+  const designationQuery = useSearchDesignationsInfinite(isOpen && designationPickerOpen)
+  const departments = useMemo(() => flattenUniquePages(deptQuery.data?.pages ?? [], d => String(d.intDept)), [deptQuery.data])
+  const designations = useMemo(() => flattenUniquePages(designationQuery.data?.pages ?? [], d => String(d.intDesignation)), [designationQuery.data])
+
+  const { data: countries = [] } = useCountries()
+  // The campus doc explicitly calls for GET /academic/campus/dropdown, not
+  // the paginated campus list useCampuses() hits.
+  const { data: campuses = [] } = useCampusDropdown()
+  const campusOptions = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
+  const countryOptions = useMemo(() => countries.map(c => ({ value: c.countryGuid, label: c.countryName })), [countries])
+  const defaultCountryGuid = countries.find(c => c.defaultCountry === 1)?.countryGuid ?? ''
+
+  // The employee's own current department/designation name might not be
+  // among whatever pages have loaded so far — injected as a fallback option
+  // so the picker still shows/keeps the right value instead of going blank,
+  // same "selected value not yet in the loaded pages" fallback other
+  // infinite pickers in this app use.
+  const departmentOptions = useMemo(() => {
+    const names = departments.map(d => d.deptName)
+    return department && !names.includes(department) ? [department, ...names] : names
+  }, [departments, department])
+  const designationOptions = useMemo(() => {
+    const names = designations.map(d => d.designationName)
+    return designation && !names.includes(designation) ? [designation, ...names] : names
+  }, [designations, designation])
 
   // Reuse the API validation messages so the form shows issues immediately.
   function validate(): Record<string, string> {
@@ -131,9 +161,15 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
     if (!emailId.trim()) e.emailId = 'Email ID cannot be left blank!'
     else if (!EMAIL_RE.test(emailId.trim())) e.emailId = 'Invalid Email ID!'
     if (!maritalStatus.trim()) e.maritalStatus = 'Select Marital Status before proceeding!'
-    if (!selectedDept) e.department = 'Select Department before proceeding!'
-    if (!selectedDesignation) e.designation = 'Select Designation before proceeding!'
-    if (selectedCampusIds.length === 0) e.campus = 'Select Campus before proceeding!'
+    // Checked against the picked NAME, not selectedDept/selectedDesignation
+    // — those only resolve against whatever pages the infinite pickers
+    // happen to have loaded so far, which is necessarily incomplete, unlike
+    // the name itself (always known once picked) and deptGuidValue (only
+    // ever known when unchanged from the record's own real guid).
+    if (!department.trim()) e.department = 'Select Department before proceeding!'
+    else if (!deptGuidValue) e.department = "This department's ID isn't available yet — only the department already on an existing employee record can be kept as-is; picking a different one isn't supported until the Department master provides an ID."
+    if (!designation.trim()) e.designation = 'Select Designation before proceeding!'
+    else if (!designationGuidValue) e.designation = "This designation's ID isn't available yet — only the designation already on an existing employee record can be kept as-is; picking a different one isn't supported until the Designation master provides an ID."
     return e
   }
 
@@ -152,40 +188,49 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
       setSex(employee.sex === 1 ? 'Male' : employee.sex === 2 ? 'Female' : 'Others')
       setBirthDate(employee.birthDate.slice(0, 10))
       setPlaceOfBirth(employee.placeOfBirth)
-      setCountry(employee.intCountryCode != null ? String(employee.intCountryCode) : '')
+      setCountryGuid(employee.countryGuid ?? '')
       setNatId(employee.natId)
       setNationalId(employee.nationalId ?? '')
       setEmailId(employee.emailId)
       setReligion(employee.intReligion ? RELIGIONS[employee.intReligion - 1] ?? '' : '')
       setMaritalStatus(MARITAL_STATUSES[employee.maritalStatus - 1] ?? '')
-      const deptRecord = employee.intDept != null ? departments.find(d => String(d.intDept) === String(employee.intDept)) : undefined
-      setDepartment(deptRecord?.deptName ?? '')
-      const desigRecord = employee.intDesignation != null ? designations.find(d => String(d.intDesignation) === String(employee.intDesignation)) : undefined
-      setDesignation(desigRecord?.designationName ?? '')
-      const initialCampusIds = employee.campusIds && employee.campusIds.length > 0
-        ? employee.campusIds.map(String)
-        : []
-      setSelectedCampusIds(initialCampusIds)
+      // Server-resolved names straight off the employee record — the guid
+      // actually submitted comes from the same place, see the note on
+      // deptGuidValue/designationGuidValue above.
+      setDepartment(employee.departmentName ?? '')
+      setDeptGuidValue(employee.deptGuid ?? null)
+      setDesignation(employee.designationName ?? '')
+      setDesignationGuidValue(employee.designationGuid ?? null)
+      setCampusGuids(employee.campusGuids ?? [])
     } else if (!isEdit) {
       setDepartment(''); setDesignation('')
-      setSelectedCampusIds([])
+      setDeptGuidValue(null); setDesignationGuidValue(null)
       setCategory(CATEGORIES[0].label)
       setTitle(''); setFirstName(''); setSurname(''); setOtherName('')
-      setSex(''); setBirthDate(''); setPlaceOfBirth(''); setCountry('')
+      setSex(''); setBirthDate(''); setPlaceOfBirth(''); setCountryGuid('')
       setNatId(''); setNationalId(''); setEmailId(''); setReligion(''); setMaritalStatus('')
+      setCampusGuids([])
     }
     setErrors({})
-  }, [isOpen, isEdit, employee, departments, designations, campuses])
+  }, [isOpen, isEdit, employee])
 
   if (!isOpen) return null
 
-  function handleClose() { setSaved(false); setErrors({}); setSelectedCampusIds([]); onClose() }
+  function handleClose() { setSaved(false); setErrors({}); onClose() }
 
   function handleDepartmentChange(dept: string) {
     setDepartment(dept)
-    const deptRecord = departments.find(d => d.deptName === dept)
-    const opts = deptRecord ? designations.filter(d => String(d.intDept) === String(deptRecord.intDept)).map(d => d.designationName) : []
-    setDesignation(prev => (opts.includes(prev) ? prev : ''))
+    // Only the department already on the record being edited has a known
+    // guid — switching to any other one (or picking one at all on Add)
+    // leaves it unresolved; see the note on deptGuidValue above. Designation
+    // is no longer department-scoped (see the note on departments/
+    // designations above), so it's left untouched here.
+    setDeptGuidValue(isEdit && dept === employee?.departmentName ? (employee?.deptGuid ?? null) : null)
+  }
+
+  function handleDesignationChange(desig: string) {
+    setDesignation(desig)
+    setDesignationGuidValue(isEdit && desig === employee?.designationName ? (employee?.designationGuid ?? null) : null)
   }
 
   function handleSubmit() {
@@ -201,19 +246,19 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
       title,
       surname,
       firstName,
+      designationGuid: designationGuidValue!,
+      deptGuid: deptGuidValue!,
       otherName: otherName.trim() || null,
       sex: sexToNumber(sex),
       birthDate,
       placeOfBirth,
-      intCountryCode: country ? Number(country) : defaultCountryCode,
+      countryGuid: countryGuid || defaultCountryGuid,
       natId,
       nationalId: nationalId.trim() || null,
       emailId,
       intReligion: religion ? RELIGIONS.indexOf(religion) + 1 : null,
       maritalStatus: MARITAL_STATUSES.indexOf(maritalStatus) + 1 || 1,
-      intDept: selectedDept!.intDept,
-      intDesignation: selectedDesignation!.intDesignation,
-      campusIds: selectedCampusIds.map(Number),
+      campusGuids,
     }
 
     if (isEdit && employeeGuid) {
@@ -309,7 +354,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
             </div>
             <div className="fg">
               <div className="lbl">Country</div>
-              <SearchSelect placeholder="Select…" options={countryOptions} value={country} onChange={setCountry} />
+              <SearchSelect placeholder="Select…" options={countryOptions} value={countryGuid} onChange={setCountryGuid} />
             </div>
             <div className="fg">
               <div className="lbl">National ID Type <span className="req">*</span></div>
@@ -330,30 +375,45 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
               <SearchSelect placeholder="Select…" options={MARITAL_STATUSES} value={maritalStatus} onChange={v => { setMaritalStatus(v); clearError('maritalStatus') }} />
               {errors.maritalStatus && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.maritalStatus}</p>}
             </div>
+            {/* Enabled on Add too now (2026-09-15, per request) — still only
+                actually resolves to a submittable guid when it matches
+                what's already on the record being edited (see the note on
+                deptGuidValue/designationGuidValue above); validate() is what
+                catches an unresolvable pick at submit time, not this
+                control being disabled up front. */}
             <div className="fg">
               <div className="lbl">Department <span className="req">*</span></div>
-              <SearchSelect placeholder="Select department…" options={departmentOptions} value={department} onChange={v => { handleDepartmentChange(v); clearError('department') }} />
+              <SearchSelect
+                placeholder="Select department…"
+                options={departmentOptions}
+                value={department}
+                onChange={v => { handleDepartmentChange(v); clearError('department') }}
+                onOpenChange={setDeptPickerOpen}
+                isLoading={deptQuery.isLoading}
+                hasNextPage={deptQuery.hasNextPage}
+                isFetchingNextPage={deptQuery.isFetchingNextPage}
+                onLoadMore={() => deptQuery.fetchNextPage()}
+              />
               {errors.department && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.department}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Designation <span className="req">*</span></div>
               <SearchSelect
-                placeholder={department ? 'Select designation…' : 'Select department first'}
+                placeholder="Select designation…"
                 options={designationOptions}
                 value={designation}
-                onChange={v => { setDesignation(v); clearError('designation') }}
+                onChange={v => { handleDesignationChange(v); clearError('designation') }}
+                onOpenChange={setDesignationPickerOpen}
+                isLoading={designationQuery.isLoading}
+                hasNextPage={designationQuery.hasNextPage}
+                isFetchingNextPage={designationQuery.isFetchingNextPage}
+                onLoadMore={() => designationQuery.fetchNextPage()}
               />
               {errors.designation && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.designation}</p>}
             </div>
             <div className="fg">
-              <div className="lbl">Campus <span className="req">*</span></div>
-              <MultiSelect
-                placeholder="Select campus…"
-                options={campusOptions}
-                value={selectedCampusIds}
-                onChange={v => { setSelectedCampusIds(v); clearError('campus') }}
-              />
-              {errors.campus && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campus}</p>}
+              <div className="lbl">Campus Assignment</div>
+              <MultiSelect placeholder="Select campuses…" options={campusOptions} value={campusGuids} onChange={setCampusGuids} />
             </div>
           </div>
 

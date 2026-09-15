@@ -1,7 +1,5 @@
 'use client'
-import { useState } from 'react'
-import { ScrollTable } from '@/components/ScrollTable'
-import { Pagination } from '@/components/Pagination'
+import { useEffect, useRef, useState } from 'react'
 import { useFakeCertificateTerminationsSearch } from '@/hooks/academic/useRefundSearch'
 import { useStudent } from '@/hooks/student/useStudents'
 import { RefundLedgerPicker, initialsFor } from './shared'
@@ -12,8 +10,13 @@ import { mockResolveApplicationGuid, mockSearchFakeCert } from './mockData'
 // carries studentGuid, not applicationGuid — resolved via useStudent's own
 // applicationSummary.applicationGuid before the ledger/refund step can run
 // (see useStudentsByGuids' comment in hooks/student/useStudents.ts for why).
+//
+// Search-and-select dropdown (2026-09-15, per request) — same move as the
+// Rejected-by-Registrar tab: replaces the always-visible results table +
+// Pagination with a live-typing typeahead, same convention the rest of this
+// app's student-search boxes use.
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 1000
 
 interface FakeCertTabProps {
   showToast: (msg: string, type?: string) => void
@@ -24,14 +27,30 @@ interface FakeCertTabProps {
 
 export function FakeCertTab({ showToast, permissionsCreate, onRefunded, useMock = false }: FakeCertTabProps) {
   const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
+  const [committedSearch, setCommittedSearch] = useState('')
+  const [searchFocused, setSearchFocused] = useState(false)
+  const searchBoxRef = useRef<HTMLDivElement>(null)
   const [selected, setSelected] = useState<{ studentGuid: string; name: string; regNo: string; remarks: string | null } | null>(null)
 
-  const { data, isLoading: isLoadingReal, isError } = useFakeCertificateTerminationsSearch({ search, page, pageSize: PAGE_SIZE }, !useMock)
-  const mockItems = useMock ? mockSearchFakeCert(search) : []
+  useEffect(() => {
+    const t = setTimeout(() => setCommittedSearch(search.trim()), 400)
+    return () => clearTimeout(t)
+  }, [search])
+
+  useEffect(() => {
+    if (!searchFocused) return
+    function handle(e: MouseEvent) {
+      if (!searchBoxRef.current?.contains(e.target as Node)) setSearchFocused(false)
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [searchFocused])
+
+  const searchTermLen = committedSearch.length
+  const searchEnabled = searchFocused && (searchTermLen === 0 || searchTermLen >= 2)
+  const { data, isLoading: isLoadingReal, isError } = useFakeCertificateTerminationsSearch({ search: committedSearch, page: 1, pageSize: PAGE_SIZE }, !useMock && searchEnabled)
+  const mockItems = useMock ? mockSearchFakeCert(committedSearch) : []
   const items = useMock ? mockItems : (data?.items ?? [])
-  const totalCount = useMock ? mockItems.length : (data?.totalCount ?? 0)
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const isLoading = useMock ? false : isLoadingReal
 
   const { data: studentDetail, isLoading: isResolvingApplicationReal, isError: isResolveErrorReal } = useStudent(selected?.studentGuid ?? null, !useMock && !!selected)
@@ -41,10 +60,17 @@ export function FakeCertTab({ showToast, permissionsCreate, onRefunded, useMock 
   const isResolvingApplication = useMock ? false : isResolvingApplicationReal
   const isResolveError = useMock ? false : isResolveErrorReal
 
-  function handleSearchChange(v: string) {
-    setSearch(v)
-    setPage(1)
+  function selectCandidate(s: { studentGuid: string; studentName: string; studentRegNo: string; terminationRemarks: string | null }) {
+    setSelected({ studentGuid: s.studentGuid, name: s.studentName, regNo: s.studentRegNo, remarks: s.terminationRemarks })
+    setSearch(s.studentName)
+    setCommittedSearch('')
+    setSearchFocused(false)
+  }
+
+  function handleClear() {
     setSelected(null)
+    setSearch('')
+    setCommittedSearch('')
   }
 
   return (
@@ -53,53 +79,56 @@ export function FakeCertTab({ showToast, permissionsCreate, onRefunded, useMock 
         <div className="card-hdr">
           <div className="card-title"><span className="ctitle-icon"><i className="lni lni-search-alt"></i></span> Search Fake-Certificate Terminations</div>
         </div>
-        <div className="fg" style={{ marginBottom: 0 }}>
+        <div className="fg" style={{ marginBottom: 0, position: 'relative' }} ref={searchBoxRef}>
           <div className="lbl">Student Name, Reg No, or Student No</div>
-          <div className="inp-wrap">
-            <span className="inp-icon"><i className="lni lni-search-alt"></i></span>
-            <input
-              className="ctrl"
-              type="text"
-              placeholder="e.g. 022210001 or Tusingwire Drake"
-              value={search}
-              onChange={e => handleSearchChange(e.target.value)}
-            />
+          <div className="flex gap-2 flex-wrap">
+            <div className="inp-wrap" style={{ flex: 1, minWidth: 180 }}>
+              <span className="inp-icon"><i className="lni lni-search-alt"></i></span>
+              <input
+                className="ctrl"
+                type="text"
+                placeholder="e.g. 022210001 or Tusingwire Drake"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onKeyDown={e => { if (e.key === 'Enter') setCommittedSearch(search.trim()) }}
+              />
+            </div>
+            {selected && (
+              <button className="btn btn-neu" onClick={handleClear}><i className="lni lni-close"></i> Clear</button>
+            )}
           </div>
-        </div>
-      </div>
 
-      <div className="card">
-        {isLoading ? (
-          <div className="text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>Searching…</div>
-        ) : isError ? (
-          <div className="text-clr-red text-center" style={{ padding: 24, fontSize: 12.5 }}><i className="lni lni-warning"></i> Search failed. Please try again.</div>
-        ) : items.length === 0 ? (
-          <div className="text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>No fake-certificate terminations found.</div>
-        ) : (
-          <>
-            <ScrollTable className="no-sticky-col">
-              <table>
-                <thead><tr><th>Student</th><th>Reg No</th><th>Programme</th><th>Termination Remarks</th><th></th></tr></thead>
-                <tbody>
-                  {items.map(s => (
-                    <tr
-                      key={s.studentGuid}
-                      className={`cursor-pointer${selected?.studentGuid === s.studentGuid ? ' bg-b50' : ''}`}
-                      onClick={() => setSelected({ studentGuid: s.studentGuid, name: s.studentName, regNo: s.studentRegNo, remarks: s.terminationRemarks })}
-                    >
-                      <td className="font-bold">{s.studentName}</td>
-                      <td>{s.studentRegNo}</td>
-                      <td>{s.programName || '—'}</td>
-                      <td>{s.terminationRemarks || '—'}</td>
-                      <td>{selected?.studentGuid === s.studentGuid && <span className="badge badge-blue">Selected</span>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </ScrollTable>
-            <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="students" onPageChange={setPage} />
-          </>
-        )}
+          {searchFocused && (
+            <div
+              className="mt-1"
+              style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
+                background: 'var(--white)', border: '1.5px solid var(--b200)', borderRadius: 'var(--rsm)',
+                boxShadow: 'var(--neu-out)', maxHeight: 280, overflowY: 'auto',
+              }}
+            >
+              {isLoading ? (
+                <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Searching…</div>
+              ) : isError ? (
+                <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Search failed. Please try again.</div>
+              ) : items.length === 0 ? (
+                <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No fake-certificate terminations found.</div>
+              ) : (
+                items.map(s => (
+                  <div
+                    key={s.studentGuid}
+                    className="cursor-pointer px-3 py-2 hover:bg-b50 border-b border-g100 last:border-b-0"
+                    onMouseDown={() => selectCandidate(s)}
+                  >
+                    <div className="font-bold">{s.studentName}</div>
+                    <div className="text-g500" style={{ fontSize: 11 }}>{s.studentRegNo}{s.programName ? ` · ${s.programName}` : ''}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {selected && (
