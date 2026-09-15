@@ -176,6 +176,11 @@ export default function NcheGuildPaymentPage() {
 
   const [category, setCategory] = useState<PaymentCategory>('nche')
 
+  // Payment History as a popup (2026-09-15) — same move Payment Console's
+  // own Semester/Other Payment tabs made: off a permanent card merged into
+  // the hero, onto a pc-hero-action button that opens it instead.
+  const [showHistory, setShowHistory] = useState(false)
+
   const [search, setSearch] = useState('')
   const [committedSearch, setCommittedSearch] = useState('')
   const [searchFocused, setSearchFocused] = useState(false)
@@ -381,13 +386,11 @@ export default function NcheGuildPaymentPage() {
 
   return (
     <>
-      {/* id scopes the .pc-body 2-column override in globals.css to just
-          this page — same convention #page-payment-console's own id uses,
-          per request (2026-09-01) to bring this page's layout in line with
-          Payment Console's: a left column (Profile Details + Payment
-          History, merged) beside a wider right column (Outstanding
-          Balance + Payment Detail, merged), instead of everything stacked
-          full-width in a single column. */}
+      {/* id no longer scopes a .pc-body override (2026-09-15 — this page's
+          body moved to the same full-width-hero + .pc-tuition-split layout
+          Payment Console's own Semester Payment tab uses, see below); kept
+          on the wrapper regardless, same as #page-payment-console's own id,
+          in case a future page-specific override is ever needed here. */}
       <div className="page active" id="page-nche-guild-payment">
         <div className="pg-hdr">
           <div>
@@ -497,113 +500,122 @@ export default function NcheGuildPaymentPage() {
               </button>
             </div>
 
-            <div className="pc-body">
-            {/* LEFT column: Profile Details + Payment History, merged into
-                one card — same layout Payment Console's own left column
-                uses (see its own "merged into this same card as a second
-                section" comment). */}
-            <div className="flex flex-col gap-5 min-w-0">
-              {/* Same pc-hero banner + pc-hero-facts grid as Payment
-                  Console's/Payment Refund's own Profile Details, in place
-                  of this page's previous plain avatar-circle + pc-fact-grid
-                  layout — per request, to bring this page's look in line
-                  with the rest of Finance. Campus still has no client-side
-                  name resolver on this page (Payment Console falls back to
-                  useCampuses() for it; not pulled in here), so it stays
-                  '—' rather than a guessed value. Every other field is
-                  already pre-resolved on StudentProfile itself, same as
-                  there. */}
-              <div className="card p-0 overflow-hidden">
-                <div className="pc-hero">
-                  <div className="pc-hero-top">
-                    <div className="pc-hero-avatar">{initialsFor(applicantName(profile))}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="pc-hero-name truncate">{applicantName(profile)}</div>
-                      <div className="pc-hero-sub truncate">{profile.programName ?? '—'}</div>
-                      <span className="pc-hero-badge"><i className="lni lni-bookmark"></i> {profile.appRefNo}</span>
-                    </div>
+            {/* Full-width hero card, promoted out of a 2-column split
+                (2026-09-15) — same move Payment Console's own Semester
+                Payment tab made: Payment History is now a popup opened from
+                a pc-hero-action button here instead of a permanent section
+                merged into this card. */}
+            <div className="card p-0 overflow-hidden">
+              <div className="pc-hero">
+                <div className="pc-hero-top">
+                  <div className="pc-hero-avatar">{initialsFor(applicantName(profile))}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="pc-hero-name truncate">{applicantName(profile)}</div>
+                    <div className="pc-hero-sub truncate">{profile.programName ?? '—'}</div>
+                    <span className="pc-hero-badge"><i className="lni lni-bookmark"></i> {profile.appRefNo}</span>
                   </div>
-                  <div className="pc-hero-facts">
-                    <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val">—</span></div>
-                    <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Semester</span><span className="pc-hero-fact-val" title={profile.semesterName ?? '—'}>{profile.semesterName ?? '—'}</span></div>
-                    {/* Guards against the literal string "null" — same live
-                        quirk Payment Console's own Intake tile guards against. */}
-                    <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Intake</span><span className="pc-hero-fact-val" title={profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}>{profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}</span></div>
-                    <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={profile.batchCode ?? '—'}>{profile.batchCode ?? '—'}</span></div>
-                    <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Year</span><span className="pc-hero-fact-val" title={profile.yearCode ?? '—'}>{profile.yearCode ?? '—'}</span></div>
-                    <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Phone</span><span className="pc-hero-fact-val" title={profile.phone ?? '—'}>{profile.phone ?? '—'}</span></div>
-                    <div className="pc-hero-fact pc-hero-fact-span2">
-                      <span className="pc-hero-fact-lbl">Email</span>
-                      <span className="pc-hero-fact-val truncate" title={profile.emailId ?? profile.universityEmail ?? '—'}>{profile.emailId ?? profile.universityEmail ?? '—'}</span>
-                    </div>
+                  <div className="pc-hero-actions pc-hero-actions-top">
+                    <button type="button" className="pc-hero-action" onClick={() => setShowHistory(true)}>
+                      <i className="lni lni-folder"></i>
+                      <span>Payment History</span>
+                      {history.length > 0 && <strong>{history.length}</strong>}
+                    </button>
                   </div>
                 </div>
-
-                <div className="px-5 pb-5">
-                <div className="sec-divider"><i className="lni lni-files"></i> Payment History</div>
-                {isHistoryLoading ? (
-                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading payment history…</div>
-                ) : history.length === 0 ? (
-                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No {CATEGORY_LABEL[category]} payments recorded yet.</div>
-                ) : (
-                  <>
-                  <ScrollTable className="no-sticky-col">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th style={{ width: 40 }}></th>
-                          <th>Payment Date</th>
-                          {category === 'nche' ? <th>PNR Number</th> : <th>Bank Deposit</th>}
-                          <th>Amount</th>
-                          {category === 'nche' && <th>Remarks</th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pagedHistory.map(h => (
-                          <tr key={h.paymentGuid}>
-                            <td>
-                              <ActionMenu>
-                                <button className="btn btn-neu btn-sm" onClick={() => setViewEntry(h)}>
-                                  <i className="lni lni-eye"></i> View
-                                </button>
-                                {/* permissions.edit && ( */}
-                                  <button className="btn btn-neu btn-sm" onClick={() => setEditTarget(h)}>
-                                    <i className="lni lni-pencil-alt"></i> Edit
-                                  </button>
-                                {/* )} */}
-                                {permissions.delete && (
-                                  <button className="btn btn-neu btn-sm" onClick={() => handleDelete(h)}>
-                                    <i className="lni lni-trash-can"></i> Delete
-                                  </button>
-                                )}
-                              </ActionMenu>
-                            </td>
-                            <td>{h.payDate.slice(0, 10)}</td>
-                            {category === 'nche' ? (
-                              <td className="font-mono text-blue">{h.pnrNumber ?? '—'}</td>
-                            ) : (
-                              <td className="text-muted">{h.bankDeposit ?? '—'}</td>
-                            )}
-                            <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
-                            {category === 'nche' && <td className="text-muted">{h.remarks ?? '—'}</td>}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </ScrollTable>
-                  <Pagination page={historyPage} totalPages={historyTotalPages} totalCount={history.length} itemLabel="payments" onPageChange={setHistoryPage} />
-                  </>
-                )}
+                <div className="pc-hero-facts">
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val">—</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Semester</span><span className="pc-hero-fact-val" title={profile.semesterName ?? '—'}>{profile.semesterName ?? '—'}</span></div>
+                  {/* Guards against the literal string "null" — same live
+                      quirk Payment Console's own Intake tile guards against. */}
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Intake</span><span className="pc-hero-fact-val" title={profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}>{profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={profile.batchCode ?? '—'}>{profile.batchCode ?? '—'}</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Year</span><span className="pc-hero-fact-val" title={profile.yearCode ?? '—'}>{profile.yearCode ?? '—'}</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Phone</span><span className="pc-hero-fact-val" title={profile.phone ?? '—'}>{profile.phone ?? '—'}</span></div>
+                  <div className="pc-hero-fact pc-hero-fact-span2">
+                    <span className="pc-hero-fact-lbl">Email</span>
+                    <span className="pc-hero-fact-val truncate" title={profile.emailId ?? profile.universityEmail ?? '—'}>{profile.emailId ?? profile.universityEmail ?? '—'}</span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* RIGHT column: Outstanding Balance + Payment Detail, merged
-                into one card — same "single card, not two" treatment
-                Payment Console's own Tuition tab uses for its outstanding-
-                balance-plus-form section. */}
-            <div className="flex flex-col gap-5 min-w-0">
-              <div className="card">
+            {/* Payment History — popup (2026-09-15), same modal-overlay/
+                modal-lg shell as Payment Console's own showPaymentHistory. */}
+            {showHistory && (
+              <div className="modal-overlay open" onClick={() => setShowHistory(false)}>
+                <div className="modal modal-lg" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+                  <div className="modal-hdr modal-hdr-blue" style={{ flexShrink: 0 }}>
+                    <div className="modal-title"><i className="lni lni-folder"></i> Payment History</div>
+                    <button className="modal-close" onClick={() => setShowHistory(false)}><i className="lni lni-close"></i></button>
+                  </div>
+                  <div style={{ padding: 20, overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
+                    {isHistoryLoading ? (
+                      <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading payment history…</div>
+                    ) : history.length === 0 ? (
+                      <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No {CATEGORY_LABEL[category]} payments recorded yet.</div>
+                    ) : (
+                      <>
+                      <ScrollTable className="no-sticky-col">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th style={{ width: 40 }}></th>
+                              <th>Payment Date</th>
+                              {category === 'nche' ? <th>PNR Number</th> : <th>Bank Deposit</th>}
+                              <th>Amount</th>
+                              {category === 'nche' && <th>Remarks</th>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pagedHistory.map(h => (
+                              <tr key={h.paymentGuid}>
+                                <td>
+                                  <ActionMenu>
+                                    <button className="btn btn-neu btn-sm" onClick={() => setViewEntry(h)}>
+                                      <i className="lni lni-eye"></i> View
+                                    </button>
+                                    {/* permissions.edit && ( */}
+                                      <button className="btn btn-neu btn-sm" onClick={() => setEditTarget(h)}>
+                                        <i className="lni lni-pencil-alt"></i> Edit
+                                      </button>
+                                    {/* )} */}
+                                    {permissions.delete && (
+                                      <button className="btn btn-neu btn-sm" onClick={() => handleDelete(h)}>
+                                        <i className="lni lni-trash-can"></i> Delete
+                                      </button>
+                                    )}
+                                  </ActionMenu>
+                                </td>
+                                <td>{h.payDate.slice(0, 10)}</td>
+                                {category === 'nche' ? (
+                                  <td className="font-mono text-blue">{h.pnrNumber ?? '—'}</td>
+                                ) : (
+                                  <td className="text-muted">{h.bankDeposit ?? '—'}</td>
+                                )}
+                                <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
+                                {category === 'nche' && <td className="text-muted">{h.remarks ?? '—'}</td>}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </ScrollTable>
+                      <Pagination page={historyPage} totalPages={historyTotalPages} totalCount={history.length} itemLabel="payments" onPageChange={setHistoryPage} />
+                      </>
+                    )}
+                  </div>
+                  <div className="modal-footer" style={{ flexShrink: 0 }}>
+                    <button className="btn btn-neu flex-1 justify-center" onClick={() => setShowHistory(false)}>Close</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* .pc-tuition-split — Outstanding Balance (left) / Payment
+                Detail (right), same two-card split as Payment Console's own
+                Semester Payment tab, in place of the single merged card
+                this used before. */}
+            <div className="pc-tuition-split">
+              <div className="card flex flex-col gap-4 min-w-0">
                 <div className="card-hdr">
                   <div className="card-title"><span className="ctitle-icon"><i className="lni lni-dollar"></i></span> Outstanding Balance ({CATEGORY_LABEL[category]})</div>
                   {dueSemester ? (
@@ -613,8 +625,10 @@ export default function NcheGuildPaymentPage() {
                   ) : null}
                 </div>
                 <RegulatoryOutstandingTable items={semesterStatusList} isLoading={isOutstandingLoading} isError={isOutstandingError} category={category} />
+              </div>
 
-                <div className="sec-divider">
+              <div className="card flex flex-col gap-4 min-w-0">
+                <div className="sec-divider" style={{ marginTop: 0 }}>
                   <i className="lni lni-wallet"></i> Payment Detail
                 </div>
                 <div className="g2 mb-[14px]">
@@ -653,7 +667,6 @@ export default function NcheGuildPaymentPage() {
                   </button>
                 </div>
               </div>
-            </div>
             </div>
           </>
         )}
