@@ -24,14 +24,26 @@ function applicantName(a: ApplicationListItem) {
   return `${a.firstName ?? ''}${a.lastName ? ` ${a.lastName}` : ''}`.trim() || '—'
 }
 
-// saveStatus has no confirmed label mapping anywhere (see the note on
-// ApplicationListItem in lib/api/admission/applicationFiling.ts) — display
-// the raw number rather than guessing a Pending/Approved-style label, same
-// caution as enquiry-list's old statusBadge before enquiryStatusGuid was
-// confirmed resolvable.
-function saveStatusBadge(status: number | null) {
-  if (status === null) return <span className="badge badge-grey">—</span>
-  return <span className="badge badge-blue">Status {status}</span>
+function renderApplicantStatus(a: ApplicationListItem) {
+  const label = a.actionLabel || a.saveStatusLabel || (a.saveStatus != null ? `Status ${a.saveStatus}` : null)
+  if (!label) return <span className="badge badge-grey">—</span>
+
+  const lower = label.toLowerCase()
+  if (lower.includes('submit') || lower.includes('approve') || lower.includes('complete') || lower.includes('register')) {
+    return <span className="badge badge-green">{label}</span>
+  }
+  if (lower.includes('reject') || lower.includes('cancel')) {
+    return <span className="badge badge-red">{label}</span>
+  }
+  if (lower.includes('pending') || lower.includes('review') || lower.includes('hold') || lower.includes('photo')) {
+    return <span className="badge badge-amber">{label}</span>
+  }
+  return <span className="badge badge-blue">{label}</span>
+}
+
+function formatApplicantDate(a: ApplicationListItem) {
+  const d = a.createdDate || a.approveDateReg || a.verifiedDate || a.modifiedDate
+  return d ? d.slice(0, 10) : '—'
 }
 
 export default function ApplicantsPage() {
@@ -155,10 +167,10 @@ export default function ApplicantsPage() {
                   <td className="py-2.5 text-g800 font-medium">{applicantName(a)}</td>
                   <td className="py-2.5 text-g600">{a.phone || '—'}</td>
                   <td className="py-2.5 text-g600">{a.emailId || '—'}</td>
-                  <td className="py-2.5">{resolveProgramName(a.programGuid)}</td>
-                  <td className="py-2.5 text-g600">{a.intakeCode || '—'}</td>
-                  <td className="py-2.5">{saveStatusBadge(a.saveStatus)}</td>
-                  <td className="py-2.5 text-g500 text-xs">{a.createdDate ? a.createdDate.slice(0, 10) : '—'}</td>
+                  <td className="py-2.5">{a.programName || resolveProgramName(a.programGuid)}</td>
+                  <td className="py-2.5 text-g600">{a.intakeName || a.intakeCode || '—'}</td>
+                  <td className="py-2.5">{renderApplicantStatus(a)}</td>
+                  <td className="py-2.5 text-g500 text-xs">{formatApplicantDate(a)}</td>
                 </tr>
               ))}
             </tbody>

@@ -328,7 +328,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
             </div>
             <div className="fg"><div className="lbl">Other Name</div><input className="ctrl" type="text" placeholder="Other name" value={otherName} onChange={e => setOtherName(e.target.value)} /></div>
             <div className="fg">
-              <div className="lbl">University Email <span className="req">*</span></div>
+              <div className="lbl">Email <span className="req">*</span></div>
               <input className="ctrl" type="email" placeholder={isEdit ? undefined : 'auto-generated'} value={emailId} onChange={e => { setEmailId(e.target.value); clearError('emailId') }} style={errors.emailId ? { borderColor: 'var(--red)' } : undefined} />
               {errors.emailId && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.emailId}</p>}
             </div>

@@ -109,6 +109,22 @@ function NotificationsBridge() {
   return null
 }
 
+// Disables mouse wheel scrolling from unintentionally incrementing/decrementing
+function NumberInputScrollPrevent() {
+  useEffect(() => {
+    const handleWheel = () => {
+      const el = document.activeElement
+      if (el instanceof HTMLInputElement && el.type === 'number') {
+        el.blur()
+      }
+    }
+    window.addEventListener('wheel', handleWheel, { passive: true })
+    return () => window.removeEventListener('wheel', handleWheel)
+  }, [])
+
+  return null
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
   // App-wide "cache until invalidated" default — react-query's own default
   // staleTime is 0, which made every page's data stale the instant it
@@ -142,6 +158,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <SessionKeepAlive />
       <NotificationsBridge />
+      <NumberInputScrollPrevent />
       {children}
       <NotificationToastHost />
     </QueryClientProvider>
