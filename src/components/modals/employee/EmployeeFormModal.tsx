@@ -3,12 +3,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import { MultiSelect } from '@/components/MultiSelect'
 import DatePicker from '@/components/DatePicker'
 import { CreateEmployeeInput } from '@/lib/api/employee/employee'
 import { useEmployee, useCreateEmployee, useUpdateEmployee } from '@/hooks/employee/useEmployees'
 import { useDepartments } from '@/hooks/config/useDepartments'
 import { useDesignations } from '@/hooks/config/useDesignations'
 import { useCountries } from '@/hooks/config/useCountries'
+import { useCampuses, getCampusId } from '@/hooks/config/useCampuses'
 
 // Add and Edit share this form — differ in prefill and which mutation runs.
 
@@ -57,6 +59,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
   const [saved, setSaved] = useState(false)
   const [department, setDepartment] = useState('')
   const [designation, setDesignation] = useState('')
+  const [selectedCampusIds, setSelectedCampusIds] = useState<string[]>([])
 
   // These fields match the employee create/update payload.
   const [category, setCategory] = useState(CATEGORIES[0].label)
@@ -81,6 +84,13 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
   const { data: departments = [] } = useDepartments()
   const { data: designations = [] } = useDesignations()
   const { data: countries = [] } = useCountries()
+  const { data: campuses = [] } = useCampuses(isOpen)
+  const campusOptions = useMemo(() => {
+    return campuses.map((c, i) => ({
+      value: String(getCampusId(c, i)),
+      label: c.campusName,
+    }))
+  }, [campuses])
   // Employee's own intCountryCode has no confirmed mapping back to a real country guid, so it's
   // sent as the option's 1-based list position — flagged, not a confirmed id (see country.ts).
   const defaultCountryIndex = countries.findIndex(c => c.defaultCountry === 1)
@@ -123,6 +133,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
     if (!maritalStatus.trim()) e.maritalStatus = 'Select Marital Status before proceeding!'
     if (!selectedDept) e.department = 'Select Department before proceeding!'
     if (!selectedDesignation) e.designation = 'Select Designation before proceeding!'
+    if (selectedCampusIds.length === 0) e.campus = 'Select Campus before proceeding!'
     return e
   }
 
@@ -151,19 +162,24 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
       setDepartment(deptRecord?.deptName ?? '')
       const desigRecord = employee.intDesignation != null ? designations.find(d => String(d.intDesignation) === String(employee.intDesignation)) : undefined
       setDesignation(desigRecord?.designationName ?? '')
+      const initialCampusIds = employee.campusIds && employee.campusIds.length > 0
+        ? employee.campusIds.map(String)
+        : []
+      setSelectedCampusIds(initialCampusIds)
     } else if (!isEdit) {
       setDepartment(''); setDesignation('')
+      setSelectedCampusIds([])
       setCategory(CATEGORIES[0].label)
       setTitle(''); setFirstName(''); setSurname(''); setOtherName('')
       setSex(''); setBirthDate(''); setPlaceOfBirth(''); setCountry('')
       setNatId(''); setNationalId(''); setEmailId(''); setReligion(''); setMaritalStatus('')
     }
     setErrors({})
-  }, [isOpen, isEdit, employee, departments, designations])
+  }, [isOpen, isEdit, employee, departments, designations, campuses])
 
   if (!isOpen) return null
 
-  function handleClose() { setSaved(false); setErrors({}); onClose() }
+  function handleClose() { setSaved(false); setErrors({}); setSelectedCampusIds([]); onClose() }
 
   function handleDepartmentChange(dept: string) {
     setDepartment(dept)
@@ -197,6 +213,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
       maritalStatus: MARITAL_STATUSES.indexOf(maritalStatus) + 1 || 1,
       intDept: selectedDept!.intDept,
       intDesignation: selectedDesignation!.intDesignation,
+      campusIds: selectedCampusIds.map(Number),
     }
 
     if (isEdit && employeeGuid) {
@@ -266,7 +283,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
             </div>
             <div className="fg"><div className="lbl">Other Name</div><input className="ctrl" type="text" placeholder="Other name" value={otherName} onChange={e => setOtherName(e.target.value)} /></div>
             <div className="fg">
-              <div className="lbl">University Email <span className="req">*</span></div>
+              <div className="lbl">Email <span className="req">*</span></div>
               <input className="ctrl" type="email" placeholder={isEdit ? undefined : 'auto-generated'} value={emailId} onChange={e => { setEmailId(e.target.value); clearError('emailId') }} style={errors.emailId ? { borderColor: 'var(--red)' } : undefined} />
               {errors.emailId && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.emailId}</p>}
             </div>
@@ -327,6 +344,16 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
                 onChange={v => { setDesignation(v); clearError('designation') }}
               />
               {errors.designation && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.designation}</p>}
+            </div>
+            <div className="fg">
+              <div className="lbl">Campus <span className="req">*</span></div>
+              <MultiSelect
+                placeholder="Select campus…"
+                options={campusOptions}
+                value={selectedCampusIds}
+                onChange={v => { setSelectedCampusIds(v); clearError('campus') }}
+              />
+              {errors.campus && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campus}</p>}
             </div>
           </div>
 
