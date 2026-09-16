@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
@@ -15,17 +15,89 @@ function formatMoney(amount?: number | null, currency = ''): string {
   return currency ? `${currency} ${prefix}${formatted}` : `${prefix}${formatted}`
 }
 
-function sumByCurrency<T extends { currencyName?: string | null; amount?: number; outstanding?: number }>(
+function parseSemesterOrder(name: string): number {
+  if (!name) return 9999
+  const lower = name.toLowerCase().trim()
+
+  // Extract Year
+  let year = 99
+  if (lower.includes('year one') || lower.includes('year 1') || lower.includes('1st year') || lower.includes('first year')) year = 1
+  else if (lower.includes('year two') || lower.includes('year 2') || lower.includes('2nd year') || lower.includes('second year')) year = 2
+  else if (lower.includes('year three') || lower.includes('year 3') || lower.includes('3rd year') || lower.includes('third year')) year = 3
+  else if (lower.includes('year four') || lower.includes('year 4') || lower.includes('4th year') || lower.includes('fourth year')) year = 4
+  else if (lower.includes('year five') || lower.includes('year 5') || lower.includes('5th year') || lower.includes('fifth year')) year = 5
+
+  // Extract Semester
+  let sem = 99
+  if (lower.includes('semester one') || lower.includes('semester 1') || lower.includes('sem 1') || lower.includes('sem one')) sem = 1
+  else if (lower.includes('semester two') || lower.includes('semester 2') || lower.includes('sem 2') || lower.includes('sem two')) sem = 2
+  else if (lower.includes('semester three') || lower.includes('semester 3') || lower.includes('sem 3') || lower.includes('sem three')) sem = 3
+
+  return year * 10 + sem
+}
+
+function sumByCurrency<T extends { currencyName?: string | null; amount?: number; outstanding?: number; amountDue?: number }>(
   rows: T[],
-  field: 'amount' | 'outstanding'
+  field: 'amount' | 'outstanding' | 'amountDue'
 ): { currency: string; total: number }[] {
   const byCurrency = new Map<string, number>()
   for (const r of rows) {
-    const cur = r.currencyName?.trim() || 'UGX'
-    const val = (field === 'amount' ? r.amount : r.outstanding) ?? 0
+    const rawCur = r.currencyName?.trim()
+    const cur = !rawCur || rawCur === '—' ? 'UGX' : rawCur
+    const val = (field === 'amount' ? r.amount : field === 'outstanding' ? r.outstanding : r.amountDue) ?? 0
     byCurrency.set(cur, (byCurrency.get(cur) ?? 0) + val)
   }
   return [...byCurrency.entries()].map(([currency, total]) => ({ currency, total }))
+}
+
+function getCategoryStyle(category?: number | null) {
+  switch (category) {
+    case 3: // NCHE
+      return {
+        badgeBg: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+        dotBg: 'bg-emerald-600',
+        cellBg: 'bg-emerald-50/40',
+        label: 'NCHE',
+      }
+    case 4: // Guild
+      return {
+        badgeBg: 'bg-amber-100 text-amber-900 border-amber-300',
+        dotBg: 'bg-amber-500',
+        cellBg: 'bg-amber-50/40',
+        label: 'Guild',
+      }
+    case 1: // Tuition
+      return {
+        badgeBg: 'bg-blue-50 text-[#1b365d] border-blue-200',
+        dotBg: 'bg-[#22558c]',
+        cellBg: '',
+        label: 'Tuition',
+      }
+    case 5: // Advance Deposit
+      return {
+        badgeBg: 'bg-indigo-50 text-indigo-900 border-indigo-200',
+        dotBg: 'bg-indigo-600',
+        cellBg: '',
+        label: 'Advance Deposit',
+      }
+    default:
+      return {
+        badgeBg: 'bg-slate-100 text-slate-700 border-slate-200',
+        dotBg: 'bg-slate-400',
+        cellBg: '',
+        label: (category != null ? PAYMENT_CATEGORY_LABELS[category] : null) || 'Other',
+      }
+  }
+}
+
+function renderCategoryBadge(category?: number | null) {
+  const style = getCategoryStyle(category)
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border shadow-2xs ${style.badgeBg}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${style.dotBg}`} />
+      {style.label}
+    </span>
+  )
 }
 
 type DisplayView = 'hybrid' | 'charts' | 'official'
@@ -44,6 +116,7 @@ export default function StudentStatementPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [tableSearch, setTableSearch] = useState('')
   const [hoveredChartSegment, setHoveredChartSegment] = useState<string | null>(null)
+  const [groupBySemester, setGroupBySemester] = useState(true)
 
   // Infinite search query for quick student selection
   const {
@@ -170,6 +243,78 @@ export default function StudentStatementPage() {
       return matchSearch
     })
   }, [futurePayments, tableSearch])
+
+  // Grouped payments by semester (sorted ascending by year & semester, with currency breakdown)
+  const groupedPayments = useMemo(() => {
+    const map = new Map<string, typeof filteredPayments>()
+    for (const p of filteredPayments) {
+      const sem = p.semesterName?.trim() || header?.semesterName?.trim() || 'General / Unassigned'
+      if (!map.has(sem)) map.set(sem, [])
+      map.get(sem)!.push(p)
+    }
+    const groups = [...map.entries()].map(([semester, items]) => ({
+      semester,
+      items,
+      currencyTotals: sumByCurrency(items, 'amount'),
+    }))
+
+    groups.sort((a, b) => {
+      const orderA = parseSemesterOrder(a.semester)
+      const orderB = parseSemesterOrder(b.semester)
+      if (orderA !== orderB) return orderA - orderB
+      return a.semester.localeCompare(b.semester)
+    })
+
+    return groups
+  }, [filteredPayments, header?.semesterName])
+
+  // Grouped outstanding items by semester (sorted ascending by year & semester, with currency breakdown)
+  const groupedOutstanding = useMemo(() => {
+    const map = new Map<string, typeof filteredOutstanding>()
+    for (const item of filteredOutstanding) {
+      const sem = item.semesterName?.trim() || header?.semesterName?.trim() || 'General / Unassigned'
+      if (!map.has(sem)) map.set(sem, [])
+      map.get(sem)!.push(item)
+    }
+    const groups = [...map.entries()].map(([semester, items]) => ({
+      semester,
+      items,
+      currencyTotals: sumByCurrency(items, 'outstanding'),
+    }))
+
+    groups.sort((a, b) => {
+      const orderA = parseSemesterOrder(a.semester)
+      const orderB = parseSemesterOrder(b.semester)
+      if (orderA !== orderB) return orderA - orderB
+      return a.semester.localeCompare(b.semester)
+    })
+
+    return groups
+  }, [filteredOutstanding, header?.semesterName])
+
+  // Grouped future payments by semester (sorted ascending by year & semester, with currency breakdown)
+  const groupedFuture = useMemo(() => {
+    const map = new Map<string, typeof filteredFuture>()
+    for (const item of filteredFuture) {
+      const sem = item.semesterName?.trim() || 'Future Assessments'
+      if (!map.has(sem)) map.set(sem, [])
+      map.get(sem)!.push(item)
+    }
+    const groups = [...map.entries()].map(([semester, items]) => ({
+      semester,
+      items,
+      currencyTotals: sumByCurrency(items, 'amountDue'),
+    }))
+
+    groups.sort((a, b) => {
+      const orderA = parseSemesterOrder(a.semester)
+      const orderB = parseSemesterOrder(b.semester)
+      if (orderA !== orderB) return orderA - orderB
+      return a.semester.localeCompare(b.semester)
+    })
+
+    return groups
+  }, [filteredFuture])
 
   return (
     <>
@@ -439,7 +584,7 @@ export default function StudentStatementPage() {
                   <span className="text-[11px] text-g400">Live graphical reconciliation</span>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Chart 1: Donut Clearance & Balance Ring - Compact */}
                   <div className="card p-3.5 shadow-sm border border-g200 flex flex-col justify-between">
                     <div className="flex items-center justify-between mb-1">
@@ -580,100 +725,6 @@ export default function StudentStatementPage() {
                       </span>
                     </div>
                   </div>
-
-                  {/* Card 3: Financial Standing & Clearance Summary - Compact */}
-                  <div className="card p-3.5 shadow-sm border border-g200 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <div>
-                          <h4 className="font-bold text-xs text-g900">Financial Standing</h4>
-                          <p className="text-[11px] text-g400">Clearance status & currency ledger</p>
-                        </div>
-                        {currentOutstanding <= 0 ? (
-                          <span className="badge badge-green text-[10px] py-0.5 px-2 font-bold flex items-center gap-1">
-                            <i className="lni lni-checkmark" /> Cleared
-                          </span>
-                        ) : (
-                          <span className="badge badge-amber text-[10px] py-0.5 px-2 font-bold flex items-center gap-1">
-                            <i className="lni lni-alarm" /> Balance Due
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Clearance Alert Pill */}
-                      <div
-                        className={`p-2.5 rounded-lg border my-2 flex items-start gap-2.5 ${
-                          currentOutstanding <= 0
-                            ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
-                            : 'bg-red-50/70 border-red-200 text-red-900'
-                        }`}
-                      >
-                        <i
-                          className={`lni ${
-                            currentOutstanding <= 0 ? 'lni-checkmark-circle text-emerald-600' : 'lni-warning text-red-600'
-                          } text-base shrink-0 mt-0.5`}
-                        />
-                        <div className="min-w-0 flex-1 text-xs">
-                          <div className="font-bold tracking-tight">
-                            {currentOutstanding <= 0 ? 'Registration & Exam Cleared' : 'Financial Clearance Required'}
-                          </div>
-                          <div className="text-[11px] opacity-80 mt-0.5">
-                            {currentOutstanding <= 0
-                              ? 'Zero outstanding balance. All current fee heads are fully settled.'
-                              : `${formatMoney(currentOutstanding)} balance remaining on current assessments.`}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Currency Breakdown */}
-                      <div className="mt-2.5 space-y-1">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-g500">
-                          Collections by Currency
-                        </div>
-                        <div className="space-y-1">
-                          {sumByCurrency(paymentHistory, 'amount').map(c => (
-                            <div
-                              key={c.currency}
-                              className="flex items-center justify-between px-2.5 py-1 rounded bg-g50 border border-g100 text-xs"
-                            >
-                              <span className="font-semibold text-g700">{c.currency}</span>
-                              <span className="font-mono font-bold text-emerald-700">
-                                {c.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Most Recent Receipt Info */}
-                      {paymentHistory.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-g100 text-xs">
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-g500 mb-1">
-                            Latest Receipt Recorded
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-g800 font-medium">
-                            <span className="flex items-center gap-1.5 truncate">
-                              <i className="lni lni-receipt text-b700" />
-                              <span className="font-mono font-bold text-g900">
-                                {paymentHistory[0].receipt || paymentHistory[0].paymentCode || 'Receipt'}
-                              </span>
-                              <span className="text-g400 text-[10px]">
-                                ({paymentHistory[0].payType || 'Payment'})
-                              </span>
-                            </span>
-                            <span className="font-mono font-bold text-g900 shrink-0 ml-2">
-                              {formatMoney(paymentHistory[0].amount, paymentHistory[0].currencyName || '')}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-g100 text-[10px] text-g400">
-                      <span>{paymentHistory.length} Receipts • {outstandingItems.length} Dues</span>
-                      <span className="font-semibold text-b700">Official Standing</span>
-                    </div>
-                  </div>
                 </div>
               </div>
             )}
@@ -741,7 +792,7 @@ export default function StudentStatementPage() {
                         <span>Future Payments</span>
                         <span
                           className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
-                            tableTab === 'future' ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple'
+                            tableTab === 'future' ? 'bg-white/20 text-white' : 'bg-blue-100 text-[#1b365d]'
                           }`}
                         >
                           {futurePayments.length}
@@ -749,7 +800,7 @@ export default function StudentStatementPage() {
                       </button>
                     </div>
 
-                    {/* Search & Category Filter Controls on Right */}
+                    {/* Search, Grouping & Category Filter Controls on Right */}
                     <div className="flex items-center gap-2">
                       <div className="relative">
                         <input
@@ -762,19 +813,35 @@ export default function StudentStatementPage() {
                         <i className="lni lni-search absolute left-2 top-1/2 -translate-y-1/2 text-g400 text-xs" />
                       </div>
 
-                      {tableTab === 'payments' && (
+                      {(tableTab === 'payments' || tableTab === 'outstanding') && (
                         <select
-                          className="form-select text-xs py-1 px-2.5 rounded-lg border-g300 bg-white font-medium"
+                          className="form-select text-xs py-1 px-2.5 rounded-lg border-g300 bg-white font-medium shadow-2xs"
                           value={selectedCategory}
                           onChange={e => setSelectedCategory(e.target.value)}
                         >
                           <option value="all">All Categories</option>
-                          <option value="1">Tuition Only</option>
-                          <option value="3">NCHE Only</option>
-                          <option value="4">Guild Only</option>
+                          <option value="1">Tuition Fee Only</option>
+                          <option value="3">NCHE Fee Only (Emerald)</option>
+                          <option value="4">Guild Fee Only (Amber)</option>
                           <option value="5">Advance Deposit</option>
                         </select>
                       )}
+
+                      {/* Group by Semester Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => setGroupBySemester(prev => !prev)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border ${
+                          groupBySemester
+                            ? 'bg-[#1b365d] text-white border-[#1b365d] shadow-xs'
+                            : 'bg-white text-g700 border-g300 hover:bg-g100'
+                        }`}
+                        title="Toggle grouping records by semester"
+                      >
+                        <i className="lni lni-layers text-xs" />
+                        <span>Group by Semester</span>
+                        {groupBySemester && <i className="lni lni-checkmark text-[10px]" />}
+                      </button>
                     </div>
                   </div>
 
@@ -803,6 +870,93 @@ export default function StudentStatementPage() {
                                 No payment history found for this selection.
                               </td>
                             </tr>
+                          ) : groupBySemester ? (
+                            groupedPayments.map((group, groupIdx) => (
+                              <Fragment key={group.semester || groupIdx}>
+                                {/* Semester Group Header Row */}
+                                <tr className="bg-gradient-to-r from-[#e9f2fb] via-[#f1f6fc] to-[#e9f2fb] border-t-2 border-b border-[#22558c]/40 font-semibold">
+                                  <td colSpan={9} className="py-2.5 px-4">
+                                    <div className="flex items-center gap-2.5">
+                                      <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-[#22558c] text-white text-xs shadow-xs">
+                                        <i className="lni lni-graduation" />
+                                      </span>
+                                      <span className="font-extrabold text-xs md:text-sm text-[#1b365d] tracking-wide">
+                                        {group.semester}
+                                      </span>
+                                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white text-[#22558c] border border-[#22558c]/20 shadow-xs">
+                                        {group.items.length} {group.items.length === 1 ? 'Record' : 'Records'}
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+
+                                {/* Rows in this Semester */}
+                                {group.items.map((p, idx) => (
+                                  <tr
+                                    key={p.paymentGuid || `${groupIdx}-${idx}`}
+                                    className={`border-b border-g100 transition-colors ${
+                                      idx % 2 === 1 ? 'bg-[#f8fafc]' : 'bg-white'
+                                    } hover:bg-blue-50/50`}
+                                  >
+                                    <td className="py-2.5 px-4 text-center text-g500">{p.slNo || idx + 1}</td>
+                                    <td className="py-2.5 px-4 font-mono text-g700 font-medium">
+                                      {p.paymentCode || '—'}
+                                    </td>
+                                    <td className="py-2.5 px-4 whitespace-nowrap text-g800">
+                                      {p.payDate ? new Date(p.payDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                                    </td>
+                                    <td className="py-2.5 px-4 font-medium text-b800 bg-[#eef4fb]">
+                                      {p.semesterName || header?.semesterName || '—'}
+                                    </td>
+                                    <td className="py-2.5 px-4 text-g700">{p.payType || '—'}</td>
+                                    <td className="py-2.5 px-4 font-mono text-g800 font-semibold">{p.receipt || '—'}</td>
+                                    <td className="py-2.5 px-4 text-right font-bold text-g900 font-mono whitespace-nowrap">
+                                      {formatMoney(p.amount)}
+                                    </td>
+                                    <td className="py-2.5 px-4 text-g700">{p.currencyName || '—'}</td>
+                                    <td className={`py-2.5 px-4 font-semibold ${getCategoryStyle(p.category).cellBg}`}>
+                                      {renderCategoryBadge(p.category)}
+                                    </td>
+                                  </tr>
+                                ))}
+
+                                {/* Section Subtotal Row at Bottom of Semester - Single Row Highlighted */}
+                                <tr className="bg-gradient-to-r from-[#d6e7f8] via-[#eaf2fb] to-[#d6e7f8] border-t-2 border-b-2 border-[#1b365d] shadow-sm text-xs whitespace-nowrap">
+                                  <td colSpan={9} className="py-3 px-4">
+                                    <div className="flex items-center justify-between gap-4 flex-nowrap">
+                                      {/* Left: Total Badge & Semester */}
+                                      <div className="flex items-center gap-3 shrink-0">
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-[#1b365d] text-white font-black text-xs uppercase tracking-wider shadow-sm">
+                                          <i className="lni lni-calculator text-blue-200 text-xs" />
+                                          SEMESTER TOTAL
+                                        </span>
+                                        <span className="font-bold text-g700 text-xs">
+                                          for <span className="text-[#1b365d] font-black text-sm tracking-tight">{group.semester}</span>:
+                                        </span>
+                                      </div>
+
+                                      {/* Right: Currency totals in single line - Highlighted Cards */}
+                                      <div className="flex items-center gap-2.5 shrink-0">
+                                        {group.currencyTotals.map(ct => (
+                                          <div
+                                            key={ct.currency}
+                                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border-2 border-[#1b365d] shadow-xs hover:shadow transition-all"
+                                          >
+                                            <span className="text-[11px] font-sans font-black uppercase tracking-wider text-[#1b365d] flex items-center gap-1.5">
+                                              <span className="w-2 h-2 rounded-full bg-[#22558c]" />
+                                              {ct.currency} Total:
+                                            </span>
+                                            <span className="font-mono text-sm font-black text-[#1b365d] bg-[#eaf2fb] px-2.5 py-0.5 rounded border border-[#22558c]/30 shadow-inner">
+                                              {formatMoney(ct.total)}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              </Fragment>
+                            ))
                           ) : (
                             filteredPayments.map((p, idx) => (
                               <tr
@@ -819,7 +973,7 @@ export default function StudentStatementPage() {
                                   {p.payDate ? new Date(p.payDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                                 </td>
                                 <td className="py-2.5 px-4 font-medium text-b800 bg-[#eef4fb]">
-                                  {p.semesterName || header.semesterName || 'Year Three - Semester One'}
+                                  {p.semesterName || header?.semesterName || '—'}
                                 </td>
                                 <td className="py-2.5 px-4 text-g700">{p.payType || '—'}</td>
                                 <td className="py-2.5 px-4 font-mono text-g800 font-semibold">{p.receipt || '—'}</td>
@@ -827,8 +981,8 @@ export default function StudentStatementPage() {
                                   {formatMoney(p.amount)}
                                 </td>
                                 <td className="py-2.5 px-4 text-g700">{p.currencyName || '—'}</td>
-                                <td className="py-2.5 px-4 font-semibold text-g800">
-                                  {PAYMENT_CATEGORY_LABELS[p.category] || 'Other'}
+                                <td className={`py-2.5 px-4 font-semibold ${getCategoryStyle(p.category).cellBg}`}>
+                                  {renderCategoryBadge(p.category)}
                                 </td>
                               </tr>
                             ))
@@ -839,12 +993,13 @@ export default function StudentStatementPage() {
 
                     {/* Tab 2: Outstanding Items */}
                     {tableTab === 'outstanding' && (
-                      <table className="w-full text-left text-xs border-collapse" style={{ minWidth: 900 }}>
+                      <table className="w-full text-left text-xs border-collapse" style={{ minWidth: 980 }}>
                         <thead>
                           <tr style={{ background: '#22558c', color: '#ffffff' }}>
                             <th className="py-3 px-4 w-14 text-center font-bold text-white text-[11px] uppercase tracking-wider">#</th>
-                            <th className="py-3 px-4 min-w-[280px] font-bold text-white text-[11px] uppercase tracking-wider">Description</th>
-                            <th className="py-3 px-4 min-w-[240px] font-bold text-white text-[11px] uppercase tracking-wider">Semester</th>
+                            <th className="py-3 px-4 min-w-[260px] font-bold text-white text-[11px] uppercase tracking-wider">Description</th>
+                            <th className="py-3 px-4 min-w-[220px] font-bold text-white text-[11px] uppercase tracking-wider">Semester</th>
+                            <th className="py-3 px-4 min-w-[130px] font-bold text-white text-[11px] uppercase tracking-wider">Category</th>
                             <th className="py-3 px-4 min-w-[160px] text-right font-bold text-white text-[11px] uppercase tracking-wider">Outstanding</th>
                             <th className="py-3 px-4 min-w-[140px] font-bold text-white text-[11px] uppercase tracking-wider">Currency</th>
                           </tr>
@@ -852,10 +1007,88 @@ export default function StudentStatementPage() {
                         <tbody>
                           {filteredOutstanding.length === 0 ? (
                             <tr>
-                              <td colSpan={5} className="py-12 text-center text-g400 text-xs">
+                              <td colSpan={6} className="py-12 text-center text-g400 text-xs">
                                 Fully settled — No outstanding items found.
                               </td>
                             </tr>
+                          ) : groupBySemester ? (
+                            groupedOutstanding.map((group, groupIdx) => (
+                              <Fragment key={group.semester || groupIdx}>
+                                {/* Semester Group Header Row */}
+                                <tr className="bg-gradient-to-r from-[#fee2e2]/40 via-[#fef2f2] to-[#fee2e2]/40 border-t-2 border-b border-red-300 font-semibold">
+                                  <td colSpan={6} className="py-2.5 px-4">
+                                    <div className="flex items-center gap-2.5">
+                                      <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-red-600 text-white text-xs shadow-xs">
+                                        <i className="lni lni-wallet" />
+                                      </span>
+                                      <span className="font-extrabold text-xs md:text-sm text-red-950 tracking-wide">
+                                        {group.semester}
+                                      </span>
+                                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white text-red-700 border border-red-200 shadow-xs">
+                                        {group.items.length} {group.items.length === 1 ? 'Due' : 'Dues'}
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+
+                                {/* Rows in this Semester */}
+                                {group.items.map((o, idx) => (
+                                  <tr
+                                    key={o.ledgerGuid || `${groupIdx}-${idx}`}
+                                    className={`border-b border-g100 transition-colors ${
+                                      idx % 2 === 1 ? 'bg-[#f8fafc]' : 'bg-white'
+                                    } hover:bg-red-50/30`}
+                                  >
+                                    <td className="py-2.5 px-4 text-center text-g500">{o.slNo || idx + 1}</td>
+                                    <td className="py-2.5 px-4 font-bold text-g900">{o.description || 'Fee Assessment'}</td>
+                                    <td className="py-2.5 px-4 text-g700">{o.semesterName || header?.semesterName || '—'}</td>
+                                    <td className={`py-2.5 px-4 font-semibold ${getCategoryStyle(o.category).cellBg}`}>
+                                      {renderCategoryBadge(o.category)}
+                                    </td>
+                                    <td className="py-2.5 px-4 text-right font-bold text-red-600 font-mono whitespace-nowrap">
+                                      {formatMoney(o.outstanding)}
+                                    </td>
+                                    <td className="py-2.5 px-4 text-g700">{o.currencyName || '—'}</td>
+                                  </tr>
+                                ))}
+
+                                {/* Section Subtotal Row at Bottom of Semester - Single Row Highlighted */}
+                                <tr className="bg-gradient-to-r from-[#fee2e2] via-[#fff1f1] to-[#fee2e2] border-t-2 border-b-2 border-red-500 shadow-sm text-xs whitespace-nowrap">
+                                  <td colSpan={6} className="py-3 px-4">
+                                    <div className="flex items-center justify-between gap-4 flex-nowrap">
+                                      {/* Left: Total Badge & Semester */}
+                                      <div className="flex items-center gap-3 shrink-0">
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-red-700 text-white font-black text-xs uppercase tracking-wider shadow-sm">
+                                          <i className="lni lni-wallet text-red-200 text-xs" />
+                                          TOTAL OUTSTANDING
+                                        </span>
+                                        <span className="font-bold text-g700 text-xs">
+                                          for <span className="text-red-900 font-black text-sm tracking-tight">{group.semester}</span>:
+                                        </span>
+                                      </div>
+
+                                      {/* Right: Currency totals in single line */}
+                                      <div className="flex items-center gap-2.5 shrink-0">
+                                        {group.currencyTotals.map(ct => (
+                                          <div
+                                            key={ct.currency}
+                                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border-2 border-red-500 shadow-xs hover:shadow transition-all"
+                                          >
+                                            <span className="text-[11px] font-sans font-black uppercase tracking-wider text-red-700 flex items-center gap-1.5">
+                                              <span className="w-2 h-2 rounded-full bg-red-600" />
+                                              {ct.currency} Due:
+                                            </span>
+                                            <span className="font-mono text-sm font-black text-red-700 bg-red-50 px-2.5 py-0.5 rounded border border-red-300 shadow-inner">
+                                              {formatMoney(ct.total)}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              </Fragment>
+                            ))
                           ) : (
                             filteredOutstanding.map((o, idx) => (
                               <tr
@@ -866,7 +1099,10 @@ export default function StudentStatementPage() {
                               >
                                 <td className="py-2.5 px-4 text-center text-g500">{o.slNo || idx + 1}</td>
                                 <td className="py-2.5 px-4 font-bold text-g900">{o.description || 'Fee Assessment'}</td>
-                                <td className="py-2.5 px-4 text-g700">{o.semesterName || header.semesterName || '—'}</td>
+                                <td className="py-2.5 px-4 text-g700">{o.semesterName || header?.semesterName || '—'}</td>
+                                <td className={`py-2.5 px-4 font-semibold ${getCategoryStyle(o.category).cellBg}`}>
+                                  {renderCategoryBadge(o.category)}
+                                </td>
                                 <td className="py-2.5 px-4 text-right font-bold text-red-600 font-mono whitespace-nowrap">
                                   {formatMoney(o.outstanding)}
                                 </td>
@@ -897,13 +1133,88 @@ export default function StudentStatementPage() {
                                 No future scheduled payments registered.
                               </td>
                             </tr>
+                          ) : groupBySemester ? (
+                            groupedFuture.map((group, groupIdx) => (
+                              <Fragment key={group.semester || groupIdx}>
+                                {/* Semester Group Header Row */}
+                                <tr className="bg-gradient-to-r from-[#e9f2fb] via-[#f1f6fc] to-[#e9f2fb] border-t-2 border-b border-[#22558c]/40 font-semibold">
+                                  <td colSpan={5} className="py-2.5 px-4">
+                                    <div className="flex items-center gap-2.5">
+                                      <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-[#22558c] text-white text-xs shadow-xs">
+                                        <i className="lni lni-alarm-clock" />
+                                      </span>
+                                      <span className="font-extrabold text-xs md:text-sm text-[#1b365d] tracking-wide">
+                                        {group.semester}
+                                      </span>
+                                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white text-[#22558c] border border-[#22558c]/20 shadow-xs">
+                                        {group.items.length} {group.items.length === 1 ? 'Scheduled' : 'Scheduled'}
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+
+                                {/* Rows in this Semester */}
+                                {group.items.map((f, idx) => (
+                                  <tr
+                                    key={f.slNo || `${groupIdx}-${idx}`}
+                                    className={`border-b border-g100 transition-colors ${
+                                      idx % 2 === 1 ? 'bg-[#f8fafc]' : 'bg-white'
+                                    } hover:bg-blue-50/50`}
+                                  >
+                                    <td className="py-2.5 px-4 text-center text-g500">{f.slNo || idx + 1}</td>
+                                    <td className="py-2.5 px-4 font-bold text-g900">{f.description}</td>
+                                    <td className="py-2.5 px-4 text-g700">{f.semesterName || '—'}</td>
+                                    <td className="py-2.5 px-4 text-right font-bold text-g900 font-mono whitespace-nowrap">
+                                      {formatMoney(f.amountDue)}
+                                    </td>
+                                    <td className="py-2.5 px-4 text-g700">{f.currencyName || 'US Dollar'}</td>
+                                  </tr>
+                                ))}
+
+                                {/* Section Subtotal Row at Bottom of Semester - Single Row Highlighted */}
+                                <tr className="bg-gradient-to-r from-[#d6e7f8] via-[#eaf2fb] to-[#d6e7f8] border-t-2 border-b-2 border-[#1b365d] shadow-sm text-xs whitespace-nowrap">
+                                  <td colSpan={5} className="py-3 px-4">
+                                    <div className="flex items-center justify-between gap-4 flex-nowrap">
+                                      {/* Left: Total Badge & Semester */}
+                                      <div className="flex items-center gap-3 shrink-0">
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-[#1b365d] text-white font-black text-xs uppercase tracking-wider shadow-sm">
+                                          <i className="lni lni-alarm-clock text-blue-200 text-xs" />
+                                          TOTAL SCHEDULED
+                                        </span>
+                                        <span className="font-bold text-g700 text-xs">
+                                          for <span className="text-[#1b365d] font-black text-sm tracking-tight">{group.semester}</span>:
+                                        </span>
+                                      </div>
+
+                                      {/* Right: Currency totals in single line */}
+                                      <div className="flex items-center gap-2.5 shrink-0">
+                                        {group.currencyTotals.map(ct => (
+                                          <div
+                                            key={ct.currency}
+                                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border-2 border-[#1b365d] shadow-xs hover:shadow transition-all"
+                                          >
+                                            <span className="text-[11px] font-sans font-black uppercase tracking-wider text-[#1b365d] flex items-center gap-1.5">
+                                              <span className="w-2 h-2 rounded-full bg-[#22558c]" />
+                                              {ct.currency} Due:
+                                            </span>
+                                            <span className="font-mono text-sm font-black text-[#1b365d] bg-[#eaf2fb] px-2.5 py-0.5 rounded border border-[#22558c]/30 shadow-inner">
+                                              {formatMoney(ct.total)}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              </Fragment>
+                            ))
                           ) : (
                             filteredFuture.map((f, idx) => (
                               <tr
                                 key={f.slNo || idx}
                                 className={`border-b border-g100 transition-colors ${
-                                  idx % 2 === 1 ? 'bg-[#f4f8fc]' : 'bg-white'
-                                } hover:bg-purple-50/30`}
+                                  idx % 2 === 1 ? 'bg-[#f8fafc]' : 'bg-white'
+                                } hover:bg-blue-50/50`}
                               >
                                 <td className="py-2.5 px-4 text-center text-g500">{f.slNo || idx + 1}</td>
                                 <td className="py-2.5 px-4 font-bold text-g900">{f.description}</td>
@@ -963,7 +1274,7 @@ export default function StudentStatementPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-g700">Total Future Due:</span>
-                        <span className="font-mono font-extrabold text-purple">
+                        <span className="font-mono font-extrabold text-[#1b365d]">
                           {formatMoney(filteredFuture.reduce((acc, item) => acc + (item.amountDue || 0), 0))}
                         </span>
                       </div>

@@ -13,33 +13,7 @@ export interface QuestionEditModalProps {
   onSaveAll?: (updatedList: QuestionPreviewItem[]) => void
 }
 
-// Rich text toolbar matching ISBAT FRP design
-const RichTextToolbar = () => (
-  <div className="flex items-center gap-1.5 p-1.5 border-b border-slate-200 bg-slate-50 overflow-x-auto select-none">
-    <button type="button" className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-200 text-slate-600 text-xs" title="Bold"><strong>B</strong></button>
-    <button type="button" className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-200 text-slate-600 text-xs italic" title="Italic">I</button>
-    <button type="button" className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-200 text-slate-600 text-xs underline" title="Underline">U</button>
-    <div className="w-px h-4 bg-slate-300 mx-1"></div>
-    <button type="button" className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-200 text-slate-600 text-xs" title="Align Left"><i className="lni lni-text-align-left"></i></button>
-    <button type="button" className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-200 text-slate-600 text-xs" title="Align Center"><i className="lni lni-text-align-center"></i></button>
-    <button type="button" className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-200 text-slate-600 text-xs" title="Align Right"><i className="lni lni-text-align-right"></i></button>
-    <button type="button" className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-200 text-slate-600 text-xs" title="Justify"><i className="lni lni-text-align-justify"></i></button>
-    <div className="w-px h-4 bg-slate-300 mx-1"></div>
-    <button type="button" className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-200 text-slate-600 text-xs" title="List"><i className="lni lni-list"></i></button>
-    <button type="button" className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-200 text-slate-600 text-xs" title="Text Color"><i className="lni lni-pallet"></i></button>
-    <select className="text-xs border border-slate-200 rounded px-1 py-0.5 bg-white ml-2 text-slate-700">
-      <option>Font</option>
-      <option>Arial</option>
-      <option>Times</option>
-      <option>Inter</option>
-    </select>
-    <select className="text-xs border border-slate-200 rounded px-1 py-0.5 bg-white text-slate-700">
-      <option>Size 1</option>
-      <option>Size 2</option>
-      <option>Size 3</option>
-    </select>
-  </div>
-)
+import { RichTextEditor } from '@/components/RichTextEditor'
 
 export function QuestionEditModal({
   question,
@@ -249,13 +223,12 @@ export function QuestionEditModal({
           {/* Question Text Editor */}
           <div className="flex flex-col sm:flex-row gap-4 items-start">
             <div className="font-semibold text-sm text-slate-700 w-24 shrink-0 pt-2">Question</div>
-            <div className="flex-1 border border-slate-300 rounded-lg overflow-hidden flex flex-col w-full shadow-xs">
-              <RichTextToolbar />
-              <textarea
-                className="w-full min-h-[120px] p-3 text-sm focus:outline-none resize-y text-slate-800 leading-relaxed font-medium bg-[#eef4fc]"
+            <div className="flex-1 w-full">
+              <RichTextEditor
                 value={formData.question}
-                onChange={e => handleChange('question', e.target.value)}
+                onChange={val => handleChange('question', val)}
                 placeholder="Enter question text here..."
+                minHeight={120}
               />
             </div>
           </div>
@@ -265,52 +238,48 @@ export function QuestionEditModal({
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row gap-4 items-start">
                 <div className="font-semibold text-sm text-slate-700 w-24 shrink-0 pt-2 text-right pr-2">Option 1</div>
-                <div className="flex-1 border border-slate-300 rounded-lg overflow-hidden flex flex-col w-full shadow-xs">
-                  <RichTextToolbar />
-                  <textarea
-                    className="w-full min-h-[60px] p-2.5 text-sm focus:outline-none resize-y text-slate-800"
+                <div className="flex-1 w-full">
+                  <RichTextEditor
                     value={formData.option1}
-                    onChange={e => handleChange('option1', e.target.value)}
+                    onChange={val => handleChange('option1', val)}
                     placeholder="Enter Option 1..."
+                    minHeight={65}
                   />
                 </div>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4 items-start">
                 <div className="font-semibold text-sm text-slate-700 w-24 shrink-0 pt-2 text-right pr-2">Option 2</div>
-                <div className="flex-1 border border-slate-300 rounded-lg overflow-hidden flex flex-col w-full shadow-xs">
-                  <RichTextToolbar />
-                  <textarea
-                    className="w-full min-h-[60px] p-2.5 text-sm focus:outline-none resize-y text-slate-800"
+                <div className="flex-1 w-full">
+                  <RichTextEditor
                     value={formData.option2}
-                    onChange={e => handleChange('option2', e.target.value)}
+                    onChange={val => handleChange('option2', val)}
                     placeholder="Enter Option 2..."
+                    minHeight={65}
                   />
                 </div>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4 items-start">
                 <div className="font-semibold text-sm text-slate-700 w-24 shrink-0 pt-2 text-right pr-2">Option 3</div>
-                <div className="flex-1 border border-slate-300 rounded-lg overflow-hidden flex flex-col w-full shadow-xs">
-                  <RichTextToolbar />
-                  <textarea
-                    className="w-full min-h-[60px] p-2.5 text-sm focus:outline-none resize-y text-slate-800"
+                <div className="flex-1 w-full">
+                  <RichTextEditor
                     value={formData.option3}
-                    onChange={e => handleChange('option3', e.target.value)}
+                    onChange={val => handleChange('option3', val)}
                     placeholder="Enter Option 3..."
+                    minHeight={65}
                   />
                 </div>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4 items-start">
                 <div className="font-semibold text-sm text-slate-700 w-24 shrink-0 pt-2 text-right pr-2">Option 4</div>
-                <div className="flex-1 border border-slate-300 rounded-lg overflow-hidden flex flex-col w-full shadow-xs">
-                  <RichTextToolbar />
-                  <textarea
-                    className="w-full min-h-[60px] p-2.5 text-sm focus:outline-none resize-y text-slate-800"
+                <div className="flex-1 w-full">
+                  <RichTextEditor
                     value={formData.option4}
-                    onChange={e => handleChange('option4', e.target.value)}
+                    onChange={val => handleChange('option4', val)}
                     placeholder="Enter Option 4..."
+                    minHeight={65}
                   />
                 </div>
               </div>

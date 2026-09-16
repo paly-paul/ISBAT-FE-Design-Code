@@ -34,6 +34,10 @@ function isAuthEndpoint(path: string): boolean {
 
 interface RefreshData {
   displayName?: string
+  employeeGuid?: string
+  userGuid?: string
+  userId?: string
+  uuid?: string
 }
 
 // Prevent duplicate refresh calls when several requests fail at once.
