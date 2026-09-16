@@ -28,6 +28,7 @@ export interface QuestionPreviewItem {
   option4: string
   answer: string
   level: string
+  questionGuid?: string // Added for DB questions
 }
 
 export interface QuestionBankFileParams {

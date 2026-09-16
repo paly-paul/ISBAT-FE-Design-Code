@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteQuestionBank,
   getQuestionBankCategories,
@@ -94,8 +94,12 @@ export function useQuestionBankPreview() {
  * Commit validated questions to database and archive file to S3.
  */
 export function useQuestionBankImport() {
+  const queryClient = useQueryClient()
   return useMutation<QuestionBankImportResult, Error, QuestionBankFileParams>({
     mutationFn: (params: QuestionBankFileParams) => postQuestionBankImport(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['questions'] })
+    },
   })
 }
 
@@ -103,6 +107,7 @@ export function useQuestionBankImport() {
  * Soft-delete existing questions for the given course unit, category, and intake.
  */
 export function useDeleteQuestionBank() {
+  const queryClient = useQueryClient()
   return useMutation<
     QuestionBankImportResult,
     Error,
@@ -110,6 +115,9 @@ export function useDeleteQuestionBank() {
   >({
     mutationFn: ({ courseUnitGuid, category, intakeGuid }) =>
       deleteQuestionBank(courseUnitGuid, category, intakeGuid),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['questions'] })
+    },
   })
 }
 
