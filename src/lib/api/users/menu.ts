@@ -109,6 +109,9 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
   section('Communications', [
     leaf('Send Communication', 'envelope', '/student/communications'),
   ]),
+  section('Events and Announcements', [
+    leaf('Event Management', 'calendar', '/student/event-management'),
+  ]),
   section('Settings', [
     leaf('Specialization Management', 'graduation', '/student/specialization'),
     // M_TERMINATION_REASON master (termination-reasons/*.md) — the reason
