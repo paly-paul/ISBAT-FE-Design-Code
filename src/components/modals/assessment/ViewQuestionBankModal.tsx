@@ -6,6 +6,7 @@ import { TableSearch } from '@/components/TableSearch'
 import { ActionMenu } from '@/components/ActionMenu'
 import { QuestionPreviewItem } from '@/hooks/assessment/useQuestionBank'
 import { QuestionEditModal } from './QuestionEditModal'
+import { RichTextDisplay } from '@/components/RichTextEditor'
 import { useQuestions, useDeleteQuestion, useUpdateQuestion, useCreateQuestion } from '@/hooks/assessment/useQuestions'
 import { QuestionDto } from '@/lib/api/assessment/questions'
 
@@ -414,7 +415,7 @@ export function ViewQuestionBankModal({
 
                           {/* Question Text */}
                           <td style={{ whiteSpace: 'normal', minWidth: 260, maxWidth: 420, lineHeight: 1.5, color: 'var(--g800)' }}>
-                            <div className="font-medium">{q.question}</div>
+                            <div className="font-medium"><RichTextDisplay content={q.question} /></div>
                           </td>
 
                           {/* Options */}
@@ -442,7 +443,7 @@ export function ViewQuestionBankModal({
                           {/* Answer */}
                           <td style={{ whiteSpace: 'normal', minWidth: 150 }}>
                             <span className="inline-block bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] px-2 py-0.5 rounded font-medium">
-                              {q.answer}
+                              <RichTextDisplay content={q.answer} />
                             </span>
                           </td>
 
@@ -509,7 +510,7 @@ export function ViewQuestionBankModal({
               </div>
               <div className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-xs">
                 <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Question</div>
-                <div className="text-sm font-medium text-slate-800">{viewingDetailQuestion.question}</div>
+                <div className="text-sm font-medium text-slate-800"><RichTextDisplay content={viewingDetailQuestion.question} /></div>
               </div>
               {viewingDetailQuestion.questionType === 'MCQ' && (
                 <div className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-xs space-y-1.5 text-xs">
@@ -522,7 +523,7 @@ export function ViewQuestionBankModal({
               )}
               <div className="bg-emerald-50 p-3.5 rounded-lg border border-emerald-200 text-xs">
                 <div className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider mb-1">Answer Key</div>
-                <div className="font-semibold text-emerald-900">{viewingDetailQuestion.answer}</div>
+                <div className="font-semibold text-emerald-900"><RichTextDisplay content={viewingDetailQuestion.answer} /></div>
               </div>
             </div>
             <div className="modal-footer shrink-0 flex items-center justify-end p-3.5 bg-white border-t border-slate-200">

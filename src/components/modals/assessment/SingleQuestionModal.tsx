@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { QuestionDto } from '@/lib/api/assessment/questions'
 import { useCreateQuestion, useUpdateQuestion } from '@/hooks/assessment/useQuestions'
+import { RichTextEditor, isHtmlEmpty } from '@/components/RichTextEditor'
 
 interface SingleQuestionModalProps {
   isOpen: boolean
@@ -87,7 +88,7 @@ export function SingleQuestionModal({
     e.preventDefault()
     setErrorMsg(null)
 
-    if (!questionText.trim()) {
+    if (isHtmlEmpty(questionText)) {
       setErrorMsg('Question text cannot be left blank!')
       return
     }
@@ -121,7 +122,7 @@ export function SingleQuestionModal({
       }
     } else {
       // Descriptive validation
-      if (!descriptiveAnswer.trim()) {
+      if (isHtmlEmpty(descriptiveAnswer)) {
         setErrorMsg('Answer / Evaluation criteria cannot be left blank!')
         return
       }
@@ -320,12 +321,12 @@ export function SingleQuestionModal({
               <label className="text-xs font-bold text-slate-800 block mb-1.5">
                 Question Text <span className="text-red-500">*</span>
               </label>
-              <textarea
-                className="w-full text-xs text-slate-800 p-2.5 border border-slate-300 rounded-md focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 min-h-[90px] leading-relaxed resize-y"
-                placeholder="Enter complete question statement here..."
+              <RichTextEditor
                 value={questionText}
-                onChange={e => setQuestionText(e.target.value)}
-                required
+                onChange={setQuestionText}
+                placeholder="Enter complete question statement here..."
+                minHeight={110}
+                disabled={isPending}
               />
             </div>
 
@@ -468,17 +469,17 @@ export function SingleQuestionModal({
                 </div>
               </div>
             ) : (
-              /* Descriptive Answer / Rubric */
               <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm">
+                {/* Descriptive Answer / Rubric */}
                 <label className="text-xs font-bold text-slate-800 block mb-1.5">
                   Expected Answer / Evaluation Rubric <span className="text-red-500">*</span>
                 </label>
-                <textarea
-                  className="w-full text-xs text-slate-800 p-2.5 border border-slate-300 rounded-md focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 min-h-[90px] leading-relaxed resize-y"
-                  placeholder="Enter expected answer, key evaluation criteria or sample solution..."
+                <RichTextEditor
                   value={descriptiveAnswer}
-                  onChange={e => setDescriptiveAnswer(e.target.value)}
-                  required
+                  onChange={setDescriptiveAnswer}
+                  placeholder="Enter expected answer, key evaluation criteria or sample solution..."
+                  minHeight={110}
+                  disabled={isPending}
                 />
               </div>
             )}

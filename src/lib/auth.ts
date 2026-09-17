@@ -14,7 +14,7 @@ export const MOCK_CREDENTIALS = {
 
 export type StaffLoginResult =
   | { requiresOtp: true; challengeId: string; otpChannel: 'email' | 'sms'; maskedTarget: string }
-  | { requiresOtp: false; displayName?: string; redirect: string }
+  | { requiresOtp: false; displayName?: string; employeeGuid?: string; userGuid?: string; redirect: string }
 
 export function staffLogin(staffId: string, password: string, trustDevice: boolean): Promise<StaffLoginResult> {
   if (MOCK_AUTH) {
@@ -27,11 +27,21 @@ export function staffLogin(staffId: string, password: string, trustDevice: boole
       maskedTarget: 'm***@isbat.ac.ug',
     })
   }
-  // The API may return no body on success. We keep displayName optional.
-  return apiPost<{ displayName: string } | null>('/api/v1/users/auth/login', {
+  // The API may return no body on success. We keep displayName and guids optional.
+  return apiPost<any>('/api/v1/users/auth/login', {
     Username: staffId,
     Password: password,
-  }).then(data => ({ requiresOtp: false, displayName: data?.displayName, redirect: '/academic' }))
+  }).then(data => {
+    const employeeGuid = data?.employeeGuid || data?.userGuid || data?.uuid || data?.id || data?.userId
+    const userGuid = data?.userGuid || data?.employeeGuid || data?.uuid || data?.id || data?.userId
+    return {
+      requiresOtp: false,
+      displayName: data?.displayName,
+      employeeGuid,
+      userGuid,
+      redirect: '/academic',
+    }
+  })
 }
 
 // Student login
@@ -63,6 +73,9 @@ export function studentLogin(studentId: string, password: string): Promise<Stude
 
 export interface RefreshResult {
   displayName?: string
+  employeeGuid?: string
+  userGuid?: string
+  uuid?: string
 }
 
 export function refreshSession(): Promise<RefreshResult> {

@@ -42,19 +42,7 @@ export interface UpdateQuestionRequest {
 
 // ── Mock data for fallback testing ──────────────────────────────────────────
 
-let mockQuestions: QuestionDto[] = [
-  {
-    questionGuid: '8f14e45f-ceea-467e-a4c8-5c6e9df8a6a3',
-    questionText: 'What is 2 + 2?',
-    option1Text: '3',
-    option2Text: '4',
-    option3Text: '5',
-    option4Text: '6',
-    answerText: '4',
-    questionType: 1,
-    level: 2,
-  },
-]
+let mockQuestions: QuestionDto[] = []
 
 // ── API Functions ───────────────────────────────────────────────────────────
 
@@ -78,107 +66,111 @@ export function getSingleQuestionCategories(): Promise<QuestionBankCategory[]> {
     ])
 }
 
+function normalizeCourseUnits(data: any): QuestionBankCourseUnit[] {
+  const items = Array.isArray(data) ? data : data?.items ?? []
+  return items
+    .map((item: any) => ({
+      courseUnitGuid: item.courseUnitGuid || item.guid || item.unitGuid || item.id || '',
+      courseUnitCode: item.courseUnitCode || item.code || item.unitCode || '',
+      courseUnitName: item.courseUnitName || item.name || item.unitName || item.title || 'Untitled Unit',
+    }))
+    .filter((u: QuestionBankCourseUnit) => Boolean(u.courseUnitGuid))
+}
+
 /**
- * Fetch course units for single-question view/edit (lecturerGuid is optional).
+ * Fetch course units for single-question and question-bank upload,
+ * strictly scoped to the logged-in user's UUID (lecturerGuid) and academic intake.
  */
-export function getSingleQuestionCourseUnits(intakeGuid: string, lecturerGuid?: string): Promise<QuestionBankCourseUnit[]> {
-  if (MOCK_AUTH) {
-    return Promise.resolve([
-      { courseUnitGuid: '017749e8-a325-4560-b8db-2230721d838f', courseUnitCode: 'BCS3127', courseUnitName: 'Compiler Design' }
-    ])
+export async function getSingleQuestionCourseUnits(intakeGuid: string, lecturerGuid?: string): Promise<QuestionBankCourseUnit[]> {
+  if (!intakeGuid && !lecturerGuid) {
+    return []
   }
-  const params = new URLSearchParams({ intakeGuid })
-  if (lecturerGuid) {
-    params.append('lecturerGuid', lecturerGuid)
+
+  const params = new URLSearchParams()
+  if (intakeGuid) params.append('intakeGuid', intakeGuid)
+  if (lecturerGuid) params.append('lecturerGuid', lecturerGuid)
+
+  // 1. Try question-bank course-units endpoint scoped to lecturerGuid
+  try {
+    const data = await apiGet<any>(`/api/v1/assessment/question-bank/course-units?${params.toString()}`)
+    const normalized = normalizeCourseUnits(data)
+    if (normalized.length > 0) {
+      return normalized
+    }
+  } catch {
+    // Continue to next endpoint
   }
-  return apiGet<QuestionBankCourseUnit[]>(`/api/v1/assessment/questions/course-units?${params.toString()}`)
-    .then(data => data ?? [])
-    .catch(async () => {
-      // Fallback: try question-bank course-units if lecturerGuid was supplied
-      if (lecturerGuid) {
-        return apiGet<QuestionBankCourseUnit[]>(`/api/v1/assessment/question-bank/course-units?${params.toString()}`).catch(() => [])
-      }
-      return []
-    })
+
+  // 2. Try questions course-units endpoint scoped to lecturerGuid
+  try {
+    const data = await apiGet<any>(`/api/v1/assessment/questions/course-units?${params.toString()}`)
+    const normalized = normalizeCourseUnits(data)
+    if (normalized.length > 0) {
+      return normalized
+    }
+  } catch {
+    // Both endpoints tried
+  }
+
+  return []
 }
 
 /**
  * Fetch all questions for a given course unit, category, and intake.
  */
-export function getQuestions(courseUnitGuid: string, category: number, intakeGuid: string): Promise<QuestionDto[] | null> {
-  if (MOCK_AUTH) {
-    return Promise.resolve(null)
+export async function getQuestions(courseUnitGuid: string, category: number, intakeGuid: string): Promise<QuestionDto[]> {
+  if (!courseUnitGuid) {
+    return []
   }
   const params = new URLSearchParams({
     courseUnitGuid,
     category: String(category),
     intakeGuid,
   })
-  return apiGet<QuestionDto[]>(`/api/v1/assessment/questions?${params.toString()}`)
-    .then(data => data ?? [])
-    .catch((err) => {
-      console.warn('Failed to load questions from backend:', err)
-      return []
-    })
+  try {
+    const data = await apiGet<any>(`/api/v1/assessment/questions?${params.toString()}`)
+    const items = Array.isArray(data) ? data : data?.items ?? []
+    return items.map((q: any) => ({
+      questionGuid: q.questionGuid || q.guid || q.id || '',
+      questionText: q.questionText ?? q.question ?? '',
+      option1Text: q.option1Text ?? q.option1 ?? null,
+      option2Text: q.option2Text ?? q.option2 ?? null,
+      option3Text: q.option3Text ?? q.option3 ?? null,
+      option4Text: q.option4Text ?? q.option4 ?? null,
+      answerText: q.answerText ?? q.answer ?? '',
+      questionType: typeof q.questionType === 'number' ? q.questionType : (q.questionType === 'MCQ' ? 1 : 2),
+      level: q.level ?? null,
+    }))
+  } catch (err) {
+    console.warn('ℹ️ [Questions] Could not fetch questions from backend:', err)
+    return []
+  }
 }
 
 /**
  * Fetch a single question by its GUID.
  */
-export function getQuestionByGuid(guid: string): Promise<QuestionDto> {
-  if (MOCK_AUTH) {
-    const q = mockQuestions.find(mq => mq.questionGuid === guid)
-    return q ? Promise.resolve(q) : Promise.reject(new Error('Not found'))
-  }
-  return apiGet<QuestionDto>(`/api/v1/assessment/questions/${guid}`)
+export async function getQuestionByGuid(guid: string): Promise<QuestionDto> {
+  return await apiGet<QuestionDto>(`/api/v1/assessment/questions/${guid}`)
 }
 
 /**
  * Create a new question.
  */
-export function createQuestion(payload: CreateQuestionRequest): Promise<QuestionDto> {
-  if (MOCK_AUTH) {
-    const newQ: QuestionDto = {
-      questionGuid: crypto.randomUUID(),
-      questionText: payload.questionText,
-      option1Text: payload.option1Text,
-      option2Text: payload.option2Text,
-      option3Text: payload.option3Text,
-      option4Text: payload.option4Text,
-      answerText: payload.answerText,
-      questionType: payload.questionType,
-      level: payload.level,
-    }
-    mockQuestions.push(newQ)
-    return Promise.resolve(newQ)
-  }
-  return apiPost<QuestionDto>('/api/v1/assessment/questions', payload)
+export async function createQuestion(payload: CreateQuestionRequest): Promise<QuestionDto> {
+  return await apiPost<QuestionDto>('/api/v1/assessment/questions', payload)
 }
 
 /**
  * Update an existing question.
  */
-export function updateQuestion(guid: string, payload: UpdateQuestionRequest): Promise<QuestionDto> {
-  if (MOCK_AUTH) {
-    const idx = mockQuestions.findIndex(q => q.questionGuid === guid)
-    if (idx === -1) return Promise.reject(new Error('Not found'))
-    
-    mockQuestions[idx] = {
-      ...mockQuestions[idx],
-      ...payload
-    }
-    return Promise.resolve(mockQuestions[idx])
-  }
-  return apiPut<QuestionDto>(`/api/v1/assessment/questions/${guid}`, payload)
+export async function updateQuestion(guid: string, payload: UpdateQuestionRequest): Promise<QuestionDto> {
+  return await apiPut<QuestionDto>(`/api/v1/assessment/questions/${guid}`, payload)
 }
 
 /**
  * Soft-delete an existing question.
  */
-export function deleteQuestion(guid: string): Promise<boolean> {
-  if (MOCK_AUTH) {
-    mockQuestions = mockQuestions.filter(q => q.questionGuid !== guid)
-    return Promise.resolve(true)
-  }
-  return apiDelete<boolean>(`/api/v1/assessment/questions/${guid}`)
+export async function deleteQuestion(guid: string): Promise<boolean> {
+  return await apiDelete<boolean>(`/api/v1/assessment/questions/${guid}`)
 }

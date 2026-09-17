@@ -8,9 +8,11 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { SingleQuestionModal } from '@/components/modals/assessment/SingleQuestionModal'
+import { RichTextDisplay } from '@/components/RichTextEditor'
 import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { EmployeeListItem } from '@/lib/api/employee/employee'
+import { getSessionIdentity, getLoggedInUserGuid, setSessionIdentity } from '@/lib/session'
 import {
   useSingleQuestionCategories,
   useSingleQuestionCourseUnits,
@@ -39,9 +41,10 @@ export default function QuestionBankUploadPage() {
   // ── Active Mode / Tab ───────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<'repository' | 'import'>('repository')
 
-  // ── Scoping Filter State ────────────────────────────────────────────────────
+  // ── Scoping Filter State (Logged-in Faculty UUID Scoped) ─────────────────────
   const [intakeGuid, setIntakeGuid] = useState<string>('')
-  const [selectedLecturerGuid, setSelectedLecturerGuid] = useState<string>('')
+  const [loggedInUserGuid, setLoggedInUserGuid] = useState<string>(() => getLoggedInUserGuid())
+  const [loggedInUserName, setLoggedInUserName] = useState<string>('')
   const [category, setCategory] = useState<string>('2') // Default to Course Work (2)
   const [courseUnitGuid, setCourseUnitGuid] = useState<string>('')
 
@@ -86,18 +89,18 @@ export default function QuestionBankUploadPage() {
       return bankCategories && bankCategories.length > 0
         ? bankCategories
         : [
-            { value: 1, name: 'CBT' },
-            { value: 2, name: 'Course Work' },
-            { value: 5, name: 'University Exam' },
-          ]
+          { value: 1, name: 'CBT' },
+          { value: 2, name: 'Course Work' },
+          { value: 5, name: 'University Exam' },
+        ]
     }
     return singleCategories && singleCategories.length > 0
       ? singleCategories
       : [
-          { value: 1, name: 'Class Test' },
-          { value: 2, name: 'Course Work' },
-          { value: 3, name: 'Class Activity' },
-        ]
+        { value: 1, name: 'Class Test' },
+        { value: 2, name: 'Course Work' },
+        { value: 3, name: 'Class Activity' },
+      ]
   }, [activeTab, bankCategories, singleCategories])
 
   const isLoadingCategories = activeTab === 'import' ? isLoadingBankCategories : isLoadingSingleCategories
@@ -116,7 +119,7 @@ export default function QuestionBankUploadPage() {
     data: courseUnits,
     isLoading: isLoadingCourseUnits,
     isFetching: isFetchingCourseUnits,
-  } = useSingleQuestionCourseUnits(intakeGuid, selectedLecturerGuid || undefined, Boolean(intakeGuid))
+  } = useSingleQuestionCourseUnits(intakeGuid, loggedInUserGuid || undefined, Boolean(intakeGuid && loggedInUserGuid))
 
   // Live Questions Query
   const {
@@ -139,12 +142,54 @@ export default function QuestionBankUploadPage() {
   const deleteSingleMut = useDeleteQuestion()
   const deleteBankMut = useDeleteQuestionBank()
 
+  // ── Resolve logged-in faculty identity & UUID ──────────────────────────────
+  useEffect(() => {
+    const identity = getSessionIdentity()
+    if (identity) {
+      if (identity.displayName) setLoggedInUserName(identity.displayName)
+      const guid =
+        identity.employeeGuid ||
+        identity.userGuid ||
+        (identity as any)?.uuid ||
+        (identity as any)?.id ||
+        ''
+      if (guid && !loggedInUserGuid) {
+        setLoggedInUserGuid(guid)
+      }
+    }
+  }, [loggedInUserGuid])
+
+  // Fallback: match logged-in user's display name with employee directory if UUID not yet in session
+  useEffect(() => {
+    if (!loggedInUserGuid && employeesData && employeesData.length > 0) {
+      const identity = getSessionIdentity()
+      if (identity?.displayName) {
+        const norm = identity.displayName.toLowerCase().replace(/^(dr\.|mr\.|mrs\.|ms\.|prof\.)\s*/i, '').trim()
+        const match = employeesData.find((e: EmployeeListItem) => {
+          const empNorm = (e.empName || '').toLowerCase().replace(/^(dr\.|mr\.|mrs\.|ms\.|prof\.)\s*/i, '').trim()
+          return empNorm === norm || (e.empName && (
+            e.empName.toLowerCase().includes(norm) ||
+            norm.includes(e.empName.toLowerCase())
+          ))
+        })
+        if (match?.employeeGuid) {
+          setLoggedInUserGuid(match.employeeGuid)
+          setSessionIdentity({ employeeGuid: match.employeeGuid, userGuid: match.employeeGuid })
+        }
+      }
+    }
+  }, [loggedInUserGuid, employeesData])
+
   // ── Auto-select current intake ──────────────────────────────────────────────
   useEffect(() => {
-    if (!intakeGuid && currentIntake?.intakeGuid) {
-      setIntakeGuid(currentIntake.intakeGuid)
+    if (!intakeGuid) {
+      if (currentIntake?.intakeGuid) {
+        setIntakeGuid(currentIntake.intakeGuid)
+      } else if (intakes && intakes.length > 0) {
+        setIntakeGuid(intakes[0].intakeGuid)
+      }
     }
-  }, [currentIntake, intakeGuid])
+  }, [currentIntake, intakes, intakeGuid])
 
   // ── Auto-select first course unit if none selected ──────────────────────────
   useEffect(() => {
@@ -160,13 +205,6 @@ export default function QuestionBankUploadPage() {
   // ── Reset dependent fields when intake changes ──────────────────────────────
   const handleIntakeChange = (val: string) => {
     setIntakeGuid(val)
-    setCourseUnitGuid('')
-    setPreviewRows(null)
-    setValidationError(null)
-  }
-
-  const handleLecturerChange = (val: string) => {
-    setSelectedLecturerGuid(val)
     setCourseUnitGuid('')
     setPreviewRows(null)
     setValidationError(null)
@@ -405,9 +443,12 @@ export default function QuestionBankUploadPage() {
     return intakes?.find(i => i.intakeGuid === intakeGuid)
   }, [intakes, intakeGuid])
 
-  const selectedLecturer = useMemo(() => {
-    return employeesData?.find((e: EmployeeListItem) => e.employeeGuid === selectedLecturerGuid)
-  }, [employeesData, selectedLecturerGuid])
+  const loggedInEmployee = useMemo(() => {
+    if (loggedInUserGuid && employeesData) {
+      return employeesData.find((e: EmployeeListItem) => e.employeeGuid === loggedInUserGuid)
+    }
+    return null
+  }, [employeesData, loggedInUserGuid])
 
   // ── Filtered Live Questions ─────────────────────────────────────────────────
   const filteredLiveQuestions = useMemo(() => {
@@ -481,17 +522,17 @@ export default function QuestionBankUploadPage() {
   return (
     <div className="page active">
       {/* ── Page Header ─────────────────────────────────────────────────────── */}
-      <div className="pg-hdr flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="pg-title flex items-center gap-2">
+      <div className="pg-hdr flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+        <div className="flex-1 min-w-0">
+          <div className="pg-title flex items-center gap-2 flex-wrap">
             <span>Question Bank & Repository</span>
-            <span className="badge badge-purple text-xs">Live Database</span>
+            {/* <span className="badge badge-purple text-xs">Live Database</span> */}
           </div>
-          <div className="pg-sub">
-            Manage course examination questions individually or in bulk via Excel (.xlsx) · Scoped to Academic Intake & Faculty
+          <div className="pg-sub text-xs text-slate-500">
+            Manage course examination questions individually or in bulk via Excel (.xlsx) · Scoped to Academic Intake & Logged-in Faculty
           </div>
         </div>
-        <div className="pg-actions flex items-center gap-2">
+        <div className="pg-actions flex items-center justify-end gap-2 ml-auto shrink-0 self-end sm:self-center">
           <button
             type="button"
             className="btn btn-neu flex items-center gap-1.5 shadow-sm text-xs"
@@ -533,18 +574,24 @@ export default function QuestionBankUploadPage() {
             </span>
             <div className="card-title mb-0">Question Bank Scope Parameters</div>
           </div>
-          <div className="text-xs text-slate-500 flex items-center gap-2">
+          <div className="text-xs text-slate-500 flex items-center flex-wrap gap-2">
             {currentIntake && (
               <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
                 <i className="lni lni-checkmark-circle text-xs"></i>
                 Active Academic Intake: {currentIntake.intakeCode}
               </span>
             )}
+            {(loggedInEmployee || loggedInUserName || loggedInUserGuid) && (
+              <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
+                <i className="lni lni-user text-xs"></i>
+                Faculty: <strong>{loggedInEmployee?.empName || loggedInUserName || 'Current User'}</strong>
+              </span>
+            )}
           </div>
         </div>
 
-        {/* 4 Form Filter Inputs Grid: Intake, Lecturer, Category, Course Unit */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 3 Form Filter Inputs Grid: Intake, Assessment Category, Course Unit */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* 1. Academic Intake */}
           <div className="fg mb-0">
             <label className="lbl">
@@ -564,30 +611,7 @@ export default function QuestionBankUploadPage() {
             />
           </div>
 
-          {/* 2. Lecturer (Faculty) — Restored per user request */}
-          <div className="fg mb-0">
-            <label className="lbl">
-              Lecturer (Faculty)
-              {isLoadingEmployees && (
-                <span className="text-xs text-indigo-500 font-normal ml-2">Loading...</span>
-              )}
-            </label>
-            <SearchSelect
-              options={[
-                { value: '', label: 'All Lecturers (Any Faculty)' },
-                ...(employeesData?.map((e: EmployeeListItem) => ({
-                  value: e.employeeGuid,
-                  label: `${e.empName} (${e.shortCode || 'FAC'})`,
-                })) || []),
-              ]}
-              value={selectedLecturerGuid}
-              onChange={handleLecturerChange}
-              placeholder={isLoadingEmployees ? 'Loading faculty...' : 'All Lecturers'}
-              disabled={isLoadingEmployees}
-            />
-          </div>
-
-          {/* 3. Assessment Category */}
+          {/* 2. Assessment Category */}
           <div className="fg mb-0">
             <label className="lbl">
               Assessment Category <span className="text-red-500">*</span>
@@ -606,7 +630,7 @@ export default function QuestionBankUploadPage() {
             />
           </div>
 
-          {/* 4. Course Unit */}
+          {/* 3. Course Unit */}
           <div className="fg mb-0">
             <label className="lbl">
               Course Unit <span className="text-red-500">*</span>
@@ -628,26 +652,18 @@ export default function QuestionBankUploadPage() {
               placeholder={
                 !intakeGuid
                   ? 'Pick Academic Intake first'
-                  : isLoadingCourseUnits
-                    ? 'Loading planned course units...'
-                    : courseUnits && courseUnits.length === 0
-                      ? 'No course units found'
-                      : 'Select course unit'
+                  : !loggedInUserGuid
+                    ? 'Identifying logged-in faculty...'
+                    : isLoadingCourseUnits
+                      ? 'Loading assigned course units...'
+                      : courseUnits && courseUnits.length === 0
+                        ? 'No course units assigned to you'
+                        : 'Select course unit'
               }
-              disabled={!intakeGuid || isLoadingCourseUnits}
+              disabled={!intakeGuid || !loggedInUserGuid || isLoadingCourseUnits}
             />
           </div>
         </div>
-
-        {/* Informational banner when lecturer has no units */}
-        {intakeGuid && selectedLecturerGuid && !isLoadingCourseUnits && courseUnits && courseUnits.length === 0 && (
-          <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg p-3 mt-4 flex items-center gap-2.5">
-            <i className="lni lni-warning text-base text-amber-600 shrink-0"></i>
-            <span>
-              No course units planned for lecturer <strong>{selectedLecturer?.empName}</strong> in this academic intake. Select &quot;All Lecturers&quot; to view all planned units.
-            </span>
-          </div>
-        )}
       </div>
 
       {/* ── Mode Switcher Tabs ──────────────────────────────────────────────── */}
@@ -655,11 +671,10 @@ export default function QuestionBankUploadPage() {
         <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
           <button
             type="button"
-            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${
-              activeTab === 'repository'
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${activeTab === 'repository'
                 ? 'bg-white text-indigo-700 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
-            }`}
+              }`}
             onClick={() => handleTabSwitch('repository')}
           >
             <i className="lni lni-library text-sm"></i>
@@ -667,11 +682,10 @@ export default function QuestionBankUploadPage() {
           </button>
           <button
             type="button"
-            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${
-              activeTab === 'import'
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${activeTab === 'import'
                 ? 'bg-white text-indigo-700 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
-            }`}
+              }`}
             onClick={() => handleTabSwitch('import')}
           >
             <i className="lni lni-cloud-upload text-sm"></i>
@@ -776,33 +790,30 @@ export default function QuestionBankUploadPage() {
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
               <button
                 type="button"
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                  repoFilterType === 'ALL'
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${repoFilterType === 'ALL'
                     ? 'bg-white text-slate-900 shadow-sm'
                     : 'text-slate-600 hover:text-slate-900'
-                }`}
+                  }`}
                 onClick={() => setRepoFilterType('ALL')}
               >
                 All ({liveQuestions?.length ?? 0})
               </button>
               <button
                 type="button"
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                  repoFilterType === 'MCQ'
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${repoFilterType === 'MCQ'
                     ? 'bg-white text-purple-700 shadow-sm'
                     : 'text-slate-600 hover:text-slate-900'
-                }`}
+                  }`}
                 onClick={() => setRepoFilterType('MCQ')}
               >
                 MCQ ({liveMcqCount})
               </button>
               <button
                 type="button"
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                  repoFilterType === 'DQ'
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${repoFilterType === 'DQ'
                     ? 'bg-white text-blue-700 shadow-sm'
                     : 'text-slate-600 hover:text-slate-900'
-                }`}
+                  }`}
                 onClick={() => setRepoFilterType('DQ')}
               >
                 DQ ({liveDqCount})
@@ -922,9 +933,8 @@ export default function QuestionBankUploadPage() {
                       {/* Type Badge */}
                       <td style={{ textAlign: 'center' }}>
                         <span
-                          className={`badge ${
-                            q.questionType === 1 ? 'badge-purple' : 'badge-blue'
-                          }`}
+                          className={`badge ${q.questionType === 1 ? 'badge-purple' : 'badge-blue'
+                            }`}
                         >
                           {q.questionType === 1 ? 'MCQ' : 'DQ'}
                         </span>
@@ -1275,33 +1285,30 @@ export default function QuestionBankUploadPage() {
               <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
                 <button
                   type="button"
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                    previewFilterType === 'ALL'
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${previewFilterType === 'ALL'
                       ? 'bg-white text-slate-900 shadow-sm'
                       : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                    }`}
                   onClick={() => setPreviewFilterType('ALL')}
                 >
                   All ({previewRows.length})
                 </button>
                 <button
                   type="button"
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                    previewFilterType === 'MCQ'
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${previewFilterType === 'MCQ'
                       ? 'bg-white text-purple-700 shadow-sm'
                       : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                    }`}
                   onClick={() => setPreviewFilterType('MCQ')}
                 >
                   MCQ ({previewMcqCount})
                 </button>
                 <button
                   type="button"
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                    previewFilterType === 'DQ'
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${previewFilterType === 'DQ'
                       ? 'bg-white text-blue-700 shadow-sm'
                       : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                    }`}
                   onClick={() => setPreviewFilterType('DQ')}
                 >
                   DQ ({previewDqCount})
@@ -1351,15 +1358,14 @@ export default function QuestionBankUploadPage() {
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <span
-                            className={`badge ${
-                              q.questionType === 'MCQ' ? 'badge-purple' : 'badge-blue'
-                            }`}
+                            className={`badge ${q.questionType === 'MCQ' ? 'badge-purple' : 'badge-blue'
+                              }`}
                           >
                             {q.questionType}
                           </span>
                         </td>
                         <td style={{ whiteSpace: 'normal', minWidth: 280, maxWidth: 460, lineHeight: 1.6, color: 'var(--g800)' }}>
-                          {q.question}
+                          <RichTextDisplay content={q.question} />
                         </td>
                         <td style={{ whiteSpace: 'normal', minWidth: 260 }}>
                           {q.questionType === 'MCQ' ? (
@@ -1387,7 +1393,7 @@ export default function QuestionBankUploadPage() {
                         </td>
                         <td style={{ whiteSpace: 'normal', minWidth: 160 }}>
                           <span className="inline-block bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11.5px] px-2.5 py-1 rounded font-medium">
-                            {q.answer}
+                            <RichTextDisplay content={q.answer} />
                           </span>
                         </td>
                         <td style={{ textAlign: 'center' }}>
@@ -1469,9 +1475,8 @@ export default function QuestionBankUploadPage() {
               <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white border border-slate-200 rounded-lg shadow-sm">
                 <div className="flex items-center gap-2">
                   <span
-                    className={`badge ${
-                      viewingQuestion.questionType === 1 ? 'badge-purple' : 'badge-blue'
-                    } text-xs font-semibold`}
+                    className={`badge ${viewingQuestion.questionType === 1 ? 'badge-purple' : 'badge-blue'
+                      } text-xs font-semibold`}
                   >
                     {viewingQuestion.questionType === 1 ? 'Multiple Choice (MCQ)' : 'Descriptive Question (DQ)'}
                   </span>
@@ -1496,7 +1501,7 @@ export default function QuestionBankUploadPage() {
                   Question Statement
                 </div>
                 <div className="text-sm font-medium text-slate-800 leading-relaxed">
-                  {viewingQuestion.questionText}
+                  <RichTextDisplay content={viewingQuestion.questionText} />
                 </div>
               </div>
 
@@ -1534,7 +1539,7 @@ export default function QuestionBankUploadPage() {
                   <span>{viewingQuestion.questionType === 1 ? 'Verified Answer' : 'Descriptive Answer / Evaluation Rubric'}</span>
                 </div>
                 <div className="text-xs text-slate-800 leading-relaxed font-medium bg-white p-3 rounded border border-emerald-100">
-                  {viewingQuestion.answerText}
+                  <RichTextDisplay content={viewingQuestion.answerText} />
                 </div>
               </div>
             </div>
