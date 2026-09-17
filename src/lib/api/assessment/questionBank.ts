@@ -28,6 +28,7 @@ export interface QuestionPreviewItem {
   option4: string
   answer: string
   level: string
+  questionGuid?: string // Added for DB questions
 }
 
 export interface QuestionBankFileParams {
@@ -125,8 +126,17 @@ export function getQuestionBankCourseUnits(intakeGuid: string, lecturerGuid: str
     return Promise.resolve(mockCourseUnits)
   }
   const params = new URLSearchParams({ intakeGuid, lecturerGuid })
-  return apiGet<QuestionBankCourseUnit[]>(`/api/v1/assessment/question-bank/course-units?${params.toString()}`)
-    .then(data => data ?? [])
+  return apiGet<any>(`/api/v1/assessment/question-bank/course-units?${params.toString()}`)
+    .then(data => {
+      const items = Array.isArray(data) ? data : data?.items ?? []
+      return items
+        .map((item: any) => ({
+          courseUnitGuid: item.courseUnitGuid || item.guid || item.unitGuid || item.id || '',
+          courseUnitCode: item.courseUnitCode || item.code || item.unitCode || '',
+          courseUnitName: item.courseUnitName || item.name || item.unitName || item.title || 'Untitled Unit',
+        }))
+        .filter((u: QuestionBankCourseUnit) => Boolean(u.courseUnitGuid))
+    })
 }
 
 /**

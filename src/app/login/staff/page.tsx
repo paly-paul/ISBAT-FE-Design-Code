@@ -46,7 +46,11 @@ export default function StaffLoginPage() {
         })
         router.push('/login/otp')
       } else {
-        if (result.displayName) setSessionIdentity({ displayName: result.displayName })
+        setSessionIdentity({
+          displayName: result.displayName || '',
+          employeeGuid: result.employeeGuid,
+          userGuid: result.userGuid,
+        })
         setSuccessState({ displayName: result.displayName, redirect: result.redirect })
       }
     } catch (err) {

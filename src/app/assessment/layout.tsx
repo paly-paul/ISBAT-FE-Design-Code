@@ -41,7 +41,13 @@ export default function AssessmentLayout({ children }: { children: React.ReactNo
       try {
         const result = await refreshSession()
         if (cancelled) return
-        if (result.displayName) setSessionIdentity({ displayName: result.displayName })
+        if (result.displayName || (result as any).employeeGuid || (result as any).userGuid) {
+          setSessionIdentity({
+            displayName: result.displayName || '',
+            ...((result as any).employeeGuid ? { employeeGuid: (result as any).employeeGuid } : {}),
+            ...((result as any).userGuid ? { userGuid: (result as any).userGuid } : {}),
+          })
+        }
         setDisplayName(result.displayName ?? null)
         setAuthChecked(true)
       } catch {
