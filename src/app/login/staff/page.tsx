@@ -37,7 +37,7 @@ export default function StaffLoginPage() {
 
     try {
       const result = await staffLogin(staffId, password, trust)
-      if (result.requiresOtp) {
+      if ('challengeId' in result) {
         setFlowState({
           challengeId: result.challengeId,
           otpChannel: result.otpChannel,

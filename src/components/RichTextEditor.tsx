@@ -146,7 +146,7 @@ export function RichTextEditor({
         disabled ? 'opacity-60 pointer-events-none bg-slate-50' : ''
       } ${className}`}
     >
-      <style jsx>{`
+      <style>{`
         .rich-editor-content ul {
           list-style-type: disc !important;
           padding-left: 1.5rem !important;
