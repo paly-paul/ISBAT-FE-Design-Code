@@ -169,7 +169,9 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Question FAQs', 'comments', '/assessment/question-faqs'),
     leaf('Weight Configuration', 'cog', '/assessment/weight-config'),
     leaf('Assessment Schedule', 'calendar', '/assessment/schedule'),
+    leaf('Bulk Exam Scheduler', 'calendar', '/assessment/bulk-exam-scheduler'),
     leaf('IA Creation', 'graduation', '/assessment/ia-creation'),
+    leaf('IA Evaluation', 'checkmark-circle', '/assessment/ia-evaluation'),
   ]),
   section('Coursework (CW)', [
     leaf('CW Overview', 'folder', '/assessment/cw-overview'),
@@ -184,7 +186,7 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
   ]),
   section('University Exam (UE)', [
     leaf('UE Schedule', 'calendar', '/assessment/ue-schedule'),
-    leaf('QP Upload & Vetting', 'upload', '/assessment/qp-vetting'),
+    leaf('Question Paper Vetting', 'upload', '/assessment/qp-vetting'),
     leaf('Hall Ticket Issuance', 'ticket', '/assessment/hall-ticket'),
     leaf('Hall Ticket Print', 'printer', '/assessment/hall-print'),
   ]),
@@ -739,8 +741,9 @@ function ensureAssessmentMaster(menu: MenuNode[]): MenuNode[] {
   const hasExamRules = structSection.children.some(l => l.name === 'Exam Rules Master')
   const hasFaqs = structSection.children.some(l => l.name === 'Question FAQs')
   const hasIaCreation = structSection.children.some(l => l.name === 'IA Creation')
+  const hasIaEvaluation = structSection.children.some(l => l.name === 'IA Evaluation')
 
-  if (hasAssMaster && hasExamRules && hasFaqs && hasIaCreation) return menu
+  if (hasAssMaster && hasExamRules && hasFaqs && hasIaCreation && hasIaEvaluation) return menu
 
   const children = [...structSection.children]
 
@@ -763,6 +766,16 @@ function ensureAssessmentMaster(menu: MenuNode[]): MenuNode[] {
       children.splice(scheduleIdx + 1, 0, leaf('IA Creation', 'graduation', '/assessment/ia-creation'))
     } else {
       children.push(leaf('IA Creation', 'graduation', '/assessment/ia-creation'))
+    }
+  }
+
+  // IA Evaluation — inject after IA Creation if present, otherwise at end
+  if (!hasIaEvaluation) {
+    const iaCreationIdx = children.findIndex(l => l.name === 'IA Creation')
+    if (iaCreationIdx !== -1) {
+      children.splice(iaCreationIdx + 1, 0, leaf('IA Evaluation', 'checkmark-circle', '/assessment/ia-evaluation'))
+    } else {
+      children.push(leaf('IA Evaluation', 'checkmark-circle', '/assessment/ia-evaluation'))
     }
   }
 
