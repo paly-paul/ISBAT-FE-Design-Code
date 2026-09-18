@@ -70,10 +70,43 @@ function normalizeIntake(item: any): CwIntakeOption {
 }
 
 function normalizeCourseUnit(item: any): CwCourseUnitOption {
+  const rawName =
+    item.courseUnitName ??
+    item.CourseUnitName ??
+    item.unitName ??
+    item.UnitName ??
+    item.name ??
+    item.Name ??
+    item.courseUnit ??
+    item.CourseUnit ??
+    null
+
+  const rawCode =
+    item.courseUnitCode ??
+    item.CourseUnitCode ??
+    item.unitCode ??
+    item.UnitCode ??
+    item.code ??
+    item.Code ??
+    null
+
+  const nameStr = rawName != null ? String(rawName).trim() : null
+  const codeStr = rawCode != null ? String(rawCode).trim() : null
+
+  const courseUnitName =
+    nameStr && nameStr.toLowerCase() !== 'null' && nameStr !== 'undefined'
+      ? nameStr
+      : null
+
+  const courseUnitCode =
+    codeStr && codeStr.toLowerCase() !== 'null' && codeStr !== 'undefined'
+      ? codeStr
+      : null
+
   return {
-    courseUnitGuid: item.courseUnitGuid ?? item.CourseUnitGuid ?? '',
-    courseUnitName: item.courseUnitName ?? item.CourseUnitName ?? null,
-    courseUnitCode: item.courseUnitCode ?? item.CourseUnitCode ?? null,
+    courseUnitGuid: item.courseUnitGuid ?? item.CourseUnitGuid ?? item.unitGuid ?? item.UnitGuid ?? '',
+    courseUnitName,
+    courseUnitCode,
   }
 }
 
@@ -159,9 +192,11 @@ export async function getCwCourseUnits(intakeGuid: string): Promise<CwCourseUnit
   if (!intakeGuid) return []
   try {
     const res = await apiGet<any>(`${BASE_PATH}/intakes/${encodeURIComponent(intakeGuid)}/course-units`)
-    const list = Array.isArray(res) ? res : (res?.data && Array.isArray(res.data) ? res.data : [])
+    const list: any[] = Array.isArray(res) ? res : (res?.data && Array.isArray(res.data) ? res.data : [])
     if (list.length > 0) {
-      return list.map(normalizeCourseUnit)
+      return list
+        .map(normalizeCourseUnit)
+        .filter((u: CwCourseUnitOption) => Boolean(u.courseUnitName && u.courseUnitName.trim().length > 0))
     }
   } catch (err: any) {
     console.warn('ℹ️ [CW Rectification] Live course-units API error:', err?.message || err)
