@@ -18,7 +18,7 @@ import {
   useUeQuestions,
   useVerifyUeQuestions,
 } from '@/hooks/assessment/useUeQuestions'
-import { UeQuestionDto } from '@/lib/api/assessment/ueQuestions'
+import { UeQuestionDto, UeCourseUnitDto } from '@/lib/api/assessment/ueQuestions'
 import { UeQuestionModal } from '@/components/modals/assessment/UeQuestionModal'
 import { ViewUeQuestionModal } from '@/components/modals/assessment/ViewUeQuestionModal'
 
@@ -190,7 +190,7 @@ export default function QpUploadVettingPage() {
       {/* ── Page Header ─────────────────────────────────────────────────────── */}
       <div className="pg-hdr">
         <div>
-          <div className="pg-title">QP Upload & Vetting</div>
+          <div className="pg-title">Question Paper Vetting</div>
           <div className="pg-sub">Faculty upload · Committee split-pane review · Lock on verify</div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -218,27 +218,25 @@ export default function QpUploadVettingPage() {
       </div>
 
       {/* ── Tabs (Faculty Upload vs Vetting Committee) ────────────────────── */}
-      <div className="flex flex-wrap gap-4 border-b border-slate-200 mb-6">
+      <div className="flex flex-wrap items-center gap-2.5 mb-6">
         <button
-          className={`px-4 py-2.5 text-[13.5px] flex items-center gap-2 transition-colors ${
-            activeTab === 'faculty'
-              ? 'font-bold text-purple-700 border-b-[3px] border-purple-700'
-              : 'font-medium text-slate-500 hover:text-slate-700'
-          }`}
+          type="button"
+          className={`btn ${activeTab === 'faculty' ? 'btn-primary' : 'btn-neu'} flex items-center gap-2 text-xs font-semibold`}
           onClick={() => setActiveTab('faculty')}
         >
-          <i className="lni lni-upload"></i> Faculty Upload
+          <i className="lni lni-upload"></i>
+          <span>Faculty Upload</span>
         </button>
         <button
-          className={`px-4 py-2.5 text-[13.5px] flex items-center gap-2 transition-colors ${
-            activeTab === 'vetting'
-              ? 'font-bold text-purple-700 border-b-[3px] border-purple-700'
-              : 'font-medium text-slate-500 hover:text-slate-700'
-          }`}
+          type="button"
+          className={`btn ${activeTab === 'vetting' ? 'btn-primary' : 'btn-neu'} flex items-center gap-2 text-xs font-semibold`}
           onClick={() => setActiveTab('vetting')}
         >
-          <i className="lni lni-users"></i> Vetting Committee
-          <span className="bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full text-[10px] font-bold ml-1 border border-red-100">
+          <i className="lni lni-users"></i>
+          <span>Vetting Committee</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ml-1 ${
+            activeTab === 'vetting' ? 'bg-white/20 text-white' : 'bg-red-50 text-red-600 border border-red-100'
+          }`}>
             {courseUnits.length}
           </span>
         </button>
@@ -360,33 +358,27 @@ export default function QpUploadVettingPage() {
                   <button
                     type="button"
                     onClick={() => setActiveLevel(1)}
-                    className={`px-3 py-1.5 rounded-md text-[12px] font-semibold transition-all ${
-                      activeLevel === 1
-                        ? 'bg-purple-600 text-white shadow-sm'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
+                    className={`btn btn-sm ${
+                      activeLevel === 1 ? 'btn-primary' : 'btn-neu'
+                    } text-xs font-semibold`}
                   >
                     Section A ({summary.sectionACount})
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveLevel(2)}
-                    className={`px-3 py-1.5 rounded-md text-[12px] font-semibold transition-all ${
-                      activeLevel === 2
-                        ? 'bg-purple-600 text-white shadow-sm'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
+                    className={`btn btn-sm ${
+                      activeLevel === 2 ? 'btn-primary' : 'btn-neu'
+                    } text-xs font-semibold`}
                   >
                     Section B ({summary.sectionBCount})
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveLevel(3)}
-                    className={`px-3 py-1.5 rounded-md text-[12px] font-semibold transition-all ${
-                      activeLevel === 3
-                        ? 'bg-purple-600 text-white shadow-sm'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
+                    className={`btn btn-sm ${
+                      activeLevel === 3 ? 'btn-primary' : 'btn-neu'
+                    } text-xs font-semibold`}
                   >
                     Section C ({summary.sectionCCount})
                   </button>
@@ -544,7 +536,7 @@ export default function QpUploadVettingPage() {
                   <th style={{ width: 140 }}>SUBJECT CODE</th>
                   <th>COURSE UNIT NAME</th>
                   <th style={{ width: 140 }}>INTAKE</th>
-                  <th style={{ width: 150 }}>ACTION</th>
+                  <th style={{ width: 160 }}>ACTION</th>
                 </tr>
               </thead>
               <tbody>
@@ -554,46 +546,14 @@ export default function QpUploadVettingPage() {
                   <EmptyState colSpan={5} title="No course units found in queue" />
                 ) : (
                   courseUnits.map((cu) => (
-                    <tr key={cu.courseUnitGuid} className="hover:bg-slate-50">
-                      <td>
-                        <ActionMenu>
-                          <button
-                            className="btn btn-neu btn-sm"
-                            onClick={() => {
-                              setSelectedCourseUnitGuid(cu.courseUnitGuid)
-                              setActiveTab('faculty')
-                            }}
-                          >
-                            <i className="lni lni-search-alt" /> Open for Review
-                          </button>
-                        </ActionMenu>
-                      </td>
-                      <td>
-                        <span className="font-mono font-bold text-purple-700 text-[12px]">
-                          {cu.courseUnitCode || '—'}
-                        </span>
-                      </td>
-                      <td className="font-semibold text-slate-800">
-                        {cu.courseUnitName || 'Untitled Unit'}
-                      </td>
-                      <td>
-                        <span className="badge bg-slate-100 text-slate-600 text-[10.5px]">
-                          Active Intake
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedCourseUnitGuid(cu.courseUnitGuid)
-                            setActiveTab('faculty')
-                          }}
-                          className="btn btn-neu btn-sm flex items-center gap-1.5"
-                        >
-                          <i className="lni lni-pencil-alt" /> Open for Review
-                        </button>
-                      </td>
-                    </tr>
+                    <VettingQueueRow
+                      key={cu.courseUnitGuid}
+                      cu={cu}
+                      onOpenReview={(guid) => {
+                        setSelectedCourseUnitGuid(guid)
+                        setActiveTab('faculty')
+                      }}
+                    />
                   ))
                 )}
               </tbody>
@@ -733,3 +693,85 @@ export default function QpUploadVettingPage() {
     </div>
   )
 }
+
+// ── Vetting Queue Row Component with Dynamic Action Button ───────────────────
+
+function VettingQueueRow({
+  cu,
+  onOpenReview,
+}: {
+  cu: UeCourseUnitDto
+  onOpenReview: (guid: string) => void
+}) {
+  const { data: summary, isLoading } = useUeQuestionSummary(cu.courseUnitGuid, 5, 0)
+  const totalCount = summary?.totalCount ?? 0
+  const isVerified = Boolean(summary?.isVerified)
+  const hasQuestions = totalCount > 0
+
+  return (
+    <tr className="hover:bg-slate-50">
+      <td>
+        <ActionMenu>
+          <button
+            className="btn btn-neu btn-sm"
+            disabled={!hasQuestions || isVerified}
+            onClick={() => onOpenReview(cu.courseUnitGuid)}
+          >
+            <i className="lni lni-search-alt" />{' '}
+            {!hasQuestions ? 'No Questions' : isVerified ? 'Verified' : 'Open for Review'}
+          </button>
+        </ActionMenu>
+      </td>
+      <td>
+        <span className="font-mono font-bold text-blue-700 text-[12px]">
+          {cu.courseUnitCode || '—'}
+        </span>
+      </td>
+      <td className="font-semibold text-slate-800">
+        {cu.courseUnitName || 'Untitled Unit'}
+      </td>
+      <td>
+        <span className="badge bg-slate-100 text-slate-600 text-[10.5px]">
+          Active Intake
+        </span>
+      </td>
+      <td>
+        {isLoading ? (
+          <button
+            type="button"
+            disabled
+            className="btn btn-neu btn-sm opacity-60 cursor-not-allowed flex items-center gap-1.5 text-xs"
+          >
+            <span className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+            <span>Checking…</span>
+          </button>
+        ) : !hasQuestions ? (
+          <button
+            type="button"
+            disabled
+            title="No questions added for this course unit yet"
+            className="btn btn-neu btn-sm opacity-50 cursor-not-allowed flex items-center gap-1.5 text-xs text-slate-400"
+          >
+            <i className="lni lni-ban" />
+            <span>No Questions</span>
+          </button>
+        ) : isVerified ? (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-600 text-white shadow-sm shrink-0">
+            <i className="lni lni-checkmark-circle text-xs" /> Verified
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onOpenReview(cu.courseUnitGuid)}
+            title={`Review ${totalCount} uploaded questions`}
+            className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm text-xs"
+          >
+            <i className="lni lni-pencil-alt" />
+            <span>Open for Review ({totalCount})</span>
+          </button>
+        )}
+      </td>
+    </tr>
+  )
+}
+

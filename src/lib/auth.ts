@@ -20,7 +20,7 @@ export function staffLogin(staffId: string, password: string, trustDevice: boole
   if (MOCK_AUTH) {
     if (staffId !== MOCK_CREDENTIALS.staff.id || password !== MOCK_CREDENTIALS.staff.password)
       return Promise.reject(new AuthError('bad_credentials'))
-    return Promise.resolve({
+    return Promise.resolve<StaffLoginResult>({
       requiresOtp: true,
       challengeId: MOCK_CREDENTIALS.staff.challengeId,
       otpChannel: 'email',
@@ -35,7 +35,7 @@ export function staffLogin(staffId: string, password: string, trustDevice: boole
     const employeeGuid = data?.employeeGuid || data?.userGuid || data?.uuid || data?.id || data?.userId
     const userGuid = data?.userGuid || data?.employeeGuid || data?.uuid || data?.id || data?.userId
     return {
-      requiresOtp: false,
+      requiresOtp: false as const,
       displayName: data?.displayName,
       employeeGuid,
       userGuid,
@@ -54,7 +54,7 @@ export function studentLogin(studentId: string, password: string): Promise<Stude
   if (MOCK_AUTH) {
     if (studentId !== MOCK_CREDENTIALS.student.id || password !== MOCK_CREDENTIALS.student.password)
       return Promise.reject(new AuthError('bad_credentials'))
-    return Promise.resolve({
+    return Promise.resolve<StudentLoginResult>({
       requiresOtp: true,
       challengeId: MOCK_CREDENTIALS.student.challengeId,
       otpChannel: 'email',
@@ -65,7 +65,7 @@ export function studentLogin(studentId: string, password: string): Promise<Stude
   return apiPost<{ displayName: string } | null>('/api/v1/users/auth/login', {
     Username: studentId,
     Password: password,
-  }).then(data => ({ requiresOtp: false, displayName: data?.displayName, redirect: '' }))
+  }).then(data => ({ requiresOtp: false as const, displayName: data?.displayName, redirect: '' }))
 }
 
 // Session refresh — relies on the httpOnly refresh-token cookie set at login;
