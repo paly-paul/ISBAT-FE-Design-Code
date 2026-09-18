@@ -744,6 +744,13 @@ through unchanged.
           "url": "/student/terminate-student",
           "permissions": {},
           "children": []
+        },
+        {
+          "name": "Passout Confirmation",
+          "icon": "lni lni-graduation",
+          "url": "/student/passout-confirmation",
+          "permissions": {},
+          "children": []
         }
       ]
     },
@@ -824,6 +831,19 @@ through unchanged.
 > `POST /students/{studentGuid}/terminate`. `Termination Reason Master`
 > (`Settings`, same date) is the `M_TERMINATION_REASON` master behind that
 > endpoint's reason picker.
+
+> `Passout Confirmation` (`Operations`, added 2026-09-18) is backed by
+> `GET /api/v1/students/passout-confirmation/candidates`,
+> `GET /api/v1/students/passout-confirmation/{studentGuid}` and
+> `POST /api/v1/students/passout-confirmation/{studentGuid}/confirm`
+> (`passout-confirmation/*.md`). Manual Passout (`REGSTATUS = 5`) confirmation
+> for PCSE/PCIM students — those two programme groups have no
+> `M_PROGRAM_UNITS`/`T_EXAM_RESULT` rows anywhere, so there's no marks data an
+> automated check could evaluate; staff search this list and confirm
+> completion themselves. The confirm endpoint re-verifies `REGSTATUS = 1` and
+> PCSE/PCIM membership server-side rather than trusting the list, and follows
+> the same clone-and-deactivate pattern as Dropout Rejoin and Programme
+> Transfer.
 
 > `Events and Announcements` is a new section, ported from the legacy
 > `isbat_student_module.html` "Event Management"/"Announcement Management"
@@ -1169,7 +1189,7 @@ Previously scattered under "Academics" (Faculty Master only) and
 ## Assessment
 
 New module/rail — had no entry in the previous version of this doc. Mirrors
-`ASSESSMENT_SECTIONS` in `menu.ts`. None of its 29 pages gate on
+`ASSESSMENT_SECTIONS` in `menu.ts`. None of its 31 pages gate on
 `permissions.xxx` in code yet (all `{}`) — it's the newest module in the app.
 
 ```json
@@ -1228,7 +1248,7 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "permissions": {},
           "children": []
         },
-        {
+        { 
           "name": "Assessment Schedule",
           "icon": "lni lni-calendar",
           "url": "/assessment/schedule",
@@ -1236,9 +1256,23 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "children": []
         },
         {
+          "name": "Bulk Exam Scheduler",
+          "icon": "lni lni-calendar",
+          "url": "/assessment/bulk-exam-scheduler",
+          "permissions": {},
+          "children": []
+        },
+        {
           "name": "IA Creation",
           "icon": "lni lni-graduation",
           "url": "/assessment/ia-creation",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "IA Evaluation",
+          "icon": "lni lni-checkmark-circle",
+          "url": "/assessment/ia-evaluation",
           "permissions": {},
           "children": []
         }
@@ -1323,7 +1357,7 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "children": []
         },
         {
-          "name": "QP Upload & Vetting",
+          "name": "Question Paper Vetting",
           "icon": "lni lni-upload",
           "url": "/assessment/qp-vetting",
           "permissions": {},
@@ -1450,17 +1484,29 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
 }
 ```
 
-> `Fee Clearance Master`, `Exam Rules Master`, `Question FAQs` and `IA
-> Creation` are newer leaves under `Assessment Structure` — fixed in at the
-> leaf level by `ensureAssessmentMaster()` even when the section itself is
-> already present. `Fee Clearance Master` was named `Assessment Master`
-> until it was renamed (same route, `/assessment/assessment-master`) to
-> better reflect what the page actually does — `ensureAssessmentMaster()`
-> matches on the current name. `Resit Master` is the equivalent addition to
-> `Resit & Disputes` (`ensureResitMaster()`), inserted before `Resit
-> Calendar`. `CBT Schedule` was dropped from `Class Test (CBT)` — its page
-> still exists on disk but is no longer linked from this menu; see the "no
-> sidebar/menu entry" table below.
+> `Fee Clearance Master`, `Exam Rules Master`, `Question FAQs`, `IA
+> Creation` and `IA Evaluation` are newer leaves under `Assessment
+> Structure` — fixed in at the leaf level by `ensureAssessmentMaster()` even
+> when the section itself is already present. `Fee Clearance Master` was
+> named `Assessment Master` until it was renamed (same route,
+> `/assessment/assessment-master`) to better reflect what the page actually
+> does — `ensureAssessmentMaster()` matches on the current name. `IA
+> Evaluation` (2026-09-18) is inserted right after `IA Creation` by the same
+> function. `Resit Master` is the equivalent addition to `Resit & Disputes`
+> (`ensureResitMaster()`), inserted before `Resit Calendar`. `CBT Schedule`
+> was dropped from `Class Test (CBT)` — its page still exists on disk but is
+> no longer linked from this menu; see the "no sidebar/menu entry" table
+> below.
+>
+> `Bulk Exam Scheduler` (2026-09-18) is a new leaf in `Assessment Structure`,
+> inserted right after `Assessment Schedule` in the static `ASSESSMENT_SECTIONS`
+> tree — unlike the others above, it is **not** yet patched in by
+> `ensureAssessmentMaster()`, so it's only present in mock mode
+> (`NEXT_PUBLIC_RBAC_MOCK=true`) today; a real backend/merge-function response
+> won't include it until that function is updated.
+>
+> `QP Upload & Vetting` was renamed to `Question Paper Vetting` (2026-09-18,
+> same route, `/assessment/qp-vetting`) to match the page's updated copy.
 
 ---
 

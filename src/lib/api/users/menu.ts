@@ -97,6 +97,11 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
     // POST /students/{studentGuid}/terminate (student-termination/
     // post-terminate-student.md) — added 2026-09-15.
     leaf('Terminate Student', 'shield', '/student/terminate-student'),
+    // GET .../passout-confirmation/candidates + POST .../{studentGuid}/confirm
+    // (passout-confirmation/*.md) — manual Passout confirmation for PCSE/PCIM
+    // students, which have no marks data anywhere to drive an automated
+    // decision. Added 2026-09-18.
+    leaf('Passout Confirmation', 'graduation', '/student/passout-confirmation'),
   ]),
   // Services section hidden from the sidebar per request, 2026-09-02 — its
   // one leaf (Student Services) still exists at /student/services, just not
