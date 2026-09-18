@@ -37,6 +37,11 @@ export interface StudentForEvaluationDto {
   studentRegNo: string | null
   studentName: string | null
   minQuestion: number
+  evaluationStatus: 'Pending' | 'Evaluated'
+  mark: number | null // null when Pending
+  maxMark: number | null // null when Pending
+  comment: string | null // null when Pending
+  evaluatedDate: string | null // null when Pending
 }
 
 /**
@@ -161,11 +166,62 @@ export function normalizeQuestion(raw: any): QuestionForEvaluationDto {
 }
 
 export function normalizeStudent(raw: any): StudentForEvaluationDto {
+  const rawStatus =
+    raw.evaluationStatus ??
+    raw.EvaluationStatus ??
+    raw.status ??
+    raw.Status ??
+    raw.evaluation_status
+
+  const rawMark = raw.mark ?? raw.Mark ?? raw.awardedMark ?? raw.AwardedMark
+  const mark =
+    rawMark !== undefined && rawMark !== null && rawMark !== '' && !isNaN(Number(rawMark))
+      ? Number(rawMark)
+      : null
+
+  const rawMax =
+    raw.maxMark ??
+    raw.MaxMark ??
+    raw.maxMarks ??
+    raw.MaxMarks ??
+    raw.totalMarks ??
+    raw.TotalMarks
+  const maxMark =
+    rawMax !== undefined && rawMax !== null && rawMax !== '' && !isNaN(Number(rawMax))
+      ? Number(rawMax)
+      : null
+
+  const evaluatedDate = raw.evaluatedDate ?? raw.EvaluatedDate ?? raw.evaluated_date ?? null
+  const comment = raw.comment ?? raw.Comment ?? null
+
+  const statusStr = String(rawStatus ?? '').trim().toLowerCase()
+  const isEvaluated =
+    statusStr === 'evaluated' ||
+    statusStr === 'completed' ||
+    statusStr === 'done' ||
+    statusStr === '2' ||
+    rawStatus === 2 ||
+    raw.isEvaluated === true ||
+    raw.isEvaluated === 1 ||
+    raw.isEvaluated === '1' ||
+    raw.isEvaluated === 'true' ||
+    raw.IsEvaluated === true ||
+    raw.IsEvaluated === 1 ||
+    (mark !== null && evaluatedDate !== null) ||
+    (mark !== null && Boolean(comment))
+
+  const evaluationStatus: 'Pending' | 'Evaluated' = isEvaluated ? 'Evaluated' : 'Pending'
+
   return {
     studentGuid: raw.studentGuid || raw.StudentGuid || raw.guid || raw.Guid || raw.id || raw.Id || '',
     studentRegNo: raw.studentRegNo ?? raw.StudentRegNo ?? raw.regNo ?? raw.RegNo ?? null,
     studentName: raw.studentName ?? raw.StudentName ?? raw.name ?? raw.Name ?? null,
     minQuestion: Number(raw.minQuestion ?? raw.MinQuestion ?? 1),
+    evaluationStatus,
+    mark,
+    maxMark,
+    comment,
+    evaluatedDate,
   }
 }
 
@@ -256,13 +312,23 @@ const MOCK_STUDENTS_BY_UNIT: Record<string, StudentsForEvaluationResponseDto> = 
         studentGuid: '9a4eebf7-a959-41fa-9979-71ae2f220268',
         studentRegNo: '23/BNCS/0142',
         studentName: 'JOHN DOE',
-        minQuestion: 1,
+        minQuestion: 2,
+        evaluationStatus: 'Pending',
+        mark: null,
+        maxMark: null,
+        comment: null,
+        evaluatedDate: null,
       },
       {
         studentGuid: '7c7d2d18-f686-4e36-915e-0718821df3a3',
         studentRegNo: '23/BNCS/0155',
         studentName: 'SARAH NAKATO',
-        minQuestion: 1,
+        minQuestion: 2,
+        evaluationStatus: 'Evaluated',
+        mark: 19.0,
+        maxMark: 25.0,
+        comment: 'Very solid explanations on IoT protocols and MQTT architectures.',
+        evaluatedDate: '2024-06-24T08:48:26.75',
       },
     ],
   },
@@ -321,44 +387,59 @@ export async function getPendingEvaluations(intakeGuid: string): Promise<Pending
 }
 
 /**
- * 2. GET /api/v1/assessment/internal-assessment-evaluations/{category}/{courseworkOrTestGuid}/students
- * Full list of students pending evaluation for one coursework/test
- * Spec: get-students.md
+ * 2. GET /api/v1/assessment/internal-assessment-evaluations/{category}/{courseworkOrTestGuid}/students?status={Pending|Evaluated}
+ * category: 1=Test, 2=Coursework1, 3=Coursework2
+ * status query param is optional — omit to get everyone, pass Pending or Evaluated to filter
  */
 export async function getStudentsForEvaluation(
   category: number,
-  courseworkOrTestGuid: string
+  courseworkOrTestGuid: string,
+  status?: 'Pending' | 'Evaluated' | ''
 ): Promise<StudentsForEvaluationResponseDto> {
   if (!courseworkOrTestGuid) {
     return { unitName: '', programmeName: '', semesterName: '', students: [] }
   }
 
   if (MOCK_AUTH) {
-    return (
+    const base =
       MOCK_STUDENTS_BY_UNIT[courseworkOrTestGuid] ||
       MOCK_STUDENTS_BY_UNIT['6b0ef15b-fddb-41b1-9adb-606034ab3e40']
-    )
+    if (!status) return base
+    return {
+      ...base,
+      students: base.students.filter(s => s.evaluationStatus === status),
+    }
   }
 
   try {
-    const url = `${BASE_PATH}/${category}/${encodeURIComponent(courseworkOrTestGuid)}/students`
-    const data = await apiGet<any>(url)
-    if (data && data.students && Array.isArray(data.students)) {
+    const params = new URLSearchParams()
+    if (status) {
+      params.append('status', status)
+    }
+    const queryStr = params.toString() ? `?${params.toString()}` : ''
+    const url = `${BASE_PATH}/${category}/${encodeURIComponent(courseworkOrTestGuid)}/students${queryStr}`
+    const rawRes = await apiGet<any>(url)
+    const payload = rawRes?.data ?? rawRes
+    if (payload && payload.students && Array.isArray(payload.students)) {
       return {
-        unitName: data.unitName ?? data.UnitName ?? null,
-        programmeName: data.programmeName ?? data.ProgrammeName ?? null,
-        semesterName: data.semesterName ?? data.SemesterName ?? null,
-        students: data.students.map(normalizeStudent),
+        unitName: payload.unitName ?? payload.UnitName ?? null,
+        programmeName: payload.programmeName ?? payload.ProgrammeName ?? null,
+        semesterName: payload.semesterName ?? payload.SemesterName ?? null,
+        students: payload.students.map(normalizeStudent),
       }
     }
   } catch (err: any) {
     console.warn('ℹ️ [IA Evaluation] Live students API failed, using fallback:', err?.message || err)
   }
 
-  return (
+  const fallback =
     MOCK_STUDENTS_BY_UNIT[courseworkOrTestGuid] ||
     MOCK_STUDENTS_BY_UNIT['6b0ef15b-fddb-41b1-9adb-606034ab3e40']
-  )
+  if (!status) return fallback
+  return {
+    ...fallback,
+    students: fallback.students.filter(s => s.evaluationStatus === status),
+  }
 }
 
 /**
@@ -441,10 +522,23 @@ export async function finalizeStudent(
   category: number,
   courseworkOrTestGuid: string,
   studentGuid: string,
-  comment?: string
+  comment?: string | null
 ): Promise<FinalizeStudentResponseDto> {
-  const payload: FinalizeStudentRequest = comment ? { comment } : {}
+  const payload = {
+    comment: comment && typeof comment === 'string' && comment.trim() ? comment.trim() : null,
+  }
   if (MOCK_AUTH) {
+    const mockUnit = MOCK_STUDENTS_BY_UNIT[courseworkOrTestGuid] || MOCK_STUDENTS_BY_UNIT['6b0ef15b-fddb-41b1-9adb-606034ab3e40']
+    if (mockUnit) {
+      const std = mockUnit.students.find(s => s.studentGuid === studentGuid)
+      if (std) {
+        std.evaluationStatus = 'Evaluated'
+        std.mark = 28
+        std.maxMark = 30
+        std.evaluatedDate = new Date().toISOString()
+        std.comment = comment || 'Good answers'
+      }
+    }
     return {
       totalMark: 28,
       totalMaxMark: 30,
@@ -457,8 +551,9 @@ export async function finalizeStudent(
 
   try {
     console.log(`📡 [finalizeStudent] Calling POST ${url}`, payload)
-    const res = await apiPost<FinalizeStudentResponseDto>(url, payload)
-    if (res) return res
+    const res = await apiPost<any>(url, payload)
+    const data = res?.data ?? res
+    if (data) return data
     throw new Error('Empty response from finalize endpoint')
   } catch (err: any) {
     console.error('❌ [finalizeStudent] Finalize API call failed:', err)
