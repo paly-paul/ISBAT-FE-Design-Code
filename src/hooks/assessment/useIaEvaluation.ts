@@ -24,17 +24,18 @@ export function usePendingEvaluations(intakeGuid: string | undefined, enabled = 
 }
 
 /**
- * 2. Hook to fetch students pending evaluation for a selected coursework
- * Spec: get-students.md
+ * 2. Hook to fetch students for a selected coursework (with optional status filter)
+ * Spec: GET .../students?status={Pending|Evaluated}
  */
 export function useStudentsForEvaluation(
   category: number | undefined,
   courseworkOrTestGuid: string | undefined,
+  status?: 'Pending' | 'Evaluated' | '',
   enabled = true
 ) {
   return useQuery({
-    queryKey: ['iaEvaluations', 'students', category, courseworkOrTestGuid],
-    queryFn: () => getStudentsForEvaluation(category!, courseworkOrTestGuid!),
+    queryKey: ['iaEvaluations', 'students', category, courseworkOrTestGuid, status || 'all'],
+    queryFn: () => getStudentsForEvaluation(category!, courseworkOrTestGuid!, status),
     enabled: Boolean(category && courseworkOrTestGuid) && enabled,
     staleTime: 20 * 1000,
   })

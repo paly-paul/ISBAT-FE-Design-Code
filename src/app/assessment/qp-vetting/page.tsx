@@ -178,11 +178,6 @@ export default function QpUploadVettingPage() {
     }))
   }, [courseUnits])
 
-  const examModeOptions = [
-    { value: '0', label: 'University Examination (Theory)' },
-    { value: '1', label: 'University Examination (Practical)' },
-  ]
-
   const isLocked = Boolean(summary.isVerified)
 
   return (
@@ -273,12 +268,16 @@ export default function QpUploadVettingPage() {
                   <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">
                     Exam Type
                   </label>
-                  <SearchSelect
-                    options={examModeOptions}
-                    value={String(ueType)}
-                    onChange={(v) => setUeType(Number(v))}
-                    className="w-full"
-                  />
+                  <div className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-800 flex items-center justify-between">
+                    <span>
+                      {ueType === 1
+                        ? 'University Examination (Practical)'
+                        : 'University Examination (Theory)'}
+                    </span>
+                    <span className="badge badge-blue text-[10.5px] font-semibold">
+                      {ueType === 1 ? 'Practical' : 'Theory'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

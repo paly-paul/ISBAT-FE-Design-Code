@@ -11,7 +11,7 @@ import {
 } from '@/lib/api/assessment/iaBulkSchedule'
 import { getExamRules, ExamRuleDto } from '@/lib/api/assessment/examRule'
 
-export type BulkAssessmentType = 'CW' | 'CLASS_TEST' | 'MOCK' | 'CA' | 'UE'
+export type BulkAssessmentType = 'CW' | 'CLASS_TEST' | 'CA' | 'UE'
 
 export interface BulkScheduleScope {
   intakeGuid: string
@@ -25,6 +25,7 @@ export interface BulkScheduleScope {
   semesterGuid?: string | null
   semesterCode?: string | null
   isBulkAll?: boolean
+  isAlreadyScheduled?: boolean
 }
 
 interface BulkScheduleModalProps {
@@ -50,12 +51,6 @@ const TYPE_CONFIG: Record<
     badge: 'Class Test',
     icon: 'lni-timer',
     defaultMaxMark: 15,
-  },
-  MOCK: {
-    title: 'Mock Exam (CBT)',
-    badge: 'Mock Exam',
-    icon: 'lni-laptop-phone',
-    defaultMaxMark: 50,
   },
   CA: {
     title: 'Continuous Assessment (CA)',
@@ -179,17 +174,6 @@ export function BulkScheduleModal({
     setPublishStatus(0)
     setSelectedExamRuleGuid('')
 
-    if (scheduleType === 'MOCK') {
-      // Mock Exam has no backend API endpoint yet
-      setIsPreviewLoading(false)
-      setPreviewStats({
-        matchCount: scope.isBulkAll ? 24 : 1,
-        scheduledCount: 0,
-        unscheduledCount: scope.isBulkAll ? 24 : 1,
-      })
-      return
-    }
-
     const baseParams = {
       academicIntakeGuid: scope.intakeGuid,
       campusGuid: scope.campusGuid || undefined,
@@ -280,6 +264,10 @@ export function BulkScheduleModal({
     }
   }, [isOpen, scheduleType, scope, config.defaultMaxMark])
 
+  const isEditMode = Boolean(
+    scope?.isAlreadyScheduled || (previewStats && previewStats.scheduledCount > 0)
+  )
+
   if (!isOpen || !scope) return null
 
   // 3. Handle Form Submission
@@ -303,7 +291,7 @@ export function BulkScheduleModal({
         setSubmitError('End time must be after start time.')
         return
       }
-    } else if (scheduleType !== 'MOCK') {
+    } else {
       if (!startDateTime || !endDateTime) {
         setSubmitError('Scheduled start and end dates/times are required.')
         return
@@ -391,10 +379,6 @@ export function BulkScheduleModal({
         )
         updatedCount = res.data ?? 1
         resMessage = res.message || `${updatedCount} University Exam record(s) scheduled successfully.`
-      } else if (scheduleType === 'MOCK') {
-        // Mock Exam notice
-        updatedCount = 1
-        resMessage = 'Mock Exam schedule simulation completed.'
       }
 
       onSuccess(updatedCount, resMessage)
@@ -420,8 +404,19 @@ export function BulkScheduleModal({
           <div className="modal-title flex items-center gap-2">
             <i className={`lni ${config.icon} text-lg`}></i>
             <span>
-              {scope.isBulkAll ? `Bulk Schedule All: ${config.title}` : `Schedule: ${config.title}`}
+              {scope.isBulkAll
+                ? isEditMode
+                  ? `Bulk Update: ${config.title}`
+                  : `Bulk Schedule All: ${config.title}`
+                : isEditMode
+                ? `Update Schedule: ${config.title}`
+                : `Schedule: ${config.title}`}
             </span>
+            {isEditMode && (
+              <span className="badge badge-amber text-[10px] font-semibold flex items-center gap-1">
+                <i className="lni lni-pencil"></i> Editing
+              </span>
+            )}
           </div>
           <button type="button" className="modal-close" onClick={onClose} disabled={isSubmitting}>
             <i className="lni lni-close"></i>
@@ -509,23 +504,8 @@ export function BulkScheduleModal({
               </div>
             )}
 
-            {/* Mock Exam Notice */}
-            {scheduleType === 'MOCK' && (
-              <div className="p-3.5 bg-indigo-50 border border-indigo-200 rounded-lg text-indigo-900 text-xs space-y-1.5 leading-relaxed">
-                <div className="flex items-center gap-1.5 font-semibold text-indigo-800">
-                  <i className="lni lni-information text-sm"></i>
-                  <span>Mock Exam (CBT) Backend Status</span>
-                </div>
-                <p>
-                  Class Test and Coursework APIs have been finalized. The Mock Exam (CBT) bulk
-                  scheduling API is currently being deployed by the backend team. The status shown in
-                  the table reflects live session records.
-                </p>
-              </div>
-            )}
-
             {/* Form Fields: Non-UE (CW, CA, Class Test) */}
-            {scheduleType !== 'UE' && scheduleType !== 'MOCK' && (
+            {scheduleType !== 'UE' && (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -761,12 +741,20 @@ export function BulkScheduleModal({
               className="btn btn-primary text-xs flex items-center gap-1.5"
               disabled={isSubmitting}
             >
-              {isSubmitting && <i className="lni lni-reload animate-spin"></i>}
+              {isSubmitting ? (
+                <i className="lni lni-reload animate-spin"></i>
+              ) : isEditMode ? (
+                <i className="lni lni-reload"></i>
+              ) : (
+                <i className="lni lni-checkmark"></i>
+              )}
               <span>
                 {isSubmitting
-                  ? 'Saving Schedule…'
-                  : scheduleType === 'MOCK'
-                  ? 'Close Preview'
+                  ? isEditMode
+                    ? 'Updating Schedule…'
+                    : 'Saving Schedule…'
+                  : isEditMode
+                  ? 'Update Schedule'
                   : 'Execute & Save Schedule'}
               </span>
             </button>

@@ -243,6 +243,7 @@ export default function BulkExamSchedulerPage() {
       showToast('Please select an Academic Session first.', 'warn')
       return
     }
+    const anyScheduled = serverRows.some(r => isCellScheduled(r, type))
     setActiveModalType(type)
     setActiveModalScope({
       intakeGuid,
@@ -251,6 +252,7 @@ export default function BulkExamSchedulerPage() {
       campusGuid: campusGuid || undefined,
       campusName: selectedCampusLabel,
       isBulkAll: true,
+      isAlreadyScheduled: anyScheduled,
     })
   }
 
@@ -267,6 +269,7 @@ export default function BulkExamSchedulerPage() {
     )
     const resolvedProgramGuid = rawRow.programGuid || matchedProg?.programGuid || ''
     const resolvedSemesterGuid = rawRow.semesterGuid || ''
+    const alreadyScheduled = isCellScheduled(row, type)
 
     setActiveModalType(type)
     setActiveModalScope({
@@ -281,6 +284,7 @@ export default function BulkExamSchedulerPage() {
       semesterGuid: resolvedSemesterGuid,
       semesterCode: row.semesterCode,
       isBulkAll: false,
+      isAlreadyScheduled: alreadyScheduled,
     })
   }
 
@@ -335,8 +339,6 @@ export default function BulkExamSchedulerPage() {
         return Boolean(status.cw1Scheduled)
       case 'CLASS_TEST':
         return Boolean(status.midScheduled)
-      case 'MOCK':
-        return Boolean(status.mokScheduled)
       case 'CA':
         return Boolean(status.cw2Scheduled)
       case 'UE':
@@ -493,19 +495,7 @@ export default function BulkExamSchedulerPage() {
                         </button>
                       </th>
 
-                      {/* 3. Schedule All (Mock Exam) Header Trigger */}
-                      <th className="py-2.5 px-2.5 min-w-[155px] text-center border-r border-blue-400/30">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenHeaderBulkSchedule('MOCK')}
-                          className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-none"
-                          title="Click to manage Mock Exam CBT for all programmes in this session"
-                        >
-                          <span>Schedule All (Mock Exam)</span>
-                        </button>
-                      </th>
-
-                      {/* 4. Schedule All (CA) Header Trigger */}
+                      {/* 3. Schedule All (CA) Header Trigger */}
                       <th className="py-2.5 px-2.5 min-w-[140px] text-center border-r border-blue-400/30">
                         <button
                           type="button"
@@ -517,7 +507,7 @@ export default function BulkExamSchedulerPage() {
                         </button>
                       </th>
 
-                      {/* 5. Schedule All (UE) Header Trigger */}
+                      {/* 4. Schedule All (UE) Header Trigger */}
                       <th className="py-2.5 px-2.5 min-w-[140px] text-center">
                         <button
                           type="button"
@@ -535,7 +525,7 @@ export default function BulkExamSchedulerPage() {
                   <tbody className="divide-y divide-slate-200/80 bg-white">
                     {serverRows.length === 0 ? (
                       <EmptyState
-                        colSpan={8}
+                        colSpan={7}
                         title="No programme sessions found"
                         subtitle="No programmes match the selected academic session and campus."
                       />
@@ -543,7 +533,6 @@ export default function BulkExamSchedulerPage() {
                       serverRows.map((row, idx) => {
                         const cwScheduled = isCellScheduled(row, 'CW')
                         const testScheduled = isCellScheduled(row, 'CLASS_TEST')
-                        const mockScheduled = isCellScheduled(row, 'MOCK')
                         const caScheduled = isCellScheduled(row, 'CA')
                         const ueScheduled = isCellScheduled(row, 'UE')
 
@@ -602,22 +591,7 @@ export default function BulkExamSchedulerPage() {
                               </button>
                             </td>
 
-                            {/* 3. Mock Exam Button (Lighter blue when scheduled as in screenshot row 1) */}
-                            <td className="py-2 px-2.5 text-center border-r border-slate-100">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenRowSchedule(row, 'MOCK')}
-                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${
-                                  mockScheduled
-                                    ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
-                                    : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
-                                }`}
-                              >
-                                {mockScheduled ? 'Scheduled' : 'Schedule'}
-                              </button>
-                            </td>
-
-                            {/* 4. CA Button */}
+                            {/* 3. CA Button */}
                             <td className="py-2 px-2.5 text-center border-r border-slate-100">
                               <button
                                 type="button"
