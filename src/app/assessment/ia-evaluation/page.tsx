@@ -74,18 +74,26 @@ export default function IaEvaluationPage() {
   // ── 2b. Assessment Category Filter ────────────────────────────────────────
   const [selectedCategory, setSelectedCategory] = useState<string>('')
 
-  // Filter pending units by selected category
+  // Filter pending units by selected category & non-null unitName
   const filteredPendingUnits = useMemo(() => {
-    if (!selectedCategory) return pendingUnits
+    const valid = pendingUnits.filter(u => {
+      const name = u.unitName?.trim()
+      return Boolean(name && name.toLowerCase() !== 'null' && name !== 'undefined')
+    })
+    if (!selectedCategory) return valid
     const catNum = Number(selectedCategory)
-    return pendingUnits.filter(u => u.category === catNum)
+    return valid.filter(u => u.category === catNum)
   }, [pendingUnits, selectedCategory])
 
-  // Filter evaluated units by selected category
+  // Filter evaluated units by selected category & non-null unitName
   const filteredEvaluatedUnits = useMemo(() => {
-    if (!selectedCategory) return evaluatedUnits
+    const valid = evaluatedUnits.filter(u => {
+      const name = u.unitName?.trim()
+      return Boolean(name && name.toLowerCase() !== 'null' && name !== 'undefined')
+    })
+    if (!selectedCategory) return valid
     const catNum = Number(selectedCategory)
-    return evaluatedUnits.filter(u => u.category === catNum)
+    return valid.filter(u => u.category === catNum)
   }, [evaluatedUnits, selectedCategory])
 
   // Active selected pending coursework unit
@@ -121,7 +129,7 @@ export default function IaEvaluationPage() {
   const unitOptions = useMemo(() => {
     return filteredPendingUnits.map(u => ({
       value: `${u.category}-${u.courseworkOrTestGuid}`,
-      label: `${u.unitCode || ''} — ${u.unitName || 'Course Unit'} [${u.categoryLabel}] (${u.pendingCount} pending)`,
+      label: `${u.unitCode ? `${u.unitCode} — ` : ''}${u.unitName} [${u.categoryLabel}] (${u.pendingCount} pending)`,
     }))
   }, [filteredPendingUnits])
 
@@ -702,19 +710,19 @@ export default function IaEvaluationPage() {
                     </div>
 
                     {/* Metadata Details */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 text-xs text-slate-600">
-                      <div>
-                        <span className="text-slate-400 font-medium">Reg No: </span>
-                        <strong className="text-slate-800 font-mono">{currentStudent.studentRegNo}</strong>
+                    <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 pt-3 text-xs text-slate-600">
+                      <div className="flex items-baseline gap-1.5 shrink-0">
+                        <span className="text-slate-400 font-medium">Reg No:</span>
+                        <strong className="text-slate-800 font-mono font-semibold">{currentStudent.studentRegNo || '—'}</strong>
                       </div>
-                      <div>
-                        <span className="text-slate-400 font-medium">Programme: </span>
-                        <span className="text-slate-800 font-medium truncate">
+                      <div className="flex items-baseline gap-1.5 min-w-0">
+                        <span className="text-slate-400 font-medium shrink-0">Programme:</span>
+                        <span className="text-slate-800 font-medium break-words" title={studentsResponse?.programmeName || ''}>
                           {studentsResponse?.programmeName || '—'}
                         </span>
                       </div>
-                      <div>
-                        <span className="text-slate-400 font-medium">Semester: </span>
+                      <div className="flex items-baseline gap-1.5 shrink-0">
+                        <span className="text-slate-400 font-medium shrink-0">Semester:</span>
                         <span className="text-slate-800 font-medium">
                           {studentsResponse?.semesterName || '—'}
                         </span>
