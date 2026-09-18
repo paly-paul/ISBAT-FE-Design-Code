@@ -100,17 +100,25 @@ export default function CwRectificationPage() {
     Boolean(selectedIntakeGuid)
   )
 
-  // Auto-select first course unit when intake changes
+  // Filter out course units where courseUnitName is null, empty, or 'null'
+  const validCourseUnits = useMemo(() => {
+    return courseUnits.filter(u => {
+      const name = u.courseUnitName?.trim()
+      return Boolean(name && name.toLowerCase() !== 'null' && name !== 'undefined')
+    })
+  }, [courseUnits])
+
+  // Auto-select first valid course unit when intake changes
   useEffect(() => {
-    if (courseUnits.length > 0) {
-      const exists = courseUnits.some(u => u.courseUnitGuid === selectedCourseUnitGuid)
+    if (validCourseUnits.length > 0) {
+      const exists = validCourseUnits.some(u => u.courseUnitGuid === selectedCourseUnitGuid)
       if (!exists) {
-        setSelectedCourseUnitGuid(courseUnits[0].courseUnitGuid)
+        setSelectedCourseUnitGuid(validCourseUnits[0].courseUnitGuid)
       }
     } else {
       setSelectedCourseUnitGuid('')
     }
-  }, [courseUnits, selectedCourseUnitGuid])
+  }, [validCourseUnits, selectedCourseUnitGuid])
 
   // ── 3. Fetch Courseworks ────────────────────────────────────────────────────
   const { data: courseworks = [], isLoading: isCourseworksLoading } = useCwCourseworks(
@@ -263,19 +271,19 @@ export default function CwRectificationPage() {
   }, [intakes])
 
   const courseUnitOptions = useMemo(() => {
-    return courseUnits.map(u => {
-      const name = u.courseUnitName?.trim()
+    return validCourseUnits.map(u => {
+      const name = u.courseUnitName!.trim()
       const code = u.courseUnitCode?.trim()
-      let label = 'Course Unit'
-      if (name && code) label = `${name} (${code})`
-      else if (name) label = name
-      else if (code) label = code
+      let label = name
+      if (code && !name.toLowerCase().includes(code.toLowerCase())) {
+        label = `${name} (${code})`
+      }
       return {
         value: u.courseUnitGuid,
         label,
       }
     })
-  }, [courseUnits])
+  }, [validCourseUnits])
 
   const courseworkOptions = useMemo(() => {
     return courseworks.map(cw => ({
@@ -298,8 +306,8 @@ export default function CwRectificationPage() {
 
   // Current active unit
   const activeCourseUnit = useMemo(() => {
-    return courseUnits.find(u => u.courseUnitGuid === selectedCourseUnitGuid)
-  }, [courseUnits, selectedCourseUnitGuid])
+    return validCourseUnits.find(u => u.courseUnitGuid === selectedCourseUnitGuid) || validCourseUnits[0]
+  }, [validCourseUnits, selectedCourseUnitGuid])
 
   // ── Dynamic Status & Actions Derived Directly from Backend Response ────────
   const currentStatus: CwSubmissionStatus = useMemo(() => {
