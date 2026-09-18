@@ -111,6 +111,7 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
   ]),
   section('Events and Announcements', [
     leaf('Event Management', 'calendar', '/student/event-management'),
+    leaf('Announcement Management', 'bullhorn', '/student/announcement-management'),
   ]),
   section('Settings', [
     leaf('Specialization Management', 'graduation', '/student/specialization'),

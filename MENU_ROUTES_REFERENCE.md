@@ -297,6 +297,13 @@ through unchanged.
           "url": "/academic/course-units",
           "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
+        },
+        {
+          "name": "Course Allocation",
+          "icon": "lni lni-agenda",
+          "url": "/academic/course-allocation",
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
+          "children": []
         }
       ]
     },
@@ -415,6 +422,11 @@ through unchanged.
 > re-reading each `page.tsx`; all six do gate Add/Edit/Delete via
 > `usePagePermissions()`, they just weren't reflected accurately before.
 
+> `Course Allocation` is a new leaf (no backend permission entry yet) —
+> inserted right after `Course Units` in `Course Unit Master` by
+> `ensureCourseAllocation()` in `menu.ts`, a no-op once the backend starts
+> returning the leaf itself.
+
 ---
 
 ## Finance
@@ -447,9 +459,9 @@ through unchanged.
           "children": []
         },
         {
-          "name": "Payment Console Adjustments",
-          "icon": "lni lni-pencil-alt",
-          "url": "/finance/payment-console-adjustments",
+          "name": "Payment Refund",
+          "icon": "lni lni-reload",
+          "url": "/finance/payment-refund",
           "permissions": {},
           "children": []
         },
@@ -511,7 +523,7 @@ through unchanged.
           "children": []
         },
         {
-          "name": "Student Statements",
+          "name": "Student Statement",
           "icon": "lni lni-files",
           "url": "/finance/student-statements",
           "permissions": {},
@@ -543,6 +555,13 @@ through unchanged.
           "name": "Ledgers",
           "icon": "lni lni-book",
           "url": "/finance/ledgers",
+          "permissions": { "add": true, "delete": true, "edit": true, "get": true },
+          "children": []
+        },
+        {
+          "name": "Other Ledgers",
+          "icon": "lni lni-book",
+          "url": "/finance/ledger-others",
           "permissions": { "add": true, "delete": true, "edit": true, "get": true },
           "children": []
         },
@@ -610,30 +629,39 @@ through unchanged.
 ```
 
 > `Payment Collection` and `Reports & Statements` are new sections, ported
-> from `isbat_student_module.html`'s sibling Finance mockup — all 11 pages are
-> mock/static (no backend permission entries exist for this workflow yet),
-> forced into the real menu tree by `mergeFinanceSections()` in `menu.ts`.
-> None of the 11 gate on `permissions.xxx` in code, hence `{}` throughout.
-> `Payment Console Adjustments`, `NCHE & Guild Payment` and `Discount
-> Allocation` are newer additions inserted right after `Payment Console` —
-> `mergeFinanceSections()` fixes these three in at the leaf level even when
-> the `Payment Collection` section itself is already present from the real
-> backend (same pattern `mergeStudentSections()` uses for `Student Records`/
-> `Settings` below).
+> from `isbat_student_module.html`'s sibling Finance mockup — all mock/static
+> (no backend permission entries exist for this workflow yet), forced into
+> the real menu tree by `mergeFinanceSections()` in `menu.ts`. None of them
+> gate on `permissions.xxx` in code, hence `{}` throughout. `Payment Refund`,
+> `NCHE & Guild Payment` and `Discount Allocation` are newer additions
+> inserted right after `Payment Console` — `mergeFinanceSections()` fixes
+> these in at the leaf level even when the `Payment Collection` section
+> itself is already present from the real backend (same pattern
+> `mergeStudentSections()` uses for `Student Records`/`Settings` below).
 >
 > `NCHE & Guild Payment` (2026-09-01) consolidates what used to be three
 > separate leaves — `NCHE Payment` (`/finance/nche-payment`), `Guild Payment`
 > (`/finance/guild-payment`) and `Guild Payment Console`
 > (`/finance/guild-console`) — into one page at `/finance/nche-guild-payment`;
-> the three old routes no longer exist on disk. `Payment Console Adjustments`
-> and `Discount Allocation` (both 2026-09-02) are net-new pages — the latter
-> replaces the per-student discount assignment half of `Student` >
-> `Discount Management`, which was dropped the same day (see the `Student`
-> module's notes below); the catalogue-CRUD half of that old page duplicated
-> `Finance` > `Discounts` and was likewise removed rather than ported.
+> the three old routes no longer exist on disk. `Discount Allocation`
+> (2026-09-02) is a net-new page that replaces the per-student discount
+> assignment half of `Student` > `Discount Management`, which was dropped the
+> same day (see the `Student` module's notes below); the catalogue-CRUD half
+> of that old page duplicated `Finance` > `Discounts` and was likewise
+> removed rather than ported.
+>
+> `Payment Console Adjustments` (`/finance/payment-console-adjustments`) was
+> removed from this doc (2026-09-08) — its "Apply Advance" functionality
+> moved into `Payment Console`'s own Semester Payment tab, behind a Regular
+> Payment/Apply Advance toggle; the standalone page now just redirects there,
+> so it no longer needs its own nav entry.
+
+> `Other Ledgers` (`Finance Core`) is a real page (not mock/static, unlike
+> `Payment Collection`/`Reports & Statements` above) that was missing from
+> this doc.
 
 > `Finance Core` and `Banking` were previously listed with `permissions: {}`
-> in this doc — corrected here; all 10 pages do gate Add/Edit/Delete via
+> in this doc — corrected here; all 11 pages do gate Add/Edit/Delete via
 > `usePagePermissions()`.
 
 ---
@@ -657,13 +685,6 @@ through unchanged.
           "name": "Student Master",
           "icon": "lni lni-graduation",
           "url": "/student/student-master",
-          "permissions": {},
-          "children": []
-        },
-        {
-          "name": "Student Statement",
-          "icon": "lni lni-files",
-          "url": "/student/statement",
           "permissions": {},
           "children": []
         }
@@ -716,6 +737,13 @@ through unchanged.
           "url": "/student/fee-structure-transfer",
           "permissions": {},
           "children": []
+        },
+        {
+          "name": "Terminate Student",
+          "icon": "lni lni-shield",
+          "url": "/student/terminate-student",
+          "permissions": {},
+          "children": []
         }
       ]
     },
@@ -735,6 +763,28 @@ through unchanged.
       ]
     },
     {
+      "name": "Events and Announcements",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Event Management",
+          "icon": "lni lni-calendar",
+          "url": "/student/event-management",
+          "permissions": { "add": true, "edit": true, "delete": true, "get": true },
+          "children": []
+        },
+        {
+          "name": "Announcement Management",
+          "icon": "lni lni-bullhorn",
+          "url": "/student/announcement-management",
+          "permissions": { "add": true, "edit": true, "delete": true, "get": true },
+          "children": []
+        }
+      ]
+    },
+    {
       "name": "Settings",
       "icon": null,
       "url": null,
@@ -744,7 +794,14 @@ through unchanged.
           "name": "Specialization Management",
           "icon": "lni lni-graduation",
           "url": "/student/specialization",
-          "permissions": {},
+          "permissions": { "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Termination Reason Master",
+          "icon": "lni lni-shield",
+          "url": "/student/termination-reasons",
+          "permissions": { "add": true, "edit": true, "delete": true },
           "children": []
         }
       ]
@@ -753,13 +810,37 @@ through unchanged.
 }
 ```
 
-> `Operations`, `Services`, `Communications` and `Settings` are new sections,
-> ported from `isbat_student_module.html` — all mock/static (no backend
-> permission entries exist for this workflow yet), forced into the real menu
-> tree by `mergeStudentSections()` in `menu.ts`. `Student Statement` extends
-> the existing `Student Records` section rather than getting its own. 9 of
-> these 10 pages don't gate on `permissions.xxx` in code (all `{}`) — this is
-> the least permission-aware module in the app today.
+> `Operations`, `Services` and `Communications` are new sections, ported from
+> `isbat_student_module.html` — all mock/static (no backend permission
+> entries exist for this workflow yet), forced into the real menu tree by
+> `mergeStudentSections()` in `menu.ts`. 8 of the module's 10 pages don't gate
+> on `permissions.xxx` in code (all `{}`) — this is the least
+> permission-aware module in the app today. `Settings` is the exception:
+> both `Specialization Management` and `Termination Reason Master` do gate
+> Add/Edit/Delete via `usePagePermissions()` (neither has a `get` action on
+> the page).
+
+> `Terminate Student` (`Operations`, added 2026-09-15) calls
+> `POST /students/{studentGuid}/terminate`. `Termination Reason Master`
+> (`Settings`, same date) is the `M_TERMINATION_REASON` master behind that
+> endpoint's reason picker.
+
+> `Events and Announcements` is a new section, ported from the legacy
+> `isbat_student_module.html` "Event Management"/"Announcement Management"
+> screens — unlike most of this module, both pages' Add/Edit/Delete actions
+> do gate on `usePagePermissions()`. Like the other Student sections above,
+> it's not yet registered on the backend's permission model, so
+> `mergeStudentSections()` forces the section into the real menu tree the
+> same way it does `Operations`/`Communications`/etc.
+>
+> `Event Management` is backed by the real
+> `academic-service.students.events.*` endpoints (`GET`/`POST`/`PUT`/
+> `DELETE /api/v1/students/events`, plus
+> `GET /api/v1/students/events/{eventGuid}`). `Announcement Management` has
+> no backend endpoint yet — the page holds its data in local component state
+> only (see `src/app/student/announcement-management/types.ts`); its
+> `permissions` above reflect what the page *would* gate once a real API and
+> `usePagePermissions()`-backed leaf exist, not a confirmed backend contract.
 
 > `Batch Summary` moved out of `Student Records` into `Academic` >
 > `Academic Core` on 2026-09-02 (see the `Academic` section above) — the
@@ -1383,6 +1464,40 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
 
 ---
 
+## Activity Log
+
+```json
+{
+  "name": "Activity Log",
+  "icon": "lni lni-list",
+  "url": null,
+  "permissions": null,
+  "children": [
+    {
+      "name": "Audit Trail",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Activity Log",
+          "icon": "lni lni-list",
+          "url": "/activity-log/logs",
+          "permissions": {},
+          "children": []
+        }
+      ]
+    }
+  ]
+}
+```
+
+> This whole module was missing from this doc. It's the last rail rendered
+> by `Sidebar.tsx` (after `Config`), one leaf deep, mock/static like most of
+> `Student`/`Finance`'s newer sections above.
+
+---
+
 ## Pages with no sidebar/menu entry yet
 
 These `page.tsx` routes exist on disk and work — they're just not reachable
@@ -1445,3 +1560,4 @@ Employee in that render order).
 | Employee | `lni lni-briefcase` |
 | Assessment | `lni lni-pencil-alt` |
 | Config | `lni lni-cog` |
+| Activity Log | `lni lni-list` |
