@@ -9,7 +9,7 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 
 import { getIntakes, Intake } from '@/lib/api/academic/intake'
 import { getHallTicketSearch, HallTicketSearchResultDto } from '@/lib/api/student/hallTicketSearch'
-import { getHallTicketEligibility, issueHallTicket, issueBulkHallTickets, getHallTicketPdfUrl, getBulkHallTicketPdfUrl, HallTicketEligibilityDto, BulkIssueResponseDto } from '@/lib/api/assessment/hallTicketIssue'
+import { getHallTicketEligibility, issueHallTicket, issueBulkHallTickets, getHallTicketPdfUrl, getBulkHallTicketPdfUrl, HallTicketEligibilityDto, BulkIssueResponseDto, getBulkIssuedHallTickets, BulkIssuedStudentDto, getHallTicketQrImageUrl } from '@/lib/api/assessment/hallTicketIssue'
 
 export default function HallTicketIssuancePage() {
   const [term, setTerm] = useState('Term 1')
@@ -28,9 +28,13 @@ export default function HallTicketIssuancePage() {
 
   const [isIssuing, setIsIssuing] = useState(false)
   const [isBulkIssuing, setIsBulkIssuing] = useState(false)
+  const [showIssuedModal, setShowIssuedModal] = useState(false)
+  const [issuedStudents, setIssuedStudents] = useState<BulkIssuedStudentDto[]>([])
+  const [isFetchingIssued, setIsFetchingIssued] = useState(false)
 
   const [toast, setToast] = useState<{ msg: string, type: string } | null>(null)
   const topCardRef = useRef<HTMLDivElement>(null)
+  const tableRef = useRef<HTMLDivElement>(null)
 
   const showToast = (msg: string, type: string = 'success') => {
     setToast({ msg, type })
@@ -53,6 +57,11 @@ export default function HallTicketIssuancePage() {
       setIsSearching(true)
       getHallTicketSearch(search, selectedIntake).then(data => {
         setStudents(data || [])
+        if (search.trim() !== '' && data && data.length > 0) {
+          setTimeout(() => {
+            tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }, 100)
+        }
       }).catch(err => {
         console.error('Search error:', err)
         setStudents([])
@@ -113,6 +122,19 @@ export default function HallTicketIssuancePage() {
         }
       })
       .finally(() => setIsIssuing(false))
+  }
+
+  const handleViewIssuedList = () => {
+    if (!selectedIntake) return
+    setShowIssuedModal(true)
+    setIsFetchingIssued(true)
+    getBulkIssuedHallTickets(selectedIntake, term === 'Term 1' ? 1 : 2)
+      .then(data => setIssuedStudents(data || []))
+      .catch(err => {
+        console.error('Failed to load issued list:', err)
+        showToast('Failed to load issued list', 'error')
+      })
+      .finally(() => setIsFetchingIssued(false))
   }
 
   const handleBulkIssue = () => {
@@ -222,11 +244,14 @@ export default function HallTicketIssuancePage() {
                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Evaluating</p>
                     </div>
                  ) : eligibility?.alreadyIssued ? (
-                    <div className="flex h-full flex-col items-center justify-center text-emerald-600">
-                       <div className="w-14 h-14 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-2 ring-4 ring-emerald-50/50">
-                         <i className="lni lni-ticket text-3xl"></i>
+                    <div className="flex h-full items-center justify-center gap-5 text-emerald-600 animate-in fade-in duration-300">
+                       <div className="w-20 h-20 bg-white p-1 rounded-lg border border-emerald-100 shadow-sm shrink-0 overflow-hidden relative">
+                         <img src={getHallTicketQrImageUrl(selectedStudent.studentGuid, term === 'Term 1' ? 1 : 2)} alt="QR Code" className="w-full h-full object-cover" />
                        </div>
-                       <h4 className="font-bold text-lg leading-tight text-emerald-700">Ticket Issued</h4>
+                       <div className="flex flex-col">
+                         <h4 className="font-bold text-lg leading-tight text-emerald-700">Ticket Issued</h4>
+                         <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600/70 mt-1">Ready for use</p>
+                       </div>
                     </div>
                  ) : eligibility ? (
                     <div className="flex flex-col h-full justify-center">
@@ -291,7 +316,7 @@ export default function HallTicketIssuancePage() {
         </div>
 
         {/* Bottom: Student List */}
-        <div className="flex-1 flex flex-col bg-white border border-slate-200/80 rounded-xl shadow-sm overflow-hidden min-h-[300px]">
+        <div ref={tableRef} className="flex-1 flex flex-col bg-white border border-slate-200/80 rounded-xl shadow-sm overflow-hidden min-h-[300px]">
           <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <div className="flex items-center gap-3">
               <h3 className="font-bold text-slate-800 flex items-center gap-2">
@@ -304,6 +329,12 @@ export default function HallTicketIssuancePage() {
 
             {selectedIntake && (
               <div className="flex gap-2">
+                <button
+                  onClick={handleViewIssuedList}
+                  className="px-3 py-1.5 text-[11px] font-bold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 rounded-md transition-colors flex items-center gap-1.5"
+                >
+                  <i className="lni lni-list"></i> View Issued List
+                </button>
                 <button
                   onClick={handleBulkIssue}
                   disabled={isBulkIssuing}
@@ -393,6 +424,73 @@ export default function HallTicketIssuancePage() {
       </div>
 
       <Toast toast={toast} />
+
+      {/* Issued List Modal */}
+      {showIssuedModal && (
+        <div className="modal-overlay open" onClick={() => setShowIssuedModal(false)} style={{ zIndex: 650 }}>
+          <div className="modal modal-lg flex flex-col" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+            
+            <div className="modal-hdr modal-hdr-blue shrink-0">
+              <div className="modal-title flex items-center gap-2">
+                <i className="lni lni-ticket"></i>
+                <span>Hall Tickets Issued for {term}</span>
+              </div>
+              <button type="button" className="modal-close" onClick={() => setShowIssuedModal(false)}>
+                <i className="lni lni-close"></i>
+              </button>
+            </div>
+            
+            <div className="modal-body p-0 flex-1 overflow-auto bg-slate-50">
+              {isFetchingIssued ? (
+                <div className="flex flex-col items-center justify-center py-20 text-blue-500">
+                  <i className="lni lni-spinner-solid animate-spin text-4xl mb-3"></i>
+                  <p className="text-sm font-medium text-slate-500">Fetching records...</p>
+                </div>
+              ) : issuedStudents.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                  <i className="lni lni-empty-file text-5xl mb-3"></i>
+                  <p className="text-sm font-medium text-slate-500">No tickets have been issued yet for this term.</p>
+                </div>
+              ) : (
+                <table className="w-full text-left text-[13px] bg-white">
+                  <thead className="sticky top-0 bg-slate-50/95 backdrop-blur z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                    <tr className="text-slate-500 font-semibold border-b border-slate-200">
+                      <th className="py-3 px-5 font-semibold text-xs">Reg. No.</th>
+                      <th className="py-3 px-5 font-semibold text-xs">Student Name</th>
+                      <th className="py-3 px-5 font-semibold text-xs">Program</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {issuedStudents.map(student => (
+                      <tr key={student.studentGuid} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-3 px-5 font-mono font-semibold text-slate-700">{student.studentRegNo}</td>
+                        <td className="py-3 px-5 font-medium text-slate-900">{student.studentName}</td>
+                        <td className="py-3 px-5 text-slate-500 text-xs truncate max-w-[200px]" title={student.programName}>{student.programName}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            
+            <div className="modal-ftr shrink-0 flex justify-between items-center bg-white border-t border-slate-200">
+              <span className="text-xs font-semibold text-slate-500">Total: {issuedStudents.length} Students</span>
+              <div className="flex gap-2">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowIssuedModal(false)}>
+                  Close
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => window.open(getBulkHallTicketPdfUrl(selectedIntake, term === 'Term 1' ? 1 : 2), '_blank')}
+                  className="btn btn-primary flex items-center gap-2"
+                >
+                  <i className="lni lni-printer"></i> Print Batch PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
