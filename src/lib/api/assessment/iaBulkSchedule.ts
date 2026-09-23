@@ -308,3 +308,73 @@ export async function updateBulkUeSchedule(
 
   return apiPut<BulkUpdateResponse>(`/api/v1/assessment/ia-bulk-ue-schedule/?${qs.toString()}`, body)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. Mock (CBT) Bulk Scheduling (ia-bulk-mock-schedule)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BulkMockSchedulePreviewResponse {
+  matchCount: number
+  scheduledCount: number
+  unscheduledCount: number
+  scheduledStartDateTime: string | null
+  scheduledEndDateTime: string | null
+  durationMinutes: number | null
+  examRuleGuid: string | null
+  examRuleCode: string | null
+  examRuleName: string | null
+}
+
+export interface BulkUpdateMockScheduleRequest {
+  scheduledStartDateTime: string
+  scheduledEndDateTime: string
+  durationMinutes: number
+  examRuleGuid?: string | null
+}
+
+/** Check status for a single Programme Semester (Mock Exam) */
+export async function getBulkMockScheduleStatus(params: {
+  academicIntakeGuid: string
+  programGuid: string
+  semesterGuid: string
+}): Promise<BulkScheduleStatusResponse> {
+  const qs = new URLSearchParams({
+    academicIntakeGuid: params.academicIntakeGuid,
+    programGuid: params.programGuid,
+    semesterGuid: params.semesterGuid,
+  })
+  return apiGet<BulkScheduleStatusResponse>(`/api/v1/assessment/ia-bulk-mock-schedule/status?${qs.toString()}`)
+}
+
+/** Dry-run preview for Mock Exam bulk scheduling */
+export async function getBulkMockSchedulePreview(params: BaseBulkScheduleScopeParams): Promise<BulkMockSchedulePreviewResponse> {
+  const qs = new URLSearchParams({
+    academicIntakeGuid: params.academicIntakeGuid,
+  })
+  if (params.programGuid && params.semesterGuid) {
+    qs.set('programGuid', params.programGuid)
+    qs.set('semesterGuid', params.semesterGuid)
+  } else if (params.campusGuid) {
+    qs.set('campusGuid', params.campusGuid)
+  }
+
+  return apiGet<BulkMockSchedulePreviewResponse>(`/api/v1/assessment/ia-bulk-mock-schedule/preview?${qs.toString()}`)
+}
+
+/** Execute bulk update for Mock Exam */
+export async function updateBulkMockSchedule(
+  params: BaseBulkScheduleScopeParams,
+  body: BulkUpdateMockScheduleRequest
+): Promise<BulkUpdateResponse> {
+  const qs = new URLSearchParams({
+    academicIntakeGuid: params.academicIntakeGuid,
+  })
+  if (params.programGuid && params.semesterGuid) {
+    qs.set('programGuid', params.programGuid)
+    qs.set('semesterGuid', params.semesterGuid)
+  } else if (params.campusGuid) {
+    qs.set('campusGuid', params.campusGuid)
+  }
+
+  return apiPut<BulkUpdateResponse>(`/api/v1/assessment/ia-bulk-mock-schedule/?${qs.toString()}`, body)
+}
