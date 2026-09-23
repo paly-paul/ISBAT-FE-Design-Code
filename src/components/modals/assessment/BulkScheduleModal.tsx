@@ -8,10 +8,12 @@ import {
   updateBulkTestSchedule,
   getBulkUeSchedulePreview,
   updateBulkUeSchedule,
+  getBulkMockSchedulePreview,
+  updateBulkMockSchedule,
 } from '@/lib/api/assessment/iaBulkSchedule'
 import { getExamRules, ExamRuleDto } from '@/lib/api/assessment/examRule'
 
-export type BulkAssessmentType = 'CW' | 'CLASS_TEST' | 'CA' | 'UE'
+export type BulkAssessmentType = 'CW' | 'CLASS_TEST' | 'CA' | 'UE' | 'MOCK'
 
 export interface BulkScheduleScope {
   intakeGuid: string
@@ -63,6 +65,12 @@ const TYPE_CONFIG: Record<
     badge: 'UE',
     icon: 'lni-graduation',
     defaultMaxMark: 70,
+  },
+  MOCK: {
+    title: 'Mock (CBT)',
+    badge: 'Mock',
+    icon: 'lni-display-alt',
+    defaultMaxMark: 0,
   },
 }
 
@@ -261,6 +269,23 @@ export function BulkScheduleModal({
           setPreviewError(err?.message || 'Could not load UE preview. You may still set new schedule dates.')
         })
         .finally(() => setIsPreviewLoading(false))
+    } else if (scheduleType === 'MOCK') {
+      getBulkMockSchedulePreview(baseParams)
+        .then(res => {
+          setPreviewStats({
+            matchCount: res.matchCount,
+            scheduledCount: res.scheduledCount,
+            unscheduledCount: res.unscheduledCount,
+          })
+          if (res.scheduledStartDateTime) setStartDateTime(toLocalDatetimeInputString(res.scheduledStartDateTime))
+          if (res.scheduledEndDateTime) setEndDateTime(toLocalDatetimeInputString(res.scheduledEndDateTime))
+          if (res.durationMinutes != null) setDurationMinutes(res.durationMinutes)
+          if (res.examRuleGuid) setSelectedExamRuleGuid(res.examRuleGuid)
+        })
+        .catch(err => {
+          setPreviewError(err?.message || 'Could not load Mock preview. You may still set new schedule dates.')
+        })
+        .finally(() => setIsPreviewLoading(false))
     }
   }, [isOpen, scheduleType, scope, config.defaultMaxMark])
 
@@ -276,6 +301,7 @@ export function BulkScheduleModal({
     if (!scope) return
 
     setSubmitError(null)
+    setPreviewError(null)
 
     // Validation
     if (scheduleType === 'UE') {
@@ -302,7 +328,7 @@ export function BulkScheduleModal({
       }
     }
 
-    if (maxMark < 0) {
+      if (scheduleType !== 'MOCK' && maxMark < 0) {
       setSubmitError('Maximum mark cannot be negative.')
       return
     }
@@ -379,6 +405,18 @@ export function BulkScheduleModal({
         )
         updatedCount = res.data ?? 1
         resMessage = res.message || `${updatedCount} University Exam record(s) scheduled successfully.`
+      } else if (scheduleType === 'MOCK') {
+        const res = await updateBulkMockSchedule(
+          baseParams,
+          {
+            scheduledStartDateTime: new Date(startDateTime).toISOString(),
+            scheduledEndDateTime: new Date(endDateTime).toISOString(),
+            durationMinutes: Number(durationMinutes) || 60,
+            examRuleGuid: selectedExamRuleGuid || null,
+          }
+        )
+        updatedCount = res.data ?? 1
+        resMessage = res.message || `${updatedCount} Mock Exam record(s) scheduled successfully.`
       }
 
       onSuccess(updatedCount, resMessage)
@@ -436,7 +474,7 @@ export function BulkScheduleModal({
                 <span className="text-slate-500 font-medium">Campus:</span>
                 <span className="text-slate-800">{scope.campusName || 'All Registered Campuses'}</span>
               </div>
-              {scheduleType !== 'CA' && (
+              {scheduleType !== 'CA' && scheduleType !== 'MOCK' && (
                 <div className="flex justify-between items-baseline border-b border-slate-200/60 pb-1">
                   <span className="text-slate-500 font-medium">Academic Term:</span>
                   <span className="badge badge-purple text-[10.5px] font-semibold">{termLabel}</span>
@@ -535,7 +573,7 @@ export function BulkScheduleModal({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {scheduleType === 'CLASS_TEST' ? (
+                  {(scheduleType === 'CLASS_TEST' || scheduleType === 'MOCK') ? (
                     <div>
                       <label className="block text-slate-700 font-semibold mb-1">
                         Duration (Minutes) <span className="text-rose-500">*</span>
@@ -551,44 +589,50 @@ export function BulkScheduleModal({
                     </div>
                   ) : null}
 
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      Max Mark <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
-                      value={maxMark}
-                      onChange={e => setMaxMark(Number(e.target.value))}
-                      required
-                    />
-                  </div>
+                  {scheduleType !== 'MOCK' && (
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1">
+                        Max Mark <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                        value={maxMark}
+                        onChange={e => setMaxMark(Number(e.target.value))}
+                        required
+                      />
+                    </div>
+                  )}
 
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">Mode</label>
-                    <select
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
-                      value={assessmentTypeMode}
-                      onChange={e => setAssessmentTypeMode(Number(e.target.value))}
-                    >
-                      <option value={0}>Online</option>
-                      <option value={1}>Offline</option>
-                    </select>
-                  </div>
+                  {scheduleType !== 'MOCK' && (
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1">Mode</label>
+                      <select
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                        value={assessmentTypeMode}
+                        onChange={e => setAssessmentTypeMode(Number(e.target.value))}
+                      >
+                        <option value={0}>Online</option>
+                        <option value={1}>Offline</option>
+                      </select>
+                    </div>
+                  )}
 
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">Publish Status</label>
-                    <select
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
-                      value={publishStatus}
-                      onChange={e => setPublishStatus(Number(e.target.value))}
-                    >
-                      <option value={0}>Unpublished (Draft)</option>
-                      <option value={1}>Published</option>
-                    </select>
-                  </div>
+                  {scheduleType !== 'MOCK' && (
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1">Publish Status</label>
+                      <select
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                        value={publishStatus}
+                        onChange={e => setPublishStatus(Number(e.target.value))}
+                      >
+                        <option value={0}>Unpublished (Draft)</option>
+                        <option value={1}>Published</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div>
