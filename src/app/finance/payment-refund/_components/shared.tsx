@@ -82,15 +82,27 @@ export function RefundLedgerPicker({ applicationGuid, studentGuid, showToast, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applicationGuid])
 
-  // Prefill amount/currency from the picked line — same "line-level detail
-  // over a bare ledger name" upgrade this batch endpoint gives over the old
-  // ledger-options picker. Still freely editable.
+  // Prefill amount/currency once a ledger is picked. A refund is scoped to
+  // the whole ledger, not the one payment line clicked — `ledgerGuid` here
+  // is a shared ledger-definition guid, the same across every semester's
+  // payment into it (see post-ledger-details-batch.md), and post-refund.md
+  // validates the amount against SUM(AMTDEF) across every payment/semester
+  // for that ledger, not just one line. So prefill from `totalPaid` (the
+  // server's own authoritative sum for this exact applicationGuid+
+  // ledgerGuid pair — get-total-paid.md) once it's loaded, falling back to
+  // the clicked line's own amount only as an optimistic placeholder while
+  // that fetch is still in flight. Still freely editable either way.
   useEffect(() => {
-    if (!selectedLine) return
-    setCurrencyGuid(selectedLine.currencyGuid)
-    setRefundAmount(String(selectedLine.amount))
+    if (!ledgerGuid) return
+    if (totalPaid) {
+      setCurrencyGuid(totalPaid.currencyGuid)
+      setRefundAmount(String(totalPaid.amount))
+    } else if (selectedLine) {
+      setCurrencyGuid(selectedLine.currencyGuid)
+      setRefundAmount(String(selectedLine.amount))
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ledgerGuid])
+  }, [ledgerGuid, totalPaid])
 
   useEffect(() => {
     if (!currencyGuid && currencies.length > 0) setCurrencyGuid(getDefaultFinanceCurrencyGuid(currencies))
@@ -205,11 +217,15 @@ export function RefundLedgerPicker({ applicationGuid, studentGuid, showToast, on
                 <span>Pay Date</span>
                 <span>Receipt</span>
               </div>
-              {lines.map(l => {
+              {lines.map((l, i) => {
                 const isSelected = ledgerGuid === l.ledgerGuid
                 return (
+                  // ledgerGuid is a shared ledger-definition guid, not a
+                  // per-payment id — multiple rows (e.g. Tuition Fee across
+                  // several semesters) share the same one, so it alone
+                  // can't key these rows uniquely.
                   <div
-                    key={l.ledgerGuid}
+                    key={`${l.ledgerGuid}-${l.receipt}-${i}`}
                     className="recgrid-row recgrid-body cursor-pointer"
                     style={isSelected ? { background: 'var(--b50)' } : undefined}
                     onClick={() => setLedgerGuid(l.ledgerGuid)}
@@ -232,6 +248,20 @@ export function RefundLedgerPicker({ applicationGuid, studentGuid, showToast, on
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-reload"></i></span> Payment Detail</div>
           </div>
+
+          {/* A refund is scoped to the whole ledger, not the one payment
+              line clicked on the left (see the useEffect above) — this
+              spells that out, since multiple highlighted rows there
+              otherwise looks like unexplained multi-select. */}
+          {selectedLine && (
+            <div className="info-box mb-[14px]">
+              <i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i>
+              <div style={{ fontSize: 12.5 }}>
+                Covers every unrefunded &quot;{selectedLine.ledgerName}&quot; payment for this application
+                {lines.filter(l => l.ledgerGuid === ledgerGuid).length > 1 ? ` (${lines.filter(l => l.ledgerGuid === ledgerGuid).length} payments, highlighted on the left)` : ''} — a ledger can only be refunded once, ever.
+              </div>
+            </div>
+          )}
 
           <div className="g2 mb-[14px]">
             <div className="fg">
