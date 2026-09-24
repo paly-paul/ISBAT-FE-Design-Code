@@ -568,7 +568,8 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
           <div className="fg" style={{ marginBottom: 0 }}>
             <div className="lbl">Programme</div>
             <SearchSelect
-              placeholder={campusGuid ? 'All programmes at this campus' : 'All programmes'}
+              placeholder={campusGuid ? 'All programmes at this campus' : 'Select a campus first'}
+              disabled={!campusGuid}
               options={programOptions}
               value={programGuid}
               onChange={v => updateFilters(() => {
@@ -589,7 +590,8 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
           <div className="fg" style={{ marginBottom: 0 }}>
             <div className="lbl">Batch</div>
             <SearchSelect
-              placeholder={programGuid ? 'All batches in this programme' : 'All batches'}
+              placeholder={programGuid ? 'All batches in this programme' : 'Select a programme first'}
+              disabled={!programGuid}
               options={batchOptions}
               value={batchGuid}
               onChange={v => updateFilters(() => {
