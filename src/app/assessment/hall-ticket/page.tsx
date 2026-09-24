@@ -330,12 +330,6 @@ export default function HallTicketIssuancePage() {
             {selectedIntake && (
               <div className="flex gap-2">
                 <button
-                  onClick={handleViewIssuedList}
-                  className="px-3 py-1.5 text-[11px] font-bold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 rounded-md transition-colors flex items-center gap-1.5"
-                >
-                  <i className="lni lni-list"></i> View Issued List
-                </button>
-                <button
                   onClick={handleBulkIssue}
                   disabled={isBulkIssuing}
                   className="px-3 py-1.5 text-[11px] font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -347,7 +341,7 @@ export default function HallTicketIssuancePage() {
                   )}
                 </button>
                 <button
-                  onClick={() => window.open(getBulkHallTicketPdfUrl(selectedIntake, term === 'Term 1' ? 1 : 2), '_blank')}
+                  onClick={handleViewIssuedList}
                   className="px-3 py-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-md transition-colors flex items-center gap-1.5"
                 >
                   <i className="lni lni-printer"></i> Bulk Print All

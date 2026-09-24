@@ -7,10 +7,20 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { FilterTh } from '@/components/FilterTh'
 import { Toast } from '@/components/Toast'
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { useUeDetailedMarks, useSaveStudentUeMark, useVerifyUeMarks } from '@/hooks/assessment/useUeMarks'
 
 export default function MarkEntryUePage() {
-  const [loading, setLoading] = useState(true)
+  const searchParams = useSearchParams()
+  // Extract GUID from URL, e.g. /assessment/mark-ue?guid=xxxx
+  // Fallback to a hardcoded ID for testing if not present in URL
+  const universityExamGuid = searchParams.get('guid') || 'test-ue-guid-123'
+  
+  const { data: gridData, isLoading, error } = useUeDetailedMarks(universityExamGuid)
+  const saveMarkMutation = useSaveStudentUeMark(universityExamGuid)
+  const verifyMutation = useVerifyUeMarks(universityExamGuid)
+
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [openFilter, setOpenFilter] = useState<string | null>(null)
@@ -19,7 +29,7 @@ export default function MarkEntryUePage() {
 
   const showToast = (msg: string, type: string = 'success') => {
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 3000)
+    setTimeout(() => setToast(null), 4000)
   }
 
   const handleFilterSelect = (col: string, vals: string[]) => {
@@ -27,27 +37,115 @@ export default function MarkEntryUePage() {
     setOpenFilter(null)
   }
 
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1200)
-    return () => clearTimeout(timer)
-  }, [])
+  const handleVerify = () => {
+    verifyMutation.mutate(undefined, {
+      onSuccess: () => {
+        showToast('University Exam Marks verified successfully!', 'success')
+      },
+      onError: (err: any) => {
+        const status = err?.response?.status || err?.status;
+        const errCode = err?.response?.data?.code || err?.code;
+        
+        if (status === 400 || errCode === 'no_marks_entered') {
+          showToast('Please enter marks before verifying.', 'error')
+        } else if (status === 409 || errCode === 'already_verified') {
+          showToast('This exam is already verified.', 'error')
+          // Since it's already verified, we could trigger a refetch of the grid to sync state
+        } else if (status === 404) {
+          showToast('Exam not found.', 'error')
+        } else {
+          showToast('Failed to verify exam marks.', 'error')
+        }
+      }
+    })
+  }
+
+  const handleMarkChange = (studentGuid: string, markValue: string) => {
+    if (gridData?.isVerified) return;
+    
+    let mark: number | null = parseFloat(markValue)
+    if (isNaN(mark)) mark = null
+    
+    // basic absent logic
+    const isAbsent = markValue.trim().toUpperCase() === 'AB'
+    if (isAbsent) mark = null
+
+    saveMarkMutation.mutate({ studentGuid, mark, isAbsent })
+  }
+
+  const students = useMemo(() => {
+    let result = gridData?.students || []
+    
+    if (search) {
+      const s = search.toLowerCase()
+      result = result.filter(st => 
+        (st.studentName && st.studentName.toLowerCase().includes(s)) ||
+        (st.studentRegNo && st.studentRegNo.toLowerCase().includes(s)) ||
+        (st.matchingCode && st.matchingCode.toLowerCase().includes(s))
+      )
+    }
+
+    if (filters['result'] && filters['result'].length > 0) {
+      result = result.filter(st => filters['result'].includes(st.result))
+    }
+
+    return result
+  }, [gridData?.students, search, filters])
+
+  if (error) {
+    return (
+      <div className="page active p-10 flex flex-col items-center justify-center h-full text-slate-500">
+        <i className="lni lni-warning text-4xl text-amber-500 mb-4"></i>
+        <h2 className="text-xl font-bold text-slate-800 mb-2">Error Loading Exam Data</h2>
+        <p>Could not fetch data for University Exam ID: {universityExamGuid}</p>
+        <p className="text-sm mt-2 opacity-75">Please ensure the backend server is running and the exam exists.</p>
+      </div>
+    )
+  }
 
   return (
     <div className="page active">
       <div className="pg-hdr">
         <div>
-          <div className="pg-title">Mark Entry — University Examination</div>
+          <div className="pg-title flex items-center gap-3">
+            Mark Entry — University Examination
+            {gridData?.isVerified === true ? (
+              <span className="badge badge-green !text-[11px] !py-1 !px-2.5 shadow-sm">
+                <i className="lni lni-checkmark-circle mr-1"></i> Verified
+              </span>
+            ) : gridData?.isVerified === false ? (
+              <span className="badge badge-amber !text-[11px] !py-1 !px-2.5 shadow-sm">
+                Pending Verification
+              </span>
+            ) : null}
+          </div>
           <div className="pg-sub">Enter UE marks · Matching Code for anonymous marking · IA + UE pass gate enforced</div>
         </div>
         <div className="pg-actions flex items-center gap-3">
           <SearchSelect
-                options={[
-                  'CSE 1301 - Algorithms (Standard/70m)'
-                ]}
-                className="w-full"
-              />
-          <button className="btn btn-primary whitespace-nowrap" onClick={() => showToast('All UE marks saved successfully')}>
+            options={[
+              gridData?.examName || 'Select Exam...'
+            ]}
+            className="w-full"
+            value={gridData?.examName}
+          />
+          <button 
+            className="btn btn-secondary whitespace-nowrap" 
+            onClick={() => showToast('All UE marks saved locally')}
+            disabled={gridData?.isVerified}
+          >
             Save All
+          </button>
+          <button 
+            className="btn btn-primary whitespace-nowrap flex items-center gap-2" 
+            onClick={handleVerify}
+            disabled={gridData?.isVerified || verifyMutation.isPending || isLoading}
+          >
+            {verifyMutation.isPending ? (
+              <><i className="lni lni-spinner-solid animate-spin"></i> Verifying...</>
+            ) : (
+              <><i className="lni lni-shield"></i> Verify Exam</>
+            )}
           </button>
         </div>
       </div>
@@ -100,111 +198,87 @@ export default function MarkEntryUePage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {isLoading ? (
                 <TableLoadingState colSpan={10} />
+              ) : students.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="text-center py-8 text-slate-400">
+                    No students found.
+                  </td>
+                </tr>
               ) : (
-                <>
-              <tr>
-                <td>
-                  <ActionMenu>
-                    <button className="btn btn-neu btn-sm"><i className="lni lni-eye"></i> View</button>
-                  </ActionMenu>
-                </td>
-                <td className="font-mono text-slate-600 text-[13px]">4821-7734</td>
-                <td className="font-mono text-slate-500 text-[12.5px]">BCS/2024/0031</td>
-                <td className="text-slate-800">Amara Nkosi</td>
-                <td className="font-medium text-slate-800 text-[13px]">23.4</td>
-                <td>
-                  <div className="flex flex-col items-center justify-center bg-green-50 text-green-700 w-12 h-12 rounded-full border border-green-200">
-                    <span className="font-bold text-[10px]">✓</span>
-                    <span className="text-[10px] font-semibold">(78%)</span>
-                  </div>
-                </td>
-                <td>
-                  <input type="text" className="w-[60px] px-2 py-1 border border-slate-200 rounded text-center text-[13px] focus:outline-none focus:border-purple-500" defaultValue="72" />
-                </td>
-                <td className="text-purple-700 font-bold">50.4</td>
-                <td>
-                  <div className="flex flex-col items-center justify-center bg-green-50 text-green-700 w-12 h-12 rounded-full border border-green-200">
-                    <span className="font-bold text-[10px]">✓</span>
-                    <span className="text-[10px] font-semibold">(72%)</span>
-                  </div>
-                </td>
-                <td><span className="bg-green-100 text-green-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold">PASS</span></td>
-              </tr>
-              <tr>
-                <td>
-                  <ActionMenu>
-                    <button className="btn btn-neu btn-sm"><i className="lni lni-eye"></i> View</button>
-                  </ActionMenu>
-                </td>
-                <td className="font-mono text-slate-600 text-[13px]">4822-9901</td>
-                <td className="font-mono text-slate-500 text-[12.5px]">BCS/2024/0017</td>
-                <td className="text-slate-800">Emmanuel Okello</td>
-                <td className="font-medium text-slate-800 text-[13px]">21.6</td>
-                <td>
-                  <div className="flex flex-col items-center justify-center bg-green-50 text-green-700 w-12 h-12 rounded-full border border-green-200">
-                    <span className="font-bold text-[10px]">✓</span>
-                    <span className="text-[10px] font-semibold">(72%)</span>
-                  </div>
-                </td>
-                <td>
-                  <input type="text" className="w-[60px] px-2 py-1 border border-slate-200 rounded text-center text-[13px] focus:outline-none focus:border-purple-500" defaultValue="58" />
-                </td>
-                <td className="text-purple-700 font-bold">40.6</td>
-                <td>
-                  <div className="flex flex-col items-center justify-center bg-amber-50 text-amber-600 w-12 h-12 rounded-full border border-amber-200">
-                    <span className="font-bold text-[10px]">✓</span>
-                    <span className="text-[10px] font-semibold">(58%)</span>
-                  </div>
-                </td>
-                <td><span className="bg-green-100 text-green-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold">PASS</span></td>
-              </tr>
-              <tr>
-                <td>
-                  <ActionMenu>
-                    <button className="btn btn-neu btn-sm"><i className="lni lni-eye"></i> View</button>
-                  </ActionMenu>
-                </td>
-                <td className="font-mono text-slate-600 text-[13px]">4823 3312</td>
-                <td className="font-mono text-slate-500 text-[12.5px]">BCS/2024/0058</td>
-                <td className="text-slate-800">David<br/>Ssemwogerere</td>
-                <td className="font-medium text-slate-800 text-[13px]">28.8</td>
-                <td>
-                  <div className="flex flex-col items-center justify-center bg-green-50 text-green-700 w-12 h-12 rounded-full border border-green-200">
-                    <span className="font-bold text-[10px]">✓</span>
-                    <span className="text-[10px] font-semibold">(96%)</span>
-                  </div>
-                </td>
-                <td>
-                  <input type="text" className="w-[60px] px-2 py-1 border border-slate-200 rounded text-center text-[13px] focus:outline-none focus:border-purple-500" defaultValue="42" />
-                </td>
-                <td className="text-purple-700 font-bold">29.4</td>
-                <td>
-                  <div className="flex flex-col items-center justify-center bg-red-50 text-red-600 w-12 h-12 rounded-full border border-red-200">
-                    <span className="font-bold text-[10px]">X</span>
-                    <span className="text-[10px] font-semibold">(42%)</span>
-                  </div>
-                </td>
-                <td><span className="badge badge-red">FAIL<br/>(UE)</span></td>
-              </tr>
-                </>
+                students.map((student) => (
+                  <tr key={student.studentGuid}>
+                    <td>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm"><i className="lni lni-eye"></i> View</button>
+                      </ActionMenu>
+                    </td>
+                    <td className="font-mono text-slate-600 text-[13px]">{student.matchingCode || '—'}</td>
+                    <td className="font-mono text-slate-500 text-[12.5px]">{student.studentRegNo}</td>
+                    <td className="text-slate-800">{student.studentName}</td>
+                    <td className="font-medium text-slate-800 text-[13px]">{student.iaTotal ?? '—'}</td>
+                    <td>
+                      {student.iaPass ? (
+                        <div className="flex flex-col items-center justify-center bg-green-50 text-green-700 w-12 h-12 rounded-full border border-green-200">
+                          <span className="font-bold text-[10px]">✓</span>
+                          <span className="text-[10px] font-semibold">({student.iaPercentage ?? 0}%)</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center bg-red-50 text-red-600 w-12 h-12 rounded-full border border-red-200">
+                          <span className="font-bold text-[10px]">X</span>
+                          <span className="text-[10px] font-semibold">({student.iaPercentage ?? 0}%)</span>
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        className="w-[60px] px-2 py-1 border border-slate-200 rounded text-center text-[13px] focus:outline-none focus:border-purple-500 disabled:bg-slate-100 disabled:text-slate-500" 
+                        defaultValue={student.isAbsent ? 'AB' : (student.ueRawMark ?? '')} 
+                        disabled={gridData?.isVerified}
+                        onBlur={(e) => {
+                          if (e.target.value !== (student.isAbsent ? 'AB' : (student.ueRawMark?.toString() ?? ''))) {
+                            handleMarkChange(student.studentGuid, e.target.value)
+                          }
+                        }}
+                      />
+                    </td>
+                    <td className="text-purple-700 font-bold">{student.ueConvertedMark ?? '—'}</td>
+                    <td>
+                      {student.uePass ? (
+                        <div className="flex flex-col items-center justify-center bg-green-50 text-green-700 w-12 h-12 rounded-full border border-green-200">
+                          <span className="font-bold text-[10px]">✓</span>
+                          <span className="text-[10px] font-semibold">({student.uePercentage ?? 0}%)</span>
+                        </div>
+                      ) : student.ueRawMark !== null || student.isAbsent ? (
+                        <div className="flex flex-col items-center justify-center bg-red-50 text-red-600 w-12 h-12 rounded-full border border-red-200">
+                          <span className="font-bold text-[10px]">X</span>
+                          <span className="text-[10px] font-semibold">({student.uePercentage ?? 0}%)</span>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td>
+                      {student.result === 'PASS' ? (
+                        <span className="bg-green-100 text-green-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold">PASS</span>
+                      ) : student.result ? (
+                        <span className="badge badge-red">{student.result}</span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </ScrollTable>
         
         <div className="p-4 border-t border-slate-100">
-          <Pagination page={page} totalPages={6} totalCount={62} onPageChange={setPage} />
+          <Pagination page={page} totalPages={1} totalCount={students.length} onPageChange={setPage} />
         </div>
-        
-        <div className="p-5 pt-0 mt-4">
-          <div className="bg-[#fffbeb] border border-[#fde68a] rounded-md p-3 flex gap-3 text-[12.5px] text-[#b45309] items-start shadow-sm mt-4">
-            <div className="mt-0.5 text-[#d97706]"><i className="lni lni-warning"></i></div>
-            <div><span className="text-amber-800">David Ssemwogerere: UE score 42% is below the 50% pass threshold. Student is flagged for Resit (UE component).</span></div>
-          </div>
-        </div>
-
       </div>
       <Toast toast={toast} />
     </div>
