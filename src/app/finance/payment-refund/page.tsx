@@ -55,8 +55,8 @@ const FORCE_ENABLE_REFUND_BUTTONS = true
 
 type Tab = 'rejected' | 'passout' | 'fake-cert'
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'rejected',  label: 'Rejected by Registrar',      icon: 'lni-close-circle' },
   { id: 'passout',   label: 'Passout / Library Deposit',  icon: 'lni-graduation' },
+  { id: 'rejected',  label: 'Rejected by Registrar',      icon: 'lni-cross-circle' },
   { id: 'fake-cert', label: 'Fake-Certificate Termination', icon: 'lni-shield' },
 ]
 
@@ -136,7 +136,17 @@ export default function PaymentRefundPage() {
               className={`pc-tab-btn${activeTab === t.id ? ' active' : ''}`}
               onClick={() => setActiveTab(t.id)}
             >
-              <i className={`lni ${t.icon}`}></i> {t.label}
+              {/* Fixed, slightly-larger-than-text size (inline, scoped to
+                  just this page's tab icons rather than the shared
+                  .pc-tab-btn rule) — LineIcons glyphs aren't drawn at
+                  consistent visual weight/size at a shared font-size;
+                  lni-cross-circle in particular reads noticeably smaller
+                  than lni-graduation/lni-shield otherwise. lineHeight: 1
+                  strips the font's default extra leading, which is what
+                  was pushing the enlarged glyph's box (and so its
+                  flex-centered position) out of line with the label text
+                  next to it. */}
+              <i className={`lni ${t.icon}`} style={{ fontSize: 16, lineHeight: 1 }}></i> {t.label}
             </button>
           ))}
         </div>
