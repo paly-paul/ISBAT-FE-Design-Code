@@ -1,37 +1,61 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { Pagination } from '@/components/Pagination'
 import DatePicker from '@/components/DatePicker'
 import { SearchSelect } from '@/components/SearchSelect'
-import { usePassoutLibraryDepositSearch } from '@/hooks/academic/useRefundSearch'
-import { useStudentsByGuids } from '@/hooks/student/useStudents'
-import { useBulkRefundPassoutLibraryDeposit, BulkRefundLineInput, BulkRefundLineResultDto } from '@/hooks/finance/usePaymentRefund'
+import { usePassoutLibraryDepositSearch, usePassoutLibraryDepositByStudent } from '@/hooks/academic/useRefundSearch'
+import { PassoutLedgerLineDto, PassoutLibraryDepositRefundCandidateDto } from '@/lib/api/academic/refundSearch'
+import {
+  useBulkRefundPassoutLibraryDeposit,
+  useCreateRefund,
+  BulkRefundLineInput,
+  BulkRefundLineResultDto,
+} from '@/hooks/finance/usePaymentRefund'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
 import { useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { flattenUniquePages } from '@/lib/pagination'
-import { fmtAmt, todayYmd } from './shared'
-import { mockBulkRefund, mockResolveApplicationGuid, mockSearchPassout } from './mockData'
+import { AuthError } from '@/lib/api/client'
+import { fmtAmt, initialsFor, todayYmd } from './shared'
+import { mockBulkRefund, mockCreateRefund, mockGetPassoutStudentByGuid, mockSearchPassout } from './mockData'
 
 // Category 2 — students with RegStatus = Passout, refunding a Library
-// Deposit paid through either the main tuition ledger or the Other-Payments
-// module (both already merged into `ledgers` by the search endpoint itself —
-// see get-passout-library-deposit.md). Unlike the other two tabs this one
-// is a bulk flow: staff check off confirmed lines across possibly several
-// students, then submit them all in one call to
-// POST /refund/passout-library-deposit/bulk. "Select all" only checks what's
-// currently on screen — it is a frontend-only affordance, not a server-side
-// filter re-derive (see that endpoint's own doc).
+// Deposit paid through either/both of two genuinely different backend
+// sources (2026-09-23 frontend integration guide, fixing the earlier
+// "Ledger not found." bug):
+// - mainLedgerLines (T_PAYMENT_LEDGER) — refund with `ledgerGuid`
+// - otherLedgerLines (T_PAYMENT_OTHER_LEDGER) — refund with `ledgerOthersGuid`
+// These are NEVER merged into one array or one combined refund action — see
+// PassoutLibraryDepositRefundCandidateDto's own comment for why flattening
+// them caused every refund to fail. Each selectable row here carries a
+// `source` tag so submit can populate the correct request field per line.
+//
+// Two entry modes toggled by staff (2026-09-23, per request):
+// - Bulk: filter + table + multi-select across possibly several students,
+//   submitted in one POST /refund/passout-library-deposit/bulk call.
+// - Single: search-and-select exactly one student — same typeahead +
+//   pc-hero card pattern Rejected-by-Registrar (Category 1) uses — backed by
+//   the dedicated single-student detail endpoint, then refunded one line at
+//   a time through the generic POST /refund/applications/{applicationGuid}
+//   (there is no single-student bulk endpoint for this category; the guide
+//   is explicit that this flow reuses the same endpoint every other tab
+//   uses).
+// "Select all" in bulk mode only checks what's currently on screen — it is
+// a frontend-only affordance, not a server-side filter re-derive.
 
 const PAGE_SIZE = 20
+
+type LedgerSource = 'main' | 'other'
 
 interface SelectableLine {
   key: string
   studentGuid: string
+  applicationGuid: string | null
   studentName: string
   studentRegNo: string
+  source: LedgerSource
   ledgerGuid: string
   ledgerName: string
   currencyGuid: string
@@ -39,8 +63,42 @@ interface SelectableLine {
   amount: number
 }
 
-function lineKey(studentGuid: string, ledgerGuid: string) {
-  return `${studentGuid}::${ledgerGuid}`
+function lineKey(studentGuid: string, source: LedgerSource, ledgerGuid: string) {
+  return `${studentGuid}::${source}::${ledgerGuid}`
+}
+
+// Sorts a filter dropdown's fetched options so the currently-selected value
+// always sorts first, regardless of where it'd otherwise land in the
+// server's own order — a re-opened dropdown should show what's already
+// picked right at the top, not buried wherever the page/search happened to
+// place it. Falls back to `selectedLabel` (this page's own "label for a
+// value not in the current fetched page" cache) when the selected value
+// hasn't loaded into `list` yet.
+function pinSelected<T extends { value: string; label: string }>(list: T[], selectedValue: string, selectedLabel: string): T[] {
+  if (!selectedValue) return list
+  const selected = list.find(o => o.value === selectedValue) ?? (selectedLabel ? ({ value: selectedValue, label: selectedLabel } as T) : null)
+  if (!selected) return list
+  return [selected, ...list.filter(o => o.value !== selectedValue)]
+}
+
+function linesFor(s: PassoutLibraryDepositRefundCandidateDto): SelectableLine[] {
+  const toRow = (source: LedgerSource) => (l: PassoutLedgerLineDto): SelectableLine => ({
+    key: lineKey(s.studentGuid, source, l.ledgerGuid),
+    studentGuid: s.studentGuid,
+    applicationGuid: s.applicationGuid,
+    studentName: s.studentName,
+    studentRegNo: s.studentRegNo,
+    source,
+    ledgerGuid: l.ledgerGuid,
+    ledgerName: l.ledgerName,
+    currencyGuid: l.currencyGuid,
+    currencyCode: l.currencyCode,
+    amount: l.amount,
+  })
+  // Defensive ?? [] — guards a live response not yet carrying these two
+  // fields (or carrying them as null), same "don't trust an array is always
+  // present" caution used throughout this codebase.
+  return [...(s.mainLedgerLines ?? []).map(toRow('main')), ...(s.otherLedgerLines ?? []).map(toRow('other'))]
 }
 
 interface PassoutLibraryDepositTabProps {
@@ -50,7 +108,76 @@ interface PassoutLibraryDepositTabProps {
 }
 
 export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock = false }: PassoutLibraryDepositTabProps) {
-  const [search, setSearch] = useState('')
+  const [mode, setMode] = useState<'bulk' | 'single'>('single')
+
+  function switchMode(next: 'bulk' | 'single') {
+    if (next === mode) return
+    setMode(next)
+    setSelectedKeys(new Set())
+    setResults(null)
+  }
+
+  // ── Single-student mode — same live-typing typeahead (opens on focus,
+  // narrows as you type, closes on pick) as Rejected-by-Registrar's own
+  // Student Search. Selecting a typeahead hit only captures its guid; the
+  // actual detail (ledger lines, applicationGuid) is fetched fresh from the
+  // dedicated single-student endpoint below, not reused off the possibly-
+  // stale search row. ────────────────────────────────────────────────────
+  const [singleSearch, setSingleSearch] = useState('')
+  const [singleCommittedSearch, setSingleCommittedSearch] = useState('')
+  const [singleSearchFocused, setSingleSearchFocused] = useState(false)
+  const singleSearchBoxRef = useRef<HTMLDivElement>(null)
+  const [selectedStudentGuid, setSelectedStudentGuid] = useState<string | null>(null)
+
+  useEffect(() => {
+    const t = setTimeout(() => setSingleCommittedSearch(singleSearch.trim()), 400)
+    return () => clearTimeout(t)
+  }, [singleSearch])
+
+  useEffect(() => {
+    if (!singleSearchFocused) return
+    function handle(e: MouseEvent) {
+      if (!singleSearchBoxRef.current?.contains(e.target as Node)) setSingleSearchFocused(false)
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [singleSearchFocused])
+
+  const singleSearchTermLen = singleCommittedSearch.length
+  const singleSearchEnabled = mode === 'single' && singleSearchFocused && (singleSearchTermLen === 0 || singleSearchTermLen >= 2)
+  const { data: singleData, isLoading: isSingleSearchLoadingReal, isError: isSingleSearchError } = usePassoutLibraryDepositSearch(
+    { search: singleCommittedSearch, page: 1, pageSize: 20 },
+    !useMock && singleSearchEnabled,
+  )
+  const singleMockItems = useMock ? mockSearchPassout({ search: singleCommittedSearch, intakeGuid: '', programGuid: '', batchGuid: '', campusGuid: '' }) : []
+  const singleMatches = useMock ? singleMockItems : (singleData?.items ?? [])
+  const isSingleSearching = useMock ? false : isSingleSearchLoadingReal
+
+  const { data: selectedStudentReal, isLoading: isSelectedLoadingReal, isError: isSelectedError } = usePassoutLibraryDepositByStudent(
+    selectedStudentGuid, !useMock && mode === 'single',
+  )
+  const selectedStudent = useMock
+    ? (selectedStudentGuid ? mockGetPassoutStudentByGuid(selectedStudentGuid) : null)
+    : (selectedStudentReal ?? null)
+  const isSelectedLoading = useMock ? false : isSelectedLoadingReal
+
+  function selectStudent(s: PassoutLibraryDepositRefundCandidateDto) {
+    setSelectedStudentGuid(s.studentGuid)
+    setSingleSearch(s.studentName)
+    setSingleCommittedSearch('')
+    setSingleSearchFocused(false)
+    setSelectedKeys(new Set())
+    setResults(null)
+  }
+
+  function clearSingleSelection() {
+    setSelectedStudentGuid(null)
+    setSingleSearch('')
+    setSingleCommittedSearch('')
+    setSelectedKeys(new Set())
+    setResults(null)
+  }
+
   const [intakeGuid, setIntakeGuid] = useState('')
   const [programGuid, setProgramGuid] = useState('')
   const [batchGuid, setBatchGuid] = useState('')
@@ -75,41 +202,40 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
   const batches = batchesData?.items ?? []
 
   const { data, isLoading: isLoadingReal, isError } = usePassoutLibraryDepositSearch(
-    { search, page, pageSize: PAGE_SIZE, intakeGuid: intakeGuid || undefined, programGuid: programGuid || undefined, batchGuid: batchGuid || undefined, campusGuid: campusGuid || undefined },
-    !useMock,
+    { page, pageSize: PAGE_SIZE, intakeGuid: intakeGuid || undefined, programGuid: programGuid || undefined, batchGuid: batchGuid || undefined, campusGuid: campusGuid || undefined },
+    !useMock && mode === 'bulk',
   )
-  const mockItems = useMock ? mockSearchPassout({ search, intakeGuid, programGuid, batchGuid, campusGuid }) : []
-  const items = useMock ? mockItems : (data?.items ?? [])
+  const mockItems = useMock && mode === 'bulk' ? mockSearchPassout({ search: '', intakeGuid, programGuid, batchGuid, campusGuid }) : []
+  const bulkItems = useMock ? mockItems : (data?.items ?? [])
   const totalCount = useMock ? mockItems.length : (data?.totalCount ?? 0)
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const isLoading = useMock ? false : isLoadingReal
 
-  // Flatten each student's embedded ledger lines into one selectable row per
-  // (student, ledger) pair — a student can have more than one unrefunded
-  // Library Deposit line (main ledger + Other-Payments both paid).
-  const rows: SelectableLine[] = useMemo(() => items.flatMap(s =>
-    s.ledgers.map(l => ({
-      key: lineKey(s.studentGuid, l.ledgerGuid),
-      studentGuid: s.studentGuid,
-      studentName: s.studentName,
-      studentRegNo: s.studentRegNo,
-      ledgerGuid: l.ledgerGuid,
-      ledgerName: l.ledgerName,
-      currencyGuid: l.currencyGuid,
-      currencyCode: l.currencyCode,
-      amount: l.amount,
-    })),
-  ), [items])
+  // Single mode's "items" is just the one fetched student (or none yet) —
+  // everything downstream (rows/selection/submit) stays identical either
+  // way, it just ends up scoped to one student's line(s).
+  const items = mode === 'single' ? (selectedStudent ? [selectedStudent] : []) : bulkItems
+
+  // Flatten each student's two ledger-source arrays into one selectable row
+  // per (student, source, ledger) triple — kept flat for a simple checkbox
+  // table, but `source` on each row is what submit uses to populate the
+  // correct request field; the two sources are never summed or merged.
+  const rows: SelectableLine[] = useMemo(() => items.flatMap(linesFor), [items])
 
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
-  const selectedRows = rows.filter(r => selectedKeys.has(r.key))
-  const allVisibleSelected = rows.length > 0 && rows.every(r => selectedKeys.has(r.key))
+  // A row with no linked application can't be refunded on either ledger
+  // (the refund endpoint requires applicationGuid even for otherLedgerLines)
+  // — excluded from selection entirely, not just visually disabled.
+  const selectableRows = useMemo(() => rows.filter(r => !!r.applicationGuid), [rows])
+  const selectedRows = selectableRows.filter(r => selectedKeys.has(r.key))
+  const allVisibleSelected = selectableRows.length > 0 && selectableRows.every(r => selectedKeys.has(r.key))
 
-  function toggleRow(key: string) {
+  function toggleRow(row: SelectableLine) {
+    if (!row.applicationGuid) return
     setSelectedKeys(prev => {
       const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
+      if (next.has(row.key)) next.delete(row.key)
+      else next.add(row.key)
       return next
     })
   }
@@ -117,8 +243,8 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
   function toggleSelectAllVisible() {
     setSelectedKeys(prev => {
       const next = new Set(prev)
-      if (allVisibleSelected) rows.forEach(r => next.delete(r.key))
-      else rows.forEach(r => next.add(r.key))
+      if (allVisibleSelected) selectableRows.forEach(r => next.delete(r.key))
+      else selectableRows.forEach(r => next.add(r.key))
       return next
     })
   }
@@ -129,98 +255,253 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
     setSelectedKeys(new Set())
   }
 
-  const intakeOptions = [...(selectedLabels.intake && intakeGuid && !intakes.some(i => i.intakeGuid === intakeGuid) ? [{ value: intakeGuid, label: selectedLabels.intake }] : []), ...intakes.map(i => ({ value: i.intakeGuid, label: `${i.month} ${i.financialYear}` }))]
-  const programOptions = [...(selectedLabels.program && programGuid && !programs.some(p => p.programGuid === programGuid) ? [{ value: programGuid, label: selectedLabels.program }] : []), ...programs.map(p => ({ value: p.programGuid, label: p.programName }))]
-  const batchOptions = [...(selectedLabels.batch && batchGuid && !batches.some(b => b.batchGuid === batchGuid) ? [{ value: batchGuid, label: selectedLabels.batch }] : []), ...batches.map(b => ({ value: b.batchGuid, label: b.batchCode }))]
-  const campusOptions = [...(selectedLabels.campus && campusGuid && !campuses.some(c => c.campusGuid === campusGuid) ? [{ value: campusGuid, label: selectedLabels.campus }] : []), ...campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))]
+  const intakeOptions = pinSelected(intakes.map(i => ({ value: i.intakeGuid, label: `${i.month} ${i.financialYear}` })), intakeGuid, selectedLabels.intake)
+  const programOptions = pinSelected(programs.map(p => ({ value: p.programGuid, label: p.programName })), programGuid, selectedLabels.program)
+  const batchOptions = pinSelected(batches.map(b => ({ value: b.batchGuid, label: b.batchCode })), batchGuid, selectedLabels.batch)
+  const campusOptions = pinSelected(campuses.map(c => ({ value: c.campusGuid, label: c.campusName })), campusGuid, selectedLabels.campus)
 
-  // Resolve applicationGuid for every distinct student currently selected —
-  // the bulk endpoint's request body is keyed by applicationGuid, but this
-  // search only returns studentGuid (see useStudentsByGuids' own comment).
-  const selectedStudentGuids = useMemo(() => Array.from(new Set(selectedRows.map(r => r.studentGuid))), [selectedRows])
-  const { byGuid: studentsByGuidReal, isLoading: isResolvingApplicationsReal } = useStudentsByGuids(selectedStudentGuids, !useMock && selectedStudentGuids.length > 0)
-  const isResolvingApplications = useMock ? false : isResolvingApplicationsReal
-  // Same studentGuid→applicationGuid shape useStudentsByGuids returns (a
-  // Map keyed by studentGuid, of just enough of StudentDetailDto to read
-  // .applicationSummary.applicationGuid off), sourced from mockData's flat
-  // lookup instead of a real fetch.
-  function resolveApplicationGuid(studentGuid: string): string | null {
-    if (useMock) return mockResolveApplicationGuid(studentGuid)
-    return studentsByGuidReal.get(studentGuid)?.applicationSummary?.applicationGuid ?? null
-  }
-
-  // Bumped after a mock bulk submit to force a re-render — mockBulkRefund
-  // mutates MOCK_PASSOUT_STUDENTS' embedded ledgers array in place, which
+  // Bumped after a mock submit to force a re-render — the mock helpers
+  // mutate MOCK_PASSOUT_STUDENTS' embedded ledger arrays in place, which
   // React has no other way to notice.
   const [, forceMockRefresh] = useState(0)
 
   const [refundDate, setRefundDate] = useState(todayYmd)
   const [remarks, setRemarks] = useState('')
   const [results, setResults] = useState<BulkRefundLineResultDto[] | null>(null)
+  const [isSingleSubmitting, setIsSingleSubmitting] = useState(false)
 
   const bulkRefund = useBulkRefundPassoutLibraryDeposit()
+  const createRefund = useCreateRefund()
+
+  function onSubmitDone(res: BulkRefundLineResultDto[]) {
+    setResults(res)
+    const failCount = res.filter(r => !r.success).length
+    if (failCount === 0) showToast(`Refunded ${res.length} line(s) successfully.`, 'success')
+    else showToast(`${res.length - failCount} of ${res.length} line(s) refunded — ${failCount} failed. See results below.`, 'warn')
+    setSelectedKeys(new Set())
+    setRemarks('')
+  }
 
   function handleBulkSubmit() {
     if (!permissionsCreate) { showToast('You do not have permission to create refunds.', 'warn'); return }
     if (selectedRows.length === 0) { showToast('Select at least one line to refund.', 'warn'); return }
     if (!refundDate) { showToast('Please select a refund date.', 'warn'); return }
 
-    const unresolved = selectedRows.filter(r => !resolveApplicationGuid(r.studentGuid))
-    if (unresolved.length > 0) {
-      showToast(`Couldn't resolve the application record for ${unresolved.length} selected line(s) — try again once they finish loading.`, 'warn')
-      return
-    }
-
     const lines: BulkRefundLineInput[] = selectedRows.map(r => ({
-      applicationGuid: resolveApplicationGuid(r.studentGuid)!,
+      applicationGuid: r.applicationGuid as string,
       studentGuid: r.studentGuid,
-      ledgerOthersGuid: r.ledgerGuid,
+      ledgerGuid: r.source === 'main' ? r.ledgerGuid : null,
+      ledgerOthersGuid: r.source === 'other' ? r.ledgerGuid : null,
       currencyGuid: r.currencyGuid,
       amount: r.amount,
       refundDate,
       remarks: remarks.trim() || null,
     }))
 
-    const onDone = (res: BulkRefundLineResultDto[]) => {
-      setResults(res)
-      const failCount = res.filter(r => !r.success).length
-      if (failCount === 0) showToast(`Refunded ${res.length} line(s) successfully.`, 'success')
-      else showToast(`${res.length - failCount} of ${res.length} line(s) refunded — ${failCount} failed. See results below.`, 'warn')
-      setSelectedKeys(new Set())
-      setRemarks('')
-    }
-
     if (useMock) {
-      mockBulkRefund(lines).then(res => { forceMockRefresh(n => n + 1); onDone(res) })
+      mockBulkRefund(lines).then(res => { forceMockRefresh(n => n + 1); onSubmitDone(res) })
       return
     }
 
     bulkRefund.mutate(lines, {
-      onSuccess: onDone,
+      onSuccess: onSubmitDone,
       onError: () => showToast('Bulk refund request failed. Please try again.', 'error'),
     })
   }
 
+  // Single mode has no dedicated bulk endpoint for this category — refunds
+  // each selected line individually through the same generic
+  // POST /refund/applications/{applicationGuid} every other tab uses, then
+  // aggregates the outcomes into the same result shape the bulk endpoint
+  // returns so the results card below can stay identical either way.
+  function handleSingleSubmit() {
+    if (!permissionsCreate) { showToast('You do not have permission to create refunds.', 'warn'); return }
+    if (selectedRows.length === 0) { showToast('Select at least one line to refund.', 'warn'); return }
+    if (!refundDate) { showToast('Please select a refund date.', 'warn'); return }
+
+    const submissions = selectedRows.map(r => ({
+      applicationGuid: r.applicationGuid as string,
+      row: r,
+      input: {
+        ledgerGuid: r.source === 'main' ? r.ledgerGuid : null,
+        ledgerOthersGuid: r.source === 'other' ? r.ledgerGuid : null,
+        currencyGuid: r.currencyGuid,
+        amount: r.amount,
+        refundDate,
+        studentGuid: r.studentGuid,
+        remarks: remarks.trim() || null,
+      },
+    }))
+
+    setIsSingleSubmitting(true)
+
+    if (useMock) {
+      Promise.all(submissions.map(s => mockCreateRefund(s.applicationGuid, s.input))).then(resArr => {
+        forceMockRefresh(n => n + 1)
+        setIsSingleSubmitting(false)
+        onSubmitDone(resArr.map((r, i) => ({
+          applicationGuid: submissions[i].applicationGuid,
+          ledgerGuid: submissions[i].input.ledgerGuid,
+          ledgerOthersGuid: submissions[i].input.ledgerOthersGuid,
+          success: true, refundGuid: r.refundGuid, error: null,
+        })))
+      })
+      return
+    }
+
+    Promise.allSettled(submissions.map(s => createRefund.mutateAsync({ applicationGuid: s.applicationGuid, input: s.input }))).then(settled => {
+      setIsSingleSubmitting(false)
+      const res: BulkRefundLineResultDto[] = settled.map((outcome, i) => {
+        const s = submissions[i]
+        if (outcome.status === 'fulfilled') {
+          return {
+            applicationGuid: s.applicationGuid, ledgerGuid: s.input.ledgerGuid, ledgerOthersGuid: s.input.ledgerOthersGuid,
+            success: true, refundGuid: outcome.value.refundGuid, error: null,
+          }
+        }
+        const err = outcome.reason
+        return {
+          applicationGuid: s.applicationGuid, ledgerGuid: s.input.ledgerGuid, ledgerOthersGuid: s.input.ledgerOthersGuid,
+          success: false, refundGuid: null,
+          error: err instanceof AuthError ? err.message : (err?.message || 'Failed to refund.'),
+        }
+      })
+      onSubmitDone(res)
+    })
+  }
+
+  const isSubmitPending = mode === 'bulk' ? bulkRefund.isPending : isSingleSubmitting
+
   return (
     <div className="flex flex-col gap-5">
+      <div className="flex justify-end">
+        {/* Same role="switch" pill toggle Payment Refund's own page header
+            uses for its Mock Data/Live API flip — an on/off flip reads more
+            correctly here than the .pc-tabs pill switcher (that's for
+            picking one of several sibling tabs; this is a two-state mode
+            within one tab). */}
+        <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 12.5, color: 'var(--g600)' }}>
+          <span className={mode === 'single' ? 'font-bold text-g700' : undefined}><i className="lni lni-user"></i> Single Student</span>
+          <span
+            role="switch"
+            aria-checked={mode === 'bulk'}
+            aria-label="Toggle between Single Student and Bulk mode"
+            onClick={() => switchMode(mode === 'single' ? 'bulk' : 'single')}
+            style={{
+              position: 'relative', width: 36, height: 20, borderRadius: 999, cursor: 'pointer', flexShrink: 0,
+              background: mode === 'bulk' ? 'var(--b500)' : 'var(--g300)', transition: 'background .15s',
+            }}
+          >
+            <span style={{
+              position: 'absolute', top: 2, left: mode === 'bulk' ? 18 : 2, width: 16, height: 16, borderRadius: '50%',
+              background: 'var(--white)', transition: 'left .15s', boxShadow: 'var(--neu-sm)',
+            }} />
+          </span>
+          <span className={mode === 'bulk' ? 'font-bold text-g700' : undefined}><i className="lni lni-layers"></i> Bulk</span>
+        </label>
+      </div>
+
+      {mode === 'single' && (
+        <>
+          <div className="card">
+            <div className="card-hdr">
+              <div className="card-title"><span className="ctitle-icon"><i className="lni lni-search-alt"></i></span> Search Passout Student</div>
+            </div>
+            <div className="fg" style={{ marginBottom: 0, position: 'relative' }} ref={singleSearchBoxRef}>
+              <div className="lbl">Student Name, Reg No, or Student No <span className="req">*</span></div>
+              <div className="flex gap-2 flex-wrap">
+                <div className="inp-wrap" style={{ flex: 1, minWidth: 180 }}>
+                  <span className="inp-icon"><i className="lni lni-search-alt"></i></span>
+                  <input
+                    className="ctrl"
+                    type="text"
+                    placeholder="e.g. MAJOK JOSEPH MADIT"
+                    value={singleSearch}
+                    onChange={e => setSingleSearch(e.target.value)}
+                    onFocus={() => setSingleSearchFocused(true)}
+                    onKeyDown={e => { if (e.key === 'Enter') setSingleCommittedSearch(singleSearch.trim()) }}
+                  />
+                </div>
+                {selectedStudentGuid && (
+                  <button className="btn btn-neu" onClick={clearSingleSelection}><i className="lni lni-close"></i> New Search</button>
+                )}
+              </div>
+
+              {singleSearchFocused && (
+                <div
+                  className="mt-1"
+                  style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
+                    background: 'var(--white)', border: '1.5px solid var(--b200)', borderRadius: 'var(--rsm)',
+                    boxShadow: 'var(--neu-out)', maxHeight: 280, overflowY: 'auto',
+                  }}
+                >
+                  {isSingleSearching ? (
+                    <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Searching…</div>
+                  ) : isSingleSearchError ? (
+                    <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Search failed. Please try again.</div>
+                  ) : singleMatches.length === 0 ? (
+                    <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No passout students found.</div>
+                  ) : (
+                    singleMatches.map(s => (
+                      <div
+                        key={s.studentGuid}
+                        className="cursor-pointer px-3 py-2 hover:bg-b50 border-b border-g100 last:border-b-0"
+                        onMouseDown={() => selectStudent(s)}
+                      >
+                        <div className="font-bold">{s.studentName}</div>
+                        <div className="text-g500" style={{ fontSize: 11 }}>{s.studentRegNo}{s.programName ? ` · ${s.programName}` : ''}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {selectedStudentGuid && (
+            isSelectedLoading ? (
+              <div className="card text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>Loading student…</div>
+            ) : isSelectedError || !selectedStudent ? (
+              <div className="card text-clr-red text-center" style={{ padding: 24, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load this student, or they&apos;re no longer marked Passout.</div>
+            ) : (
+              <>
+                <div className="card p-0 overflow-hidden">
+                  <div className="pc-hero">
+                    <div className="pc-hero-top">
+                      <div className="pc-hero-avatar">{initialsFor(selectedStudent.studentName)}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="pc-hero-name truncate">{selectedStudent.studentName}</div>
+                        <div className="pc-hero-sub truncate">{selectedStudent.programName ?? '—'}</div>
+                        <span className="pc-hero-badge"><i className="lni lni-bookmark"></i> {selectedStudent.studentRegNo}</span>
+                      </div>
+                    </div>
+                    <div className="pc-hero-facts">
+                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={selectedStudent.batchCode ?? '—'}>{selectedStudent.batchCode ?? '—'}</span></div>
+                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val" title={selectedStudent.campusName ?? '—'}>{selectedStudent.campusName ?? '—'}</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                {!selectedStudent.applicationGuid && (
+                  <div className="warn-box">
+                    <i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0, marginTop: 1 }}></i>
+                    <div>No linked application for this student — cannot refund on either ledger.</div>
+                  </div>
+                )}
+              </>
+            )
+          )}
+        </>
+      )}
+
+      {mode === 'bulk' && (
+      <>
       <div className="card">
         <div className="card-hdr">
           <div className="card-title"><span className="ctitle-icon"><i className="lni lni-search-alt"></i></span> Search Passout / Library Deposit</div>
         </div>
-        <div className="g2 mb-[14px]">
-          <div className="fg" style={{ marginBottom: 0 }}>
-            <div className="lbl">Student Name, Reg No, or Student No</div>
-            <div className="inp-wrap">
-              <span className="inp-icon"><i className="lni lni-search-alt"></i></span>
-              <input
-                className="ctrl"
-                type="text"
-                placeholder="e.g. MAJOK JOSEPH MADIT"
-                value={search}
-                onChange={e => updateFilters(() => setSearch(e.target.value))}
-              />
-            </div>
-          </div>
+        <div className="g4">
           <div className="fg" style={{ marginBottom: 0 }}>
             <div className="lbl">Intake</div>
             <SearchSelect
@@ -240,8 +521,6 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
               onLoadMore={() => intakeQuery.fetchNextPage()}
             />
           </div>
-        </div>
-        <div className="g3">
           <div className="fg" style={{ marginBottom: 0 }}>
             <div className="lbl">Programme</div>
             <SearchSelect
@@ -311,23 +590,37 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
               <table>
                 <thead>
                   <tr>
-                    <th><input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} title="Select all on this page" /></th>
+                    <th><input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} title="Select all refundable lines on this page" /></th>
                     <th>Student</th>
                     <th>Reg No</th>
+                    <th>Source</th>
                     <th>Ledger</th>
                     <th>Amount</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map(r => (
-                    <tr key={r.key} className="cursor-pointer" onClick={() => toggleRow(r.key)}>
-                      <td><input type="checkbox" checked={selectedKeys.has(r.key)} onChange={() => toggleRow(r.key)} onClick={e => e.stopPropagation()} /></td>
-                      <td className="font-bold">{r.studentName}</td>
-                      <td>{r.studentRegNo}</td>
-                      <td>{r.ledgerName}</td>
-                      <td className="font-bold">{r.currencyCode} {fmtAmt(r.amount)}</td>
-                    </tr>
-                  ))}
+                  {rows.map(r => {
+                    const disabled = !r.applicationGuid
+                    return (
+                      <tr key={r.key} className={disabled ? '' : 'cursor-pointer'} style={disabled ? { opacity: 0.55 } : undefined} onClick={() => toggleRow(r)}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedKeys.has(r.key)}
+                            disabled={disabled}
+                            onChange={() => toggleRow(r)}
+                            onClick={e => e.stopPropagation()}
+                            title={disabled ? 'No linked application — cannot refund' : undefined}
+                          />
+                        </td>
+                        <td className="font-bold">{r.studentName}</td>
+                        <td>{r.studentRegNo}</td>
+                        <td><span className={`badge ${r.source === 'main' ? 'badge-cyan' : 'badge-purple'}`}>{r.source === 'main' ? 'Main Ledger' : 'Other Ledger'}</span></td>
+                        <td>{r.ledgerName}{disabled && <span className="text-clr-red" style={{ fontSize: 10.5, marginLeft: 6 }}>No application</span>}</td>
+                        <td className="font-bold">{r.currencyCode} {fmtAmt(r.amount)}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </ScrollTable>
@@ -335,13 +628,62 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
           </>
         )}
       </div>
+      </>
+      )}
+
+      {mode === 'single' && selectedStudent && (
+        <div className="card">
+          {rows.length === 0 ? (
+            <div className="text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>No unrefunded Library Deposit lines found for this student.</div>
+          ) : (
+            <ScrollTable className="no-sticky-col">
+              <table>
+                <thead>
+                  <tr>
+                    <th><input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} title="Select all refundable lines" /></th>
+                    <th>Source</th>
+                    <th>Ledger</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(r => {
+                    const disabled = !r.applicationGuid
+                    return (
+                      <tr key={r.key} className={disabled ? '' : 'cursor-pointer'} style={disabled ? { opacity: 0.55 } : undefined} onClick={() => toggleRow(r)}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedKeys.has(r.key)}
+                            disabled={disabled}
+                            onChange={() => toggleRow(r)}
+                            onClick={e => e.stopPropagation()}
+                            title={disabled ? 'No linked application — cannot refund' : undefined}
+                          />
+                        </td>
+                        <td><span className={`badge ${r.source === 'main' ? 'badge-cyan' : 'badge-purple'}`}>{r.source === 'main' ? 'Main Ledger' : 'Other Ledger'}</span></td>
+                        <td>{r.ledgerName}</td>
+                        <td className="font-bold">{r.currencyCode} {fmtAmt(r.amount)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </ScrollTable>
+          )}
+        </div>
+      )}
 
       {selectedRows.length > 0 && (
         <div className="card">
           <div className="card-hdr">
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-reload"></i></span> Bulk Refund — {selectedRows.length} line{selectedRows.length === 1 ? '' : 's'} selected</div>
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-reload"></i></span> {mode === 'single' ? 'Refund' : 'Bulk Refund'} — {selectedRows.length} line{selectedRows.length === 1 ? '' : 's'} selected</div>
           </div>
 
+          {/* Each selected line keeps its own amount — this date/remarks
+              pair applies to every refund submitted in this batch, it is
+              never combined into one editable total across lines/sources
+              (see the tab's own comment on the refund cap model). */}
           <div className="g2 mb-[14px]">
             <div className="fg">
               <div className="lbl">Refund Date <span className="req">*</span></div>
@@ -357,10 +699,10 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
             <button className="btn btn-neu" onClick={() => setSelectedKeys(new Set())}><i className="lni lni-close"></i> Clear Selection</button>
             <button
               className="btn btn-primary btn-lg"
-              disabled={bulkRefund.isPending || isResolvingApplications || !permissionsCreate}
-              onClick={handleBulkSubmit}
+              disabled={isSubmitPending || !permissionsCreate}
+              onClick={mode === 'bulk' ? handleBulkSubmit : handleSingleSubmit}
             >
-              <i className="lni lni-checkmark"></i> {bulkRefund.isPending ? 'Submitting…' : isResolvingApplications ? 'Resolving…' : `Refund ${selectedRows.length} Line${selectedRows.length === 1 ? '' : 's'}`}
+              <i className="lni lni-checkmark"></i> {isSubmitPending ? 'Submitting…' : `Refund ${selectedRows.length} Line${selectedRows.length === 1 ? '' : 's'}`}
             </button>
           </div>
         </div>
@@ -369,16 +711,17 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
       {results && (
         <div className="card">
           <div className="card-hdr">
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-folder"></i></span> Bulk Refund Results</div>
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-folder"></i></span> {mode === 'single' ? 'Refund Results' : 'Bulk Refund Results'}</div>
             <button className="btn btn-neu btn-sm" onClick={() => setResults(null)}><i className="lni lni-close"></i> Dismiss</button>
           </div>
           <ScrollTable className="no-sticky-col">
             <table>
-              <thead><tr><th>Application</th><th>Status</th><th>Detail</th></tr></thead>
+              <thead><tr><th>Application</th><th>Source</th><th>Status</th><th>Detail</th></tr></thead>
               <tbody>
                 {results.map((r, i) => (
-                  <tr key={`${r.applicationGuid}-${r.ledgerOthersGuid}-${i}`}>
+                  <tr key={`${r.applicationGuid}-${r.ledgerGuid ?? r.ledgerOthersGuid}-${i}`}>
                     <td className="font-mono">{r.applicationGuid}</td>
+                    <td><span className={`badge ${r.ledgerGuid ? 'badge-cyan' : 'badge-purple'}`}>{r.ledgerGuid ? 'Main Ledger' : 'Other Ledger'}</span></td>
                     <td>{r.success ? <span className="badge badge-green">Refunded</span> : <span className="badge badge-red">Failed</span>}</td>
                     <td>{r.success ? (r.refundGuid ?? '—') : (r.error ?? 'Unknown error')}</td>
                   </tr>

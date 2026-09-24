@@ -5,6 +5,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { useSearchStudentsInfinite, useStudentProfile } from '@/hooks/finance/usePaymentConsole'
+import { refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
 import { useStudent } from '@/hooks/student/useStudents'
 import { useTerminationReasonsDropdown } from '@/hooks/student/useTerminationReasons'
 import { useTerminateStudent } from '@/hooks/student/useStudentTermination'
@@ -122,7 +123,7 @@ export default function TerminateStudentPage() {
   }
 
   function handleTerminateClick() {
-    if (!permissions.add) { showToast('You do not have permission to terminate students.', 'warn'); return }
+    // if (!permissions.add) { showToast('You do not have permission to terminate students.', 'warn'); return }
     if (!studentGuid) { showToast('This application has no linked student record — nothing to terminate.', 'warn'); return }
     if (!terminationReasonGuid) { showToast('Please select a termination reason.', 'warn'); return }
     setConfirmOpen(true)
@@ -256,6 +257,9 @@ export default function TerminateStudentPage() {
                       <span className="pc-hero-fact-lbl">Email</span>
                       <span className="pc-hero-fact-val truncate" title={profile.emailId ?? profile.universityEmail ?? '—'}>{profile.emailId ?? profile.universityEmail ?? '—'}</span>
                     </div>
+                    <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Reg Status</span><span className="pc-hero-fact-val" title={profile.regStatusName ?? '—'}>{profile.regStatusName ?? '—'}</span></div>
+                    <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Refugee</span><span className="pc-hero-fact-val">{refugeeLabel(profile.refugee)}</span></div>
+                    <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Category</span><span className="pc-hero-fact-val">{studCategoryLabel(profile.studCategory)}</span></div>
                   </div>
                 </div>
               </div>

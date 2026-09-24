@@ -58,8 +58,13 @@ export function getTotalPaid(applicationGuid: string, ledgerGuid: string): Promi
 }
 
 // ─── POST /refund/applications/{applicationGuid} ─────────────────────────
+// Exactly one of ledgerGuid/ledgerOthersGuid per the endpoint's own
+// validator — main-ledger refunds (Rejected/Fake-Cert tabs, and Passout's
+// mainLedgerLines) pass ledgerGuid; Other-Payments refunds (Passout's
+// otherLedgerLines) pass ledgerOthersGuid. Never both, never neither.
 export interface CreateRefundInput {
-  ledgerGuid: string
+  ledgerGuid?: string | null
+  ledgerOthersGuid?: string | null
   currencyGuid: string
   amount: number
   refundDate: string
@@ -162,10 +167,19 @@ export function getOtherLedgerDetailsBatch(studentGuids: string[], ledgerName: s
 // independently server-side — no shared transaction, so a failure on one
 // line never rolls back the others; every line's outcome is reported back
 // individually.
+//
+// Per the 2026-09-23 fix: a line's source (mainLedgerLines vs
+// otherLedgerLines, see refundSearch.ts) determines which of
+// ledgerGuid/ledgerOthersGuid to populate — exactly one, never both. This
+// replaces the old always-ledgerOthersGuid shape that caused every line to
+// fail with "Ledger not found." once the search endpoint stopped returning
+// a shared ledger-type guid and started returning proper source-specific
+// ledger guids.
 export interface BulkRefundLineInput {
   applicationGuid: string
   studentGuid: string | null
-  ledgerOthersGuid: string
+  ledgerGuid: string | null
+  ledgerOthersGuid: string | null
   currencyGuid: string
   amount: number
   refundDate: string
@@ -174,7 +188,8 @@ export interface BulkRefundLineInput {
 
 export interface BulkRefundLineResultDto {
   applicationGuid: string
-  ledgerOthersGuid: string
+  ledgerGuid: string | null
+  ledgerOthersGuid: string | null
   success: boolean
   refundGuid: string | null
   error: string | null
@@ -183,7 +198,7 @@ export interface BulkRefundLineResultDto {
 export function bulkRefundPassoutLibraryDeposit(lines: BulkRefundLineInput[]): Promise<BulkRefundLineResultDto[]> {
   if (MOCK_AUTH) {
     return Promise.resolve(lines.map(l => ({
-      applicationGuid: l.applicationGuid, ledgerOthersGuid: l.ledgerOthersGuid,
+      applicationGuid: l.applicationGuid, ledgerGuid: l.ledgerGuid, ledgerOthersGuid: l.ledgerOthersGuid,
       success: true, refundGuid: `mock-refund-${Date.now()}`, error: null,
     })))
   }

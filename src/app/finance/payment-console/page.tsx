@@ -44,6 +44,7 @@ import {
   PaymentHistoryEntry,
 } from '@/hooks/finance/usePaymentConsole'
 import { usePaymentOthersList } from '@/hooks/finance/usePaymentOthers'
+import { refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
 import { formatDate, formatDateTime } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -1590,6 +1591,9 @@ export default function PaymentConsolePage() {
                     <span className="pc-hero-fact-lbl">Email</span>
                     <span className="pc-hero-fact-val truncate" title={profile.emailId ?? profile.universityEmail ?? '—'}>{profile.emailId ?? profile.universityEmail ?? '—'}</span>
                   </div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Reg Status</span><span className="pc-hero-fact-val" title={profile.regStatusName ?? '—'}>{profile.regStatusName ?? '—'}</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Refugee</span><span className="pc-hero-fact-val">{refugeeLabel(profile.refugee)}</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Category</span><span className="pc-hero-fact-val">{studCategoryLabel(profile.studCategory)}</span></div>
                 </div>
               </div>
             </div>
