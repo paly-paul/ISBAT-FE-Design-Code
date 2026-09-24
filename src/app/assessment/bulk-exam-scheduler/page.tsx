@@ -24,6 +24,7 @@ import {
   getBulkCwScheduleStatus,
   getBulkTestScheduleStatus,
   getBulkUeScheduleStatus,
+  getBulkMockScheduleStatus,
 } from '@/lib/api/assessment/iaBulkSchedule'
 
 const PAGE_SIZE = 15
@@ -226,6 +227,22 @@ export default function BulkExamSchedulerPage() {
           }
         })
         .catch(() => {})
+
+      // Mock Status (ia-bulk-mock-schedule/status)
+      getBulkMockScheduleStatus({
+        academicIntakeGuid: intakeGuid,
+        programGuid: progGuid,
+        semesterGuid: semGuid,
+      })
+        .then(res => {
+          if (active && res) {
+            setStatusOverrides(prev => ({
+              ...prev,
+              [row.sessionGuid]: { ...(prev[row.sessionGuid] || {}), MOCK: res.isFullyScheduled },
+            }))
+          }
+        })
+        .catch(() => {})
     })
 
     return () => {
@@ -343,6 +360,8 @@ export default function BulkExamSchedulerPage() {
         return Boolean(status.cw2Scheduled)
       case 'UE':
         return Boolean(status.ueScheduled)
+      case 'MOCK':
+        return false // Only populated via live override since session endpoint doesn't track it
       default:
         return false
     }
@@ -508,7 +527,7 @@ export default function BulkExamSchedulerPage() {
                       </th>
 
                       {/* 4. Schedule All (UE) Header Trigger */}
-                      <th className="py-2.5 px-2.5 min-w-[140px] text-center">
+                      <th className="py-2.5 px-2.5 min-w-[140px] text-center border-r border-blue-400/30">
                         <button
                           type="button"
                           onClick={() => handleOpenHeaderBulkSchedule('UE')}
@@ -516,6 +535,18 @@ export default function BulkExamSchedulerPage() {
                           title="Click to schedule University Exam (UE) for all programmes in this session"
                         >
                           <span>Schedule All (UE)</span>
+                        </button>
+                      </th>
+
+                      {/* 5. Schedule All (Mock) Header Trigger */}
+                      <th className="py-2.5 px-2.5 min-w-[140px] text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenHeaderBulkSchedule('MOCK')}
+                          className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-none"
+                          title="Click to schedule Mock Exam (CBT) for all programmes in this session"
+                        >
+                          <span>Schedule All (Mock)</span>
                         </button>
                       </th>
                     </tr>
@@ -535,6 +566,7 @@ export default function BulkExamSchedulerPage() {
                         const testScheduled = isCellScheduled(row, 'CLASS_TEST')
                         const caScheduled = isCellScheduled(row, 'CA')
                         const ueScheduled = isCellScheduled(row, 'UE')
+                        const mockScheduled = isCellScheduled(row, 'MOCK')
 
                         return (
                           <tr
@@ -606,8 +638,8 @@ export default function BulkExamSchedulerPage() {
                               </button>
                             </td>
 
-                            {/* 5. UE Button */}
-                            <td className="py-2 px-2.5 text-center">
+                            {/* 4. UE Button */}
+                            <td className="py-2 px-2.5 text-center border-r border-slate-100">
                               <button
                                 type="button"
                                 onClick={() => handleOpenRowSchedule(row, 'UE')}
@@ -618,6 +650,21 @@ export default function BulkExamSchedulerPage() {
                                 }`}
                               >
                                 {ueScheduled ? 'Scheduled' : 'Schedule'}
+                              </button>
+                            </td>
+
+                            {/* 5. Mock Button */}
+                            <td className="py-2 px-2.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenRowSchedule(row, 'MOCK')}
+                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${
+                                  mockScheduled
+                                    ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
+                                    : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
+                                }`}
+                              >
+                                {mockScheduled ? 'Scheduled' : 'Schedule'}
                               </button>
                             </td>
                           </tr>

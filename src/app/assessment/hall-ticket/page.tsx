@@ -1,269 +1,508 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { TableSearch } from '@/components/TableSearch'
-import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Pagination } from '@/components/Pagination'
-import { FilterTh } from '@/components/FilterTh'
 import { Toast } from '@/components/Toast'
+import { TableLoadingState } from '@/components/TableLoadingState'
+
+import { getIntakes, Intake } from '@/lib/api/academic/intake'
+import { getHallTicketSearch, HallTicketSearchResultDto } from '@/lib/api/student/hallTicketSearch'
+import { getHallTicketEligibility, issueHallTicket, issueBulkHallTickets, getHallTicketPdfUrl, getBulkHallTicketPdfUrl, HallTicketEligibilityDto, BulkIssueResponseDto, getBulkIssuedHallTickets, BulkIssuedStudentDto, getHallTicketQrImageUrl } from '@/lib/api/assessment/hallTicketIssue'
 
 export default function HallTicketIssuancePage() {
   const [term, setTerm] = useState('Term 1')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const [openFilter, setOpenFilter] = useState<string | null>(null)
-  const [filters, setFilters] = useState<Record<string, string[]>>({})
-  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+
+  const [intakes, setIntakes] = useState<Intake[]>([])
+  const [selectedIntake, setSelectedIntake] = useState<string>('')
+
+  const [students, setStudents] = useState<HallTicketSearchResultDto[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+
+  const [selectedStudent, setSelectedStudent] = useState<HallTicketSearchResultDto | null>(null)
+  const [eligibility, setEligibility] = useState<HallTicketEligibilityDto | null>(null)
+  const [isCheckingEligibility, setIsCheckingEligibility] = useState(false)
+
+  const [isIssuing, setIsIssuing] = useState(false)
+  const [isBulkIssuing, setIsBulkIssuing] = useState(false)
+  const [showIssuedModal, setShowIssuedModal] = useState(false)
+  const [issuedStudents, setIssuedStudents] = useState<BulkIssuedStudentDto[]>([])
+  const [isFetchingIssued, setIsFetchingIssued] = useState(false)
+
+  const [toast, setToast] = useState<{ msg: string, type: string } | null>(null)
+  const topCardRef = useRef<HTMLDivElement>(null)
+  const tableRef = useRef<HTMLDivElement>(null)
 
   const showToast = (msg: string, type: string = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3000)
   }
 
-  const handleFilterSelect = (col: string, vals: string[]) => {
-    setFilters(prev => ({ ...prev, [col]: vals }))
-    setOpenFilter(null)
+  // Fetch intakes on mount
+  useEffect(() => {
+    getIntakes().then(data => {
+      setIntakes(data)
+      const current = data.find(i => i.currentAdmissionIntake) || data[0]
+      if (current) setSelectedIntake(current.intakeGuid)
+    }).catch(err => console.error('Failed to load intakes:', err))
+  }, [])
+
+  // Search debounced
+  useEffect(() => {
+    if (!selectedIntake) return
+    const timer = setTimeout(() => {
+      setIsSearching(true)
+      getHallTicketSearch(search, selectedIntake).then(data => {
+        setStudents(data || [])
+        if (search.trim() !== '' && data && data.length > 0) {
+          setTimeout(() => {
+            tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }, 100)
+        }
+      }).catch(err => {
+        console.error('Search error:', err)
+        setStudents([])
+      }).finally(() => setIsSearching(false))
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [search, selectedIntake])
+
+  // Clear selection when term or intake changes
+  useEffect(() => {
+    setSelectedStudent(null)
+    setEligibility(null)
+  }, [term, selectedIntake])
+
+  const handleRowClick = (student: HallTicketSearchResultDto) => {
+    setSelectedStudent(student)
+    setIsCheckingEligibility(true)
+    setEligibility(null)
+
+    setTimeout(() => {
+      topCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 100)
+
+    const termNum = term === 'Term 1' ? 1 : 2
+    getHallTicketEligibility(student.studentGuid, selectedIntake, termNum)
+      .then(data => {
+        setEligibility(data)
+      })
+      .catch(err => {
+        console.error('Eligibility error:', err)
+        showToast(err.message || 'Failed to load eligibility', 'error')
+      })
+      .finally(() => setIsCheckingEligibility(false))
+  }
+
+  const handleIssue = () => {
+    if (!selectedStudent || !selectedIntake || !eligibility?.canIssue) return
+
+    setIsIssuing(true)
+    const termNum = term === 'Term 1' ? 1 : 2
+
+    issueHallTicket({
+      studentGuid: selectedStudent.studentGuid,
+      intakeGuid: selectedIntake,
+      term: termNum
+    })
+      .then(() => {
+        showToast('Hall ticket issued successfully', 'success')
+        setEligibility(prev => prev ? { ...prev, alreadyIssued: true, canIssue: false } : null)
+      })
+      .catch(err => {
+        console.error('Issue error:', err)
+        showToast(err.message || 'Failed to issue hall ticket', 'error')
+        // Re-fetch eligibility if blocked
+        if (err.code === 'bad_request') {
+          handleRowClick(selectedStudent)
+        }
+      })
+      .finally(() => setIsIssuing(false))
+  }
+
+  const handleViewIssuedList = () => {
+    if (!selectedIntake) return
+    setShowIssuedModal(true)
+    setIsFetchingIssued(true)
+    getBulkIssuedHallTickets(selectedIntake, term === 'Term 1' ? 1 : 2)
+      .then(data => setIssuedStudents(data || []))
+      .catch(err => {
+        console.error('Failed to load issued list:', err)
+        showToast('Failed to load issued list', 'error')
+      })
+      .finally(() => setIsFetchingIssued(false))
+  }
+
+  const handleBulkIssue = () => {
+    if (!selectedIntake) return
+    if (!window.confirm('Are you sure you want to bulk issue hall tickets for ALL eligible students in this intake? This action may take some time.')) return
+
+    setIsBulkIssuing(true)
+    issueBulkHallTickets({ intakeGuid: selectedIntake, term: term === 'Term 1' ? 1 : 2 })
+      .then((res) => {
+        showToast(
+          `Processed ${res.totalConsidered} students. Issued: ${res.issued}, Ineligible: ${res.ineligible}, Already Issued: ${res.alreadyIssued}, Failed: ${res.failed}`,
+          res.issued > 0 ? 'success' : 'info'
+        )
+        // Re-evaluate eligibility for the selected student to update their UI
+        if (selectedStudent) {
+          handleRowClick(selectedStudent)
+        }
+      })
+      .catch(err => {
+        console.error('Bulk issue error:', err)
+        showToast(err.message || 'Failed to bulk issue hall tickets', 'error')
+      })
+      .finally(() => setIsBulkIssuing(false))
   }
 
   return (
-    <div className="page active">
-      <div className="pg-hdr">
+    <div className="page active h-full flex flex-col bg-slate-50/50">
+      <div className="pg-hdr shrink-0 pb-4">
         <div>
-          <div className="pg-title">Hall Ticket Issuance</div>
-          <div className="pg-sub">Clearance panel — Issue button enabled only when all criteria are met</div>
+          <div className="pg-title text-2xl font-bold text-slate-800">Hall Ticket Issuance</div>
+          <div className="pg-sub text-slate-500 mt-1">Search and clear students to issue hall tickets for examinations</div>
         </div>
       </div>
 
-      <div className="card">
-        <div className="flex flex-col md:flex-row gap-4 md:items-end">
-          <div className="flex-1">
-            <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Term</label>
+      {/* Modern Filter Bar */}
+      <div className="bg-white border border-slate-200/80 rounded-xl p-3 shadow-sm mb-5 shrink-0">
+        <div className="flex flex-col md:flex-row gap-4 items-center">
+          <div className="w-full md:w-48">
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Term</label>
             <SearchSelect
-                options={[
-                  { value: 'Term 1', label: 'Term 1' },
-                  { value: 'Term 2', label: 'Term 2' }
-                ]}
-                value={term}
-                onChange={setTerm}
-                className="w-full"
-              />
+              options={[{ value: 'Term 1', label: 'Term 1' }, { value: 'Term 2', label: 'Term 2' }]}
+              value={term} onChange={setTerm} className="w-full"
+            />
           </div>
-          <div className="w-full md:w-auto" style={{ flex: 1.5 }}>
-            <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Programme</label>
+          <div className="w-full md:w-80">
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Academic Session (Intake)</label>
             <SearchSelect
-                options={[
-                  'BSc Computer Science',
-                  'BBA'
-                ]}
-                className="w-full"
-              />
+              options={intakes.map(i => ({ value: i.intakeGuid, label: i.description }))}
+              value={selectedIntake} onChange={setSelectedIntake} className="w-full"
+            />
           </div>
-          <div className="w-full md:w-auto" style={{ flex: 1.5 }}>
-            <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">Semester</label>
-            <SearchSelect
-                options={[
-                  'Semester 1'
-                ]}
-                className="w-full"
+          <div className="flex-1 w-full relative group">
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Search Student</label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 group-focus-within:text-blue-500 transition-colors">
+                <i className="lni lni-search-alt text-lg"></i>
+              </span>
+              <input
+                type="text"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-10 pr-4 text-sm text-slate-700 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none placeholder-slate-400"
+                placeholder="Type name or registration number..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
               />
-          </div>
-          <div className="flex-1">
-            <input type="text" className="ctrl w-full" placeholder="Search" />
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+            {/* Top-Bottom Layout */}
+      <div className="flex flex-col gap-5 flex-1 min-h-0">
         
-        {/* Clearance Criteria */}
-        <div className="card">
-          <div className="card-title mb-4 flex items-center gap-2">
-            Clearance Criteria 
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${term === 'Term 1' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-purple-50 text-purple-600 border-purple-100'}`}>
-              {term}
-            </span>
-          </div>
-          
-          <div className="space-y-4 mb-6">
-            <div className="flex justify-between items-center text-[13px]">
-              <span className="text-slate-700 font-medium">CW Submitted (Term 1)</span>
-              <span className="text-green-500 bg-green-50 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[10px] border border-green-200">✓</span>
+        {/* Top: Horizontal Clearance Panel */}
+        <div ref={topCardRef} className="bg-white border border-slate-200/80 rounded-xl shadow-sm shrink-0 flex flex-col md:flex-row items-stretch min-h-[140px]">
+          {!selectedStudent ? (
+             <div className="flex-1 flex flex-col items-center justify-center text-slate-400 py-10">
+               <div className="w-14 h-14 rounded-full bg-slate-50 flex items-center justify-center mb-3">
+                 <i className="lni lni-user text-2xl"></i>
+               </div>
+               <p className="text-sm font-medium text-slate-500">Select a student from the list below</p>
+               <p className="text-xs mt-1">Their clearance details will appear here.</p>
+             </div>
+          ) : (
+             <>
+               {/* Section 1: Student Details */}
+               <div className="flex-[1.4] flex items-center p-5 md:border-r border-b md:border-b-0 border-slate-100 bg-slate-50/30 min-w-0">
+                 <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#0066b2] to-indigo-600 text-white flex items-center justify-center text-2xl font-bold mr-4 shrink-0 shadow-sm">
+                   {selectedStudent.studentName.charAt(0)}
+                 </div>
+                 <div className="min-w-0">
+                   <h2 className="text-lg font-bold text-slate-900 leading-tight truncate" title={selectedStudent.studentName}>{selectedStudent.studentName}</h2>
+                   <p className="text-[#0066b2] font-mono font-bold text-sm mb-1">{selectedStudent.studentRegNo}</p>
+                   <p className="text-xs text-slate-500 truncate font-medium" title={selectedStudent.programName}>
+                     {selectedStudent.programName}
+                   </p>
+                   <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider mt-0.5">
+                     Sem {selectedStudent.semCode} • {selectedStudent.batchCode}
+                   </p>
+                 </div>
+               </div>
+               
+               {/* Section 2: Checklist */}
+               <div className="flex-[1.1] p-5 md:border-r border-b md:border-b-0 border-slate-100 relative bg-white min-w-0">
+                 {isCheckingEligibility ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 z-10 text-blue-500">
+                       <i className="lni lni-spinner-solid animate-spin text-3xl mb-2"></i>
+                       <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Evaluating</p>
+                    </div>
+                 ) : eligibility?.alreadyIssued ? (
+                    <div className="flex h-full items-center justify-center gap-5 text-emerald-600 animate-in fade-in duration-300">
+                       <div className="w-20 h-20 bg-white p-1 rounded-lg border border-emerald-100 shadow-sm shrink-0 overflow-hidden relative">
+                         <img src={getHallTicketQrImageUrl(selectedStudent.studentGuid, term === 'Term 1' ? 1 : 2)} alt="QR Code" className="w-full h-full object-cover" />
+                       </div>
+                       <div className="flex flex-col">
+                         <h4 className="font-bold text-lg leading-tight text-emerald-700">Ticket Issued</h4>
+                         <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600/70 mt-1">Ready for use</p>
+                       </div>
+                    </div>
+                 ) : eligibility ? (
+                    <div className="flex flex-col h-full justify-center">
+                       <div className="flex justify-between items-center mb-3">
+                         <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                           <i className="lni lni-checkmark-circle text-emerald-600"></i> Clearance Status
+                         </h3>
+                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${term === 'Term 1' ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}`}>
+                           {term}
+                         </span>
+                       </div>
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                         <ChecklistItem label="Coursework (CW)" isOk={eligibility.cwOk} />
+                         <ChecklistItem label="Mock CBT" isOk={eligibility.ctOk} />
+                         <ChecklistItem label="Tuition Fee" isOk={eligibility.feeOk} />
+                         {term === 'Term 2' ? (
+                           <ChecklistItem label="NCHE & Guild" isOk={eligibility.ncheOk !== false && eligibility.guildOk !== false} />
+                         ) : (
+                           <div className="flex items-center text-[11px] font-medium text-slate-400 italic bg-slate-50 rounded px-2">No extra fees for Term 1</div>
+                         )}
+                       </div>
+                    </div>
+                 ) : null}
+               </div>
+
+               {/* Section 3: Action Button */}
+               <div className="w-full md:w-64 p-5 flex flex-col justify-center bg-slate-50/50 items-stretch">
+                  {!eligibility?.alreadyIssued ? (
+                    <>
+                      <button 
+                        onClick={handleIssue}
+                        disabled={!eligibility?.canIssue || isIssuing || isCheckingEligibility}
+                        className={`w-full py-4 rounded-xl font-bold text-[13px] uppercase tracking-wider flex flex-col items-center justify-center gap-2 transition-all duration-200
+                          ${eligibility?.canIssue
+                            ? 'bg-[#0066b2] hover:bg-blue-700 text-white shadow-lg shadow-blue-500/30 transform hover:-translate-y-0.5' 
+                            : 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-200'
+                          }`}
+                      >
+                        {isIssuing ? (
+                          <><i className="lni lni-spinner-solid animate-spin text-2xl"></i> Issuing...</>
+                        ) : (
+                          <><i className="lni lni-ticket text-3xl mb-1"></i> Issue Ticket</>
+                        )}
+                      </button>
+                      {eligibility && !eligibility.canIssue && !isCheckingEligibility && (
+                        <p className="text-center text-rose-500 text-[10px] font-bold mt-3 uppercase tracking-wider flex items-center justify-center gap-1 animate-pulse">
+                          <i className="lni lni-cross-circle text-sm"></i> Blocked
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <button 
+                      onClick={() => window.open(getHallTicketPdfUrl(selectedStudent!.studentGuid, selectedIntake, term === 'Term 1' ? 1 : 2), '_blank')}
+                      className="w-full py-4 rounded-xl font-bold text-[13px] uppercase tracking-wider flex flex-col items-center justify-center gap-2 transition-all duration-200 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/30 transform hover:-translate-y-0.5"
+                    >
+                      <i className="lni lni-printer text-3xl mb-1"></i> Print Ticket
+                    </button>
+                  )}
+               </div>
+             </>
+          )}
+        </div>
+
+        {/* Bottom: Student List */}
+        <div ref={tableRef} className="flex-1 flex flex-col bg-white border border-slate-200/80 rounded-xl shadow-sm overflow-hidden min-h-[300px]">
+          <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <div className="flex items-center gap-3">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <i className="lni lni-users text-blue-600"></i> Students in Session
+              </h3>
+              <div className="text-[11px] font-semibold text-slate-500 bg-slate-200/60 px-2 py-0.5 rounded-full">
+                {students.length} Records
+              </div>
             </div>
-            <div className="flex justify-between items-center text-[13px]">
-              <span className="text-slate-700 font-medium">CBT Completed (Term 1)</span>
-              <span className="text-green-500 bg-green-50 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[10px] border border-green-200">✓</span>
-            </div>
-            <div className="flex justify-between items-center text-[13px]">
-              <span className="text-slate-700 font-medium">50% Fee Cleared</span>
-              <span className="text-red-500 bg-red-50 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[10px] border border-red-200">✗</span>
-            </div>
-            
-            {term === 'Term 2' && (
-              <>
-                <div className="flex justify-between items-center text-[13px]">
-                  <span className="text-slate-700 font-medium">100% Fee Cleared</span>
-                  <span className="text-red-500 bg-red-50 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[10px] border border-red-200">✗</span>
-                </div>
-                <div className="flex justify-between items-center text-[13px]">
-                  <span className="text-slate-700 font-medium">NCHE Fee (20,000 UGX)</span>
-                  <span className="text-amber-500 bg-amber-50 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[11px] border border-amber-200">!</span>
-                </div>
-                <div className="flex justify-between items-center text-[13px]">
-                  <span className="text-slate-700 font-medium">Guild Fee (10,000 UGX/sem)</span>
-                  <span className="text-red-500 bg-red-50 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[10px] border border-red-200">✗</span>
-                </div>
-              </>
+
+            {selectedIntake && (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleViewIssuedList}
+                  className="px-3 py-1.5 text-[11px] font-bold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 rounded-md transition-colors flex items-center gap-1.5"
+                >
+                  <i className="lni lni-list"></i> View Issued List
+                </button>
+                <button
+                  onClick={handleBulkIssue}
+                  disabled={isBulkIssuing}
+                  className="px-3 py-1.5 text-[11px] font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isBulkIssuing ? (
+                    <><i className="lni lni-spinner-solid animate-spin"></i> Processing...</>
+                  ) : (
+                    <><i className="lni lni-ticket"></i> Bulk Issue All</>
+                  )}
+                </button>
+                <button
+                  onClick={() => window.open(getBulkHallTicketPdfUrl(selectedIntake, term === 'Term 1' ? 1 : 2), '_blank')}
+                  className="px-3 py-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-md transition-colors flex items-center gap-1.5"
+                >
+                  <i className="lni lni-printer"></i> Bulk Print All
+                </button>
+              </div>
             )}
           </div>
-          
-          <div className="pt-4 border-t border-slate-100 text-[12px] text-slate-500">
-            {term === 'Term 1' ? (
-              'Term 1 requires: 50% fee + CW + CBT completion.'
-            ) : (
-              'Term 2 requires: 100% fee + CW + CBT + NCHE fee (20,000 UGX) + Guild fee (10,000 UGX).'
-            )}
-          </div>
-        </div>
 
-        {/* Selected Student */}
-        <div className="card">
-          <div className="card-title mb-4">Selected Student</div>
-          
-          <div className="space-y-3 mb-6">
-            <div className="flex text-[13px]">
-              <div className="w-[100px] text-slate-500 font-medium">Name:</div>
-              <div className="font-semibold text-slate-900">Amara Nkosi</div>
-            </div>
-            <div className="flex text-[13px]">
-              <div className="w-[100px] text-slate-500 font-medium">Reg. No.:</div>
-              <div className="font-semibold text-slate-800 font-mono">BCS/2024/0031</div>
-            </div>
-            <div className="flex text-[13px]">
-              <div className="w-[100px] text-slate-500 font-medium">Fee Paid:</div>
-              <div className="font-medium text-slate-700">$125 / $250 (50%)</div>
-            </div>
-            <div className="flex text-[13px] items-center">
-              <div className="w-[100px] text-slate-500 font-medium">CW Status:</div>
-              <div><span className="badge badge-green">Submitted</span></div>
-            </div>
-            <div className="flex text-[13px] items-center">
-              <div className="w-[100px] text-slate-500 font-medium">CBT Status:</div>
-              <div><span className="badge badge-green">Submitted</span></div>
-            </div>
+          <div className="flex-1 overflow-auto">
+            <table className="w-full text-left text-[13px]">
+              <thead className="sticky top-0 bg-white/95 backdrop-blur z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                <tr className="text-slate-500 font-semibold border-b border-slate-200">
+                  <th className="py-3 px-4 font-semibold text-xs">Reg. No.</th>
+                  <th className="py-3 px-4 font-semibold text-xs">Student</th>
+                  <th className="py-3 px-4 font-semibold text-xs">Program</th>
+                  <th className="py-3 px-4 font-semibold text-xs text-center">Semester</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {isSearching ? (
+                  <TableLoadingState colSpan={4} title="Searching records..." subtitle="Please wait while we fetch the students." />
+                ) : students.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-24">
+                      <div className="flex flex-col items-center justify-center text-slate-400">
+                        <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-3">
+                          <i className="lni lni-search-alt text-2xl"></i>
+                        </div>
+                        <p className="text-sm font-medium text-slate-500">No students found</p>
+                        <p className="text-xs mt-1">Try adjusting your search or selected intake.</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  students.map(student => {
+                    const isSelected = selectedStudent?.studentGuid === student.studentGuid;
+                    return (
+                      <tr
+                        key={student.studentGuid}
+                        onClick={() => handleRowClick(student)}
+                        className={`cursor-pointer group transition-all duration-200 ${isSelected ? 'bg-blue-50/60 shadow-[inset_3px_0_0_var(--blue)]' : 'hover:bg-slate-50'
+                          }`}
+                      >
+                        <td className="py-3 px-4">
+                          <span className={`font-mono font-semibold ${isSelected ? 'text-blue-700' : 'text-slate-600 group-hover:text-blue-600'}`}>
+                            {student.studentRegNo}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-medium text-slate-800">
+                          {student.studentName}
+                        </td>
+                        <td className="py-3 px-4 text-slate-600 text-xs truncate max-w-[200px]" title={student.programName}>
+                          {student.programName}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`px-2 py-1 rounded text-[11px] font-bold ${isSelected ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                            {student.semCode}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
 
-          <div className="pt-4 border-t border-slate-100">
-            <button className="btn btn-success opacity-60 cursor-not-allowed" disabled>
-              Issue Hall Ticket
-            </button>
-            <div className="text-[11px] text-red-500 mt-2 font-medium">Issue blocked — 50% fee clearance not met</div>
-          </div>
-        </div>
-
-      </div>
-
-      <div className="card">
-        <div className="card-hdr">
-          <div className="text-[13.5px] font-bold text-slate-900">Student Clearance List</div>
-        </div>
-        
-        <div className="card-hdr">
-          <div className="card-title">
-            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
-          </div>
-          <TableSearch
-            className="w-64"
-            placeholder="Search records..."
-            value={search}
-            onChange={setSearch}
-            results={[]}
-          />
-        </div>
-        <ScrollTable>
-          <table>
-            <thead>
-              <tr>
-                <th style={{ width: 48 }}></th>
-                <th>Reg. No.</th>
-                <th>Student</th>
-                <th>Fee %</th>
-                <th>CW</th>
-                <th>CBT</th>
-                <FilterTh 
-                  label="Clearance" 
-                  opts={['Ready', 'Fee Pending', 'CW/CBT Pending']} 
-                  isOpen={openFilter === 'clearance'} 
-                  activeFilter={filters['clearance'] || []} 
-                  onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'clearance' ? null : 'clearance') }} 
-                  onSelect={(vals) => handleFilterSelect('clearance', vals)} 
-                  onClear={() => handleFilterSelect('clearance', [])} 
-                  onClose={() => setOpenFilter(null)} 
-                />
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <ActionMenu>
-                    <button className="btn btn-neu btn-sm text-green-600" onClick={() => showToast('Hall ticket issued')}><i className="lni lni-ticket"></i> Issue Ticket</button>
-                  </ActionMenu>
-                </td>
-                <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0017</span></td>
-                <td className="text-slate-800">Emmanuel Okello</td>
-                <td><span className="badge badge-green">100%</span></td>
-                <td><span className="badge badge-green">✓</span></td>
-                <td><span className="badge badge-green">✓</span></td>
-                <td><span className="badge badge-green">Ready</span></td>
-              </tr>
-              <tr>
-                <td>
-                  <ActionMenu>
-                    <button className="btn btn-neu btn-sm opacity-50 cursor-not-allowed"><i className="lni lni-ticket"></i> Issue Ticket</button>
-                  </ActionMenu>
-                </td>
-                <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0031</span></td>
-                <td className="text-slate-800">Amara Nkosi</td>
-                <td><span className="badge badge-red">50%</span></td>
-                <td><span className="badge badge-green">✓</span></td>
-                <td><span className="badge badge-green">✓</span></td>
-                <td><span className="badge badge-red">Fee Pending</span></td>
-              </tr>
-              <tr>
-                <td>
-                  <ActionMenu>
-                    <button className="btn btn-neu btn-sm opacity-50 cursor-not-allowed"><i className="lni lni-ticket"></i> Issue Ticket</button>
-                  </ActionMenu>
-                </td>
-                <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0044</span></td>
-                <td className="text-slate-800">Grace Akello</td>
-                <td><span className="badge badge-amber">60%</span></td>
-                <td><span className="badge badge-red">✗</span></td>
-                <td><span className="badge badge-red">✗</span></td>
-                <td><span className="badge badge-red">CW/CBT Pending</span></td>
-              </tr>
-              <tr>
-                <td>
-                  <ActionMenu>
-                    <button className="btn btn-neu btn-sm text-green-600" onClick={() => showToast('Hall ticket issued')}><i className="lni lni-ticket"></i> Issue Ticket</button>
-                  </ActionMenu>
-                </td>
-                <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0058</span></td>
-                <td className="text-slate-800">David Ssemwogerere</td>
-                <td><span className="badge badge-green">100%</span></td>
-                <td><span className="badge badge-green">✓</span></td>
-                <td><span className="badge badge-green">✓</span></td>
-                <td><span className="badge badge-green">Ready</span></td>
-              </tr>
-            </tbody>
-          </table>
-        </ScrollTable>
-        <div className="p-4 border-t border-slate-100">
-          <Pagination page={page} totalPages={6} totalCount={62} onPageChange={setPage} />
+          {students.length > 0 && (
+            <div className="p-3 border-t border-slate-100 bg-slate-50/50">
+              <Pagination page={1} totalPages={1} totalCount={students.length} onPageChange={setPage} />
+            </div>
+          )}
         </div>
       </div>
 
       <Toast toast={toast} />
+
+      {/* Issued List Modal */}
+      {showIssuedModal && (
+        <div className="modal-overlay open" onClick={() => setShowIssuedModal(false)} style={{ zIndex: 650 }}>
+          <div className="modal modal-lg flex flex-col" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+            
+            <div className="modal-hdr modal-hdr-blue shrink-0">
+              <div className="modal-title flex items-center gap-2">
+                <i className="lni lni-ticket"></i>
+                <span>Hall Tickets Issued for {term}</span>
+              </div>
+              <button type="button" className="modal-close" onClick={() => setShowIssuedModal(false)}>
+                <i className="lni lni-close"></i>
+              </button>
+            </div>
+            
+            <div className="modal-body p-0 flex-1 overflow-auto bg-slate-50">
+              {isFetchingIssued ? (
+                <div className="flex flex-col items-center justify-center py-20 text-blue-500">
+                  <i className="lni lni-spinner-solid animate-spin text-4xl mb-3"></i>
+                  <p className="text-sm font-medium text-slate-500">Fetching records...</p>
+                </div>
+              ) : issuedStudents.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                  <i className="lni lni-empty-file text-5xl mb-3"></i>
+                  <p className="text-sm font-medium text-slate-500">No tickets have been issued yet for this term.</p>
+                </div>
+              ) : (
+                <table className="w-full text-left text-[13px] bg-white">
+                  <thead className="sticky top-0 bg-slate-50/95 backdrop-blur z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                    <tr className="text-slate-500 font-semibold border-b border-slate-200">
+                      <th className="py-3 px-5 font-semibold text-xs">Reg. No.</th>
+                      <th className="py-3 px-5 font-semibold text-xs">Student Name</th>
+                      <th className="py-3 px-5 font-semibold text-xs">Program</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {issuedStudents.map(student => (
+                      <tr key={student.studentGuid} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-3 px-5 font-mono font-semibold text-slate-700">{student.studentRegNo}</td>
+                        <td className="py-3 px-5 font-medium text-slate-900">{student.studentName}</td>
+                        <td className="py-3 px-5 text-slate-500 text-xs truncate max-w-[200px]" title={student.programName}>{student.programName}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            
+            <div className="modal-ftr shrink-0 flex justify-between items-center bg-white border-t border-slate-200">
+              <span className="text-xs font-semibold text-slate-500">Total: {issuedStudents.length} Students</span>
+              <div className="flex gap-2">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowIssuedModal(false)}>
+                  Close
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => window.open(getBulkHallTicketPdfUrl(selectedIntake, term === 'Term 1' ? 1 : 2), '_blank')}
+                  className="btn btn-primary flex items-center gap-2"
+                >
+                  <i className="lni lni-printer"></i> Print Batch PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ChecklistItem({ label, isOk }: { label: string, isOk: boolean | null }) {
+  if (isOk === null) return null;
+  return (
+    <div className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${isOk ? 'bg-emerald-50/40 border-emerald-100/60' : 'bg-rose-50/40 border-rose-100/60'}`}>
+      <div className={`w-5 h-5 shrink-0 rounded-full flex items-center justify-center text-[10px] font-bold ${isOk ? 'bg-emerald-500 text-white shadow-sm' : 'bg-rose-500 text-white shadow-sm'}`}>
+        <i className={`lni ${isOk ? 'lni-checkmark' : 'lni-close'}`}></i>
+      </div>
+      <span className={`text-[11px] font-semibold leading-tight ${isOk ? 'text-emerald-800' : 'text-rose-800'}`}>{label}</span>
     </div>
   )
 }
