@@ -13,7 +13,7 @@ import {
   BulkRefundLineResultDto,
 } from '@/hooks/finance/usePaymentRefund'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
-import { useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
+import { useSearchProgramMastersInfinite, useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { flattenUniquePages } from '@/lib/pagination'
@@ -193,13 +193,32 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
   const [page, setPage] = useState(1)
 
   const intakeQuery = useSearchIntakesInfinite(intakeSearch, 20, intakePickerOpen)
-  const programQuery = useSearchProgramMastersInfinite(programSearch, 20, programPickerOpen)
   const campusQuery = useSearchCampusesInfinite(campusSearch, 20, campusPickerOpen)
+  // Programme is scoped to whichever Campus is currently picked — same
+  // cascading-dropdown convention Application Payment uses (see
+  // useProgramMastersByCampus's own comment). Falls back to the unscoped
+  // search when no campus is picked yet, so staff aren't blocked from
+  // filtering by Programme first if they want to.
+  const programByCampusQuery = useSearchProgramMastersByCampusInfinite(campusGuid, programSearch, 20, programPickerOpen && !!campusGuid)
+  const programAllQuery = useSearchProgramMastersInfinite(programSearch, 20, programPickerOpen && !campusGuid)
   const intakes = useMemo(() => flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid), [intakeQuery.data])
-  const programs = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
+  const programsByCampus = useMemo(() => flattenUniquePages(programByCampusQuery.data?.pages ?? [], p => p.programGuid), [programByCampusQuery.data])
+  const programsAll = useMemo(() => flattenUniquePages(programAllQuery.data?.pages ?? [], p => p.programGuid), [programAllQuery.data])
+  const programs = campusGuid ? programsByCampus : programsAll
+  // Whichever of the two program queries is actually active right now —
+  // only its own isLoading/hasNextPage/fetchNextPage should drive the
+  // dropdown's own loading/scroll state.
+  const programQuery = campusGuid ? programByCampusQuery : programAllQuery
   const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
   const { data: batchesData } = useBatches(1, 20, batchSearch, true)
-  const batches = batchesData?.items ?? []
+  // Batch is scoped to whichever Programme is currently picked — filtered
+  // client-side (Batch has no server-side by-program search endpoint in
+  // this app), same pattern Filing/Payment's own programGuid+semesterGuid+
+  // batchTimeGuid batch lookups already use.
+  const batches = useMemo(() => {
+    const items = batchesData?.items ?? []
+    return programGuid ? items.filter(b => b.programGuid === programGuid) : items
+  }, [batchesData, programGuid])
 
   const { data, isLoading: isLoadingReal, isError } = usePassoutLibraryDepositSearch(
     { page, pageSize: PAGE_SIZE, intakeGuid: intakeGuid || undefined, programGuid: programGuid || undefined, batchGuid: batchGuid || undefined, campusGuid: campusGuid || undefined },
@@ -522,15 +541,42 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
             />
           </div>
           <div className="fg" style={{ marginBottom: 0 }}>
+            <div className="lbl">Campus</div>
+            <SearchSelect
+              placeholder="All campuses"
+              options={campusOptions}
+              value={campusGuid}
+              onChange={v => updateFilters(() => {
+                setCampusGuid(v)
+                const campus = campuses.find(c => c.campusGuid === v)
+                setSelectedLabels(prev => ({ ...prev, campus: campus?.campusName ?? '', program: '', batch: '' }))
+                // Cascade reset — a Programme (and its own downstream Batch)
+                // picked under the old Campus may not exist under the new
+                // one, so both clear rather than silently keep filtering by
+                // a now-stale guid.
+                setProgramGuid('')
+                setBatchGuid('')
+              })}
+              onSearch={setCampusSearch}
+              onOpenChange={setCampusPickerOpen}
+              isLoading={campusQuery.isLoading}
+              hasNextPage={campusQuery.hasNextPage}
+              isFetchingNextPage={campusQuery.isFetchingNextPage}
+              onLoadMore={() => campusQuery.fetchNextPage()}
+            />
+          </div>
+          <div className="fg" style={{ marginBottom: 0 }}>
             <div className="lbl">Programme</div>
             <SearchSelect
-              placeholder="All programmes"
+              placeholder={campusGuid ? 'All programmes at this campus' : 'All programmes'}
               options={programOptions}
               value={programGuid}
               onChange={v => updateFilters(() => {
                 setProgramGuid(v)
                 const program = programs.find(p => p.programGuid === v)
-                if (program) setSelectedLabels(prev => ({ ...prev, program: program.programName }))
+                setSelectedLabels(prev => ({ ...prev, program: program?.programName ?? '', batch: '' }))
+                // Cascade reset — Batch is scoped to Programme.
+                setBatchGuid('')
               })}
               onSearch={setProgramSearch}
               onOpenChange={setProgramPickerOpen}
@@ -543,7 +589,7 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
           <div className="fg" style={{ marginBottom: 0 }}>
             <div className="lbl">Batch</div>
             <SearchSelect
-              placeholder="All batches"
+              placeholder={programGuid ? 'All batches in this programme' : 'All batches'}
               options={batchOptions}
               value={batchGuid}
               onChange={v => updateFilters(() => {
@@ -553,25 +599,6 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
               })}
               onSearch={setBatchSearch}
               isLoading={batchesData === undefined}
-            />
-          </div>
-          <div className="fg" style={{ marginBottom: 0 }}>
-            <div className="lbl">Campus</div>
-            <SearchSelect
-              placeholder="All campuses"
-              options={campusOptions}
-              value={campusGuid}
-              onChange={v => updateFilters(() => {
-                setCampusGuid(v)
-                const campus = campuses.find(c => c.campusGuid === v)
-                if (campus) setSelectedLabels(prev => ({ ...prev, campus: campus.campusName }))
-              })}
-              onSearch={setCampusSearch}
-              onOpenChange={setCampusPickerOpen}
-              isLoading={campusQuery.isLoading}
-              hasNextPage={campusQuery.hasNextPage}
-              isFetchingNextPage={campusQuery.isFetchingNextPage}
-              onLoadMore={() => campusQuery.fetchNextPage()}
             />
           </div>
         </div>
