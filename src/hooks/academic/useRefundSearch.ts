@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
+  getPassoutLibraryDepositByStudent,
   PassoutLibraryDepositSearchParams,
   RefundSearchParams,
   searchFakeCertificateTerminations,
@@ -30,6 +31,18 @@ export function usePassoutLibraryDepositSearch(params: PassoutLibraryDepositSear
     queryFn: () => searchPassoutLibraryDeposit(params),
     enabled,
     placeholderData: keepPreviousData,
+  })
+}
+
+// Flow 2's single-student detail view — fetched fresh by studentGuid rather
+// than reused off the search-list row it was picked from, so the refund
+// form always works off current data (e.g. a line refunded moments ago
+// elsewhere won't still show as outstanding here).
+export function usePassoutLibraryDepositByStudent(studentGuid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...REFUND_SEARCH_KEY, 'passout-library-deposit', 'student', studentGuid],
+    queryFn: () => getPassoutLibraryDepositByStudent(studentGuid as string),
+    enabled: enabled && !!studentGuid,
   })
 }
 

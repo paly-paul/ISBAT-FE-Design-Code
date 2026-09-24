@@ -1,15 +1,16 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useFakeCertificateTerminationsSearch } from '@/hooks/academic/useRefundSearch'
-import { useStudent } from '@/hooks/student/useStudents'
 import { RefundLedgerPicker, initialsFor } from './shared'
-import { mockResolveApplicationGuid, mockSearchFakeCert } from './mockData'
+import { mockSearchFakeCert } from './mockData'
 
 // Category 3 — students terminated mid-program with reason "Fake
-// Certificate" (get-fake-certificate-terminations.md). The search DTO only
-// carries studentGuid, not applicationGuid — resolved via useStudent's own
-// applicationSummary.applicationGuid before the ledger/refund step can run
-// (see useStudentsByGuids' comment in hooks/student/useStudents.ts for why).
+// Certificate" (get-fake-certificate-terminations.md). applicationGuid comes
+// straight off the search response (2026-09-24 fix) — previously resolved
+// via a separate GET /students/{guid} call whose applicationSummary field
+// was intermittently missing on live responses, which is exactly what
+// caused "Application record not found" to fire for students who did in
+// fact have one.
 //
 // Search-and-select dropdown (2026-09-15, per request) — same move as the
 // Rejected-by-Registrar tab: replaces the always-visible results table +
@@ -30,7 +31,7 @@ export function FakeCertTab({ showToast, permissionsCreate, onRefunded, useMock 
   const [committedSearch, setCommittedSearch] = useState('')
   const [searchFocused, setSearchFocused] = useState(false)
   const searchBoxRef = useRef<HTMLDivElement>(null)
-  const [selected, setSelected] = useState<{ studentGuid: string; name: string; regNo: string; remarks: string | null } | null>(null)
+  const [selected, setSelected] = useState<{ studentGuid: string; applicationGuid: string | null; name: string; regNo: string; remarks: string | null } | null>(null)
 
   useEffect(() => {
     const t = setTimeout(() => setCommittedSearch(search.trim()), 400)
@@ -53,15 +54,10 @@ export function FakeCertTab({ showToast, permissionsCreate, onRefunded, useMock 
   const items = useMock ? mockItems : (data?.items ?? [])
   const isLoading = useMock ? false : isLoadingReal
 
-  const { data: studentDetail, isLoading: isResolvingApplicationReal, isError: isResolveErrorReal } = useStudent(selected?.studentGuid ?? null, !useMock && !!selected)
-  const applicationGuid = useMock
-    ? (selected ? mockResolveApplicationGuid(selected.studentGuid) : null)
-    : (studentDetail?.applicationSummary?.applicationGuid ?? null)
-  const isResolvingApplication = useMock ? false : isResolvingApplicationReal
-  const isResolveError = useMock ? false : isResolveErrorReal
+  const applicationGuid = selected?.applicationGuid ?? null
 
-  function selectCandidate(s: { studentGuid: string; studentName: string; studentRegNo: string; terminationRemarks: string | null }) {
-    setSelected({ studentGuid: s.studentGuid, name: s.studentName, regNo: s.studentRegNo, remarks: s.terminationRemarks })
+  function selectCandidate(s: { studentGuid: string; applicationGuid: string | null; studentName: string; studentRegNo: string; terminationRemarks: string | null }) {
+    setSelected({ studentGuid: s.studentGuid, applicationGuid: s.applicationGuid, name: s.studentName, regNo: s.studentRegNo, remarks: s.terminationRemarks })
     setSearch(s.studentName)
     setCommittedSearch('')
     setSearchFocused(false)
@@ -152,9 +148,7 @@ export function FakeCertTab({ showToast, permissionsCreate, onRefunded, useMock 
             </div>
           </div>
 
-          {isResolvingApplication ? (
-            <div className="card text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>Resolving application record…</div>
-          ) : isResolveError || !applicationGuid ? (
+          {!applicationGuid ? (
             // Same centered-icon/title/subtitle empty-state treatment as
             // Payment Console's own "Fully settled" card (.pc-receipt-check),
             // just in red for a blocking error instead of green for success —

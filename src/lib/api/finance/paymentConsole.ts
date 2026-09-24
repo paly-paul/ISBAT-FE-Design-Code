@@ -85,11 +85,27 @@ export interface StudentProfile {
   feeCode: string | null
   intType: string | null
   admissionTypeLabel: string | null
+  exemptionTypeGuid: string | null
+  regStatus: number | null
+  regStatusName: string | null
   // Type genuinely unconfirmed — null on every live sample seen so far, no
   // spec coverage, and the name isn't self-explanatory enough to guess a
   // shape for. Left as unknown rather than assuming string; narrow it once
   // a non-null sample turns up.
   ucam: unknown
+}
+
+// studCategory: 1 = active, anything else (0/null/other) = inactive — per
+// FinanceStudentProfileDto, confirmed against a live response.
+export function studCategoryLabel(studCategory: number | null): string {
+  return studCategory === 1 ? 'Active' : 'Inactive'
+}
+
+// refugee: 1 = refugee, anything else = not a refugee — same 1/0 flag
+// convention as the applicant-side `refugee` field elsewhere in this app
+// (see ViewApplicantModal).
+export function refugeeLabel(refugee: number | null): string {
+  return refugee === 1 ? 'Refugee' : 'No'
 }
 
 // Confirmed via payment-console/get-outstanding-ledgers.md — tuition-only

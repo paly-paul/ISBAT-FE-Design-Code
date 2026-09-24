@@ -1,4 +1,4 @@
-import { apiGet } from '../client'
+import { apiGet, AuthError } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -48,9 +48,16 @@ export function searchRejectedApplications(params: RefundSearchParams): Promise<
 
 // ─── GET /students/refund-search/passout-library-deposit ─────────────────
 // Category 2 — students with RegStatus = Passout, eligible for a Library
-// Deposit refund. Ledgers are embedded per student (merged main-ledger +
-// Other-Payments lines), so a bulk-refund confirm step can post straight
-// off what this response already shows without a second round trip.
+// Deposit refund. Per the 2026-09-23 frontend integration guide (backend
+// fix for the "Ledger not found." bug — see PassoutLibraryDepositTab's own
+// comment): a student's Library Deposit can sit in either/both of two
+// genuinely different backend sources, kept as two separate arrays rather
+// than merged into one — mainLedgerLines (T_PAYMENT_LEDGER, refund with
+// `ledgerGuid`) and otherLedgerLines (T_PAYMENT_OTHER_LEDGER, refund with
+// `ledgerOthersGuid`). Never flatten these back into one array — which
+// array a line came from is the only way to know which request field to
+// populate, and getting that backwards is exactly what caused every refund
+// to fail with "Ledger not found." before this fix.
 export interface PassoutLedgerLineDto {
   ledgerGuid: string
   ledgerName: string
@@ -66,6 +73,11 @@ export interface PassoutLedgerLineDto {
 
 export interface PassoutLibraryDepositRefundCandidateDto {
   studentGuid: string
+  // Nullable — a passout student with no linked application can't be
+  // refunded on either ledger (the refund endpoint requires applicationGuid
+  // in the path even for otherLedgerLines). Callers must disable the refund
+  // action when this is null.
+  applicationGuid: string | null
   studentRegNo: string
   studentNum: string
   studentName: string
@@ -76,7 +88,11 @@ export interface PassoutLibraryDepositRefundCandidateDto {
   campusGuid: string | null
   campusName: string | null
   intakeGuid: string | null
-  ledgers: PassoutLedgerLineDto[]
+  // Nullable/possibly-missing on a live response as of 2026-09-23, despite
+  // the integration guide documenting them as always-present arrays —
+  // callers must guard with `?? []`.
+  mainLedgerLines: PassoutLedgerLineDto[] | null | undefined
+  otherLedgerLines: PassoutLedgerLineDto[] | null | undefined
 }
 
 export interface PassoutLibraryDepositSearchParams extends RefundSearchParams {
@@ -100,15 +116,33 @@ export function searchPassoutLibraryDeposit(params: PassoutLibraryDepositSearchP
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
+// ─── GET /students/refund-search/passout-library-deposit/{studentGuid} ───
+// Single-student detail view for Flow 2 (click a row → detail) — same shape
+// as one search row. 404 when the student doesn't exist or isn't currently
+// Passout status; treated as "not found" rather than an error, same pattern
+// used elsewhere in this file's sibling endpoints.
+export function getPassoutLibraryDepositByStudent(studentGuid: string): Promise<PassoutLibraryDepositRefundCandidateDto | null> {
+  if (MOCK_AUTH) return Promise.resolve(null)
+  return apiGet<PassoutLibraryDepositRefundCandidateDto>(`/api/v1/students/refund-search/passout-library-deposit/${studentGuid}`)
+    .catch(err => {
+      if (err instanceof AuthError && err.code === 'not_found') return null
+      throw err
+    })
+}
+
 // ─── GET /students/refund-search/fake-certificate-terminations ───────────
 // Category 3 — students terminated mid-program with reason "Fake
-// Certificate" (POST /students/{studentGuid}/terminate). No applicationGuid
-// on this DTO — resolve it via getStudentByGuid(studentGuid)
-// (src/lib/api/student/student.ts), whose applicationSummary.applicationGuid
-// carries it, the same resolver the page already needs for the refund step
-// (ledger detail is fetched by applicationGuid, not studentGuid).
+// Certificate" (POST /students/{studentGuid}/terminate). Now returns
+// applicationGuid directly (2026-09-24 — same fix already shipped for the
+// Passout/Library Deposit search) rather than requiring the fragile
+// getStudentByGuid(studentGuid) fallback this DTO used to need: that
+// resolver's applicationSummary.applicationGuid was intermittently missing
+// on a live response, which is exactly what broke this tab before this
+// field was added. Kept nullable — undocumented whether every terminated
+// student has a linked application — callers must still guard for null.
 export interface TerminatedStudentRefundCandidateDto {
   studentGuid: string
+  applicationGuid: string | null
   studentRegNo: string
   studentNum: string
   studentName: string

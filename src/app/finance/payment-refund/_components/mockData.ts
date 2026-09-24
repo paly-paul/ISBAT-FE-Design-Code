@@ -30,23 +30,27 @@ export const MOCK_REJECTED_APPLICATIONS: RejectedApplicationRefundCandidateDto[]
 export const MOCK_PASSOUT_STUDENTS: PassoutLibraryDepositRefundCandidateDto[] = [
   {
     studentGuid: mockGuid('student-passout-1'),
+    applicationGuid: mockGuid('app-passout-1'),
     studentRegNo: '0120231230523', studentNum: '0120231230523', studentName: 'Majok Joseph Madit',
     programGuid: mockGuid('program-1'), programName: 'Bachelor of Science in Applied Information Technology - S22',
     batchGuid: mockGuid('batch-1'), batchCode: 'BSCAITS21DA',
     campusGuid: mockGuid('campus-1'), campusName: 'ISBAT University - Main Campus',
     intakeGuid: mockGuid('intake-1'),
-    ledgers: [
+    mainLedgerLines: [
       { ledgerGuid: mockGuid('ledger-passout-1a'), ledgerName: 'Library Deposit', currencyGuid: mockGuid('currency-usd'), currencyCode: 'USD', amount: 50, convertedAmount: 190000, exchangeRateMissing: false, payDate: '2024-02-21T00:00:00', receipt: '89662', receiptBookCode: 'MCC56' },
     ],
+    otherLedgerLines: [],
   },
   {
     studentGuid: mockGuid('student-passout-2'),
+    applicationGuid: mockGuid('app-passout-2'),
     studentRegNo: '022210044', studentNum: '022210044', studentName: 'Brian Ssemanda',
     programGuid: mockGuid('program-2'), programName: 'Diploma in Nursing',
     batchGuid: mockGuid('batch-2'), batchCode: 'NUR-2022-MAY-A',
     campusGuid: mockGuid('campus-1'), campusName: 'ISBAT University - Main Campus',
     intakeGuid: mockGuid('intake-2'),
-    ledgers: [
+    mainLedgerLines: [],
+    otherLedgerLines: [
       { ledgerGuid: mockGuid('ledger-passout-2a'), ledgerName: 'Library Deposit', currencyGuid: mockGuid('currency-ugx'), currencyCode: 'UGX', amount: 100000, convertedAmount: 100000, exchangeRateMissing: false, payDate: '2024-09-19T00:00:00', receipt: '160878', receiptBookCode: 'MCCB22' },
       { ledgerGuid: mockGuid('ledger-passout-2b'), ledgerName: 'Library Deposit', currencyGuid: mockGuid('currency-ugx'), currencyCode: 'UGX', amount: 20000, convertedAmount: 20000, exchangeRateMissing: false, payDate: '2023-11-02T00:00:00', receipt: '142201', receiptBookCode: 'MCCB19' },
     ],
@@ -56,34 +60,18 @@ export const MOCK_PASSOUT_STUDENTS: PassoutLibraryDepositRefundCandidateDto[] = 
 // ─── Category 3 — Fake-Certificate Termination ────────────────────────────
 export const MOCK_FAKECERT_STUDENTS: TerminatedStudentRefundCandidateDto[] = [
   {
-    studentGuid: mockGuid('student-fakecert-1'), studentRegNo: '022210001', studentNum: '022210001', studentName: 'Tusingwire Drake',
+    studentGuid: mockGuid('student-fakecert-1'), applicationGuid: mockGuid('app-fakecert-1'), studentRegNo: '022210001', studentNum: '022210001', studentName: 'Tusingwire Drake',
     programGuid: mockGuid('program-3'), programName: 'Diploma in Networking and Cyber Security - F21',
     batchGuid: mockGuid('batch-3'), batchCode: null,
     terminationRemarks: 'Submitted a fabricated national diploma certificate',
   },
   {
-    studentGuid: mockGuid('student-fakecert-2'), studentRegNo: '011230078', studentNum: '011230078', studentName: 'Nabirye Patience',
+    studentGuid: mockGuid('student-fakecert-2'), applicationGuid: mockGuid('app-fakecert-2'), studentRegNo: '011230078', studentNum: '011230078', studentName: 'Nabirye Patience',
     programGuid: mockGuid('program-1'), programName: 'Bachelor of Science in Applied Information Technology - S22',
     batchGuid: mockGuid('batch-1'), batchCode: 'BSCAITS21DA',
     terminationRemarks: 'Submitted a forged A-Level transcript',
   },
 ]
-
-// studentGuid → applicationGuid — resolves what useStudent()/
-// useStudentsByGuids() would normally get from StudentDetailDto.
-// applicationSummary.applicationGuid, for the two categories whose search
-// DTO only carries studentGuid (see those hooks' own comments for why).
-const MOCK_APPLICATION_GUID_BY_STUDENT: Record<string, string> = {
-  [mockGuid('student-rejected-3')]: mockGuid('app-rejected-3'),
-  [mockGuid('student-passout-1')]: mockGuid('app-passout-1'),
-  [mockGuid('student-passout-2')]: mockGuid('app-passout-2'),
-  [mockGuid('student-fakecert-1')]: mockGuid('app-fakecert-1'),
-  [mockGuid('student-fakecert-2')]: mockGuid('app-fakecert-2'),
-}
-
-export function mockResolveApplicationGuid(studentGuid: string): string | null {
-  return MOCK_APPLICATION_GUID_BY_STUDENT[studentGuid] ?? null
-}
 
 // ─── Main-ledger lines (Categories 1 & 3) — mutable so a submitted refund
 // removes its line, same "already-refunded lines excluded" behavior the
@@ -129,10 +117,13 @@ export function mockGetRefundsByApplication(applicationGuid: string): RefundDto[
 // records the refund, then removes the line from the picker so it can't be
 // selected again — same effect ledger-details-batch's own already-refunded
 // exclusion has server-side.
-export function mockCreateRefund(applicationGuid: string, input: { ledgerGuid: string; currencyGuid: string; amount: number; refundDate: string; remarks: string | null }): Promise<RefundResultDto> {
+// ledgerOthersGuid support added (2026-09-23) for Passout single-student
+// mode, which reuses this same generic single-refund mock — Categories 1/3
+// only ever pass ledgerGuid, unaffected.
+export function mockCreateRefund(applicationGuid: string, input: { ledgerGuid?: string | null; ledgerOthersGuid?: string | null; currencyGuid: string; amount: number; refundDate: string; remarks: string | null }): Promise<RefundResultDto> {
   const lines = mockMainLedgerLines[applicationGuid] ?? []
   const line = lines.find(l => l.ledgerGuid === input.ledgerGuid)
-  const refundGuid = mockGuid(`refund-${applicationGuid}-${input.ledgerGuid}-${Date.now()}`)
+  const refundGuid = mockGuid(`refund-${applicationGuid}-${input.ledgerGuid ?? input.ledgerOthersGuid}-${Date.now()}`)
   const history = mockRefundHistory[applicationGuid] ?? (mockRefundHistory[applicationGuid] = [])
   history.push({
     refundGuid,
@@ -140,12 +131,26 @@ export function mockCreateRefund(applicationGuid: string, input: { ledgerGuid: s
     amount: input.amount,
     currencyGuid: input.currencyGuid,
     currencyName: input.currencyGuid === mockGuid('currency-usd') ? 'US Dollars' : 'Uganda Shilling',
-    ledgerGuid: input.ledgerGuid,
-    ledgerName: line?.ledgerName ?? 'Ledger',
+    ledgerGuid: input.ledgerGuid ?? input.ledgerOthersGuid ?? '',
+    ledgerName: line?.ledgerName ?? 'Library Deposit',
     remarks: input.remarks,
   })
-  mockMainLedgerLines[applicationGuid] = lines.filter(l => l.ledgerGuid !== input.ledgerGuid)
+  if (input.ledgerGuid) {
+    mockMainLedgerLines[applicationGuid] = lines.filter(l => l.ledgerGuid !== input.ledgerGuid)
+    const student = MOCK_PASSOUT_STUDENTS.find(s => s.applicationGuid === applicationGuid)
+    if (student) student.mainLedgerLines = (student.mainLedgerLines ?? []).filter(l => l.ledgerGuid !== input.ledgerGuid)
+  }
+  if (input.ledgerOthersGuid) {
+    const student = MOCK_PASSOUT_STUDENTS.find(s => s.applicationGuid === applicationGuid)
+    if (student) student.otherLedgerLines = (student.otherLedgerLines ?? []).filter(l => l.ledgerGuid !== input.ledgerOthersGuid)
+  }
   return Promise.resolve({ refundGuid })
+}
+
+// Flow 2 (single-student) lookup — mirrors getPassoutLibraryDepositByStudent
+// for the dev "Mock Data" toggle.
+export function mockGetPassoutStudentByGuid(studentGuid: string): PassoutLibraryDepositRefundCandidateDto | null {
+  return MOCK_PASSOUT_STUDENTS.find(s => s.studentGuid === studentGuid) ?? null
 }
 
 // ─── Bulk refund (Category 2) — happy path only, every line succeeds and is
@@ -153,9 +158,15 @@ export function mockCreateRefund(applicationGuid: string, input: { ledgerGuid: s
 // refunded. ─────────────────────────────────────────────────────────────
 export function mockBulkRefund(lines: BulkRefundLineInput[]): Promise<BulkRefundLineResultDto[]> {
   const results = lines.map((l): BulkRefundLineResultDto => {
-    const student = MOCK_PASSOUT_STUDENTS.find(s => mockResolveApplicationGuid(s.studentGuid) === l.applicationGuid)
-    if (student) student.ledgers = student.ledgers.filter(led => led.ledgerGuid !== l.ledgerOthersGuid)
-    return { applicationGuid: l.applicationGuid, ledgerOthersGuid: l.ledgerOthersGuid, success: true, refundGuid: mockGuid(`bulk-refund-${l.applicationGuid}-${l.ledgerOthersGuid}-${Date.now()}`), error: null }
+    const student = MOCK_PASSOUT_STUDENTS.find(s => s.applicationGuid === l.applicationGuid)
+    if (student) {
+      if (l.ledgerGuid) student.mainLedgerLines = (student.mainLedgerLines ?? []).filter(led => led.ledgerGuid !== l.ledgerGuid)
+      if (l.ledgerOthersGuid) student.otherLedgerLines = (student.otherLedgerLines ?? []).filter(led => led.ledgerGuid !== l.ledgerOthersGuid)
+    }
+    return {
+      applicationGuid: l.applicationGuid, ledgerGuid: l.ledgerGuid, ledgerOthersGuid: l.ledgerOthersGuid,
+      success: true, refundGuid: mockGuid(`bulk-refund-${l.applicationGuid}-${l.ledgerGuid ?? l.ledgerOthersGuid}-${Date.now()}`), error: null,
+    }
   })
   return Promise.resolve(results)
 }

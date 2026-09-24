@@ -25,6 +25,7 @@ import {
   RegulatoryPaymentHistoryEntry,
   RegulatorySemesterStatus,
 } from '@/hooks/finance/useNcheGuildPayment'
+import { refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
 
 // Merged NCHE + Guild Payment page — combines the two previously separate
 // nche-payment/guild-payment pages behind a single tab switcher, per
@@ -535,6 +536,9 @@ export default function NcheGuildPaymentPage() {
                     <span className="pc-hero-fact-lbl">Email</span>
                     <span className="pc-hero-fact-val truncate" title={profile.emailId ?? profile.universityEmail ?? '—'}>{profile.emailId ?? profile.universityEmail ?? '—'}</span>
                   </div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Reg Status</span><span className="pc-hero-fact-val" title={profile.regStatusName ?? '—'}>{profile.regStatusName ?? '—'}</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Refugee</span><span className="pc-hero-fact-val">{refugeeLabel(profile.refugee)}</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Category</span><span className="pc-hero-fact-val">{studCategoryLabel(profile.studCategory)}</span></div>
                 </div>
               </div>
             </div>
