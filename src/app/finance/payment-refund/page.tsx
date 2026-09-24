@@ -71,7 +71,7 @@ export default function PaymentRefundPage() {
     setSuccessModal({ title: 'Refund Recorded', rows })
   }
 
-  const [activeTab, setActiveTab] = useState<Tab>('rejected')
+  const [activeTab, setActiveTab] = useState<Tab>('passout')
 
   // Starts false on every render (server and first client render must
   // match) and is corrected from localStorage right after mount — avoids a
