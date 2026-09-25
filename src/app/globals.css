@@ -8501,6 +8501,33 @@ body {
   min-height: 185px;
 }
 
+/* Print Card on the student profile — the global print rule above hides
+   every body descendant except .receipt-print-area, so the card printed as a
+   blank page. handlePrintCard toggles body.printing-id-card for the duration
+   of the print dialog; only then is the card hoisted to the page, at card
+   size (not stretched full-page like a receipt), with its dark gradient kept
+   so the white text stays legible. */
+@media print {
+  body.printing-id-card {
+    height: 100vh;
+    overflow: hidden
+  }
+
+  body.printing-id-card .id-preview,
+  body.printing-id-card .id-preview * {
+    visibility: visible
+  }
+
+  body.printing-id-card .id-preview {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 420px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact
+  }
+}
+
 .id-preview::before {
   content: '';
   position: absolute;
