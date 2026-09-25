@@ -874,16 +874,16 @@ export default function StudentStatementPage() {
                             groupedPayments.map((group, groupIdx) => (
                               <Fragment key={group.semester || groupIdx}>
                                 {/* Semester Group Header Row */}
-                                <tr className="bg-gradient-to-r from-[#e9f2fb] via-[#f1f6fc] to-[#e9f2fb] border-t-2 border-b border-[#22558c]/40 font-semibold">
-                                  <td colSpan={9} className="py-2.5 px-4">
+                                <tr className="bg-gradient-to-r from-[#1b365d] via-[#22558c] to-[#1b365d] font-semibold">
+                                  <td colSpan={9} className="py-2.5 px-4 border-l-4 border-l-[#f5b82e]">
                                     <div className="flex items-center gap-2.5">
-                                      <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-[#22558c] text-white text-xs shadow-xs">
+                                      <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-white/20 text-white text-xs">
                                         <i className="lni lni-graduation" />
                                       </span>
-                                      <span className="font-extrabold text-xs md:text-sm text-[#1b365d] tracking-wide">
+                                      <span className="font-extrabold text-xs md:text-sm text-white uppercase tracking-wide">
                                         {group.semester}
                                       </span>
-                                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white text-[#22558c] border border-[#22558c]/20 shadow-xs">
+                                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white text-[#22558c] shadow-xs">
                                         {group.items.length} {group.items.length === 1 ? 'Record' : 'Records'}
                                       </span>
                                     </div>
@@ -921,32 +921,32 @@ export default function StudentStatementPage() {
                                 ))}
 
                                 {/* Section Subtotal Row at Bottom of Semester - Single Row Highlighted */}
-                                <tr className="bg-gradient-to-r from-[#d6e7f8] via-[#eaf2fb] to-[#d6e7f8] border-t-2 border-b-2 border-[#1b365d] shadow-sm text-xs whitespace-nowrap">
-                                  <td colSpan={9} className="py-3 px-4">
+                                <tr className="bg-[#eef4fb] border-t border-b border-[#1b365d]/20 text-xs whitespace-nowrap">
+                                  <td colSpan={9} className="py-1.5 px-4">
                                     <div className="flex items-center justify-between gap-4 flex-nowrap">
                                       {/* Left: Total Badge & Semester */}
-                                      <div className="flex items-center gap-3 shrink-0">
-                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-[#1b365d] text-white font-black text-xs uppercase tracking-wider shadow-sm">
-                                          <i className="lni lni-calculator text-blue-200 text-xs" />
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#1b365d] text-white font-bold text-[10px] uppercase tracking-wider">
+                                          <i className="lni lni-calculator text-blue-200 text-[10px]" />
                                           SEMESTER TOTAL
                                         </span>
-                                        <span className="font-bold text-g700 text-xs">
-                                          for <span className="text-[#1b365d] font-black text-sm tracking-tight">{group.semester}</span>:
+                                        <span className="font-semibold text-g600 text-[11px]">
+                                          for <span className="text-[#1b365d] font-bold">{group.semester}</span>:
                                         </span>
                                       </div>
 
-                                      {/* Right: Currency totals in single line - Highlighted Cards */}
-                                      <div className="flex items-center gap-2.5 shrink-0">
+                                      {/* Right: Currency totals in single line */}
+                                      <div className="flex items-center gap-2 shrink-0">
                                         {group.currencyTotals.map(ct => (
                                           <div
                                             key={ct.currency}
-                                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border-2 border-[#1b365d] shadow-xs hover:shadow transition-all"
+                                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-white border border-[#1b365d]/30"
                                           >
-                                            <span className="text-[11px] font-sans font-black uppercase tracking-wider text-[#1b365d] flex items-center gap-1.5">
-                                              <span className="w-2 h-2 rounded-full bg-[#22558c]" />
+                                            <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-[#1b365d] flex items-center gap-1.5">
+                                              <span className="w-1.5 h-1.5 rounded-full bg-[#22558c]" />
                                               {ct.currency} Total:
                                             </span>
-                                            <span className="font-mono text-sm font-black text-[#1b365d] bg-[#eaf2fb] px-2.5 py-0.5 rounded border border-[#22558c]/30 shadow-inner">
+                                            <span className="font-mono text-xs font-black text-[#1b365d]">
                                               {formatMoney(ct.total)}
                                             </span>
                                           </div>
@@ -1015,8 +1015,8 @@ export default function StudentStatementPage() {
                             groupedOutstanding.map((group, groupIdx) => (
                               <Fragment key={group.semester || groupIdx}>
                                 {/* Semester Group Header Row */}
-                                <tr className="bg-gradient-to-r from-[#fee2e2]/40 via-[#fef2f2] to-[#fee2e2]/40 border-t-2 border-b border-red-300 font-semibold">
-                                  <td colSpan={6} className="py-2.5 px-4">
+                                <tr className="bg-gradient-to-r from-[#fcd4d4] via-[#fde6e6] to-[#fcd4d4] border-t border-b border-red-300 font-semibold">
+                                  <td colSpan={6} className="py-2.5 px-4 border-l-4 border-l-red-600">
                                     <div className="flex items-center gap-2.5">
                                       <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-red-600 text-white text-xs shadow-xs">
                                         <i className="lni lni-wallet" />
@@ -1053,7 +1053,7 @@ export default function StudentStatementPage() {
                                 ))}
 
                                 {/* Section Subtotal Row at Bottom of Semester - Single Row Highlighted */}
-                                <tr className="bg-gradient-to-r from-[#fee2e2] via-[#fff1f1] to-[#fee2e2] border-t-2 border-b-2 border-red-500 shadow-sm text-xs whitespace-nowrap">
+                                <tr className="bg-gradient-to-r from-[#fee2e2] via-[#fff1f1] to-[#fee2e2] border-t border-b border-red-400/60 shadow-sm text-xs whitespace-nowrap">
                                   <td colSpan={6} className="py-3 px-4">
                                     <div className="flex items-center justify-between gap-4 flex-nowrap">
                                       {/* Left: Total Badge & Semester */}
@@ -1137,8 +1137,8 @@ export default function StudentStatementPage() {
                             groupedFuture.map((group, groupIdx) => (
                               <Fragment key={group.semester || groupIdx}>
                                 {/* Semester Group Header Row */}
-                                <tr className="bg-gradient-to-r from-[#e9f2fb] via-[#f1f6fc] to-[#e9f2fb] border-t-2 border-b border-[#22558c]/40 font-semibold">
-                                  <td colSpan={5} className="py-2.5 px-4">
+                                <tr className="bg-gradient-to-r from-[#c9dcf2] via-[#dce9f7] to-[#c9dcf2] border-t border-b border-[#22558c]/50 font-semibold">
+                                  <td colSpan={5} className="py-2.5 px-4 border-l-4 border-l-[#22558c]">
                                     <div className="flex items-center gap-2.5">
                                       <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-[#22558c] text-white text-xs shadow-xs">
                                         <i className="lni lni-alarm-clock" />
@@ -1172,7 +1172,7 @@ export default function StudentStatementPage() {
                                 ))}
 
                                 {/* Section Subtotal Row at Bottom of Semester - Single Row Highlighted */}
-                                <tr className="bg-gradient-to-r from-[#d6e7f8] via-[#eaf2fb] to-[#d6e7f8] border-t-2 border-b-2 border-[#1b365d] shadow-sm text-xs whitespace-nowrap">
+                                <tr className="bg-gradient-to-r from-[#d6e7f8] via-[#eaf2fb] to-[#d6e7f8] border-t border-b border-[#1b365d]/40 shadow-sm text-xs whitespace-nowrap">
                                   <td colSpan={5} className="py-3 px-4">
                                     <div className="flex items-center justify-between gap-4 flex-nowrap">
                                       {/* Left: Total Badge & Semester */}
