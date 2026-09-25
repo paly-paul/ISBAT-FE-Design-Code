@@ -397,6 +397,9 @@ function StudentProfileContent() {
   }
 
   function handlePrintCard() {
+    // Scopes the print to the card preview only — see .printing-id-card in globals.css.
+    document.body.classList.add('printing-id-card')
+    window.addEventListener('afterprint', () => document.body.classList.remove('printing-id-card'), { once: true })
     window.print()
   }
 
@@ -619,10 +622,10 @@ function StudentProfileContent() {
             {tab === 'info' && (
               <div>
                 <div className="card">
-                  <div className="card-hdr"><div className="card-title"><i className="lni lni-pencil-alt"></i> Personal Information</div><span className="badge badge-grey">Editable</span></div>
+                  <div className="card-hdr"><div className="card-title"><i className="lni lni-user"></i> Personal Information</div><span className="badge badge-grey">Read-only</span></div>
                   <div className="g3">
-                    <div className="fg"><label className="lbl">First Name <span className="req">*</span></label><input className="ctrl" value={firstName} onChange={e => setFirstName(e.target.value)} /></div>
-                    <div className="fg"><label className="lbl">Last Name <span className="req">*</span></label><input className="ctrl" value={lastName} onChange={e => setLastName(e.target.value)} /></div>
+                    <div className="fg"><label className="lbl">First Name</label><input className="ctrl" readOnly value={firstName} /></div>
+                    <div className="fg"><label className="lbl">Last Name</label><input className="ctrl" readOnly value={lastName} /></div>
                     <div className="fg"><label className="lbl">Gender</label><input className="ctrl" readOnly value={gender} /></div>
                   </div>
                 </div>
@@ -638,16 +641,18 @@ function StudentProfileContent() {
                   <div className="info-box"><i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12 }}>To change Batch, Programme, Learning Mode, or Intake — use the quick-action buttons in the banner above or navigate via the Operations section in the sidebar.</div></div>
                 </div>
                 <div className="card">
-                  <div className="card-hdr"><div className="card-title"><i className="lni lni-home"></i> Contact</div></div>
+                  <div className="card-hdr"><div className="card-title"><i className="lni lni-home"></i> Contact</div><span className="badge badge-grey">Read-only</span></div>
                   <div className="g3">
-                    <div className="fg"><label className="lbl">Primary Email <span className="req">*</span></label><input className="ctrl" value={email} onChange={e => setEmail(e.target.value)} /></div>
-                    <div className="fg"><label className="lbl">Mobile / WhatsApp <span className="req">*</span></label><input className="ctrl" value={phone} onChange={e => setPhone(e.target.value)} /></div>
+                    <div className="fg"><label className="lbl">Primary Email</label><input className="ctrl" readOnly value={email} /></div>
+                    <div className="fg"><label className="lbl">Mobile / WhatsApp</label><input className="ctrl" readOnly value={phone} /></div>
                   </div>
                 </div>
-                <div className="flex gap-2" style={{ justifyContent: 'flex-end', marginBottom: 20 }}>
+                {/* Profile Info is display-only for now — no update endpoint wired yet.
+                    Restore these (and the editable inputs above) once editing is supported. */}
+                {/* <div className="flex gap-2" style={{ justifyContent: 'flex-end', marginBottom: 20 }}>
                   <button className="btn btn-neu">Discard</button>
                   {permissions.edit && <button className="btn btn-primary" onClick={() => showToast('Profile saved', 'ok')}><i className="lni lni-save"></i> Save Profile</button>}
-                </div>
+                </div> */}
               </div>
             )}
 
@@ -772,7 +777,7 @@ function StudentProfileContent() {
                       </div>
                     </div>
                     <div className="flex gap-2" style={{ justifyContent: 'center', marginTop: 12 }}>
-                      <button className="btn btn-neu btn-sm" onClick={handleDownloadCard}><i className="lni lni-download"></i> Download</button>
+                      {/* <button className="btn btn-neu btn-sm" onClick={handleDownloadCard}><i className="lni lni-download"></i> Download</button> */}
                       <button className="btn btn-primary btn-sm" onClick={handlePrintCard}><i className="lni lni-printer"></i> Print</button>
                     </div>
                   </div>
