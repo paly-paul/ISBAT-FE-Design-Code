@@ -5,105 +5,77 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
 import { RichTextDisplay } from '@/components/RichTextEditor'
 import { AnnouncementFormModal } from '@/components/modals/student/AnnouncementFormModal'
-import { AttachmentPreviewModal } from '@/components/modals/shared/AttachmentPreviewModal'
+import {
+  useAnnouncements, useCreateAnnouncement, useUpdateAnnouncement, useDeleteAnnouncement, AnnouncementItem,
+} from '@/hooks/student/useAnnouncementManagement'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { openDocumentForViewing } from '@/lib/documentViewer'
 import { formatDate } from '@/lib/date'
-import { AnnouncementInput, AnnouncementItem } from './types'
 
-let mockAnnouncementSeq = 1
-
-// No backend endpoint exists for this page yet (see types.ts) — seeded with
-// a couple of sample rows, ported from the legacy "Announcement Management"
-// screen, and held entirely in local state below. Swap for a real
-// hooks/api-client pair (mirroring Event Management) once the backend ships
-// the CRUD endpoints.
-const initialAnnouncements: AnnouncementItem[] = [
-  {
-    announcementGuid: 'mock-announcement-1',
-    subject: "Board Chairman's Message",
-    programGuid: null,
-    programName: null,
-    visibleUpto: '2026-12-31',
-    body: "<p><strong>BOARD CHAIRMAN'S MESSAGE</strong></p><p>Dear Students,</p><p>Greetings from ISBAT University!</p><p>As we begin the continuing students, I extend a warm welcome to the new session Spring 2026! We are pleased and feel happy to have you back, and to embark on a new and exciting academic journey at ISBAT. As we start this new semester, we encourage you to set your goals, stay focused, and make the most of your journey with us and the dreams you hold towards the world of the highest education.</p>",
-    // Live network sample (picsum.photos) so the Attachment preview popup has
-    // something real to show before a real upload/backend exists.
-    attachmentUrl: 'https://picsum.photos/seed/isbat-announcement/900/600',
-    attachmentName: 'chairmans-message-banner.jpg',
-    attachmentType: 'image',
-  },
-  {
-    announcementGuid: 'mock-announcement-2',
-    subject: 'Hybrid Blended Learning Platform',
-    programGuid: null,
-    programName: null,
-    visibleUpto: '2026-10-15',
-    body: '<p>ISBAT University’s Hybrid Blended Learning platform brings every student to a experimental learning, spanning at outcome-based learning as designed by its academic delivery.</p>',
-    // Live network sample (Mozilla's public pdf.js demo file) — same reasoning
-    // as the image above.
-    attachmentUrl: 'https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf',
-    attachmentName: 'hybrid-learning-overview.pdf',
-    attachmentType: 'pdf',
-  },
-]
+// programName is null both for global announcements and for ones whose
+// programme has since been deactivated (see get-admin-announcements.md).
+function programLabel(a: AnnouncementItem): string {
+  if (a.isGlobal) return 'All Programmes'
+  return a.programName ?? 'Programme unavailable'
+}
 
 export default function Page() {
   const permissions = usePagePermissions()
-  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>(initialAnnouncements)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]       = useState<{ msg: string; type: string } | null>(null)
   const [search, setSearch]     = useState('')
-  const [editingAnnouncement, setEditingAnnouncement] = useState<AnnouncementItem | null>(null)
+  const [editingAnnouncementGuid, setEditingAnnouncementGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AnnouncementItem | null>(null)
-  const [previewTarget, setPreviewTarget] = useState<AnnouncementItem | null>(null)
 
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
+  // Unpaginated — the endpoint returns every announcement in one response
+  // (see get-admin-announcements.md), so search/sort run client-side.
+  const { data, isLoading } = useAnnouncements()
+  const allAnnouncements = data ?? []
+
   const searchTrimmed = search.trim().toLowerCase()
   const filteredRows = useMemo(() => {
     const base = searchTrimmed
-      ? announcements.filter(a =>
-          a.subject.toLowerCase().includes(searchTrimmed) ||
-          (a.programName ?? '').toLowerCase().includes(searchTrimmed) ||
-          a.body.toLowerCase().includes(searchTrimmed),
+      ? allAnnouncements.filter(a =>
+          (a.subject ?? '').toLowerCase().includes(searchTrimmed) ||
+          programLabel(a).toLowerCase().includes(searchTrimmed) ||
+          (a.announcementBody ?? '').toLowerCase().includes(searchTrimmed),
         )
-      : announcements
-    // Newest Visible Upto first, matching Event Management's ordering.
-    return [...base].sort((a, b) => b.visibleUpto.localeCompare(a.visibleUpto))
-  }, [announcements, searchTrimmed])
+      : allAnnouncements
+    // Newest Visible Upto first — matches the endpoint's own ordering.
+    return [...base].sort((a, b) => b.announceDate.localeCompare(a.announceDate))
+  }, [allAnnouncements, searchTrimmed])
 
   const searchMatches = useMemo(
     () => (searchTrimmed ? filteredRows.slice(0, 8) : []),
     [filteredRows, searchTrimmed],
   )
 
-  function openEditModal(item: AnnouncementItem) {
-    setEditingAnnouncement(item)
+  const createAnnouncement = useCreateAnnouncement()
+  const updateAnnouncement = useUpdateAnnouncement()
+  const deleteAnnouncement = useDeleteAnnouncement()
+
+  function openEditModal(guid: string) {
+    setEditingAnnouncementGuid(guid)
     openModal('edit-announcement-modal')
   }
 
-  function handleCreate(input: AnnouncementInput) {
-    setAnnouncements(prev => [{ announcementGuid: `mock-announcement-new-${mockAnnouncementSeq++}`, ...input }, ...prev])
-  }
-
-  function handleUpdate(input: AnnouncementInput) {
-    if (!editingAnnouncement) return
-    const guid = editingAnnouncement.announcementGuid
-    if (editingAnnouncement.attachmentUrl && editingAnnouncement.attachmentUrl !== input.attachmentUrl) {
-      URL.revokeObjectURL(editingAnnouncement.attachmentUrl)
-    }
-    setAnnouncements(prev => prev.map(a => (a.announcementGuid === guid ? { announcementGuid: guid, ...input } : a)))
+  function viewAttachment(url: string) {
+    openDocumentForViewing(url).catch(() => showToast('Failed to open attachment', 'error'))
   }
 
   function confirmDeleteAnnouncement() {
     if (!deleteTarget) return
-    if (deleteTarget.attachmentUrl) URL.revokeObjectURL(deleteTarget.attachmentUrl)
-    setAnnouncements(prev => prev.filter(a => a.announcementGuid !== deleteTarget.announcementGuid))
-    setDeleteTarget(null)
-    showToast('Announcement deleted successfully')
+    deleteAnnouncement.mutate(deleteTarget.announcementGuid, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Announcement deleted successfully') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete announcement', 'error'),
+    })
   }
 
   return (
@@ -127,7 +99,7 @@ export default function Page() {
               placeholder="Search subject, programme or content…"
               value={search}
               onChange={v => setSearch(v)}
-              results={searchMatches.map(a => ({ id: a.announcementGuid, primary: a.subject || 'Untitled announcement', secondary: a.programName ?? 'All Programmes' }))}
+              results={searchMatches.map(a => ({ id: a.announcementGuid, primary: a.subject || 'Untitled announcement', secondary: programLabel(a) }))}
               minChars={1}
               onSelect={() => {}}
             />
@@ -144,16 +116,18 @@ export default function Page() {
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.length === 0 && (
-                  <EmptyState colSpan={999} hasFilters={!!search} onClearFilters={() => setSearch('')} />
-                )}
-                {filteredRows.map(a => (
+                {isLoading
+                  ? <TableLoadingState colSpan={999} />
+                  : filteredRows.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={!!search} onClearFilters={() => setSearch('')} />
+                    : null}
+                {!isLoading && filteredRows.map(a => (
                   <tr key={a.announcementGuid}>
                     <td>
                       {(permissions.edit || permissions.delete) && (
                         <ActionMenu>
                           {permissions.edit && (
-                            <button className="btn btn-neu btn-sm" onClick={() => openEditModal(a)}>
+                            <button className="btn btn-neu btn-sm" onClick={() => openEditModal(a.announcementGuid)}>
                               <i className="lni lni-pencil"></i> Edit
                             </button>
                           )}
@@ -168,20 +142,20 @@ export default function Page() {
                     <td style={{ maxWidth: 480 }}>
                       <strong>{a.subject || <span className="text-muted">— Untitled —</span>}</strong>
                       <div className="text-muted" style={{ fontSize: 12.5, marginTop: 4, maxHeight: 60, overflow: 'hidden' }}>
-                        <RichTextDisplay content={a.body} />
+                        <RichTextDisplay content={a.announcementBody ?? ''} />
                       </div>
                     </td>
-                    <td className="text-muted">{a.programName ?? 'All Programmes'}</td>
-                    <td className="text-muted">{formatDate(a.visibleUpto)}</td>
+                    <td className="text-muted">{programLabel(a)}</td>
+                    <td className="text-muted">{formatDate(a.announceDate)}</td>
                     <td>
                       {a.attachmentUrl ? (
                         <button
                           type="button"
                           className="btn btn-neu btn-sm"
-                          title={a.attachmentName ?? 'View attachment'}
-                          onClick={() => setPreviewTarget(a)}
+                          title="View attachment"
+                          onClick={() => viewAttachment(a.attachmentUrl as string)}
                         >
-                          <i className={`lni ${a.attachmentType === 'image' ? 'lni-image' : 'lni-files'}`}></i>
+                          <i className="lni lni-paperclip"></i>
                         </button>
                       ) : (
                         <span className="text-muted">—</span>
@@ -200,23 +174,18 @@ export default function Page() {
         isOpen={openModals.has('add-announcement-modal')}
         onClose={() => closeModal('add-announcement-modal')}
         showToast={showToast}
-        initial={null}
-        onSubmit={handleCreate}
+        announcementGuid={null}
+        createAnnouncement={createAnnouncement}
+        updateAnnouncement={updateAnnouncement}
       />
       <AnnouncementFormModal
         mode="edit"
         isOpen={openModals.has('edit-announcement-modal')}
         onClose={() => closeModal('edit-announcement-modal')}
         showToast={showToast}
-        initial={editingAnnouncement}
-        onSubmit={handleUpdate}
-      />
-      <AttachmentPreviewModal
-        isOpen={!!previewTarget}
-        onClose={() => setPreviewTarget(null)}
-        url={previewTarget?.attachmentUrl ?? null}
-        name={previewTarget?.attachmentName ?? null}
-        type={previewTarget?.attachmentType ?? null}
+        announcementGuid={editingAnnouncementGuid}
+        createAnnouncement={createAnnouncement}
+        updateAnnouncement={updateAnnouncement}
       />
       <Toast toast={toast} />
 
@@ -226,12 +195,12 @@ export default function Page() {
             <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
             <div className="perm-delete-title">Delete &quot;{deleteTarget.subject || 'this announcement'}&quot;?</div>
             <div className="perm-delete-sub">
-              This will permanently delete this announcement. This can&apos;t be undone.
+              This will permanently delete this announcement and its attachment. This can&apos;t be undone.
             </div>
             <div className="perm-delete-actions">
               <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button className="btn btn-danger" onClick={confirmDeleteAnnouncement}>
-                <i className="lni lni-trash-can"></i> Delete
+              <button className="btn btn-danger" disabled={deleteAnnouncement.isPending} onClick={confirmDeleteAnnouncement}>
+                <i className="lni lni-trash-can"></i> {deleteAnnouncement.isPending ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>

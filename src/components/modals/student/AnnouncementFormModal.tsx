@@ -2,102 +2,68 @@
 import { useEffect, useRef, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
+import { FailurePopup } from '../shared/FailurePopup'
 import DatePicker from '@/components/DatePicker'
 import { SearchSelect } from '@/components/SearchSelect'
 import { RichTextEditor, isHtmlEmpty } from '@/components/RichTextEditor'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
-import { AnnouncementInput, AnnouncementItem, AttachmentType } from '@/app/student/announcement-management/types'
+import { useAnnouncement, AnnouncementCreateInput, AnnouncementUpdateInput } from '@/hooks/student/useAnnouncementManagement'
+import { AuthError } from '@/lib/api/client'
+import { openDocumentForViewing } from '@/lib/documentViewer'
 
 const SUBJECT_MAX = 150
-const ATTACHMENT_ACCEPT = 'image/*,.pdf'
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024 // 10MB — an arbitrary client-side cap, no backend to enforce one yet
 
-interface Attachment { url: string; name: string; type: AttachmentType }
-
-// No backend endpoint exists for Announcement Management yet (unlike Event
-// Management's confirmed academic-service.students.events.* contract) — the
-// page holds everything in local state and hands this modal a plain
-// onSubmit callback rather than a react-query mutation. Swap this for the
-// mutation-object pattern (see EventFormModal) once the API is deployed.
+// Add and Edit share this form — differ in prefill and which mutation runs.
+// On edit the subject is read-only (immutable server-side) and an existing
+// attachment can only be replaced, not removed — PUT has no way to clear it.
 interface AnnouncementFormModalProps extends ModalProps {
   mode: 'new' | 'edit'
-  initial: AnnouncementItem | null
-  onSubmit: (input: AnnouncementInput) => void
+  announcementGuid: string | null
+  createAnnouncement: {
+    mutate: (input: AnnouncementCreateInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
+    isPending: boolean
+  }
+  updateAnnouncement: {
+    mutate: (variables: { guid: string; input: AnnouncementUpdateInput }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
+    isPending: boolean
+  }
 }
 
-export function AnnouncementFormModal({ isOpen, onClose, showToast, mode, initial, onSubmit }: AnnouncementFormModalProps) {
+export function AnnouncementFormModal({ isOpen, onClose, showToast, mode, announcementGuid, createAnnouncement, updateAnnouncement }: AnnouncementFormModalProps) {
   const isEdit = mode === 'edit'
   const { data: programs = [], isLoading: programsLoading } = useProgramDropdown(undefined, isOpen)
+  const { data: announcement, isLoading, isError, error } = useAnnouncement(announcementGuid, isOpen && isEdit)
 
   const [subject, setSubject] = useState('')
   const [programGuid, setProgramGuid] = useState('')
-  const [visibleUpto, setVisibleUpto] = useState('')
+  const [announceDate, setAnnounceDate] = useState('')
   const [body, setBody] = useState('')
-  const [attachment, setAttachment] = useState<Attachment | null>(null)
-  const [saved, setSaved]   = useState(false)
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [attachment, setAttachment] = useState<File | null>(null)
+  const [saved, setSaved]     = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
+  const [errors, setErrors]   = useState<Record<string, string>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
-  // Tracks object URLs this form created (vs. one carried over from `initial`
-  // on edit) so they can be revoked on replace/remove/close without
-  // revoking a URL a saved row is still using elsewhere on the page.
-  const ownedUrlRef = useRef<string | null>(null)
 
+  // Fill the form when the announcement loads on edit; blank on fresh create.
   useEffect(() => {
     if (!isOpen) return
-    if (isEdit && initial) {
-      setSubject(initial.subject)
-      setProgramGuid(initial.programGuid ?? '')
-      setVisibleUpto(initial.visibleUpto)
-      setBody(initial.body)
-      setAttachment(
-        initial.attachmentUrl && initial.attachmentType
-          ? { url: initial.attachmentUrl, name: initial.attachmentName ?? 'Attachment', type: initial.attachmentType }
-          : null,
-      )
+    if (isEdit && announcement) {
+      setSubject(announcement.subject ?? '')
+      setProgramGuid(announcement.isGlobal ? '' : announcement.programGuid ?? '')
+      setAnnounceDate(announcement.announceDate)
+      setBody(announcement.announcementBody ?? '')
+      setAttachment(null)
+      setErrors({})
     } else if (!isEdit) {
-      setSubject(''); setProgramGuid(''); setVisibleUpto(''); setBody(''); setAttachment(null)
+      setSubject(''); setProgramGuid(''); setAnnounceDate(''); setBody(''); setAttachment(null); setErrors({})
     }
-    ownedUrlRef.current = null
-    setErrors({})
-  }, [isOpen, isEdit, initial])
+  }, [isOpen, isEdit, announcement])
 
   if (!isOpen) return null
 
-  function revokeOwnedUrl() {
-    if (ownedUrlRef.current) {
-      URL.revokeObjectURL(ownedUrlRef.current)
-      ownedUrlRef.current = null
-    }
-  }
-
-  function handleAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      showToast('Attachment must be 10MB or smaller', 'error')
-      return
-    }
-    const type: AttachmentType | null = file.type === 'application/pdf' ? 'pdf' : file.type.startsWith('image/') ? 'image' : null
-    if (!type) {
-      showToast('Only images and PDFs are supported', 'error')
-      return
-    }
-    revokeOwnedUrl()
-    const url = URL.createObjectURL(file)
-    ownedUrlRef.current = url
-    setAttachment({ url, name: file.name, type })
-  }
-
-  function removeAttachment() {
-    revokeOwnedUrl()
-    setAttachment(null)
-  }
-
   function handleClose() {
-    setSaved(false)
-    revokeOwnedUrl()
-    setSubject(''); setProgramGuid(''); setVisibleUpto(''); setBody(''); setAttachment(null); setErrors({})
+    setSaved(false); setFailure(null)
+    setSubject(''); setProgramGuid(''); setAnnounceDate(''); setBody(''); setAttachment(null); setErrors({})
     onClose()
   }
 
@@ -105,11 +71,29 @@ export function AnnouncementFormModal({ isOpen, onClose, showToast, mode, initia
     setErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
   }
 
+  function handleAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    // The backend rejects files without an extension (see post-create-announcement.md).
+    if (!/\.[^./\\]+$/.test(file.name)) {
+      showToast('Attachment must have a file extension', 'error')
+      return
+    }
+    setAttachment(file)
+  }
+
+  function viewExistingAttachment(url: string) {
+    openDocumentForViewing(url).catch(() => showToast('Failed to open attachment', 'error'))
+  }
+
   function validate() {
     const e: Record<string, string> = {}
-    if (!subject.trim()) e.subject = 'Subject is required'
-    else if (subject.trim().length > SUBJECT_MAX) e.subject = `Subject must be ${SUBJECT_MAX} characters or fewer`
-    if (!visibleUpto) e.visibleUpto = 'Visible Upto is required'
+    if (!isEdit) {
+      if (!subject.trim()) e.subject = 'Subject is required'
+      else if (subject.trim().length > SUBJECT_MAX) e.subject = `Subject must be ${SUBJECT_MAX} characters or fewer`
+    }
+    if (!announceDate) e.announceDate = 'Visible Upto is required'
     if (isHtmlEmpty(body)) e.body = 'Announcement is required'
     setErrors(e)
     return Object.keys(e).length === 0
@@ -117,23 +101,22 @@ export function AnnouncementFormModal({ isOpen, onClose, showToast, mode, initia
 
   function handleSubmit() {
     if (!validate()) return
-    const selectedProgram = programs.find(p => p.programGuid === programGuid)
-    onSubmit({
-      subject: subject.trim(),
-      programGuid: programGuid || null,
-      programName: selectedProgram?.programName ?? null,
-      visibleUpto,
-      body,
-      attachmentUrl: attachment?.url ?? null,
-      attachmentName: attachment?.name ?? null,
-      attachmentType: attachment?.type ?? null,
-    })
-    // The saved row now owns this object URL (if any was created this
-    // session) — handleClose must no longer revoke it once the popup closes.
-    ownedUrlRef.current = null
-    setSaved(true)
-    showToast(isEdit ? 'Announcement updated successfully' : 'Announcement added successfully')
+    const input: AnnouncementUpdateInput = { body, announceDate, programGuid: programGuid || null, attachment }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Announcement updated successfully' : 'Announcement added successfully') }
+    const onError = (error: Error) => {
+      const code = error instanceof AuthError ? error.code : undefined
+      setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} announcement${code ? ` (${code})` : ''}. Please try again.`)
+    }
+
+    if (isEdit && announcementGuid) {
+      updateAnnouncement.mutate({ guid: announcementGuid, input }, { onSuccess, onError })
+    } else {
+      createAnnouncement.mutate({ ...input, subject: subject.trim() }, { onSuccess, onError })
+    }
   }
+
+  const isPending = isEdit ? updateAnnouncement.isPending : createAnnouncement.isPending
+  const existingAttachmentUrl = isEdit ? announcement?.attachmentUrl ?? null : null
 
   const programOptions = [
     { value: '', label: 'All Programmes' },
@@ -154,6 +137,46 @@ export function AnnouncementFormModal({ isOpen, onClose, showToast, mode, initia
     )
   }
 
+  if (failure) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup title={isEdit ? "Couldn't Update Announcement" : "Couldn't Add Announcement"} subtitle={failure} onClose={() => setFailure(null)} />
+        </div>
+      </div>
+    )
+  }
+
+  if (isEdit && isError) {
+    return (
+      <div className="modal-overlay open">
+        <div className="modal" style={{ maxWidth: 400 }}>
+          <FailurePopup
+            title="Couldn't Load Announcement"
+            subtitle={error instanceof AuthError ? (error.message || 'Failed to load announcement details.') : 'Failed to load announcement details.'}
+            onClose={handleClose}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (isEdit && (isLoading || !announcement)) {
+    return (
+      <div className="modal-overlay open" id="edit-announcement-modal">
+        <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+          <div className="modal-hdr modal-hdr-blue">
+            <div className="modal-title"><i className="lni lni-pencil"></i> Edit Announcement</div>
+            <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
+            <span style={{ color: 'var(--g400)' }}>Loading announcement details…</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="modal-overlay open" id={isEdit ? 'edit-announcement-modal' : 'new-announcement-modal'}>
       <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
@@ -163,22 +186,24 @@ export function AnnouncementFormModal({ isOpen, onClose, showToast, mode, initia
         </div>
         <div className="g2">
           <div className="fg">
-            <div className="lbl">Subject <span className="req">*</span></div>
+            <div className="lbl">Subject {!isEdit && <span className="req">*</span>}</div>
             <input
               className="ctrl"
               type="text"
               placeholder="e.g. Board Chairman's Message"
               maxLength={SUBJECT_MAX}
               value={subject}
+              readOnly={isEdit}
+              title={isEdit ? 'Subject cannot be changed after creation' : undefined}
               onChange={e => { setSubject(e.target.value); clearError('subject') }}
-              style={errors.subject ? { borderColor: 'var(--red)' } : undefined}
+              style={errors.subject ? { borderColor: 'var(--red)' } : isEdit ? { background: 'var(--g100)', color: 'var(--g500)' } : undefined}
             />
             {errors.subject && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.subject}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Visible Upto <span className="req">*</span></div>
-            <DatePicker value={visibleUpto} onChange={v => { setVisibleUpto(v); clearError('visibleUpto') }} hasError={!!errors.visibleUpto} />
-            {errors.visibleUpto && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.visibleUpto}</p>}
+            <DatePicker value={announceDate} onChange={v => { setAnnounceDate(v); clearError('announceDate') }} hasError={!!errors.announceDate} />
+            {errors.announceDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.announceDate}</p>}
           </div>
           <div className="fg span2">
             <div className="lbl">Programme</div>
@@ -196,26 +221,35 @@ export function AnnouncementFormModal({ isOpen, onClose, showToast, mode, initia
             {errors.body && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.body}</p>}
           </div>
           <div className="fg span2">
-            <div className="lbl">Attachment (image or PDF, optional)</div>
+            <div className="lbl">Attachment (optional)</div>
             {attachment ? (
               <div className="flex items-center gap-2" style={{ padding: '8px 12px', border: '1px solid var(--g200)', borderRadius: 'var(--rsm)' }}>
-                <i className={`lni ${attachment.type === 'image' ? 'lni-image' : 'lni-files'}`} style={{ color: 'var(--g500)' }}></i>
+                <i className="lni lni-files" style={{ color: 'var(--g500)' }}></i>
                 <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{attachment.name}</span>
                 <button type="button" className="btn btn-neu btn-sm" onClick={() => fileInputRef.current?.click()}>Replace</button>
-                <button type="button" className="btn btn-neu btn-sm" onClick={removeAttachment}><i className="lni lni-trash-can"></i></button>
+                <button type="button" className="btn btn-neu btn-sm" title={existingAttachmentUrl ? 'Keep the current attachment' : 'Remove'} onClick={() => setAttachment(null)}>
+                  <i className="lni lni-trash-can"></i>
+                </button>
+              </div>
+            ) : existingAttachmentUrl ? (
+              <div className="flex items-center gap-2" style={{ padding: '8px 12px', border: '1px solid var(--g200)', borderRadius: 'var(--rsm)' }}>
+                <i className="lni lni-paperclip" style={{ color: 'var(--g500)' }}></i>
+                <span style={{ flex: 1, fontSize: 13 }}>Current attachment</span>
+                <button type="button" className="btn btn-neu btn-sm" onClick={() => viewExistingAttachment(existingAttachmentUrl)}>View</button>
+                <button type="button" className="btn btn-neu btn-sm" onClick={() => fileInputRef.current?.click()}>Replace</button>
               </div>
             ) : (
               <button type="button" className="btn btn-neu" onClick={() => fileInputRef.current?.click()}>
                 <i className="lni lni-paperclip"></i> Choose file…
               </button>
             )}
-            <input ref={fileInputRef} type="file" accept={ATTACHMENT_ACCEPT} onChange={handleAttachmentChange} style={{ display: 'none' }} />
+            <input ref={fileInputRef} type="file" onChange={handleAttachmentChange} style={{ display: 'none' }} />
           </div>
         </div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSubmit}>
-            <i className="lni lni-checkmark"></i> {isEdit ? 'Update Announcement' : 'Add Announcement'}
+          <button className="btn btn-primary" disabled={isPending} onClick={handleSubmit}>
+            <i className="lni lni-checkmark"></i> {isPending ? (isEdit ? 'Updating…' : 'Adding…') : (isEdit ? 'Update Announcement' : 'Add Announcement')}
           </button>
         </div>
       </div>

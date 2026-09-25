@@ -219,7 +219,10 @@ function extractErrorInfo(envelope: unknown): { code: string; message?: string }
     const firstField = Object.keys(fieldErrors)[0]
     return { code: 'validation_error', message: (firstField ? fieldErrors[firstField]?.[0] : undefined) ?? e.title ?? undefined }
   }
-  return { code: 'unknown', message: e.title ?? undefined }
+  // An app envelope with a null `code` but a populated errors[]/message
+  // (seen on a 400 from announcements create) — surface that text rather
+  // than a bare 'unknown'.
+  return { code: 'unknown', message: (Array.isArray(e.errors) ? e.errors[0] : undefined) ?? e.message ?? e.title ?? undefined }
 }
 
 export async function apiPost<T>(path: string, body: unknown, retried = false): Promise<T> {
@@ -282,7 +285,12 @@ export async function apiPostForm<T>(path: string, formData: FormData, retried =
   const responseText = await res.text()
   console.log(`📄 Response body: ${responseText || '(empty)'}`)
 
-  const envelope = responseText ? (JSON.parse(responseText) as ApiEnvelope<T>) : null
+  let envelope: ApiEnvelope<T> | null = null
+  try {
+    envelope = responseText ? (JSON.parse(responseText) as ApiEnvelope<T>) : null
+  } catch {
+    envelope = null
+  }
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
@@ -299,7 +307,7 @@ export async function apiPostForm<T>(path: string, formData: FormData, retried =
   }
 
   const { code, message } = extractErrorInfo(envelope)
-  throw new AuthError(code, message)
+  throw new AuthError(code, message || responseText || `HTTP ${res.status}`)
 }
 
 // multipart/form-data variant of apiPut — mirrors apiPostForm for endpoints
