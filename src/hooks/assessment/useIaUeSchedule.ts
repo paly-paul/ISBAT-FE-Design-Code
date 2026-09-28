@@ -6,6 +6,7 @@ export function useIaUeSchedule(universityExamGuid: string | null) {
     queryKey: ['ia-ue-schedule', universityExamGuid],
     queryFn: () => getIaUeSchedule(universityExamGuid!),
     enabled: !!universityExamGuid,
+    retry: false,
   })
 }
 
