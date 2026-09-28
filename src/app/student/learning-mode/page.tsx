@@ -13,7 +13,7 @@ import { StudentDto, normalizeStudentDetail } from '@/lib/api/student/student'
 import { useStudent } from '@/hooks/student/useStudents'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { useIntakes } from '@/hooks/academic/useIntakes'
-import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
   useLearningModeOptions,
   useStudentLearningModeDetail,
@@ -39,7 +39,10 @@ const REPORT_PAGE_SIZE = 10
 // Router) — see the wrapping default export at the bottom of this file,
 // same split Student Profile uses for the same reason.
 function LearningModeContent() {
-  const permissions = usePagePermissions()
+  // Permission checks disabled for now — every action is allowed. Restore the
+  // line below (and the import above) to gate actions by the menu permissions again.
+  // const permissions = usePagePermissions()
+  const permissions = { add: true, edit: true, delete: true }
   const router = useRouter()
   const searchParams = useSearchParams()
   // Student Profile's action menu links here as

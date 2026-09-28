@@ -14,7 +14,7 @@ import { useStudentsFilter, useStudentsFilterMulti, getStudentsFilterCombination
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
-import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
@@ -38,7 +38,10 @@ interface ColumnFilterState {
 const EMPTY_COLUMN_FILTERS: ColumnFilterState = { programGuid: [], semesterGuid: [], batchGuid: [] }
 
 export default function Page() {
-  const permissions = usePagePermissions()
+  // Permission checks disabled for now — every action is allowed. Restore the
+  // line below (and the import above) to gate actions by the menu permissions again.
+  // const permissions = usePagePermissions()
+  const permissions = { add: true, edit: true, delete: true }
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)

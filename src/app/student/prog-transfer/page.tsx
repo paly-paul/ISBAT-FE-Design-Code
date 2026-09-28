@@ -18,7 +18,7 @@ import {
   useProgramTransferHistory,
   usePostProgramTransfer,
 } from '@/hooks/student/useProgramTransfer'
-import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Ported from isbat_student_module.html's Programme Transfer page, then
 // rewired to the real students/program-transfer/*.md endpoints (2026-08-18/
@@ -72,7 +72,10 @@ function ProgTransferContent() {
   // deep-link convention Student Master's own "View" action uses to reach
   // Profile itself.
   const studentGuidParam = searchParams.get('studentGuid')
-  const permissions = usePagePermissions()
+  // Permission checks disabled for now — every action is allowed. Restore the
+  // line below (and the import above) to gate actions by the menu permissions again.
+  // const permissions = usePagePermissions()
+  const permissions = { add: true, edit: true, delete: true }
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [student, setStudent] = useState<StudentDto | null>(null)
   // Deep-link fetch: only run if the page opened with a ?studentGuid= param

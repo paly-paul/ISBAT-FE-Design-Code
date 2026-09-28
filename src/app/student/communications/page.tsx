@@ -2,7 +2,7 @@
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
-import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { BulkEmailJobStatus, JOB_STATUSES } from '@/hooks/student/useBulkEmail'
 import { EMPTY_LIST_FILTERS, ListFilters, MailList } from './_components/MailList'
 import { MailDetail } from './_components/MailDetail'
@@ -40,7 +40,10 @@ function listQuery(f: ListFilters): URLSearchParams {
 function CommunicationsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const permissions = usePagePermissions()
+  // Permission checks disabled for now — every action is allowed. Restore the
+  // line below (and the import above) to gate actions by the menu permissions again.
+  // const permissions = usePagePermissions()
+  const permissions = { add: true, edit: true, delete: true }
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }

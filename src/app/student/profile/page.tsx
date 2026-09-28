@@ -15,7 +15,7 @@ import { useStudentDiscount, useAssignStudentDiscount, useUpdateStudentDiscount,
 import { useDiscounts } from '@/hooks/finance/useDiscounts'
 import { CALC_TYPE_VALUES } from '@/lib/api/finance/discount'
 import { formatDate } from '@/lib/date'
-import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -94,7 +94,10 @@ function formatDiscountDetail(detail: StudentDiscountDto) {
 }
 
 function StudentProfileContent() {
-  const permissions = usePagePermissions()
+  // Permission checks disabled for now — every action is allowed. Restore the
+  // line below (and the import above) to gate actions by the menu permissions again.
+  // const permissions = usePagePermissions()
+  const permissions = { add: true, edit: true, delete: true }
   const router = useRouter()
   const searchParams = useSearchParams()
   // Student Master's "View" row action links here as
