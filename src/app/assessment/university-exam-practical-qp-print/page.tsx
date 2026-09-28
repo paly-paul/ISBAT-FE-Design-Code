@@ -1,27 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useIntakes } from '@/hooks/academic/useIntakes'
-import { useEffect } from 'react'
 import {
-  useUeMaterialPrintPrograms,
-  useUeMaterialPrintSemesters,
-  useUeQuestionPrintCourseUnits,
-  usePrintUeQuestionTheory,
-  useDownloadUeQuestionTheoryPdf,
-  useDownloadUeQuestionTheoryWord,
-  useDeleteUeQuestionTheory,
-  useDownloadUeQuestionTheoryAnswerKey,
-  usePrintUeBooklet,
-  useDownloadUeBookletPdf,
-  useDownloadUeBookletAttendance,
-  useDownloadUeBookletCover,
-  useDownloadUeConsolidatedMarkSheet
-} from '@/hooks/assessment/useUeMaterialPrint'
+  useUePracticalPrintPrograms,
+  useUePracticalPrintSemesters,
+  useUePracticalProgramUnits,
+  usePrintUeQuestionPractical,
+  useDownloadUeQuestionPracticalPdf,
+  useDownloadUeQuestionPracticalWord,
+  useDeleteUeQuestionPractical
+} from '@/hooks/assessment/useUePracticalPrint'
 
-export default function UniversityExamMaterialPrintPage() {
+export default function UniversityExamPracticalQpPrintPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
 
   const showToast = (msg: string, type = '') => {
@@ -41,38 +34,32 @@ export default function UniversityExamMaterialPrintPage() {
   const [confirmMessage, setConfirmMessage] = useState('')
 
   // Data Hooks
-  const { data: intakes, isLoading: intakeLoading } = useIntakes()
-  const { data: programs, isLoading: programsLoading } = useUeMaterialPrintPrograms()
+  const { data: intakes, isLoading: intakesLoading } = useIntakes()
+  const { data: programs, isLoading: programsLoading } = useUePracticalPrintPrograms()
+  const { data: semesters, isLoading: semLoading } = useUePracticalPrintSemesters(selectedProgramGuid || null)
+  const { data: allProgramUnits, isLoading: unitsLoading } = useUePracticalProgramUnits(selectedProgramGuid || null)
 
   // Pre-select current intake
   useEffect(() => {
     if (intakes && !selectedIntakeGuid) {
-      const current = intakes.find((i: any) => i.currentIntake)
+      const current = intakes.find(i => i.currentIntake)
       if (current) setSelectedIntakeGuid(current.intakeGuid)
     }
   }, [intakes, selectedIntakeGuid])
-  const { data: semesters, isLoading: semLoading } = useUeMaterialPrintSemesters(selectedProgramGuid || null)
-  
-  const isCourseUnitEnabled = !!selectedProgramGuid && !!selectedSemesterGuid
-  const { data: courseUnits, isLoading: unitsLoading } = useUeQuestionPrintCourseUnits(
-    selectedProgramGuid, selectedSemesterGuid, isCourseUnitEnabled
-  )
+
+  // Filter Practical units for the selected semester
+  const courseUnits = useMemo(() => {
+    if (!allProgramUnits || !selectedSemesterGuid) return []
+    return allProgramUnits.filter((u: any) => u.semesterGuid === selectedSemesterGuid && u.unitTypeName === 'Practical')
+  }, [allProgramUnits, selectedSemesterGuid])
+
+  const isFormValid = !!selectedIntakeGuid && !!selectedProgramGuid && !!selectedSemesterGuid && !!selectedCourseUnitGuid
 
   // API Hooks
-  const printTheoryMut = usePrintUeQuestionTheory()
-  const dlTheoryPdfMut = useDownloadUeQuestionTheoryPdf()
-  const dlTheoryWordMut = useDownloadUeQuestionTheoryWord()
-  const delTheoryMut = useDeleteUeQuestionTheory()
-  const dlAnswerKeyMut = useDownloadUeQuestionTheoryAnswerKey()
-
-  const printBookletMut = usePrintUeBooklet()
-  const dlBookletPdfMut = useDownloadUeBookletPdf()
-  const dlAttendanceMut = useDownloadUeBookletAttendance()
-  const dlCoverMut = useDownloadUeBookletCover()
-  const dlConsolidatedMut = useDownloadUeConsolidatedMarkSheet()
-
-  const intakeGuid = selectedIntakeGuid || ''
-  const isFormValid = !!intakeGuid && !!selectedProgramGuid && !!selectedSemesterGuid && !!selectedCourseUnitGuid
+  const printPracticalMut = usePrintUeQuestionPractical()
+  const dlPracticalPdfMut = useDownloadUeQuestionPracticalPdf()
+  const dlPracticalWordMut = useDownloadUeQuestionPracticalWord()
+  const delPracticalMut = useDeleteUeQuestionPractical()
 
   // Handlers
   const handleProgramChange = (guid: string) => {
@@ -82,6 +69,11 @@ export default function UniversityExamMaterialPrintPage() {
   }
   const handleSemesterChange = (guid: string) => {
     setSelectedSemesterGuid(guid)
+    setSelectedCourseUnitGuid('')
+  }
+  const handleRefresh = () => {
+    setSelectedProgramGuid('')
+    setSelectedSemesterGuid('')
     setSelectedCourseUnitGuid('')
   }
 
@@ -116,12 +108,12 @@ export default function UniversityExamMaterialPrintPage() {
       programGuid: selectedProgramGuid,
       semesterGuid: selectedSemesterGuid,
       courseUnitGuid: selectedCourseUnitGuid,
-      intakeGuid,
+      intakeGuid: selectedIntakeGuid,
       confirm
     }
 
     try {
-      const res = await printTheoryMut.mutateAsync(req)
+      const res = await printPracticalMut.mutateAsync(req)
 
       if (res.outcome === 'ExamRuleNotSet') {
         showToast('University Exam not yet Scheduled!!', 'error')
@@ -133,7 +125,7 @@ export default function UniversityExamMaterialPrintPage() {
         showToast(`Question Paper ${res.outcome}!`, 'success')
       }
     } catch (err: any) {
-      showToast(err.message || 'Failed to print QP', 'error')
+      showToast(err.message || 'Failed to print practical QP', 'error')
     }
   }
 
@@ -144,12 +136,12 @@ export default function UniversityExamMaterialPrintPage() {
       programGuid: selectedProgramGuid,
       semesterGuid: selectedSemesterGuid,
       courseUnitGuid: selectedCourseUnitGuid,
-      intakeGuid,
+      intakeGuid: selectedIntakeGuid,
       confirm
     }
 
     try {
-      const res = await delTheoryMut.mutateAsync(req)
+      const res = await delPracticalMut.mutateAsync(req)
       if (res.data === false && !confirm) {
         confirmAndExecute(res.message || 'You are about to delete the QP set. Do you want to continue?', () => handleDeleteQP(true))
       } else if (res.data === true) {
@@ -160,99 +152,37 @@ export default function UniversityExamMaterialPrintPage() {
     }
   }
 
-  // 3. Booklet Print
-  const handlePrintBooklet = async (confirm = false) => {
-    if (!isFormValid) return
-    const req = {
-      programGuid: selectedProgramGuid,
-      semesterGuid: selectedSemesterGuid,
-      courseUnitGuid: selectedCourseUnitGuid,
-      intakeGuid,
-      confirm
-    }
-
-    try {
-      const res = await printBookletMut.mutateAsync(req)
-      if (res.confirmationRequired && !confirm) {
-        confirmAndExecute(res.message || 'Booklets are already printed. Do you want to reprint the same?', () => handlePrintBooklet(true))
-      } else {
-        if (res.wasReprint) {
-          showToast(`Reprinted! Added ${res.addedStudentCount} students. (Total: ${res.totalStudentCount})`, 'success')
-        } else {
-          showToast(`Booklet printed! (Total: ${res.totalStudentCount})`, 'success')
-        }
-      }
-    } catch (err: any) {
-      showToast(err.message || 'Failed to print booklet', 'error')
-    }
-  }
-
   // Download Handlers
-  const handleDownload = async (type: 'QPPDF' | 'QPWord' | 'AnswerKey' | 'BookletPDF' | 'Attendance' | 'Cover' | 'Consolidated') => {
+  const handleDownload = async (type: 'QPPDF' | 'QPWord') => {
     if (!isFormValid) return
     const req = {
       programGuid: selectedProgramGuid,
       semesterGuid: selectedSemesterGuid,
       courseUnitGuid: selectedCourseUnitGuid,
-      intakeGuid,
+      intakeGuid: selectedIntakeGuid,
     }
 
     try {
-      let mut: any
-      let fallback = ''
-      
-      switch (type) {
-        case 'QPPDF':
-          mut = dlTheoryPdfMut
-          fallback = 'QuestionPaper.pdf'
-          break
-        case 'QPWord':
-          mut = dlTheoryWordMut
-          fallback = 'QuestionPaper.doc'
-          break
-        case 'AnswerKey':
-          mut = dlAnswerKeyMut
-          fallback = 'AnswerKey.pdf'
-          break
-        case 'BookletPDF':
-          mut = dlBookletPdfMut
-          fallback = 'Booklet.pdf'
-          break
-        case 'Attendance':
-          mut = dlAttendanceMut
-          fallback = 'Attendance.pdf'
-          break
-        case 'Cover':
-          mut = dlCoverMut
-          fallback = 'CoverLetter.pdf'
-          break
-        case 'Consolidated':
-          mut = dlConsolidatedMut
-          fallback = 'ConsolidatedMarkSheet.pdf'
-          break
+      if (type === 'QPPDF') {
+        const { blob, filename } = await dlPracticalPdfMut.mutateAsync(req)
+        downloadFile(blob, filename, 'Practical_QuestionPaper.pdf')
+      } else if (type === 'QPWord') {
+        const { blob, filename } = await dlPracticalWordMut.mutateAsync(req)
+        downloadFile(blob, filename, 'Practical_QuestionPaper.doc')
       }
-
-      const { blob, filename } = await mut.mutateAsync(req)
-      downloadFile(blob, filename, fallback)
     } catch (err: any) {
       showToast(err.message || 'Failed to download document', 'error')
     }
   }
 
-  const handleRefresh = () => {
-    setSelectedProgramGuid('')
-    setSelectedSemesterGuid('')
-    setSelectedCourseUnitGuid('')
-  }
-
-  const isWorking = printTheoryMut.isPending || delTheoryMut.isPending || printBookletMut.isPending
+  const isWorking = printPracticalMut.isPending || dlPracticalPdfMut.isPending || dlPracticalWordMut.isPending || delPracticalMut.isPending
   
   return (
     <div className="page active">
       <div className="pg-hdr flex justify-between items-end">
         <div>
-          <h1 className="pg-title">University Exam Material Print</h1>
-          <p className="pg-sub">Generate and print exam materials for a regular university exam cycle (Theory Only)</p>
+          <h1 className="pg-title">University Exam Practical QP Print</h1>
+          <p className="pg-sub">Generate and print exam materials for Practical course units</p>
         </div>
         <button className="btn btn-neu" onClick={handleRefresh}>
           <i className="lni lni-reload"></i> Refresh
@@ -267,8 +197,8 @@ export default function UniversityExamMaterialPrintPage() {
               placeholder="— Select Intake —"
               value={selectedIntakeGuid}
               onChange={setSelectedIntakeGuid}
-              disabled={intakeLoading}
-              options={(intakes ?? []).map((i: any) => ({
+              disabled={intakesLoading}
+              options={(intakes ?? []).map(i => ({
                 value: i.intakeGuid,
                 label: `${i.description || i.intakeCode} ${i.currentIntake ? '(Current)' : ''}`,
               }))}
@@ -301,13 +231,13 @@ export default function UniversityExamMaterialPrintPage() {
             />
           </div>
           <div className="fg mb-0">
-            <label className="lbl">Course Unit (Theory) <span className="text-red-500">*</span></label>
+            <label className="lbl">Course Unit (Practical) <span className="text-red-500">*</span></label>
             <SearchSelect
-              placeholder="— Select Course Unit —"
+              placeholder="— Select Practical Unit —"
               value={selectedCourseUnitGuid}
               onChange={setSelectedCourseUnitGuid}
               disabled={!selectedSemesterGuid || unitsLoading}
-              options={(courseUnits ?? []).map((u: any) => ({
+              options={courseUnits.map((u: any) => ({
                 value: u.courseUnitGuid,
                 label: `${u.courseUnitCode} - ${u.courseUnitName}`,
               }))}
@@ -323,11 +253,11 @@ export default function UniversityExamMaterialPrintPage() {
                 <i className="lni lni-layout"></i>
               </div>
               <div>
-                <h3 className="font-semibold text-gray-800 text-sm m-0">Question Paper Materials (Theory)</h3>
-                <p className="text-xs text-gray-500 m-0">Generate & download QP</p>
+                <h3 className="font-semibold text-gray-800 text-sm m-0">Practical QP Materials</h3>
+                <p className="text-xs text-gray-500 m-0">Generate & download practical QP</p>
               </div>
             </div>
-            <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="p-5 grid grid-cols-2 sm:grid-cols-2 gap-3">
               <button 
                 className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-primary hover:text-primary hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-white"
                 onClick={() => handlePrintQP()}
@@ -356,15 +286,6 @@ export default function UniversityExamMaterialPrintPage() {
               </button>
 
               <button 
-                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-primary hover:text-primary hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-sky-50 border-sky-100"
-                onClick={() => handleDownload('AnswerKey')}
-                disabled={!isFormValid || isWorking}
-              >
-                <i className="lni lni-key text-3xl text-amber-500"></i>
-                Answer Key
-              </button>
-
-              <button 
                 className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-red-500 hover:text-red-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-red-50 border-red-100"
                 onClick={() => handleDeleteQP()}
                 disabled={!isFormValid || isWorking}
@@ -376,59 +297,38 @@ export default function UniversityExamMaterialPrintPage() {
           </div>
 
           {/* Booklet Card */}
-          <div className="bg-amber-50 border-amber-100 border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-            <div className="bg-slate-50 px-5 py-4 border-b border-gray-100 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
-                <i className="lni lni-book"></i>
+          <div className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden shadow-sm opacity-70">
+            <div className="bg-gray-100 px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center">
+                  <i className="lni lni-book"></i>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-700 text-sm m-0">Booklet & Registers</h3>
+                  <p className="text-xs text-gray-500 m-0">Not supported for practical units yet</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-semibold text-gray-800 text-sm m-0">Booklet & Registers</h3>
-                <p className="text-xs text-gray-500 m-0">Merge students & download files</p>
-              </div>
+              <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded font-semibold uppercase">Coming Soon</span>
             </div>
             <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <button 
-                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-indigo-500 hover:text-indigo-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-white"
-                onClick={() => handlePrintBooklet()}
-                disabled={!isFormValid || isWorking}
-              >
-                <i className="lni lni-printer text-3xl text-indigo-500"></i>
+              <button className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium opacity-50 cursor-not-allowed bg-sky-50 border-sky-100" disabled title="Not yet supported for practical exams">
+                <i className="lni lni-printer text-3xl text-gray-400"></i>
                 Print Booklet
               </button>
-
-              <button 
-                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-indigo-500 hover:text-indigo-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-indigo-50 border-indigo-100"
-                onClick={() => handleDownload('BookletPDF')}
-                disabled={!isFormValid || isWorking}
-              >
-                <i className="lni lni-empty-file text-3xl text-gray-600"></i>
+              <button className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium opacity-50 cursor-not-allowed bg-gray-50 border-gray-100" disabled title="Not yet supported for practical exams">
+                <i className="lni lni-empty-file text-3xl text-gray-400"></i>
                 Booklet PDF
               </button>
-
-              <button 
-                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-indigo-500 hover:text-indigo-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-gray-50 border-gray-200"
-                onClick={() => handleDownload('Attendance')}
-                disabled={!isFormValid || isWorking}
-              >
-                <i className="lni lni-users text-3xl text-green-600"></i>
+              <button className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium opacity-50 cursor-not-allowed bg-gray-50 border-gray-100" disabled title="Not yet supported for practical exams">
+                <i className="lni lni-users text-3xl text-gray-400"></i>
                 Attendance
               </button>
-
-              <button 
-                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-indigo-500 hover:text-indigo-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-emerald-50 border-emerald-100"
-                onClick={() => handleDownload('Cover')}
-                disabled={!isFormValid || isWorking}
-              >
-                <i className="lni lni-envelope text-3xl text-orange-500"></i>
+              <button className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium opacity-50 cursor-not-allowed bg-gray-50 border-gray-100" disabled title="Not yet supported for practical exams">
+                <i className="lni lni-envelope text-3xl text-gray-400"></i>
                 Cover Letter
               </button>
-
-              <button 
-                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-indigo-500 hover:text-indigo-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-orange-50 border-orange-100"
-                onClick={() => handleDownload('Consolidated')}
-                disabled={!isFormValid || isWorking}
-              >
-                <i className="lni lni-list text-3xl text-purple-600"></i>
+              <button className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium opacity-50 cursor-not-allowed bg-gray-50 border-gray-100" disabled title="Not yet supported for practical exams">
+                <i className="lni lni-list text-3xl text-gray-400"></i>
                 Mark Sheet
               </button>
             </div>

@@ -195,6 +195,10 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Hall Ticket Issuance', 'ticket', '/assessment/hall-ticket'),
     leaf('Hall Ticket Print', 'printer', '/assessment/hall-print'),
     leaf('UE Material Print', 'printer', '/assessment/university-exam-material-print'),
+    leaf('UE QP/Booklet Print', 'printer', '/assessment/university-exam-qp-booklet-print'),
+    leaf('UE Practical QP Print', 'printer', '/assessment/university-exam-practical-qp-print'),
+    leaf('UE Project Booklet Print', 'printer', '/assessment/university-exam-project-booklet-print'),
+    leaf('Resit Question Print', 'printer', '/assessment/resit-question-print'),
     leaf('UE Mark Import', 'upload', '/assessment/ue-mark-import'),
   ]),
   section('Mark Entry & Results', [
@@ -831,7 +835,7 @@ function ensureUeMaterialPrint(menu: MenuNode[]): MenuNode[] {
   const ueSection = assessModule.children[ueIdx]
   if (ueSection.children.some(l => l.name === 'UE Material Print')) return menu
 
-  const children = [...ueSection.children, leaf('UE Material Print', 'printer', '/assessment/university-exam-material-print')]
+  const children = [...ueSection.children, leaf('UE Material Print', 'printer', '/assessment/university-exam-material-print'), leaf('UE QP/Booklet Print', 'printer', '/assessment/university-exam-qp-booklet-print'), leaf('UE Practical QP Print', 'printer', '/assessment/university-exam-practical-qp-print'), leaf('UE Project Booklet Print', 'printer', '/assessment/university-exam-project-booklet-print'), leaf('Resit Question Print', 'printer', '/assessment/resit-question-print')]
 
   const mergedSection = { ...ueSection, children }
   const mergedAssess = { ...assessModule }

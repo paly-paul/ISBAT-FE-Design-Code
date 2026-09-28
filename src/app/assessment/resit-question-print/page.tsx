@@ -1,27 +1,29 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
-import { useIntakes } from '@/hooks/academic/useIntakes'
-import { useEffect } from 'react'
+import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
+import { useUeMaterialPrintPrograms, useUeMaterialPrintSemesters } from '@/hooks/assessment/useUeMaterialPrint'
 import {
-  useUeMaterialPrintPrograms,
-  useUeMaterialPrintSemesters,
-  useUeQuestionPrintCourseUnits,
-  usePrintUeQuestionTheory,
-  useDownloadUeQuestionTheoryPdf,
-  useDownloadUeQuestionTheoryWord,
-  useDeleteUeQuestionTheory,
-  useDownloadUeQuestionTheoryAnswerKey,
-  usePrintUeBooklet,
-  useDownloadUeBookletPdf,
-  useDownloadUeBookletAttendance,
-  useDownloadUeBookletCover,
-  useDownloadUeConsolidatedMarkSheet
-} from '@/hooks/assessment/useUeMaterialPrint'
+  useResitCourseUnits,
+  usePrintResitTheory,
+  useDownloadResitTheoryPdf,
+  useDownloadResitTheoryWord,
+  useDeleteResitTheory,
+  useDownloadResitTheoryAnswerKey,
+  usePrintResitPractical,
+  useDownloadResitPracticalPdf,
+  useDownloadResitPracticalWord,
+  useDeleteResitPractical,
+  usePrintResitBooklet,
+  useDownloadResitBookletPdf,
+  useDownloadResitBookletAttendance,
+  useDownloadResitBookletCover,
+  useDownloadResitBookletConsolidated
+} from '@/hooks/assessment/useResitQuestionPrint'
 
-export default function UniversityExamMaterialPrintPage() {
+export default function ResitQuestionPrintPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
 
   const showToast = (msg: string, type = '') => {
@@ -31,6 +33,7 @@ export default function UniversityExamMaterialPrintPage() {
 
   // Dropdown States
   const [selectedIntakeGuid, setSelectedIntakeGuid] = useState<string>('')
+  const [selectedQPIntakeGuid, setSelectedQPIntakeGuid] = useState<string>('')
   const [selectedProgramGuid, setSelectedProgramGuid] = useState<string>('')
   const [selectedSemesterGuid, setSelectedSemesterGuid] = useState<string>('')
   const [selectedCourseUnitGuid, setSelectedCourseUnitGuid] = useState<string>('')
@@ -41,38 +44,43 @@ export default function UniversityExamMaterialPrintPage() {
   const [confirmMessage, setConfirmMessage] = useState('')
 
   // Data Hooks
-  const { data: intakes, isLoading: intakeLoading } = useIntakes()
+  const { data: intakes, isLoading: intakesLoading } = useIntakes()
+  const { data: currentIntake } = useCurrentAcademicIntake()
   const { data: programs, isLoading: programsLoading } = useUeMaterialPrintPrograms()
-
-  // Pre-select current intake
-  useEffect(() => {
-    if (intakes && !selectedIntakeGuid) {
-      const current = intakes.find((i: any) => i.currentIntake)
-      if (current) setSelectedIntakeGuid(current.intakeGuid)
-    }
-  }, [intakes, selectedIntakeGuid])
   const { data: semesters, isLoading: semLoading } = useUeMaterialPrintSemesters(selectedProgramGuid || null)
   
-  const isCourseUnitEnabled = !!selectedProgramGuid && !!selectedSemesterGuid
-  const { data: courseUnits, isLoading: unitsLoading } = useUeQuestionPrintCourseUnits(
-    selectedProgramGuid, selectedSemesterGuid, isCourseUnitEnabled
+  const isCourseUnitEnabled = !!selectedProgramGuid && !!selectedSemesterGuid && !!selectedIntakeGuid
+  const { data: courseUnits, isLoading: unitsLoading } = useResitCourseUnits(
+    selectedProgramGuid, selectedSemesterGuid, selectedIntakeGuid, isCourseUnitEnabled
   )
 
   // API Hooks
-  const printTheoryMut = usePrintUeQuestionTheory()
-  const dlTheoryPdfMut = useDownloadUeQuestionTheoryPdf()
-  const dlTheoryWordMut = useDownloadUeQuestionTheoryWord()
-  const delTheoryMut = useDeleteUeQuestionTheory()
-  const dlAnswerKeyMut = useDownloadUeQuestionTheoryAnswerKey()
+  const printTheoryMut = usePrintResitTheory()
+  const dlTheoryPdfMut = useDownloadResitTheoryPdf()
+  const dlTheoryWordMut = useDownloadResitTheoryWord()
+  const delTheoryMut = useDeleteResitTheory()
+  const dlAnswerKeyMut = useDownloadResitTheoryAnswerKey()
 
-  const printBookletMut = usePrintUeBooklet()
-  const dlBookletPdfMut = useDownloadUeBookletPdf()
-  const dlAttendanceMut = useDownloadUeBookletAttendance()
-  const dlCoverMut = useDownloadUeBookletCover()
-  const dlConsolidatedMut = useDownloadUeConsolidatedMarkSheet()
+  const printPracticalMut = usePrintResitPractical()
+  const dlPracticalPdfMut = useDownloadResitPracticalPdf()
+  const dlPracticalWordMut = useDownloadResitPracticalWord()
+  const delPracticalMut = useDeleteResitPractical()
 
-  const intakeGuid = selectedIntakeGuid || ''
-  const isFormValid = !!intakeGuid && !!selectedProgramGuid && !!selectedSemesterGuid && !!selectedCourseUnitGuid
+  const printBookletMut = usePrintResitBooklet()
+  const dlBookletPdfMut = useDownloadResitBookletPdf()
+  const dlAttendanceMut = useDownloadResitBookletAttendance()
+  const dlCoverMut = useDownloadResitBookletCover()
+  const dlConsolidatedMut = useDownloadResitBookletConsolidated()
+
+  // Computed
+  const selectedUnitType = useMemo(() => {
+    if (!selectedCourseUnitGuid || !courseUnits) return null
+    return courseUnits.find((u: any) => u.courseUnitGuid === selectedCourseUnitGuid)?.unitTypeName || null
+  }, [selectedCourseUnitGuid, courseUnits])
+
+  const isFormValid = !!selectedIntakeGuid && !!selectedProgramGuid && !!selectedSemesterGuid && !!selectedCourseUnitGuid
+  const isTheory = selectedUnitType === 'Theory'
+  const isPractical = selectedUnitType === 'Practical'
 
   // Handlers
   const handleProgramChange = (guid: string) => {
@@ -116,15 +124,17 @@ export default function UniversityExamMaterialPrintPage() {
       programGuid: selectedProgramGuid,
       semesterGuid: selectedSemesterGuid,
       courseUnitGuid: selectedCourseUnitGuid,
-      intakeGuid,
+      academicIntakeGuid: selectedIntakeGuid,
+      questionBankIntakeGuid: selectedQPIntakeGuid || selectedIntakeGuid,
       confirm
     }
 
     try {
-      const res = await printTheoryMut.mutateAsync(req)
+      const mut = isTheory ? printTheoryMut : printPracticalMut
+      const res = await mut.mutateAsync(req)
 
-      if (res.outcome === 'ExamRuleNotSet') {
-        showToast('University Exam not yet Scheduled!!', 'error')
+      if (res.outcome === 'ScheduleNotSet') {
+        showToast('Resit Exam not yet Scheduled or Exam Rule not yet set!!', 'error')
       } else if (res.outcome === 'QuestionsNotAvailable') {
         showToast('Questions are not yet uploaded!!', 'error')
       } else if (res.outcome === 'ConfirmationRequired') {
@@ -144,19 +154,20 @@ export default function UniversityExamMaterialPrintPage() {
       programGuid: selectedProgramGuid,
       semesterGuid: selectedSemesterGuid,
       courseUnitGuid: selectedCourseUnitGuid,
-      intakeGuid,
+      academicIntakeGuid: selectedIntakeGuid,
       confirm
     }
 
     try {
-      const res = await delTheoryMut.mutateAsync(req)
+      const mut = isTheory ? delTheoryMut : delPracticalMut
+      const res = await mut.mutateAsync(req)
       if (res.data === false && !confirm) {
-        confirmAndExecute(res.message || 'You are about to delete the QP set. Do you want to continue?', () => handleDeleteQP(true))
+        confirmAndExecute(res.message || 'Are you sure you want to delete?', () => handleDeleteQP(true))
       } else if (res.data === true) {
-        showToast(res.message || 'Deleted successfully!', 'success')
+        showToast(res.message || 'Deleted successfully......!', 'success')
       }
     } catch (err: any) {
-      showToast(err.message || 'Could not delete QP.', 'error')
+      showToast(err.message || 'Could not delete....!', 'error')
     }
   }
 
@@ -167,7 +178,8 @@ export default function UniversityExamMaterialPrintPage() {
       programGuid: selectedProgramGuid,
       semesterGuid: selectedSemesterGuid,
       courseUnitGuid: selectedCourseUnitGuid,
-      intakeGuid,
+      academicIntakeGuid: selectedIntakeGuid,
+      ueType: 1, // Resit
       confirm
     }
 
@@ -176,11 +188,7 @@ export default function UniversityExamMaterialPrintPage() {
       if (res.confirmationRequired && !confirm) {
         confirmAndExecute(res.message || 'Booklets are already printed. Do you want to reprint the same?', () => handlePrintBooklet(true))
       } else {
-        if (res.wasReprint) {
-          showToast(`Reprinted! Added ${res.addedStudentCount} students. (Total: ${res.totalStudentCount})`, 'success')
-        } else {
-          showToast(`Booklet printed! (Total: ${res.totalStudentCount})`, 'success')
-        }
+        showToast('Booklet printed/merged successfully!', 'success')
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to print booklet', 'error')
@@ -194,7 +202,8 @@ export default function UniversityExamMaterialPrintPage() {
       programGuid: selectedProgramGuid,
       semesterGuid: selectedSemesterGuid,
       courseUnitGuid: selectedCourseUnitGuid,
-      intakeGuid,
+      academicIntakeGuid: selectedIntakeGuid,
+      questionBankIntakeGuid: selectedQPIntakeGuid || selectedIntakeGuid,
     }
 
     try {
@@ -203,11 +212,11 @@ export default function UniversityExamMaterialPrintPage() {
       
       switch (type) {
         case 'QPPDF':
-          mut = dlTheoryPdfMut
+          mut = isTheory ? dlTheoryPdfMut : dlPracticalPdfMut
           fallback = 'QuestionPaper.pdf'
           break
         case 'QPWord':
-          mut = dlTheoryWordMut
+          mut = isTheory ? dlTheoryWordMut : dlPracticalWordMut
           fallback = 'QuestionPaper.doc'
           break
         case 'AnswerKey':
@@ -239,38 +248,29 @@ export default function UniversityExamMaterialPrintPage() {
     }
   }
 
-  const handleRefresh = () => {
-    setSelectedProgramGuid('')
-    setSelectedSemesterGuid('')
-    setSelectedCourseUnitGuid('')
-  }
-
-  const isWorking = printTheoryMut.isPending || delTheoryMut.isPending || printBookletMut.isPending
+  const isWorking = printTheoryMut.isPending || printPracticalMut.isPending || delTheoryMut.isPending || delPracticalMut.isPending || printBookletMut.isPending
   
   return (
     <div className="page active">
-      <div className="pg-hdr flex justify-between items-end">
+      <div className="pg-hdr">
         <div>
-          <h1 className="pg-title">University Exam Material Print</h1>
-          <p className="pg-sub">Generate and print exam materials for a regular university exam cycle (Theory Only)</p>
+          <h1 className="pg-title">Resit Question Print</h1>
+          <p className="pg-sub">Generate and print exam materials for a resit round</p>
         </div>
-        <button className="btn btn-neu" onClick={handleRefresh}>
-          <i className="lni lni-reload"></i> Refresh
-        </button>
       </div>
 
       <div className="card mb-5">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-5">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 p-5">
           <div className="fg mb-0">
             <label className="lbl">Academic Intake <span className="text-red-500">*</span></label>
             <SearchSelect
               placeholder="— Select Intake —"
               value={selectedIntakeGuid}
               onChange={setSelectedIntakeGuid}
-              disabled={intakeLoading}
-              options={(intakes ?? []).map((i: any) => ({
+              disabled={intakesLoading}
+              options={(intakes ?? []).map(i => ({
                 value: i.intakeGuid,
-                label: `${i.description || i.intakeCode} ${i.currentIntake ? '(Current)' : ''}`,
+                label: i.description || `Intake ${i.intakeCode}`,
               }))}
             />
           </div>
@@ -301,7 +301,7 @@ export default function UniversityExamMaterialPrintPage() {
             />
           </div>
           <div className="fg mb-0">
-            <label className="lbl">Course Unit (Theory) <span className="text-red-500">*</span></label>
+            <label className="lbl">Course Unit <span className="text-red-500">*</span></label>
             <SearchSelect
               placeholder="— Select Course Unit —"
               value={selectedCourseUnitGuid}
@@ -313,9 +313,23 @@ export default function UniversityExamMaterialPrintPage() {
               }))}
             />
           </div>
+          <div className="fg mb-0">
+            <label className="lbl">Question Bank Intake <span className="text-gray-400 text-xs">(Opt)</span></label>
+            <SearchSelect
+              placeholder="— Inherit from Academic —"
+              value={selectedQPIntakeGuid}
+              onChange={setSelectedQPIntakeGuid}
+              disabled={intakesLoading}
+              options={(intakes ?? []).map(i => ({
+                value: i.intakeGuid,
+                label: i.description || `Intake ${i.intakeCode}`,
+              }))}
+            />
+          </div>
         </div>
 
         <div className="p-5 pt-0 mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
           {/* Question Paper Card */}
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
             <div className="bg-slate-50 px-5 py-4 border-b border-gray-100 flex items-center gap-3">
@@ -323,8 +337,8 @@ export default function UniversityExamMaterialPrintPage() {
                 <i className="lni lni-layout"></i>
               </div>
               <div>
-                <h3 className="font-semibold text-gray-800 text-sm m-0">Question Paper Materials (Theory)</h3>
-                <p className="text-xs text-gray-500 m-0">Generate & download QP</p>
+                <h3 className="font-semibold text-gray-800 text-sm m-0">Question Paper Materials</h3>
+                <p className="text-xs text-gray-500 m-0">{selectedUnitType ? `Type: ${selectedUnitType}` : 'Select a course unit'}</p>
               </div>
             </div>
             <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -355,14 +369,16 @@ export default function UniversityExamMaterialPrintPage() {
                 Word Format
               </button>
 
-              <button 
-                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-primary hover:text-primary hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-sky-50 border-sky-100"
-                onClick={() => handleDownload('AnswerKey')}
-                disabled={!isFormValid || isWorking}
-              >
-                <i className="lni lni-key text-3xl text-amber-500"></i>
-                Answer Key
-              </button>
+              {(!selectedUnitType || isTheory) && (
+                <button 
+                  className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-primary hover:text-primary hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-sky-50 border-sky-100"
+                  onClick={() => handleDownload('AnswerKey')}
+                  disabled={!isFormValid || !isTheory || isWorking}
+                >
+                  <i className="lni lni-key text-3xl text-amber-500"></i>
+                  Answer Key
+                </button>
+              )}
 
               <button 
                 className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-red-500 hover:text-red-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-red-50 border-red-100"
