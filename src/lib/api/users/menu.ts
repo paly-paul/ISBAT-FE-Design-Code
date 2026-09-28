@@ -194,6 +194,8 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Question Paper Vetting', 'upload', '/assessment/qp-vetting'),
     leaf('Hall Ticket Issuance', 'ticket', '/assessment/hall-ticket'),
     leaf('Hall Ticket Print', 'printer', '/assessment/hall-print'),
+    leaf('UE Material Print', 'printer', '/assessment/university-exam-material-print'),
+    leaf('UE Mark Import', 'upload', '/assessment/ue-mark-import'),
   ]),
   section('Mark Entry & Results', [
     leaf('Mark Entry — CW', 'pencil-alt', '/assessment/mark-cw'),
@@ -818,6 +820,52 @@ function ensureResitMaster(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+function ensureUeMaterialPrint(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const ueIdx = assessModule.children.findIndex(c => c.name === 'University Exam (UE)')
+  if (ueIdx === -1) return menu
+
+  const ueSection = assessModule.children[ueIdx]
+  if (ueSection.children.some(l => l.name === 'UE Material Print')) return menu
+
+  const children = [...ueSection.children, leaf('UE Material Print', 'printer', '/assessment/university-exam-material-print')]
+
+  const mergedSection = { ...ueSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[ueIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
+function ensureUeMarkImport(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const ueIdx = assessModule.children.findIndex(c => c.name === 'University Exam (UE)')
+  if (ueIdx === -1) return menu
+
+  const ueSection = assessModule.children[ueIdx]
+  if (ueSection.children.some(l => l.name === 'UE Mark Import')) return menu
+
+  const children = [...ueSection.children, leaf('UE Mark Import', 'upload', '/assessment/ue-mark-import')]
+
+  const mergedSection = { ...ueSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[ueIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
 function stripLectureMaster(menu: MenuNode[]): MenuNode[] {
   return menu.map(mod => {
     const isLectureMatch = (name: string) => {
@@ -851,7 +899,9 @@ export function getMenu(): Promise<MenuResult> {
       const withProgApp = ensureProgrammeApproval(withConfig)
       const withAssMaster = ensureAssessmentMaster(withProgApp)
       const withResit = ensureResitMaster(withAssMaster)
-      const finalMenu = stripLectureMaster(withResit)
+      const withUePrint = ensureUeMaterialPrint(withResit)
+      const withUeMarkImport = ensureUeMarkImport(withUePrint)
+      const finalMenu = stripLectureMaster(withUeMarkImport)
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: stripLectureMaster(mockMenu), isFallback: true }))

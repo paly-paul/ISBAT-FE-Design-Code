@@ -505,28 +505,7 @@ export function BulkScheduleModal({
               )}
             </div>
 
-            {/* Dry-Run Preview Statistics */}
-            {isPreviewLoading ? (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2 text-blue-700 text-xs">
-                <i className="lni lni-reload animate-spin text-sm"></i>
-                <span>Checking eligible assessment units and existing schedules...</span>
-              </div>
-            ) : previewStats ? (
-              <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                <div className="bg-slate-50 border border-slate-200 rounded p-2">
-                  <div className="text-[11px] text-slate-500">Total Units</div>
-                  <div className="text-base font-bold text-slate-800">{previewStats.matchCount}</div>
-                </div>
-                <div className="bg-emerald-50 border border-emerald-200 rounded p-2">
-                  <div className="text-[11px] text-emerald-700 font-medium">Already Sched.</div>
-                  <div className="text-base font-bold text-emerald-800">{previewStats.scheduledCount}</div>
-                </div>
-                <div className="bg-amber-50 border border-amber-200 rounded p-2">
-                  <div className="text-[11px] text-amber-700 font-medium">Pending / New</div>
-                  <div className="text-base font-bold text-amber-800">{previewStats.unscheduledCount}</div>
-                </div>
-              </div>
-            ) : null}
+            {/* Dry-Run Preview Statistics (Removed per user request) */}
 
             {previewError && (
               <div className="p-2.5 bg-amber-50 border border-amber-200 rounded text-amber-800 text-[11px] flex items-center gap-1.5">

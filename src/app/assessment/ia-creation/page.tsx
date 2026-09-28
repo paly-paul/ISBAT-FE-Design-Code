@@ -30,7 +30,7 @@ function formatDateRange(start: string | null, end: string | null) {
     const m = d.getMinutes().toString().padStart(2, '0')
     return `${months[d.getMonth()]} ${d.getDate()} ${d.getFullYear()} ${h}:${m}${ampm}`
   }
-  
+
   const startStr = formatPart(s)
   if (!end) return startStr
   const e = new Date(end)
@@ -164,7 +164,7 @@ export default function IaCreationPage() {
                 .map(i => ({
                   value: i.intakeGuid,
                   label: `${i.description ?? `Intake ${i.intakeCode}`} (Current)`,
-              }))}
+                }))}
             />
           </div>
 
@@ -277,9 +277,12 @@ export default function IaCreationPage() {
                       <td className="border-r border-slate-200 px-4 py-3 text-left">
                         {row.classTestGuid ? (
                           <div className="flex flex-wrap items-center gap-2">
-                            {/* Max mark removed as requested */}
                             {row.classTestStartDateTime ? (
-                              <span className="text-g900 font-medium text-[11px] leading-tight">
+                              <span
+                                className="text-g900 font-medium text-[11px] leading-tight"
+                                style={{ cursor: 'pointer', borderBottom: '1px dashed #9ca3af' }}
+                                onClick={() => setSelectedCbtData({ testGuid: row.classTestGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}
+                              >
                                 {formatDateRange(row.classTestStartDateTime, row.classTestEndDateTime)}
                               </span>
                             ) : (
@@ -300,9 +303,12 @@ export default function IaCreationPage() {
                       <td className="border-r border-slate-200 px-4 py-3 text-left">
                         {row.courseworkGuid ? (
                           <div className="flex flex-wrap items-center gap-2">
-                            {/* Max mark removed as requested */}
                             {row.courseworkStartDateTime ? (
-                              <span className="text-g900 font-medium text-[11px] leading-tight">
+                              <span
+                                className="text-g900 font-medium text-[11px] leading-tight"
+                                style={{ cursor: 'pointer', borderBottom: '1px dashed #9ca3af' }}
+                                onClick={() => setSelectedCwGuid(row.courseworkGuid)}
+                              >
                                 {formatDateRange(row.courseworkStartDateTime, row.courseworkEndDateTime)}
                               </span>
                             ) : (
