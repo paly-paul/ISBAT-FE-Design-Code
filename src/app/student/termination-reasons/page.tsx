@@ -4,7 +4,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { Pagination } from '@/components/Pagination'
-import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
   useTerminationReasons,
   useCreateTerminationReason,
@@ -22,7 +22,10 @@ import {
 const PAGE_SIZE = 20
 
 export default function Page() {
-  const permissions = usePagePermissions()
+  // Permission checks disabled for now — every action is allowed. Restore the
+  // line below (and the import above) to gate actions by the menu permissions again.
+  // const permissions = usePagePermissions()
+  const permissions = { add: true, edit: true, delete: true }
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 

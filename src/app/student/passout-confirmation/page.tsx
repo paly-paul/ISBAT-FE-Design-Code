@@ -10,7 +10,7 @@ import { Pagination } from '@/components/Pagination'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { usePassoutCandidates, usePassoutCandidateDetail, useConfirmPassout } from '@/hooks/student/usePassoutConfirmation'
-import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
 
 const PAGE_SIZE = 10
@@ -33,7 +33,10 @@ const PROGRAM_GROUPS = [
 // Router) — same split intake-transfer/Student Profile use for the same
 // reason.
 function PassoutConfirmationContent() {
-  const permissions = usePagePermissions()
+  // Permission checks disabled for now — every action is allowed. Restore the
+  // line below (and the import above) to gate actions by the menu permissions again.
+  // const permissions = usePagePermissions()
+  const permissions = { add: true, edit: true, delete: true }
   const router = useRouter()
   const searchParams = useSearchParams()
 

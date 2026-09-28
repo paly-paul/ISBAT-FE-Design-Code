@@ -11,7 +11,7 @@ import { BaselinePanel } from '@/components/student/BaselinePanel'
 import { StudentDto } from '@/lib/api/student/student'
 import { useDropoutStudents, useRejoinCandidate, useRejoinBatches, useRejoinStudent } from '@/hooks/student/useDropoutRejoin'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
-import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Ported from isbat_student_module.html's Intake Transfer page. Only the
 // "Dropout Rejoin" reason has a real backend contract — students/dropout-
@@ -75,7 +75,10 @@ export default function Page() {
 // Dropout Rejoin — real flow against students/dropout-rejoin/*.md.
 // ---------------------------------------------------------------------------
 function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: string) => void }) {
-  const permissions = usePagePermissions()
+  // Permission checks disabled for now — every action is allowed. Restore the
+  // line below (and the import above) to gate actions by the menu permissions again.
+  // const permissions = usePagePermissions()
+  const permissions = { add: true, edit: true, delete: true }
   const router = useRouter()
   const searchParams = useSearchParams()
   // Student Profile's action menu links here as
@@ -320,7 +323,10 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
 // page-local mock data, same as before this page grew a Dropout Rejoin mode.
 // ---------------------------------------------------------------------------
 function DefermentPanel({ showToast }: { showToast: (msg: string, type?: string) => void }) {
-  const permissions = usePagePermissions()
+  // Permission checks disabled for now — every action is allowed. Restore the
+  // line below (and the import above) to gate actions by the menu permissions again.
+  // const permissions = usePagePermissions()
+  const permissions = { add: true, edit: true, delete: true }
   const [student, setStudent] = useState<StudentDto | null>(null)
   const [targetIntake, setTargetIntake] = useState(TARGET_INTAKES[0].value)
   const [targetBatch, setTargetBatch] = useState('BSc.IT-2025A · Day')
