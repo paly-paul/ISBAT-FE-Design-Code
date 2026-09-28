@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery, useQueries } from '@tanstack/react-query'
-import { Faculty, FacultyInput, createFaculty, deleteFaculty, getFaculties, getFacultiesPaged, getFacultyById, updateFaculty } from '@/lib/api/academic/faculty'
+import { Faculty, FacultyInput, createFaculty, deleteFaculty, getFaculties, getFacultiesPaged, getFacultyById, getFacultyDropdown, updateFaculty } from '@/lib/api/academic/faculty'
 import { getNextPageParam } from '@/lib/pagination'
 
 const FACULTIES_KEY = ['faculties']
@@ -17,6 +17,18 @@ export function useFaculties(enabled = true) {
     queryKey: FACULTIES_KEY,
     queryFn: () => getFaculties(1, FACULTIES_PAGE_SIZE),
     // Keep the list cached until a mutation invalidates it.
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}
+
+// Faculties scoped to a campus (or all, when campusGuid is empty) — the
+// lightweight dropdown endpoint, used by cascading filter panels.
+export function useFacultyDropdown(campusGuid: string | null, enabled = true) {
+  return useQuery({
+    queryKey: [...FACULTIES_KEY, 'dropdown', campusGuid ?? ''],
+    queryFn: () => getFacultyDropdown(campusGuid ?? undefined),
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,
