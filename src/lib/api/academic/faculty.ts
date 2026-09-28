@@ -109,6 +109,26 @@ export function getFacultyById(guid: string): Promise<Faculty> {
   return apiGet<Faculty>(`/api/v1/academic/faculties/${guid}`)
 }
 
+export interface FacultyDropdownItem {
+  facultyGuid: string
+  facultyName: string
+  facultyCode?: string
+}
+
+// GET /api/v1/academic/faculties/dropdown?campusGuid= — per the bulk-email
+// page doc (get-faculty-dropdown.md isn't available locally, so the item
+// shape is assumed to match Faculty's own guid/name fields). Unwrapped
+// defensively, same as getCampusDropdown/getProgramDropdown.
+export function getFacultyDropdown(campusGuid?: string): Promise<FacultyDropdownItem[]> {
+  if (MOCK_AUTH) {
+    const rows = campusGuid ? mockFaculties.filter(f => f.campusGuid === campusGuid) : mockFaculties
+    return Promise.resolve(rows.map(f => ({ facultyGuid: f.facultyGuid, facultyName: f.facultyName, facultyCode: f.facultyCode })))
+  }
+  const query = campusGuid ? `?campusGuid=${campusGuid}` : ''
+  return apiGet<FacultyDropdownItem[] | null>(`/api/v1/academic/faculties/dropdown${query}`)
+    .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+}
+
 export function createFaculty(input: FacultyInput): Promise<Faculty> {
   if (MOCK_AUTH) {
     // Mock mode does not know the campus name yet, so it stays empty.

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { createBatch, deleteBatch, getBatchById, getBatches, getStudentCountsByBatch, updateBatch, Batch, BatchCreateInput, BatchDetail, BatchUpdateInput } from '@/lib/api/academic/batch'
+import { createBatch, deleteBatch, getBatchById, getBatchDropdown, getBatches, getStudentCountsByBatch, updateBatch, Batch, BatchCreateInput, BatchDetail, BatchUpdateInput } from '@/lib/api/academic/batch'
 
 const BATCHES_KEY = ['batches']
 
@@ -28,6 +28,17 @@ export function useBatchSearch(search: string, pageSize: number) {
     queryKey: [...BATCHES_KEY, 'search', q],
     queryFn: () => getBatches(1, pageSize, q),
     enabled: q.length > 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
+// Batches for one programme + semester — only enabled once both are picked.
+export function useBatchDropdown(programGuid: string | null, semesterGuid: string | null) {
+  return useQuery({
+    queryKey: [...BATCHES_KEY, 'dropdown', programGuid, semesterGuid],
+    queryFn: () => getBatchDropdown(programGuid as string, semesterGuid as string),
+    enabled: !!programGuid && !!semesterGuid,
     staleTime: Infinity,
     gcTime: Infinity,
   })
