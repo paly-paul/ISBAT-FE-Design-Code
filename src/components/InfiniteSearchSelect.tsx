@@ -20,6 +20,9 @@ interface Props<T> {
   placeholder?: string
   disabled?: boolean
   pageSize?: number
+  // Label for a value set from outside (e.g. a default) before the dropdown
+  // has loaded the page that contains it.
+  selectedOption?: Option | null
 }
 
 // SearchSelect backed by a paginated list endpoint: loads the first page when
@@ -27,7 +30,7 @@ interface Props<T> {
 // bottom, and re-queries the server as the user types (debounced 300 ms) —
 // same useInfiniteQuery pattern as the campus/intake pickers on Session
 // Movement, packaged so each dropdown doesn't repeat the wiring.
-export function InfiniteSearchSelect<T>({ queryKey, fetchPage, toOption, value, onChange, allLabel, placeholder, disabled, pageSize = 20 }: Props<T>) {
+export function InfiniteSearchSelect<T>({ queryKey, fetchPage, toOption, value, onChange, allLabel, placeholder, disabled, pageSize = 20, selectedOption }: Props<T>) {
   const [open, setOpen] = useState(false)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -53,11 +56,12 @@ export function InfiniteSearchSelect<T>({ queryKey, fetchPage, toOption, value, 
   const options = useMemo(() => {
     const loaded = flattenUniquePages(query.data?.pages ?? [], item => toOption(item).value).map(toOption)
     const list: Option[] = allLabel !== undefined ? [{ value: '', label: allLabel }] : []
-    if (value && picked?.value === value && !loaded.some(o => o.value === value)) list.push(picked)
+    const current = picked?.value === value ? picked : selectedOption?.value === value ? selectedOption : null
+    if (value && current && !loaded.some(o => o.value === value)) list.push(current)
     return [...list, ...loaded]
     // toOption is expected to be a pure mapping; the loaded pages drive this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query.data, allLabel, value, picked])
+  }, [query.data, allLabel, value, picked, selectedOption])
 
   function handleChange(v: string) {
     setPicked(options.find(o => o.value === v) ?? null)

@@ -70,10 +70,11 @@ export function useRefreshBulkEmailRecipients() {
   return (jobGuid: string) => queryClient.invalidateQueries({ queryKey: [...BULK_EMAIL_KEY, 'recipients', jobGuid] })
 }
 
-export function useBulkEmailStudentSearch(filters: StudentSearchFilters) {
+export function useBulkEmailStudentSearch(filters: StudentSearchFilters, enabled = true) {
   return useQuery({
     queryKey: [...BULK_EMAIL_KEY, 'students', filters],
     queryFn: () => searchBulkEmailStudents(filters),
+    enabled,
     placeholderData: keepPreviousData,
   })
 }

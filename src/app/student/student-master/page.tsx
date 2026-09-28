@@ -1,11 +1,12 @@
 'use client'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { GuidColumnFilter } from '@/components/GuidColumnFilter'
 import { StudentRefugeeModal } from '@/components/modals/student/StudentRefugeeModal'
+import { StudentSponsorModal } from '@/components/modals/student/StudentSponsorModal'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
@@ -37,16 +38,28 @@ interface ColumnFilterState {
 }
 const EMPTY_COLUMN_FILTERS: ColumnFilterState = { programGuid: [], semesterGuid: [], batchGuid: [] }
 
-export default function Page() {
+function StudentMasterContent() {
   // Permission checks disabled for now — every action is allowed. Restore the
   // line below (and the import above) to gate actions by the menu permissions again.
   // const permissions = usePagePermissions()
   const permissions = { add: true, edit: true, delete: true }
   const router = useRouter()
-  const [openModals, setOpenModals] = useState<Set<string>>(new Set())
+  const searchParams = useSearchParams()
+  // Student Profile's read-only Refugee Status / Sponsor fields link here as
+  // ?refugeeFor=<guid> or ?sponsorFor=<guid> (plus &studentName=<name>) —
+  // the matching modal opens pre-loaded for that student, and the params
+  // are cleared below so a refresh doesn't reopen it.
+  const refugeeForParam = searchParams.get('refugeeFor')
+  const sponsorForParam = searchParams.get('sponsorFor')
+  const [openModals, setOpenModals] = useState<Set<string>>(() => new Set(
+    refugeeForParam ? ['refugee-status-modal'] : sponsorForParam ? ['sponsor-modal'] : []
+  ))
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [selectedStudentGuid, setSelectedStudentGuid] = useState<string | null>(null)
-  const [selectedStudentName, setSelectedStudentName] = useState<string | undefined>(undefined)
+  const [selectedStudentGuid, setSelectedStudentGuid] = useState<string | null>(refugeeForParam ?? sponsorForParam)
+  const [selectedStudentName, setSelectedStudentName] = useState<string | undefined>(() => searchParams.get('studentName') ?? undefined)
+  useEffect(() => {
+    if (refugeeForParam || sponsorForParam) router.replace('/student/student-master')
+  }, [refugeeForParam, sponsorForParam, router])
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [colFilters, setColFilters] = useState<ColumnFilterState>(EMPTY_COLUMN_FILTERS)
@@ -65,6 +78,7 @@ export default function Page() {
   function handleView(studentGuid: string) { router.push('/student/profile?studentGuid=' + studentGuid) }
   function handleLearningMode(studentGuid: string) { router.push('/student/learning-mode?studentGuid=' + studentGuid) }
   function handleRefugee(studentGuid: string, studentName: string) { setSelectedStudentGuid(studentGuid); setSelectedStudentName(studentName); openModal('refugee-status-modal') }
+  function handleSponsor(studentGuid: string, studentName: string) { setSelectedStudentGuid(studentGuid); setSelectedStudentName(studentName); openModal('sponsor-modal') }
   function updateSearch(value?: string) { setSearch(value ?? ''); setPage(1) }
   // Closes whichever column popover is open — every call site here is a
   // committed choice (OK or Reset inside GuidColumnFilter), same as
@@ -214,6 +228,7 @@ export default function Page() {
                         <button className="btn btn-neu btn-sm" onClick={() => handleView(r.studentGuid)}><i className="lni lni-eye"></i> View</button>
                         {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => handleLearningMode(r.studentGuid)}><i className="lni lni-book"></i> Learning Mode</button>}
                         {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => handleRefugee(r.studentGuid, r.studentName)}><i className="lni lni-shield"></i> Refugee Status</button>}
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => handleSponsor(r.studentGuid, r.studentName)}><i className="lni lni-handshake"></i> Sponsor</button>}
                       </ActionMenu>
                     </td>
                     <td className="font-mono">{r.studentRegNo}</td>
@@ -230,7 +245,16 @@ export default function Page() {
         </div>
       </div>
       <StudentRefugeeModal isOpen={openModals.has('refugee-status-modal')} onClose={() => closeModal('refugee-status-modal')} showToast={showToast} studentGuid={selectedStudentGuid} studentName={selectedStudentName} />
+      <StudentSponsorModal isOpen={openModals.has('sponsor-modal')} onClose={() => closeModal('sponsor-modal')} showToast={showToast} studentGuid={selectedStudentGuid} studentName={selectedStudentName} />
       <Toast toast={toast} />
     </>
+  )
+}
+
+export default function Page() {
+  return (
+    <Suspense>
+      <StudentMasterContent />
+    </Suspense>
   )
 }

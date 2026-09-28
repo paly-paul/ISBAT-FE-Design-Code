@@ -153,7 +153,7 @@ function PassoutConfirmationContent() {
               <>
                 <ScrollTable>
                   <table>
-                    <thead><tr><th>Student</th><th>Reg No.</th><th>Programme</th><th>Group</th><th>Batch</th><th></th></tr></thead>
+                    <thead><tr><th style={{ textAlign: 'left' }}>Student</th><th>Reg No.</th><th>Programme</th><th>Group</th><th>Batch</th><th></th></tr></thead>
                     <tbody>
                       {listLoading ? (
                         <TableLoadingState colSpan={6} title="Loading candidates…" />
@@ -167,7 +167,7 @@ function PassoutConfirmationContent() {
                         />
                       ) : candidates.map(c => (
                         <tr key={c.studentGuid}>
-                          <td className="font-bold">{c.studentName}</td>
+                          <td className="font-bold" style={{ textAlign: 'left' }}>{c.studentName}</td>
                           <td className="font-mono">{c.studentRegNo}</td>
                           <td>{c.programName || '—'}</td>
                           <td><span className="badge badge-blue">{c.programGroup}</span></td>

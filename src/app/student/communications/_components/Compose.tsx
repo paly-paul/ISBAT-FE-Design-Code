@@ -14,6 +14,7 @@ import { useFacultyDropdown } from '@/hooks/config/useFaculties'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useBatchDropdown } from '@/hooks/academic/useBatches'
+import { useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import {
   ATTACHMENT_ACCEPT,
   ATTACHMENT_MIME_TYPES,
@@ -71,6 +72,12 @@ function toSearchFilters(f: FilterForm): StudentSearchFilters {
   }
 }
 
+// At least one filter must be set before students are loaded — an
+// unfiltered search returns every student and is slow.
+function hasAnyFilter(f: StudentSearchFilters) {
+  return Object.values(f).some(v => v !== null && v !== undefined && v !== '')
+}
+
 interface SelectedStudent { regNo: string; name: string; email: string }
 
 interface Props {
@@ -84,6 +91,18 @@ export function Compose({ onCancel, onSent, showToast }: Props) {
   const [form, setForm] = useState<FilterForm>(EMPTY_FORM)
   const [applied, setApplied] = useState<StudentSearchFilters>({})
   const [page, setPage] = useState(1)
+
+  // Intake defaults to the current academic intake. Set once when it loads;
+  // the user can still change or clear it.
+  const { data: currentIntake } = useCurrentAcademicIntake()
+  const defaultForm = useMemo<FilterForm>(() => ({ ...EMPTY_FORM, intakeCode: currentIntake ? String(currentIntake.intakeCode) : '' }), [currentIntake])
+  const intakeDefaulted = useRef(false)
+  useEffect(() => {
+    if (intakeDefaulted.current || !currentIntake) return
+    intakeDefaulted.current = true
+    setForm(f => (f.intakeCode ? f : { ...f, intakeCode: String(currentIntake.intakeCode) }))
+  }, [currentIntake])
+  const currentIntakeOption = currentIntake ? { value: String(currentIntake.intakeCode), label: currentIntake.description || String(currentIntake.intakeCode) } : null
 
   // Campus, Programme, Intake, Sponsor Category and Nationality come from
   // paginated list endpoints — loaded page by page as the dropdown scrolls,
@@ -104,12 +123,20 @@ export function Compose({ onCancel, onSent, showToast }: Props) {
   function setSemester(v: string) { setForm(f => ({ ...f, semesterGuid: v, batchGuid: '' })) }
   function setField<K extends keyof FilterForm>(key: K, v: FilterForm[K]) { setForm(f => ({ ...f, [key]: v })) }
 
-  function applyFilters() { setApplied(toSearchFilters(form)); setPage(1); cancelSelectAll() }
-  function resetFilters() { setForm(EMPTY_FORM); setApplied({}); setPage(1); cancelSelectAll() }
+  const formHasFilter = hasAnyFilter(toSearchFilters(form))
+  const filtersApplied = hasAnyFilter(applied)
+
+  function applyFilters() {
+    if (!formHasFilter) { showToast('Select at least one filter.', 'warn'); return }
+    setApplied(toSearchFilters(form)); setPage(1); cancelSelectAll()
+  }
+  // Back to the defaults (current intake). Students are hidden again until
+  // Apply is clicked.
+  function resetFilters() { setForm(defaultForm); setApplied({}); setPage(1); cancelSelectAll() }
 
   // ── Students (middle) ──
   const query = useMemo(() => ({ ...applied, pageNumber: page, pageSize: STUDENT_PAGE_SIZE }), [applied, page])
-  const students = useBulkEmailStudentSearch(query)
+  const students = useBulkEmailStudentSearch(query, filtersApplied)
   const rows = students.data?.items ?? []
   const matchCount = students.data?.totalCount ?? 0
 
@@ -231,6 +258,7 @@ export function Compose({ onCancel, onSent, showToast }: Props) {
   }
 
   const opt = (label: string) => [{ value: '', label }]
+  const showRight = filtersApplied || recipientCount > 0
 
   return (
     <section className="cm-main cm-compose-page">
@@ -242,7 +270,13 @@ export function Compose({ onCancel, onSent, showToast }: Props) {
       <div className="cm-compose-grid cm-compose-grid-3">
         {/* ── Filters ── */}
         <div className="cm-compose-side">
-          <div className="cm-compose-sect"><i className="lni lni-funnel"></i> Filters</div>
+          <div className="cm-compose-sect">
+            <i className="lni lni-funnel"></i> Filters
+            <div className="cm-filter-actions">
+              <button className="cm-link" onClick={resetFilters}>Reset</button>
+              <button className="btn btn-primary btn-sm" disabled={!formHasFilter} title={formHasFilter ? undefined : 'Select at least one filter'} onClick={applyFilters}>Apply</button>
+            </div>
+          </div>
           <div className="fg"><label className="lbl">Campus</label>
             <InfiniteSearchSelect
               queryKey={['campuses', 'bulk-email']}
@@ -284,6 +318,7 @@ export function Compose({ onCancel, onSent, showToast }: Props) {
               fetchPage={getIntakesPaged}
               toOption={i => ({ value: String(i.intakeCode), label: i.description || String(i.intakeCode) })}
               allLabel="All intakes"
+              selectedOption={currentIntakeOption}
               value={form.intakeCode}
               onChange={v => setField('intakeCode', v)}
             />
@@ -324,12 +359,19 @@ export function Compose({ onCancel, onSent, showToast }: Props) {
           <div className="fg"><label className="lbl">Name</label>
             <input className="ctrl" maxLength={50} placeholder="Partial match" value={form.studentName} onChange={e => setField('studentName', e.target.value)} onKeyDown={e => { if (e.key === 'Enter') applyFilters() }} />
           </div>
-          <div className="flex gap-2">
-            <button className="btn btn-neu btn-sm" style={{ flex: 1 }} onClick={resetFilters}>Reset</button>
-            <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={applyFilters}><i className="lni lni-funnel"></i> Apply</button>
-          </div>
         </div>
 
+        {/* Students and Message stay hidden until filters are applied (or
+            students were already picked under earlier filters). */}
+        {!showRight ? (
+          <div className="cm-compose-empty">
+            <div className="empty">
+              <div className="empty-icon"><i className="lni lni-funnel"></i></div>
+              <div className="empty-title">Select at least one filter</div>
+              <div className="empty-sub">Choose filters on the left and click <strong>Apply</strong> to load the matching students.</div>
+            </div>
+          </div>
+        ) : (<>
         {/* ── Students ── */}
         <div className="cm-compose-students">
           <div className="cm-stu-head">
@@ -420,13 +462,16 @@ export function Compose({ onCancel, onSent, showToast }: Props) {
             </div>
           )}
         </div>
+        </>)}
       </div>
 
       <div className="cm-compose-ftr">
         <button className="btn btn-neu" onClick={requestCancel}>Cancel</button>
-        <button className="btn btn-primary" disabled={!canSend} onClick={() => setConfirmOpen(true)}>
-          <i className="lni lni-telegram-original"></i> Send to {recipientCount.toLocaleString()} Student{recipientCount === 1 ? '' : 's'}
-        </button>
+        {showRight && (
+          <button className="btn btn-primary" disabled={!canSend} onClick={() => setConfirmOpen(true)}>
+            <i className="lni lni-telegram-original"></i> Send to {recipientCount.toLocaleString()} Student{recipientCount === 1 ? '' : 's'}
+          </button>
+        )}
       </div>
 
       {/* Confirm send — a job can't be cancelled once started. */}

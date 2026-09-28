@@ -90,7 +90,22 @@ export default function TerminateStudentPage() {
   // known (an application with no linked student record yet has nothing to
   // terminate — see the "select a student" empty state below).
   const { data: studentDetail, isLoading: isStudentDetailLoading } = useStudent(studentGuid, !!studentGuid)
-  const alreadyTerminated = studentDetail?.studActive === 0
+
+  // Students terminated from this page during the current visit. The live
+  // GET /students/{guid} response doesn't include studActive (confirmed
+  // 2026-09-28), so without this the page can't tell a student it just
+  // terminated from an active one. Lost on reload — until the backend
+  // exposes studActive, a reload shows the status as unknown, not Active.
+  const [terminatedGuids, setTerminatedGuids] = useState<Set<string>>(new Set())
+  const terminatedHere = !!studentGuid && terminatedGuids.has(studentGuid)
+  const alreadyTerminated = terminatedHere || studentDetail?.studActive === 0
+  // Status badge: Inactive when known terminated; the server's status when
+  // it sends one; otherwise unknown ('—') rather than assuming Active.
+  const statusLabel = alreadyTerminated
+    ? 'Terminated'
+    : studentDetail?.studActive === 1
+      ? (studentDetail.regStatusName || 'Active')
+      : (studentDetail?.regStatusName || null)
 
   const { data: reasons = [], isLoading: isReasonsLoading } = useTerminationReasonsDropdown('', true)
   const [terminationReasonGuid, setTerminationReasonGuid] = useState('')
@@ -116,18 +131,23 @@ export default function TerminateStudentPage() {
     showToast(`Loaded: ${name}`, 'success')
   }
 
-  function handleClear() {
+  function clearSelection() {
     setSelectedApplicationGuid(null)
     setSelectedStudentGuidHint(null)
     setSearch('')
     setCommittedSearch('')
     resetForm()
+  }
+
+  function handleClear() {
+    clearSelection()
     showToast('Form cleared.', 'warn')
   }
 
   function handleTerminateClick() {
     // if (!permissions.add) { showToast('You do not have permission to terminate students.', 'warn'); return }
     if (!studentGuid) { showToast('This application has no linked student record — nothing to terminate.', 'warn'); return }
+    if (alreadyTerminated) { showToast('This student is already terminated.', 'warn'); return }
     if (!terminationReasonGuid) { showToast('Please select a termination reason.', 'warn'); return }
     setConfirmOpen(true)
   }
@@ -138,6 +158,7 @@ export default function TerminateStudentPage() {
       { studentGuid, input: { terminationReasonGuid, remarks: remarks.trim() || null } },
       {
         onSuccess: () => {
+          setTerminatedGuids(prev => new Set(prev).add(studentGuid))
           setSuccessInfo({
             title: 'Student Terminated',
             subtitle: `${applicantName(profile ?? { firstName: null, lastName: null })} has been terminated — reason: ${selectedReason.reasonName}.`,
@@ -152,6 +173,9 @@ export default function TerminateStudentPage() {
   }
 
   function closeConfirm() {
+    // Closing the success popup also clears the terminated student, so the
+    // page is ready for the next search instead of showing a stale record.
+    if (successInfo) clearSelection()
     setConfirmOpen(false)
     setSuccessInfo(null)
   }
@@ -242,10 +266,13 @@ export default function TerminateStudentPage() {
                       <div className="pc-hero-sub truncate">{profile.programName ?? '—'}</div>
                       <span className="pc-hero-badge"><i className="lni lni-bookmark"></i> {profile.appRefNo}</span>
                     </div>
-                    {!isStudentDetailLoading && studentDetail && (
+                    {!isStudentDetailLoading && (studentDetail || alreadyTerminated) && (
                       <div className="pc-hero-actions pc-hero-actions-top">
-                        <span className={`badge ${alreadyTerminated ? 'badge-red' : 'badge-green'}`}>
-                          {alreadyTerminated ? 'Inactive' : (studentDetail.regStatusName || 'Active')}
+                        <span
+                          className={`badge ${alreadyTerminated ? 'badge-red' : statusLabel ? 'badge-green' : 'badge-grey'}`}
+                          title={statusLabel ? undefined : 'Status not available from the server'}
+                        >
+                          {statusLabel ?? 'Status —'}
                         </span>
                       </div>
                     )}
@@ -279,11 +306,11 @@ export default function TerminateStudentPage() {
             {studentGuid && alreadyTerminated && (
               <div className="warn-box">
                 <i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0, marginTop: 1 }}></i>
-                <div>This student is already inactive. Terminating again would still succeed server-side, but is very likely unintended — double-check before proceeding.</div>
+                <div>This student has already been terminated. Search for another student to continue.</div>
               </div>
             )}
 
-            {studentGuid && (
+            {studentGuid && !alreadyTerminated && (
               <div className="card">
                 <div className="card-hdr">
                   <div className="card-title"><span className="ctitle-icon"><i className="lni lni-shield"></i></span> Termination</div>

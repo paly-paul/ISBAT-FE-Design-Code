@@ -10200,6 +10200,24 @@ body {
   color: var(--b700)
 }
 
+/* Reset + Apply, right-aligned in the Filters header */
+.cm-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto
+}
+
+/* Stand-in for the Students + Message columns until filters are applied */
+.cm-compose-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  grid-column: 2 / -1;
+  padding: 24px;
+  overflow-y: auto
+}
+
 .cm-compose-students {
   display: flex;
   flex-direction: column;
@@ -10390,6 +10408,10 @@ body {
   .cm-compose-main {
     border: none;
     border-bottom: 1.5px solid var(--g200)
+  }
+
+  .cm-compose-empty {
+    grid-column: auto
   }
 
   .cm-stu-list {

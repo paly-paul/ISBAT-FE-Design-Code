@@ -13,6 +13,10 @@ export function useTerminateStudent() {
     onSuccess: (_data, { studentGuid }) => {
       queryClient.invalidateQueries({ queryKey: ['student-detail', studentGuid] })
       queryClient.invalidateQueries({ queryKey: ['refund-search'] })
+      // Terminate Student searches and loads profiles through the Payment
+      // Console queries, which are otherwise cached forever — refresh them so
+      // the next search reflects the termination.
+      queryClient.invalidateQueries({ queryKey: ['payment-console'] })
     },
   })
 }
