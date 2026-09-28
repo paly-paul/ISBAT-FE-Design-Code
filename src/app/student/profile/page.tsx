@@ -2,18 +2,14 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
-import { SearchSelect } from '@/components/SearchSelect'
 import { ActionMenu } from '@/components/ActionMenu'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { useStudent } from '@/hooks/student/useStudents'
 import { StudentDto, normalizeStudentDetail } from '@/lib/api/student/student'
 import { useIdCard, useIssueOrRenewIdCard, useUpdateIdCardDates, getIdCardQrImageUrl, currentCardIssue } from '@/hooks/student/useIdCards'
-import { useSponsorDetails, useSponsorCategories, useAssignSponsorCategory } from '@/hooks/student/useSponsor'
-import { useStudentRefugeeDetails, useAssignRefugeeStatus, useRemoveRefugeeStatus } from '@/hooks/student/useRefugee'
+import { useSponsorDetails } from '@/hooks/student/useSponsor'
+import { useStudentRefugeeDetails } from '@/hooks/student/useRefugee'
 import { useCountries } from '@/hooks/config/useCountries'
-import { useStudentDiscount, useAssignStudentDiscount, useUpdateStudentDiscount, useCancelStudentDiscount, DISCOUNT_STATUS_VALUES, StudentDiscountDto } from '@/hooks/student/useStudentDiscount'
-import { useDiscounts } from '@/hooks/finance/useDiscounts'
-import { CALC_TYPE_VALUES } from '@/lib/api/finance/discount'
 import { formatDate } from '@/lib/date'
 // import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -23,20 +19,17 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 // academic fields (name, programme, semester, batch, status) come from the
 // real GET /api/v1/students/:guid (useStudent) once a student is loaded via
 // StudentLookup. The ID Card tab is now wired to the real students/id-cards/*
-// endpoints (see students/id-cards/*.md), and the Sponsor field to
-// students/sponsor-assignment. Discount is now wired to the real
-// students/{guid}/discount assign/update/cancel endpoints (students/
-// student-discounts/*.md) via a management modal — the StudentDetailDto
-// discount fields are still used for the read-only summary badge shown
-// before that modal is opened, since useStudent already carries them.
-// Refugee status is wired to students/refugee/*.md the same way, via its
-// own assign/remove modal (assign is multipart — a document is mandatory).
-// Sponsor/Discount/Refugee's own dedicated GET endpoints are no longer
-// fetched automatically the moment a student loads (per request,
-// 2026-09-01) — each now fires only on demand (Sponsor: entering edit;
-// Discount: opening the management modal; Refugee: an explicit "Check
-// status" click, since it has no fallback field to show passively) — see
-// each hook call's own comment below.
+// endpoints (see students/id-cards/*.md). Sponsor is read-only here and
+// links through to Student Master's StudentSponsorModal (assign/change).
+// Discount is read-only here (the
+// StudentDetailDto discount fields useStudent already carries) — its value
+// links through to Finance's Discount Allocation, which owns assign/update/
+// cancel.
+// Refugee status is read-only here (students/refugee GET) — its value links
+// through to Student Master, whose StudentRefugeeModal owns assign/remove.
+// Sponsor's own dedicated GET endpoint is never fetched from this page (per
+// request, 2026-09-01). Refugee's is fetched on load, since the Refugee
+// Details card's visibility depends on it — see each hook call's comment.
 // Fee structure display and the communication dispatch audit
 // log still have no backend contract — page-local mock state only, same
 // "UI-first prototype" convention as Finance's Payment Collection pages.
@@ -79,18 +72,6 @@ function formatDiscountValue(amtPer: number, isPercentage: boolean, isAmount: bo
 function formatDiscount(detail: { discountStatus: string | null; calcType: string | null; amtPer: number | null } | undefined) {
   if (!detail?.discountStatus || detail.discountStatus === 'Cancelled' || detail.discountStatus === 'CancelledImmediate') return 'None'
   return detail.amtPer != null ? formatDiscountValue(detail.amtPer, detail.calcType === '2', detail.calcType === '1') : detail.discountStatus
-}
-
-// Same summary format as formatDiscount above, but for the real
-// student-discount assignment (StudentDiscountDto) — discountStatus there
-// is a confirmed-live NUMERIC enum, not the string label formatDiscount's
-// StudentDetailDto-sourced fallback expects (see studentDiscount.ts), so
-// this doesn't just reformat and delegate to it.
-function formatDiscountDetail(detail: StudentDiscountDto) {
-  if (detail.discountStatus !== DISCOUNT_STATUS_VALUES.Active) return 'None'
-  return detail.amtPer != null
-    ? formatDiscountValue(detail.amtPer, detail.calcType === CALC_TYPE_VALUES.Percentage, detail.calcType === CALC_TYPE_VALUES.Amount)
-    : 'Active'
 }
 
 function StudentProfileContent() {
@@ -137,89 +118,38 @@ function StudentProfileContent() {
   const issueOrRenewIdCard = useIssueOrRenewIdCard()
   const updateIdCardDates = useUpdateIdCardDates(student?.studentGuid ?? null)
 
-  // Real sponsor assignment — GET .../sponsor-details, resolves to null when
-  // unassigned. No longer fetched automatically on profile load (per
-  // request, 2026-09-01) — sponsorRequested gates it to only fire once the
-  // cashier actually clicks in to edit, since that's the one place the
-  // fetched value (sponsorCategoryGuid, for seeding the picker) and the
-  // restriction check both matter. The inline read-only label falls back to
-  // detail?.sponsor (StudentDetailDto's own raw field, already fetched by
-  // useStudent above) instead of a bare "Unassigned" while unrequested, so
-  // it doesn't lie about a value that simply hasn't been checked yet.
-  // `error` here is NOT "no assignment" (that's a null `data`, handled
-  // server-side as 404) — a real 401 has been observed live (2026-08-25):
-  // "You are not authorized to view sponsor details for students in this
-  // campus", despite the docs saying no fine-grained permission exists.
-  // Surfaced as "Restricted" below rather than silently reading as
-  // "Unassigned", which would misleadingly invite editing.
-  const [sponsorRequested, setSponsorRequested] = useState(false)
-  const { data: sponsorDetail, error: sponsorError } = useSponsorDetails(student?.studentGuid ?? null, !!student && sponsorRequested)
-  const sponsorRestricted = !!sponsorError
-  const [editingSponsor, setEditingSponsor] = useState(false)
-  const { data: sponsorCategoriesPage } = useSponsorCategories(editingSponsor)
-  const assignSponsorCategory = useAssignSponsorCategory()
-  const [sponsorChoice, setSponsorChoice] = useState('')
+  // Sponsor is read-only here (assign/change lives in Student Master's
+  // StudentSponsorModal). Never fetched from this page (per 2026-09-01, no
+  // eager sponsor-details call) — enabled: false only reads the shared
+  // react-query cache, so a sponsor just assigned in the modal shows here
+  // straight away; otherwise it falls back to StudentDetailDto's own
+  // detail?.sponsor, already fetched by useStudent above.
+  const { data: sponsorDetail } = useSponsorDetails(student?.studentGuid ?? null, false)
 
   // Real refugee-status record — GET /students/refugee/{guid}, resolves to
   // null when the student has no record yet (404 not_found is the common
-  // case, not an error — see getStudentRefugeeDetails). No longer fetched
-  // automatically on profile load (per request, 2026-09-01) — unlike
-  // Sponsor/Discount, StudentDetailDto carries no refugee field at all to
-  // fall back on for a passive display, so refugeeRequested gates a genuine
-  // "check status" step the cashier triggers explicitly, before the row can
-  // show either state (Refugee/Not a refugee).
-  const [refugeeRequested, setRefugeeRequested] = useState(false)
-  const { data: refugeeDetail, isFetching: isRefugeeChecking } = useStudentRefugeeDetails(student?.studentGuid ?? null, !!student && refugeeRequested)
-  const assignRefugeeStatus = useAssignRefugeeStatus()
-  const removeRefugeeStatus = useRemoveRefugeeStatus()
-  const [refugeeModalOpen, setRefugeeModalOpen] = useState(false)
-  // CountryGuid — confirmed (post-assign-refugee-status.md) as a real guid
-  // field on the student entity, not a legacy numeric code, so the option's
-  // own countryGuid is sent as-is; no index/position workaround needed.
-  // Also resolves the ID card's Nationality — GET /students/{guid} returns
+  // case, not an error — see getStudentRefugeeDetails). Fetched as soon as a
+  // student loads again (was on-demand behind a "Check status" click, per
+  // 2026-09-01) — the Profile Info tab's Refugee Details card only renders
+  // when a record exists, so the answer is needed up front to decide that.
+  const { data: refugeeDetail, isLoading: isRefugeeChecking } = useStudentRefugeeDetails(student?.studentGuid ?? null, !!student)
+  // Supporting-document preview popup. Images render as <img>; anything
+  // else (PDF, etc.) goes in an iframe and relies on the browser's viewer.
+  const [docPreviewOpen, setDocPreviewOpen] = useState(false)
+  const refugeeDocUrl = refugeeDetail?.documentUrl ?? null
+  const refugeeDocIsImage = !!refugeeDocUrl && /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(refugeeDocUrl)
+  // Resolves the ID card's Nationality — GET /students/{guid} returns
   // nationality: null alongside a populated nationalityGuid (confirmed live
   // 2026-09-28), so the name has to come from the country catalogue. Same
   // fallback chain as StudentProfileModal; the guid has been seen not to
   // match any catalogue row, in which case it stays '—'.
   const nationalityGuid = detail?.nationalityGuid ?? detail?.applicationSummary?.countryGuid ?? null
   const needsCountryLookup = !detail?.nationality && !detail?.nationalityCode && !!nationalityGuid
-  const { data: countries = [] } = useCountries(refugeeModalOpen || needsCountryLookup)
-  const refugeeCountryOptions = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
+  const { data: countries = [] } = useCountries(needsCountryLookup)
   const nationality = detail?.nationality
     || detail?.nationalityCode
     || countries.find(c => c.countryGuid === nationalityGuid)?.nationality
     || '—'
-  const [refugeeCountryGuid, setRefugeeCountryGuid] = useState('')
-  const [refugeeIdInput, setRefugeeIdInput] = useState('')
-  const [refugeeDocFile, setRefugeeDocFile] = useState<File | null>(null)
-
-  // Real discount assignment — GET /students/{guid}/discount, resolves to
-  // null when unassigned (see getStudentDiscount). No longer fetched
-  // automatically on profile load (per request, 2026-09-01) — gated on the
-  // management modal actually being open instead, since the inline
-  // read-only badge already has a real fallback (detail's own
-  // discountStatus/calcType/amtPer fields, from the always-fetched
-  // useStudent above — see formatDiscount(detail) below) and doesn't need
-  // this dedicated endpoint just to display a label. Finance's own discount
-  // catalogue (useDiscounts) backs the "which discount" picker in the
-  // management modal.
-  const [discountModalOpen, setDiscountModalOpen] = useState(false)
-  const { data: discountDetail } = useStudentDiscount(student?.studentGuid ?? null, !!student && discountModalOpen)
-  const { data: discountCatalogue = [] } = useDiscounts(discountModalOpen)
-  const assignStudentDiscount = useAssignStudentDiscount()
-  const updateStudentDiscount = useUpdateStudentDiscount()
-  const cancelStudentDiscount = useCancelStudentDiscount()
-  const [discountChoice, setDiscountChoice] = useState('')
-  const [discountCalcType, setDiscountCalcType] = useState<'Amount' | 'Percentage'>('Percentage')
-  const [discountAmtPer, setDiscountAmtPer] = useState('')
-  const [discountRemarks, setDiscountRemarks] = useState('')
-  // A cancelled assignment is still a non-null discountDetail (cancellation
-  // is a status change, not a delete — post-cancel-student-discount.md), so
-  // "is there something to edit/cancel" needs the status check too, not
-  // just "did this fetch resolve to a record at all" — otherwise the modal
-  // would offer Update/Cancel on an assignment that's already cancelled
-  // instead of reopening the Assign form for a new one.
-  const hasActiveDiscount = discountDetail?.discountStatus === DISCOUNT_STATUS_VALUES.Active
 
   // Personal-info edit form — seeded from the loaded record, editable but
   // not wired to any save endpoint (none confirmed for this workflow).
@@ -262,35 +192,6 @@ function StudentProfileContent() {
     }
   }, [currentCard])
 
-  useEffect(() => {
-    setSponsorChoice(sponsorDetail?.sponsorCategoryGuid ?? '')
-    setEditingSponsor(false)
-  }, [sponsorDetail])
-
-  // Seed the discount modal's fields whenever it's (re)opened — either from
-  // the existing assignment's terms, or discount-catalogue/50% defaults for
-  // a fresh assignment.
-  useEffect(() => {
-    if (!discountModalOpen) return
-    if (hasActiveDiscount && discountDetail) {
-      setDiscountChoice(discountDetail.discountGuid)
-      setDiscountCalcType(discountDetail.calcType === CALC_TYPE_VALUES.Amount ? 'Amount' : 'Percentage')
-      setDiscountAmtPer(discountDetail.amtPer != null ? String(discountDetail.amtPer) : '')
-      setDiscountRemarks(discountDetail.remarks ?? '')
-    } else {
-      setDiscountChoice(discountCatalogue[0]?.discountGuid ?? '')
-      setDiscountCalcType('Percentage')
-      setDiscountAmtPer('')
-      setDiscountRemarks('')
-    }
-  }, [discountModalOpen, discountDetail, hasActiveDiscount, discountCatalogue])
-
-  useEffect(() => {
-    if (!refugeeModalOpen) return
-    setRefugeeCountryGuid('')
-    setRefugeeIdInput('')
-    setRefugeeDocFile(null)
-  }, [refugeeModalOpen])
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -338,14 +239,9 @@ function StudentProfileContent() {
     if (detail?.phone) setStuPhone(detail.phone)
   }, [detail])
 
-  // sponsorRequested/refugeeRequested reset here too — a newly-loaded (or
-  // cleared) student starts back at "not checked" for both, same as a first
-  // visit, rather than carrying over the previous student's requested state.
-  function handleLoad(s: StudentDto) { setStudent(s); setSponsorRequested(false); setRefugeeRequested(false); showToast(`${s.studentName} profile loaded`, 'ok') }
+  function handleLoad(s: StudentDto) { setStudent(s); showToast(`${s.studentName} profile loaded`, 'ok') }
   function handleClear() {
     setStudent(null)
-    setSponsorRequested(false)
-    setRefugeeRequested(false)
     // Drop ?studentGuid= so the useEffect above doesn't immediately reload
     // the same student right after Clear.
     if (studentGuidParam) router.replace('/student/profile')
@@ -426,78 +322,30 @@ function StudentProfileContent() {
     window.print()
   }
 
-  function handleSaveSponsor() {
-    if (!student || !sponsorChoice) return
-    assignSponsorCategory.mutate(
-      { studentGuid: student.studentGuid, sponsorCategoryGuid: sponsorChoice },
-      { onSuccess: () => showToast('Sponsor category updated', 'ok'), onError: () => showToast('Could not update sponsor category', 'err') },
-    )
+  // Sponsor is read-only here too — assigning/changing lives in Student
+  // Master's StudentSponsorModal, which this deep-links to via ?sponsorFor=.
+  function handleManageSponsor() {
+    if (!student) return
+    router.push(`/student/student-master?sponsorFor=${student.studentGuid}&studentName=${encodeURIComponent(student.studentName)}`)
   }
 
-  function handleAssignRefugee() {
+  // Refugee status is read-only here — granting/removing lives in Student
+  // Master's own StudentRefugeeModal, which this deep-links to (the modal
+  // opens pre-loaded for this student via ?refugeeFor=).
+  function handleManageRefugee() {
     if (!student) return
-    if (!refugeeCountryGuid) { showToast('Country is required.', 'warn'); return }
-    if (!refugeeIdInput.trim()) { showToast('Refugee ID is required.', 'warn'); return }
-    if (refugeeIdInput.trim().length > 20) { showToast('Refugee ID must be 20 characters or fewer.', 'warn'); return }
-    if (!refugeeDocFile) { showToast('A supporting document is required.', 'warn'); return }
-    assignRefugeeStatus.mutate(
-      { studentGuid: student.studentGuid, countryGuid: refugeeCountryGuid, refugeeId: refugeeIdInput.trim(), document: refugeeDocFile },
-      {
-        onSuccess: () => { showToast('Refugee status granted', 'ok'); setRefugeeModalOpen(false) },
-        onError: (error: Error) => showToast(error.message || 'Could not assign refugee status', 'err'),
-      },
-    )
+    router.push(`/student/student-master?refugeeFor=${student.studentGuid}&studentName=${encodeURIComponent(student.studentName)}`)
   }
 
-  function handleRemoveRefugee() {
+  // Discount is read-only here too — assign/update/cancel lives on Finance's
+  // Discount Allocation page, which this deep-links to pre-loaded with the
+  // student (it searches by applicationGuid, with studentGuid as a hint).
+  function handleManageDiscount() {
     if (!student) return
-    removeRefugeeStatus.mutate(student.studentGuid, {
-      onSuccess: () => showToast('Refugee status removed', 'ok'),
-      onError: (error: Error) => showToast(error.message || 'Could not remove refugee status', 'err'),
-    })
-  }
-
-  function handleSaveDiscount() {
-    if (!student) return
-    const amtPer = discountAmtPer.trim() ? Number(discountAmtPer) : null
-    if (amtPer != null && amtPer <= 0) { showToast('Amount/percentage must be greater than 0.', 'warn'); return }
-    if (amtPer != null && discountCalcType === 'Percentage' && amtPer > 100) { showToast('Percentage cannot be more than 100.', 'warn'); return }
-
-    if (hasActiveDiscount) {
-      updateStudentDiscount.mutate(
-        { studentGuid: student.studentGuid, payload: { calcType: CALC_TYPE_VALUES[discountCalcType], amtPer, remarks: discountRemarks.trim() || null } },
-        { onSuccess: () => { showToast('Discount updated', 'ok'); setDiscountModalOpen(false) }, onError: (error: Error) => showToast(error.message || 'Could not update discount', 'err') },
-      )
-    } else {
-      if (!discountChoice) { showToast('Please select a discount.', 'warn'); return }
-      assignStudentDiscount.mutate(
-        {
-          studentGuid: student.studentGuid,
-          payload: {
-            discountGuid: discountChoice,
-            calcType: CALC_TYPE_VALUES[discountCalcType],
-            amtPer,
-            // No program-scoped semester list is available here to pick
-            // from (see studentDiscount.ts) — defaults to the student's own
-            // current semester rather than an invented dropdown.
-            effectiveFromSemesterGuid: detail?.currentSemesterGuid ?? null,
-            remarks: discountRemarks.trim() || null,
-          },
-        },
-        { onSuccess: () => { showToast('Discount assigned', 'ok'); setDiscountModalOpen(false) }, onError: (error: Error) => showToast(error.message || 'Could not assign discount', 'err') },
-      )
-    }
-  }
-
-  function handleCancelDiscount(includeCurrentSemester: boolean) {
-    if (!student) return
-    cancelStudentDiscount.mutate(
-      { studentGuid: student.studentGuid, includeCurrentSemester },
-      {
-        onSuccess: () => { showToast('Discount cancelled', 'ok'); setDiscountModalOpen(false) },
-        onError: (error: Error) => showToast(error.message || 'Could not cancel discount', 'err'),
-      },
-    )
+    const params = new URLSearchParams({ studentGuid: student.studentGuid, studentName: student.studentName })
+    const applicationGuid = detail?.applicationSummary?.applicationGuid
+    if (applicationGuid) params.set('applicationGuid', applicationGuid)
+    router.push('/finance/discount-allocation?' + params.toString())
   }
 
   return (
@@ -539,7 +387,13 @@ function StudentProfileContent() {
                   <div className="flex-1 min-w-0">
                     <div className="pc-hero-name truncate">{student.studentName}</div>
                     <div className="pc-hero-sub truncate">{student.programName || detail?.programme || '—'}</div>
-                    <span className="pc-hero-badge"><i className="lni lni-bookmark"></i> {studentNo} · {student.studentRegNo || detail?.regNo}</span>
+                    {/* studentNo falls back to the reg no. when studentNum is
+                        missing (see studentNo above) — only show the reg no.
+                        separately when it's actually a different value. */}
+                    <span className="pc-hero-badge">
+                      <i className="lni lni-bookmark"></i> {studentNo}
+                      {(() => { const regNo = student.studentRegNo || detail?.regNo; return regNo && regNo !== studentNo ? ` · ${regNo}` : null })()}
+                    </span>
                   </div>
                   {/* Batch/Programme Transfer, Learning Mode, Intake Transfer — tucked
                       behind a single three-dot menu instead of four always-visible
@@ -576,56 +430,24 @@ function StudentProfileContent() {
                 <div className="stu-meta-item"><div className="stu-meta-lbl">Fee Structure</div><div className="stu-meta-val">Local</div></div>
                 <div className="stu-meta-item">
                   <div className="stu-meta-lbl">Sponsor</div>
-                  {sponsorRestricted ? (
-                    <div className="stu-meta-val" title="You are not authorized to view sponsor details for students in this campus">
-                      Restricted
-                    </div>
-                  ) : editingSponsor ? (
-                    <div className="flex gap-2" style={{ alignItems: 'center' }}>
-                      <SearchSelect
-                        options={(sponsorCategoriesPage?.items ?? []).map(c => c.category)}
-                        value={(sponsorCategoriesPage?.items ?? []).find(c => c.sponsorCategoryGuid === sponsorChoice)?.category ?? ''}
-                        onChange={label => {
-                          const found = sponsorCategoriesPage?.items.find(c => c.category === label)
-                          setSponsorChoice(found?.sponsorCategoryGuid ?? '')
-                        }}
-                      />
-                      <button className="btn-icon" title="Save" onClick={handleSaveSponsor}><i className="lni lni-checkmark"></i></button>
-                      <button className="btn-icon" title="Cancel" onClick={() => setEditingSponsor(false)}><i className="lni lni-close"></i></button>
-                    </div>
-                  ) : (
-                    <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={() => { setSponsorRequested(true); setEditingSponsor(true) }} title="Click to change sponsor category">
-                      {sponsorDetail?.category ?? detail?.sponsor ?? 'Unassigned'} <i className="lni lni-pencil-alt" style={{ fontSize: 10 }}></i>
-                    </div>
-                  )}
+                  <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={handleManageSponsor} title="Assign or change sponsor in Student Master">
+                    {sponsorDetail?.category ?? detail?.sponsor ?? 'Unassigned'} <i className="lni lni-arrow-right" style={{ fontSize: 10 }}></i>
+                  </div>
                 </div>
                 <div className="stu-meta-item">
                   <div className="stu-meta-lbl">Discount</div>
-                  <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={() => setDiscountModalOpen(true)} title="Click to manage this student's discount">
-                    {discountDetail ? formatDiscountDetail(discountDetail) : formatDiscount(detail)}
-                    {' '}<i className="lni lni-pencil-alt" style={{ fontSize: 10 }}></i>
+                  <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={handleManageDiscount} title="Manage discount in Discount Allocation">
+                    {formatDiscount(detail)}
+                    {' '}<i className="lni lni-arrow-right" style={{ fontSize: 10 }}></i>
                   </div>
                 </div>
                 <div className="stu-meta-item">
                   <div className="stu-meta-lbl">Refugee Status</div>
-                  {/* No fallback field exists on StudentDetailDto for this
-                      one (unlike Sponsor/Discount) — the row starts at an
-                      explicit "not checked" state instead of guessing, and
-                      only fetches once the cashier actually asks. */}
-                  {!refugeeRequested ? (
-                    <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={() => setRefugeeRequested(true)} title="Click to check refugee status">
-                      Check status <i className="lni lni-search-alt" style={{ fontSize: 10 }}></i>
-                    </div>
-                  ) : isRefugeeChecking ? (
+                  {isRefugeeChecking ? (
                     <div className="stu-meta-val text-g400">Checking…</div>
-                  ) : refugeeDetail ? (
-                    <div className="flex gap-2" style={{ alignItems: 'center' }}>
-                      <span className="stu-meta-val">Refugee · ID {refugeeDetail.refugeeId}</span>
-                      <button className="btn-icon" title="Remove refugee status" onClick={handleRemoveRefugee} disabled={removeRefugeeStatus.isPending}><i className="lni lni-close"></i></button>
-                    </div>
                   ) : (
-                    <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={() => setRefugeeModalOpen(true)} title="Click to grant refugee status">
-                      Not a refugee <i className="lni lni-pencil-alt" style={{ fontSize: 10 }}></i>
+                    <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={handleManageRefugee} title="Manage refugee status in Student Master">
+                      {refugeeDetail ? `Refugee · ID ${refugeeDetail.refugeeId}` : 'Not a refugee'} <i className="lni lni-arrow-right" style={{ fontSize: 10 }}></i>
                     </div>
                   )}
                 </div>
@@ -670,6 +492,28 @@ function StudentProfileContent() {
                     <div className="fg"><label className="lbl">Mobile / WhatsApp</label><input className="ctrl" readOnly value={detail?.phone || '—'} /></div>
                   </div>
                 </div>
+                {/* Only rendered when the student has a refugee record —
+                    GET /students/refugee/{guid} resolves to null otherwise.
+                    Changes go through Student Master (handleManageRefugee). */}
+                {refugeeDetail && (
+                  <div className="card">
+                    <div className="card-hdr">
+                      <div className="card-title"><i className="lni lni-shield"></i> Refugee Details</div>
+                      <span className="badge badge-grey">Read-only</span>
+                    </div>
+                    <div className="g3">
+                      <div className="fg"><label className="lbl">Refugee Status</label><input className="ctrl" readOnly value="Refugee" /></div>
+                      <div className="fg"><label className="lbl">Refugee ID</label><input className="ctrl" readOnly value={refugeeDetail.refugeeId || '—'} /></div>
+                      <div className="fg">
+                        <label className="lbl">Supporting Document</label>
+                        {refugeeDetail.documentUrl
+                          ? <button className="btn btn-neu" onClick={() => setDocPreviewOpen(true)}><i className="lni lni-eye"></i> View Document</button>
+                          : <input className="ctrl" readOnly value="—" />}
+                      </div>
+                    </div>
+                    <div className="info-box"><i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12 }}>To grant or remove refugee status, use the Refugee Status field in the banner above — it opens Student Master.</div></div>
+                  </div>
+                )}
                 {/* Profile Info is display-only for now — no update endpoint wired yet.
                     Restore these (and the editable inputs above) once editing is supported. */}
                 {/* <div className="flex gap-2" style={{ justifyContent: 'flex-end', marginBottom: 20 }}>
@@ -877,81 +721,18 @@ function StudentProfileContent() {
         )}
       </div>
 
-      {refugeeModalOpen && student && (
-        <div className="modal-overlay open" onClick={() => setRefugeeModalOpen(false)}>
-          <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-            <div className="modal-hdr"><div className="modal-title"><i className="lni lni-shield"></i> Grant Refugee Status</div><button className="modal-close" onClick={() => setRefugeeModalOpen(false)}>✕</button></div>
-            <div>
-              <div className="fg"><label className="lbl">Student</label><input className="ctrl" readOnly value={student.studentName} /></div>
-              <div className="fg">
-                <label className="lbl">Country <span className="req">*</span></label>
-                <SearchSelect placeholder="-- Select Country --" options={refugeeCountryOptions} value={refugeeCountryGuid} onChange={setRefugeeCountryGuid} />
-              </div>
-              <div className="fg"><label className="lbl">Refugee ID <span className="req">*</span></label><input className="ctrl" maxLength={20} value={refugeeIdInput} onChange={e => setRefugeeIdInput(e.target.value)} placeholder="Refugee document/registration number" /></div>
-              <div className="fg">
-                <label className="lbl">Supporting Document <span className="req">*</span></label>
-                <input className="ctrl" type="file" onChange={e => setRefugeeDocFile(e.target.files?.[0] ?? null)} />
-                <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4 }}>Required — the request is rejected without it.</div>
-              </div>
+      {docPreviewOpen && refugeeDocUrl && (
+        <div className="modal-overlay open" onClick={() => setDocPreviewOpen(false)}>
+          <div className="modal modal-xl" onClick={e => e.stopPropagation()}>
+            <div className="modal-hdr"><div className="modal-title"><i className="lni lni-files"></i> Refugee Supporting Document</div><button className="modal-close" onClick={() => setDocPreviewOpen(false)}>✕</button></div>
+            <div style={{ height: '70vh', background: 'var(--g100)', borderRadius: 'var(--rsm)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {refugeeDocIsImage
+                ? <img src={refugeeDocUrl} alt="Refugee supporting document" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                : <iframe src={refugeeDocUrl} title="Refugee supporting document" style={{ width: '100%', height: '100%', border: 0 }} />}
             </div>
             <div className="modal-footer">
-              <button className="btn btn-neu" onClick={() => setRefugeeModalOpen(false)} disabled={assignRefugeeStatus.isPending}>Cancel</button>
-              {permissions.edit && <button className="btn btn-primary" onClick={handleAssignRefugee} disabled={assignRefugeeStatus.isPending}><i className="lni lni-checkmark"></i> {assignRefugeeStatus.isPending ? 'Saving…' : 'Grant Status'}</button>}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {discountModalOpen && student && (
-        <div className="modal-overlay open" onClick={() => setDiscountModalOpen(false)}>
-          <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-            <div className="modal-hdr"><div className="modal-title"><i className="lni lni-tag"></i> Manage Discount</div><button className="modal-close" onClick={() => setDiscountModalOpen(false)}>✕</button></div>
-            <div>
-              {/* A cancelled discountDetail is still "nothing currently
-                  assigned" (see hasActiveDiscount's own comment) — the
-                  discount picker reopens for it same as with no assignment
-                  at all, with a note about what it's replacing. */}
-              {discountDetail && !hasActiveDiscount && (
-                <div className="info-box" style={{ marginBottom: 12 }}>
-                  <i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i>
-                  <div style={{ fontSize: 12 }}>Previous discount &ldquo;{discountDetail.discountName}&rdquo; is {discountDetail.discountStatus === DISCOUNT_STATUS_VALUES.CancelledImmediate ? 'cancelled immediately' : 'cancelled'}. Assigning below starts a new one.</div>
-                </div>
-              )}
-              {!hasActiveDiscount && (
-                <div className="fg">
-                  <label className="lbl">Discount <span className="req">*</span></label>
-                  <SearchSelect
-                    placeholder="— Select discount —"
-                    options={discountCatalogue.map(d => ({ value: d.discountGuid, label: `${d.discountCode} — ${d.discountName}` }))}
-                    value={discountChoice}
-                    onChange={setDiscountChoice}
-                  />
-                </div>
-              )}
-              <div className="g2">
-                <div className="fg"><label className="lbl">Calculation Type</label><SearchSelect options={['Amount', 'Percentage']} value={discountCalcType} onChange={v => setDiscountCalcType(v as 'Amount' | 'Percentage')} /></div>
-                <div className="fg"><label className="lbl">{discountCalcType === 'Percentage' ? 'Percentage (%)' : 'Amount'}</label><input className="ctrl" type="number" min={0} value={discountAmtPer} onChange={e => setDiscountAmtPer(e.target.value)} placeholder="Leave blank to inherit from the discount" /></div>
-              </div>
-              <div className="fg"><label className="lbl">Remarks</label><textarea className="ctrl" rows={2} maxLength={500} value={discountRemarks} onChange={e => setDiscountRemarks(e.target.value)} /></div>
-              {hasActiveDiscount && (
-                <div className="info-box"><i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12 }}>The discount and its effective-from semester can&apos;t be changed here — cancel this assignment and assign again to change either.</div></div>
-              )}
-            </div>
-            <div className="modal-footer" style={{ justifyContent: hasActiveDiscount ? 'space-between' : 'flex-end' }}>
-              {hasActiveDiscount && (
-                <div className="flex gap-2">
-                  <button className="btn btn-neu btn-sm" onClick={() => handleCancelDiscount(false)} disabled={cancelStudentDiscount.isPending}>Cancel (from next semester)</button>
-                  {permissions.delete && <button className="btn btn-danger btn-sm" onClick={() => handleCancelDiscount(true)} disabled={cancelStudentDiscount.isPending}>Cancel Immediately</button>}
-                </div>
-              )}
-              <div className="flex gap-2">
-                <button className="btn btn-neu" onClick={() => setDiscountModalOpen(false)}>Close</button>
-                {permissions.edit && (
-                  <button className="btn btn-primary" onClick={handleSaveDiscount} disabled={assignStudentDiscount.isPending || updateStudentDiscount.isPending}>
-                    <i className="lni lni-checkmark"></i> {assignStudentDiscount.isPending || updateStudentDiscount.isPending ? 'Saving…' : hasActiveDiscount ? 'Update Terms' : 'Assign Discount'}
-                  </button>
-                )}
-              </div>
+              <a className="btn btn-neu" href={refugeeDocUrl} target="_blank" rel="noopener noreferrer"><i className="lni lni-exit-up"></i> Open in New Tab</a>
+              <button className="btn btn-primary" onClick={() => setDocPreviewOpen(false)}>Close</button>
             </div>
           </div>
         </div>

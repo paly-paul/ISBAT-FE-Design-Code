@@ -1,10 +1,10 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useSearchStudentsInfinite, useStudentProfile } from '@/hooks/finance/usePaymentConsole'
-import { refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
+import { refugeeLabel, studCategoryLabel, searchStudents } from '@/lib/api/finance/paymentConsole'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
@@ -84,7 +84,7 @@ function isCancelledStatus(status: number | null | undefined) {
   return status !== DISCOUNT_STATUS_VALUES.Active
 }
 
-export default function DiscountAllocationPage() {
+function DiscountAllocationContent() {
   const permissions = usePagePermissions()
   const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
@@ -97,8 +97,49 @@ export default function DiscountAllocationPage() {
   const [committedSearch, setCommittedSearch] = useState('')
   const [searchFocused, setSearchFocused] = useState(false)
   const searchBoxRef = useRef<HTMLDivElement>(null)
-  const [selectedApplicationGuid, setSelectedApplicationGuid] = useState<string | null>(null)
-  const [selectedStudentGuidHint, setSelectedStudentGuidHint] = useState<string | null>(null)
+  // Student Profile's read-only Discount field links here as
+  // ?studentGuid=&studentName=[&applicationGuid=] — the student is loaded
+  // straight away, same as picking them from search, and the params are
+  // cleared below so a refresh doesn't reload them. applicationGuid is only
+  // present when GET /students/{guid} carried an applicationSummary (it
+  // often doesn't); otherwise it's resolved here by running this page's own
+  // search on the name and taking the hit whose studentGuid matches.
+  const searchParams = useSearchParams()
+  const applicationGuidParam = searchParams.get('applicationGuid')
+  const [selectedApplicationGuid, setSelectedApplicationGuid] = useState<string | null>(applicationGuidParam)
+  const [selectedStudentGuidHint, setSelectedStudentGuidHint] = useState<string | null>(() => searchParams.get('studentGuid'))
+  // True while the name search above is resolving the applicationGuid —
+  // the profile query hasn't started yet, so this drives the loader alone.
+  const [isResolvingPrefill, setIsResolvingPrefill] = useState(() => !!searchParams.get('studentGuid') && !applicationGuidParam)
+  useEffect(() => {
+    const studentGuidParam = searchParams.get('studentGuid')
+    if (!studentGuidParam) return
+    const name = searchParams.get('studentName') ?? ''
+    setSearch(name)
+    router.replace('/finance/discount-allocation')
+    if (applicationGuidParam) return
+    let cancelled = false
+    searchStudents(name, 1, 50)
+      .then(res => {
+        if (cancelled) return
+        // Search hits don't reliably carry the same studentGuid (seen null/
+        // mismatched live), so fall back to an exact, unambiguous name match,
+        // then to a lone result.
+        const norm = (s: string | null | undefined) => (s ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+        const byGuid = res.items.find(a => norm(a.studentGuid) === norm(studentGuidParam))
+        const byName = res.items.filter(a => norm(searchResultName(a)) === norm(name))
+        const hit = byGuid ?? (byName.length === 1 ? byName[0] : res.items.length === 1 ? res.items[0] : undefined)
+        if (hit) {
+          setSelectedApplicationGuid(hit.applicationGuid)
+          if (hit.studentGuid) setSelectedStudentGuidHint(hit.studentGuid)
+        }
+        else showToast('Could not pre-load this student — please search for them.', 'warn')
+      })
+      .catch(() => { if (!cancelled) showToast('Could not pre-load this student — please search for them.', 'warn') })
+      .finally(() => { if (!cancelled) setIsResolvingPrefill(false) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     const t = setTimeout(() => setCommittedSearch(search.trim()), 400)
@@ -406,15 +447,27 @@ export default function DiscountAllocationPage() {
             )}
           </div>
 
-          {isProfileLoading && selectedApplicationGuid && (
-            <div className="mt-4 text-g400" style={{ fontSize: 12.5 }}>Loading applicant profile…</div>
-          )}
           {isProfileError && selectedApplicationGuid && (
             <div className="mt-4 text-clr-red" style={{ fontSize: 12.5 }}>
               <i className="lni lni-warning"></i> {profileError instanceof Error ? profileError.message : "Couldn't load this applicant's profile."}
             </div>
           )}
         </div>
+
+        {(isResolvingPrefill || (isProfileLoading && selectedApplicationGuid)) && (
+          <div className="card mt-4" style={{ padding: '48px 24px', textAlign: 'center' }}>
+            <div className="tbl-empty-inner">
+              <div className="tbl-loading-icon-wrap"><i className="lni lni-reload" /></div>
+              <div className="tbl-empty-title">Loading profile…</div>
+              <div className="tbl-empty-sub">Fetching the student&apos;s details and current discount, just a moment.</div>
+              <div className="tbl-loading-dots">
+                <span className="tbl-loading-dot" />
+                <span className="tbl-loading-dot" />
+                <span className="tbl-loading-dot" />
+              </div>
+            </div>
+          </div>
+        )}
 
         {selectedApplicationGuid && profile && (
           <div className="pc-body">
@@ -667,5 +720,13 @@ export default function DiscountAllocationPage() {
       )}
       <Toast toast={toast} />
     </>
+  )
+}
+
+export default function DiscountAllocationPage() {
+  return (
+    <Suspense>
+      <DiscountAllocationContent />
+    </Suspense>
   )
 }

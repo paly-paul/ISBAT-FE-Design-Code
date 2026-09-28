@@ -174,7 +174,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
           <>
             <ScrollTable>
               <table>
-                <thead><tr><th>Student</th><th>Reg No.</th><th>Programme</th><th>Semester</th><th>Batch</th><th>Eligibility</th><th></th></tr></thead>
+                <thead><tr><th style={{ textAlign: 'left' }}>Student</th><th>Reg No.</th><th>Programme</th><th>Semester</th><th>Batch</th><th>Eligibility</th><th></th></tr></thead>
                 <tbody>
                   {listLoading ? (
                     <tr><td colSpan={7} style={{ textAlign: 'center', padding: 16, fontSize: 12.5, color: 'var(--g400)' }}>Loading dropout students…</td></tr>
@@ -182,7 +182,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
                     <EmptyState colSpan={7} title="No dropout students" subtitle="There are no students currently marked as dropped out." />
                   ) : paginatedDropouts.map(d => (
                     <tr key={d.studentGuid}>
-                      <td className="font-bold">{d.studentName}</td>
+                      <td className="font-bold" style={{ textAlign: 'left' }}>{d.studentName}</td>
                       <td className="font-mono">{d.studentRegNo}</td>
                       <td>{d.programName || '—'}</td>
                       <td>{d.semesterName || '—'}</td>
