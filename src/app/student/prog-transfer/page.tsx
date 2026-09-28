@@ -130,7 +130,14 @@ function ProgTransferContent() {
     postProgramTransfer.mutate(
       { studentGuid: student.studentGuid, input: { newProgramGuid: targetProg, newBatchGuid: targetBatch, newSemesterGuid: targetSemester, newFeeGuid: targetFeeStructure, remarks: remarks.trim() || null } },
       {
-        onSuccess: result => { showToast(`Programme transfer executed — ${result.programTransferCode}`, 'ok'); setConfirmOpen(false); handleClear() },
+        // Keep the student loaded, same as Batch Transfer — usePostProgramTransfer
+        // invalidates detail/history, so the panel and history table refetch and
+        // show the new programme. Only the transfer form itself resets.
+        onSuccess: result => {
+          showToast(`Programme transfer executed — ${result.programTransferCode}`, 'ok')
+          setConfirmOpen(false)
+          setTargetProg(''); setTargetSemester(''); setTargetBatch(''); setTargetFeeStructure(''); setRemarks('')
+        },
         onError: (error: Error) => { showToast(error.message || 'Could not execute programme transfer', 'err'); setConfirmOpen(false) },
       }
     )

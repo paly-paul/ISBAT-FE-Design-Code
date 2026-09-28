@@ -37,7 +37,7 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 // Discount: opening the management modal; Refugee: an explicit "Check
 // status" click, since it has no fallback field to show passively) — see
 // each hook call's own comment below.
-// Fee structure/learning mode display and the communication dispatch audit
+// Fee structure display and the communication dispatch audit
 // log still have no backend contract — page-local mock state only, same
 // "UI-first prototype" convention as Finance's Payment Collection pages.
 // The old barcode/ESSL-device and photo-upload UI had no backing endpoint at
@@ -64,13 +64,21 @@ function initials(name: string) {
 function isValidEmail(v: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) }
 function isValidPhone(v: string) { return /^\+\d[\d\s]{6,14}$/.test(v.trim()) }
 
+// "15%" for a percentage, "Amt 600,000" for an amount. No currency — the
+// discount records carry none.
+function formatDiscountValue(amtPer: number, isPercentage: boolean, isAmount: boolean) {
+  const value = amtPer.toLocaleString('en-US', { maximumFractionDigits: 2 })
+  if (isPercentage) return `${value}%`
+  if (isAmount) return `Amt ${value}`
+  return value
+}
+
 // calcType is documented ("1" = Amount, "2" = Percentage) on the
 // student-discounts assign/update endpoints; StudentDetailDto carries the
 // same field for whatever discount is already resolved onto the student.
 function formatDiscount(detail: { discountStatus: string | null; calcType: string | null; amtPer: number | null } | undefined) {
   if (!detail?.discountStatus || detail.discountStatus === 'Cancelled' || detail.discountStatus === 'CancelledImmediate') return 'None'
-  const kind = detail.calcType === '2' ? '%' : detail.calcType === '1' ? 'Amt' : ''
-  return detail.amtPer != null ? `${detail.amtPer}${kind}` : detail.discountStatus
+  return detail.amtPer != null ? formatDiscountValue(detail.amtPer, detail.calcType === '2', detail.calcType === '1') : detail.discountStatus
 }
 
 // Same summary format as formatDiscount above, but for the real
@@ -80,8 +88,9 @@ function formatDiscount(detail: { discountStatus: string | null; calcType: strin
 // this doesn't just reformat and delegate to it.
 function formatDiscountDetail(detail: StudentDiscountDto) {
   if (detail.discountStatus !== DISCOUNT_STATUS_VALUES.Active) return 'None'
-  const kind = detail.calcType === CALC_TYPE_VALUES.Percentage ? '%' : detail.calcType === CALC_TYPE_VALUES.Amount ? 'Amt' : ''
-  return detail.amtPer != null ? `${detail.amtPer}${kind}` : 'Active'
+  return detail.amtPer != null
+    ? formatDiscountValue(detail.amtPer, detail.calcType === CALC_TYPE_VALUES.Percentage, detail.calcType === CALC_TYPE_VALUES.Amount)
+    : 'Active'
 }
 
 function StudentProfileContent() {
@@ -164,8 +173,19 @@ function StudentProfileContent() {
   // CountryGuid — confirmed (post-assign-refugee-status.md) as a real guid
   // field on the student entity, not a legacy numeric code, so the option's
   // own countryGuid is sent as-is; no index/position workaround needed.
-  const { data: refugeeCountries = [] } = useCountries(refugeeModalOpen)
-  const refugeeCountryOptions = refugeeCountries.map(c => ({ value: c.countryGuid, label: c.countryName }))
+  // Also resolves the ID card's Nationality — GET /students/{guid} returns
+  // nationality: null alongside a populated nationalityGuid (confirmed live
+  // 2026-09-28), so the name has to come from the country catalogue. Same
+  // fallback chain as StudentProfileModal; the guid has been seen not to
+  // match any catalogue row, in which case it stays '—'.
+  const nationalityGuid = detail?.nationalityGuid ?? detail?.applicationSummary?.countryGuid ?? null
+  const needsCountryLookup = !detail?.nationality && !detail?.nationalityCode && !!nationalityGuid
+  const { data: countries = [] } = useCountries(refugeeModalOpen || needsCountryLookup)
+  const refugeeCountryOptions = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
+  const nationality = detail?.nationality
+    || detail?.nationalityCode
+    || countries.find(c => c.countryGuid === nationalityGuid)?.nationality
+    || '—'
   const [refugeeCountryGuid, setRefugeeCountryGuid] = useState('')
   const [refugeeIdInput, setRefugeeIdInput] = useState('')
   const [refugeeDocFile, setRefugeeDocFile] = useState<File | null>(null)
@@ -203,8 +223,6 @@ function StudentProfileContent() {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [gender, setGender] = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
 
   // ID-card date fields — seeded from the real card record below (or left
   // blank for a first-time issue); joiningDate/expiryDate are the only
@@ -287,10 +305,10 @@ function StudentProfileContent() {
     // from whatever `detail` already has at the time `student` changes; the
     // effect below corrects it once `detail` itself actually resolves.
     setGender(detail?.gender || '—')
-    setStuEmail(derivedEmail)
-    setEmail(derivedEmail)
-    setStuPhone('+256 701 234 567')
-    setPhone('+256 701 234 567')
+    // Communication tab's student contact seeds from the real record, same
+    // as gender — the effect below corrects it once `detail` resolves.
+    setStuEmail(detail?.email || '')
+    setStuPhone(detail?.phone || '')
     // Same seed audit log as the mockup — illustrative dispatch/update
     // history, not real events (there's no backend for this workflow at
     // all), just re-pointed at whichever student is actually loaded.
@@ -313,6 +331,8 @@ function StudentProfileContent() {
   // whatever the effect above had at the time (stale, or the '—' fallback).
   useEffect(() => {
     if (detail?.gender) setGender(detail.gender)
+    if (detail?.email) setStuEmail(detail.email)
+    if (detail?.phone) setStuPhone(detail.phone)
   }, [detail])
 
   // sponsorRequested/refugeeRequested reset here too — a newly-loaded (or
@@ -544,12 +564,12 @@ function StudentProfileContent() {
                 <div className="pc-hero-facts">
                   <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={student.batchCode || detail?.batch || '—'}>{student.batchCode || detail?.batch || '—'}</span></div>
                   <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Semester</span><span className="pc-hero-fact-val" title={student.semesterName || detail?.semester || '—'}>{student.semesterName || detail?.semester || '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val">Campus</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val" title={detail?.campus || '—'}>{detail?.campus || '—'}</span></div>
                 </div>
               </div>
               <div className="stu-meta-row">
-                {/* Fee Structure / Learning Mode still have no backend contract — left as
-                    illustrative placeholders, same as before. */}
+                {/* Fee Structure still has no field on any student response — left as an
+                    illustrative placeholder. Learning Mode reads detail.learningMode. */}
                 <div className="stu-meta-item"><div className="stu-meta-lbl">Fee Structure</div><div className="stu-meta-val">Local</div></div>
                 <div className="stu-meta-item">
                   <div className="stu-meta-lbl">Sponsor</div>
@@ -606,7 +626,7 @@ function StudentProfileContent() {
                     </div>
                   )}
                 </div>
-                <div className="stu-meta-item"><div className="stu-meta-lbl">Learning Mode</div><div className="stu-meta-val">Campus</div></div>
+                <div className="stu-meta-item"><div className="stu-meta-lbl">Learning Mode</div><div className="stu-meta-val">{detail?.learningMode || '—'}</div></div>
                 <div className="stu-meta-item"><div className="stu-meta-lbl">Registration No.</div><div className="stu-meta-val">{student.studentRegNo || detail?.regNo}</div></div>
               </div>
             </div>
@@ -643,8 +663,8 @@ function StudentProfileContent() {
                 <div className="card">
                   <div className="card-hdr"><div className="card-title"><i className="lni lni-home"></i> Contact</div><span className="badge badge-grey">Read-only</span></div>
                   <div className="g3">
-                    <div className="fg"><label className="lbl">Primary Email</label><input className="ctrl" readOnly value={email} /></div>
-                    <div className="fg"><label className="lbl">Mobile / WhatsApp</label><input className="ctrl" readOnly value={phone} /></div>
+                    <div className="fg"><label className="lbl">Primary Email</label><input className="ctrl" readOnly value={detail?.email || '—'} /></div>
+                    <div className="fg"><label className="lbl">Mobile / WhatsApp</label><input className="ctrl" readOnly value={detail?.phone || '—'} /></div>
                   </div>
                 </div>
                 {/* Profile Info is display-only for now — no update endpoint wired yet.
@@ -762,12 +782,10 @@ function StudentProfileContent() {
                         <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Card No.</span> {currentCard?.issueCode || '—'}</div>
                         <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Batch</span> {student.batchCode || '—'}</div>
                         {/* Batch Time confirmed on the id-cards DTO itself (card.batchTimeInfo.
-                            batchTime), 2026-09-07 — Nationality still has no field anywhere on
-                            the wire (not on StudentDto/StudentDetailDto, not here either),
-                            still shown as a placeholder, same "flag the gap" convention as the
-                            commented-out photo-upload/ESSL UI above. */}
+                            batchTime), 2026-09-07. Nationality isn't on the id-cards DTO —
+                            resolved from the student detail record (see `nationality` above). */}
                         <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Batch Time</span> {card?.batchTimeInfo?.batchTime || '—'}</div>
-                        <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Nationality</span> —</div>
+                        <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Nationality</span> {nationality}</div>
                         <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Joining</span> {joiningDate ? formatDate(joiningDate) : '—'}</div>
                         <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Expiry</span> {expiryDate ? formatDate(expiryDate) : '—'}</div>
                       </div>
