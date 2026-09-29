@@ -39,6 +39,8 @@ import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 // Semester are already shown on the profile hero card to the left, so
 // repeating them in the form was redundant.
 
+const MIN_SEARCH_CHARS = 3
+
 function applicantName(a: { firstName: string | null; lastName: string | null }) {
   return `${a.firstName ?? ''}${a.lastName ? ` ${a.lastName}` : ''}`.trim() || '—'
 }
@@ -155,15 +157,18 @@ function DiscountAllocationContent() {
     return () => document.removeEventListener('mousedown', handle)
   }, [searchFocused])
 
+  // The backend's search currently only returns results from 3 characters
+  // (its documented minimum of 2 errors out live), so gate at 3 here.
   const searchTermLen = committedSearch.trim().length
+  const searchTooShort = searchTermLen > 0 && searchTermLen < MIN_SEARCH_CHARS
   const {
     data: searchPages, fetchNextPage, hasNextPage, isFetchingNextPage,
     isFetching: isSearching, isError: isSearchError, error: searchError,
   } = useSearchStudentsInfinite(
     committedSearch, 20,
-    searchFocused && (searchTermLen === 0 || searchTermLen >= 2),
+    searchFocused && !searchTooShort,
   )
-  const matches = searchPages?.pages.flatMap(p => p.items) ?? []
+  const matches = searchTooShort ? [] : searchPages?.pages.flatMap(p => p.items) ?? []
 
   function handleSearchResultsScroll(e: React.UIEvent<HTMLDivElement>) {
     if (!hasNextPage || isFetchingNextPage) return
@@ -417,13 +422,16 @@ function DiscountAllocationContent() {
                 }}
                 onScroll={handleSearchResultsScroll}
               >
-                {isSearching && matches.length === 0 && <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>Searching…</div>}
-                {!isSearching && isSearchError && matches.length === 0 && (
+                {searchTooShort && (
+                  <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>Type at least {MIN_SEARCH_CHARS} characters to search.</div>
+                )}
+                {!searchTooShort && isSearching && matches.length === 0 && <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>Searching…</div>}
+                {!searchTooShort && !isSearching && isSearchError && matches.length === 0 && (
                   <div className="text-clr-red px-3 py-2" style={{ fontSize: 12.5 }}>
                     <i className="lni lni-warning"></i> {searchError instanceof Error ? searchError.message : 'Search failed. Please try again.'}
                   </div>
                 )}
-                {!isSearching && !isSearchError && matches.length === 0 && (
+                {!searchTooShort && !isSearching && !isSearchError && matches.length === 0 && (
                   <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>
                     {committedSearch ? 'No matching applications found.' : 'No applications found.'}
                   </div>

@@ -89,6 +89,10 @@ function StudentProfileContent() {
   // manual search would populate `student` from, so the rest of the page
   // (tabs, ID card, sponsor, etc.) behaves identically either way.
   const studentGuidParam = searchParams.get('studentGuid')
+  // Student Master's View adds &from=student-master. Held in state since
+  // the params get stripped (handleClear). router.back() returns to Student
+  // Master's own URL, which carries its page/search/filters.
+  const [cameFromStudentMaster] = useState(() => searchParams.get('from') === 'student-master')
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [student, setStudent] = useState<StudentDto | null>(null)
   const [tab, setTab] = useState<TabId>('info')
@@ -353,6 +357,9 @@ function StudentProfileContent() {
       <div className="page active">
         <div className="pg-hdr">
           <div><div className="pg-title">Student Profile</div><div className="pg-sub">Search a student or navigate from Student Master to view and edit their profile</div></div>
+          {cameFromStudentMaster && (
+            <button className="btn btn-neu btn-sm" onClick={() => router.back()}><i className="lni lni-arrow-left"></i> Back to Student Master</button>
+          )}
         </div>
 
         <StudentLookup
@@ -422,6 +429,7 @@ function StudentProfileContent() {
                   <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={student.batchCode || detail?.batch || '—'}>{student.batchCode || detail?.batch || '—'}</span></div>
                   <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Semester</span><span className="pc-hero-fact-val" title={student.semesterName || detail?.semester || '—'}>{student.semesterName || detail?.semester || '—'}</span></div>
                   <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val" title={detail?.campus || '—'}>{detail?.campus || '—'}</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Intake</span><span className="pc-hero-fact-val" title={detail?.joinedIntake || '—'}>{detail?.joinedIntake || '—'}</span></div>
                 </div>
               </div>
               <div className="stu-meta-row">

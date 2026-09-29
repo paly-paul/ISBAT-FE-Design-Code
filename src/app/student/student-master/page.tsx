@@ -1,11 +1,12 @@
 'use client'
 import { Suspense, useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, ReadonlyURLSearchParams } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { GuidColumnFilter } from '@/components/GuidColumnFilter'
 import { StudentRefugeeModal } from '@/components/modals/student/StudentRefugeeModal'
+import { StudentLearningModeModal } from '@/components/modals/student/StudentLearningModeModal'
 import { StudentSponsorModal } from '@/components/modals/student/StudentSponsorModal'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
@@ -14,7 +15,7 @@ import { Pagination } from '@/components/Pagination'
 import { useStudentsFilter, useStudentsFilterMulti, getStudentsFilterCombinations, useStudentsInfinite } from '@/hooks/student/useStudents'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
-import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
+import { useSemesterCodeGroups } from '@/hooks/academic/useSemesters'
 // import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -30,13 +31,35 @@ const PAGE_SIZE = 10
 // select, same as FilterTh's own columns elsewhere — even though the
 // endpoint itself only takes one guid per field; see
 // getStudentsFilterCombinations/useStudentsFilterMulti in useStudents.ts
-// for how multiple selections turn into real results.
+// for how multiple selections turn into real results. Semester holds
+// semCodes, not guids — sent as /students/filter's semCode param.
 interface ColumnFilterState {
   programGuid: string[]
-  semesterGuid: string[]
+  semCode: string[]
   batchGuid: string[]
 }
-const EMPTY_COLUMN_FILTERS: ColumnFilterState = { programGuid: [], semesterGuid: [], batchGuid: [] }
+const EMPTY_COLUMN_FILTERS: ColumnFilterState = { programGuid: [], semCode: [], batchGuid: [] }
+
+// Page/search/column filters ↔ URL query (?page=&q=&prog=&sem=&batch=).
+// Parameters this page doesn't own (refugeeFor etc.) are ignored/dropped.
+function listStateFromUrl(params: URLSearchParams | ReadonlyURLSearchParams) {
+  const list = (key: string) => params.get(key)?.split(',').filter(Boolean) ?? []
+  return {
+    page: Math.max(1, Number(params.get('page')) || 1),
+    search: params.get('q') ?? '',
+    colFilters: { programGuid: list('prog'), semCode: list('sem'), batchGuid: list('batch') } as ColumnFilterState,
+  }
+}
+
+function listStateToQuery(page: number, search: string, colFilters: ColumnFilterState) {
+  const params = new URLSearchParams()
+  if (page > 1) params.set('page', String(page))
+  if (search.trim()) params.set('q', search)
+  if (colFilters.programGuid.length) params.set('prog', colFilters.programGuid.join(','))
+  if (colFilters.semCode.length) params.set('sem', colFilters.semCode.join(','))
+  if (colFilters.batchGuid.length) params.set('batch', colFilters.batchGuid.join(','))
+  return params.toString()
+}
 
 function StudentMasterContent() {
   // Permission checks disabled for now — every action is allowed. Restore the
@@ -57,12 +80,34 @@ function StudentMasterContent() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [selectedStudentGuid, setSelectedStudentGuid] = useState<string | null>(refugeeForParam ?? sponsorForParam)
   const [selectedStudentName, setSelectedStudentName] = useState<string | undefined>(() => searchParams.get('studentName') ?? undefined)
+  // Page, search and column filters live in the URL (?page=&q=&prog=&sem=
+  // &batch=) so opening a student's profile and coming back — browser Back
+  // or Profile's own "Back to Student Master" — lands on the same page and
+  // filters instead of resetting to page 1.
+  const [search, setSearch] = useState(() => listStateFromUrl(searchParams).search)
+  const [page, setPage] = useState(() => listStateFromUrl(searchParams).page)
+  const [colFilters, setColFilters] = useState<ColumnFilterState>(() => listStateFromUrl(searchParams).colFilters)
+  // State → URL. window.history.replaceState (not router.replace) so the URL
+  // updates synchronously — Next.js keeps useSearchParams in step with it,
+  // and the URL → state effect below never sees a stale, half-applied write
+  // (e.g. mid-typing in the search box). Also drops refugeeFor/sponsorFor/
+  // studentName once read above, so a refresh doesn't reopen their modal.
+  const stateQs = listStateToQuery(page, search, colFilters)
   useEffect(() => {
-    if (refugeeForParam || sponsorForParam) router.replace('/student/student-master')
-  }, [refugeeForParam, sponsorForParam, router])
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
-  const [colFilters, setColFilters] = useState<ColumnFilterState>(EMPTY_COLUMN_FILTERS)
+    if (window.location.search.replace(/^\?/, '') === stateQs) return
+    window.history.replaceState(null, '', stateQs ? `/student/student-master?${stateQs}` : '/student/student-master')
+  }, [stateQs])
+  // URL → state, for navigations from outside this page's own controls —
+  // e.g. clicking Student Master in the sidebar while already here swaps
+  // the URL to the bare route without remounting the page, which must reset
+  // the table to page 1 / no filters rather than leave it where it was.
+  const urlQs = searchParams.toString()
+  useEffect(() => {
+    const fromUrl = listStateFromUrl(searchParams)
+    if (listStateToQuery(fromUrl.page, fromUrl.search, fromUrl.colFilters) === stateQs) return
+    setPage(fromUrl.page); setSearch(fromUrl.search); setColFilters(fromUrl.colFilters)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlQs])
   // Which column's filter popover is open, if any — GuidColumnFilter's own
   // funnel icon toggles this, same "one open at a time, tracked by key"
   // convention academic/intake-master's own FilterTh usage already uses.
@@ -75,8 +120,8 @@ function StudentMasterContent() {
   // modal (StudentProfileModal, now unused) — same page Student Profile's
   // own sidebar link opens, just pre-loaded via ?studentGuid= instead of a
   // StudentLookup search.
-  function handleView(studentGuid: string) { router.push('/student/profile?studentGuid=' + studentGuid) }
-  function handleLearningMode(studentGuid: string) { router.push('/student/learning-mode?studentGuid=' + studentGuid) }
+  function handleView(studentGuid: string) { router.push('/student/profile?studentGuid=' + studentGuid + '&from=student-master') }
+  function handleLearningMode(studentGuid: string, studentName: string) { setSelectedStudentGuid(studentGuid); setSelectedStudentName(studentName); openModal('learning-mode-modal') }
   function handleRefugee(studentGuid: string, studentName: string) { setSelectedStudentGuid(studentGuid); setSelectedStudentName(studentName); openModal('refugee-status-modal') }
   function handleSponsor(studentGuid: string, studentName: string) { setSelectedStudentGuid(studentGuid); setSelectedStudentName(studentName); openModal('sponsor-modal') }
   function updateSearch(value?: string) { setSearch(value ?? ''); setPage(1) }
@@ -89,22 +134,18 @@ function StudentMasterContent() {
   const { data: programs = [] } = useProgramMasters()
   const { data: allBatchesData } = useBatches(1, 1000)
   const batches = allBatchesData?.items ?? []
-  // Scoped to the Programme filter, same as every other Programme→Semester
-  // cascade in this app (Programme Transfer's own included) — there's no
-  // "all semesters" mode to fall back to, so Semester's own GuidColumnFilter
-  // stays disabled until at least one Programme is picked. With multiple
-  // programmes checked, this just reads semesters off the first one —
-  // Semester Master's catalogue (Semester 1/2/3/…) is the same structure
-  // across programmes in practice, so this doesn't meaningfully narrow the
-  // list a second programme's own semesters would've offered.
-  const { data: semesters = [] } = useSemestersForProgram(colFilters.programGuid[0] ?? null, colFilters.programGuid.length > 0)
+  // Semester options come from GET /academic/semesters/filter/by-semcode —
+  // one option per semCode ("Year One - Semester One", …), usable without a
+  // Programme picked. A picked code goes to /students/filter as semCode, so
+  // one request covers every programme's semester with that code.
+  const { groups: semCodeGroups } = useSemesterCodeGroups()
 
-  const hasColFilters = colFilters.programGuid.length > 0 || colFilters.semesterGuid.length > 0 || colFilters.batchGuid.length > 0
+  const hasColFilters = colFilters.programGuid.length > 0 || colFilters.semCode.length > 0 || colFilters.batchGuid.length > 0
 
-  // get-students-filter.md's programGuid/semesterGuid/batchGuid each take
-  // exactly one guid — a multi-select column here (checking 2+ boxes) has
+  // get-students-filter.md's programGuid/semCode/batchGuid each take
+  // exactly one value — a multi-select column here (checking 2+ boxes) has
   // no single request that can express it. combos is every (programGuid ×
-  // semesterGuid × batchGuid) combination actually selected; it collapses
+  // semCode × batchGuid) combination actually selected; it collapses
   // to exactly one entry — real server pagination via useStudentsFilter
   // below — whenever each dimension has at most one value picked (the
   // common case, including "no filters at all"). More than one combination
@@ -184,24 +225,19 @@ function StudentMasterContent() {
                     isOpen={openColFilter === 'programGuid'}
                     activeFilter={colFilters.programGuid}
                     onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'programGuid' ? null : 'programGuid') }}
-                    // Semester is scoped to Programme — clears with it so a
-                    // stale semester from the previous programme doesn't
-                    // silently keep narrowing the result set.
-                    onSelect={vals => updateColFilters({ programGuid: vals, semesterGuid: [] })}
-                    onClear={() => updateColFilters({ programGuid: [], semesterGuid: [] })}
+                    onSelect={vals => updateColFilters({ programGuid: vals })}
+                    onClear={() => updateColFilters({ programGuid: [] })}
                     onClose={() => setOpenColFilter(null)}
                   />
                   <GuidColumnFilter
                     label="Semester"
-                    options={semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))}
-                    isOpen={openColFilter === 'semesterGuid'}
-                    activeFilter={colFilters.semesterGuid}
-                    onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'semesterGuid' ? null : 'semesterGuid') }}
-                    onSelect={vals => updateColFilters({ semesterGuid: vals })}
-                    onClear={() => updateColFilters({ semesterGuid: [] })}
+                    options={semCodeGroups.map(g => ({ value: g.semCode, label: g.semName }))}
+                    isOpen={openColFilter === 'semCode'}
+                    activeFilter={colFilters.semCode}
+                    onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'semCode' ? null : 'semCode') }}
+                    onSelect={vals => updateColFilters({ semCode: vals })}
+                    onClear={() => updateColFilters({ semCode: [] })}
                     onClose={() => setOpenColFilter(null)}
-                    disabled={colFilters.programGuid.length === 0}
-                    disabledHint="Select a Programme filter first"
                   />
                   <GuidColumnFilter
                     label="Batch"
@@ -221,12 +257,16 @@ function StudentMasterContent() {
                   : items.length === 0
                     ? <EmptyState colSpan={6} hasFilters={!!normalizedSearch || hasColFilters} onClearFilters={() => { setSearch(''); clearColFilters() }} />
                     : null}
-                {items.map(r => (
+                {/* Rows only once everything's in — a multi-combo fetch
+                    (e.g. a Semester pick fanning out per programme) would
+                    otherwise show partial, still-reshuffling results under
+                    the loader. */}
+                {!isLoading && items.map(r => (
                   <tr key={r.studentGuid}>
                     <td>
                       <ActionMenu>
                         <button className="btn btn-neu btn-sm" onClick={() => handleView(r.studentGuid)}><i className="lni lni-eye"></i> View</button>
-                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => handleLearningMode(r.studentGuid)}><i className="lni lni-book"></i> Learning Mode</button>}
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => handleLearningMode(r.studentGuid, r.studentName)}><i className="lni lni-book"></i> Learning Mode</button>}
                         {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => handleRefugee(r.studentGuid, r.studentName)}><i className="lni lni-shield"></i> Refugee Status</button>}
                         {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => handleSponsor(r.studentGuid, r.studentName)}><i className="lni lni-handshake"></i> Sponsor</button>}
                       </ActionMenu>
@@ -244,6 +284,7 @@ function StudentMasterContent() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="students" onPageChange={setPage} />
         </div>
       </div>
+      <StudentLearningModeModal isOpen={openModals.has('learning-mode-modal')} onClose={() => closeModal('learning-mode-modal')} showToast={showToast} studentGuid={selectedStudentGuid} studentName={selectedStudentName} />
       <StudentRefugeeModal isOpen={openModals.has('refugee-status-modal')} onClose={() => closeModal('refugee-status-modal')} showToast={showToast} studentGuid={selectedStudentGuid} studentName={selectedStudentName} />
       <StudentSponsorModal isOpen={openModals.has('sponsor-modal')} onClose={() => closeModal('sponsor-modal')} showToast={showToast} studentGuid={selectedStudentGuid} studentName={selectedStudentName} />
       <Toast toast={toast} />

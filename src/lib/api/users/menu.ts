@@ -103,6 +103,11 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
     // decision. Added 2026-09-18.
     leaf('Passout Confirmation', 'graduation', '/student/passout-confirmation'),
   ]),
+  // Learning Mode Report split out of the Learning Mode page into its own
+  // page, 2026-09-29 (GET /students/learning-mode/report).
+  section('Reports', [
+    leaf('Learning Mode Report', 'bar-chart', '/student/learning-mode-report'),
+  ]),
   // Services section hidden from the sidebar per request, 2026-09-02 — its
   // one leaf (Student Services) still exists at /student/services, just not
   // linked to. Commented out whole (not just the leaf) since Sidebar.tsx
@@ -503,9 +508,20 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
 
   const existingSections = new Set(studentModule.children.map(c => c.name))
   const missingSections = STUDENT_OPERATIONS_SECTIONS.filter(s => !existingSections.has(s.name))
+  // Reports goes right after Operations (its position in
+  // STUDENT_OPERATIONS_SECTIONS) rather than trailing below Settings; every
+  // other missing section is still appended at the end as before.
+  const missingReports = missingSections.find(s => s.name === 'Reports')
+  const otherMissing = missingSections.filter(s => s !== missingReports)
+  let finalChildren = [...studentModule.children, ...otherMissing]
+  if (missingReports) {
+    const opsIdx = finalChildren.findIndex(c => c.name === 'Operations')
+    if (opsIdx !== -1) finalChildren.splice(opsIdx + 1, 0, missingReports)
+    else finalChildren.push(missingReports)
+  }
   const finalModule = missingSections.length === 0
     ? studentModule
-    : { ...studentModule, children: [...studentModule.children, ...missingSections] }
+    : { ...studentModule, children: finalChildren }
 
   const merged = [...menu]
   merged[studentIdx] = finalModule

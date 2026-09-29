@@ -62,6 +62,9 @@ export interface StudentDetailDto extends StudentDto {
   gender?: string | null
   sponsor?: string | null
   learningMode?: string | null
+  // Intake code the student joined in (e.g. "20222") — added to
+  // GET /students/{guid} 2026-09-29.
+  joinedIntake?: string | null
   // A third live shape, confirmed against students/students/get-student-by-guid.md
   // (2026-08-17 doc) — that response has no top-level nationalityGuid at all;
   // the actual country identifier lives here instead, nested under the
@@ -133,6 +136,10 @@ export interface StudentListFilters {
 export interface StudentColumnFilters {
   programGuid?: string
   semesterGuid?: string
+  // Matches every programme's semester with this code in one request
+  // (e.g. 1 → each programme's "Year One - Semester One"). Requested from
+  // backend 2026-09-29 — not live yet; until it is, the param is ignored.
+  semCode?: string
   batchGuid?: string
   searchTerm?: string
 }
@@ -178,6 +185,7 @@ export function getStudentsFilter(page: number, pageSize: number, filters: Stude
   const params = new URLSearchParams()
   if (filters.programGuid) params.set('programGuid', filters.programGuid)
   if (filters.semesterGuid) params.set('semesterGuid', filters.semesterGuid)
+  if (filters.semCode) params.set('semCode', filters.semCode)
   if (filters.batchGuid) params.set('batchGuid', filters.batchGuid)
   if (filters.searchTerm?.trim()) params.set('searchTerm', filters.searchTerm.trim())
   params.set('page', String(page))
@@ -199,7 +207,7 @@ export function getStudentByGuid(guid: string): Promise<StudentDetailDto> {
       regNo: found.studentRegNo, batch: found.batchCode, semester: found.semesterName, programme: found.programName,
       faculty: 'Faculty of Computing', campus: 'ISBAT University - Main Campus',
       email: 'student@example.com', phone: '+256700000000',
-      nationalityGuid: null, nationality: 'Ugandan', nationalityCode: 'UG', gender: 'Female', sponsor: null, learningMode: 'Campus Mode',
+      nationalityGuid: null, nationality: 'Ugandan', nationalityCode: 'UG', gender: 'Female', sponsor: null, learningMode: 'Campus Mode', joinedIntake: '20241',
     })
   }
   return apiGet<StudentDetailDto>(`/api/v1/students/${guid}`)
