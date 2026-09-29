@@ -215,6 +215,9 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
   section('Resit & Disputes', [
     leaf('Resit Master', 'cogs', '/assessment/resit-configs'),
     leaf('Resit Calendar', 'calendar', '/assessment/resit-calendar'),
+    leaf('Resit Applications', 'folder', '/assessment/resit-applications'),
+    leaf('Resit Apply', 'pencil-alt', '/assessment/resit-apply'),
+    leaf('Resit Scheduling', 'calendar', '/assessment/resit-scheduling'),
     leaf('Resit Seating Allocator', 'users', '/assessment/resit-seating'),
     leaf('CW Reevaluation', 'reload', '/assessment/reeval'),
     leaf('CW Recheck Hub', 'search-alt', '/assessment/recheck'),
@@ -863,6 +866,34 @@ function ensureUeMaterialPrint(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+
+function ensureResitApplications(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const resitIdx = assessModule.children.findIndex(c => c.name === 'Resit & Disputes')
+  if (resitIdx === -1) return menu
+
+  const resitSection = assessModule.children[resitIdx]
+  const hasApps = resitSection.children.some(l => l.name === 'Resit Applications')
+  const hasApply = resitSection.children.some(l => l.name === 'Resit Apply')
+  if (hasApps && hasApply) return menu
+
+  let children = [...resitSection.children]
+  if (!hasApps) children.push(leaf('Resit Applications', 'folder', '/assessment/resit-applications'))
+  if (!hasApply) children.push(leaf('Resit Apply', 'pencil-alt', '/assessment/resit-apply'))
+
+  const mergedSection = { ...resitSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[resitIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
 function ensureUeMarkImport(menu: MenuNode[]): MenuNode[] {
   const assessIdx = menu.findIndex(n => n.name === 'Assessment')
   if (assessIdx === -1) return menu
@@ -919,7 +950,8 @@ export function getMenu(): Promise<MenuResult> {
       const withProgApp = ensureProgrammeApproval(withConfig)
       const withAssMaster = ensureAssessmentMaster(withProgApp)
       const withResit = ensureResitMaster(withAssMaster)
-      const withUePrint = ensureUeMaterialPrint(withResit)
+      const withResitApps = ensureResitApplications(withResit)
+      const withUePrint = ensureUeMaterialPrint(withResitApps)
       const withUeMarkImport = ensureUeMarkImport(withUePrint)
       const finalMenu = stripLectureMaster(withUeMarkImport)
       return { menu: finalMenu, isFallback: false }
