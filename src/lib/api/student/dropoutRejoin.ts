@@ -71,7 +71,11 @@ const mockDropouts: DropoutStudentDto[] = [
 
 export function getDropoutStudents(): Promise<DropoutStudentDto[]> {
   if (MOCK_AUTH) return Promise.resolve(mockDropouts)
-  return apiGet<DropoutStudentDto[] | null>('/api/v1/students/dropout-rejoin').then(data => data ?? [])
+  // Documented as a plain array, but the live response has come back as a
+  // paged object ({ items, totalCount, … }) — accept either so the page
+  // never receives a non-array.
+  return apiGet<DropoutStudentDto[] | { items?: DropoutStudentDto[] | null } | null>('/api/v1/students/dropout-rejoin')
+    .then(data => Array.isArray(data) ? data : (data?.items ?? []))
 }
 
 export function getRejoinCandidate(studentGuid: string): Promise<RejoinCandidateDto> {

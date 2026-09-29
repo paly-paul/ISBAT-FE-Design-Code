@@ -30,12 +30,19 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
   const [countryGuid, setCountryGuid] = useState('')
   const [refugeeId, setRefugeeId] = useState('')
   const [docFile, setDocFile] = useState<File | null>(null)
+  // Supporting-document preview — same popup as Student Profile's refugee
+  // row. Images render as <img>; anything else (PDF, etc.) goes in an
+  // iframe and relies on the browser's viewer.
+  const [docPreviewOpen, setDocPreviewOpen] = useState(false)
+  const refugeeDocUrl = refugeeDetail?.documentUrl ?? null
+  const refugeeDocIsImage = !!refugeeDocUrl && /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(refugeeDocUrl)
 
   useEffect(() => {
     if (!isOpen) return
     setCountryGuid('')
     setRefugeeId('')
     setDocFile(null)
+    setDocPreviewOpen(false)
   }, [isOpen])
 
   if (!isOpen || !studentGuid) return null
@@ -64,6 +71,7 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
   }
 
   return (
+    <>
     <div className="modal-overlay open" onClick={onClose}>
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr"><div className="modal-title"><i className="lni lni-shield"></i> Refugee Status</div><button className="modal-close" onClick={onClose}>✕</button></div>
@@ -76,6 +84,12 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
             <>
               <div className="info-box mb-3"><i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12.5 }}>This student already has refugee status on record.</div></div>
               <div className="fg"><label className="lbl">Refugee ID</label><input className="ctrl" readOnly value={refugeeDetail.refugeeId ?? '—'} /></div>
+              <div className="fg">
+                <label className="lbl">Supporting Document</label>
+                {refugeeDocUrl
+                  ? <div><button className="btn btn-neu" onClick={() => setDocPreviewOpen(true)}><i className="lni lni-eye"></i> View Document</button></div>
+                  : <input className="ctrl" readOnly value="—" />}
+              </div>
             </>
           ) : (
             <>
@@ -108,5 +122,25 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
         </div>
       </div>
     </div>
+
+    {/* Sibling of the main overlay (not nested) so a click on this
+        overlay doesn't bubble up and close the Refugee Status modal too. */}
+    {docPreviewOpen && refugeeDocUrl && (
+      <div className="modal-overlay open" onClick={() => setDocPreviewOpen(false)}>
+        <div className="modal modal-xl" onClick={e => e.stopPropagation()}>
+          <div className="modal-hdr"><div className="modal-title"><i className="lni lni-files"></i> Refugee Supporting Document</div><button className="modal-close" onClick={() => setDocPreviewOpen(false)}>✕</button></div>
+          <div style={{ height: '70vh', background: 'var(--g100)', borderRadius: 'var(--rsm)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {refugeeDocIsImage
+              ? <img src={refugeeDocUrl} alt="Refugee supporting document" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+              : <iframe src={refugeeDocUrl} title="Refugee supporting document" style={{ width: '100%', height: '100%', border: 0 }} />}
+          </div>
+          <div className="modal-footer">
+            <a className="btn btn-neu" href={refugeeDocUrl} target="_blank" rel="noopener noreferrer"><i className="lni lni-exit-up"></i> Open in New Tab</a>
+            <button className="btn btn-primary" onClick={() => setDocPreviewOpen(false)}>Close</button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
