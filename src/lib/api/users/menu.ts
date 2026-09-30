@@ -87,6 +87,10 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
     leaf('Batch Transfer', 'shuffle', '/student/batch-transfer'),
     leaf('Programme Transfer', 'graduation', '/student/prog-transfer'),
     leaf('Learning Mode', 'display', '/student/learning-mode'),
+    // Approval queue for Learning Mode's change requests, 2026-09-30 — no
+    // backend page registration yet, so the Operations merge in getMenu()
+    // appends it as a missing leaf in real mode too.
+    leaf('Learning Mode Approval', 'checkmark-circle', '/student/learning-mode-approval'),
     // Re-enabled and renamed from "Intake Transfer" to "Dropout Rejoin",
     // 2026-09-03 — same route (/student/intake-transfer), matching the page's
     // own "Dropout Rejoin" mode tab (its "Deferment / Period Shift" tab was
