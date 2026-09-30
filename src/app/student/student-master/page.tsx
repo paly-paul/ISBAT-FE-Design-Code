@@ -276,7 +276,7 @@ function StudentMasterContent() {
                     onClose={() => setOpenColFilter(null)}
                   />
                   <GuidColumnFilter
-                    label="Intake"
+                    label="Academic Intake"
                     options={intakeOptions}
                     isOpen={openColFilter === 'academicIntake'}
                     activeFilter={colFilters.academicIntake}
