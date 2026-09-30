@@ -13,6 +13,7 @@ export function useIaTestSchedule(testGuid: string | null) {
     queryKey: [...IA_TEST_SCHEDULE_KEY, testGuid],
     queryFn: () => getIaTestSchedule(testGuid as string),
     enabled: !!testGuid,
+    retry: false,
   })
 }
 

@@ -8,15 +8,16 @@ import { Pagination } from '@/components/Pagination'
 import { FilterTh } from '@/components/FilterTh'
 import { Toast } from '@/components/Toast'
 import { useState, useMemo } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useUeDetailedMarks, useSaveStudentUeMark, useVerifyUeMarks } from '@/hooks/assessment/useUeMarks'
+import { useIaCreationInit, useIaCreationSemesters, useIaCreationStructure } from '@/hooks/assessment/useIaCreation'
 
 export default function MarkEntryUePage() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   // Extract GUID from URL, e.g. /assessment/mark-ue?guid=xxxx
-  // Fallback to a hardcoded ID for testing if not present in URL
-  const universityExamGuid = searchParams.get('guid') || 'test-ue-guid-123'
-  
+  const universityExamGuid = searchParams.get('guid') || ''
+
   const { data: gridData, isLoading, error } = useUeDetailedMarks(universityExamGuid)
   const saveMarkMutation = useSaveStudentUeMark(universityExamGuid)
   const verifyMutation = useVerifyUeMarks(universityExamGuid)
@@ -25,7 +26,28 @@ export default function MarkEntryUePage() {
   const [page, setPage] = useState(1)
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
-  const [toast, setToast] = useState<{msg: string, type: string} | null>(null)
+  const [toast, setToast] = useState<{ msg: string, type: string } | null>(null)
+
+  // Dropdown Selections
+  const [selectedIntakeGuid, setSelectedIntakeGuid] = useState<string>('')
+  const [selectedProgramGuid, setSelectedProgramGuid] = useState<string>('')
+  const [selectedSemesterGuid, setSelectedSemesterGuid] = useState<string>('')
+  const [selectedCourseUnitGuid, setSelectedCourseUnitGuid] = useState<string>('')
+
+  // Data fetching for dropdowns
+  const { data: initData, isLoading: initLoading } = useIaCreationInit()
+  const { data: semesters, isLoading: semLoading } = useIaCreationSemesters(selectedProgramGuid || null)
+  const { data: structureRows, isLoading: structureLoading } = useIaCreationStructure(
+    selectedProgramGuid || null,
+    selectedSemesterGuid || null,
+    selectedIntakeGuid || null
+  )
+
+  const handleProgramChange = (guid: string) => {
+    setSelectedProgramGuid(guid)
+    setSelectedSemesterGuid('')
+    setSelectedCourseUnitGuid('')
+  }
 
   const showToast = (msg: string, type: string = 'success') => {
     setToast({ msg, type })
@@ -45,7 +67,7 @@ export default function MarkEntryUePage() {
       onError: (err: any) => {
         const status = err?.response?.status || err?.status;
         const errCode = err?.response?.data?.code || err?.code;
-        
+
         if (status === 400 || errCode === 'no_marks_entered') {
           showToast('Please enter marks before verifying.', 'error')
         } else if (status === 409 || errCode === 'already_verified') {
@@ -62,10 +84,10 @@ export default function MarkEntryUePage() {
 
   const handleMarkChange = (studentGuid: string, markValue: string) => {
     if (gridData?.isVerified) return;
-    
+
     let mark: number | null = parseFloat(markValue)
     if (isNaN(mark)) mark = null
-    
+
     // basic absent logic
     const isAbsent = markValue.trim().toUpperCase() === 'AB'
     if (isAbsent) mark = null
@@ -75,10 +97,10 @@ export default function MarkEntryUePage() {
 
   const students = useMemo(() => {
     let result = gridData?.students || []
-    
+
     if (search) {
       const s = search.toLowerCase()
-      result = result.filter(st => 
+      result = result.filter(st =>
         (st.studentName && st.studentName.toLowerCase().includes(s)) ||
         (st.studentRegNo && st.studentRegNo.toLowerCase().includes(s)) ||
         (st.matchingCode && st.matchingCode.toLowerCase().includes(s))
@@ -92,16 +114,7 @@ export default function MarkEntryUePage() {
     return result
   }, [gridData?.students, search, filters])
 
-  if (error) {
-    return (
-      <div className="page active p-10 flex flex-col items-center justify-center h-full text-slate-500">
-        <i className="lni lni-warning text-4xl text-amber-500 mb-4"></i>
-        <h2 className="text-xl font-bold text-slate-800 mb-2">Error Loading Exam Data</h2>
-        <p>Could not fetch data for University Exam ID: {universityExamGuid}</p>
-        <p className="text-sm mt-2 opacity-75">Please ensure the backend server is running and the exam exists.</p>
-      </div>
-    )
-  }
+
 
   return (
     <div className="page active">
@@ -122,22 +135,15 @@ export default function MarkEntryUePage() {
           <div className="pg-sub">Enter UE marks · Matching Code for anonymous marking · IA + UE pass gate enforced</div>
         </div>
         <div className="pg-actions flex items-center gap-3">
-          <SearchSelect
-            options={[
-              gridData?.examName || 'Select Exam...'
-            ]}
-            className="w-full"
-            value={gridData?.examName}
-          />
-          <button 
-            className="btn btn-secondary whitespace-nowrap" 
+          <button
+            className="btn btn-secondary whitespace-nowrap"
             onClick={() => showToast('All UE marks saved locally')}
             disabled={gridData?.isVerified}
           >
             Save All
           </button>
-          <button 
-            className="btn btn-primary whitespace-nowrap flex items-center gap-2" 
+          <button
+            className="btn btn-primary whitespace-nowrap flex items-center gap-2"
             onClick={handleVerify}
             disabled={gridData?.isVerified || verifyMutation.isPending || isLoading}
           >
@@ -146,6 +152,88 @@ export default function MarkEntryUePage() {
             ) : (
               <><i className="lni lni-shield"></i> Verify Exam</>
             )}
+          </button>
+        </div>
+      </div>
+
+      <div className="card mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-5">
+          <div className="fg mb-0">
+            <label className="lbl">Academic Session</label>
+            <SearchSelect
+              placeholder="— Select Session —"
+              value={selectedIntakeGuid}
+              onChange={setSelectedIntakeGuid}
+              disabled={initLoading}
+              options={(initData?.intakes ?? [])
+                .filter(i => i.currentIntake)
+                .map(i => ({
+                  value: i.intakeGuid,
+                  label: `${i.description ?? `Intake ${i.intakeCode}`} (Current)`,
+                }))}
+            />
+          </div>
+          <div className="fg mb-0">
+            <label className="lbl">Programme <span className="text-red-500">*</span></label>
+            <SearchSelect
+              placeholder="— Select Programme —"
+              value={selectedProgramGuid}
+              onChange={handleProgramChange}
+              disabled={initLoading}
+              options={(initData?.programs ?? []).map(p => ({
+                value: p.programGuid,
+                label: `${p.programCode} — ${p.programName}`,
+              }))}
+            />
+          </div>
+          <div className="fg mb-0">
+            <label className="lbl">Semester <span className="text-red-500">*</span></label>
+            <SearchSelect
+              placeholder="— Select Semester —"
+              value={selectedSemesterGuid}
+              onChange={(val) => { setSelectedSemesterGuid(val); setSelectedCourseUnitGuid(''); }}
+              disabled={!selectedProgramGuid || semLoading}
+              options={(semesters ?? []).map(s => ({
+                value: s.semesterGuid,
+                label: s.semName,
+              }))}
+            />
+          </div>
+          <div className="fg mb-0">
+            <label className="lbl">Course Unit <span className="text-red-500">*</span></label>
+            <SearchSelect
+              placeholder="— Select Course Unit —"
+              value={selectedCourseUnitGuid}
+              onChange={setSelectedCourseUnitGuid}
+              disabled={!selectedSemesterGuid || structureLoading}
+              options={(structureRows ?? [])
+                .filter(r => r.universityExamGuid)
+                .map(r => ({
+                  value: r.universityExamGuid!,
+                  label: `${r.unitCode} - ${r.unitName}`,
+                }))}
+            />
+          </div>
+        </div>
+        <div className="p-5 pt-0 flex gap-2">
+          <button 
+             className="btn btn-primary" 
+             disabled={!selectedCourseUnitGuid}
+             onClick={() => router.push(`/assessment/mark-ue?guid=${selectedCourseUnitGuid}`)}
+          >
+             Show Mark Sheet
+          </button>
+          <button 
+             className="btn btn-neu"
+             onClick={() => {
+                setSelectedIntakeGuid('')
+                setSelectedProgramGuid('')
+                setSelectedSemesterGuid('')
+                setSelectedCourseUnitGuid('')
+                router.push(`/assessment/mark-ue`)
+             }}
+          >
+             Refresh
           </button>
         </div>
       </div>
@@ -159,7 +247,7 @@ export default function MarkEntryUePage() {
             </div>
           </div>
         </div>
-        
+
         <div className="card-hdr">
           <div className="card-title">
             <span className="ctitle-icon"><i className="lni lni-list"></i></span> Records
@@ -177,28 +265,42 @@ export default function MarkEntryUePage() {
             <thead>
               <tr>
                 <th style={{ width: 48 }}></th>
-                <th>MATCHING<br/>CODE</th>
+                <th>MATCHING<br />CODE</th>
                 <th>REG. NO.</th>
                 <th>STUDENT</th>
-                <th>IA TOTAL<br/>(/30)</th>
+                <th>IA TOTAL<br />(/30)</th>
                 <th>IA PASS</th>
-                <th>UE RAW<br/>(/100)</th>
-                <th>UE<br/>(/70)</th>
+                <th>UE RAW<br />(/100)</th>
+                <th>UE<br />(/70)</th>
                 <th>UE PASS</th>
-                <FilterTh 
-                  label="RESULT" 
-                  opts={['PASS', 'FAIL (UE)']} 
-                  isOpen={openFilter === 'result'} 
-                  activeFilter={filters['result'] || []} 
-                  onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'result' ? null : 'result') }} 
-                  onSelect={(vals) => handleFilterSelect('result', vals)} 
-                  onClear={() => handleFilterSelect('result', [])} 
-                  onClose={() => setOpenFilter(null)} 
+                <FilterTh
+                  label="RESULT"
+                  opts={['PASS', 'FAIL (UE)']}
+                  isOpen={openFilter === 'result'}
+                  activeFilter={filters['result'] || []}
+                  onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'result' ? null : 'result') }}
+                  onSelect={(vals) => handleFilterSelect('result', vals)}
+                  onClear={() => handleFilterSelect('result', [])}
+                  onClose={() => setOpenFilter(null)}
                 />
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (
+              {!universityExamGuid ? (
+                <tr>
+                  <td colSpan={10} className="text-center py-16 text-slate-400">
+                    <i className="lni lni-calendar text-3xl mb-3 block text-slate-300"></i>
+                    No exam selected. Please enter an Exam GUID above to load students.
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={10} className="text-center py-16 text-rose-500">
+                    <i className="lni lni-warning text-3xl mb-3 block"></i>
+                    Could not fetch data for University Exam ID: {universityExamGuid}
+                  </td>
+                </tr>
+              ) : isLoading ? (
                 <TableLoadingState colSpan={10} />
               ) : students.length === 0 ? (
                 <tr>
@@ -232,10 +334,10 @@ export default function MarkEntryUePage() {
                       )}
                     </td>
                     <td>
-                      <input 
-                        type="text" 
-                        className="w-[60px] px-2 py-1 border border-slate-200 rounded text-center text-[13px] focus:outline-none focus:border-purple-500 disabled:bg-slate-100 disabled:text-slate-500" 
-                        defaultValue={student.isAbsent ? 'AB' : (student.ueRawMark ?? '')} 
+                      <input
+                        type="text"
+                        className="w-[60px] px-2 py-1 border border-slate-200 rounded text-center text-[13px] focus:outline-none focus:border-purple-500 disabled:bg-slate-100 disabled:text-slate-500"
+                        defaultValue={student.isAbsent ? 'AB' : (student.ueRawMark ?? '')}
                         disabled={gridData?.isVerified}
                         onBlur={(e) => {
                           if (e.target.value !== (student.isAbsent ? 'AB' : (student.ueRawMark?.toString() ?? ''))) {
@@ -275,7 +377,7 @@ export default function MarkEntryUePage() {
             </tbody>
           </table>
         </ScrollTable>
-        
+
         <div className="p-4 border-t border-slate-100">
           <Pagination page={page} totalPages={1} totalCount={students.length} onPageChange={setPage} />
         </div>

@@ -8,6 +8,7 @@ export function useIaCwSchedule(courseworkGuid: string | null) {
     queryKey: [IA_CW_SCHEDULE_KEY, courseworkGuid],
     queryFn: () => getIaCwSchedule(courseworkGuid!),
     enabled: !!courseworkGuid,
+    retry: false,
   })
 }
 

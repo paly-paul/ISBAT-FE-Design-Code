@@ -110,7 +110,7 @@ export default function BulkExamSchedulerPage() {
   useEffect(() => {
     getIaCreationInit()
       .then(res => setAllPrograms(res?.programs || []))
-      .catch(() => {})
+      .catch(() => { })
   }, [])
 
   // ── 3. Table Rows from Session Management API ───────────────────────────────
@@ -142,7 +142,7 @@ export default function BulkExamSchedulerPage() {
           if (current) setIntakeGuid(current.intakeGuid)
         }
       })
-      .catch(() => {})
+      .catch(() => { })
   }, [intakeGuid])
 
   // Pre-fetch live status for visible rows using the dedicated status endpoints (ia-bulk-cw-schedule/status, ia-bulk-test-schedule/status, ia-bulk-ue-schedule/status)
@@ -177,7 +177,7 @@ export default function BulkExamSchedulerPage() {
             }))
           }
         })
-        .catch(() => {})
+        .catch(() => { })
 
       // CA Status (ia-bulk-cw-schedule/status?cwNo=2)
       getBulkCwScheduleStatus({
@@ -194,7 +194,7 @@ export default function BulkExamSchedulerPage() {
             }))
           }
         })
-        .catch(() => {})
+        .catch(() => { })
 
       // Class Test Status (ia-bulk-test-schedule/status)
       getBulkTestScheduleStatus({
@@ -210,7 +210,7 @@ export default function BulkExamSchedulerPage() {
             }))
           }
         })
-        .catch(() => {})
+        .catch(() => { })
 
       // UE Status (ia-bulk-ue-schedule/status)
       getBulkUeScheduleStatus({
@@ -226,7 +226,7 @@ export default function BulkExamSchedulerPage() {
             }))
           }
         })
-        .catch(() => {})
+        .catch(() => { })
 
       // Mock Status (ia-bulk-mock-schedule/status)
       getBulkMockScheduleStatus({
@@ -242,7 +242,7 @@ export default function BulkExamSchedulerPage() {
             }))
           }
         })
-        .catch(() => {})
+        .catch(() => { })
     })
 
     return () => {
@@ -598,11 +598,10 @@ export default function BulkExamSchedulerPage() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenRowSchedule(row, 'CW')}
-                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${
-                                  cwScheduled
+                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${cwScheduled
                                     ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
                                     : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
-                                }`}
+                                  }`}
                               >
                                 {cwScheduled ? 'Scheduled' : 'Schedule'}
                               </button>
@@ -613,11 +612,10 @@ export default function BulkExamSchedulerPage() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenRowSchedule(row, 'CLASS_TEST')}
-                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${
-                                  testScheduled
+                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${testScheduled
                                     ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
                                     : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
-                                }`}
+                                  }`}
                               >
                                 {testScheduled ? 'Scheduled' : 'Schedule'}
                               </button>
@@ -628,11 +626,10 @@ export default function BulkExamSchedulerPage() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenRowSchedule(row, 'CA')}
-                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${
-                                  caScheduled
+                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${caScheduled
                                     ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
                                     : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
-                                }`}
+                                  }`}
                               >
                                 {caScheduled ? 'Scheduled' : 'Schedule'}
                               </button>
@@ -643,11 +640,10 @@ export default function BulkExamSchedulerPage() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenRowSchedule(row, 'UE')}
-                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${
-                                  ueScheduled
+                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${ueScheduled
                                     ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
                                     : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
-                                }`}
+                                  }`}
                               >
                                 {ueScheduled ? 'Scheduled' : 'Schedule'}
                               </button>
@@ -658,11 +654,10 @@ export default function BulkExamSchedulerPage() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenRowSchedule(row, 'MOCK')}
-                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${
-                                  mockScheduled
+                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${mockScheduled
                                     ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
                                     : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
-                                }`}
+                                  }`}
                               >
                                 {mockScheduled ? 'Scheduled' : 'Schedule'}
                               </button>
