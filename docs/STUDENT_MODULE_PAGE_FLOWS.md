@@ -90,8 +90,8 @@ Student Master and Profile link to other pages with `?studentGuid=<guid>`. The t
 
 The entry point for the module.
 
-1. **Table:** `GET /students/filter`, 10 rows per page. Columns: Reg No, Name, Programme, Semester, Batch, Intake (`academicIntake`).
-   - **Intake filter:** the Intake column's funnel (options from `GET /academic/intakes`) and the intake dropdown before the search box (server-side search + scroll) share one filter, sent as `academicIntake=<intake code>`.
+1. **Table:** `GET /students/filter`, 10 rows per page. Columns: Reg No, Name, Programme, Semester, Batch, Academic Intake (`academicIntake`).
+   - **Intake filter:** the Academic Intake column's funnel (options from `GET /academic/intakes`) and the intake dropdown before the search box (server-side search + scroll) share one filter, sent as `academicIntake=<intake code>`.
 2. **Column filters:** Programme, Semester and Batch. Their options come from the academic endpoints. Semester stays disabled until a programme is picked, and changing the programme clears the semester.
 3. **Multi-select filters:** the API accepts only one GUID per filter. When one value (or none) is picked per column, the page uses normal server paging. When several are ticked, `useStudentsFilterMulti` sends one request for every programme × semester × batch combination (page size 1,000 each), merges the results and pages them in the browser.
 4. **Search box:** filters the table and also shows a quick-pick dropdown from `GET /students?searchTerm=`, which loads more on scroll. The dropdown is hidden while column filters are active.
