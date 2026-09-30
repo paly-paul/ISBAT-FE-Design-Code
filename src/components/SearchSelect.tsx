@@ -160,14 +160,14 @@ export function SearchSelect({
 
   function select(val: string) {
     if (controlled) onChange?.(val)
-    else setInternal(val)
+    else { setInternal(val); onChange?.(val) }
     setOpen(false)
     onOpenChange?.(false)
   }
 
   function clear() {
     if (controlled) onChange?.('')
-    else setInternal('')
+    else { setInternal(''); onChange?.('') }
     setOpen(false)
     onOpenChange?.(false)
   }
