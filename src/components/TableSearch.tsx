@@ -17,6 +17,7 @@ interface TableSearchProps {
   // Defaults to filling the input with the picked result's `primary` text
   // (narrowing the table to just that row via the caller's own filter).
   onSelect?: (result: TableSearchResult) => void
+  onEnter?: () => void
   placeholder?: string
   className?: string
   emptyLabel?: string
@@ -64,6 +65,7 @@ export function TableSearch({
   onChange,
   results,
   onSelect,
+  onEnter,
   placeholder = 'Search…',
   className,
   emptyLabel = 'No matches',
@@ -108,6 +110,12 @@ export function TableSearch({
         value={safeValue}
         onChange={e => { onChange(e.target.value); setOpen(true) }}
         onFocus={() => { if (safeValue.trim().length >= minChars) setOpen(true) }}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && onEnter) {
+            onEnter()
+            setOpen(false)
+          }
+        }}
       />
       {open && safeValue.trim().length >= minChars && (
         <div
