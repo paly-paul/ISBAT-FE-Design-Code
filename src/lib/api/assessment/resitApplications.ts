@@ -16,7 +16,15 @@ export function getResitApplicationCourseUnits() {
       { courseUnitGuid: '56470e91-831a-476e-bf70-b63f0ab91227', unitCode: 'BIT2116', unitName: 'Data Communication & Networking', isCombined: true }
     ] as ResitAppCourseUnit[])
   }
-  return apiGet<ResitAppCourseUnit[]>('/api/v1/assessment/resit-application/applications/course-units')
+  return apiGet<any>('/api/v1/assessment/resit-application/applications/course-units')
+    .then(data => {
+      if (Array.isArray(data)) return data as ResitAppCourseUnit[]
+      if (data && typeof data === 'object') {
+        const arr = data.items || data.data || Object.values(data).find(Array.isArray)
+        if (Array.isArray(arr)) return arr as ResitAppCourseUnit[]
+      }
+      return []
+    })
 }
 
 export interface ResitApplicationQueryParams {

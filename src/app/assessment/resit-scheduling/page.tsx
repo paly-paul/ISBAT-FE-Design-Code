@@ -16,6 +16,7 @@ import {
   useResitScheduleCourseUnits,
   useCreateResitSchedule,
   useUpdateResitSchedule,
+  useResitSchedule,
   useResitCwSchedule,
   useUpdateResitCwSchedule,
   useResitCtSchedule,
@@ -77,18 +78,11 @@ function UeSchedulingTab({ showToast }: { showToast: (m: string, t?: string) => 
   const [searchInput, setSearchInput] = useState('')
   const { data: pageData, isLoading } = useResitSchedules({ page, pageSize: 10, search })
   
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editingGuid, setEditingGuid] = useState<string | null>(null)
+  const [modalState, setModalState] = useState<{ open: boolean, mode: 'add' | 'edit' | 'view', guid: string | null }>({ open: false, mode: 'add', guid: null })
   
-  const handleEdit = (guid: string) => {
-    setEditingGuid(guid)
-    setModalOpen(true)
-  }
-  
-  const handleAdd = () => {
-    setEditingGuid(null)
-    setModalOpen(true)
-  }
+  const handleView = (guid: string) => setModalState({ open: true, mode: 'view', guid })
+  const handleEdit = (guid: string) => setModalState({ open: true, mode: 'edit', guid })
+  const handleAdd = () => setModalState({ open: true, mode: 'add', guid: null })
 
   const resitContext = pageData?.resit
   const items = pageData?.schedules.items || []
@@ -146,7 +140,10 @@ function UeSchedulingTab({ showToast }: { showToast: (m: string, t?: string) => 
                 <tr key={s.resitScheduleGuid}>
                   <td>
                     <ActionMenu>
-                      <button className="btn btn-neu btn-sm" onClick={() => handleEdit(s.resitScheduleGuid)}>
+                      <button className="text-left px-4 py-2 hover:bg-slate-50 text-sm w-full flex items-center gap-2 border-b border-slate-100" onClick={() => handleView(s.resitScheduleGuid)}>
+                        <i className="lni lni-eye"></i> View
+                      </button>
+                      <button className="text-left px-4 py-2 hover:bg-slate-50 text-sm w-full flex items-center gap-2" onClick={() => handleEdit(s.resitScheduleGuid)}>
                         <i className="lni lni-pencil"></i> Edit
                       </button>
                     </ActionMenu>
@@ -180,19 +177,21 @@ function UeSchedulingTab({ showToast }: { showToast: (m: string, t?: string) => 
         </div>
       )}
       
-      {modalOpen && (
+      {modalState.open && (
         <UeScheduleModal 
-          onClose={() => setModalOpen(false)} 
+          onClose={() => setModalState({ ...modalState, open: false })} 
           showToast={showToast} 
-          editingGuid={editingGuid}
+          modalState={modalState}
         />
       )}
     </div>
   )
 }
 
-function UeScheduleModal({ onClose, showToast, editingGuid }: { onClose: () => void; showToast: (m: string, t?: string) => void; editingGuid: string | null }) {
-  const isEdit = !!editingGuid
+function UeScheduleModal({ onClose, showToast, modalState }: { onClose: () => void; showToast: (m: string, t?: string) => void; modalState: { mode: 'add' | 'edit' | 'view', guid: string | null } }) {
+  const isEdit = modalState.mode === 'edit'
+  const isView = modalState.mode === 'view'
+  const editingGuid = modalState.guid
   
   const [courseUnitGuid, setCourseUnitGuid] = useState('')
   const [ueType, setUeType] = useState(0)
@@ -213,8 +212,21 @@ function UeScheduleModal({ onClose, showToast, editingGuid }: { onClose: () => v
     queryFn: () => apiGet<any[]>('/api/v1/assessment/exam-rules')
   })
   
-  // mock edit load since we don't have the specific GET hook fully wired with a form populate here for brevity
-  // Real implementation would use useResitSchedule(editingGuid) and populate states in useEffect
+  const { data: scheduleData, isLoading: isLoadingSchedule } = useResitSchedule(editingGuid)
+
+  useEffect(() => {
+    if (scheduleData) {
+      setCourseUnitGuid(scheduleData.courseUnitGuid || '')
+      setUeType(scheduleData.ueType ?? 0)
+      setExamDate(scheduleData.examDate || '')
+      setStartTime(scheduleData.startTime || '')
+      setEndTime(scheduleData.endTime || '')
+      setMaxMark(scheduleData.maxMark ?? 100)
+      setExamType(scheduleData.examType ?? 1)
+      setPublishStatus(scheduleData.publishStatus ?? 0)
+      setExamRuleGuid(scheduleData.examRuleGuid || '')
+    }
+  }, [scheduleData])
   
   const handleSave = () => {
     if (!courseUnitGuid && !isEdit) {
@@ -233,7 +245,7 @@ function UeScheduleModal({ onClose, showToast, editingGuid }: { onClose: () => v
       examRuleGuid
     }
     
-    if (isEdit) {
+    if (isEdit && editingGuid) {
       updateMut.mutate({ guid: editingGuid, data }, {
         onSuccess: () => {
           showToast('Schedule updated')
@@ -258,14 +270,19 @@ function UeScheduleModal({ onClose, showToast, editingGuid }: { onClose: () => v
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl flex flex-col overflow-hidden max-h-full">
         <div className="flex items-center justify-between p-4 border-b border-slate-100">
-          <div className="font-bold text-[16px] text-slate-800">{isEdit ? 'Edit Schedule' : 'Add Schedule'}</div>
+          <div className="font-bold text-[16px] text-slate-800">{isView ? 'View Schedule' : isEdit ? 'Edit Schedule' : 'Add Schedule'}</div>
           <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={onClose}><i className="lni lni-close text-lg"></i></button>
         </div>
-        <div className="p-5 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+        {isLoadingSchedule ? (
+          <div className="p-10 text-center flex-1 flex items-center justify-center">
+            <i className="lni lni-spinner-solid animate-spin text-2xl text-blue-500"></i>
+          </div>
+        ) : (
+          <div className="p-5 overflow-y-auto custom-scrollbar flex flex-col gap-4">
           
           <div className="form-group">
-            <label>Course Unit {!isEdit && <span className="text-red-500">*</span>}</label>
-            <select className="form-control" value={courseUnitGuid} onChange={e => setCourseUnitGuid(e.target.value)} disabled={isEdit}>
+            <label>Course Unit {!(isEdit || isView) && <span className="text-red-500">*</span>}</label>
+            <select className="form-control" value={courseUnitGuid} onChange={e => setCourseUnitGuid(e.target.value)} disabled={isEdit || isView}>
               <option value="">-- Select Unit --</option>
               {units?.map(u => (
                 <option key={u.courseUnitGuid} value={u.courseUnitGuid} disabled={u.theoryScheduled && u.practicalScheduled}>{u.unitCode} - {u.unitName}</option>
@@ -278,10 +295,10 @@ function UeScheduleModal({ onClose, showToast, editingGuid }: { onClose: () => v
               <label>Part</label>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="radio" checked={ueType === 0} onChange={() => setUeType(0)} disabled={selectedUnit.theoryScheduled} /> Theory
+                  <input type="radio" checked={ueType === 0} onChange={() => setUeType(0)} disabled={selectedUnit.theoryScheduled || isView} /> Theory
                 </label>
                 <label className="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="radio" checked={ueType === 1} onChange={() => setUeType(1)} disabled={selectedUnit.practicalScheduled} /> Practical
+                  <input type="radio" checked={ueType === 1} onChange={() => setUeType(1)} disabled={selectedUnit.practicalScheduled || isView} /> Practical
                 </label>
               </div>
             </div>
@@ -290,11 +307,11 @@ function UeScheduleModal({ onClose, showToast, editingGuid }: { onClose: () => v
           <div className="grid grid-cols-2 gap-4">
             <div className="form-group">
               <label>Exam Date <span className="text-red-500">*</span></label>
-              <input type="date" className="form-control" value={examDate} onChange={e => setExamDate(e.target.value)} />
+              <input type="date" className="form-control" value={examDate} onChange={e => setExamDate(e.target.value)} disabled={isView} />
             </div>
             <div className="form-group">
               <label>Exam Type</label>
-              <select className="form-control" value={examType} onChange={e => setExamType(Number(e.target.value))}>
+              <select className="form-control" value={examType} onChange={e => setExamType(Number(e.target.value))} disabled={isView}>
                 <option value={0}>Online</option>
                 <option value={1}>Offline</option>
               </select>
@@ -304,22 +321,22 @@ function UeScheduleModal({ onClose, showToast, editingGuid }: { onClose: () => v
           <div className="grid grid-cols-2 gap-4">
             <div className="form-group">
               <label>Start Time <span className="text-red-500">*</span></label>
-              <input type="time" className="form-control" value={startTime} onChange={e => setStartTime(e.target.value)} />
+              <input type="time" className="form-control" value={startTime} onChange={e => setStartTime(e.target.value)} disabled={isView} />
             </div>
             <div className="form-group">
               <label>End Time <span className="text-red-500">*</span></label>
-              <input type="time" className="form-control" value={endTime} onChange={e => setEndTime(e.target.value)} />
+              <input type="time" className="form-control" value={endTime} onChange={e => setEndTime(e.target.value)} disabled={isView} />
             </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div className="form-group">
               <label>Max Mark <span className="text-red-500">*</span></label>
-              <input type="number" className="form-control" value={maxMark} onChange={e => setMaxMark(Number(e.target.value))} />
+              <input type="number" className="form-control" value={maxMark} onChange={e => setMaxMark(Number(e.target.value))} disabled={isView} />
             </div>
             <div className="form-group">
               <label>Publish Status</label>
-              <select className="form-control" value={publishStatus} onChange={e => setPublishStatus(Number(e.target.value))}>
+              <select className="form-control" value={publishStatus} onChange={e => setPublishStatus(Number(e.target.value))} disabled={isView}>
                 <option value={0}>Not Published</option>
                 <option value={1}>Published</option>
               </select>
@@ -328,7 +345,7 @@ function UeScheduleModal({ onClose, showToast, editingGuid }: { onClose: () => v
 
           <div className="form-group">
             <label>Exam Rule <span className="text-red-500">*</span></label>
-            <select className="form-control" value={examRuleGuid} onChange={e => setExamRuleGuid(e.target.value)}>
+            <select className="form-control" value={examRuleGuid} onChange={e => setExamRuleGuid(e.target.value)} disabled={isView}>
               <option value="">-- Select Rule --</option>
               {rules?.map(r => (
                 <option key={r.guid} value={r.guid}>{r.code} - {r.name}</option>
@@ -337,11 +354,14 @@ function UeScheduleModal({ onClose, showToast, editingGuid }: { onClose: () => v
           </div>
           
         </div>
+        )}
         <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
-          <button className="btn btn-white" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={createMut.isPending || updateMut.isPending}>
-            {createMut.isPending || updateMut.isPending ? 'Saving...' : 'Save Schedule'}
-          </button>
+          <button className="btn btn-white" onClick={onClose}>{isView ? 'Close' : 'Cancel'}</button>
+          {!isView && (
+            <button className="btn btn-primary" onClick={handleSave} disabled={createMut.isPending || updateMut.isPending}>
+              {createMut.isPending || updateMut.isPending ? 'Saving...' : 'Save Schedule'}
+            </button>
+          )}
         </div>
       </div>
     </div>

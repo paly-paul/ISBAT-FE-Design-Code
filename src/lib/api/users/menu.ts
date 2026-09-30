@@ -204,6 +204,7 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('UE Practical QP Print', 'printer', '/assessment/university-exam-practical-qp-print'),
     leaf('UE Project Booklet Print', 'printer', '/assessment/university-exam-project-booklet-print'),
     leaf('Resit Question Print', 'printer', '/assessment/resit-question-print'),
+    leaf('UE Attendance', 'users', '/assessment/ue-attendance'),
     leaf('UE Mark Import', 'upload', '/assessment/ue-mark-import'),
   ]),
   section('Mark Entry & Results', [
@@ -878,11 +879,13 @@ function ensureResitApplications(menu: MenuNode[]): MenuNode[] {
   const resitSection = assessModule.children[resitIdx]
   const hasApps = resitSection.children.some(l => l.name === 'Resit Applications')
   const hasApply = resitSection.children.some(l => l.name === 'Resit Apply')
-  if (hasApps && hasApply) return menu
+  const hasScheduling = resitSection.children.some(l => l.name === 'Resit Scheduling')
+  if (hasApps && hasApply && hasScheduling) return menu
 
   let children = [...resitSection.children]
   if (!hasApps) children.push(leaf('Resit Applications', 'folder', '/assessment/resit-applications'))
   if (!hasApply) children.push(leaf('Resit Apply', 'pencil-alt', '/assessment/resit-apply'))
+  if (!hasScheduling) children.push(leaf('Resit Scheduling', 'calendar', '/assessment/resit-scheduling'))
 
   const mergedSection = { ...resitSection, children }
   const mergedAssess = { ...assessModule }
@@ -911,6 +914,52 @@ function ensureUeMarkImport(menu: MenuNode[]): MenuNode[] {
   const mergedAssess = { ...assessModule }
   mergedAssess.children = [...assessModule.children]
   mergedAssess.children[ueIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
+function ensureUeAttendance(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const ueIdx = assessModule.children.findIndex(c => c.name === 'University Exam (UE)')
+  if (ueIdx === -1) return menu
+
+  const ueSection = assessModule.children[ueIdx]
+  if (ueSection.children.some(l => l.name === 'UE Attendance')) return menu
+
+  const children = [...ueSection.children, leaf('UE Attendance', 'users', '/assessment/ue-attendance')]
+
+  const mergedSection = { ...ueSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[ueIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
+function ensureResultModeration(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const markIdx = assessModule.children.findIndex(c => c.name === 'Mark Entry & Results')
+  if (markIdx === -1) return menu
+
+  const markSection = assessModule.children[markIdx]
+  if (markSection.children.some(l => l.name === 'Result & Moderation')) return menu
+
+  const children = [...markSection.children, leaf('Result & Moderation', 'bar-chart', '/assessment/moderation')]
+
+  const mergedSection = { ...markSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[markIdx] = mergedSection
 
   const mergedMenu = [...menu]
   mergedMenu[assessIdx] = mergedAssess
@@ -952,8 +1001,10 @@ export function getMenu(): Promise<MenuResult> {
       const withResit = ensureResitMaster(withAssMaster)
       const withResitApps = ensureResitApplications(withResit)
       const withUePrint = ensureUeMaterialPrint(withResitApps)
-      const withUeMarkImport = ensureUeMarkImport(withUePrint)
-      const finalMenu = stripLectureMaster(withUeMarkImport)
+      const withUeAttendance = ensureUeAttendance(withUePrint)
+      const withUeMarkImport = ensureUeMarkImport(withUeAttendance)
+      const withModeration = ensureResultModeration(withUeMarkImport)
+      const finalMenu = stripLectureMaster(withModeration)
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: stripLectureMaster(mockMenu), isFallback: true }))
