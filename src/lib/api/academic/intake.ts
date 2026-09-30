@@ -479,3 +479,24 @@ export function bulkUpdateCalendarBatch(entries: AcademicCalendarBatchEntryDto[]
   }
   return apiPatch<AcademicCalendarBatchEntryDto[]>('/api/v1/academic/intakes/calendar-batch', entries)
 }
+
+export interface IntakeDropdownItem {
+  intakeGuid: string
+  intakeCode: number
+  description: string
+  currentIntake: boolean
+  currentAdmissionIntake: boolean
+}
+
+export function getIntakesDropdown(): Promise<IntakeDropdownItem[]> {
+  if (MOCK_AUTH) {
+    return Promise.resolve(mockIntakes.map(i => ({
+      intakeGuid: i.intakeGuid,
+      intakeCode: i.intakeCode,
+      description: i.description,
+      currentIntake: i.currentIntake,
+      currentAdmissionIntake: i.currentAdmissionIntake
+    })))
+  }
+  return apiGet<IntakeDropdownItem[] | null>('/api/v1/academic/intakes/dropdown').then(data => data || [])
+}
