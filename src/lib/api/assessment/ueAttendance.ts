@@ -43,7 +43,7 @@ export interface UeAttendanceSavePayload {
   students: { studentGuid: string; isPresent: boolean }[]
 }
 
-const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
+const MOCK_AUTH = true // FORCED FOR UI VERIFICATION
 
 export function getUeAttendanceInit() {
   if (MOCK_AUTH) {

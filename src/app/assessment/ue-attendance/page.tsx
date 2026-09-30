@@ -20,7 +20,7 @@ import {
 
 export default function UeAttendancePage() {
   const queryClient = useQueryClient()
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
 
   // Form State
   const [programGuid, setProgramGuid] = useState('')
@@ -32,11 +32,14 @@ export default function UeAttendancePage() {
   // Search State
   const [searchTerm, setSearchTerm] = useState('')
 
+  // Modal State
+  const [confirmStudent, setConfirmStudent] = useState<{ studentGuid: string, name: string, isPresent: boolean } | null>(null)
+
   // Local Attendance State (editable)
   const [attendanceState, setAttendanceState] = useState<Record<string, boolean>>({})
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type })
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type })
   }
 
   // 1. Init
@@ -236,27 +239,42 @@ export default function UeAttendancePage() {
       </div>
 
       {isReadyForData && (
-        <div className="card mb-5">
-          <div className="card-body">
+        <div className="card mb-5 border-l-4 border-l-blue-500">
+          <div className="p-5 flex flex-col md:flex-row items-center gap-6">
             {loadingSchedule ? (
-              <div className="text-center p-4 text-slate-500"><i className="lni lni-spinner-solid animate-spin mr-2"></i> Loading schedule...</div>
-            ) : scheduleError ? (
-              <div className="text-center p-4 text-red-500">No scheduled exam found for this combination. Please create the exam schedule first.</div>
-            ) : schedule ? (
-              <div className="flex items-center gap-6">
-                <div>
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase">Exam Date</div>
-                  <div className="font-bold text-slate-900">{schedule.examDate}</div>
-                </div>
-                <div>
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase">Start Time</div>
-                  <div className="font-bold text-slate-900">{schedule.startTime}</div>
-                </div>
-                <div>
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase">End Time</div>
-                  <div className="font-bold text-slate-900">{schedule.endTime}</div>
-                </div>
+              <div className="flex items-center gap-3 text-slate-500 font-medium">
+                <i className="lni lni-spinner-solid animate-spin text-xl text-blue-500"></i> Fetching schedule details...
               </div>
+            ) : scheduleError ? (
+              <div className="flex items-center gap-3 text-red-500 font-medium bg-red-50 p-3 rounded-lg border border-red-100 w-full">
+                <i className="lni lni-warning text-xl"></i> No scheduled exam found for this combination. Please create the exam schedule first.
+              </div>
+            ) : schedule ? (
+              <>
+                <div className="h-14 w-14 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0 border border-blue-100 shadow-sm">
+                  <i className="lni lni-calendar text-2xl"></i>
+                </div>
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-8">
+                  <div>
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                      <i className="lni lni-calendar text-blue-500"></i> Exam Date
+                    </div>
+                    <div className="font-bold text-slate-800 text-[16px]">{schedule.examDate}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                      <i className="lni lni-alarm-clock text-blue-500"></i> Start Time
+                    </div>
+                    <div className="font-bold text-slate-800 text-[16px]">{schedule.startTime}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                      <i className="lni lni-timer text-blue-500"></i> End Time
+                    </div>
+                    <div className="font-bold text-slate-800 text-[16px]">{schedule.endTime}</div>
+                  </div>
+                </div>
+              </>
             ) : null}
           </div>
         </div>
@@ -312,7 +330,11 @@ export default function UeAttendancePage() {
                     <tr key={student.studentGuid}>
                       <td>
                         <ActionMenu>
-                          <button className="btn btn-neu btn-sm" onClick={() => handleToggleAttendance(student.studentGuid)}>
+                          <button className="btn btn-neu btn-sm" onClick={() => setConfirmStudent({
+                                studentGuid: student.studentGuid,
+                                name: student.studentName,
+                                isPresent: !!isPresent
+                              })}>
                             <i className={`lni ${isPresent ? 'lni-close' : 'lni-checkmark'}`}></i> 
                             Mark {isPresent ? 'Absent' : 'Present'}
                           </button>
@@ -342,6 +364,37 @@ export default function UeAttendancePage() {
           </table>
         </ScrollTable>
       </div>
+
+      {confirmStudent && (
+        <div className="modal-overlay open">
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <div className="modal-hdr modal-hdr-blue">
+              <div className="modal-title">Confirm Change</div>
+              <button className="modal-close" onClick={() => setConfirmStudent(null)}><i className="lni lni-close"></i></button>
+            </div>
+            <div className="modal-body p-6 text-center">
+              <div className="text-[48px] text-orange-500 mb-3"><i className="lni lni-warning"></i></div>
+              <div className="text-lg font-semibold text-slate-800 mb-2">Are you sure?</div>
+              <div className="text-[14px] text-slate-600">
+                You are about to mark <strong className="text-slate-900">{confirmStudent.name}</strong> as 
+                <strong className={confirmStudent.isPresent ? 'text-red-600' : 'text-green-600'}> {confirmStudent.isPresent ? 'Absent' : 'Present'}</strong>.
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-4 border-t border-slate-200 bg-slate-50">
+              <button className="btn btn-neu" onClick={() => setConfirmStudent(null)}>Cancel</button>
+              <button 
+                className="btn btn-primary" 
+                onClick={() => {
+                  handleToggleAttendance(confirmStudent.studentGuid)
+                  setConfirmStudent(null)
+                }}
+              >
+                Yes, Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && <Toast toast={toast} />}
     </div>

@@ -13,7 +13,7 @@ interface TableSearchProps {
   // Caller still owns the actual match logic (each table's searchable
   // fields differ) — this component only owns the open/close behavior and
   // dropdown rendering, capped to whatever list the caller passes in.
-  results: TableSearchResult[]
+  results?: TableSearchResult[]
   // Defaults to filling the input with the picked result's `primary` text
   // (narrowing the table to just that row via the caller's own filter).
   onSelect?: (result: TableSearchResult) => void
@@ -54,6 +54,7 @@ interface TableSearchProps {
   onLoadMore?: () => void
   hasMore?: boolean
   loadingMore?: boolean
+  disabled?: boolean
 }
 
 // Search-by-code/name input + live "as you type" results dropdown, meant to
@@ -74,6 +75,7 @@ export function TableSearch({
   onLoadMore,
   hasMore = false,
   loadingMore = false,
+  disabled = false,
 }: TableSearchProps) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -107,6 +109,7 @@ export function TableSearch({
       <input
         className="ctrl"
         placeholder={placeholder}
+        disabled={disabled}
         value={safeValue}
         onChange={e => { onChange(e.target.value); setOpen(true) }}
         onFocus={() => { if (safeValue.trim().length >= minChars) setOpen(true) }}
@@ -117,7 +120,7 @@ export function TableSearch({
           }
         }}
       />
-      {open && safeValue.trim().length >= minChars && (
+      {open && results !== undefined && safeValue.trim().length >= minChars && (
         <div
           className="absolute left-0 right-0 top-full mt-1 bg-white border border-g200 rounded-lg shadow-lg z-20 max-h-56 overflow-y-auto"
           onScroll={handleResultsScroll}
