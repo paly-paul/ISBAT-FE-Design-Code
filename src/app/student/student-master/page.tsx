@@ -6,7 +6,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { GuidColumnFilter } from '@/components/GuidColumnFilter'
 import { IntakeSearchPicker } from '@/components/IntakeSearchPicker'
-import { useIntakesByGuids } from '@/hooks/academic/useIntakes'
+import { useIntakes } from '@/hooks/academic/useIntakes'
 import { StudentRefugeeModal } from '@/components/modals/student/StudentRefugeeModal'
 import { StudentLearningModeModal } from '@/components/modals/student/StudentLearningModeModal'
 import { StudentSponsorModal } from '@/components/modals/student/StudentSponsorModal'
@@ -34,35 +34,37 @@ const PAGE_SIZE = 10
 // endpoint itself only takes one guid per field; see
 // getStudentsFilterCombinations/useStudentsFilterMulti in useStudents.ts
 // for how multiple selections turn into real results. Semester holds
-// semCodes, not guids — sent as /students/filter's semCode param.
+// semCodes, not guids — sent as /students/filter's semCode param. Intake
+// holds intake codes (e.g. "20241"), sent as academicIntake — set from
+// either the Intake column's funnel or the intake dropdown in the header.
 interface ColumnFilterState {
   programGuid: string[]
   semCode: string[]
   batchGuid: string[]
+  academicIntake: string[]
 }
-const EMPTY_COLUMN_FILTERS: ColumnFilterState = { programGuid: [], semCode: [], batchGuid: [] }
+const EMPTY_COLUMN_FILTERS: ColumnFilterState = { programGuid: [], semCode: [], batchGuid: [], academicIntake: [] }
 
-// Page/intake/search/column filters ↔ URL query (?page=&intake=&q=&prog=
-// &sem=&batch=). Parameters this page doesn't own (refugeeFor etc.) are
+// Page/search/column filters ↔ URL query (?page=&q=&prog=&sem=&batch=
+// &intake=). Parameters this page doesn't own (refugeeFor etc.) are
 // ignored/dropped.
 function listStateFromUrl(params: URLSearchParams | ReadonlyURLSearchParams) {
   const list = (key: string) => params.get(key)?.split(',').filter(Boolean) ?? []
   return {
     page: Math.max(1, Number(params.get('page')) || 1),
-    intakeGuid: params.get('intake') ?? '',
     search: params.get('q') ?? '',
-    colFilters: { programGuid: list('prog'), semCode: list('sem'), batchGuid: list('batch') } as ColumnFilterState,
+    colFilters: { programGuid: list('prog'), semCode: list('sem'), batchGuid: list('batch'), academicIntake: list('intake') } as ColumnFilterState,
   }
 }
 
-function listStateToQuery(page: number, intakeGuid: string, search: string, colFilters: ColumnFilterState) {
+function listStateToQuery(page: number, search: string, colFilters: ColumnFilterState) {
   const params = new URLSearchParams()
   if (page > 1) params.set('page', String(page))
-  if (intakeGuid) params.set('intake', intakeGuid)
   if (search.trim()) params.set('q', search)
   if (colFilters.programGuid.length) params.set('prog', colFilters.programGuid.join(','))
   if (colFilters.semCode.length) params.set('sem', colFilters.semCode.join(','))
   if (colFilters.batchGuid.length) params.set('batch', colFilters.batchGuid.join(','))
+  if (colFilters.academicIntake.length) params.set('intake', colFilters.academicIntake.join(','))
   return params.toString()
 }
 
@@ -92,13 +94,12 @@ function StudentMasterContent() {
   const [search, setSearch] = useState(() => listStateFromUrl(searchParams).search)
   const [page, setPage] = useState(() => listStateFromUrl(searchParams).page)
   const [colFilters, setColFilters] = useState<ColumnFilterState>(() => listStateFromUrl(searchParams).colFilters)
-  const [intakeGuid, setIntakeGuid] = useState(() => listStateFromUrl(searchParams).intakeGuid)
   // State → URL. window.history.replaceState (not router.replace) so the URL
   // updates synchronously — Next.js keeps useSearchParams in step with it,
   // and the URL → state effect below never sees a stale, half-applied write
   // (e.g. mid-typing in the search box). Also drops refugeeFor/sponsorFor/
   // studentName once read above, so a refresh doesn't reopen their modal.
-  const stateQs = listStateToQuery(page, intakeGuid, search, colFilters)
+  const stateQs = listStateToQuery(page, search, colFilters)
   useEffect(() => {
     if (window.location.search.replace(/^\?/, '') === stateQs) return
     window.history.replaceState(null, '', stateQs ? `/student/student-master?${stateQs}` : '/student/student-master')
@@ -110,8 +111,8 @@ function StudentMasterContent() {
   const urlQs = searchParams.toString()
   useEffect(() => {
     const fromUrl = listStateFromUrl(searchParams)
-    if (listStateToQuery(fromUrl.page, fromUrl.intakeGuid, fromUrl.search, fromUrl.colFilters) === stateQs) return
-    setPage(fromUrl.page); setIntakeGuid(fromUrl.intakeGuid); setSearch(fromUrl.search); setColFilters(fromUrl.colFilters)
+    if (listStateToQuery(fromUrl.page, fromUrl.search, fromUrl.colFilters) === stateQs) return
+    setPage(fromUrl.page); setSearch(fromUrl.search); setColFilters(fromUrl.colFilters)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlQs])
   // Which column's filter popover is open, if any — GuidColumnFilter's own
@@ -131,7 +132,6 @@ function StudentMasterContent() {
   function handleRefugee(studentGuid: string, studentName: string) { setSelectedStudentGuid(studentGuid); setSelectedStudentName(studentName); openModal('refugee-status-modal') }
   function handleSponsor(studentGuid: string, studentName: string) { setSelectedStudentGuid(studentGuid); setSelectedStudentName(studentName); openModal('sponsor-modal') }
   function updateSearch(value?: string) { setSearch(value ?? ''); setPage(1) }
-  function updateIntake(guid: string) { setIntakeGuid(guid); setPage(1) }
   // Closes whichever column popover is open — every call site here is a
   // committed choice (OK or Reset inside GuidColumnFilter), same as
   // FilterTh's own onSelect/onClear handlers closing the filter themselves.
@@ -147,16 +147,19 @@ function StudentMasterContent() {
   // one request covers every programme's semester with that code.
   const { groups: semCodeGroups } = useSemesterCodeGroups()
 
-  // Intake dropdown's trigger label — the dropdown itself (IntakeSearchPicker)
-  // pages through the intake list server-side, so the picked intake's label
-  // is resolved by guid, which also covers a guid restored from the URL.
-  const intakeByGuid = useIntakesByGuids(intakeGuid ? [intakeGuid] : [])
-  const selectedIntake = intakeGuid ? intakeByGuid.get(intakeGuid) : undefined
-  const selectedIntakeLabel = selectedIntake ? `${selectedIntake.intakeCode} — ${selectedIntake.description}` : intakeGuid ? 'Loading…' : null
+  // Intake column funnel options, and the label lookup for the header
+  // dropdown's trigger (which itself pages intakes server-side via
+  // IntakeSearchPicker). Both views share colFilters.academicIntake.
+  const { data: intakes = [] } = useIntakes()
+  const intakeOptions = intakes.map(i => ({ value: String(i.intakeCode), label: `${i.intakeCode} — ${i.description}` }))
+  const pickedIntakes = colFilters.academicIntake
+  const selectedIntakeLabel = pickedIntakes.length === 0
+    ? null
+    : pickedIntakes.length === 1
+      ? intakeOptions.find(o => o.value === pickedIntakes[0])?.label ?? pickedIntakes[0]
+      : `${pickedIntakes.length} intakes`
 
-  // Intake counts here too: the search dropdown's quick-jump matches below
-  // aren't intake-filtered either.
-  const hasColFilters = !!intakeGuid || colFilters.programGuid.length > 0 || colFilters.semCode.length > 0 || colFilters.batchGuid.length > 0
+  const hasColFilters = colFilters.programGuid.length > 0 || colFilters.semCode.length > 0 || colFilters.batchGuid.length > 0 || colFilters.academicIntake.length > 0
 
   // get-students-filter.md's programGuid/semCode/batchGuid each take
   // exactly one value — a multi-select column here (checking 2+ boxes) has
@@ -169,7 +172,7 @@ function StudentMasterContent() {
   // full and merges/paginates client-side — see that hook's own comment in
   // useStudents.ts for why.
   const normalizedSearch = (search || '').trim()
-  const combos = getStudentsFilterCombinations(colFilters, normalizedSearch || undefined, intakeGuid || undefined)
+  const combos = getStudentsFilterCombinations(colFilters, normalizedSearch || undefined)
   const isMultiCombo = combos.length > 1
 
   const singleQuery = useStudentsFilter(page, PAGE_SIZE, combos[0], !isMultiCombo)
@@ -205,8 +208,8 @@ function StudentMasterContent() {
                 className="w-56"
                 placeholder="All intakes"
                 selectedLabel={selectedIntakeLabel}
-                onSelect={i => updateIntake(i.intakeGuid)}
-                onClear={() => updateIntake('')}
+                onSelect={i => updateColFilters({ academicIntake: [String(i.intakeCode)] })}
+                onClear={() => updateColFilters({ academicIntake: [] })}
               />
               <TableSearch
                 className="w-56"
@@ -272,13 +275,23 @@ function StudentMasterContent() {
                     onClear={() => updateColFilters({ batchGuid: [] })}
                     onClose={() => setOpenColFilter(null)}
                   />
+                  <GuidColumnFilter
+                    label="Intake"
+                    options={intakeOptions}
+                    isOpen={openColFilter === 'academicIntake'}
+                    activeFilter={colFilters.academicIntake}
+                    onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'academicIntake' ? null : 'academicIntake') }}
+                    onSelect={vals => updateColFilters({ academicIntake: vals })}
+                    onClear={() => updateColFilters({ academicIntake: [] })}
+                    onClose={() => setOpenColFilter(null)}
+                  />
                 </tr>
               </thead>
               <tbody>
                 {isLoading
-                  ? <TableLoadingState colSpan={6} />
+                  ? <TableLoadingState colSpan={7} />
                   : items.length === 0
-                    ? <EmptyState colSpan={6} hasFilters={!!normalizedSearch || hasColFilters} onClearFilters={() => { setSearch(''); setIntakeGuid(''); clearColFilters() }} />
+                    ? <EmptyState colSpan={7} hasFilters={!!normalizedSearch || hasColFilters} onClearFilters={() => { setSearch(''); clearColFilters() }} />
                     : null}
                 {/* Rows only once everything's in — a multi-combo fetch
                     (e.g. a Semester pick fanning out per programme) would
@@ -299,6 +312,7 @@ function StudentMasterContent() {
                     <td>{r.programName || '—'}</td>
                     <td>{r.semesterName || '—'}</td>
                     <td>{r.batchCode || '—'}</td>
+                    <td className="font-mono">{r.academicIntake || '—'}</td>
                   </tr>
                 ))}
               </tbody>

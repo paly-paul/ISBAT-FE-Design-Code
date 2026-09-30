@@ -13,6 +13,9 @@ export interface StudentDto {
   programName: string
   semesterName: string
   batchCode: string
+  // Intake code (e.g. 20241) — on /students/filter list items since
+  // 2026-09-30; absent on older responses.
+  academicIntake?: number | null
 }
 
 // Confirmed via a real GET /api/v1/students/:guid response. Everything past
@@ -141,9 +144,9 @@ export interface StudentColumnFilters {
   // backend 2026-09-29 — not live yet; until it is, the param is ignored.
   semCode?: string
   batchGuid?: string
-  // Student Master's intake dropdown. Not in get-students-filter.md yet
-  // (2026-09-30) — until the backend accepts it, the param is ignored.
-  intakeGuid?: string
+  // Intake code (e.g. "20241"), matching the list items' own academicIntake
+  // field — Student Master's intake dropdown and Intake column filter.
+  academicIntake?: string
   searchTerm?: string
 }
 
@@ -190,7 +193,7 @@ export function getStudentsFilter(page: number, pageSize: number, filters: Stude
   if (filters.semesterGuid) params.set('semesterGuid', filters.semesterGuid)
   if (filters.semCode) params.set('semCode', filters.semCode)
   if (filters.batchGuid) params.set('batchGuid', filters.batchGuid)
-  if (filters.intakeGuid) params.set('intakeGuid', filters.intakeGuid)
+  if (filters.academicIntake) params.set('academicIntake', filters.academicIntake)
   if (filters.searchTerm?.trim()) params.set('searchTerm', filters.searchTerm.trim())
   params.set('page', String(page))
   params.set('pageSize', String(pageSize))
