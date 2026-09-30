@@ -6,6 +6,14 @@ import {
   updateStudentLearningMode,
   LearningModeReportFilters,
 } from '@/lib/api/student/learningMode'
+import {
+  approveLearningModeRequest,
+  createLearningModeRequest,
+  getPendingLearningModeRequestForStudent,
+  getPendingLearningModeRequests,
+  rejectLearningModeRequest,
+  CreateLearningModeRequestInput,
+} from '@/lib/api/student/learningModeRequests'
 
 const LEARNING_MODE_KEY = ['learning-mode']
 
@@ -53,4 +61,56 @@ export function useLearningModeReport(filters: LearningModeReportFilters | null,
   })
 }
 
+// Change requests — see learningModeRequests.ts for why these are
+// browser-local for now.
+const REQUESTS_KEY = [...LEARNING_MODE_KEY, 'requests']
+
+export function usePendingLearningModeRequests() {
+  return useQuery({
+    queryKey: REQUESTS_KEY,
+    queryFn: getPendingLearningModeRequests,
+    staleTime: 0,
+  })
+}
+
+export function usePendingLearningModeRequestForStudent(studentGuid: string | null) {
+  return useQuery({
+    queryKey: [...REQUESTS_KEY, 'student', studentGuid],
+    queryFn: () => getPendingLearningModeRequestForStudent(studentGuid as string),
+    enabled: !!studentGuid,
+    staleTime: 0,
+  })
+}
+
+export function useCreateLearningModeRequest() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CreateLearningModeRequestInput) => createLearningModeRequest(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: REQUESTS_KEY }),
+  })
+}
+
+export function useApproveLearningModeRequest() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ requestGuid, approverRemarks }: { requestGuid: string; approverRemarks: string; studentGuid: string }) =>
+      approveLearningModeRequest(requestGuid, approverRemarks),
+    onSuccess: (_result, { studentGuid }) => {
+      queryClient.invalidateQueries({ queryKey: REQUESTS_KEY })
+      queryClient.invalidateQueries({ queryKey: [...LEARNING_MODE_KEY, 'detail', studentGuid] })
+      queryClient.invalidateQueries({ queryKey: [...LEARNING_MODE_KEY, 'report'] })
+    },
+  })
+}
+
+export function useRejectLearningModeRequest() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ requestGuid, approverRemarks }: { requestGuid: string; approverRemarks: string }) =>
+      rejectLearningModeRequest(requestGuid, approverRemarks),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: REQUESTS_KEY }),
+  })
+}
+
+export type { LearningModeRequest, CreateLearningModeRequestInput } from '@/lib/api/student/learningModeRequests'
 export type { LearningModeOption, StudentLearningModeDetail, LearningModeReportRow, LearningModeReportFilters, PagedResult } from '@/lib/api/student/learningMode'
