@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ModalProps } from '../types'
 import { SearchSelect } from '@/components/SearchSelect'
-import { useStudentRefugeeDetails, useAssignRefugeeStatus, useRemoveRefugeeStatus } from '@/hooks/student/useRefugee'
+import { useStudentRefugeeDetails, useAssignRefugeeStatus, useUpdateRefugeeStatus, useRemoveRefugeeStatus } from '@/hooks/student/useRefugee'
 import { useCountries } from '@/hooks/config/useCountries'
 
 interface Props extends ModalProps {
@@ -12,15 +13,20 @@ interface Props extends ModalProps {
 
 // Same refugee-status assign/remove workflow already on the Student Profile
 // page (students/student-refugee/*.md), pulled out into its own modal so
-// Student Master's row action menu can grant/view/remove refugee status
+// Student Master's row action menu can grant/view/edit/remove refugee status
 // without a trip through Profile first. Reuses the same hooks, so both
 // entry points share one cache — granting status here is reflected on
 // Profile's own refugee row immediately (react-query invalidation, see
 // useRefugee.ts) and vice versa.
 export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, studentName }: Props) {
+  const router = useRouter()
   const { data: refugeeDetail, isLoading } = useStudentRefugeeDetails(studentGuid, isOpen)
   const assignRefugeeStatus = useAssignRefugeeStatus()
+  const updateRefugeeStatus = useUpdateRefugeeStatus()
   const removeRefugeeStatus = useRemoveRefugeeStatus()
+  // Existing refugees open read-only; Edit swaps in the same form as assign
+  // (PUT takes the same fields, document included).
+  const [editing, setEditing] = useState(false)
   // CountryGuid — confirmed (post-assign-refugee-status.md) as a real guid
   // field on the student entity, not a legacy numeric code, so the option's
   // own countryGuid is sent as-is; no index/position workaround needed.
@@ -43,32 +49,57 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
     setRefugeeId('')
     setDocFile(null)
     setDocPreviewOpen(false)
+    setEditing(false)
   }, [isOpen])
 
   if (!isOpen || !studentGuid) return null
 
-  function handleAssign() {
+  // Refugee status changes the student's applicable fees, so every
+  // successful assign/edit/remove continues straight to Fee Structure
+  // Transfer with this student preloaded.
+  function goToFeeTransfer(guid: string) {
+    onClose()
+    router.push(`/student/fee-structure-transfer?studentGuid=${encodeURIComponent(guid)}`)
+  }
+
+  function startEdit() {
+    setCountryGuid('')
+    setRefugeeId(refugeeDetail?.refugeeId ?? '')
+    setDocFile(null)
+    setEditing(true)
+  }
+
+  function handleSave() {
     if (!studentGuid) return
     if (!countryGuid) { showToast('Country is required.', 'warn'); return }
     if (!refugeeId.trim()) { showToast('Refugee ID is required.', 'warn'); return }
     if (refugeeId.trim().length > 20) { showToast('Refugee ID must be 20 characters or fewer.', 'warn'); return }
     if (!docFile) { showToast('A supporting document is required.', 'warn'); return }
-    assignRefugeeStatus.mutate(
-      { studentGuid, countryGuid, refugeeId: refugeeId.trim(), document: docFile },
-      {
-        onSuccess: () => showToast('Refugee status granted', 'ok'),
+    const guid = studentGuid
+    const payload = { studentGuid: guid, countryGuid, refugeeId: refugeeId.trim(), document: docFile }
+    if (editing) {
+      updateRefugeeStatus.mutate(payload, {
+        onSuccess: () => { showToast('Refugee status updated', 'ok'); goToFeeTransfer(guid) },
+        onError: (error: Error) => showToast(error.message || 'Could not update refugee status', 'err'),
+      })
+    } else {
+      assignRefugeeStatus.mutate(payload, {
+        onSuccess: () => { showToast('Refugee status granted', 'ok'); goToFeeTransfer(guid) },
         onError: (error: Error) => showToast(error.message || 'Could not assign refugee status', 'err'),
-      }
-    )
+      })
+    }
   }
 
   function handleRemove() {
     if (!studentGuid) return
-    removeRefugeeStatus.mutate(studentGuid, {
-      onSuccess: () => showToast('Refugee status removed', 'ok'),
+    const guid = studentGuid
+    removeRefugeeStatus.mutate(guid, {
+      onSuccess: () => { showToast('Refugee status removed', 'ok'); goToFeeTransfer(guid) },
       onError: (error: Error) => showToast(error.message || 'Could not remove refugee status', 'err'),
     })
   }
+
+  const saving = assignRefugeeStatus.isPending || updateRefugeeStatus.isPending
 
   return (
     <>
@@ -80,7 +111,7 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
 
           {isLoading ? (
             <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading refugee status…</div>
-          ) : refugeeDetail ? (
+          ) : refugeeDetail && !editing ? (
             <>
               <div className="info-box mb-3"><i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12.5 }}>This student already has refugee status on record.</div></div>
               <div className="fg"><label className="lbl">Refugee ID</label><input className="ctrl" readOnly value={refugeeDetail.refugeeId ?? '—'} /></div>
@@ -101,21 +132,30 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
               <div className="fg">
                 <label className="lbl">Supporting Document <span className="req">*</span></label>
                 <input className="ctrl" type="file" onChange={e => setDocFile(e.target.files?.[0] ?? null)} />
-                <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4 }}>Required — the request is rejected without it.</div>
+                <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4 }}>
+                  {editing ? 'Required — upload the document again, it replaces the one on record.' : 'Required — the request is rejected without it.'}
+                </div>
               </div>
             </>
           )}
         </div>
         <div className="modal-footer">
-          <button className="btn btn-neu" onClick={onClose}>Close</button>
+          {editing
+            ? <button className="btn btn-neu" onClick={() => setEditing(false)} disabled={saving}>Cancel</button>
+            : <button className="btn btn-neu" onClick={onClose}>Close</button>}
           {!isLoading && (
-            refugeeDetail ? (
-              <button className="btn btn-primary" style={{ background: 'var(--red)' }} onClick={handleRemove} disabled={removeRefugeeStatus.isPending}>
-                <i className="lni lni-close"></i> {removeRefugeeStatus.isPending ? 'Removing…' : 'Remove Status'}
-              </button>
+            refugeeDetail && !editing ? (
+              <>
+                <button className="btn btn-neu" onClick={startEdit} disabled={removeRefugeeStatus.isPending}>
+                  <i className="lni lni-pencil"></i> Edit
+                </button>
+                <button className="btn btn-primary" style={{ background: 'var(--red)' }} onClick={handleRemove} disabled={removeRefugeeStatus.isPending}>
+                  <i className="lni lni-close"></i> {removeRefugeeStatus.isPending ? 'Removing…' : 'Remove Status'}
+                </button>
+              </>
             ) : (
-              <button className="btn btn-primary" onClick={handleAssign} disabled={assignRefugeeStatus.isPending}>
-                <i className="lni lni-checkmark"></i> {assignRefugeeStatus.isPending ? 'Saving…' : 'Grant Status'}
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                <i className="lni lni-checkmark"></i> {saving ? 'Saving…' : editing ? 'Save Changes' : 'Grant Status'}
               </button>
             )
           )}

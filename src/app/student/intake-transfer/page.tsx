@@ -8,6 +8,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { Pagination } from '@/components/Pagination'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
+import { StudentFinancialRecord } from '@/components/student/StudentFinancialRecord'
+import { StudentAcademicRecord } from '@/components/student/StudentAcademicRecord'
 import { StudentDto } from '@/lib/api/student/student'
 import { useDropoutStudents, useRejoinCandidate, useRejoinBatches, useRejoinStudent } from '@/hooks/student/useDropoutRejoin'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
@@ -74,6 +76,13 @@ export default function Page() {
 // ---------------------------------------------------------------------------
 // Dropout Rejoin — real flow against students/dropout-rejoin/*.md.
 // ---------------------------------------------------------------------------
+type RejoinTab = 'academic' | 'financial' | 'rejoin'
+const REJOIN_TABS: { id: RejoinTab; label: string; icon: string }[] = [
+  { id: 'academic', label: 'Academic Record', icon: 'graduation' },
+  { id: 'financial', label: 'Financial Record', icon: 'wallet' },
+  { id: 'rejoin', label: 'Rejoin', icon: 'reload' },
+]
+
 function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: string) => void }) {
   // Permission checks disabled for now — every action is allowed. Restore the
   // line below (and the import above) to gate actions by the menu permissions again.
@@ -111,6 +120,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
   const [targetFeeHead, setTargetFeeHead] = useState('')
   const [remarks, setRemarks] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<RejoinTab>('academic')
 
   // Batch Time — a plain global list (Morning/Evening/etc.), same source
   // Admission's own filing form uses, not something the candidate response
@@ -141,7 +151,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
   // Transfer's own semester→batch chain uses.
   useEffect(() => { setTargetBatch('') }, [targetSemester, targetBatchTime])
 
-  function handlePick(studentGuid: string) { setSelectedGuid(studentGuid); setRemarks('') }
+  function handlePick(studentGuid: string) { setSelectedGuid(studentGuid); setRemarks(''); setActiveTab('academic') }
   function handleClear() {
     setSelectedGuid(null); setRemarks(''); setConfirmOpen(false)
     // Drop ?studentGuid= so a page revisit doesn't reseed the same guid.
@@ -233,6 +243,36 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
               { label: 'Status', value: <span style={{ color: 'var(--red)' }}>Dropped Out</span> },
             ]}
           />
+
+          {/* Tabs — same horizontal tab strip as Programme Master's View
+              modal: review the student's academic and financial record
+              before running the rejoin itself. */}
+          <div className="card" style={{ padding: 0, marginBottom: 16, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', background: '#fafafa' }}>
+              {REJOIN_TABS.map(t => (
+                <div
+                  key={t.id}
+                  onClick={() => setActiveTab(t.id)}
+                  style={{
+                    flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 8, padding: '14px 0',
+                    background: activeTab === t.id ? 'var(--b50)' : 'transparent',
+                    borderBottom: activeTab === t.id ? '2px solid var(--b500)' : '2px solid transparent',
+                    color: activeTab === t.id ? 'var(--b700)' : 'var(--g600)',
+                    fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'all .15s',
+                  }}
+                >
+                  <i className={`lni lni-${t.icon}`} style={{ fontSize: 16 }}></i>
+                  {t.label}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {activeTab === 'academic' && <StudentAcademicRecord studentGuid={candidate.studentGuid} />}
+
+          {activeTab === 'financial' && <StudentFinancialRecord studentGuid={candidate.studentGuid} />}
+
+          {activeTab === 'rejoin' && (
           <div className="g2">
             <div className="card">
               <div className="card-hdr"><div className="card-title"><i className="lni lni-reload"></i> Rejoin Parameters</div></div>
@@ -270,7 +310,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
                 <label className="lbl">Fee Head <span className="req">*</span></label>
                 <SearchSelect
                   placeholder="— Select fee head —"
-                  options={(candidate.availableFeeHeads ?? []).map(f => ({ value: f.feeHdGuid, label: `${f.feeCode} — ${f.feeDesc}` }))}
+                  options={(candidate.availableFeeHeads ?? []).map(f => ({ value: f.feeHdGuid, label: f.feeCode }))}
                   value={targetFeeHead}
                   onChange={setTargetFeeHead}
                 />
@@ -290,6 +330,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
               </div>
             </div>
           </div>
+          )}
         </>
       )}
 

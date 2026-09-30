@@ -6,6 +6,7 @@ import {
   getRefugeeStudents,
   getStudentRefugeeDetails,
   removeRefugeeStatus,
+  updateRefugeeStatus,
 } from '@/lib/api/student/refugee'
 
 const REFUGEE_DETAILS_KEY = ['refugee-details']
@@ -46,6 +47,17 @@ export function useAssignRefugeeStatus() {
     onSuccess: (_data, payload) => {
       queryClient.invalidateQueries({ queryKey: [...REFUGEE_DETAILS_KEY, payload.studentGuid] })
       queryClient.invalidateQueries({ queryKey: ELIGIBLE_STUDENTS_KEY })
+      queryClient.invalidateQueries({ queryKey: REFUGEE_STUDENTS_KEY })
+    },
+  })
+}
+
+export function useUpdateRefugeeStatus() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: AssignRefugeeStatusRequest) => updateRefugeeStatus(payload),
+    onSuccess: (_data, payload) => {
+      queryClient.invalidateQueries({ queryKey: [...REFUGEE_DETAILS_KEY, payload.studentGuid] })
       queryClient.invalidateQueries({ queryKey: REFUGEE_STUDENTS_KEY })
     },
   })

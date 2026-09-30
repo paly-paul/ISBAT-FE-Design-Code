@@ -141,6 +141,9 @@ export interface StudentColumnFilters {
   // backend 2026-09-29 — not live yet; until it is, the param is ignored.
   semCode?: string
   batchGuid?: string
+  // Student Master's intake dropdown. Not in get-students-filter.md yet
+  // (2026-09-30) — until the backend accepts it, the param is ignored.
+  intakeGuid?: string
   searchTerm?: string
 }
 
@@ -187,6 +190,7 @@ export function getStudentsFilter(page: number, pageSize: number, filters: Stude
   if (filters.semesterGuid) params.set('semesterGuid', filters.semesterGuid)
   if (filters.semCode) params.set('semCode', filters.semCode)
   if (filters.batchGuid) params.set('batchGuid', filters.batchGuid)
+  if (filters.intakeGuid) params.set('intakeGuid', filters.intakeGuid)
   if (filters.searchTerm?.trim()) params.set('searchTerm', filters.searchTerm.trim())
   params.set('page', String(page))
   params.set('pageSize', String(pageSize))

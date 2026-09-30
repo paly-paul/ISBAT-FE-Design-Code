@@ -9,6 +9,7 @@ import { StudentDto, normalizeStudentDetail } from '@/lib/api/student/student'
 import { useIdCard, useIssueOrRenewIdCard, useUpdateIdCardDates, getIdCardQrImageUrl, currentCardIssue } from '@/hooks/student/useIdCards'
 import { useSponsorDetails } from '@/hooks/student/useSponsor'
 import { useStudentRefugeeDetails } from '@/hooks/student/useRefugee'
+import { useDropoutStudents } from '@/hooks/student/useDropoutRejoin'
 import { useCountries } from '@/hooks/config/useCountries'
 import { formatDate } from '@/lib/date'
 // import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -137,6 +138,14 @@ function StudentProfileContent() {
   // 2026-09-01) — the Profile Info tab's Refugee Details card only renders
   // when a record exists, so the answer is needed up front to decide that.
   const { data: refugeeDetail, isLoading: isRefugeeChecking } = useStudentRefugeeDetails(student?.studentGuid ?? null, !!student)
+
+  // The Dropout Rejoin action only applies to dropped-out students — the
+  // rejoin candidate endpoint rejects anyone else ("Student is not a
+  // dropout."). The student detail response carries no reg status, so this
+  // checks membership in the dropout list (GET /students/dropout-rejoin),
+  // the same list Dropout Rejoin itself shows.
+  const { data: dropouts = [] } = useDropoutStudents(!!student)
+  const isDropout = !!student && dropouts.some(d => d.studentGuid === student.studentGuid)
   // Supporting-document preview popup. Images render as <img>; anything
   // else (PDF, etc.) goes in an iframe and relies on the browser's viewer.
   const [docPreviewOpen, setDocPreviewOpen] = useState(false)
@@ -421,7 +430,7 @@ function StudentProfileContent() {
                       <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/batch-transfer?studentGuid=' + student.studentGuid)}><i className="lni lni-shuffle"></i> Batch Transfer</button>
                       <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/prog-transfer?studentGuid=' + student.studentGuid)}><i className="lni lni-graduation"></i> Prog. Transfer</button>
                       <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/learning-mode?studentGuid=' + student.studentGuid)}><i className="lni lni-display"></i> Learning Mode</button>
-                      <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/intake-transfer?studentGuid=' + student.studentGuid)}><i className="lni lni-calendar"></i> Dropout Rejoin</button>
+                      {isDropout && <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/intake-transfer?studentGuid=' + student.studentGuid)}><i className="lni lni-calendar"></i> Dropout Rejoin</button>}
                     </ActionMenu>
                   )}
                 </div>
