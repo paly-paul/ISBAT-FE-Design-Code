@@ -1370,6 +1370,27 @@ body {
   margin-top: 3px
 }
 
+/* Money stat tiles (e.g. Dropout Rejoin's Financial Record). Column count
+   follows the space actually available (sidebar open/closed, tab width),
+   not the viewport, and the amount scales with its own card so long
+   figures like 11,570,650.00 never clip. */
+.stat-grid-fluid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px
+}
+
+.stat-grid-fluid .stat-card {
+  min-width: 0;
+  container-type: inline-size
+}
+
+.stat-grid-fluid .stat-num {
+  font-size: clamp(17px, 10.5cqi, var(--fs-stat));
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere
+}
+
 .stat-sub {
   font-size: var(--fs-xs);
   margin-top: 7px;

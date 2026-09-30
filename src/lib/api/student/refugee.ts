@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPostForm, AuthError } from '../client'
+import { apiDelete, apiGet, apiPostForm, apiPutForm, AuthError } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -122,6 +122,24 @@ export function assignRefugeeStatus(payload: AssignRefugeeStatusRequest): Promis
   formData.append('RefugeeId', payload.refugeeId)
   formData.append('document', payload.document)
   return apiPostForm<RefugeeStudentDetailsDto>(`/api/v1/students/refugee/${payload.studentGuid}`, formData)
+}
+
+// Same command/validator as assign (put-update-refugee-status.md) — replaces
+// country, refugee ID and document together, so the document is mandatory
+// here too. 200 vs POST's 201 is the only server-side difference.
+export function updateRefugeeStatus(payload: AssignRefugeeStatusRequest): Promise<RefugeeStudentDetailsDto> {
+  if (MOCK_AUTH) {
+    const existing = mockRefugees[payload.studentGuid]
+    if (!existing) return Promise.reject(new AuthError('not_found', 'Student not found'))
+    const row: RefugeeStudentDetailsDto = { ...existing, refugeeId: payload.refugeeId, documentUrl: `/uploads/refugee/${payload.document.name}` }
+    mockRefugees[payload.studentGuid] = row
+    return Promise.resolve(row)
+  }
+  const formData = new FormData()
+  formData.append('countryGuid', payload.countryGuid)
+  formData.append('refugeeId', payload.refugeeId)
+  formData.append('document', payload.document)
+  return apiPutForm<RefugeeStudentDetailsDto>(`/api/v1/students/refugee/${payload.studentGuid}`, formData)
 }
 
 // No restore — re-granting requires re-uploading the document via assign

@@ -35,8 +35,8 @@ export function StudentSponsorModal({ isOpen, onClose, showToast, studentGuid, s
   if (!isOpen || !studentGuid) return null
 
   // Only a real access denial blocks the form. Any other failure (500,
-  // validation, etc.) is shown as the server's own message, but assigning
-  // is still offered — the POST is a separate endpoint and may succeed.
+  // validation, etc.) is ignored silently and falls back to "Unassigned" —
+  // the POST is a separate endpoint and may still succeed.
   const errorCode = error instanceof AuthError ? error.code : null
   const restricted = errorCode === 'unauthorized' || errorCode === 'forbidden'
   const errorMessage = error instanceof Error ? error.message : null
@@ -67,9 +67,6 @@ export function StudentSponsorModal({ isOpen, onClose, showToast, studentGuid, s
             <div className="info-box"><i className="lni lni-lock-alt" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12.5 }}>{errorMessage || 'You are not authorized to view or change sponsor details for students in this campus.'}</div></div>
           ) : (
             <>
-              {error && (
-                <div className="info-box mb-3"><i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12.5 }}>Couldn&apos;t load the current sponsor{errorMessage ? ` (${errorMessage})` : ''}. You can still assign one below.</div></div>
-              )}
               <div className="fg"><label className="lbl">Current Sponsor</label><input className="ctrl" readOnly value={sponsorDetail?.category ?? 'Unassigned'} /></div>
               <div className="fg">
                 <label className="lbl">{sponsorDetail ? 'Change To' : 'Sponsor Category'} <span className="req">*</span></label>
