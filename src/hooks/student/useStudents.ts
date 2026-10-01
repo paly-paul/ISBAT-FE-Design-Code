@@ -22,7 +22,7 @@ export function useStudents(page: number, pageSize: number, filters?: StudentLis
 // useStudentsFilterMulti below is the active path instead.
 export function useStudentsFilter(page: number, pageSize: number, filters: StudentColumnFilters, enabled = true) {
   return useQuery({
-    queryKey: [...STUDENTS_LIST_KEY, 'filter', page, pageSize, filters.programGuid ?? '', filters.semesterGuid ?? '', filters.semCode ?? '', filters.batchGuid ?? '', filters.academicIntake ?? '', filters.searchTerm ?? ''],
+    queryKey: [...STUDENTS_LIST_KEY, 'filter', page, pageSize, filters.programGuid ?? '', filters.semesterGuid ?? '', filters.semCode ?? '', filters.batchGuid ?? '', filters.academicIntake ?? '', filters.regStatusName ?? '', filters.searchTerm ?? ''],
     queryFn: () => getStudentsFilter(page, pageSize, filters),
     enabled,
     staleTime: Infinity,
@@ -50,17 +50,20 @@ export function useStudentsFilter(page: number, pageSize: number, filters: Stude
 // common case.
 const MULTI_FETCH_PAGE_SIZE = 1000
 
-export function getStudentsFilterCombinations(colFilters: { programGuid: string[]; semCode: string[]; batchGuid: string[]; academicIntake: string[] }, searchTerm?: string): StudentColumnFilters[] {
+export function getStudentsFilterCombinations(colFilters: { programGuid: string[]; semCode: string[]; batchGuid: string[]; academicIntake: string[]; regStatusName: string[] }, searchTerm?: string): StudentColumnFilters[] {
   const programs = colFilters.programGuid.length ? colFilters.programGuid : [undefined]
   const semCodes = colFilters.semCode.length ? colFilters.semCode : [undefined]
   const batches = colFilters.batchGuid.length ? colFilters.batchGuid : [undefined]
   const intakes = colFilters.academicIntake.length ? colFilters.academicIntake : [undefined]
+  const statuses = colFilters.regStatusName.length ? colFilters.regStatusName : [undefined]
   const combos: StudentColumnFilters[] = []
   for (const programGuid of programs) {
     for (const semCode of semCodes) {
       for (const batchGuid of batches) {
         for (const academicIntake of intakes) {
-          combos.push({ programGuid, semCode, batchGuid, academicIntake, searchTerm })
+          for (const regStatusName of statuses) {
+            combos.push({ programGuid, semCode, batchGuid, academicIntake, regStatusName, searchTerm })
+          }
         }
       }
     }
@@ -71,7 +74,7 @@ export function getStudentsFilterCombinations(colFilters: { programGuid: string[
 export function useStudentsFilterMulti(combos: StudentColumnFilters[], enabled: boolean) {
   const results = useQueries({
     queries: combos.map(f => ({
-      queryKey: [...STUDENTS_LIST_KEY, 'filter-multi', f.programGuid ?? '', f.semesterGuid ?? '', f.semCode ?? '', f.batchGuid ?? '', f.academicIntake ?? '', f.searchTerm ?? ''],
+      queryKey: [...STUDENTS_LIST_KEY, 'filter-multi', f.programGuid ?? '', f.semesterGuid ?? '', f.semCode ?? '', f.batchGuid ?? '', f.academicIntake ?? '', f.regStatusName ?? '', f.searchTerm ?? ''],
       queryFn: () => getStudentsFilter(1, MULTI_FETCH_PAGE_SIZE, f),
       enabled,
       staleTime: Infinity,

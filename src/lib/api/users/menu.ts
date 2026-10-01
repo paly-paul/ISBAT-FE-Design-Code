@@ -108,10 +108,13 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
     leaf('Passout Confirmation', 'graduation', '/student/passout-confirmation'),
   ]),
   // Learning Mode Report split out of the Learning Mode page into its own
-  // page, 2026-09-29 (GET /students/learning-mode/report).
-  section('Reports', [
-    leaf('Learning Mode Report', 'bar-chart', '/student/learning-mode-report'),
-  ]),
+  // page, 2026-09-29 (GET /students/learning-mode/report). Hidden from the
+  // sidebar per request, 2026-10-01 — the page still exists at
+  // /student/learning-mode-report, just not linked to. Commented out whole
+  // for the same "childless section renders as Soon" reason as Services below.
+  // section('Reports', [
+  //   leaf('Learning Mode Report', 'bar-chart', '/student/learning-mode-report'),
+  // ]),
   // Services section hidden from the sidebar per request, 2026-09-02 — its
   // one leaf (Student Services) still exists at /student/services, just not
   // linked to. Commented out whole (not just the leaf) since Sidebar.tsx
