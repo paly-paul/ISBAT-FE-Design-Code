@@ -226,6 +226,7 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Resit Applications', 'folder', '/assessment/resit-applications'),
     leaf('Resit Apply', 'pencil-alt', '/assessment/resit-apply'),
     leaf('Resit Scheduling', 'calendar', '/assessment/resit-scheduling'),
+    leaf('Resit Mark Update', 'reload', '/assessment/resit-mark-update'),
     leaf('Resit Seating Allocator', 'users', '/assessment/resit-seating'),
     leaf('CW Reevaluation', 'reload', '/assessment/reeval'),
     leaf('CW Recheck Hub', 'search-alt', '/assessment/recheck'),
@@ -987,6 +988,36 @@ function stripLectureMaster(menu: MenuNode[]): MenuNode[] {
   })
 }
 
+function ensureResitMarkUpdate(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const resitIdx = assessModule.children.findIndex(c => c.name === 'Resit & Disputes')
+  if (resitIdx === -1) return menu
+
+  const resitSection = assessModule.children[resitIdx]
+  if (resitSection.children.some(l => l.name === 'Resit Mark Update')) return menu
+
+  const children = [...resitSection.children]
+  const schedulingIdx = children.findIndex(l => l.name === 'Resit Scheduling')
+  const newLeaf = leaf('Resit Mark Update', 'reload', '/assessment/resit-mark-update')
+  if (schedulingIdx !== -1) {
+    children.splice(schedulingIdx + 1, 0, newLeaf)
+  } else {
+    children.push(newLeaf)
+  }
+
+  const mergedSection = { ...resitSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[resitIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
 export function getMenu(): Promise<MenuResult> {
   if (MOCK_MENU) return Promise.resolve({ menu: stripLectureMaster(mockMenu), isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
@@ -1007,7 +1038,8 @@ export function getMenu(): Promise<MenuResult> {
       const withAssMaster = ensureAssessmentMaster(withProgApp)
       const withResit = ensureResitMaster(withAssMaster)
       const withResitApps = ensureResitApplications(withResit)
-      const withUePrint = ensureUeMaterialPrint(withResitApps)
+      const withResitMarkUpdate = ensureResitMarkUpdate(withResitApps)
+      const withUePrint = ensureUeMaterialPrint(withResitMarkUpdate)
       const withUeAttendance = ensureUeAttendance(withUePrint)
       const withUeMarkImport = ensureUeMarkImport(withUeAttendance)
       const withModeration = ensureResultModeration(withUeMarkImport)

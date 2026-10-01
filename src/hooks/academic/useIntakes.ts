@@ -1,5 +1,5 @@
 import { QueryClient, useMutation, useQuery, useQueryClient, useInfiniteQuery, useQueries, keepPreviousData } from '@tanstack/react-query'
-import { createIntake, CreateIntakeInput, deleteIntake, getCurrentIntake, getIntakeById, getIntakes, getIntakesPaged, Intake, updateIntake } from '@/lib/api/academic/intake'
+import { createIntake, CreateIntakeInput, deleteIntake, getCurrentIntake, getIntakeById, getIntakes, getIntakesPaged, Intake, updateIntake, getIntakesDropdown } from '@/lib/api/academic/intake'
 import { getNextPageParam } from '@/lib/pagination'
 
 const INTAKES_KEY = ['intakes']
@@ -164,4 +164,14 @@ export function useDeleteIntake() {
   })
 }
 
-export type { Intake, AcademicCalendarEntry, CreateIntakeInput, CreateAcademicCalendarEntryInput } from '@/lib/api/academic/intake'
+export function useIntakesDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...INTAKES_KEY, 'dropdown'],
+    queryFn: getIntakesDropdown,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}
+
+export type { Intake, AcademicCalendarEntry, CreateIntakeInput, CreateAcademicCalendarEntryInput, IntakeDropdownItem } from '@/lib/api/academic/intake'
