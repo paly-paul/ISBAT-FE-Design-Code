@@ -5,7 +5,7 @@ import { Toast } from '@/components/Toast'
 import { Pagination } from '@/components/Pagination'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
 import {
-  usePendingLearningModeRequests,
+  usePendingLearningModeApprovals,
   useStudentLearningModeDetail,
   useApproveLearningModeChange,
 } from '@/hooks/student/useLearningMode'
@@ -15,9 +15,8 @@ import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreview
 
 // Approval queue for learning-mode change requests raised on
 // /student/learning-mode. Same list → review shape as Dropout Rejoin:
-//  - List: browser-local index of requests raised here, each re-checked
-//    against the real detail endpoint (usePendingLearningModeRequests /
-//    learningModeRequests.ts) — there's no list endpoint yet.
+//  - List: GET /students/learning-mode/pending-approvals (server-paged,
+//    every campus) — get-pending-learning-mode-approvals.md.
 //  - Review: GET /students/learning-mode/{studentGuid} for the request's
 //    remarks and document, then POST .../{studentGuid}/approve.
 // There is no reject endpoint, so a request can only be approved here.
@@ -27,10 +26,6 @@ const PAGE_SIZE = 10
 function initials(name: string | null) {
   const parts = (name ?? '').trim().split(/\s+/).filter(Boolean)
   return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() || '?'
-}
-
-function formatSubmitted(iso: string) {
-  return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 // useSearchParams() requires a Suspense boundary above it — see the default
@@ -46,12 +41,20 @@ function LearningModeApprovalContent() {
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
   // ---- List --------------------------------------------------------------
-  const { data: requests = [], isLoading: listLoading, isError: listError } = usePendingLearningModeRequests()
   const [page, setPage] = useState(1)
-  const totalCount = requests.length
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  // Debounced — each keystroke would otherwise be its own request.
+  useEffect(() => {
+    const t = setTimeout(() => { if (searchInput.trim() !== search) { setSearch(searchInput.trim()); setPage(1) } }, 400)
+    return () => clearTimeout(t)
+  }, [searchInput, search])
+  const { data, isLoading: listLoading, isError: listError } = usePendingLearningModeApprovals(search, page, PAGE_SIZE)
+  const requests = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  const paginated = requests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  useEffect(() => { if (page > totalPages) setPage(totalPages) }, [page, totalPages])
+  // Approving the last row on the last page leaves that page empty.
+  useEffect(() => { if (data && page > totalPages) setPage(totalPages) }, [data, page, totalPages])
 
   // ---- Review ------------------------------------------------------------
   // Picked from the list, or deep-linked from Learning Mode's "Review it →"
@@ -90,38 +93,44 @@ function LearningModeApprovalContent() {
           <div className="card">
             <div className="card-hdr">
               <div className="card-title"><i className="lni lni-hourglass"></i> Awaiting Approval</div>
-              {totalCount > 0 && <span className="badge badge-amber">{totalCount} pending</span>}
+              <div className="flex gap-2" style={{ alignItems: 'center' }}>
+                {totalCount > 0 && <span className="badge badge-amber">{totalCount} pending</span>}
+                <div className="inp-wrap w-64">
+                  <i className="lni lni-search-alt inp-icon"></i>
+                  <input className="ctrl" placeholder="Search by Student No., Reg No. or name…" value={searchInput} onChange={e => setSearchInput(e.target.value)} />
+                </div>
+              </div>
             </div>
             {listError ? (
               <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load pending requests. Please try again.</div>
             ) : listLoading ? (
               <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading pending requests…</div>
-            ) : paginated.length === 0 ? (
+            ) : requests.length === 0 ? (
               <div className="empty">
                 <div className="empty-icon"><i className="lni lni-checkmark-circle"></i></div>
-                <div className="empty-title">Nothing to approve</div>
-                <div className="empty-sub">No learning mode changes are waiting for approval.</div>
+                <div className="empty-title">{search ? 'No matches' : 'Nothing to approve'}</div>
+                <div className="empty-sub">{search ? 'No pending request matches your search.' : 'No learning mode changes are waiting for approval.'}</div>
               </div>
             ) : (
               <>
                 <div className="person-list">
-                  {paginated.map(r => (
+                  {requests.map(r => (
                     <div key={r.studentGuid} className="person-row">
                       <div className="person-row-av">{initials(r.studentName)}</div>
                       <div className="person-row-main">
                         <div className="person-row-name">{r.studentName ?? '—'}</div>
                         <div className="person-row-sub">
-                          {r.studentNum && <span className="font-mono">{r.studentNum}</span>}
-                          {r.studentNum && r.programName && ' · '}
-                          {r.programName}
+                          {(r.studentNum || r.studentRegNo) && <span className="font-mono">{r.studentNum || r.studentRegNo}</span>}
+                          {(r.studentNum || r.studentRegNo) && (r.programName || r.semesterName || r.batchCode) && ' · '}
+                          {[r.programName, r.semesterName, r.batchCode].filter(Boolean).join(' · ')}
                         </div>
                         <div className="person-row-meta">
-                          {r.currentModeLabel && <>
-                            <span>{r.currentModeLabel}</span>
+                          {r.currentLearningModeLabel && <>
+                            <span>{r.currentLearningModeLabel}</span>
                             <i className="lni lni-arrow-right" style={{ fontSize: 10 }}></i>
                           </>}
-                          <span className="badge badge-blue">{r.requestedModeLabel ?? '—'}</span>
-                          <span>· Submitted {formatSubmitted(r.submittedAt)}</span>
+                          <span className="badge badge-blue">{r.requestedLearningModeLabel ?? '—'}</span>
+                          {r.remarks && <span className="truncate" style={{ maxWidth: 320 }} title={r.remarks}>· {r.remarks}</span>}
                         </div>
                       </div>
                       <button className="btn btn-neu btn-sm" onClick={() => setSelectedGuid(r.studentGuid)}><i className="lni lni-eye"></i> Review</button>

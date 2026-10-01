@@ -21,7 +21,7 @@ export function useStudents(page: number, pageSize: number, filters?: StudentLis
 // hook to cover both. `enabled` lets the page skip this one entirely while
 // useStudentsFilterMulti below is the active path instead.
 function studentsFilterKey(page: number, pageSize: number, f: StudentColumnFilters) {
-  return [...STUDENTS_LIST_KEY, 'filter', page, pageSize, f.programGuid ?? '', f.semesterGuid ?? '', f.semCode ?? '', f.batchGuid ?? '', f.academicIntake ?? '', f.regStatus ?? '', f.searchTerm ?? '']
+  return [...STUDENTS_LIST_KEY, 'filter', page, pageSize, f.programGuid ?? '', f.semesterGuid ?? '', f.semCode ?? '', f.batchGuid ?? '', f.intakeGuid ?? '', f.academicIntake ?? '', f.regStatus ?? '', f.searchTerm ?? '']
 }
 
 export function useStudentsFilter(page: number, pageSize: number, filters: StudentColumnFilters, enabled = true) {
@@ -44,19 +44,22 @@ export function useStudentsFilter(page: number, pageSize: number, filters: Stude
 // The page falls back to plain useStudentsFilter above whenever there's
 // only a single combination (no filter, or one value per dimension).
 
-export function getStudentsFilterCombinations(colFilters: { programGuid: string[]; semCode: string[]; batchGuid: string[]; academicIntake: string[]; regStatus: string[] }, searchTerm?: string): StudentColumnFilters[] {
+export function getStudentsFilterCombinations(colFilters: { programGuid: string[]; semCode: string[]; batchGuid: string[]; intakeGuid: string[]; academicIntake: string[]; regStatus: string[] }, searchTerm?: string): StudentColumnFilters[] {
   const programs = colFilters.programGuid.length ? colFilters.programGuid : [undefined]
   const semCodes = colFilters.semCode.length ? colFilters.semCode : [undefined]
   const batches = colFilters.batchGuid.length ? colFilters.batchGuid : [undefined]
+  const joinedIntakes = colFilters.intakeGuid.length ? colFilters.intakeGuid : [undefined]
   const intakes = colFilters.academicIntake.length ? colFilters.academicIntake : [undefined]
   const statuses = colFilters.regStatus.length ? colFilters.regStatus : [undefined]
   const combos: StudentColumnFilters[] = []
   for (const programGuid of programs) {
     for (const semCode of semCodes) {
       for (const batchGuid of batches) {
-        for (const academicIntake of intakes) {
-          for (const regStatus of statuses) {
-            combos.push({ programGuid, semCode, batchGuid, academicIntake, regStatus, searchTerm })
+        for (const intakeGuid of joinedIntakes) {
+          for (const academicIntake of intakes) {
+            for (const regStatus of statuses) {
+              combos.push({ programGuid, semCode, batchGuid, intakeGuid, academicIntake, regStatus, searchTerm })
+            }
           }
         }
       }

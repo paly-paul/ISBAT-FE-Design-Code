@@ -103,7 +103,7 @@ function LearningModeContent() {
     if (remarks.trim().length > REMARKS_MAX) { showToast(`Remarks must be ${REMARKS_MAX} characters or fewer.`, 'warn'); return }
     if (!docFile) { showToast('A supporting document is required.', 'warn'); return }
     applyChange.mutate(
-      { studentGuid: student.studentGuid, input: { requestedLearningMode: Number(selectedMode), remarks: remarks.trim() || null, document: docFile }, currentModeLabel: detail?.learningModeLabel ?? null },
+      { studentGuid: student.studentGuid, input: { requestedLearningMode: Number(selectedMode), remarks: remarks.trim() || null, document: docFile } },
       {
         onSuccess: () => { resetForm(); showToast('Mode change submitted for approval.', 'ok') },
         onError: (error: Error) => showToast(error.message || 'Could not submit the request.', 'error'),
