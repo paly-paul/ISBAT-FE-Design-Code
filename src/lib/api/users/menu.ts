@@ -65,6 +65,9 @@ const FINANCE_PAYMENT_SECTIONS: MenuNode[] = [
     leaf('Payment Refund', 'reload', 'payment-refund'),
     leaf('NCHE & Guild Payment', 'graduation', 'nche-guild-payment'),
     leaf('Discount Allocation', 'tag', 'discount-allocation'),
+    // Same refugee-status workflow as Student Master's row-menu modal, as a
+    // standalone page for Finance (it changes the student's fees).
+    leaf('Refugee Status', 'shield', 'refugee-status'),
     leaf('Payment History', 'bar-chart', 'payment-history'),
     leaf('Ledger Adjustments', 'lock', 'ledger-adjustments'),
     leaf('Exchange Rates', 'world', 'exchange-rates'),
@@ -390,6 +393,7 @@ function mergeFinanceSections(menu: MenuNode[]): MenuNode[] {
       leaf('Payment Refund', 'reload', 'payment-refund'),
       leaf('NCHE & Guild Payment', 'graduation', 'nche-guild-payment'),
       leaf('Discount Allocation', 'tag', 'discount-allocation'),
+      leaf('Refugee Status', 'shield', 'refugee-status'),
     ].filter(l => !existingLeaves.has(l.name))
     if (missingLeaves.length > 0) {
       // Inserted right after Payment Console, matching their position in
