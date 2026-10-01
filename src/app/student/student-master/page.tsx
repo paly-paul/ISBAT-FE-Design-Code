@@ -18,7 +18,7 @@ import { useStudentsFilter, useStudentsFilterMulti, getStudentsFilterCombination
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useSemesterCodeGroups } from '@/hooks/academic/useSemesters'
-// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
@@ -92,10 +92,20 @@ function listStateToQuery(page: number, search: string, colFilters: ColumnFilter
 }
 
 function StudentMasterContent() {
-  // Permission checks disabled for now — every action is allowed. Restore the
-  // line below (and the import above) to gate actions by the menu permissions again.
-  // const permissions = usePagePermissions()
-  const permissions = { add: true, edit: true, delete: true }
+  // Row actions gated by this page's own custom keys from /me/menu
+  // ({ get, view, learningmode, refugee, sponsor }). Each falls back to the
+  // generic flag (`?? permissions.get` / `?? permissions.edit`) — same
+  // convention as Employee Master's `assign ?? edit` — so mock mode and the
+  // fail-open default (both only carry add/edit/delete/get) still show every
+  // action, while a real response missing a key hides that action.
+  const pagePermissions = usePagePermissions()
+  const permissions = {
+    view: pagePermissions.view ?? pagePermissions.get ?? false,
+    learningMode: pagePermissions.learningmode ?? pagePermissions.edit ?? false,
+    refugee: pagePermissions.refugee ?? pagePermissions.edit ?? false,
+    sponsor: pagePermissions.sponsor ?? pagePermissions.edit ?? false,
+  }
+  const hasAnyAction = permissions.view || permissions.learningMode || permissions.refugee || permissions.sponsor
   const router = useRouter()
   const searchParams = useSearchParams()
   // Student Profile's read-only Refugee Status / Sponsor fields link here as
@@ -333,12 +343,12 @@ function StudentMasterContent() {
                 {!isLoading && items.map(r => (
                   <tr key={r.studentGuid}>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => handleView(r.studentGuid)}><i className="lni lni-eye"></i> View</button>
-                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => handleLearningMode(r.studentGuid, r.studentName)}><i className="lni lni-book"></i> Learning Mode</button>}
-                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => handleRefugee(r.studentGuid, r.studentName)}><i className="lni lni-shield"></i> Refugee Status</button>}
-                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => handleSponsor(r.studentGuid, r.studentName)}><i className="lni lni-handshake"></i> Sponsor</button>}
-                      </ActionMenu>
+                      {hasAnyAction && <ActionMenu>
+                        {permissions.view && <button className="btn btn-neu btn-sm" onClick={() => handleView(r.studentGuid)}><i className="lni lni-eye"></i> View</button>}
+                        {permissions.learningMode && <button className="btn btn-neu btn-sm" onClick={() => handleLearningMode(r.studentGuid, r.studentName)}><i className="lni lni-book"></i> Learning Mode</button>}
+                        {permissions.refugee && <button className="btn btn-neu btn-sm" onClick={() => handleRefugee(r.studentGuid, r.studentName)}><i className="lni lni-shield"></i> Refugee Status</button>}
+                        {permissions.sponsor && <button className="btn btn-neu btn-sm" onClick={() => handleSponsor(r.studentGuid, r.studentName)}><i className="lni lni-handshake"></i> Sponsor</button>}
+                      </ActionMenu>}
                     </td>
                     <td className="font-mono">{r.studentRegNo}</td>
                     <td><strong>{r.studentName}</strong></td>
@@ -355,9 +365,12 @@ function StudentMasterContent() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="students" onPageChange={setPage} />
         </div>
       </div>
-      <StudentLearningModeModal isOpen={openModals.has('learning-mode-modal')} onClose={() => closeModal('learning-mode-modal')} showToast={showToast} studentGuid={selectedStudentGuid} studentName={selectedStudentName} />
-      <StudentRefugeeModal isOpen={openModals.has('refugee-status-modal')} onClose={() => closeModal('refugee-status-modal')} showToast={showToast} studentGuid={selectedStudentGuid} studentName={selectedStudentName} />
-      <StudentSponsorModal isOpen={openModals.has('sponsor-modal')} onClose={() => closeModal('sponsor-modal')} showToast={showToast} studentGuid={selectedStudentGuid} studentName={selectedStudentName} />
+      {/* Gated here too, not just on the row buttons — the Refugee/Sponsor
+          modals can also open from Student Profile's ?refugeeFor=/?sponsorFor=
+          deep links. */}
+      <StudentLearningModeModal isOpen={openModals.has('learning-mode-modal') && permissions.learningMode} onClose={() => closeModal('learning-mode-modal')} showToast={showToast} studentGuid={selectedStudentGuid} studentName={selectedStudentName} />
+      <StudentRefugeeModal isOpen={openModals.has('refugee-status-modal') && permissions.refugee} onClose={() => closeModal('refugee-status-modal')} showToast={showToast} studentGuid={selectedStudentGuid} studentName={selectedStudentName} />
+      <StudentSponsorModal isOpen={openModals.has('sponsor-modal') && permissions.sponsor} onClose={() => closeModal('sponsor-modal')} showToast={showToast} studentGuid={selectedStudentGuid} studentName={selectedStudentName} />
       <Toast toast={toast} />
     </>
   )

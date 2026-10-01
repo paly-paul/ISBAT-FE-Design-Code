@@ -705,7 +705,7 @@ through unchanged.
           "name": "Student Master",
           "icon": "lni lni-graduation",
           "url": "/student/student-master",
-          "permissions": {},
+          "permissions": { "get": true, "view": true, "learningmode": true, "refugee": true, "sponsor": true },
           "children": []
         }
       ]
