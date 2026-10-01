@@ -37,33 +37,30 @@ const PAGE_SIZE = 10
 // semCodes, not guids — sent as /students/filter's semCode param. Intake
 // holds intake codes (e.g. "20241"), sent as academicIntake — set from
 // either the Intake column's funnel or the intake dropdown in the header.
-// Status holds regStatusName text (e.g. "Passout"), sent as regStatusName.
+// Status holds regStatus codes (e.g. "5"), sent as regStatus.
 interface ColumnFilterState {
   programGuid: string[]
   semCode: string[]
   batchGuid: string[]
   academicIntake: string[]
-  regStatusName: string[]
+  regStatus: string[]
 }
-const EMPTY_COLUMN_FILTERS: ColumnFilterState = { programGuid: [], semCode: [], batchGuid: [], academicIntake: [], regStatusName: [] }
+const EMPTY_COLUMN_FILTERS: ColumnFilterState = { programGuid: [], semCode: [], batchGuid: [], academicIntake: [], regStatus: [] }
 
-// Values seen on real /students/filter responses (2026-10-01) — no options
-// endpoint exists for these. The value is sent as-is; the label just adds
-// spaces. Extend this list if the backend returns other statuses.
-const REG_STATUS_OPTIONS = [
-  { value: 'Registered', label: 'Registered' },
-  { value: 'YetToRegister', label: 'Yet to Register' },
-  { value: 'YetToClear', label: 'Yet to Clear' },
-  { value: 'Passout', label: 'Passout' },
+// regStatus codes from get-students-filter.md. The filter sends the code;
+// the list items carry the matching name in regStatusName, which is what
+// the column's badge keys off.
+const REG_STATUSES = [
+  { code: '1', name: 'Registered', label: 'Registered', badge: 'badge-green' },
+  { code: '2', name: 'YetToRegister', label: 'Yet to Register', badge: 'badge-amber' },
+  { code: '3', name: 'DropOut', label: 'Drop Out', badge: 'badge-grey' },
+  { code: '4', name: 'YetToClear', label: 'Yet to Clear', badge: 'badge-red' },
+  { code: '5', name: 'Passout', label: 'Passout', badge: 'badge-blue' },
 ]
-const REG_STATUS_BADGE: Record<string, string> = {
-  Registered: 'badge-green',
-  YetToRegister: 'badge-amber',
-  YetToClear: 'badge-red',
-  Passout: 'badge-blue',
-}
-function regStatusLabel(status: string) {
-  return REG_STATUS_OPTIONS.find(o => o.value === status)?.label ?? status.replace(/([a-z])([A-Z])/g, '$1 $2')
+const REG_STATUS_OPTIONS = REG_STATUSES.map(s => ({ value: s.code, label: s.label }))
+function regStatusBadge(name: string) {
+  const s = REG_STATUSES.find(x => x.name.toLowerCase() === name.toLowerCase())
+  return { label: s?.label ?? name.replace(/([a-z])([A-Z])/g, '$1 $2'), badge: s?.badge ?? 'badge-grey' }
 }
 
 // Page/search/column filters ↔ URL query (?page=&q=&prog=&sem=&batch=
@@ -74,7 +71,7 @@ function listStateFromUrl(params: URLSearchParams | ReadonlyURLSearchParams) {
   return {
     page: Math.max(1, Number(params.get('page')) || 1),
     search: params.get('q') ?? '',
-    colFilters: { programGuid: list('prog'), semCode: list('sem'), batchGuid: list('batch'), academicIntake: list('intake'), regStatusName: list('status') } as ColumnFilterState,
+    colFilters: { programGuid: list('prog'), semCode: list('sem'), batchGuid: list('batch'), academicIntake: list('intake'), regStatus: list('status') } as ColumnFilterState,
   }
 }
 
@@ -86,7 +83,7 @@ function listStateToQuery(page: number, search: string, colFilters: ColumnFilter
   if (colFilters.semCode.length) params.set('sem', colFilters.semCode.join(','))
   if (colFilters.batchGuid.length) params.set('batch', colFilters.batchGuid.join(','))
   if (colFilters.academicIntake.length) params.set('intake', colFilters.academicIntake.join(','))
-  if (colFilters.regStatusName.length) params.set('status', colFilters.regStatusName.join(','))
+  if (colFilters.regStatus.length) params.set('status', colFilters.regStatus.join(','))
   return params.toString()
 }
 
@@ -181,7 +178,7 @@ function StudentMasterContent() {
       ? intakeOptions.find(o => o.value === pickedIntakes[0])?.label ?? pickedIntakes[0]
       : `${pickedIntakes.length} intakes`
 
-  const hasColFilters = colFilters.programGuid.length > 0 || colFilters.semCode.length > 0 || colFilters.batchGuid.length > 0 || colFilters.academicIntake.length > 0 || colFilters.regStatusName.length > 0
+  const hasColFilters = colFilters.programGuid.length > 0 || colFilters.semCode.length > 0 || colFilters.batchGuid.length > 0 || colFilters.academicIntake.length > 0 || colFilters.regStatus.length > 0
 
   // get-students-filter.md's programGuid/semCode/batchGuid each take
   // exactly one value — a multi-select column here (checking 2+ boxes) has
@@ -190,20 +187,18 @@ function StudentMasterContent() {
   // to exactly one entry — real server pagination via useStudentsFilter
   // below — whenever each dimension has at most one value picked (the
   // common case, including "no filters at all"). More than one combination
-  // switches to useStudentsFilterMulti, which fetches each combination in
-  // full and merges/paginates client-side — see that hook's own comment in
-  // useStudents.ts for why.
+  // switches to useStudentsFilterMulti, which fetches only each
+  // combination's first page × PAGE_SIZE rows and merges them into one
+  // name-sorted list (see that hook's comment in useStudents.ts).
   const normalizedSearch = (search || '').trim()
   const combos = getStudentsFilterCombinations(colFilters, normalizedSearch || undefined)
   const isMultiCombo = combos.length > 1
 
   const singleQuery = useStudentsFilter(page, PAGE_SIZE, combos[0], !isMultiCombo)
-  const multi = useStudentsFilterMulti(combos, isMultiCombo)
-  const multiTotalCount = multi.items.length
-  const multiPageItems = multi.items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const multi = useStudentsFilterMulti(combos, page, PAGE_SIZE, isMultiCombo)
 
-  const items = isMultiCombo ? multiPageItems : (singleQuery.data?.items ?? [])
-  const totalCount = isMultiCombo ? multiTotalCount : (singleQuery.data?.totalCount ?? 0)
+  const items = isMultiCombo ? multi.items : (singleQuery.data?.items ?? [])
+  const totalCount = isMultiCombo ? multi.totalCount : (singleQuery.data?.totalCount ?? 0)
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const isLoading = isMultiCombo ? multi.isLoading : singleQuery.isLoading
 
@@ -310,11 +305,11 @@ function StudentMasterContent() {
                   <GuidColumnFilter
                     label="Status"
                     options={REG_STATUS_OPTIONS}
-                    isOpen={openColFilter === 'regStatusName'}
-                    activeFilter={colFilters.regStatusName}
-                    onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'regStatusName' ? null : 'regStatusName') }}
-                    onSelect={vals => updateColFilters({ regStatusName: vals })}
-                    onClear={() => updateColFilters({ regStatusName: [] })}
+                    isOpen={openColFilter === 'regStatus'}
+                    activeFilter={colFilters.regStatus}
+                    onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'regStatus' ? null : 'regStatus') }}
+                    onSelect={vals => updateColFilters({ regStatus: vals })}
+                    onClear={() => updateColFilters({ regStatus: [] })}
                     onClose={() => setOpenColFilter(null)}
                   />
                 </tr>
@@ -345,7 +340,7 @@ function StudentMasterContent() {
                     <td>{r.semesterName || '—'}</td>
                     <td>{r.batchCode || '—'}</td>
                     <td className="font-mono">{r.academicIntake || '—'}</td>
-                    <td>{r.regStatusName ? <span className={`badge ${REG_STATUS_BADGE[r.regStatusName] ?? 'badge-grey'}`}>{regStatusLabel(r.regStatusName)}</span> : '—'}</td>
+                    <td>{r.regStatusName ? <span className={`badge ${regStatusBadge(r.regStatusName).badge}`}>{regStatusBadge(r.regStatusName).label}</span> : '—'}</td>
                   </tr>
                 ))}
               </tbody>

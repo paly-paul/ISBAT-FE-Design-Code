@@ -16,8 +16,9 @@ export interface StudentDto {
   // Intake code (e.g. 20241) — on /students/filter list items since
   // 2026-09-30; absent on older responses.
   academicIntake?: number | null
-  // Registration status as text ("Registered", "Passout", "YetToClear",
-  // "YetToRegister", …) — on /students/filter list items (2026-10-01).
+  // Registration status as text ("Registered", "YetToRegister", "DropOut",
+  // "YetToClear", "Passout") from the active history row — on
+  // /students/filter list items (get-students-filter.md, 2026-09-29).
   regStatusName?: string | null
 }
 
@@ -150,8 +151,9 @@ export interface StudentColumnFilters {
   // Intake code (e.g. "20241"), matching the list items' own academicIntake
   // field — Student Master's intake dropdown and Intake column filter.
   academicIntake?: string
-  // Same text as the list items' regStatusName (e.g. "Passout").
-  regStatusName?: string
+  // Registration status code (get-students-filter.md): 1 Registered,
+  // 2 YetToRegister, 3 DropOut, 4 YetToClear, 5 Passout.
+  regStatus?: string
   searchTerm?: string
 }
 
@@ -199,7 +201,7 @@ export function getStudentsFilter(page: number, pageSize: number, filters: Stude
   if (filters.semCode) params.set('semCode', filters.semCode)
   if (filters.batchGuid) params.set('batchGuid', filters.batchGuid)
   if (filters.academicIntake) params.set('academicIntake', filters.academicIntake)
-  if (filters.regStatusName) params.set('regStatusName', filters.regStatusName)
+  if (filters.regStatus) params.set('regStatus', filters.regStatus)
   if (filters.searchTerm?.trim()) params.set('searchTerm', filters.searchTerm.trim())
   params.set('page', String(page))
   params.set('pageSize', String(pageSize))

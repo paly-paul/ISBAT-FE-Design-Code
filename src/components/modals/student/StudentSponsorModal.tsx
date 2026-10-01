@@ -10,7 +10,7 @@ interface Props extends ModalProps {
   studentName?: string
 }
 
-// Sponsor-category assignment (studentsponsorassignment/*.md), moved off the
+// Sponsor-category assignment (students/sponsor-assignment/*.md), moved off the
 // Student Profile page's inline editor so Student Master's row action menu
 // owns it — same split as StudentRefugeeModal. Profile's Sponsor field is
 // read-only and deep-links here. Shares useSponsor's cache, so a change here
