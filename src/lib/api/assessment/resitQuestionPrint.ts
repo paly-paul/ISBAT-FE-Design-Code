@@ -1,4 +1,21 @@
-import { apiPost, apiGet, apiGetBlob, apiDelete } from '@/lib/api/client'
+import { apiPost, apiGet, apiGetBlob, apiDeleteWithMessage } from '@/lib/api/client'
+
+// DELETE /theory and /practical are confirm-before-delete: without
+// confirm=true they answer { data: false, message: "You are about to
+// delete … Do you want to continue?" } and delete nothing; with it,
+// { data: true, message: "Deleted successfully......!" }. The page needs
+// both fields, so these use apiDeleteWithMessage (plain apiDelete returns
+// only the bare boolean).
+export interface ResitDeleteResponse {
+  data: boolean
+  message: string | null
+}
+
+function mockDelete(confirm?: boolean): Promise<ResitDeleteResponse> {
+  return Promise.resolve(confirm
+    ? { data: true, message: 'Deleted successfully......!' }
+    : { data: false, message: 'You are about to delete the resit QP set of this unit. Do you want to continue?' })
+}
 
 export interface ResitParams {
   programGuid: string
@@ -65,8 +82,8 @@ export function getResitTheoryWord(paramsObj: ResitParams) {
   if (paramsObj.questionBankIntakeGuid) params.append('questionBankIntakeGuid', paramsObj.questionBankIntakeGuid)
   return apiGetBlob(`/api/v1/assessment/resit-question-print/theory/word?${params.toString()}`)
 }
-export function deleteResitTheory(data: ResitParams) {
-  if (MOCK_AUTH) return Promise.resolve({ data: true, message: 'Deleted successfully' })
+export function deleteResitTheory(data: ResitParams): Promise<ResitDeleteResponse> {
+  if (MOCK_AUTH) return mockDelete(data.confirm)
   const params = new URLSearchParams({
     programGuid: data.programGuid?.toUpperCase() || '',
     semesterGuid: data.semesterGuid?.toUpperCase() || '',
@@ -74,7 +91,7 @@ export function deleteResitTheory(data: ResitParams) {
     academicIntakeGuid: data.academicIntakeGuid?.toUpperCase() || ''
   })
   if (data.confirm !== undefined) params.append('confirm', String(data.confirm))
-  return apiDelete<any>(`/api/v1/assessment/resit-question-print/theory?${params.toString()}`)
+  return apiDeleteWithMessage<boolean>(`/api/v1/assessment/resit-question-print/theory?${params.toString()}`)
 }
 export function getResitTheoryAnswerKey(paramsObj: ResitParams) {
   if (MOCK_AUTH) return Promise.resolve({ blob: new Blob(['mock answer key'], { type: 'application/pdf' }), filename: 'answer-key.pdf' })
@@ -112,8 +129,8 @@ export function getResitPracticalWord(paramsObj: ResitParams) {
   })
   return apiGetBlob(`/api/v1/assessment/resit-question-print/practical/word?${params.toString()}`)
 }
-export function deleteResitPractical(data: ResitParams) {
-  if (MOCK_AUTH) return Promise.resolve({ data: true, message: 'Deleted successfully' })
+export function deleteResitPractical(data: ResitParams): Promise<ResitDeleteResponse> {
+  if (MOCK_AUTH) return mockDelete(data.confirm)
   const params = new URLSearchParams({
     programGuid: data.programGuid?.toUpperCase() || '',
     semesterGuid: data.semesterGuid?.toUpperCase() || '',
@@ -121,7 +138,7 @@ export function deleteResitPractical(data: ResitParams) {
     academicIntakeGuid: data.academicIntakeGuid?.toUpperCase() || ''
   })
   if (data.confirm !== undefined) params.append('confirm', String(data.confirm))
-  return apiDelete<any>(`/api/v1/assessment/resit-question-print/practical?${params.toString()}`)
+  return apiDeleteWithMessage<boolean>(`/api/v1/assessment/resit-question-print/practical?${params.toString()}`)
 }
 
 // -- Booklet Actions --
