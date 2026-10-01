@@ -7,7 +7,7 @@ the merged/final tree built in `src/lib/api/users/menu.ts` (mockMenu plus its
 `ensure*` / `merge*` functions — `ensureBulkIntakeEdit`, `ensureBatchSummary`,
 `ensureCourseAllocation`, `ensureProgrammeApproval`, `ensureEmployeeApprovals`,
 `ensureAssessmentMaster`, `ensureResitMaster`, `ensureResitApplications`,
-`ensureResitMarkUpdate`, `ensureUeMaterialPrint`, `ensureUeAttendance`,
+`ensureResitMarkUpdate`, `ensureResitEvaluation`, `ensureResitIaResults`, `ensureResitUeMarkImport`, `ensureUeMaterialPrint`, `ensureUeAttendance`,
 `ensureUeMarkImport`, `ensureResultModeration`, `mergeFinanceSections`,
 `mergeStudentSections`, `mergeConfigSections`), the actual
 `page.tsx` routes on disk
@@ -668,6 +668,14 @@ through unchanged.
 > moved into `Payment Console`'s own Semester Payment tab, behind a Regular
 > Payment/Apply Advance toggle; the standalone page now just redirects there,
 > so it no longer needs its own nav entry.
+>
+> `Refugee Status` (`/finance/refugee-status`, added 2026-10-01) is a
+> standalone page for the same refugee-status workflow as Student Master's
+> row-menu popup: grant, view, edit and remove, using the same
+> `/students/refugee/{guid}` endpoints. It sits right after `Discount
+> Allocation`, and `mergeFinanceSections()` adds it as a missing
+> `Payment Collection` leaf in real mode too. It doesn't gate on
+> `permissions.xxx` yet, so `permissions` is `{}`.
 
 > **Sidebar rendering differs from this tree.** `Sidebar.tsx` changes two
 > things client-side, whatever the API returns:
@@ -679,7 +687,7 @@ through unchanged.
 > - **`Payment Collection` is re-sorted** (`ORDER_PRIORITY`, 2026-09-07,
 >   Finance rail only). The rendered order is `Dashboard`, `Payment Console`,
 >   `NCHE & Guild Payment`, `Advanced Payments`, `Discount Allocation`,
->   `Payment Refund`, `Payment History`, `Exchange Rates`. The backend can
+>   `Refugee Status`, `Payment Refund`, `Payment History`, `Exchange Rates`. The backend can
 >   return any order; returning this one avoids depending on the client
 >   re-sort.
 
@@ -854,12 +862,27 @@ through unchanged.
 > `Operations`, `Services` and `Communications` are new sections, ported from
 > `isbat_student_module.html` — all mock/static (no backend permission
 > entries exist for this workflow yet), forced into the real menu tree by
-> `mergeStudentSections()` in `menu.ts`. 10 of the module's 15 sidebar pages
-> don't gate on `permissions.xxx` in code (all `{}`). The five that do gate:
-> `Learning Mode Approval` (`edit` only), the two `Events and Announcements`
-> pages, and both `Settings` pages (`Specialization Management` and
-> `Termination Reason Master`, which gate Add/Edit/Delete via
-> `usePagePermissions()` but have no `get` action).
+> `mergeStudentSections()` in `menu.ts`. 9 of the module's 15 sidebar pages
+> don't gate on `permissions.xxx` in code (all `{}`). The six that do gate:
+> `Student Master` (custom keys, see below), `Learning Mode Approval` (`edit`
+> only), the two `Events and Announcements` pages, and both `Settings` pages
+> (`Specialization Management` and `Termination Reason Master`, which gate
+> Add/Edit/Delete via `usePagePermissions()` but have no `get` action).
+
+> `Student Master` (2026-10-01) gates its row actions on custom keys rather
+> than add/edit/delete, matching the real `/me/menu` response:
+>
+> | Key | Row action | Fallback when the key is absent |
+> |---|---|---|
+> | `view` | View (opens Student Profile) | `get` |
+> | `learningmode` | Learning Mode | `edit` |
+> | `refugee` | Refugee Status | `edit` |
+> | `sponsor` | Sponsor | `edit` |
+>
+> The fallbacks keep every action visible in mock mode and in the fail-open
+> default, which only carry `add/edit/delete/get`. `get` gates access to the
+> page. The Refugee and Sponsor popups also open from Student Profile's
+> `?refugeeFor=` / `?sponsorFor=` links, which respect the same keys.
 
 > `Terminate Student` (`Operations`, added 2026-09-15) calls
 > `POST /students/{studentGuid}/terminate`. `Termination Reason Master`
@@ -883,7 +906,10 @@ through unchanged.
 > queue for change requests raised on `Learning Mode`, split out into its own
 > page. It gates its Approve action on `permissions.edit`. It has no backend
 > menu registration yet, so `mergeStudentSections()` appends it as a missing
-> `Operations` leaf in real mode too.
+> `Operations` leaf in real mode too. Since 2026-10-01 its list comes from
+> `GET /students/learning-mode/pending-approvals` (server-paged, every
+> campus). This replaced the earlier browser-only localStorage index, which
+> only showed requests raised in the same browser.
 >
 > `Learning Mode Report` (`/student/learning-mode-report`,
 > `GET /students/learning-mode/report`) was split out of `Learning Mode` into
@@ -1236,7 +1262,7 @@ Previously scattered under "Academics" (Faculty Master only) and
 ## Assessment
 
 New module/rail — had no entry in the previous version of this doc. Mirrors
-`ASSESSMENT_SECTIONS` in `menu.ts`. None of its 43 pages gate on
+`ASSESSMENT_SECTIONS` in `menu.ts`. None of its 45 pages gate on
 `permissions.xxx` in code yet (all `{}`) — it's the newest module in the app.
 
 ```json
@@ -1560,6 +1586,20 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "children": []
         },
         {
+          "name": "Resit IA Result",
+          "icon": "lni lni-bar-chart",
+          "url": "/assessment/resit-ia-results",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Resit UE Mark Import",
+          "icon": "lni lni-upload",
+          "url": "/assessment/resit-ue-mark-import",
+          "permissions": {},
+          "children": []
+        },
+        {
           "name": "Resit Mark Update",
           "icon": "lni lni-reload",
           "url": "/assessment/resit-mark-update",
@@ -1674,6 +1714,17 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
 > the end of the section). The backend defines
 > `assessment.resitevaluation.get` / `.save` permissions for it, but neither
 > is enforced yet and the page doesn't gate on them, so `permissions` is `{}`.
+>
+> `Resit IA Result` (`/assessment/resit-ia-results`, added 2026-10-01) is the
+> read-only list of marks submitted on `Resit IA Evaluation`, and sits right
+> after it (`ensureResitIaResults()` in real mode). The backend defines
+> `assessment.resitiaresult.get`, not enforced yet, so `permissions` is `{}`.
+>
+> `Resit UE Mark Import` (`/assessment/resit-ue-mark-import`, added
+> 2026-10-01) sits right before `Resit Mark Update`, whose UE part it feeds.
+> In real mode `ensureResitUeMarkImport()` inserts it there (or at the end of
+> the section). The backend defines `assessment.resituemarkimport.get` /
+> `.import`, neither enforced yet, so `permissions` is `{}`.
 >
 > That brings the Assessment module to 43 pages.
 

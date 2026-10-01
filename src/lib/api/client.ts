@@ -19,6 +19,9 @@ export class AuthError extends Error {
   constructor(
     public readonly code: string,
     message?: string,
+    // Every entry of the envelope's errors[] — `message` only carries the
+    // first. Set by apiPost; e.g. a bulk import's per-row problems.
+    public readonly errors?: string[],
   ) {
     super(message ?? code)
     this.name = 'AuthError'
@@ -247,13 +250,13 @@ export async function apiPost<T>(path: string, body: unknown, retried = false): 
     // not an error, so resolve with null data rather than throwing.
     if (!envelope) return null as T
     if (!envelope.success) {
-      throw new AuthError(envelope.code ?? 'unknown', envelope.errors?.[0] ?? envelope.message ?? undefined)
+      throw new AuthError(envelope.code ?? 'unknown', envelope.errors?.[0] ?? envelope.message ?? undefined, Array.isArray(envelope.errors) ? envelope.errors : undefined)
     }
     return envelope.data as T
   }
 
   const { code, message } = extractErrorInfo(envelope)
-  throw new AuthError(code, message)
+  throw new AuthError(code, message, Array.isArray(envelope?.errors) ? envelope.errors : undefined)
 }
 
 // multipart/form-data variant of apiPost — for endpoints that accept a file
@@ -421,7 +424,15 @@ export async function apiPatch<T>(path: string, body: unknown, retried = false):
   throw new AuthError(code, message)
 }
 
-export async function apiDelete<T>(path: string, retried = false): Promise<T> {
+export async function apiDelete<T>(path: string): Promise<T> {
+  return (await apiDeleteWithMessage<T>(path)).data
+}
+
+// Same as apiDelete, but also returns the envelope's `message` — for
+// endpoints whose message carries meaning, e.g. a confirm-before-delete
+// first call answering `{ data: false, message: "You are about to delete
+// … Do you want to continue?" }` (resit-question-print/delete-*.md).
+export async function apiDeleteWithMessage<T>(path: string, retried = false): Promise<{ data: T; message: string | null }> {
   const res = await fetch(buildUrl(path), {
     method: 'DELETE',
     headers: NGROK_HEADERS,
@@ -433,15 +444,15 @@ export async function apiDelete<T>(path: string, retried = false): Promise<T> {
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
     await handleUnauthorized(path)
-    return apiDelete<T>(path, true)
+    return apiDeleteWithMessage<T>(path, true)
   }
 
   if (res.ok) {
-    if (!envelope) return null as T
+    if (!envelope) return { data: null as T, message: null }
     if (!envelope.success) {
       throw new AuthError(envelope.code ?? 'unknown', envelope.errors?.[0] ?? envelope.message ?? undefined)
     }
-    return envelope.data as T
+    return { data: envelope.data as T, message: envelope.message }
   }
 
   const { code, message } = extractErrorInfo(envelope)

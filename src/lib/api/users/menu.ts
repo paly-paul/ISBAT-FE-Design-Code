@@ -230,6 +230,8 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Resit Apply', 'pencil-alt', '/assessment/resit-apply'),
     leaf('Resit Scheduling', 'calendar', '/assessment/resit-scheduling'),
     leaf('Resit IA Evaluation', 'checkmark-circle', '/assessment/resit-evaluation'),
+    leaf('Resit IA Result', 'bar-chart', '/assessment/resit-ia-results'),
+    leaf('Resit UE Mark Import', 'upload', '/assessment/resit-ue-mark-import'),
     leaf('Resit Mark Update', 'reload', '/assessment/resit-mark-update'),
     leaf('Resit Seating Allocator', 'users', '/assessment/resit-seating'),
     leaf('CW Reevaluation', 'reload', '/assessment/reeval'),
@@ -1057,6 +1059,71 @@ function ensureResitEvaluation(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+// New page, no backend menu registration yet — same pattern as
+// ensureResitEvaluation above. Inserted right before Resit Mark Update
+// (imported UE marks feed that page), else at the end of the section.
+function ensureResitUeMarkImport(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const resitIdx = assessModule.children.findIndex(c => c.name === 'Resit & Disputes')
+  if (resitIdx === -1) return menu
+
+  const resitSection = assessModule.children[resitIdx]
+  if (resitSection.children.some(l => l.name === 'Resit UE Mark Import')) return menu
+
+  const children = [...resitSection.children]
+  const markUpdateIdx = children.findIndex(l => l.name === 'Resit Mark Update')
+  const newLeaf = leaf('Resit UE Mark Import', 'upload', '/assessment/resit-ue-mark-import')
+  if (markUpdateIdx !== -1) {
+    children.splice(markUpdateIdx, 0, newLeaf)
+  } else {
+    children.push(newLeaf)
+  }
+
+  const mergedSection = { ...resitSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[resitIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
+// New page, no backend menu registration yet. Inserted right after Resit IA
+// Evaluation (it lists that page's submitted marks), else at the end.
+function ensureResitIaResults(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const resitIdx = assessModule.children.findIndex(c => c.name === 'Resit & Disputes')
+  if (resitIdx === -1) return menu
+
+  const resitSection = assessModule.children[resitIdx]
+  if (resitSection.children.some(l => l.name === 'Resit IA Result')) return menu
+
+  const children = [...resitSection.children]
+  const evaluationIdx = children.findIndex(l => l.name === 'Resit IA Evaluation')
+  const newLeaf = leaf('Resit IA Result', 'bar-chart', '/assessment/resit-ia-results')
+  if (evaluationIdx !== -1) {
+    children.splice(evaluationIdx + 1, 0, newLeaf)
+  } else {
+    children.push(newLeaf)
+  }
+
+  const mergedSection = { ...resitSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[resitIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
 export function getMenu(): Promise<MenuResult> {
   if (MOCK_MENU) return Promise.resolve({ menu: stripLectureMaster(mockMenu), isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
@@ -1079,7 +1146,9 @@ export function getMenu(): Promise<MenuResult> {
       const withResitApps = ensureResitApplications(withResit)
       const withResitMarkUpdate = ensureResitMarkUpdate(withResitApps)
       const withResitEvaluation = ensureResitEvaluation(withResitMarkUpdate)
-      const withUePrint = ensureUeMaterialPrint(withResitEvaluation)
+      const withResitIaResults = ensureResitIaResults(withResitEvaluation)
+      const withResitUeImport = ensureResitUeMarkImport(withResitIaResults)
+      const withUePrint = ensureUeMaterialPrint(withResitUeImport)
       const withUeAttendance = ensureUeAttendance(withUePrint)
       const withUeMarkImport = ensureUeMarkImport(withUeAttendance)
       const withModeration = ensureResultModeration(withUeMarkImport)
