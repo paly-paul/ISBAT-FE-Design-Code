@@ -6,21 +6,26 @@ import { Pagination } from '@/components/Pagination'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
 import {
   usePendingLearningModeRequests,
-  useApproveLearningModeRequest,
-  useRejectLearningModeRequest,
+  useStudentLearningModeDetail,
+  useApproveLearningModeChange,
 } from '@/hooks/student/useLearningMode'
+import { downloadDocument } from '@/lib/documentViewer'
+import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
 // import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Approval queue for learning-mode change requests raised on
-// /student/learning-mode. Same list → review shape as Dropout Rejoin: a list
-// of waiting students, "Review" opens one request read-only with Approve /
-// Reject. Approve applies the change via the real PUT learning-mode update;
-// the queue itself is browser-local for now (see learningModeRequests.ts).
+// /student/learning-mode. Same list → review shape as Dropout Rejoin:
+//  - List: browser-local index of requests raised here, each re-checked
+//    against the real detail endpoint (usePendingLearningModeRequests /
+//    learningModeRequests.ts) — there's no list endpoint yet.
+//  - Review: GET /students/learning-mode/{studentGuid} for the request's
+//    remarks and document, then POST .../{studentGuid}/approve.
+// There is no reject endpoint, so a request can only be approved here.
 
 const PAGE_SIZE = 10
 
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
+function initials(name: string | null) {
+  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean)
   return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() || '?'
 }
 
@@ -40,55 +45,39 @@ function LearningModeApprovalContent() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  // Learning Mode's "Review it →" link deep-links a request here as
-  // ?requestGuid=<guid>.
-  const [selectedGuid, setSelectedGuid] = useState<string | null>(() => searchParams.get('requestGuid'))
-  const { data: requests = [], isLoading, isError } = usePendingLearningModeRequests()
-  const approve = useApproveLearningModeRequest()
-  const reject = useRejectLearningModeRequest()
-  const busy = approve.isPending || reject.isPending
-
+  // ---- List --------------------------------------------------------------
+  const { data: requests = [], isLoading: listLoading, isError: listError } = usePendingLearningModeRequests()
   const [page, setPage] = useState(1)
   const totalCount = requests.length
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const paginated = requests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   useEffect(() => { if (page > totalPages) setPage(totalPages) }, [page, totalPages])
 
-  const [approverRemarks, setApproverRemarks] = useState('')
+  // ---- Review ------------------------------------------------------------
+  // Picked from the list, or deep-linked from Learning Mode's "Review it →"
+  // link as ?studentGuid=<guid>.
+  const [selectedGuid, setSelectedGuid] = useState<string | null>(() => searchParams.get('studentGuid'))
+  const { data: detail, isLoading: detailLoading, isError: detailError } = useStudentLearningModeDetail(selectedGuid)
+  const approve = useApproveLearningModeChange()
   const [docPreviewOpen, setDocPreviewOpen] = useState(false)
-  const selected = requests.find(r => r.requestGuid === selectedGuid) ?? null
-  const doc = selected?.document ?? null
-  const docIsImage = !!doc?.type.startsWith('image/')
 
-  function handlePick(guid: string) { setSelectedGuid(guid); setApproverRemarks('') }
   function backToList() {
-    setSelectedGuid(null); setApproverRemarks(''); setDocPreviewOpen(false)
-    // Drop ?requestGuid= so a revisit doesn't reopen the same request.
-    if (searchParams.get('requestGuid')) router.replace('/student/learning-mode-approval')
+    setSelectedGuid(null); setDocPreviewOpen(false)
+    // Drop ?studentGuid= so a revisit doesn't reopen the same request.
+    if (searchParams.get('studentGuid')) router.replace('/student/learning-mode-approval')
   }
 
   function handleApprove() {
-    if (!permissions.edit || !selected) return
-    approve.mutate(
-      { requestGuid: selected.requestGuid, approverRemarks: approverRemarks.trim(), studentGuid: selected.studentGuid },
-      {
-        onSuccess: result => { showToast(`Approved — ${selected.studentName} moved to ${result.learningModeLabel ?? selected.requestedModeLabel}.`, 'ok'); backToList() },
-        onError: (error: Error) => showToast(error.message || 'Could not approve the request.', 'error'),
-      },
-    )
+    if (!permissions.edit || !selectedGuid || !detail) return
+    approve.mutate(selectedGuid, {
+      onSuccess: result => { showToast(`Approved — ${result.studentName ?? 'student'} is now in ${result.learningModeLabel ?? 'the requested mode'}.`, 'ok'); backToList() },
+      onError: (error: Error) => showToast(error.message || 'Could not approve the request.', 'error'),
+    })
   }
 
-  function handleReject() {
-    if (!permissions.edit || !selected) return
-    if (!approverRemarks.trim()) { showToast('Add approver remarks explaining the rejection.', 'warn'); return }
-    reject.mutate(
-      { requestGuid: selected.requestGuid, approverRemarks: approverRemarks.trim() },
-      {
-        onSuccess: () => { showToast(`Request for ${selected.studentName} rejected.`, 'ok'); backToList() },
-        onError: (error: Error) => showToast(error.message || 'Could not reject the request.', 'error'),
-      },
-    )
-  }
+  const isPending = detail?.learningModeChangeStatus === 1
+  const requestedLabel = detail?.requestedLearningModeLabel ?? detail?.learningModeLabel ?? '—'
+  const docUrl = detail?.learningModeChangeDocumentUrl ?? null
 
   return (
     <>
@@ -103,9 +92,9 @@ function LearningModeApprovalContent() {
               <div className="card-title"><i className="lni lni-hourglass"></i> Awaiting Approval</div>
               {totalCount > 0 && <span className="badge badge-amber">{totalCount} pending</span>}
             </div>
-            {isError ? (
+            {listError ? (
               <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load pending requests. Please try again.</div>
-            ) : isLoading ? (
+            ) : listLoading ? (
               <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading pending requests…</div>
             ) : paginated.length === 0 ? (
               <div className="empty">
@@ -117,29 +106,29 @@ function LearningModeApprovalContent() {
               <>
                 <div className="person-list">
                   {paginated.map(r => (
-                    <div key={r.requestGuid} className="person-row">
+                    <div key={r.studentGuid} className="person-row">
                       <div className="person-row-av">{initials(r.studentName)}</div>
                       <div className="person-row-main">
-                        <div className="person-row-name">{r.studentName}</div>
+                        <div className="person-row-name">{r.studentName ?? '—'}</div>
                         <div className="person-row-sub">
-                          {r.studentRegNo && <span className="font-mono">{r.studentRegNo}</span>}
-                          {r.studentRegNo && r.programName && ' · '}
+                          {r.studentNum && <span className="font-mono">{r.studentNum}</span>}
+                          {r.studentNum && r.programName && ' · '}
                           {r.programName}
                         </div>
                         <div className="person-row-meta">
-                          <span>{r.currentModeLabel}</span>
-                          <i className="lni lni-arrow-right" style={{ fontSize: 10 }}></i>
-                          <span className="badge badge-blue">{r.requestedModeLabel}</span>
+                          {r.currentModeLabel && <>
+                            <span>{r.currentModeLabel}</span>
+                            <i className="lni lni-arrow-right" style={{ fontSize: 10 }}></i>
+                          </>}
+                          <span className="badge badge-blue">{r.requestedModeLabel ?? '—'}</span>
                           <span>· Submitted {formatSubmitted(r.submittedAt)}</span>
                         </div>
                       </div>
-                      <button className="btn btn-neu btn-sm" onClick={() => handlePick(r.requestGuid)}><i className="lni lni-eye"></i> Review</button>
+                      <button className="btn btn-neu btn-sm" onClick={() => setSelectedGuid(r.studentGuid)}><i className="lni lni-eye"></i> Review</button>
                     </div>
                   ))}
                 </div>
-                {totalCount > 0 && (
-                  <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="pending requests" onPageChange={setPage} />
-                )}
+                <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="pending requests" onPageChange={setPage} />
               </>
             )}
           </div>
@@ -147,60 +136,68 @@ function LearningModeApprovalContent() {
           <>
             <button className="btn btn-neu btn-sm mb-4" onClick={backToList}><i className="lni lni-arrow-left"></i> Back to Approval List</button>
 
-            {isLoading ? (
+            {detailLoading ? (
               <div className="empty"><div className="empty-title">Loading request…</div></div>
-            ) : !selected ? (
+            ) : detailError || !detail ? (
               <div className="empty">
                 <div className="empty-icon"><i className="lni lni-warning"></i></div>
-                <div className="empty-title">Request Not Found</div>
-                <div className="empty-sub">It may already have been approved or rejected.</div>
+                <div className="empty-title">Couldn&apos;t Load Request</div>
+                <div className="empty-sub">The student may not exist, or the request couldn&apos;t be fetched.</div>
+              </div>
+            ) : !isPending ? (
+              <div className="empty">
+                <div className="empty-icon"><i className="lni lni-checkmark-circle"></i></div>
+                <div className="empty-title">No Pending Request</div>
+                <div className="empty-sub">
+                  {detail.learningModeChangeStatus === 2
+                    ? `${detail.studentName ?? 'This student'}'s change to ${detail.learningModeLabel ?? 'the requested mode'} has already been approved.`
+                    : `${detail.studentName ?? 'This student'} has no learning mode change awaiting approval.`}
+                </div>
               </div>
             ) : (
               <>
                 <BaselinePanel
                   label="Request Details (Read-Only)"
                   items={[
-                    { label: 'Student', value: selected.studentName },
-                    { label: 'Reg No.', value: selected.studentRegNo || '—', accent: true },
-                    { label: 'Programme', value: selected.programName || '—' },
-                    { label: 'Semester', value: selected.semesterName || '—' },
-                    { label: 'Current Mode', value: selected.currentModeLabel },
-                    { label: 'Requested Mode', value: <span style={{ color: 'var(--b700)', fontWeight: 700 }}>{selected.requestedModeLabel}</span> },
-                    { label: 'Submitted', value: formatSubmitted(selected.submittedAt) },
-                    { label: 'Status', value: <span style={{ color: 'var(--amber)' }}>Pending Approval</span> },
+                    { label: 'Student', value: detail.studentName ?? '—' },
+                    { label: 'Student No.', value: detail.studentNum || detail.studentRegNo || '—', accent: true },
+                    { label: 'Programme', value: detail.programName ?? '—' },
+                    { label: 'Semester', value: detail.semesterName ?? '—' },
+                    { label: 'Requested Mode', value: <span style={{ color: 'var(--b700)', fontWeight: 700 }}>{requestedLabel}</span> },
+                    { label: 'Status', value: <span style={{ color: 'var(--amber)' }}>{detail.learningModeChangeStatusLabel ?? 'Applied'} — pending approval</span> },
                   ]}
                 />
 
                 <div className="card" style={{ marginBottom: 16 }}>
                   <div className="card-hdr"><div className="card-title"><i className="lni lni-comments"></i> Remarks &amp; Document</div></div>
                   <div className="fg">
-                    <label className="lbl">Requester Remarks</label>
-                    <div className="ctrl" style={{ height: 'auto', minHeight: 60, whiteSpace: 'pre-wrap', background: 'var(--g100)' }}>{selected.remarks}</div>
+                    <label className="lbl">Remarks</label>
+                    <div className="ctrl" style={{ height: 'auto', minHeight: 60, whiteSpace: 'pre-wrap', background: 'var(--g100)' }}>
+                      {detail.learningModeChangeRemarks || <span className="text-g400">No remarks provided.</span>}
+                    </div>
                   </div>
                   <div className="fg">
                     <label className="lbl">Supporting Document</label>
-                    {!doc ? (
-                      <input className="ctrl" readOnly value="None attached" />
-                    ) : doc.dataUrl ? (
-                      <div><button className="btn btn-neu" onClick={() => setDocPreviewOpen(true)}><i className="lni lni-eye"></i> View {doc.name}</button></div>
+                    {docUrl ? (
+                      <div className="flex gap-2">
+                        <button className="btn btn-neu" onClick={() => setDocPreviewOpen(true)}><i className="lni lni-eye"></i> View Document</button>
+                        <button className="btn btn-neu" onClick={() => downloadDocument(docUrl)}><i className="lni lni-download"></i> Download</button>
+                      </div>
                     ) : (
-                      <input className="ctrl" readOnly value={`${doc.name} (too large to preview in this browser-only prototype)`} />
+                      <input className="ctrl" readOnly value="No document found" />
                     )}
                   </div>
                 </div>
 
                 <div className="card">
                   <div className="card-hdr"><div className="card-title"><i className="lni lni-checkmark-circle"></i> Decision</div></div>
-                  <div className="fg">
-                    <label className="lbl">Approver Remarks</label>
-                    <textarea className="ctrl" rows={3} placeholder="Required when rejecting…" value={approverRemarks} onChange={e => setApproverRemarks(e.target.value)} />
+                  <div style={{ fontSize: 12.5, color: 'var(--g600)', marginBottom: 12 }}>
+                    Approving makes <strong>{requestedLabel}</strong> the student&apos;s active learning mode for attendance, finance and exam eligibility.
                   </div>
                   <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
-                    <button className="btn btn-danger" onClick={handleReject} disabled={busy || !permissions.edit}>
-                      <i className="lni lni-close"></i> {reject.isPending ? 'Rejecting…' : 'Reject'}
-                    </button>
-                    <button className="btn btn-primary" onClick={handleApprove} disabled={busy || !permissions.edit}>
-                      <i className="lni lni-checkmark"></i> {approve.isPending ? 'Applying…' : 'Approve & Apply'}
+                    <button className="btn btn-neu" onClick={backToList} disabled={approve.isPending}>Cancel</button>
+                    <button className="btn btn-primary" onClick={handleApprove} disabled={approve.isPending || !permissions.edit}>
+                      <i className="lni lni-checkmark"></i> {approve.isPending ? 'Approving…' : 'Approve'}
                     </button>
                   </div>
                 </div>
@@ -209,24 +206,13 @@ function LearningModeApprovalContent() {
           </>
         )}
       </div>
-
-      {docPreviewOpen && doc?.dataUrl && (
-        <div className="modal-overlay open" onClick={() => setDocPreviewOpen(false)}>
-          <div className="modal modal-xl" onClick={e => e.stopPropagation()}>
-            <div className="modal-hdr"><div className="modal-title"><i className="lni lni-files"></i> {doc.name}</div><button className="modal-close" onClick={() => setDocPreviewOpen(false)}>✕</button></div>
-            <div style={{ height: '70vh', background: 'var(--g100)', borderRadius: 'var(--rsm)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {docIsImage
-                ? <img src={doc.dataUrl} alt="Supporting document" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-                : <iframe src={doc.dataUrl} title="Supporting document" style={{ width: '100%', height: '100%', border: 0 }} />}
-            </div>
-            <div className="modal-footer">
-              <a className="btn btn-neu" href={doc.dataUrl} download={doc.name}><i className="lni lni-download"></i> Download</a>
-              <button className="btn btn-primary" onClick={() => setDocPreviewOpen(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
       <Toast toast={toast} />
+      <DocumentPreviewModal
+        isOpen={docPreviewOpen && !!docUrl}
+        onClose={() => setDocPreviewOpen(false)}
+        url={docUrl}
+        title={`Supporting Document — ${detail?.studentName ?? 'Student'}`}
+      />
     </>
   )
 }

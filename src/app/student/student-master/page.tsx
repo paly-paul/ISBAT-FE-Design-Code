@@ -37,23 +37,44 @@ const PAGE_SIZE = 10
 // semCodes, not guids — sent as /students/filter's semCode param. Intake
 // holds intake codes (e.g. "20241"), sent as academicIntake — set from
 // either the Intake column's funnel or the intake dropdown in the header.
+// Status holds regStatusName text (e.g. "Passout"), sent as regStatusName.
 interface ColumnFilterState {
   programGuid: string[]
   semCode: string[]
   batchGuid: string[]
   academicIntake: string[]
+  regStatusName: string[]
 }
-const EMPTY_COLUMN_FILTERS: ColumnFilterState = { programGuid: [], semCode: [], batchGuid: [], academicIntake: [] }
+const EMPTY_COLUMN_FILTERS: ColumnFilterState = { programGuid: [], semCode: [], batchGuid: [], academicIntake: [], regStatusName: [] }
+
+// Values seen on real /students/filter responses (2026-10-01) — no options
+// endpoint exists for these. The value is sent as-is; the label just adds
+// spaces. Extend this list if the backend returns other statuses.
+const REG_STATUS_OPTIONS = [
+  { value: 'Registered', label: 'Registered' },
+  { value: 'YetToRegister', label: 'Yet to Register' },
+  { value: 'YetToClear', label: 'Yet to Clear' },
+  { value: 'Passout', label: 'Passout' },
+]
+const REG_STATUS_BADGE: Record<string, string> = {
+  Registered: 'badge-green',
+  YetToRegister: 'badge-amber',
+  YetToClear: 'badge-red',
+  Passout: 'badge-blue',
+}
+function regStatusLabel(status: string) {
+  return REG_STATUS_OPTIONS.find(o => o.value === status)?.label ?? status.replace(/([a-z])([A-Z])/g, '$1 $2')
+}
 
 // Page/search/column filters ↔ URL query (?page=&q=&prog=&sem=&batch=
-// &intake=). Parameters this page doesn't own (refugeeFor etc.) are
+// &intake=&status=). Parameters this page doesn't own (refugeeFor etc.) are
 // ignored/dropped.
 function listStateFromUrl(params: URLSearchParams | ReadonlyURLSearchParams) {
   const list = (key: string) => params.get(key)?.split(',').filter(Boolean) ?? []
   return {
     page: Math.max(1, Number(params.get('page')) || 1),
     search: params.get('q') ?? '',
-    colFilters: { programGuid: list('prog'), semCode: list('sem'), batchGuid: list('batch'), academicIntake: list('intake') } as ColumnFilterState,
+    colFilters: { programGuid: list('prog'), semCode: list('sem'), batchGuid: list('batch'), academicIntake: list('intake'), regStatusName: list('status') } as ColumnFilterState,
   }
 }
 
@@ -65,6 +86,7 @@ function listStateToQuery(page: number, search: string, colFilters: ColumnFilter
   if (colFilters.semCode.length) params.set('sem', colFilters.semCode.join(','))
   if (colFilters.batchGuid.length) params.set('batch', colFilters.batchGuid.join(','))
   if (colFilters.academicIntake.length) params.set('intake', colFilters.academicIntake.join(','))
+  if (colFilters.regStatusName.length) params.set('status', colFilters.regStatusName.join(','))
   return params.toString()
 }
 
@@ -159,7 +181,7 @@ function StudentMasterContent() {
       ? intakeOptions.find(o => o.value === pickedIntakes[0])?.label ?? pickedIntakes[0]
       : `${pickedIntakes.length} intakes`
 
-  const hasColFilters = colFilters.programGuid.length > 0 || colFilters.semCode.length > 0 || colFilters.batchGuid.length > 0 || colFilters.academicIntake.length > 0
+  const hasColFilters = colFilters.programGuid.length > 0 || colFilters.semCode.length > 0 || colFilters.batchGuid.length > 0 || colFilters.academicIntake.length > 0 || colFilters.regStatusName.length > 0
 
   // get-students-filter.md's programGuid/semCode/batchGuid each take
   // exactly one value — a multi-select column here (checking 2+ boxes) has
@@ -285,13 +307,23 @@ function StudentMasterContent() {
                     onClear={() => updateColFilters({ academicIntake: [] })}
                     onClose={() => setOpenColFilter(null)}
                   />
+                  <GuidColumnFilter
+                    label="Status"
+                    options={REG_STATUS_OPTIONS}
+                    isOpen={openColFilter === 'regStatusName'}
+                    activeFilter={colFilters.regStatusName}
+                    onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'regStatusName' ? null : 'regStatusName') }}
+                    onSelect={vals => updateColFilters({ regStatusName: vals })}
+                    onClear={() => updateColFilters({ regStatusName: [] })}
+                    onClose={() => setOpenColFilter(null)}
+                  />
                 </tr>
               </thead>
               <tbody>
                 {isLoading
-                  ? <TableLoadingState colSpan={7} />
+                  ? <TableLoadingState colSpan={8} />
                   : items.length === 0
-                    ? <EmptyState colSpan={7} hasFilters={!!normalizedSearch || hasColFilters} onClearFilters={() => { setSearch(''); clearColFilters() }} />
+                    ? <EmptyState colSpan={8} hasFilters={!!normalizedSearch || hasColFilters} onClearFilters={() => { setSearch(''); clearColFilters() }} />
                     : null}
                 {/* Rows only once everything's in — a multi-combo fetch
                     (e.g. a Semester pick fanning out per programme) would
@@ -313,6 +345,7 @@ function StudentMasterContent() {
                     <td>{r.semesterName || '—'}</td>
                     <td>{r.batchCode || '—'}</td>
                     <td className="font-mono">{r.academicIntake || '—'}</td>
+                    <td>{r.regStatusName ? <span className={`badge ${REG_STATUS_BADGE[r.regStatusName] ?? 'badge-grey'}`}>{regStatusLabel(r.regStatusName)}</span> : '—'}</td>
                   </tr>
                 ))}
               </tbody>

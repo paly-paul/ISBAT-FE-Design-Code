@@ -1,18 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  applyLearningModeChange,
+  approveLearningModeChange,
   getLearningModeOptions,
   getLearningModeReport,
   getStudentLearningModeDetail,
   updateStudentLearningMode,
+  ApplyLearningModeChangeInput,
   LearningModeReportFilters,
 } from '@/lib/api/student/learningMode'
 import {
-  approveLearningModeRequest,
-  createLearningModeRequest,
-  getPendingLearningModeRequestForStudent,
-  getPendingLearningModeRequests,
-  rejectLearningModeRequest,
-  CreateLearningModeRequestInput,
+  addLocalLearningModeRequest,
+  getLocalLearningModeRequests,
+  removeLocalLearningModeRequests,
+  LearningModeRequestEntry,
 } from '@/lib/api/student/learningModeRequests'
 
 const LEARNING_MODE_KEY = ['learning-mode']
@@ -28,27 +29,109 @@ export function useLearningModeOptions() {
   })
 }
 
+// staleTime 0 — the change-request state on this record can be moved by
+// someone else (apply on one page, approve on another), so always refetch
+// on mount rather than trusting a cached "pending"/"not pending".
 export function useStudentLearningModeDetail(studentGuid: string | null) {
   return useQuery({
     queryKey: [...LEARNING_MODE_KEY, 'detail', studentGuid],
     queryFn: () => getStudentLearningModeDetail(studentGuid as string),
     enabled: !!studentGuid,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
   })
 }
 
+// Every write below can move a student in/out of the report (and the
+// approval queue, which is the report filtered to status 1) — cheap enough
+// to invalidate the whole report broadly rather than track exactly which
+// campus/filter combination the student sits in.
+function invalidateStudent(queryClient: ReturnType<typeof useQueryClient>, studentGuid: string) {
+  queryClient.invalidateQueries({ queryKey: [...LEARNING_MODE_KEY, 'detail', studentGuid] })
+  queryClient.invalidateQueries({ queryKey: [...LEARNING_MODE_KEY, 'report'] })
+  queryClient.invalidateQueries({ queryKey: [...LEARNING_MODE_KEY, 'pending'] })
+}
+
+// Direct update (PUT) — still used by Student Master's row-menu modal.
 export function useUpdateStudentLearningMode() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ studentGuid, learningMode }: { studentGuid: string; learningMode: number }) =>
       updateStudentLearningMode(studentGuid, learningMode),
-    onSuccess: (_result, { studentGuid }) => {
-      queryClient.invalidateQueries({ queryKey: [...LEARNING_MODE_KEY, 'detail', studentGuid] })
-      // The report roster may now show this student under a different mode
-      // — cheap enough to invalidate broadly rather than track exactly
-      // which campus/filter combination it currently sits in.
-      queryClient.invalidateQueries({ queryKey: [...LEARNING_MODE_KEY, 'report'] })
+    onSuccess: (_result, { studentGuid }) => invalidateStudent(queryClient, studentGuid),
+  })
+}
+
+export function useApplyLearningModeChange() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    // currentModeLabel: the mode before this request, kept for the approval
+    // list (the API stops returning it once the request is pending).
+    mutationFn: ({ studentGuid, input }: { studentGuid: string; input: ApplyLearningModeChangeInput; currentModeLabel: string | null }) =>
+      applyLearningModeChange(studentGuid, input),
+    onSuccess: (result, { studentGuid, currentModeLabel }) => {
+      addLocalLearningModeRequest({
+        studentGuid,
+        studentName: result.studentName,
+        studentNum: result.studentNum || result.studentRegNo,
+        programName: result.programName,
+        semesterName: result.semesterName,
+        currentModeLabel,
+        requestedModeLabel: result.requestedLearningModeLabel ?? result.learningModeLabel,
+        submittedAt: new Date().toISOString(),
+      })
+      // Seed the detail cache with the response straight away so the page
+      // flips to "pending" without waiting on the refetch.
+      queryClient.setQueryData([...LEARNING_MODE_KEY, 'detail', studentGuid], result)
+      invalidateStudent(queryClient, studentGuid)
     },
+  })
+}
+
+export function useApproveLearningModeChange() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (studentGuid: string) => approveLearningModeChange(studentGuid),
+    onSuccess: (result, studentGuid) => {
+      removeLocalLearningModeRequests([studentGuid])
+      queryClient.setQueryData([...LEARNING_MODE_KEY, 'detail', studentGuid], result)
+      invalidateStudent(queryClient, studentGuid)
+    },
+  })
+}
+
+// Approval list — the browser-local index (see learningModeRequests.ts),
+// each entry re-checked against the real detail endpoint so anything
+// approved elsewhere (or no longer pending) drops out and is pruned.
+// Oldest first — first come, first reviewed. staleTime 0: always re-check
+// on mount, the state can be moved from another page or user.
+export function usePendingLearningModeRequests() {
+  return useQuery({
+    queryKey: [...LEARNING_MODE_KEY, 'pending'],
+    queryFn: async (): Promise<LearningModeRequestEntry[]> => {
+      const entries = getLocalLearningModeRequests()
+      const checked = await Promise.all(entries.map(async entry => {
+        try {
+          const detail = await getStudentLearningModeDetail(entry.studentGuid)
+          return { entry, detail, stale: detail.learningModeChangeStatus !== 1 }
+        } catch {
+          // Couldn't check (network blip) — keep it rather than lose it.
+          return { entry, detail: null, stale: false }
+        }
+      }))
+      removeLocalLearningModeRequests(checked.filter(c => c.stale).map(c => c.entry.studentGuid))
+      return checked
+        .filter(c => !c.stale)
+        .map(({ entry, detail }) => detail ? {
+          ...entry,
+          studentName: detail.studentName ?? entry.studentName,
+          studentNum: detail.studentNum || detail.studentRegNo || entry.studentNum,
+          programName: detail.programName ?? entry.programName,
+          semesterName: detail.semesterName ?? entry.semesterName,
+          requestedModeLabel: detail.requestedLearningModeLabel ?? entry.requestedModeLabel,
+        } : entry)
+        .sort((a, b) => a.submittedAt.localeCompare(b.submittedAt))
+    },
+    staleTime: 0,
   })
 }
 
@@ -61,56 +144,5 @@ export function useLearningModeReport(filters: LearningModeReportFilters | null,
   })
 }
 
-// Change requests — see learningModeRequests.ts for why these are
-// browser-local for now.
-const REQUESTS_KEY = [...LEARNING_MODE_KEY, 'requests']
-
-export function usePendingLearningModeRequests() {
-  return useQuery({
-    queryKey: REQUESTS_KEY,
-    queryFn: getPendingLearningModeRequests,
-    staleTime: 0,
-  })
-}
-
-export function usePendingLearningModeRequestForStudent(studentGuid: string | null) {
-  return useQuery({
-    queryKey: [...REQUESTS_KEY, 'student', studentGuid],
-    queryFn: () => getPendingLearningModeRequestForStudent(studentGuid as string),
-    enabled: !!studentGuid,
-    staleTime: 0,
-  })
-}
-
-export function useCreateLearningModeRequest() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (input: CreateLearningModeRequestInput) => createLearningModeRequest(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: REQUESTS_KEY }),
-  })
-}
-
-export function useApproveLearningModeRequest() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({ requestGuid, approverRemarks }: { requestGuid: string; approverRemarks: string; studentGuid: string }) =>
-      approveLearningModeRequest(requestGuid, approverRemarks),
-    onSuccess: (_result, { studentGuid }) => {
-      queryClient.invalidateQueries({ queryKey: REQUESTS_KEY })
-      queryClient.invalidateQueries({ queryKey: [...LEARNING_MODE_KEY, 'detail', studentGuid] })
-      queryClient.invalidateQueries({ queryKey: [...LEARNING_MODE_KEY, 'report'] })
-    },
-  })
-}
-
-export function useRejectLearningModeRequest() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({ requestGuid, approverRemarks }: { requestGuid: string; approverRemarks: string }) =>
-      rejectLearningModeRequest(requestGuid, approverRemarks),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: REQUESTS_KEY }),
-  })
-}
-
-export type { LearningModeRequest, CreateLearningModeRequestInput } from '@/lib/api/student/learningModeRequests'
-export type { LearningModeOption, StudentLearningModeDetail, LearningModeReportRow, LearningModeReportFilters, PagedResult } from '@/lib/api/student/learningMode'
+export type { LearningModeRequestEntry } from '@/lib/api/student/learningModeRequests'
+export type { LearningModeOption, StudentLearningModeDetail, LearningModeReportRow, LearningModeReportFilters, PagedResult, ApplyLearningModeChangeInput } from '@/lib/api/student/learningMode'

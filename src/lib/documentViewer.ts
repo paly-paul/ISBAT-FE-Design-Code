@@ -67,6 +67,101 @@ export async function openDocumentForViewing(url: string): Promise<void> {
   window.open(url, '_blank', 'noopener')
 }
 
+// ---- In-page preview -------------------------------------------------------
+// openDocumentForViewing above trusts response-content-type alone and opens a
+// new tab after an await (popup blockers can eat that). For an in-page
+// preview we resolve the type more defensively — URL param, then file
+// extension, then the fetched blob's own type, then the file's magic bytes —
+// and re-wrap the bytes in a Blob carrying that type, so an S3 object stored
+// as application/octet-stream still renders instead of downloading.
+
+export type DocumentPreview =
+  | { kind: 'pdf' | 'image'; src: string; revoke: () => void }
+  | { kind: 'office'; src: string; revoke: () => void }
+  | { kind: 'text'; src: null; text: string; revoke: () => void }
+  | { kind: 'unsupported'; src: null; revoke: () => void }
+
+const EXTENSION_TYPES: Record<string, string> = {
+  pdf: 'application/pdf',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', svg: 'image/svg+xml',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  txt: 'text/plain', md: 'text/markdown', csv: 'text/csv', log: 'text/plain', json: 'application/json',
+}
+
+const MAX_TEXT_BYTES = 2 * 1024 * 1024
+
+function isTextType(t: string) {
+  return t.startsWith('text/') || t === 'application/json'
+}
+
+// Last-resort check for untyped files: no NUL bytes and valid UTF-8 → text.
+async function decodeIfText(blob: Blob): Promise<string | null> {
+  if (blob.size > MAX_TEXT_BYTES) return null
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  if (bytes.subarray(0, 4096).includes(0)) return null
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch {
+    return null
+  }
+}
+
+function typeFromExtension(url: string): string {
+  try {
+    const ext = new URL(url).pathname.split('.').pop()?.toLowerCase() ?? ''
+    return EXTENSION_TYPES[ext] ?? ''
+  } catch {
+    return ''
+  }
+}
+
+async function sniffType(blob: Blob): Promise<string> {
+  const b = new Uint8Array(await blob.slice(0, 8).arrayBuffer())
+  if (b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46) return 'application/pdf' // %PDF
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png'
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg'
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'image/gif'
+  return ''
+}
+
+function isUsefulType(t: string) {
+  return !!t && t !== 'application/octet-stream' && t !== 'binary/octet-stream'
+}
+
+// Throws only if the document can't be fetched at all (expired presign, CORS).
+export async function resolveDocumentPreview(url: string): Promise<DocumentPreview> {
+  const noop = () => {}
+  const hinted = [extractContentType(url), typeFromExtension(url)].find(isUsefulType) ?? ''
+
+  // Office Online fetches the file itself, so it needs the real https URL.
+  if (OFFICE_CONTENT_TYPES.includes(hinted)) {
+    return url.startsWith('https:')
+      ? { kind: 'office', src: `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`, revoke: noop }
+      : { kind: 'unsupported', src: null, revoke: noop }
+  }
+
+  // The S3 bucket has no CORS policy, so remote URLs go through the
+  // same-origin /doc-proxy route (app/doc-proxy/route.ts). blob: URLs (mock
+  // mode) are already local.
+  const fetchUrl = url.startsWith('blob:') ? url : `/doc-proxy?url=${encodeURIComponent(url)}`
+  const res = await fetch(fetchUrl)
+  if (!res.ok) throw new Error('Failed to load document')
+  const raw = await res.blob()
+  const type = [hinted, raw.type].find(isUsefulType) || (await sniffType(raw))
+
+  if (type === 'application/pdf' || type.startsWith('image/')) {
+    const src = URL.createObjectURL(new Blob([raw], { type }))
+    return { kind: type === 'application/pdf' ? 'pdf' : 'image', src, revoke: () => URL.revokeObjectURL(src) }
+  }
+  if (isTextType(type) || !type) {
+    const text = await decodeIfText(raw)
+    if (text !== null) return { kind: 'text', src: null, text, revoke: noop }
+  }
+  return { kind: 'unsupported', src: null, revoke: noop }
+}
+
 export function downloadDocument(url: string): void {
   window.open(url, '_blank', 'noopener')
 }

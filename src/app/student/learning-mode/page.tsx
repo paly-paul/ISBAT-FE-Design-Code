@@ -12,8 +12,7 @@ import { useStudent } from '@/hooks/student/useStudents'
 import {
   useLearningModeOptions,
   useStudentLearningModeDetail,
-  useCreateLearningModeRequest,
-  usePendingLearningModeRequestForStudent,
+  useApplyLearningModeChange,
 } from '@/hooks/student/useLearningMode'
 
 // Ported from isbat_student_module.html's Learning Mode page, then rewired
@@ -22,10 +21,13 @@ import {
 // its own page, /student/learning-mode-report (2026-09-29). Only 3 real modes
 // exist (Campus/Blended/Online).
 //
-// Mode changes go through approval (2026-09-30): this page only raises the
-// request (mode + remarks + optional document); /student/learning-mode-
-// approval lists pending requests and applies the change on approve. See
-// learningModeRequests.ts for why requests are browser-local for now.
+// Mode changes go through approval (post-apply-learning-mode-change.md,
+// 2026-09-30): this page applies (mode + optional remarks + required
+// document); /student/learning-mode-approval lists pending requests and
+// approves them. Pending state comes from the detail's
+// learningModeChangeStatus (1 = Applied).
+
+const REMARKS_MAX = 500
 
 // useSearchParams() requires a Suspense boundary above it (Next.js App
 // Router) — see the wrapping default export at the bottom of this file,
@@ -56,8 +58,7 @@ function LearningModeContent() {
 
   const { data: detail, isLoading: isDetailLoading } = useStudentLearningModeDetail(student?.studentGuid ?? null)
   const { data: options = [] } = useLearningModeOptions()
-  const { data: pendingRequest } = usePendingLearningModeRequestForStudent(student?.studentGuid ?? null)
-  const createRequest = useCreateLearningModeRequest()
+  const applyChange = useApplyLearningModeChange()
 
   const [selectedMode, setSelectedMode] = useState('')
   const [remarks, setRemarks] = useState('')
@@ -72,10 +73,16 @@ function LearningModeContent() {
     setSelectedMode(detail?.learningMode != null ? String(detail.learningMode) : '')
   }, [detail?.studentGuid, detail?.learningMode])
 
-  const currentModeLabel = String(detail?.learningModeLabel ?? (detail as any)?.learningMode ?? (student as any)?.learningMode ?? 'Not set')
-  const programmeLabel = detail?.programName ?? (detail as any)?.programme ?? student?.programName ?? (student as any)?.programme ?? null
-  const semesterLabel = detail?.semesterName ?? (detail as any)?.semester ?? student?.semesterName ?? (student as any)?.semester ?? null
-  const isPending = !!pendingRequest
+  const isPending = detail?.learningModeChangeStatus === 1
+  const requestedLabel = detail?.requestedLearningModeLabel ?? detail?.learningModeLabel ?? '—'
+  const programmeLabel = detail?.programName ?? (detail as any)?.programme ?? student?.programName ?? (student as any)?.programme ?? '—'
+  const semesterLabel = detail?.semesterName ?? (detail as any)?.semester ?? student?.semesterName ?? (student as any)?.semester ?? '—'
+  // While pending, detail.learningMode already holds the *requested* mode
+  // (the backend writes it on apply) — the pre-request mode isn't returned,
+  // so it isn't shown as "Current Mode" here.
+  const modeValue = isPending
+    ? <span>{requestedLabel} <span className="badge badge-amber" style={{ marginLeft: 4 }}>Pending approval</span></span>
+    : detail?.learningModeLabel ?? (detail as any)?.learningMode ?? (student as any)?.learningMode ?? 'Not set'
 
   function resetForm() {
     setRemarks(''); setDocFile(null); setFileInputKey(k => k + 1)
@@ -93,20 +100,10 @@ function LearningModeContent() {
     if (!permissions.edit || !student) return
     if (!selectedMode) { showToast('Please select a learning mode.', 'warn'); return }
     if (detail?.learningMode != null && String(detail.learningMode) === selectedMode) { showToast('The student is already in this learning mode.', 'warn'); return }
-    if (!remarks.trim()) { showToast('Remarks are required.', 'warn'); return }
-    createRequest.mutate(
-      {
-        studentGuid: student.studentGuid,
-        studentName: detail?.studentName ?? student.studentName,
-        studentRegNo: detail?.studentRegNo ?? student.studentRegNo ?? null,
-        programName: programmeLabel,
-        semesterName: semesterLabel,
-        currentModeLabel,
-        requestedMode: Number(selectedMode),
-        requestedModeLabel: options.find(o => String(o.value) === selectedMode)?.label ?? selectedMode,
-        remarks: remarks.trim(),
-        document: docFile,
-      },
+    if (remarks.trim().length > REMARKS_MAX) { showToast(`Remarks must be ${REMARKS_MAX} characters or fewer.`, 'warn'); return }
+    if (!docFile) { showToast('A supporting document is required.', 'warn'); return }
+    applyChange.mutate(
+      { studentGuid: student.studentGuid, input: { requestedLearningMode: Number(selectedMode), remarks: remarks.trim() || null, document: docFile }, currentModeLabel: detail?.learningModeLabel ?? null },
       {
         onSuccess: () => { resetForm(); showToast('Mode change submitted for approval.', 'ok') },
         onError: (error: Error) => showToast(error.message || 'Could not submit the request.', 'error'),
@@ -138,9 +135,9 @@ function LearningModeContent() {
               label="Current Enrollment (Read-Only)"
               items={[
                 { label: 'Student', value: detail?.studentName ?? student.studentName },
-                { label: 'Programme', value: programmeLabel ?? '—' },
-                { label: 'Semester', value: semesterLabel ?? '—' },
-                { label: 'Current Mode', value: currentModeLabel },
+                { label: 'Programme', value: programmeLabel },
+                { label: 'Semester', value: semesterLabel },
+                { label: isPending ? 'Requested Mode' : 'Current Mode', value: modeValue },
               ]}
             />
             <div className="card">
@@ -149,8 +146,8 @@ function LearningModeContent() {
                 <div className="info-box mb-3">
                   <i className="lni lni-hourglass" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0 }}></i>
                   <div style={{ fontSize: 12.5 }}>
-                    A change to <strong>{pendingRequest.requestedModeLabel}</strong> is awaiting approval. It must be approved or rejected before a new request can be raised.{' '}
-                    <Link href={`/student/learning-mode-approval?requestGuid=${pendingRequest.requestGuid}`} style={{ color: 'var(--b700)', fontWeight: 600 }}>Review it →</Link>
+                    A change to <strong>{requestedLabel}</strong> is awaiting approval. A new request can be raised once it&apos;s approved.{' '}
+                    <Link href={`/student/learning-mode-approval?studentGuid=${student.studentGuid}`} style={{ color: 'var(--b700)', fontWeight: 600 }}>Review it →</Link>
                   </div>
                 </div>
               )}
@@ -164,18 +161,19 @@ function LearningModeContent() {
                 />
               </div>
               <div className="fg">
-                <label className="lbl">Remarks <span className="req">*</span></label>
-                <textarea className="ctrl" rows={3} placeholder="Reason for changing the learning mode…" value={remarks} onChange={e => setRemarks(e.target.value)} disabled={isPending} />
+                <label className="lbl">Remarks</label>
+                <textarea className="ctrl" rows={3} maxLength={REMARKS_MAX} placeholder="Reason for changing the learning mode…" value={remarks} onChange={e => setRemarks(e.target.value)} disabled={isPending} />
+                <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4, textAlign: 'right' }}>{remarks.length}/{REMARKS_MAX}</div>
               </div>
               <div className="fg">
-                <label className="lbl">Supporting Document</label>
-                <input key={fileInputKey} className="ctrl" type="file" accept=".pdf,image/*" onChange={e => setDocFile(e.target.files?.[0] ?? null)} disabled={isPending} />
-                <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4 }}>Optional — PDF or image, e.g. an approval letter or medical note.</div>
+                <label className="lbl">Supporting Document <span className="req">*</span></label>
+                <input key={fileInputKey} className="ctrl" type="file" onChange={e => setDocFile(e.target.files?.[0] ?? null)} disabled={isPending} />
+                <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4 }}>Required — e.g. proof of relocation or an employer letter.</div>
               </div>
               <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                 <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                <button className="btn btn-primary" disabled={isPending || createRequest.isPending || !permissions.edit} onClick={handleSubmit}>
-                  <i className="lni lni-telegram-original"></i> {createRequest.isPending ? 'Submitting…' : 'Submit for Approval'}
+                <button className="btn btn-primary" disabled={isPending || applyChange.isPending || !permissions.edit} onClick={handleSubmit}>
+                  <i className="lni lni-telegram-original"></i> {applyChange.isPending ? 'Submitting…' : 'Submit for Approval'}
                 </button>
               </div>
             </div>
