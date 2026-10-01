@@ -20,9 +20,13 @@ export function useStudents(page: number, pageSize: number, filters?: StudentLis
 // filter shape (guids, not just free text), rather than overloading one
 // hook to cover both. `enabled` lets the page skip this one entirely while
 // useStudentsFilterMulti below is the active path instead.
+function studentsFilterKey(page: number, pageSize: number, f: StudentColumnFilters) {
+  return [...STUDENTS_LIST_KEY, 'filter', page, pageSize, f.programGuid ?? '', f.semesterGuid ?? '', f.semCode ?? '', f.batchGuid ?? '', f.academicIntake ?? '', f.regStatus ?? '', f.searchTerm ?? '']
+}
+
 export function useStudentsFilter(page: number, pageSize: number, filters: StudentColumnFilters, enabled = true) {
   return useQuery({
-    queryKey: [...STUDENTS_LIST_KEY, 'filter', page, pageSize, filters.programGuid ?? '', filters.semesterGuid ?? '', filters.semCode ?? '', filters.batchGuid ?? '', filters.academicIntake ?? '', filters.regStatusName ?? '', filters.searchTerm ?? ''],
+    queryKey: studentsFilterKey(page, pageSize, filters),
     queryFn: () => getStudentsFilter(page, pageSize, filters),
     enabled,
     staleTime: Infinity,
@@ -30,39 +34,29 @@ export function useStudentsFilter(page: number, pageSize: number, filters: Stude
   })
 }
 
-// Multi-select column filters, layered on top of the single-guid-per-field
-// endpoint above — get-students-filter.md's programGuid/semesterGuid/
-// batchGuid params each take exactly one guid, no array/comma-list support
-// documented. To let a column filter still check off "Programme A AND
-// Programme B" the way FilterTh's own multi-select columns do elsewhere,
-// each *combination* of the selected guids (one per dimension, all
-// dimensions ANDed, values within a dimension ORed) is fetched as its own
-// request — GetStudentsFilterCombinations below builds that list — and the
-// results are merged by studentGuid (dedup) and paginated client-side.
-// This necessarily gives up real server-side pagination the moment more
-// than one combination is in play: pageSize is forced high per request so
-// each combination's *full* result set is in hand before merging, which
-// only stays cheap because Student Master's own filter dimensions
-// (Programme/Semester/Batch) are narrow, hand-picked slices, not "no
-// filters at all". The page falls back to plain useStudentsFilter above
-// (real server pagination) whenever there's only a single combination —
-// no filter, or exactly one value picked per dimension — which covers the
-// common case.
-const MULTI_FETCH_PAGE_SIZE = 1000
+// Multi-select column filters, layered on top of the single-value-per-field
+// endpoint above — get-students-filter.md's programGuid/semCode/batchGuid/
+// academicIntake/regStatus params each take exactly one value, no array/
+// comma-list support documented. To let a column filter still check off
+// "Programme A AND Programme B", each *combination* of the selected values
+// (one per dimension, dimensions ANDed, values within a dimension ORed) is
+// its own request — getStudentsFilterCombinations below builds that list.
+// The page falls back to plain useStudentsFilter above whenever there's
+// only a single combination (no filter, or one value per dimension).
 
-export function getStudentsFilterCombinations(colFilters: { programGuid: string[]; semCode: string[]; batchGuid: string[]; academicIntake: string[]; regStatusName: string[] }, searchTerm?: string): StudentColumnFilters[] {
+export function getStudentsFilterCombinations(colFilters: { programGuid: string[]; semCode: string[]; batchGuid: string[]; academicIntake: string[]; regStatus: string[] }, searchTerm?: string): StudentColumnFilters[] {
   const programs = colFilters.programGuid.length ? colFilters.programGuid : [undefined]
   const semCodes = colFilters.semCode.length ? colFilters.semCode : [undefined]
   const batches = colFilters.batchGuid.length ? colFilters.batchGuid : [undefined]
   const intakes = colFilters.academicIntake.length ? colFilters.academicIntake : [undefined]
-  const statuses = colFilters.regStatusName.length ? colFilters.regStatusName : [undefined]
+  const statuses = colFilters.regStatus.length ? colFilters.regStatus : [undefined]
   const combos: StudentColumnFilters[] = []
   for (const programGuid of programs) {
     for (const semCode of semCodes) {
       for (const batchGuid of batches) {
         for (const academicIntake of intakes) {
-          for (const regStatusName of statuses) {
-            combos.push({ programGuid, semCode, batchGuid, academicIntake, regStatusName, searchTerm })
+          for (const regStatus of statuses) {
+            combos.push({ programGuid, semCode, batchGuid, academicIntake, regStatus, searchTerm })
           }
         }
       }
@@ -71,27 +65,48 @@ export function getStudentsFilterCombinations(colFilters: { programGuid: string[
   return combos
 }
 
-export function useStudentsFilterMulti(combos: StudentColumnFilters[], enabled: boolean) {
+// Server-paged across combinations, sorted by name as one list. A student
+// has exactly one programme, semester, batch, intake and status, so
+// combinations never overlap. The server returns each combination sorted by
+// name, so the first K rows of the merged, name-sorted list are always
+// among the first K rows of each combination. For table page p (K = p ×
+// pageSize): fetch each combination's first K rows (one request each),
+// merge, sort by name, and take page p's slice. totalCount comes from each
+// response. K is rounded up to a CHUNK so neighbouring pages reuse the same
+// requests (pages 1–5 at pageSize 10 share one request per combination).
+const MULTI_CHUNK = 50
+
+function compareByName(a: StudentDto, b: StudentDto) {
+  return (a.studentName ?? '').localeCompare(b.studentName ?? '', undefined, { sensitivity: 'base' })
+    || a.studentGuid.localeCompare(b.studentGuid)
+}
+
+export function useStudentsFilterMulti(combos: StudentColumnFilters[], page: number, pageSize: number, enabled: boolean) {
+  const needed = page * pageSize
+  const fetchSize = Math.ceil(needed / MULTI_CHUNK) * MULTI_CHUNK
+
   const results = useQueries({
     queries: combos.map(f => ({
-      queryKey: [...STUDENTS_LIST_KEY, 'filter-multi', f.programGuid ?? '', f.semesterGuid ?? '', f.semCode ?? '', f.batchGuid ?? '', f.academicIntake ?? '', f.regStatusName ?? '', f.searchTerm ?? ''],
-      queryFn: () => getStudentsFilter(1, MULTI_FETCH_PAGE_SIZE, f),
+      queryKey: studentsFilterKey(1, fetchSize, f),
+      queryFn: () => getStudentsFilter(1, fetchSize, f),
       enabled,
       staleTime: Infinity,
       gcTime: Infinity,
     })),
   })
 
-  return useMemo(() => {
-    const merged = new Map<string, StudentDto>()
-    for (const r of results) r.data?.items.forEach(item => merged.set(item.studentGuid, item))
-    return {
-      items: Array.from(merged.values()),
-      isLoading: results.some(r => r.isLoading),
-      isError: results.some(r => r.isError),
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [results])
+  const ready = enabled && results.length > 0 && results.every(r => r.data)
+  const totalCount = results.reduce((sum, r) => sum + (r.data?.totalCount ?? 0), 0)
+  const items = ready
+    ? results.flatMap(r => r.data!.items).sort(compareByName).slice((page - 1) * pageSize, needed)
+    : []
+  const isError = results.some(r => r.isError)
+  return {
+    items,
+    totalCount,
+    isLoading: !isError && !ready,
+    isError,
+  }
 }
 
 // Infinite-scroll variant for a search dropdown — each additional page is

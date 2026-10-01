@@ -26,6 +26,8 @@ import { AuthError } from '@/lib/api/client'
 function applicantName(a: { firstName: string | null; lastName: string | null }) {
   return `${a.firstName ?? ''}${a.lastName ? ` ${a.lastName}` : ''}`.trim() || '—'
 }
+const MIN_SEARCH_CHARS = 3
+
 function searchResultName(a: { studentName: string | null; firstName: string | null }) {
   return a.studentName || a.firstName || '—'
 }
@@ -65,15 +67,18 @@ export default function TerminateStudentPage() {
     return () => document.removeEventListener('mousedown', handle)
   }, [searchFocused])
 
+  // Same 3-character minimum as Discount Allocation — the backend's search
+  // only returns results from 3 characters. Empty still lists everyone.
   const searchTermLen = committedSearch.trim().length
+  const searchTooShort = searchTermLen > 0 && searchTermLen < MIN_SEARCH_CHARS
   const {
     data: searchPages, fetchNextPage, hasNextPage, isFetchingNextPage,
     isFetching: isSearching, isError: isSearchError,
   } = useSearchStudentsInfinite(
     committedSearch, 20,
-    searchFocused && (searchTermLen === 0 || searchTermLen >= 2),
+    searchFocused && !searchTooShort,
   )
-  const matches = searchPages?.pages.flatMap(p => p.items) ?? []
+  const matches = searchTooShort ? [] : searchPages?.pages.flatMap(p => p.items) ?? []
 
   function handleSearchResultsScroll(e: React.UIEvent<HTMLDivElement>) {
     if (!hasNextPage || isFetchingNextPage) return
@@ -99,13 +104,10 @@ export default function TerminateStudentPage() {
   const [terminatedGuids, setTerminatedGuids] = useState<Set<string>>(new Set())
   const terminatedHere = !!studentGuid && terminatedGuids.has(studentGuid)
   const alreadyTerminated = terminatedHere || studentDetail?.studActive === 0
-  // Status badge: Inactive when known terminated; the server's status when
-  // it sends one; otherwise unknown ('—') rather than assuming Active.
-  const statusLabel = alreadyTerminated
-    ? 'Terminated'
-    : studentDetail?.studActive === 1
-      ? (studentDetail.regStatusName || 'Active')
-      : (studentDetail?.regStatusName || null)
+  // Status badge: Terminated once terminated (here or already on the
+  // server), otherwise Active — per request, 2026-10-01. Reg status itself
+  // is shown separately in the facts grid below.
+  const statusLabel = alreadyTerminated ? 'Terminated' : 'Active'
 
   const { data: reasons = [], isLoading: isReasonsLoading } = useTerminationReasonsDropdown('', true)
   const [terminationReasonGuid, setTerminationReasonGuid] = useState('')
@@ -173,9 +175,8 @@ export default function TerminateStudentPage() {
   }
 
   function closeConfirm() {
-    // Closing the success popup also clears the terminated student, so the
-    // page is ready for the next search instead of showing a stale record.
-    if (successInfo) clearSelection()
+    // The terminated student stays on screen (badge flips to Terminated via
+    // terminatedGuids) — "New Search" in the header clears the page.
     setConfirmOpen(false)
     setSuccessInfo(null)
   }
@@ -222,7 +223,9 @@ export default function TerminateStudentPage() {
                 }}
                 onScroll={handleSearchResultsScroll}
               >
-                {isSearching && matches.length === 0 ? (
+                {searchTooShort ? (
+                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Type at least {MIN_SEARCH_CHARS} characters to search.</div>
+                ) : isSearching && matches.length === 0 ? (
                   <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Searching…</div>
                 ) : isSearchError ? (
                   <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Search failed. Please try again.</div>
@@ -268,12 +271,7 @@ export default function TerminateStudentPage() {
                     </div>
                     {!isStudentDetailLoading && (studentDetail || alreadyTerminated) && (
                       <div className="pc-hero-actions pc-hero-actions-top">
-                        <span
-                          className={`badge ${alreadyTerminated ? 'badge-red' : statusLabel ? 'badge-green' : 'badge-grey'}`}
-                          title={statusLabel ? undefined : 'Status not available from the server'}
-                        >
-                          {statusLabel ?? 'Status —'}
-                        </span>
+                        <span className={`badge ${alreadyTerminated ? 'badge-red' : 'badge-green'}`}>{statusLabel}</span>
                       </div>
                     )}
                   </div>
