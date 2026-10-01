@@ -226,6 +226,7 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Resit Applications', 'folder', '/assessment/resit-applications'),
     leaf('Resit Apply', 'pencil-alt', '/assessment/resit-apply'),
     leaf('Resit Scheduling', 'calendar', '/assessment/resit-scheduling'),
+    leaf('Resit IA Evaluation', 'checkmark-circle', '/assessment/resit-evaluation'),
     leaf('Resit Mark Update', 'reload', '/assessment/resit-mark-update'),
     leaf('Resit Seating Allocator', 'users', '/assessment/resit-seating'),
     leaf('CW Reevaluation', 'reload', '/assessment/reeval'),
@@ -1018,6 +1019,40 @@ function ensureResitMarkUpdate(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+// New page, no backend menu registration yet — same "patch it into the real
+// menu client-side" pattern as ensureResitMarkUpdate above. Inserted right
+// after Resit Scheduling (falls back to the end), so it lands between
+// Scheduling and Mark Update once ensureResitMarkUpdate has run.
+function ensureResitEvaluation(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const resitIdx = assessModule.children.findIndex(c => c.name === 'Resit & Disputes')
+  if (resitIdx === -1) return menu
+
+  const resitSection = assessModule.children[resitIdx]
+  if (resitSection.children.some(l => l.name === 'Resit IA Evaluation')) return menu
+
+  const children = [...resitSection.children]
+  const schedulingIdx = children.findIndex(l => l.name === 'Resit Scheduling')
+  const newLeaf = leaf('Resit IA Evaluation', 'checkmark-circle', '/assessment/resit-evaluation')
+  if (schedulingIdx !== -1) {
+    children.splice(schedulingIdx + 1, 0, newLeaf)
+  } else {
+    children.push(newLeaf)
+  }
+
+  const mergedSection = { ...resitSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[resitIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
 export function getMenu(): Promise<MenuResult> {
   if (MOCK_MENU) return Promise.resolve({ menu: stripLectureMaster(mockMenu), isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
@@ -1039,7 +1074,8 @@ export function getMenu(): Promise<MenuResult> {
       const withResit = ensureResitMaster(withAssMaster)
       const withResitApps = ensureResitApplications(withResit)
       const withResitMarkUpdate = ensureResitMarkUpdate(withResitApps)
-      const withUePrint = ensureUeMaterialPrint(withResitMarkUpdate)
+      const withResitEvaluation = ensureResitEvaluation(withResitMarkUpdate)
+      const withUePrint = ensureUeMaterialPrint(withResitEvaluation)
       const withUeAttendance = ensureUeAttendance(withUePrint)
       const withUeMarkImport = ensureUeMarkImport(withUeAttendance)
       const withModeration = ensureResultModeration(withUeMarkImport)

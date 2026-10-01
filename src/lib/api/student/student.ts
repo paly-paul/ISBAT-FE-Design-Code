@@ -148,8 +148,12 @@ export interface StudentColumnFilters {
   // backend 2026-09-29 — not live yet; until it is, the param is ignored.
   semCode?: string
   batchGuid?: string
-  // Intake code (e.g. "20241"), matching the list items' own academicIntake
-  // field — Student Master's intake dropdown and Intake column filter.
+  // Joined intake (T_STUDENT.INTAKEGUID) — Student Master's header intake
+  // dropdown. Not the same as academicIntake below.
+  intakeGuid?: string
+  // Intake code (e.g. "20241") from the student's active history row,
+  // matching the list items' own academicIntake field — Student Master's
+  // Academic Intake column filter.
   academicIntake?: string
   // Registration status code (get-students-filter.md): 1 Registered,
   // 2 YetToRegister, 3 DropOut, 4 YetToClear, 5 Passout.
@@ -200,6 +204,7 @@ export function getStudentsFilter(page: number, pageSize: number, filters: Stude
   if (filters.semesterGuid) params.set('semesterGuid', filters.semesterGuid)
   if (filters.semCode) params.set('semCode', filters.semCode)
   if (filters.batchGuid) params.set('batchGuid', filters.batchGuid)
+  if (filters.intakeGuid) params.set('intakeGuid', filters.intakeGuid)
   if (filters.academicIntake) params.set('academicIntake', filters.academicIntake)
   if (filters.regStatus) params.set('regStatus', filters.regStatus)
   if (filters.searchTerm?.trim()) params.set('searchTerm', filters.searchTerm.trim())

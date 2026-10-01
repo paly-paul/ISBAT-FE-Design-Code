@@ -67,6 +67,30 @@ export interface LearningModeReportRow {
   learningModeLabel: string
 }
 
+// GET /students/learning-mode/pending-approvals
+// (get-pending-learning-mode-approvals.md, 2026-10-01) — every active student
+// with a change request at status 1 (Applied), across all campuses.
+// Programme/semester/batch names are null for a legacy student whose GUIDs
+// don't resolve. documentUrl is a pre-signed S3 URL that expires.
+export interface PendingLearningModeApprovalRow {
+  studentGuid: string
+  studentNum: string | null
+  studentRegNo: string | null
+  studentName: string | null
+  programGuid: string | null
+  programName: string | null
+  semesterGuid: string | null
+  semesterName: string | null
+  batchGuid: string | null
+  batchCode: string | null
+  currentLearningMode: number | null
+  currentLearningModeLabel: string | null
+  requestedLearningMode: number | null
+  requestedLearningModeLabel: string | null
+  remarks: string | null
+  documentUrl: string | null
+}
+
 export interface PagedResult<T> {
   items: T[]
   totalCount: number
@@ -157,6 +181,30 @@ export function approveLearningModeChange(studentGuid: string): Promise<StudentL
     return Promise.resolve(updated)
   }
   return apiPost<StudentLearningModeDetail>(`/api/v1/students/learning-mode/${studentGuid}/approve`, {})
+}
+
+// search matches student number / reg no exactly, or name as LIKE '%term%'.
+// pageSize is 1–200 server-side (out of range falls back to 25).
+export function getPendingLearningModeApprovals(search: string | null, pageNumber = 1, pageSize = 25): Promise<PagedResult<PendingLearningModeApprovalRow>> {
+  if (MOCK_AUTH) {
+    const term = search?.trim().toLowerCase() ?? ''
+    const items: PendingLearningModeApprovalRow[] = Object.values(mockDetails)
+      .filter(d => d.learningModeChangeStatus === 1)
+      .filter(d => !term || d.studentNum?.toLowerCase() === term || d.studentRegNo?.toLowerCase() === term || (d.studentName ?? '').toLowerCase().includes(term))
+      .map(d => ({
+        studentGuid: d.studentGuid, studentNum: d.studentNum, studentRegNo: d.studentRegNo, studentName: d.studentName,
+        programGuid: d.programGuid, programName: d.programName, semesterGuid: d.semesterGuid, semesterName: d.semesterName,
+        batchGuid: null, batchCode: null,
+        currentLearningMode: null, currentLearningModeLabel: null,
+        requestedLearningMode: d.requestedLearningMode ?? d.learningMode, requestedLearningModeLabel: d.requestedLearningModeLabel ?? d.learningModeLabel,
+        remarks: d.learningModeChangeRemarks ?? null, documentUrl: d.learningModeChangeDocumentUrl ?? null,
+      }))
+    return Promise.resolve({ items: items.slice((pageNumber - 1) * pageSize, pageNumber * pageSize), totalCount: items.length, pageNumber, pageSize })
+  }
+  const params = new URLSearchParams({ pageNumber: String(pageNumber), pageSize: String(pageSize) })
+  if (search?.trim()) params.set('search', search.trim())
+  return apiGet<PagedResult<PendingLearningModeApprovalRow> | null>(`/api/v1/students/learning-mode/pending-approvals?${params.toString()}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }
 
 export function getLearningModeReport(filters: LearningModeReportFilters, pageNumber = 1, pageSize = 25): Promise<PagedResult<LearningModeReportRow>> {

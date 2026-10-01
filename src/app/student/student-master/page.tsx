@@ -34,18 +34,21 @@ const PAGE_SIZE = 10
 // endpoint itself only takes one guid per field; see
 // getStudentsFilterCombinations/useStudentsFilterMulti in useStudents.ts
 // for how multiple selections turn into real results. Semester holds
-// semCodes, not guids — sent as /students/filter's semCode param. Intake
-// holds intake codes (e.g. "20241"), sent as academicIntake — set from
-// either the Intake column's funnel or the intake dropdown in the header.
+// semCodes, not guids — sent as /students/filter's semCode param. Two
+// separate intake filters: intakeGuid is the joined intake (T_STUDENT.
+// INTAKEGUID), set only from the header intake dropdown; academicIntake
+// holds intake codes (e.g. "20241") from the active history row, set only
+// from the Academic Intake column's funnel.
 // Status holds regStatus codes (e.g. "5"), sent as regStatus.
 interface ColumnFilterState {
   programGuid: string[]
   semCode: string[]
   batchGuid: string[]
+  intakeGuid: string[]
   academicIntake: string[]
   regStatus: string[]
 }
-const EMPTY_COLUMN_FILTERS: ColumnFilterState = { programGuid: [], semCode: [], batchGuid: [], academicIntake: [], regStatus: [] }
+const EMPTY_COLUMN_FILTERS: ColumnFilterState = { programGuid: [], semCode: [], batchGuid: [], intakeGuid: [], academicIntake: [], regStatus: [] }
 
 // regStatus codes from get-students-filter.md. The filter sends the code;
 // the list items carry the matching name in regStatusName, which is what
@@ -64,14 +67,14 @@ function regStatusBadge(name: string) {
 }
 
 // Page/search/column filters ↔ URL query (?page=&q=&prog=&sem=&batch=
-// &intake=&status=). Parameters this page doesn't own (refugeeFor etc.) are
-// ignored/dropped.
+// &joined=&intake=&status=). Parameters this page doesn't own (refugeeFor
+// etc.) are ignored/dropped.
 function listStateFromUrl(params: URLSearchParams | ReadonlyURLSearchParams) {
   const list = (key: string) => params.get(key)?.split(',').filter(Boolean) ?? []
   return {
     page: Math.max(1, Number(params.get('page')) || 1),
     search: params.get('q') ?? '',
-    colFilters: { programGuid: list('prog'), semCode: list('sem'), batchGuid: list('batch'), academicIntake: list('intake'), regStatus: list('status') } as ColumnFilterState,
+    colFilters: { programGuid: list('prog'), semCode: list('sem'), batchGuid: list('batch'), intakeGuid: list('joined'), academicIntake: list('intake'), regStatus: list('status') } as ColumnFilterState,
   }
 }
 
@@ -82,6 +85,7 @@ function listStateToQuery(page: number, search: string, colFilters: ColumnFilter
   if (colFilters.programGuid.length) params.set('prog', colFilters.programGuid.join(','))
   if (colFilters.semCode.length) params.set('sem', colFilters.semCode.join(','))
   if (colFilters.batchGuid.length) params.set('batch', colFilters.batchGuid.join(','))
+  if (colFilters.intakeGuid.length) params.set('joined', colFilters.intakeGuid.join(','))
   if (colFilters.academicIntake.length) params.set('intake', colFilters.academicIntake.join(','))
   if (colFilters.regStatus.length) params.set('status', colFilters.regStatus.join(','))
   return params.toString()
@@ -166,19 +170,21 @@ function StudentMasterContent() {
   // one request covers every programme's semester with that code.
   const { groups: semCodeGroups } = useSemesterCodeGroups()
 
-  // Intake column funnel options, and the label lookup for the header
-  // dropdown's trigger (which itself pages intakes server-side via
-  // IntakeSearchPicker). Both views share colFilters.academicIntake.
+  // Academic Intake column funnel options (by intake code), and the label
+  // lookup for the header joined-intake dropdown's trigger (by intakeGuid —
+  // the dropdown itself pages intakes server-side via IntakeSearchPicker).
+  // The two filters are independent: colFilters.intakeGuid vs
+  // colFilters.academicIntake.
   const { data: intakes = [] } = useIntakes()
   const intakeOptions = intakes.map(i => ({ value: String(i.intakeCode), label: `${i.intakeCode} — ${i.description}` }))
-  const pickedIntakes = colFilters.academicIntake
-  const selectedIntakeLabel = pickedIntakes.length === 0
+  const joinedIntakeGuid = colFilters.intakeGuid[0]
+  const joinedIntake = joinedIntakeGuid ? intakes.find(i => i.intakeGuid === joinedIntakeGuid) : undefined
+  const [joinedIntakeLabel, setJoinedIntakeLabel] = useState<string | null>(null)
+  const selectedIntakeLabel = !joinedIntakeGuid
     ? null
-    : pickedIntakes.length === 1
-      ? intakeOptions.find(o => o.value === pickedIntakes[0])?.label ?? pickedIntakes[0]
-      : `${pickedIntakes.length} intakes`
+    : joinedIntake ? `${joinedIntake.intakeCode} — ${joinedIntake.description}` : joinedIntakeLabel ?? joinedIntakeGuid
 
-  const hasColFilters = colFilters.programGuid.length > 0 || colFilters.semCode.length > 0 || colFilters.batchGuid.length > 0 || colFilters.academicIntake.length > 0 || colFilters.regStatus.length > 0
+  const hasColFilters = colFilters.programGuid.length > 0 || colFilters.semCode.length > 0 || colFilters.batchGuid.length > 0 || colFilters.intakeGuid.length > 0 || colFilters.academicIntake.length > 0 || colFilters.regStatus.length > 0
 
   // get-students-filter.md's programGuid/semCode/batchGuid each take
   // exactly one value — a multi-select column here (checking 2+ boxes) has
@@ -225,8 +231,8 @@ function StudentMasterContent() {
                 className="w-56"
                 placeholder="All intakes"
                 selectedLabel={selectedIntakeLabel}
-                onSelect={i => updateColFilters({ academicIntake: [String(i.intakeCode)] })}
-                onClear={() => updateColFilters({ academicIntake: [] })}
+                onSelect={i => { setJoinedIntakeLabel(`${i.intakeCode} — ${i.description}`); updateColFilters({ intakeGuid: [i.intakeGuid] }) }}
+                onClear={() => updateColFilters({ intakeGuid: [] })}
               />
               <TableSearch
                 className="w-56"

@@ -4,8 +4,12 @@ Companion doc for the permission-driven sidebar menu API (`GET` response with
 `{ name, icon, url, permissions, children }` nodes). Below is the same JSON
 shape, with `icon` and `url` filled in for every node — cross-checked against
 the merged/final tree built in `src/lib/api/users/menu.ts` (mockMenu plus its
-`ensureBulkIntakeEdit` / `ensureBatchSummary` / `ensureProgrammeApproval` /
-`mergeFinanceSections` / `mergeStudentSections` merge functions), the actual
+`ensure*` / `merge*` functions — `ensureBulkIntakeEdit`, `ensureBatchSummary`,
+`ensureCourseAllocation`, `ensureProgrammeApproval`, `ensureEmployeeApprovals`,
+`ensureAssessmentMaster`, `ensureResitMaster`, `ensureResitApplications`,
+`ensureResitMarkUpdate`, `ensureUeMaterialPrint`, `ensureUeAttendance`,
+`ensureUeMarkImport`, `ensureResultModeration`, `mergeFinanceSections`,
+`mergeStudentSections`, `mergeConfigSections`), the actual
 `page.tsx` routes on disk
 under `src/app/*`, and `src/components/Sidebar.tsx` (the single source of
 truth for what the sidebar actually renders) for rail ordering/icons. One
@@ -33,7 +37,9 @@ not just the LineIcons name — copy it as-is into the `icon` field.
 `NEXT_PUBLIC_RBAC_MOCK` (falls back to `NEXT_PUBLIC_AUTH_MOCK` if unset):
 
 - `true` → `mockMenu`, the literal tree documented below — full access, no
-  role restrictions.
+  role restrictions. **Exception:** `Config` is not part of `mockMenu`
+  (removed in commit `06745e7`), so the Config rail doesn't render in mock
+  mode — it only appears via the real response + `mergeConfigSections()`.
 - `false` → the real `GET /api/v1/users/me/menu` response, run through the
   `merge*`/`ensure*` functions this doc's per-module notes describe —
   permission-gated per the logged-in user's role, with certain sections/
@@ -656,6 +662,20 @@ through unchanged.
 > Payment/Apply Advance toggle; the standalone page now just redirects there,
 > so it no longer needs its own nav entry.
 
+> **Sidebar rendering differs from this tree.** `Sidebar.tsx` changes two
+> things client-side, whatever the API returns:
+>
+> - **`Ledger Adjustments` is hidden** (`HIDDEN_ITEM_IDS`, 2026-09-07). The
+>   page is still a UI-only mock with no backing endpoint. It stays in the
+>   tree above so the backend contract is unchanged; the frontend filters it
+>   out.
+> - **`Payment Collection` is re-sorted** (`ORDER_PRIORITY`, 2026-09-07,
+>   Finance rail only). The rendered order is `Dashboard`, `Payment Console`,
+>   `NCHE & Guild Payment`, `Advanced Payments`, `Discount Allocation`,
+>   `Payment Refund`, `Payment History`, `Exchange Rates`. The backend can
+>   return any order; returning this one avoids depending on the client
+>   re-sort.
+
 > `Other Ledgers` (`Finance Core`) is a real page (not mock/static, unlike
 > `Payment Collection`/`Reports & Statements` above) that was missing from
 > this doc.
@@ -722,6 +742,13 @@ through unchanged.
           "icon": "lni lni-display",
           "url": "/student/learning-mode",
           "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Learning Mode Approval",
+          "icon": "lni lni-checkmark-circle",
+          "url": "/student/learning-mode-approval",
+          "permissions": { "edit": true },
           "children": []
         },
         {
@@ -820,12 +847,12 @@ through unchanged.
 > `Operations`, `Services` and `Communications` are new sections, ported from
 > `isbat_student_module.html` — all mock/static (no backend permission
 > entries exist for this workflow yet), forced into the real menu tree by
-> `mergeStudentSections()` in `menu.ts`. 8 of the module's 10 pages don't gate
-> on `permissions.xxx` in code (all `{}`) — this is the least
-> permission-aware module in the app today. `Settings` is the exception:
-> both `Specialization Management` and `Termination Reason Master` do gate
-> Add/Edit/Delete via `usePagePermissions()` (neither has a `get` action on
-> the page).
+> `mergeStudentSections()` in `menu.ts`. 10 of the module's 15 sidebar pages
+> don't gate on `permissions.xxx` in code (all `{}`). The five that do gate:
+> `Learning Mode Approval` (`edit` only), the two `Events and Announcements`
+> pages, and both `Settings` pages (`Specialization Management` and
+> `Termination Reason Master`, which gate Add/Edit/Delete via
+> `usePagePermissions()` but have no `get` action).
 
 > `Terminate Student` (`Operations`, added 2026-09-15) calls
 > `POST /students/{studentGuid}/terminate`. `Termination Reason Master`
@@ -844,6 +871,19 @@ through unchanged.
 > PCSE/PCIM membership server-side rather than trusting the list, and follows
 > the same clone-and-deactivate pattern as Dropout Rejoin and Programme
 > Transfer.
+
+> `Learning Mode Approval` (`Operations`, added 2026-09-30) is the approval
+> queue for change requests raised on `Learning Mode`, split out into its own
+> page. It gates its Approve action on `permissions.edit`. It has no backend
+> menu registration yet, so `mergeStudentSections()` appends it as a missing
+> `Operations` leaf in real mode too.
+>
+> `Learning Mode Report` (`/student/learning-mode-report`,
+> `GET /students/learning-mode/report`) was split out of `Learning Mode` into
+> its own page under a new `Reports` section on 2026-09-29, then hidden from
+> the sidebar on 2026-10-01. The whole `Reports` section is commented out in
+> `STUDENT_OPERATIONS_SECTIONS`, and the page still exists on disk. Don't
+> return it from the API for now.
 
 > `Events and Announcements` is a new section, ported from the legacy
 > `isbat_student_module.html` "Event Management"/"Announcement Management"
@@ -1189,7 +1229,7 @@ Previously scattered under "Academics" (Faculty Master only) and
 ## Assessment
 
 New module/rail — had no entry in the previous version of this doc. Mirrors
-`ASSESSMENT_SECTIONS` in `menu.ts`. None of its 31 pages gate on
+`ASSESSMENT_SECTIONS` in `menu.ts`. None of its 43 pages gate on
 `permissions.xxx` in code yet (all `{}`) — it's the newest module in the app.
 
 ```json
@@ -1376,6 +1416,55 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "url": "/assessment/hall-print",
           "permissions": {},
           "children": []
+        },
+        {
+          "name": "UE Material Print",
+          "icon": "lni lni-printer",
+          "url": "/assessment/university-exam-material-print",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "UE QP/Booklet Print",
+          "icon": "lni lni-printer",
+          "url": "/assessment/university-exam-qp-booklet-print",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "UE Practical QP Print",
+          "icon": "lni lni-printer",
+          "url": "/assessment/university-exam-practical-qp-print",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "UE Project Booklet Print",
+          "icon": "lni lni-printer",
+          "url": "/assessment/university-exam-project-booklet-print",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Resit Question Print",
+          "icon": "lni lni-printer",
+          "url": "/assessment/resit-question-print",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "UE Attendance",
+          "icon": "lni lni-users",
+          "url": "/assessment/ue-attendance",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "UE Mark Import",
+          "icon": "lni lni-upload",
+          "url": "/assessment/ue-mark-import",
+          "permissions": {},
+          "children": []
         }
       ]
     },
@@ -1432,6 +1521,41 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "name": "Resit Calendar",
           "icon": "lni lni-calendar",
           "url": "/assessment/resit-calendar",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Resit Applications",
+          "icon": "lni lni-folder",
+          "url": "/assessment/resit-applications",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Resit Apply",
+          "icon": "lni lni-pencil-alt",
+          "url": "/assessment/resit-apply",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Resit Scheduling",
+          "icon": "lni lni-calendar",
+          "url": "/assessment/resit-scheduling",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Resit IA Evaluation",
+          "icon": "lni lni-checkmark-circle",
+          "url": "/assessment/resit-evaluation",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Resit Mark Update",
+          "icon": "lni lni-reload",
+          "url": "/assessment/resit-mark-update",
           "permissions": {},
           "children": []
         },
@@ -1508,6 +1632,47 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
 > `QP Upload & Vetting` was renamed to `Question Paper Vetting` (2026-09-18,
 > same route, `/assessment/qp-vetting`) to match the page's updated copy.
 
+> **`University Exam (UE)` additions:** seven new leaves follow `Hall Ticket
+> Print`. None has a backend menu registration yet, so each is patched into
+> the real tree by an `ensure*` function:
+>
+> | Leaves | Patched in by | Real-mode position |
+> |---|---|---|
+> | `UE Material Print`, `UE QP/Booklet Print`, `UE Practical QP Print`, `UE Project Booklet Print`, `Resit Question Print` | `ensureUeMaterialPrint()` | Appended at the end, as a group. The function only checks for `UE Material Print`, so the other four are added only when that one is missing too. |
+> | `UE Attendance` | `ensureUeAttendance()` | Appended at the end |
+> | `UE Mark Import` | `ensureUeMarkImport()` | Appended at the end |
+>
+> `Resit Question Print` sits under `University Exam (UE)` rather than
+> `Resit & Disputes` because it's one of the print-pack pages, not the resit
+> workflow.
+
+> **`Resit & Disputes` additions:** four new leaves sit between `Resit
+> Calendar` and `Resit Seating Allocator` in `ASSESSMENT_SECTIONS`. In real
+> mode:
+>
+> - `Resit Applications`, `Resit Apply` and `Resit Scheduling` are appended
+>   to the end of the section by `ensureResitApplications()`, after `CW
+>   Recheck Hub`, so the real-mode order differs from the mock order shown
+>   above.
+> - `Resit Mark Update` is inserted right after `Resit Scheduling` by
+>   `ensureResitMarkUpdate()`. It's appended at the end if `Resit Scheduling`
+>   isn't present.
+>
+> If the backend registers these leaves, return them in the mock order shown
+> above.
+>
+> `Resit IA Evaluation` (`/assessment/resit-evaluation`, added 2026-10-01)
+> sits between `Resit Scheduling` and `Resit Mark Update`. In real mode
+> `ensureResitEvaluation()` inserts it right after `Resit Scheduling` (or at
+> the end of the section). The backend defines
+> `assessment.resitevaluation.get` / `.save` permissions for it, but neither
+> is enforced yet and the page doesn't gate on them, so `permissions` is `{}`.
+>
+> That brings the Assessment module to 43 pages.
+
+> `Result & Moderation` is also guarded by `ensureResultModeration()`, which
+> appends it to `Mark Entry & Results` if the backend omits it.
+
 ---
 
 ## Activity Log
@@ -1567,6 +1732,9 @@ routes with no inbound navigation left in the codebase at all.
 | University Exam (legacy) | `/academic/university-exam` | Superseded by the Assessment module's UE pages (`/assessment/ue-*`); no inbound nav found. |
 | ODeL Student Preview | `/academic/odel-student-preview` | Reached via `nav('acad-dashboard')`/back-link only; not linked *to* from anywhere found — appears to be a preview/demo page. |
 | CBT Schedule | `/assessment/cbt-schedule` | No longer in `ASSESSMENT_SECTIONS`' `Class Test (CBT)` section; page still exists on disk but has no inbound sidebar link. |
+| Learning Mode Report | `/student/learning-mode-report` | Hidden from the sidebar 2026-10-01 (its `Reports` section is commented out in `menu.ts`); page still exists on disk. |
+| Student Services | `/student/services` | Whole `Services` section hidden 2026-09-02; page still exists on disk. |
+| Ledger Adjustments | `/finance/ledger-adjustments` | Still in the menu tree, but filtered out client-side by `Sidebar.tsx`'s `HIDDEN_ITEM_IDS`, so it's unreachable from the sidebar. |
 
 ---
 
