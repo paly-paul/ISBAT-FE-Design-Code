@@ -6,7 +6,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { GuidColumnFilter } from '@/components/GuidColumnFilter'
 import { IntakeSearchPicker } from '@/components/IntakeSearchPicker'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { StudentRefugeeModal } from '@/components/modals/student/StudentRefugeeModal'
 import { StudentLearningModeModal } from '@/components/modals/student/StudentLearningModeModal'
 import { StudentSponsorModal } from '@/components/modals/student/StudentSponsorModal'
@@ -69,12 +69,25 @@ function regStatusBadge(name: string) {
 // Page/search/column filters ↔ URL query (?page=&q=&prog=&sem=&batch=
 // &joined=&intake=&status=). Parameters this page doesn't own (refugeeFor
 // etc.) are ignored/dropped.
-function listStateFromUrl(params: URLSearchParams | ReadonlyURLSearchParams) {
+//
+// Academic Intake defaults to the current academic intake. `intake` is
+// therefore always written explicitly (`intake=all` once cleared), so a URL
+// with no `intake` at all — a fresh visit, or clicking Student Master in the
+// sidebar — means "apply the default", not "all intakes".
+const ALL_INTAKES = 'all'
+
+function listStateFromUrl(params: URLSearchParams | ReadonlyURLSearchParams, defaultIntakeCode: string | null) {
   const list = (key: string) => params.get(key)?.split(',').filter(Boolean) ?? []
+  const intakeParam = params.get('intake')
+  const academicIntake = intakeParam === null
+    ? (defaultIntakeCode ? [defaultIntakeCode] : [])
+    : intakeParam === ALL_INTAKES ? [] : list('intake')
   return {
     page: Math.max(1, Number(params.get('page')) || 1),
     search: params.get('q') ?? '',
-    colFilters: { programGuid: list('prog'), semCode: list('sem'), batchGuid: list('batch'), intakeGuid: list('joined'), academicIntake: list('intake'), regStatus: list('status') } as ColumnFilterState,
+    colFilters: { programGuid: list('prog'), semCode: list('sem'), batchGuid: list('batch'), intakeGuid: list('joined'), academicIntake, regStatus: list('status') } as ColumnFilterState,
+    // No intake in the URL and the current intake isn't known yet.
+    awaitingDefault: intakeParam === null && !defaultIntakeCode,
   }
 }
 
@@ -86,7 +99,7 @@ function listStateToQuery(page: number, search: string, colFilters: ColumnFilter
   if (colFilters.semCode.length) params.set('sem', colFilters.semCode.join(','))
   if (colFilters.batchGuid.length) params.set('batch', colFilters.batchGuid.join(','))
   if (colFilters.intakeGuid.length) params.set('joined', colFilters.intakeGuid.join(','))
-  if (colFilters.academicIntake.length) params.set('intake', colFilters.academicIntake.join(','))
+  params.set('intake', colFilters.academicIntake.length ? colFilters.academicIntake.join(',') : ALL_INTAKES)
   if (colFilters.regStatus.length) params.set('status', colFilters.regStatus.join(','))
   return params.toString()
 }
@@ -124,27 +137,47 @@ function StudentMasterContent() {
   // &batch=) so opening a student's profile and coming back — browser Back
   // or Profile's own "Back to Student Master" — lands on the same page and
   // filters instead of resetting to page 1.
-  const [search, setSearch] = useState(() => listStateFromUrl(searchParams).search)
-  const [page, setPage] = useState(() => listStateFromUrl(searchParams).page)
-  const [colFilters, setColFilters] = useState<ColumnFilterState>(() => listStateFromUrl(searchParams).colFilters)
+  // Academic Intake options + default (see listStateFromUrl), from
+  // GET /academic/intakes/dropdown — the item with currentIntake: true is
+  // preselected (get-intakes-dropdown.md). Cached indefinitely by the hook,
+  // so on a revisit it's usually already known.
+  const { data: intakes = [], isFetched: currentIntakeFetched } = useIntakesDropdown()
+  const currentAcademicIntake = intakes.find(i => i.currentIntake)
+  const defaultIntakeCode = currentAcademicIntake ? String(currentAcademicIntake.intakeCode) : null
+  const [search, setSearch] = useState(() => listStateFromUrl(searchParams, defaultIntakeCode).search)
+  const [page, setPage] = useState(() => listStateFromUrl(searchParams, defaultIntakeCode).page)
+  const [colFilters, setColFilters] = useState<ColumnFilterState>(() => listStateFromUrl(searchParams, defaultIntakeCode).colFilters)
+  // True while the URL asks for the default intake but it hasn't loaded —
+  // the list waits rather than briefly showing every intake.
+  const [awaitingDefault, setAwaitingDefault] = useState(() => listStateFromUrl(searchParams, defaultIntakeCode).awaitingDefault)
+  useEffect(() => {
+    if (!awaitingDefault || !currentIntakeFetched) return
+    // No current intake configured (or the lookup failed) → fall back to all.
+    if (defaultIntakeCode) setColFilters(prev => ({ ...prev, academicIntake: [defaultIntakeCode] }))
+    setAwaitingDefault(false)
+  }, [awaitingDefault, currentIntakeFetched, defaultIntakeCode])
   // State → URL. window.history.replaceState (not router.replace) so the URL
   // updates synchronously — Next.js keeps useSearchParams in step with it,
   // and the URL → state effect below never sees a stale, half-applied write
   // (e.g. mid-typing in the search box). Also drops refugeeFor/sponsorFor/
   // studentName once read above, so a refresh doesn't reopen their modal.
+  // Skipped while awaitingDefault, so the bare URL isn't overwritten with
+  // `intake=all` before the default has been applied.
   const stateQs = listStateToQuery(page, search, colFilters)
   useEffect(() => {
+    if (awaitingDefault) return
     if (window.location.search.replace(/^\?/, '') === stateQs) return
     window.history.replaceState(null, '', stateQs ? `/student/student-master?${stateQs}` : '/student/student-master')
-  }, [stateQs])
+  }, [stateQs, awaitingDefault])
   // URL → state, for navigations from outside this page's own controls —
   // e.g. clicking Student Master in the sidebar while already here swaps
   // the URL to the bare route without remounting the page, which must reset
-  // the table to page 1 / no filters rather than leave it where it was.
+  // the table to page 1 / default filters rather than leave it where it was.
   const urlQs = searchParams.toString()
   useEffect(() => {
-    const fromUrl = listStateFromUrl(searchParams)
-    if (listStateToQuery(fromUrl.page, fromUrl.search, fromUrl.colFilters) === stateQs) return
+    const fromUrl = listStateFromUrl(searchParams, defaultIntakeCode)
+    if (fromUrl.awaitingDefault) setAwaitingDefault(true)
+    else if (listStateToQuery(fromUrl.page, fromUrl.search, fromUrl.colFilters) === stateQs) return
     setPage(fromUrl.page); setSearch(fromUrl.search); setColFilters(fromUrl.colFilters)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlQs])
@@ -184,15 +217,16 @@ function StudentMasterContent() {
   // lookup for the header joined-intake dropdown's trigger (by intakeGuid —
   // the dropdown itself pages intakes server-side via IntakeSearchPicker).
   // The two filters are independent: colFilters.intakeGuid vs
-  // colFilters.academicIntake.
-  const { data: intakes = [] } = useIntakes()
-  const intakeOptions = intakes.map(i => ({ value: String(i.intakeCode), label: `${i.intakeCode} — ${i.description}` }))
+  // colFilters.academicIntake. `intakes` is the dropdown list loaded above
+  // (GET /academic/intakes/dropdown — every intake, newest first).
+  // description may be null — label as "description (intakeCode)".
+  const intakeOptions = intakes.map(i => ({ value: String(i.intakeCode), label: i.description ? `${i.description} (${i.intakeCode})` : String(i.intakeCode) }))
   const joinedIntakeGuid = colFilters.intakeGuid[0]
   const joinedIntake = joinedIntakeGuid ? intakes.find(i => i.intakeGuid === joinedIntakeGuid) : undefined
   const [joinedIntakeLabel, setJoinedIntakeLabel] = useState<string | null>(null)
   const selectedIntakeLabel = !joinedIntakeGuid
     ? null
-    : joinedIntake ? `${joinedIntake.intakeCode} — ${joinedIntake.description}` : joinedIntakeLabel ?? joinedIntakeGuid
+    : joinedIntake ? (joinedIntake.description ? `${joinedIntake.description} (${joinedIntake.intakeCode})` : String(joinedIntake.intakeCode)) : joinedIntakeLabel ?? joinedIntakeGuid
 
   const hasColFilters = colFilters.programGuid.length > 0 || colFilters.semCode.length > 0 || colFilters.batchGuid.length > 0 || colFilters.intakeGuid.length > 0 || colFilters.academicIntake.length > 0 || colFilters.regStatus.length > 0
 
@@ -210,13 +244,13 @@ function StudentMasterContent() {
   const combos = getStudentsFilterCombinations(colFilters, normalizedSearch || undefined)
   const isMultiCombo = combos.length > 1
 
-  const singleQuery = useStudentsFilter(page, PAGE_SIZE, combos[0], !isMultiCombo)
-  const multi = useStudentsFilterMulti(combos, page, PAGE_SIZE, isMultiCombo)
+  const singleQuery = useStudentsFilter(page, PAGE_SIZE, combos[0], !isMultiCombo && !awaitingDefault)
+  const multi = useStudentsFilterMulti(combos, page, PAGE_SIZE, isMultiCombo && !awaitingDefault)
 
   const items = isMultiCombo ? multi.items : (singleQuery.data?.items ?? [])
   const totalCount = isMultiCombo ? multi.totalCount : (singleQuery.data?.totalCount ?? 0)
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  const isLoading = isMultiCombo ? multi.isLoading : singleQuery.isLoading
+  const isLoading = awaitingDefault || (isMultiCombo ? multi.isLoading : singleQuery.isLoading)
 
   // Dedicated, infinite-scroll query for the search dropdown — its matches
   // aren't filtered by the guid columns above, so it's suppressed the

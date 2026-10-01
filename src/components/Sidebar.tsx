@@ -99,6 +99,7 @@ const ORDER_PRIORITY = [
   'nche-guild-payment',
   'advanced-payments',
   'discount-allocation',
+  'refugee-status',
   'payment-refund',
   'payment-history',
   'exchange-rates',

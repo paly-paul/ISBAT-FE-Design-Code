@@ -486,6 +486,13 @@ through unchanged.
           "children": []
         },
         {
+          "name": "Refugee Status",
+          "icon": "lni lni-shield",
+          "url": "/finance/refugee-status",
+          "permissions": {},
+          "children": []
+        },
+        {
           "name": "Payment History",
           "icon": "lni lni-bar-chart",
           "url": "/finance/payment-history",
