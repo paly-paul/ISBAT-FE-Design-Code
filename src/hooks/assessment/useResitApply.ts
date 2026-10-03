@@ -60,9 +60,16 @@ export function useSubmitResitApplication() {
   })
 }
 
+// Always 200 — `deleted: false` also means the grid is stale (already deleted
+// or paid meanwhile), so both outcomes reload the grid; a real delete also
+// puts the unit back in the dropdown.
 export function useDeleteResitApplication() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (resitApplicationGuid: string) => deleteResitApplication(resitApplicationGuid)
+    mutationFn: ({ resitApplicationGuid }: { resitApplicationGuid: string; studentGuid: string }) => deleteResitApplication(resitApplicationGuid),
+    onSuccess: (res, { studentGuid }) => {
+      qc.invalidateQueries({ queryKey: ['resit-applied-units', studentGuid] })
+      if (res.deleted) qc.invalidateQueries({ queryKey: ['resit-dropdown', studentGuid] })
+    }
   })
 }

@@ -221,22 +221,19 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
 
       {open && typeof window !== 'undefined' && createPortal(
         <div
-          className="date-picker-popover"
-          style={{ position: 'fixed', top: popoverPos.top, bottom: popoverPos.bottom, left: popoverPos.left, zIndex: 9999, boxShadow: '0 6px 18px rgba(0,0,0,0.12)', background: 'white', borderRadius: 8 }}
+          className="date-picker-popover pk-pop"
+          style={{ top: popoverPos.top, bottom: popoverPos.bottom, left: popoverPos.left }}
           onMouseDown={e => e.stopPropagation()}
         >
-          {/* Fixed width, not just a minWidth — previously the popup had no
-              real width cap and just grew to fit the header row (130px month
-              + 96px year select + gaps + nav buttons, 300px+ total), which
-              then stretched the 7-column day grid into oversized cells to
-              match. ~228px is a normal compact-calendar width; the
-              month/year select widths below are sized to still show every
-              month name (up to "September") and a 4-digit year in full. */}
-          <div style={{ padding: 8, width: 228 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 4 }}>
-              <button type="button" className="btn btn-neu btn-sm" onMouseDown={e => e.preventDefault()} onClick={prevMonth} style={{ padding: '3px 6px' }}>{'<'}</button>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <div style={{ width: 106 }}>
+          {/* Fixed width: 7 × 32px day cells + gaps. The header's month/year
+              selects flex into the space between the two square nav buttons,
+              sized to still show every month name (up to "September") and a
+              4-digit year in full. */}
+          <div style={{ width: 240 }}>
+            <div className="pk-hdr">
+              <button type="button" className="pk-nav" aria-label="Previous month" onMouseDown={e => e.preventDefault()} onClick={prevMonth}><i className="lni lni-chevron-left" /></button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   {/* No `placeholder` here — month/year always have a real
                       value (there's no meaningful "cleared" state for the
                       calendar's own current view), but passing one is what
@@ -251,7 +248,7 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
                     onChange={v => setViewDate(new Date(viewDate.getFullYear(), Number(v), 1))}
                   />
                 </div>
-                <div style={{ width: 66 }}>
+                <div style={{ width: 72, flexShrink: 0 }}>
                   <SearchSelect
                     options={yearOptions}
                     value={String(viewDate.getFullYear())}
@@ -259,12 +256,12 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
                   />
                 </div>
               </div>
-              <button type="button" className="btn btn-neu btn-sm" onMouseDown={e => e.preventDefault()} onClick={nextMonth} style={{ padding: '3px 6px' }}>{'>'}</button>
+              <button type="button" className="pk-nav" aria-label="Next month" onMouseDown={e => e.preventDefault()} onClick={nextMonth}><i className="lni lni-chevron-right" /></button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, textAlign: 'center', marginBottom: 4, color: '#666', fontSize: 10.5 }}>
-              {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => <div key={d}>{d}</div>)}
+            <div className="pk-grid" style={{ marginBottom: 2 }}>
+              {['Mo','Tu','We','Th','Fr','Sa','Su'].map(d => <div key={d} className="pk-wd">{d}</div>)}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+            <div className="pk-grid">
               {daysMatrix().map((cell, i) => {
                 if (cell === null) return <div key={i} />
                 const selDate = value && ymdToDate(value)
@@ -272,15 +269,16 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
                 const cellDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), cell as number)
                 const cellYmd = dateToYmd(cellDate)
                 const disabled = !!maxYmd && compareYmd(cellYmd, maxYmd) > 0
+                const isToday = cellYmd === dateToYmd(new Date())
                 return (
                   <button
                     key={i}
                     type="button"
+                    className={`pk-cell${selected ? ' pk-sel' : ''}${isToday ? ' pk-today' : ''}`}
                     onMouseDown={e => e.preventDefault()}
                     onClick={() => { if (!disabled) pick(cell as number) }}
                     disabled={disabled}
                     aria-disabled={disabled}
-                    style={{ padding: 5, borderRadius: 6, background: selected ? '#0b5cff' : 'transparent', color: selected ? 'white' : (disabled ? '#bbb' : '#111'), border: 'none', fontSize: 12, opacity: disabled ? 0.6 : 1 }}
                   >
                     {cell}
                   </button>
