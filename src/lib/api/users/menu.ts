@@ -242,6 +242,10 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Resit Seating Allocator', 'users', '/assessment/resit-seating'),
     leaf('CW Reevaluation', 'reload', '/assessment/reeval'),
     leaf('CW Recheck Hub', 'search-alt', '/assessment/recheck'),
+    leaf('Exam Grievances', 'files', '/assessment/exam-grievances'),
+  ]),
+  section('Student Services', [
+    leaf('Service Tickets', 'ticket', '/assessment/service-tickets'),
   ]),
   section('Reports', [
     leaf('Pending QP Upload', 'folder', '/assessment/rpt-pending-qp'),
@@ -1229,6 +1233,10 @@ function ensureResitIaResults(menu: MenuNode[]): MenuNode[] {
 }
 
 function ensureGownCollection(menu: MenuNode[]): MenuNode[] {
+// New page, no backend menu registration yet (service-ticket-staff-page.md;
+// APIs not deployed). Adds a "Student Services" section to Assessment —
+// before Reports when present, otherwise at the end.
+function ensureServiceTickets(menu: MenuNode[]): MenuNode[] {
   const assessIdx = menu.findIndex(n => n.name === 'Assessment')
   if (assessIdx === -1) return menu
 
@@ -1252,6 +1260,40 @@ function ensureGownCollection(menu: MenuNode[]): MenuNode[] {
   const mergedAssess = { ...assessModule }
   mergedAssess.children = [...assessModule.children]
   mergedAssess.children[markEntryIdx] = mergedSection
+  const hasPage = assessModule.children.some(s => s.children.some(l => l.url === '/assessment/service-tickets'))
+  if (hasPage) return menu
+
+  const newLeaf = leaf('Service Tickets', 'ticket', '/assessment/service-tickets')
+  const children = [...assessModule.children]
+  const servicesIdx = children.findIndex(c => c.name === 'Student Services')
+  if (servicesIdx !== -1) {
+    children[servicesIdx] = { ...children[servicesIdx], children: [...children[servicesIdx].children, newLeaf] }
+  } else {
+    const reportsIdx = children.findIndex(c => c.name === 'Reports')
+    children.splice(reportsIdx === -1 ? children.length : reportsIdx, 0, section('Student Services', [newLeaf]))
+  }
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = { ...assessModule, children }
+  return mergedMenu
+}
+
+// New page, no backend menu registration yet (exam-grievance-management-page.md;
+// APIs not deployed). Appended to Resit & Disputes.
+function ensureExamGrievances(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const resitIdx = assessModule.children.findIndex(c => c.name === 'Resit & Disputes')
+  if (resitIdx === -1) return menu
+
+  const resitSection = assessModule.children[resitIdx]
+  if (resitSection.children.some(l => l.url === '/assessment/exam-grievances')) return menu
+
+  const mergedSection = { ...resitSection, children: [...resitSection.children, leaf('Exam Grievances', 'files', '/assessment/exam-grievances')] }
+  const mergedAssess = { ...assessModule, children: [...assessModule.children] }
+  mergedAssess.children[resitIdx] = mergedSection
 
   const mergedMenu = [...menu]
   mergedMenu[assessIdx] = mergedAssess
@@ -1292,6 +1334,9 @@ export function getMenu(): Promise<MenuResult> {
       const withTranscriptCollection = ensureTranscriptCollection(withGraduateTranscript)
       const withGownCollection = ensureGownCollection(withTranscriptCollection)
       const finalMenu = stripLectureMaster(withGownCollection)
+      const withServiceTickets = ensureServiceTickets(withGraduateTranscript)
+      const withExamGrievances = ensureExamGrievances(withServiceTickets)
+      const finalMenu = stripLectureMaster(withExamGrievances)
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: stripLectureMaster(mockMenu), isFallback: true }))
