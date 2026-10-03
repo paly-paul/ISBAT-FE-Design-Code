@@ -6,6 +6,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useResitConfigs } from '@/hooks/assessment/useResitConfigs'
 import { useResitMarkUpdates, usePushResitMarkUpdate } from '@/hooks/assessment/useResitMarkUpdates'
@@ -252,12 +253,7 @@ export default function ResitMarkUpdatePage() {
             </thead>
             <tbody>
               {updatesLoading ? (
-                <tr>
-                  <td colSpan={colCount} className="text-center py-10 text-gray-500">
-                    <i className="lni lni-spinner-solid animate-spin text-2xl mb-2"></i>
-                    <p>Loading updates...</p>
-                  </td>
-                </tr>
+                <TableLoadingState colSpan={colCount} title="Loading updates..." />
               ) : !markUpdatesData || markUpdatesData.rows.items.length === 0 ? (
                 <EmptyState
                   colSpan={colCount}

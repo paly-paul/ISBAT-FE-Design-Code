@@ -193,10 +193,10 @@ function UeSchedulingTab({ showToast }: { showToast: (m: string, t?: string) => 
                 <tr key={s.resitScheduleGuid}>
                   <td>
                     <ActionMenu>
-                      <button className="text-left px-4 py-2 hover:bg-slate-50 text-sm w-full flex items-center gap-2 border-b border-slate-100" onClick={() => handleView(s.resitScheduleGuid)}>
+                      <button className="btn btn-neu btn-sm" onClick={() => handleView(s.resitScheduleGuid)}>
                         <i className="lni lni-eye"></i> View
                       </button>
-                      <button className="text-left px-4 py-2 hover:bg-slate-50 text-sm w-full flex items-center gap-2" onClick={() => handleEdit(s.resitScheduleGuid)}>
+                      <button className="btn btn-neu btn-sm" onClick={() => handleEdit(s.resitScheduleGuid)}>
                         <i className="lni lni-pencil"></i> Edit
                       </button>
                     </ActionMenu>
