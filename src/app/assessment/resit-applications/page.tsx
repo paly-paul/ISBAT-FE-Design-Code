@@ -140,7 +140,7 @@ export default function ResitApplicationsListPage() {
                 {appsLoading ? (
                   <TableLoadingState colSpan={7} title="Loading applications..." />
                 ) : !resitAppsData || resitAppsData.applications.items.length === 0 ? (
-                  <EmptyState colSpan={7} message="No applications found matching your criteria." />
+                  <EmptyState colSpan={7} title="No applications found" subtitle="No applications found matching your criteria." />
                 ) : (
                   resitAppsData?.applications.items.map((app, index) => (
                     <tr key={app.resitApplicationGuid}>

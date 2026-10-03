@@ -15,24 +15,25 @@ import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 
 import { Toast } from '@/components/Toast'
 
+// SearchSelect values are strings; the page keeps month/year as numbers.
 const MONTHS = [
-  { value: 1, label: 'January' },
-  { value: 2, label: 'February' },
-  { value: 3, label: 'March' },
-  { value: 4, label: 'April' },
-  { value: 5, label: 'May' },
-  { value: 6, label: 'June' },
-  { value: 7, label: 'July' },
-  { value: 8, label: 'August' },
-  { value: 9, label: 'September' },
-  { value: 10, label: 'October' },
-  { value: 11, label: 'November' },
-  { value: 12, label: 'December' }
+  { value: '1', label: 'January' },
+  { value: '2', label: 'February' },
+  { value: '3', label: 'March' },
+  { value: '4', label: 'April' },
+  { value: '5', label: 'May' },
+  { value: '6', label: 'June' },
+  { value: '7', label: 'July' },
+  { value: '8', label: 'August' },
+  { value: '9', label: 'September' },
+  { value: '10', label: 'October' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'December' }
 ]
 
 const YEARS = Array.from({ length: 10 }, (_, i) => {
   const y = new Date().getFullYear() - 2 + i
-  return { value: y, label: y.toString() }
+  return { value: String(y), label: y.toString() }
 })
 
 export default function GraduateTranscriptPage() {
@@ -181,8 +182,8 @@ export default function GraduateTranscriptPage() {
             <label className="text-sm font-semibold text-slate-700 mb-1 block">Exam Month <span className="text-rose-500">*</span></label>
             <SearchSelect
               placeholder="Select Month"
-              value={examMonth}
-              onChange={(val) => setExamMonth(val as number)}
+              value={String(examMonth)}
+              onChange={(val) => setExamMonth(val === '' ? '' : Number(val))}
               options={[
                 { value: '', label: 'Select Month' },
                 ...MONTHS
@@ -193,8 +194,8 @@ export default function GraduateTranscriptPage() {
             <label className="text-sm font-semibold text-slate-700 mb-1 block">Exam Year <span className="text-rose-500">*</span></label>
             <SearchSelect
               placeholder="Select Year"
-              value={examYear}
-              onChange={(val) => setExamYear(val as number)}
+              value={String(examYear)}
+              onChange={(val) => setExamYear(val === '' ? '' : Number(val))}
               options={[
                 { value: '', label: 'Select Year' },
                 ...YEARS
