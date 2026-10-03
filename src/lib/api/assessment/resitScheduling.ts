@@ -172,4 +172,3 @@ export function updateResitCtSchedule(data: ResitCtScheduleSaveCommand) {
   if (MOCK_AUTH) return Promise.resolve({} as ResitCtScheduleDto)
   return apiPut<ResitCtScheduleDto>(`/api/v1/assessment/resit-ct-schedule`, data)
 }
-export function getExamRules() { return apiGet<any[]>('/api/v1/assessment/exam-rules') }

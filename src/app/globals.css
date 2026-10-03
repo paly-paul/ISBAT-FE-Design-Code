@@ -10528,3 +10528,151 @@ body {
     width: 128px
   }
 }
+
+/* ═══════════════════════════════════════
+   DATE / TIME PICKER POPOVERS
+   Shared by DatePicker and TimePicker (portaled to body).
+═══════════════════════════════════════ */
+.pk-pop {
+  position: fixed;
+  z-index: 9999;
+  background: var(--white);
+  border: 1px solid var(--g200);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, .14);
+  padding: 12px
+}
+
+.pk-hdr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px
+}
+
+.pk-nav {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--g200);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--g500);
+  font-size: 12px;
+  cursor: pointer
+}
+
+.pk-nav:hover {
+  background: var(--b50);
+  color: var(--b500);
+  border-color: var(--b500)
+}
+
+.pk-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 32px);
+  gap: 2px;
+  justify-content: space-between
+}
+
+.pk-wd {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--g500)
+}
+
+.pk-cell {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--g800, #1e293b);
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 0
+}
+
+.pk-cell:hover:not(:disabled):not(.pk-sel) {
+  background: var(--b50);
+  color: var(--b500)
+}
+
+.pk-cell.pk-today:not(.pk-sel) {
+  box-shadow: inset 0 0 0 1.5px var(--b500);
+  font-weight: 600
+}
+
+.pk-cell.pk-sel {
+  background: var(--b500);
+  color: var(--white);
+  font-weight: 600
+}
+
+.pk-cell:disabled {
+  color: var(--g300, #cbd5e1);
+  cursor: not-allowed
+}
+
+/* TimePicker: hour / minute / AM-PM columns */
+.pk-cols {
+  display: flex;
+  gap: 6px
+}
+
+/* Scrollbar hidden; a fade at the top/bottom edges shows the column scrolls. */
+.pk-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 52px;
+  max-height: 216px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 8px 0;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%)
+}
+
+.pk-col::-webkit-scrollbar {
+  display: none
+}
+
+/* AM/PM is only two items — no scroll, no fade. */
+.pk-col.pk-col-static {
+  -webkit-mask-image: none;
+  mask-image: none
+}
+
+.pk-col-hdr {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--g500);
+  text-align: center;
+  margin-bottom: 6px
+}
+
+.pk-col .pk-cell {
+  width: 100%;
+  flex-shrink: 0
+}
+
+.pk-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--g200)
+}

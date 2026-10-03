@@ -11,11 +11,13 @@ export interface ResitMarkUpdateQueryParams {
   pageSize?: number
 }
 
+// currentMark / maxMark are null when the student has no exam result (or it
+// lacks the maximum) — those rows come with a `warning` and can't be pushed.
 export interface ResitMarkUpdatePart {
   status: number
-  currentMark: number
+  currentMark: number | null
   newMark: number | null
-  maxMark: number
+  maxMark: number | null
 }
 
 export interface ResitMarkUpdateItem {
