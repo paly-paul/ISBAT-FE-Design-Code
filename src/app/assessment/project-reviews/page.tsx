@@ -77,7 +77,7 @@ export default function ProjectReviewsPage() {
 
   return (
     <div className="pg-cont">
-      {toastMessage && <Toast message={toastMessage.msg} type={toastMessage.type} />}
+      <Toast toast={toastMessage} />
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div>

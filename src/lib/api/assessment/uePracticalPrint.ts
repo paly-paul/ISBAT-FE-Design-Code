@@ -8,8 +8,11 @@ export interface UePracticalPrintParams {
   confirm?: boolean
 }
 
+// The outcome enum may arrive by name or by number (0 Printed, 1 Reprinted,
+// 2 ExamRuleNotSet, 3 QuestionsNotAvailable, 4 ConfirmationRequired) — the
+// page handles both.
 export interface UePracticalOutcomeResponse {
-  outcome: 'Printed' | 'Reprinted' | 'ExamRuleNotSet' | 'QuestionsNotAvailable' | 'ConfirmationRequired'
+  outcome: 'Printed' | 'Reprinted' | 'ExamRuleNotSet' | 'QuestionsNotAvailable' | 'ConfirmationRequired' | 0 | 1 | 2 | 3 | 4
   message?: string
 }
 

@@ -423,11 +423,11 @@ export default function BulkExamSchedulerPage() {
               <div className="flex-1 min-w-0">
                 <SearchSelect
                   options={[
-                    { value: 1, label: 'Term 1' },
-                    { value: 2, label: 'Term 2' },
-                    { value: 3, label: 'Both (Term 1 & 2)' },
+                    { value: '1', label: 'Term 1' },
+                    { value: '2', label: 'Term 2' },
+                    { value: '3', label: 'Both (Term 1 & 2)' },
                   ]}
-                  value={term}
+                  value={String(term)}
                   onChange={(val) => setTerm(Number(val))}
                   placeholder="Select Term"
                 />
