@@ -5,11 +5,11 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
-import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
-import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { 
   useGraduateTranscriptPending, 
-  useGenerateGraduateTranscripts 
+  useGenerateGraduateTranscripts,
+  useHecIntakesDropdown,
+  useHecProgramsDropdown
 } from '@/hooks/assessment/useGraduateTranscript'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 
@@ -33,23 +33,23 @@ const MONTHS = [
 
 const YEARS = Array.from({ length: 10 }, (_, i) => {
   const y = new Date().getFullYear() - 2 + i
-  return { value: String(y), label: y.toString() }
+  return { value: y.toString(), label: y.toString() }
 })
 
 export default function GraduateTranscriptPage() {
   const [academicIntakeGuid, setAcademicIntakeGuid] = useState<string>('')
   const [programGuid, setProgramGuid] = useState<string>('')
   
-  const [examMonth, setExamMonth] = useState<number | ''>('')
-  const [examYear, setExamYear] = useState<number | ''>('')
+  const [examMonth, setExamMonth] = useState<string>('')
+  const [examYear, setExamYear] = useState<string>('')
   
   const [selectedGuids, setSelectedGuids] = useState<Set<string>>(new Set())
   const [toastMessage, setToastMessage] = useState<{ msg: string, type: 'success' | 'error' | 'warn' | 'info' | 'danger' } | null>(null)
   
   const [successData, setSuccessData] = useState<{ created: number, refreshed: number } | null>(null)
 
-  const { data: intakes, isLoading: isLoadingIntakes } = useIntakesDropdown()
-  const { data: programs, isLoading: isLoadingPrograms } = useProgramDropdown()
+  const { data: intakes, isLoading: isLoadingIntakes } = useHecIntakesDropdown()
+  const { data: programs, isLoading: isLoadingPrograms } = useHecProgramsDropdown()
 
   const { data: pendingList, isLoading: isLoadingPending } = useGraduateTranscriptPending(
     academicIntakeGuid || null, 
@@ -153,8 +153,8 @@ export default function GraduateTranscriptPage() {
               options={[
                 { value: '', label: 'Select Intake' },
                 ...(intakes || []).map((i: any) => ({
-                  value: i.intakeGuid,
-                  label: i.description
+                  value: i.guid || i.value || i.intakeGuid,
+                  label: i.name || i.label || i.description
                 }))
               ]}
             />
@@ -172,8 +172,8 @@ export default function GraduateTranscriptPage() {
               options={[
                 { value: '', label: 'Select Programme' },
                 ...(programs || []).map((p: any) => ({
-                  value: p.programGuid,
-                  label: p.programName
+                  value: p.guid || p.value || p.programGuid,
+                  label: p.name || p.label || p.programName
                 }))
               ]}
             />
@@ -182,8 +182,9 @@ export default function GraduateTranscriptPage() {
             <label className="text-sm font-semibold text-slate-700 mb-1 block">Exam Month <span className="text-rose-500">*</span></label>
             <SearchSelect
               placeholder="Select Month"
-              value={String(examMonth)}
-              onChange={(val) => setExamMonth(val === '' ? '' : Number(val))}
+              value={examMonth}
+              onChange={(val) => setExamMonth(val)}
+              disabled={selectedGuids.size === 0}
               options={[
                 { value: '', label: 'Select Month' },
                 ...MONTHS
@@ -194,8 +195,9 @@ export default function GraduateTranscriptPage() {
             <label className="text-sm font-semibold text-slate-700 mb-1 block">Exam Year <span className="text-rose-500">*</span></label>
             <SearchSelect
               placeholder="Select Year"
-              value={String(examYear)}
-              onChange={(val) => setExamYear(val === '' ? '' : Number(val))}
+              value={examYear}
+              onChange={(val) => setExamYear(val)}
+              disabled={selectedGuids.size === 0}
               options={[
                 { value: '', label: 'Select Year' },
                 ...YEARS
@@ -223,8 +225,8 @@ export default function GraduateTranscriptPage() {
               </tr>
             </thead>
             <tbody>
-              {(!academicIntakeGuid || !programGuid) ? (
-                <EmptyState colSpan={4} title="Select an Academic Intake and Programme to view pending students." />
+              {!academicIntakeGuid ? (
+                <EmptyState colSpan={4} title="Select an Academic Intake to view pending students." />
               ) : isLoadingPending ? (
                 <TableLoadingState colSpan={4} title="Loading pending students..." />
               ) : !pendingList || pendingList.length === 0 ? (
