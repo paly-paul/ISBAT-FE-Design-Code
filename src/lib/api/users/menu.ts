@@ -226,6 +226,8 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Result & Moderation', 'bar-chart', '/assessment/moderation'),
     leaf('Transcript Print', 'printer', '/assessment/transcript-print'),
     leaf('Graduate Transcript', 'certificate', '/assessment/graduate-transcript'),
+    leaf('Transcript Collection', 'check-box', '/assessment/graduate-transcript/collection'),
+    leaf('Gown Collection', 'check-box', '/assessment/gown-collection'),
   ]),
   section('Resit & Disputes', [
     leaf('Resit Master', 'cogs', '/assessment/resit-configs'),
@@ -1008,6 +1010,29 @@ function ensureGraduateTranscript(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+function ensureTranscriptCollection(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const markIdx = assessModule.children.findIndex(c => c.name === 'Mark Entry & Results')
+  if (markIdx === -1) return menu
+
+  const markSection = assessModule.children[markIdx]
+  if (markSection.children.some(l => l.name === 'Transcript Collection')) return menu
+
+  const children = [...markSection.children, leaf('Transcript Collection', 'check-box', '/assessment/graduate-transcript/collection')]
+
+  const mergedSection = { ...markSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[markIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
 function ensureResultModeration(menu: MenuNode[]): MenuNode[] {
   const assessIdx = menu.findIndex(n => n.name === 'Assessment')
   if (assessIdx === -1) return menu
@@ -1203,6 +1228,36 @@ function ensureResitIaResults(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+function ensureGownCollection(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const markEntryIdx = assessModule.children.findIndex(c => c.name === 'Mark Entry & Results')
+  if (markEntryIdx === -1) return menu
+
+  const markEntrySection = assessModule.children[markEntryIdx]
+  if (markEntrySection.children.some(l => l.name === 'Gown Collection')) return menu
+
+  const children = [...markEntrySection.children]
+  const graduateIdx = children.findIndex(l => l.name === 'Transcript Collection')
+  const newLeaf = leaf('Gown Collection', 'check-box', '/assessment/gown-collection')
+  if (graduateIdx !== -1) {
+    children.splice(graduateIdx + 1, 0, newLeaf)
+  } else {
+    children.push(newLeaf)
+  }
+
+  const mergedSection = { ...markEntrySection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[markEntryIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
 export function getMenu(): Promise<MenuResult> {
   if (MOCK_MENU) return Promise.resolve({ menu: stripLectureMaster(mockMenu), isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
@@ -1234,7 +1289,9 @@ export function getMenu(): Promise<MenuResult> {
       const withProjectProposals = ensureProjectProposals(withModeration)
       const withTranscriptPrint = ensureTranscriptPrint(withProjectProposals)
       const withGraduateTranscript = ensureGraduateTranscript(withTranscriptPrint)
-      const finalMenu = stripLectureMaster(withGraduateTranscript)
+      const withTranscriptCollection = ensureTranscriptCollection(withGraduateTranscript)
+      const withGownCollection = ensureGownCollection(withTranscriptCollection)
+      const finalMenu = stripLectureMaster(withGownCollection)
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: stripLectureMaster(mockMenu), isFallback: true }))
