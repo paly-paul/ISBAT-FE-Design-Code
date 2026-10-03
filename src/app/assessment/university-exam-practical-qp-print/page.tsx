@@ -115,14 +115,16 @@ export default function UniversityExamPracticalQpPrintPage() {
     try {
       const res = await printPracticalMut.mutateAsync(req)
 
-      if (res.outcome === 'ExamRuleNotSet') {
-        showToast('University Exam not yet Scheduled!!', 'error')
-      } else if (res.outcome === 'QuestionsNotAvailable') {
-        showToast('Questions are not yet uploaded!!', 'error')
-      } else if (res.outcome === 'ConfirmationRequired') {
+      const outcome = res.outcome
+
+      if (outcome === 2 || outcome === 'ExamRuleNotSet') {
+        showToast(res.message || 'University Exam not yet Scheduled!!', 'error')
+      } else if (outcome === 3 || outcome === 'QuestionsNotAvailable') {
+        showToast(res.message || 'Questions are not yet uploaded!!', 'error')
+      } else if (outcome === 4 || outcome === 'ConfirmationRequired') {
         confirmAndExecute(res.message || 'Questions are already printed. Do you want to reprint the same?', () => handlePrintQP(true))
-      } else if (res.outcome === 'Printed' || res.outcome === 'Reprinted') {
-        showToast(`Question Paper ${res.outcome}!`, 'success')
+      } else if (outcome === 0 || outcome === 1 || outcome === 'Printed' || outcome === 'Reprinted') {
+        showToast(res.message || `Question Paper Generated!`, 'success')
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to print practical QP', 'error')

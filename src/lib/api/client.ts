@@ -252,7 +252,11 @@ export async function apiPost<T>(path: string, body: unknown, retried = false): 
     if (!envelope.success) {
       throw new AuthError(envelope.code ?? 'unknown', envelope.errors?.[0] ?? envelope.message ?? undefined, Array.isArray(envelope.errors) ? envelope.errors : undefined)
     }
-    return envelope.data as T
+    const data = envelope.data as any
+    if (data && typeof data === 'object' && !Array.isArray(data) && envelope.message) {
+      data.message = envelope.message
+    }
+    return data as T
   }
 
   const { code, message } = extractErrorInfo(envelope)

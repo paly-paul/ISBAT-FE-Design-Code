@@ -138,6 +138,32 @@ export default function UeAttendancePage() {
     saveMutate(payload)
   }
 
+  const handleSingleSave = (studentGuid: string, newStatus: boolean) => {
+    if (!students) return
+    
+    // Update local state for immediate UI feedback
+    setAttendanceState(prev => ({
+      ...prev,
+      [studentGuid]: newStatus
+    }))
+
+    // Fire API call immediately
+    const payload = {
+      programGuid,
+      semesterGuid,
+      unitGuid,
+      intakeGuid,
+      ueType: derivedUeType,
+      students: students.map(s => {
+        if (s.studentGuid === studentGuid) {
+          return { studentGuid: s.studentGuid, isPresent: newStatus }
+        }
+        return { studentGuid: s.studentGuid, isPresent: !!attendanceState[s.studentGuid] }
+      })
+    }
+    saveMutate(payload)
+  }
+
   const handleToggleAttendance = (studentGuid: string) => {
     setAttendanceState(prev => ({
       ...prev,
@@ -385,7 +411,7 @@ export default function UeAttendancePage() {
               <button 
                 className="btn btn-primary" 
                 onClick={() => {
-                  handleToggleAttendance(confirmStudent.studentGuid)
+                  handleSingleSave(confirmStudent.studentGuid, !confirmStudent.isPresent)
                   setConfirmStudent(null)
                 }}
               >

@@ -198,6 +198,8 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Question Bank Upload', 'upload', '/assessment/cw-qbank'),
     leaf('CW Submissions', 'files', '/assessment/cw-submissions'),
     leaf('CW Rectification', 'reload', '/assessment/cw-rectify'),
+    leaf('Project Proposals', 'folder', '/assessment/project-proposals'),
+    leaf('Project Reviews', 'folder', '/assessment/project-reviews'),
   ]),
   section('Class Test (CBT)', [
     leaf('CBT Overview', 'folder', '/assessment/cbt-overview'),
@@ -222,6 +224,8 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Mark Entry — CBT', 'pencil-alt', '/assessment/mark-cbt'),
     leaf('Mark Entry — UE', 'pencil-alt', '/assessment/mark-ue'),
     leaf('Result & Moderation', 'bar-chart', '/assessment/moderation'),
+    leaf('Transcript Print', 'printer', '/assessment/transcript-print'),
+    leaf('Graduate Transcript', 'certificate', '/assessment/graduate-transcript'),
   ]),
   section('Resit & Disputes', [
     leaf('Resit Master', 'cogs', '/assessment/resit-configs'),
@@ -958,6 +962,52 @@ function ensureUeAttendance(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+function ensureTranscriptPrint(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const markIdx = assessModule.children.findIndex(c => c.name === 'Mark Entry & Results')
+  if (markIdx === -1) return menu
+
+  const markSection = assessModule.children[markIdx]
+  if (markSection.children.some(l => l.name === 'Transcript Print')) return menu
+
+  const children = [...markSection.children, leaf('Transcript Print', 'printer', '/assessment/transcript-print')]
+
+  const mergedSection = { ...markSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[markIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
+function ensureGraduateTranscript(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const markIdx = assessModule.children.findIndex(c => c.name === 'Mark Entry & Results')
+  if (markIdx === -1) return menu
+
+  const markSection = assessModule.children[markIdx]
+  if (markSection.children.some(l => l.name === 'Graduate Transcript')) return menu
+
+  const children = [...markSection.children, leaf('Graduate Transcript', 'certificate', '/assessment/graduate-transcript')]
+
+  const mergedSection = { ...markSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[markIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
 function ensureResultModeration(menu: MenuNode[]): MenuNode[] {
   const assessIdx = menu.findIndex(n => n.name === 'Assessment')
   if (assessIdx === -1) return menu
@@ -975,6 +1025,35 @@ function ensureResultModeration(menu: MenuNode[]): MenuNode[] {
   const mergedAssess = { ...assessModule }
   mergedAssess.children = [...assessModule.children]
   mergedAssess.children[markIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
+function ensureProjectProposals(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const cwIdx = assessModule.children.findIndex(c => c.name === 'Coursework (CW)')
+  if (cwIdx === -1) return menu
+
+  const cwSection = assessModule.children[cwIdx]
+  if (cwSection.children.some(l => l.name === 'Project Proposals')) {
+    if (!cwSection.children.some(l => l.name === 'Project Reviews')) {
+      const pIdx = cwSection.children.findIndex(l => l.name === 'Project Proposals')
+      cwSection.children.splice(pIdx + 1, 0, leaf('Project Reviews', 'folder', '/assessment/project-reviews'))
+    }
+    return menu
+  }
+
+  const children = [...cwSection.children, leaf('Project Proposals', 'folder', '/assessment/project-proposals'), leaf('Project Reviews', 'folder', '/assessment/project-reviews')]
+
+  const mergedSection = { ...cwSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[cwIdx] = mergedSection
 
   const mergedMenu = [...menu]
   mergedMenu[assessIdx] = mergedAssess
@@ -1152,7 +1231,10 @@ export function getMenu(): Promise<MenuResult> {
       const withUeAttendance = ensureUeAttendance(withUePrint)
       const withUeMarkImport = ensureUeMarkImport(withUeAttendance)
       const withModeration = ensureResultModeration(withUeMarkImport)
-      const finalMenu = stripLectureMaster(withModeration)
+      const withProjectProposals = ensureProjectProposals(withModeration)
+      const withTranscriptPrint = ensureTranscriptPrint(withProjectProposals)
+      const withGraduateTranscript = ensureGraduateTranscript(withTranscriptPrint)
+      const finalMenu = stripLectureMaster(withGraduateTranscript)
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: stripLectureMaster(mockMenu), isFallback: true }))

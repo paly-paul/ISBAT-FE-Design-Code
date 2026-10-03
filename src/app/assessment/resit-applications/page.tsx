@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react'
 import { TableSearch } from '@/components/TableSearch'
 import { useResitAppCourseUnits, useResitApplications } from '@/hooks/assessment/useResitApplications'
 import { SearchSelect } from '@/components/SearchSelect'
+import { ScrollTable } from '@/components/ScrollTable'
+import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
 
 export default function ResitApplicationsListPage() {
   const [courseUnitGuid, setCourseUnitGuid] = useState<string>('')
@@ -119,7 +123,7 @@ export default function ResitApplicationsListPage() {
             </div>
           </div>
 
-          <div className="table-responsive overflow-x-auto w-full">
+          <ScrollTable>
             <table className="table w-full">
               <thead>
                 <tr>
@@ -134,21 +138,9 @@ export default function ResitApplicationsListPage() {
               </thead>
               <tbody>
                 {appsLoading ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-10 text-gray-500">
-                      <i className="lni lni-spinner-solid animate-spin text-2xl mb-2"></i>
-                      <p>Loading applications...</p>
-                    </td>
-                  </tr>
-                ) : resitAppsData?.applications.items.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-10 text-gray-500">
-                      <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-3">
-                        <i className="lni lni-search-alt text-gray-400 text-xl"></i>
-                      </div>
-                      <p>No applications found matching your criteria.</p>
-                    </td>
-                  </tr>
+                  <TableLoadingState colSpan={7} title="Loading applications..." />
+                ) : !resitAppsData || resitAppsData.applications.items.length === 0 ? (
+                  <EmptyState colSpan={7} message="No applications found matching your criteria." />
                 ) : (
                   resitAppsData?.applications.items.map((app, index) => (
                     <tr key={app.resitApplicationGuid}>
@@ -193,34 +185,17 @@ export default function ResitApplicationsListPage() {
                 )}
               </tbody>
             </table>
-          </div>
+          </ScrollTable>
 
           {/* Pagination */}
           {resitAppsData && resitAppsData.applications.totalCount > 0 && (
-            <div className="p-4 border-t border-gray-100 flex items-center justify-between">
-              <div className="text-sm text-gray-500">
-                Showing <span className="font-medium">{(page - 1) * pageSize + 1}</span> to <span className="font-medium">{Math.min(page * pageSize, resitAppsData.applications.totalCount)}</span> of <span className="font-medium">{resitAppsData.applications.totalCount}</span> applications
-              </div>
-              <div className="flex gap-1">
-                <button 
-                  onClick={() => handlePageChange(page - 1)}
-                  disabled={page === 1}
-                  className="px-3 py-1 border border-gray-200 rounded-md text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Prev
-                </button>
-                <div className="px-3 py-1 bg-primary text-white rounded-md text-sm font-medium">
-                  {page}
-                </div>
-                <button 
-                  onClick={() => handlePageChange(page + 1)}
-                  disabled={page * pageSize >= resitAppsData.applications.totalCount}
-                  className="px-3 py-1 border border-gray-200 rounded-md text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
+            <Pagination 
+              page={page} 
+              totalPages={Math.ceil(resitAppsData.applications.totalCount / pageSize)} 
+              totalCount={resitAppsData.applications.totalCount} 
+              itemLabel="applications" 
+              onPageChange={setPage} 
+            />
           )}
       </div>
     </div>

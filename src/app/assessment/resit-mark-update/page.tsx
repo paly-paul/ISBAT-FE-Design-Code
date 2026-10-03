@@ -6,6 +6,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useResitConfigs } from '@/hooks/assessment/useResitConfigs'
 import { useResitMarkUpdates, usePushResitMarkUpdate } from '@/hooks/assessment/useResitMarkUpdates'
@@ -111,31 +112,31 @@ export default function ResitMarkUpdatePage() {
       case 1:
         return (
           <div>
-            <div className="font-medium">{part.currentMark.toFixed(2)} <span className="text-gray-400 font-normal">· waiting</span></div>
+            <div className="font-medium">{part.currentMark?.toFixed(2) ?? '--'} <span className="text-gray-400 font-normal">· waiting</span></div>
             <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded text-[10px] uppercase font-semibold">Pending</span>
           </div>
         )
       case 2:
         return (
           <div>
-            <div className="font-medium text-blue-600">{part.currentMark.toFixed(2)} → {part.newMark?.toFixed(2)} / {part.maxMark.toFixed(2)}</div>
+            <div className="font-medium text-blue-600">{part.currentMark?.toFixed(2) ?? '--'} → {part.newMark?.toFixed(2) ?? '--'} / {part.maxMark?.toFixed(2) ?? '--'}</div>
             <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] uppercase font-semibold inline-flex items-center gap-1">
               Ready
-              {(part.newMark ?? 0) <= part.currentMark && <span className="text-gray-500 lowercase font-normal">(lower)</span>}
+              {(part.newMark ?? 0) <= (part.currentMark ?? 0) && <span className="text-gray-500 lowercase font-normal">(lower)</span>}
             </span>
           </div>
         )
       case 3:
         return (
           <div>
-            <div className="font-medium text-emerald-600">{part.currentMark.toFixed(2)} / {part.maxMark.toFixed(2)}</div>
+            <div className="font-medium text-emerald-600">{part.currentMark?.toFixed(2) ?? '--'} / {part.maxMark?.toFixed(2) ?? '--'}</div>
             <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] uppercase font-semibold">Updated</span>
           </div>
         )
       case 4:
         return (
           <div>
-            <div className="font-medium text-gray-500">{part.currentMark.toFixed(2)} / {part.maxMark.toFixed(2)}</div>
+            <div className="font-medium text-gray-500">{part.currentMark?.toFixed(2) ?? '--'} / {part.maxMark?.toFixed(2) ?? '--'}</div>
             <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-[10px] uppercase font-semibold">Not updated - lower</span>
           </div>
         )
@@ -226,12 +227,7 @@ export default function ResitMarkUpdatePage() {
             </thead>
             <tbody>
               {updatesLoading ? (
-                <tr>
-                  <td colSpan={5} className="text-center py-10 text-gray-500">
-                    <i className="lni lni-spinner-solid animate-spin text-2xl mb-2"></i>
-                    <p>Loading updates...</p>
-                  </td>
-                </tr>
+                <TableLoadingState colSpan={5} title="Loading updates..." />
               ) : !markUpdatesData || markUpdatesData.rows.items.length === 0 ? (
                 <EmptyState
                   colSpan={5}
@@ -313,15 +309,18 @@ export default function ResitMarkUpdatePage() {
       </div>
 
       {pushModalData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg overflow-hidden">
-            <div className="flex justify-between items-center p-4 border-b">
-              <h3 className="font-semibold text-lg">Push resit marks</h3>
-              <button onClick={() => setPushModalData(null)} className="text-gray-400 hover:text-gray-600">
+        <div className="modal-overlay open" onClick={() => setPushModalData(null)}>
+          <div className="modal" style={{ maxWidth: '500px', width: '100%' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-hdr modal-hdr-blue">
+              <div className="modal-title">
+                <i className="lni lni-cloud-upload"></i> Push resit marks
+              </div>
+              <button onClick={() => setPushModalData(null)} className="modal-close">
                 <i className="lni lni-close"></i>
               </button>
             </div>
-            <div className="p-6">
+            
+            <div className="modal-body p-6">
               <div className="mb-4">
                 <div className="font-medium">{pushModalData.studentName} · {pushModalData.studentNum || pushModalData.studentRegNo}</div>
                 <div className="text-gray-600">{pushModalData.unitCode} · {pushModalData.unitName}</div>
@@ -340,18 +339,18 @@ export default function ResitMarkUpdatePage() {
                     )
                   }
                   if (part.status === 2) {
-                    if ((part.newMark ?? 0) > part.currentMark) {
+                    if ((part.newMark ?? 0) > (part.currentMark ?? 0)) {
                       return (
                         <div key={label} className="flex gap-4 text-emerald-600">
                           <div className="w-8 font-semibold">{label}</div>
-                          <div>{part.currentMark.toFixed(2)} → {part.newMark?.toFixed(2)} / {part.maxMark.toFixed(2)} — will be updated</div>
+                          <div>{part.currentMark?.toFixed(2) ?? '--'} → {part.newMark?.toFixed(2) ?? '--'} / {part.maxMark?.toFixed(2) ?? '--'} — will be updated</div>
                         </div>
                       )
                     } else {
                       return (
                         <div key={label} className="flex gap-4 text-gray-500">
                           <div className="w-8 font-semibold">{label}</div>
-                          <div>{part.newMark?.toFixed(2)} is not higher than {part.currentMark.toFixed(2)} — current mark is kept</div>
+                          <div>{part.newMark?.toFixed(2) ?? '--'} is not higher than {part.currentMark?.toFixed(2) ?? '--'} — current mark is kept</div>
                         </div>
                       )
                     }
@@ -359,18 +358,19 @@ export default function ResitMarkUpdatePage() {
                   return null
                 })}
               </div>
-              <p className="text-sm text-gray-500 mb-6">
+              <p className="text-sm text-gray-500 mb-0">
                 The exam result is only changed when the resit mark is higher.
               </p>
+            </div>
               
-              <div className="flex justify-end gap-3">
-                <button onClick={() => setPushModalData(null)} className="btn btn-light" disabled={pushMutation.isPending}>
-                  Cancel
-                </button>
-                <button onClick={handlePush} className="btn btn-primary" disabled={pushMutation.isPending}>
-                  {pushMutation.isPending ? 'Pushing...' : 'Push marks'}
-                </button>
-              </div>
+            <div className="modal-ftr">
+              <button onClick={() => setPushModalData(null)} className="btn btn-neu" disabled={pushMutation.isPending}>
+                Cancel
+              </button>
+              <span className="flex-1"></span>
+              <button onClick={handlePush} className="btn btn-primary" disabled={pushMutation.isPending}>
+                <i className="lni lni-checkmark"></i> {pushMutation.isPending ? 'Pushing...' : 'Push marks'}
+              </button>
             </div>
           </div>
         </div>
