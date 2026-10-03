@@ -1233,10 +1233,6 @@ function ensureResitIaResults(menu: MenuNode[]): MenuNode[] {
 }
 
 function ensureGownCollection(menu: MenuNode[]): MenuNode[] {
-// New page, no backend menu registration yet (service-ticket-staff-page.md;
-// APIs not deployed). Adds a "Student Services" section to Assessment —
-// before Reports when present, otherwise at the end.
-function ensureServiceTickets(menu: MenuNode[]): MenuNode[] {
   const assessIdx = menu.findIndex(n => n.name === 'Assessment')
   if (assessIdx === -1) return menu
 
@@ -1260,6 +1256,20 @@ function ensureServiceTickets(menu: MenuNode[]): MenuNode[] {
   const mergedAssess = { ...assessModule }
   mergedAssess.children = [...assessModule.children]
   mergedAssess.children[markEntryIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
+// New page, no backend menu registration yet (service-ticket-staff-page.md;
+// APIs not deployed). Adds a "Student Services" section to Assessment —
+// before Reports when present, otherwise at the end.
+function ensureServiceTickets(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
   const hasPage = assessModule.children.some(s => s.children.some(l => l.url === '/assessment/service-tickets'))
   if (hasPage) return menu
 
@@ -1333,8 +1343,7 @@ export function getMenu(): Promise<MenuResult> {
       const withGraduateTranscript = ensureGraduateTranscript(withTranscriptPrint)
       const withTranscriptCollection = ensureTranscriptCollection(withGraduateTranscript)
       const withGownCollection = ensureGownCollection(withTranscriptCollection)
-      const finalMenu = stripLectureMaster(withGownCollection)
-      const withServiceTickets = ensureServiceTickets(withGraduateTranscript)
+      const withServiceTickets = ensureServiceTickets(withGownCollection)
       const withExamGrievances = ensureExamGrievances(withServiceTickets)
       const finalMenu = stripLectureMaster(withExamGrievances)
       return { menu: finalMenu, isFallback: false }
