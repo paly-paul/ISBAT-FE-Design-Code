@@ -121,8 +121,6 @@ function UeSchedulingTab({ showToast }: { showToast: (m: string, t?: string) => 
           <thead>
             <tr>
               <th style={{ width: 48 }}>Action</th>
-              <th>Unit Code</th>
-              <th>Unit Name</th>
               <th>Part</th>
               <th>Date & Time</th>
               <th>Type</th>
@@ -132,24 +130,22 @@ function UeSchedulingTab({ showToast }: { showToast: (m: string, t?: string) => 
           </thead>
           <tbody>
             {isLoading ? (
-              <TableLoadingState colSpan={8} />
+              <TableLoadingState colSpan={6} />
             ) : items.length === 0 ? (
-              <EmptyState colSpan={8} hasFilters={!!search} onClearFilters={() => { setSearchInput(''); setSearch(''); setPage(1) }} />
+              <EmptyState colSpan={6} hasFilters={!!search} onClearFilters={() => { setSearchInput(''); setSearch(''); setPage(1) }} />
             ) : (
               items.map(s => (
                 <tr key={s.resitScheduleGuid}>
                   <td>
                     <ActionMenu>
-                      <button className="text-left px-4 py-2 hover:bg-slate-50 text-sm w-full flex items-center gap-2 border-b border-slate-100" onClick={() => handleView(s.resitScheduleGuid)}>
+                      <button className="btn btn-neu btn-sm" onClick={() => handleView(s.resitScheduleGuid)}>
                         <i className="lni lni-eye"></i> View
                       </button>
-                      <button className="text-left px-4 py-2 hover:bg-slate-50 text-sm w-full flex items-center gap-2" onClick={() => handleEdit(s.resitScheduleGuid)}>
+                      <button className="btn btn-neu btn-sm" onClick={() => handleEdit(s.resitScheduleGuid)}>
                         <i className="lni lni-pencil"></i> Edit
                       </button>
                     </ActionMenu>
                   </td>
-                  <td className="font-mono text-slate-700">{s.unitCode}</td>
-                  <td>{s.unitName}</td>
                   <td>{s.ueType === 0 ? 'Theory' : 'Practical'}</td>
                   <td>
                     <div className="font-mono text-[12px] text-slate-700">{s.examDate || '-'}</div>
@@ -209,7 +205,7 @@ function UeScheduleModal({ onClose, showToast, modalState }: { onClose: () => vo
   
   const { data: rules } = useQuery({
     queryKey: ['exam-rules'],
-    queryFn: () => apiGet<any[]>('/api/v1/assessment/exam-rules')
+    queryFn: () => apiGet<any>('/api/v1/assessment/exam-rules').then(res => res.items || [])
   })
   
   const { data: scheduleData, isLoading: isLoadingSchedule } = useResitSchedule(editingGuid)
@@ -267,99 +263,96 @@ function UeScheduleModal({ onClose, showToast, modalState }: { onClose: () => vo
   const selectedUnit = units?.find(u => u.courseUnitGuid === courseUnitGuid)
   
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl flex flex-col overflow-hidden max-h-full">
-        <div className="flex items-center justify-between p-4 border-b border-slate-100">
-          <div className="font-bold text-[16px] text-slate-800">{isView ? 'View Schedule' : isEdit ? 'Edit Schedule' : 'Add Schedule'}</div>
-          <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={onClose}><i className="lni lni-close text-lg"></i></button>
+    <div className="modal-overlay open">
+      <div className="modal modal-md" onClick={e => e.stopPropagation()}>
+        <div className="modal-hdr modal-hdr-blue">
+          <div className="modal-title">
+            <i className={`lni ${isView ? 'lni-eye' : isEdit ? 'lni-pencil' : 'lni-plus'}`}></i> {isView ? 'View Schedule' : isEdit ? 'Edit Schedule' : 'Add Schedule'}
+          </div>
+          <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
+        
         {isLoadingSchedule ? (
-          <div className="p-10 text-center flex-1 flex items-center justify-center">
-            <i className="lni lni-spinner-solid animate-spin text-2xl text-blue-500"></i>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
+            <span style={{ color: 'var(--g400)' }}>Loading schedule details…</span>
           </div>
         ) : (
-          <div className="p-5 overflow-y-auto custom-scrollbar flex flex-col gap-4">
-          
-          <div className="form-group">
-            <label>Course Unit {!(isEdit || isView) && <span className="text-red-500">*</span>}</label>
-            <select className="form-control" value={courseUnitGuid} onChange={e => setCourseUnitGuid(e.target.value)} disabled={isEdit || isView}>
-              <option value="">-- Select Unit --</option>
-              {units?.map(u => (
-                <option key={u.courseUnitGuid} value={u.courseUnitGuid} disabled={u.theoryScheduled && u.practicalScheduled}>{u.unitCode} - {u.unitName}</option>
-              ))}
-            </select>
-          </div>
-          
-          {!isEdit && selectedUnit?.isTheoryPracticalUnit && (
-            <div className="form-group">
-              <label>Part</label>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="radio" checked={ueType === 0} onChange={() => setUeType(0)} disabled={selectedUnit.theoryScheduled || isView} /> Theory
-                </label>
-                <label className="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="radio" checked={ueType === 1} onChange={() => setUeType(1)} disabled={selectedUnit.practicalScheduled || isView} /> Practical
-                </label>
+          <div className="g2">
+            <div className="fg span2">
+              <div className="lbl">Course Unit {!(isEdit || isView) && <span className="req">*</span>}</div>
+              <select className="ctrl" value={courseUnitGuid} onChange={e => setCourseUnitGuid(e.target.value)} disabled={isEdit || isView}>
+                <option value="">-- Select Unit --</option>
+                {units?.map(u => (
+                  <option key={u.courseUnitGuid} value={u.courseUnitGuid} disabled={u.theoryScheduled && u.practicalScheduled}>{u.unitCode} - {u.unitName}</option>
+                ))}
+              </select>
+            </div>
+            
+            {!isEdit && selectedUnit?.isTheoryPracticalUnit && (
+              <div className="fg span2">
+                <div className="lbl">Part</div>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="radio" checked={ueType === 0} onChange={() => setUeType(0)} disabled={selectedUnit.theoryScheduled || isView} /> Theory
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="radio" checked={ueType === 1} onChange={() => setUeType(1)} disabled={selectedUnit.practicalScheduled || isView} /> Practical
+                  </label>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="form-group">
-              <label>Exam Date <span className="text-red-500">*</span></label>
-              <input type="date" className="form-control" value={examDate} onChange={e => setExamDate(e.target.value)} disabled={isView} />
+            <div className="fg">
+              <div className="lbl">Exam Date <span className="req">*</span></div>
+              <input type="date" className="ctrl" value={examDate} onChange={e => setExamDate(e.target.value)} disabled={isView} />
             </div>
-            <div className="form-group">
-              <label>Exam Type</label>
-              <select className="form-control" value={examType} onChange={e => setExamType(Number(e.target.value))} disabled={isView}>
+            <div className="fg">
+              <div className="lbl">Exam Type</div>
+              <select className="ctrl" value={examType} onChange={e => setExamType(Number(e.target.value))} disabled={isView}>
                 <option value={0}>Online</option>
                 <option value={1}>Offline</option>
               </select>
             </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="form-group">
-              <label>Start Time <span className="text-red-500">*</span></label>
-              <input type="time" className="form-control" value={startTime} onChange={e => setStartTime(e.target.value)} disabled={isView} />
+            
+            <div className="fg">
+              <div className="lbl">Start Time <span className="req">*</span></div>
+              <input type="time" className="ctrl" value={startTime} onChange={e => setStartTime(e.target.value)} disabled={isView} />
             </div>
-            <div className="form-group">
-              <label>End Time <span className="text-red-500">*</span></label>
-              <input type="time" className="form-control" value={endTime} onChange={e => setEndTime(e.target.value)} disabled={isView} />
+            <div className="fg">
+              <div className="lbl">End Time <span className="req">*</span></div>
+              <input type="time" className="ctrl" value={endTime} onChange={e => setEndTime(e.target.value)} disabled={isView} />
             </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="form-group">
-              <label>Max Mark <span className="text-red-500">*</span></label>
-              <input type="number" className="form-control" value={maxMark} onChange={e => setMaxMark(Number(e.target.value))} disabled={isView} />
+            
+            <div className="fg">
+              <div className="lbl">Max Mark <span className="req">*</span></div>
+              <input type="number" className="ctrl" value={maxMark} onChange={e => setMaxMark(Number(e.target.value))} disabled={isView} />
             </div>
-            <div className="form-group">
-              <label>Publish Status</label>
-              <select className="form-control" value={publishStatus} onChange={e => setPublishStatus(Number(e.target.value))} disabled={isView}>
+            <div className="fg">
+              <div className="lbl">Publish Status</div>
+              <select className="ctrl" value={publishStatus} onChange={e => setPublishStatus(Number(e.target.value))} disabled={isView}>
                 <option value={0}>Not Published</option>
                 <option value={1}>Published</option>
               </select>
             </div>
-          </div>
 
-          <div className="form-group">
-            <label>Exam Rule <span className="text-red-500">*</span></label>
-            <select className="form-control" value={examRuleGuid} onChange={e => setExamRuleGuid(e.target.value)} disabled={isView}>
-              <option value="">-- Select Rule --</option>
-              {rules?.map(r => (
-                <option key={r.guid} value={r.guid}>{r.code} - {r.name}</option>
-              ))}
-            </select>
+            <div className="fg span2">
+              <div className="lbl">Exam Rule <span className="req">*</span></div>
+              <select className="ctrl" value={examRuleGuid} onChange={e => setExamRuleGuid(e.target.value)} disabled={isView}>
+                <option value="">-- Select Rule --</option>
+                {rules?.map((r: any) => (
+                  <option key={r.examRuleGuid} value={r.examRuleGuid}>{r.ruleCode} - {r.ruleName}</option>
+                ))}
+              </select>
+            </div>
+            
           </div>
-          
-        </div>
         )}
-        <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
-          <button className="btn btn-white" onClick={onClose}>{isView ? 'Close' : 'Cancel'}</button>
+
+        <div className="modal-footer">
+          <button className="btn btn-neu" onClick={onClose}>{isView ? 'Close' : 'Cancel'}</button>
           {!isView && (
             <button className="btn btn-primary" onClick={handleSave} disabled={createMut.isPending || updateMut.isPending}>
-              {createMut.isPending || updateMut.isPending ? 'Saving...' : 'Save Schedule'}
+              <i className="lni lni-checkmark"></i> {createMut.isPending || updateMut.isPending ? 'Saving...' : 'Save Schedule'}
             </button>
           )}
         </div>
@@ -390,7 +383,7 @@ function CwSchedulingTab({ showToast }: { showToast: (m: string, t?: string) => 
 
   const { data: rules } = useQuery({
     queryKey: ['exam-rules'],
-    queryFn: () => apiGet<any[]>('/api/v1/assessment/exam-rules')
+    queryFn: () => apiGet<any>('/api/v1/assessment/exam-rules').then(res => res.items || [])
   })
 
   const handleSave = () => {
@@ -429,46 +422,44 @@ function CwSchedulingTab({ showToast }: { showToast: (m: string, t?: string) => 
         </div>
       )}
       
-      <div className="grid grid-cols-2 gap-5 mb-4">
-        <div className="form-group">
-          <label>Start Date & Time</label>
-          <input type="datetime-local" className="form-control" value={startDateTime} onChange={e => setStartDateTime(e.target.value)} />
+      <div className="g2 mb-5">
+        <div className="fg">
+          <div className="lbl">Start Date & Time</div>
+          <input type="datetime-local" className="ctrl" value={startDateTime} onChange={e => setStartDateTime(e.target.value)} />
         </div>
-        <div className="form-group">
-          <label>End Date & Time</label>
-          <input type="datetime-local" className="form-control" value={endDateTime} onChange={e => setEndDateTime(e.target.value)} />
+        <div className="fg">
+          <div className="lbl">End Date & Time</div>
+          <input type="datetime-local" className="ctrl" value={endDateTime} onChange={e => setEndDateTime(e.target.value)} />
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-5 mb-4">
-        <div className="form-group">
-          <label>Test Type</label>
-          <select className="form-control" value={testType} onChange={e => setTestType(Number(e.target.value))} disabled={data.locked}>
+        <div className="fg">
+          <div className="lbl">Test Type</div>
+          <select className="ctrl" value={testType} onChange={e => setTestType(Number(e.target.value))} disabled={data.locked}>
             <option value={0}>Online</option>
             <option value={1}>Offline</option>
           </select>
         </div>
-        <div className="form-group">
-          <label>Publish Status</label>
-          <select className="form-control" value={publishStatus} onChange={e => setPublishStatus(Number(e.target.value))}>
+        <div className="fg">
+          <div className="lbl">Publish Status</div>
+          <select className="ctrl" value={publishStatus} onChange={e => setPublishStatus(Number(e.target.value))}>
             <option value={0}>Not Published</option>
             <option value={1}>Published</option>
           </select>
         </div>
-      </div>
 
-      <div className="form-group mb-5">
-        <label>Exam Rule</label>
-        <select className="form-control" value={examRuleGuid} onChange={e => setExamRuleGuid(e.target.value)} disabled={data.locked}>
-          <option value="">-- Select Rule --</option>
-          {rules?.map(r => (
-            <option key={r.guid} value={r.guid}>{r.code} - {r.name}</option>
-          ))}
-        </select>
+        <div className="fg span2">
+          <div className="lbl">Exam Rule</div>
+          <select className="ctrl" value={examRuleGuid} onChange={e => setExamRuleGuid(e.target.value)} disabled={data.locked}>
+            <option value="">-- Select Rule --</option>
+            {rules?.map((r: any) => (
+              <option key={r.examRuleGuid} value={r.examRuleGuid}>{r.ruleCode} - {r.ruleName}</option>
+            ))}
+          </select>
+        </div>
       </div>
       
       <button className="btn btn-primary" onClick={handleSave} disabled={mut.isPending}>
-        {mut.isPending ? 'Saving...' : 'Save Coursework Schedule'}
+        <i className="lni lni-checkmark"></i> {mut.isPending ? 'Saving...' : 'Save Coursework Schedule'}
       </button>
     </div>
   )
@@ -498,7 +489,7 @@ function CtSchedulingTab({ showToast }: { showToast: (m: string, t?: string) => 
 
   const { data: rules } = useQuery({
     queryKey: ['exam-rules'],
-    queryFn: () => apiGet<any[]>('/api/v1/assessment/exam-rules')
+    queryFn: () => apiGet<any>('/api/v1/assessment/exam-rules').then(res => res.items || [])
   })
 
   const handleSave = () => {
@@ -538,50 +529,48 @@ function CtSchedulingTab({ showToast }: { showToast: (m: string, t?: string) => 
         </div>
       )}
       
-      <div className="grid grid-cols-2 gap-5 mb-4">
-        <div className="form-group">
-          <label>Start Date & Time</label>
-          <input type="datetime-local" className="form-control" value={startDateTime} onChange={e => setStartDateTime(e.target.value)} />
+      <div className="g2 mb-5">
+        <div className="fg">
+          <div className="lbl">Start Date & Time</div>
+          <input type="datetime-local" className="ctrl" value={startDateTime} onChange={e => setStartDateTime(e.target.value)} />
         </div>
-        <div className="form-group">
-          <label>End Date & Time</label>
-          <input type="datetime-local" className="form-control" value={endDateTime} onChange={e => setEndDateTime(e.target.value)} />
+        <div className="fg">
+          <div className="lbl">End Date & Time</div>
+          <input type="datetime-local" className="ctrl" value={endDateTime} onChange={e => setEndDateTime(e.target.value)} />
         </div>
-      </div>
 
-      <div className="grid grid-cols-3 gap-5 mb-4">
-        <div className="form-group">
-          <label>Duration (mins)</label>
-          <input type="number" className="form-control" value={durationMinutes} onChange={e => setDurationMinutes(Number(e.target.value))} disabled={data.locked} />
+        <div className="fg">
+          <div className="lbl">Duration (mins)</div>
+          <input type="number" className="ctrl" value={durationMinutes} onChange={e => setDurationMinutes(Number(e.target.value))} disabled={data.locked} />
         </div>
-        <div className="form-group">
-          <label>Test Type</label>
-          <select className="form-control" value={testType} onChange={e => setTestType(Number(e.target.value))} disabled={data.locked}>
+        <div className="fg">
+          <div className="lbl">Test Type</div>
+          <select className="ctrl" value={testType} onChange={e => setTestType(Number(e.target.value))} disabled={data.locked}>
             <option value={0}>Online</option>
             <option value={1}>Offline</option>
           </select>
         </div>
-        <div className="form-group">
-          <label>Publish Status</label>
-          <select className="form-control" value={publishStatus} onChange={e => setPublishStatus(Number(e.target.value))}>
+
+        <div className="fg">
+          <div className="lbl">Publish Status</div>
+          <select className="ctrl" value={publishStatus} onChange={e => setPublishStatus(Number(e.target.value))}>
             <option value={0}>Not Published</option>
             <option value={1}>Published</option>
           </select>
         </div>
-      </div>
-
-      <div className="form-group mb-5">
-        <label>Exam Rule</label>
-        <select className="form-control" value={examRuleGuid} onChange={e => setExamRuleGuid(e.target.value)} disabled={data.locked}>
-          <option value="">-- Select Rule --</option>
-          {rules?.map(r => (
-            <option key={r.guid} value={r.guid}>{r.code} - {r.name}</option>
-          ))}
-        </select>
+        <div className="fg">
+          <div className="lbl">Exam Rule</div>
+          <select className="ctrl" value={examRuleGuid} onChange={e => setExamRuleGuid(e.target.value)} disabled={data.locked}>
+            <option value="">-- Select Rule --</option>
+            {rules?.map((r: any) => (
+              <option key={r.examRuleGuid} value={r.examRuleGuid}>{r.ruleCode} - {r.ruleName}</option>
+            ))}
+          </select>
+        </div>
       </div>
       
       <button className="btn btn-primary" onClick={handleSave} disabled={mut.isPending}>
-        {mut.isPending ? 'Saving...' : 'Save Class Test Schedule'}
+        <i className="lni lni-checkmark"></i> {mut.isPending ? 'Saving...' : 'Save Class Test Schedule'}
       </button>
     </div>
   )

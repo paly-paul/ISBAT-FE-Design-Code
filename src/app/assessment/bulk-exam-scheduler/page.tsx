@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -394,7 +395,7 @@ export default function BulkExamSchedulerPage() {
         <div className="bg-white border border-slate-200/80 rounded-lg p-4 mb-4 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
             {/* 1. Academic Session */}
-            <div className="md:col-span-5 flex items-center gap-2">
+            <div className="md:col-span-4 flex items-center gap-2">
               <label className="text-xs font-semibold text-slate-700 shrink-0 w-32">
                 Academic Session<span className="text-rose-600 font-bold">*</span>
               </label>
@@ -420,24 +421,22 @@ export default function BulkExamSchedulerPage() {
             <div className="md:col-span-4 flex items-center gap-2">
               <label className="text-xs font-semibold text-slate-700 shrink-0 w-14">Term</label>
               <div className="flex-1 min-w-0">
-                <select
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                <SearchSelect
+                  options={[
+                    { value: 1, label: 'Term 1' },
+                    { value: 2, label: 'Term 2' },
+                    { value: 3, label: 'Both (Term 1 & 2)' },
+                  ]}
                   value={term}
-                  onChange={e => setTerm(Number(e.target.value))}
-                >
-                  <option value={1}>Term 1</option>
-                  <option value={2}>Term 2</option>
-                  <option value={3}>Both (Term 1 &amp; 2)</option>
-                </select>
+                  onChange={(val) => setTerm(Number(val))}
+                  placeholder="Select Term"
+                />
               </div>
             </div>
 
-            {/* Empty spacer for top row */}
-            <div className="hidden md:block md:col-span-3"></div>
-
             {/* 3. Campus */}
-            <div className="md:col-span-5 flex items-center gap-2">
-              <label className="text-xs font-semibold text-slate-700 shrink-0 w-32">Campus</label>
+            <div className="md:col-span-4 flex items-center gap-2">
+              <label className="text-xs font-semibold text-slate-700 shrink-0 w-16">Campus</label>
               <div className="flex-1 min-w-0">
                 <SearchSelect
                   placeholder="All Campuses"
@@ -554,7 +553,9 @@ export default function BulkExamSchedulerPage() {
 
                   {/* ── Table Body ── */}
                   <tbody className="divide-y divide-slate-200/80 bg-white">
-                    {serverRows.length === 0 ? (
+                    {isTableLoading ? (
+                      <TableLoadingState colSpan={7} title="Loading schedules..." />
+                    ) : serverRows.length === 0 ? (
                       <EmptyState
                         colSpan={7}
                         title="No programme sessions found"
