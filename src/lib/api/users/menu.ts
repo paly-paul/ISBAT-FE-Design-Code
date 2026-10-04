@@ -209,6 +209,7 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
   section('University Exam (UE)', [
     leaf('UE Schedule', 'calendar', '/assessment/ue-schedule'),
     leaf('Question Paper Vetting', 'upload', '/assessment/qp-vetting'),
+    leaf('UE Practical QBank', 'upload', '/assessment/question-bank-practical'),
     leaf('Hall Ticket Issuance', 'ticket', '/assessment/hall-ticket'),
     leaf('Hall Ticket Print', 'printer', '/assessment/hall-print'),
     leaf('UE Material Print', 'printer', '/assessment/university-exam-material-print'),
@@ -1233,10 +1234,6 @@ function ensureResitIaResults(menu: MenuNode[]): MenuNode[] {
 }
 
 function ensureGownCollection(menu: MenuNode[]): MenuNode[] {
-// New page, no backend menu registration yet (service-ticket-staff-page.md;
-// APIs not deployed). Adds a "Student Services" section to Assessment —
-// before Reports when present, otherwise at the end.
-function ensureServiceTickets(menu: MenuNode[]): MenuNode[] {
   const assessIdx = menu.findIndex(n => n.name === 'Assessment')
   if (assessIdx === -1) return menu
 
@@ -1260,6 +1257,20 @@ function ensureServiceTickets(menu: MenuNode[]): MenuNode[] {
   const mergedAssess = { ...assessModule }
   mergedAssess.children = [...assessModule.children]
   mergedAssess.children[markEntryIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
+// New page, no backend menu registration yet (service-ticket-staff-page.md;
+// APIs not deployed). Adds a "Student Services" section to Assessment —
+// before Reports when present, otherwise at the end.
+function ensureServiceTickets(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
   const hasPage = assessModule.children.some(s => s.children.some(l => l.url === '/assessment/service-tickets'))
   if (hasPage) return menu
 
@@ -1300,6 +1311,36 @@ function ensureExamGrievances(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+function ensureQuestionBankPractical(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const ueIdx = assessModule.children.findIndex(c => c.name === 'University Exam (UE)')
+  if (ueIdx === -1) return menu
+
+  const ueSection = assessModule.children[ueIdx]
+  if (ueSection.children.some(l => l.url === '/assessment/question-bank-practical')) return menu
+
+  const children = [...ueSection.children]
+  const qpIdx = children.findIndex(l => l.name === 'Question Paper Vetting')
+  const newLeaf = leaf('UE Practical QBank', 'upload', '/assessment/question-bank-practical')
+  if (qpIdx !== -1) {
+    children.splice(qpIdx + 1, 0, newLeaf)
+  } else {
+    children.push(newLeaf)
+  }
+
+  const mergedSection = { ...ueSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[ueIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
 export function getMenu(): Promise<MenuResult> {
   if (MOCK_MENU) return Promise.resolve({ menu: stripLectureMaster(mockMenu), isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
@@ -1333,10 +1374,10 @@ export function getMenu(): Promise<MenuResult> {
       const withGraduateTranscript = ensureGraduateTranscript(withTranscriptPrint)
       const withTranscriptCollection = ensureTranscriptCollection(withGraduateTranscript)
       const withGownCollection = ensureGownCollection(withTranscriptCollection)
-      const finalMenu = stripLectureMaster(withGownCollection)
-      const withServiceTickets = ensureServiceTickets(withGraduateTranscript)
+      const withServiceTickets = ensureServiceTickets(withGownCollection)
       const withExamGrievances = ensureExamGrievances(withServiceTickets)
-      const finalMenu = stripLectureMaster(withExamGrievances)
+      const withQuestionBankPractical = ensureQuestionBankPractical(withExamGrievances)
+      const finalMenu = stripLectureMaster(withQuestionBankPractical)
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: stripLectureMaster(mockMenu), isFallback: true }))
