@@ -374,16 +374,9 @@ const BASE_PATH = '/api/v1/assessment/internal-assessment-evaluations'
  */
 export async function getPendingEvaluations(intakeGuid: string): Promise<PendingEvaluationDto[]> {
   if (MOCK_AUTH) return MOCK_PENDING_UNITS
-  try {
-    const url = `${BASE_PATH}/pending?intakeGuid=${encodeURIComponent(intakeGuid)}`
-    const data = await apiGet<any[]>(url)
-    if (data && Array.isArray(data)) {
-      return data.map(normalizePendingUnit)
-    }
-  } catch (err: any) {
-    console.warn('ℹ️ [IA Evaluation] Live pending API failed, using fallback:', err?.message || err)
-  }
-  return MOCK_PENDING_UNITS
+  const url = `${BASE_PATH}/pending?intakeGuid=${encodeURIComponent(intakeGuid)}`
+  const data = await apiGet<any[] | null>(url)
+  return Array.isArray(data) ? data.map(normalizePendingUnit) : []
 }
 
 /**
@@ -411,34 +404,19 @@ export async function getStudentsForEvaluation(
     }
   }
 
-  try {
-    const params = new URLSearchParams()
-    if (status) {
-      params.append('status', status)
-    }
-    const queryStr = params.toString() ? `?${params.toString()}` : ''
-    const url = `${BASE_PATH}/${category}/${encodeURIComponent(courseworkOrTestGuid)}/students${queryStr}`
-    const rawRes = await apiGet<any>(url)
-    const payload = rawRes?.data ?? rawRes
-    if (payload && payload.students && Array.isArray(payload.students)) {
-      return {
-        unitName: payload.unitName ?? payload.UnitName ?? null,
-        programmeName: payload.programmeName ?? payload.ProgrammeName ?? null,
-        semesterName: payload.semesterName ?? payload.SemesterName ?? null,
-        students: payload.students.map(normalizeStudent),
-      }
-    }
-  } catch (err: any) {
-    console.warn('ℹ️ [IA Evaluation] Live students API failed, using fallback:', err?.message || err)
+  const params = new URLSearchParams()
+  if (status) {
+    params.append('status', status)
   }
-
-  const fallback =
-    MOCK_STUDENTS_BY_UNIT[courseworkOrTestGuid] ||
-    MOCK_STUDENTS_BY_UNIT['6b0ef15b-fddb-41b1-9adb-606034ab3e40']
-  if (!status) return fallback
+  const queryStr = params.toString() ? `?${params.toString()}` : ''
+  const url = `${BASE_PATH}/${category}/${encodeURIComponent(courseworkOrTestGuid)}/students${queryStr}`
+  const rawRes = await apiGet<any>(url)
+  const payload = rawRes?.data ?? rawRes
   return {
-    ...fallback,
-    students: fallback.students.filter(s => s.evaluationStatus === status),
+    unitName: payload?.unitName ?? payload?.UnitName ?? null,
+    programmeName: payload?.programmeName ?? payload?.ProgrammeName ?? null,
+    semesterName: payload?.semesterName ?? payload?.SemesterName ?? null,
+    students: Array.isArray(payload?.students) ? payload.students.map(normalizeStudent) : [],
   }
 }
 
@@ -462,22 +440,9 @@ export async function getStudentQuestions(
     )
   }
 
-  try {
-    const url = `${BASE_PATH}/${category}/${encodeURIComponent(courseworkOrTestGuid)}/students/${encodeURIComponent(studentGuid)}/questions`
-    const data = await apiGet<any[]>(url)
-    if (data && Array.isArray(data)) {
-      console.log('📦 [getStudentQuestions] Loaded live questions:', data)
-      return data.map(normalizeQuestion)
-    }
-  } catch (err: any) {
-    console.warn('ℹ️ [IA Evaluation] Live questions API failed, using fallback:', err?.message || err)
-  }
-
-  return (
-    MOCK_QUESTIONS_BY_STUDENT[studentGuid] ||
-    MOCK_QUESTIONS_BY_STUDENT['9a4eebf7-a959-41fa-9979-71ae2f220268'] ||
-    []
-  )
+  const url = `${BASE_PATH}/${category}/${encodeURIComponent(courseworkOrTestGuid)}/students/${encodeURIComponent(studentGuid)}/questions`
+  const data = await apiGet<any[] | null>(url)
+  return Array.isArray(data) ? data.map(normalizeQuestion) : []
 }
 
 /**
@@ -568,14 +533,7 @@ export async function finalizeStudent(
  */
 export async function getEvaluatedList(intakeGuid: string): Promise<PendingEvaluationDto[]> {
   if (MOCK_AUTH) return MOCK_EVALUATED_UNITS
-  try {
-    const url = `${BASE_PATH}/evaluated?intakeGuid=${encodeURIComponent(intakeGuid)}`
-    const data = await apiGet<any[]>(url)
-    if (data && Array.isArray(data)) {
-      return data.map(normalizePendingUnit)
-    }
-  } catch (err: any) {
-    console.warn('ℹ️ [IA Evaluation] Live evaluated API failed, using fallback:', err?.message || err)
-  }
-  return MOCK_EVALUATED_UNITS
+  const url = `${BASE_PATH}/evaluated?intakeGuid=${encodeURIComponent(intakeGuid)}`
+  const data = await apiGet<any[] | null>(url)
+  return Array.isArray(data) ? data.map(normalizePendingUnit) : []
 }
