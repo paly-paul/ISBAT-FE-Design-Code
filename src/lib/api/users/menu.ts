@@ -205,6 +205,7 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('CBT Overview', 'folder', '/assessment/cbt-overview'),
     leaf('CBT Question Upload', 'upload', '/assessment/cbt-qupload'),
     leaf('CBT Monitor', 'display', '/assessment/cbt-monitor'),
+    leaf('Exam Cancel', 'timer', '/assessment/exam-cancel'),
   ]),
   section('University Exam (UE)', [
     leaf('UE Schedule', 'calendar', '/assessment/ue-schedule'),
@@ -224,6 +225,7 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Mark Entry — CBT', 'pencil-alt', '/assessment/mark-cbt'),
     leaf('Mark Entry — UE', 'pencil-alt', '/assessment/mark-ue'),
     leaf('Result & Moderation', 'bar-chart', '/assessment/moderation'),
+    leaf('Generate Result', 'cogs', '/assessment/generate-result'),
     leaf('Transcript Print', 'printer', '/assessment/transcript-print'),
     leaf('Graduate Transcript', 'certificate', '/assessment/graduate-transcript'),
     leaf('Transcript Collection', 'check-box', '/assessment/graduate-transcript/collection'),
@@ -1233,10 +1235,6 @@ function ensureResitIaResults(menu: MenuNode[]): MenuNode[] {
 }
 
 function ensureGownCollection(menu: MenuNode[]): MenuNode[] {
-// New page, no backend menu registration yet (service-ticket-staff-page.md;
-// APIs not deployed). Adds a "Student Services" section to Assessment —
-// before Reports when present, otherwise at the end.
-function ensureServiceTickets(menu: MenuNode[]): MenuNode[] {
   const assessIdx = menu.findIndex(n => n.name === 'Assessment')
   if (assessIdx === -1) return menu
 
@@ -1260,6 +1258,20 @@ function ensureServiceTickets(menu: MenuNode[]): MenuNode[] {
   const mergedAssess = { ...assessModule }
   mergedAssess.children = [...assessModule.children]
   mergedAssess.children[markEntryIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
+// New page, no backend menu registration yet (service-ticket-staff-page.md;
+// APIs not deployed). Adds a "Student Services" section to Assessment —
+// before Reports when present, otherwise at the end.
+function ensureServiceTickets(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
   const hasPage = assessModule.children.some(s => s.children.some(l => l.url === '/assessment/service-tickets'))
   if (hasPage) return menu
 
@@ -1300,6 +1312,55 @@ function ensureExamGrievances(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+// New page, no backend menu registration yet (generate-result/*.md). Placed
+// right after Result & Moderation in Mark Entry & Results (falls back to the end).
+function ensureGenerateResult(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const sectionIdx = assessModule.children.findIndex(c => c.name === 'Mark Entry & Results')
+  if (sectionIdx === -1) return menu
+
+  const markEntrySection = assessModule.children[sectionIdx]
+  if (markEntrySection.children.some(l => l.url === '/assessment/generate-result')) return menu
+
+  const children = [...markEntrySection.children]
+  const moderationIdx = children.findIndex(l => l.name === 'Result & Moderation')
+  const newLeaf = leaf('Generate Result', 'cogs', '/assessment/generate-result')
+  if (moderationIdx !== -1) children.splice(moderationIdx + 1, 0, newLeaf)
+  else children.push(newLeaf)
+
+  const mergedAssess = { ...assessModule, children: [...assessModule.children] }
+  mergedAssess.children[sectionIdx] = { ...markEntrySection, children }
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
+// New page, no backend menu registration yet (exam-cancel/*.md). Appended to
+// Class Test (CBT) — it cancels Class Test / coursework attempts and gives
+// Class Test extra time.
+function ensureExamCancel(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const sectionIdx = assessModule.children.findIndex(c => c.name === 'Class Test (CBT)')
+  if (sectionIdx === -1) return menu
+
+  const cbtSection = assessModule.children[sectionIdx]
+  if (cbtSection.children.some(l => l.url === '/assessment/exam-cancel')) return menu
+
+  const mergedAssess = { ...assessModule, children: [...assessModule.children] }
+  mergedAssess.children[sectionIdx] = { ...cbtSection, children: [...cbtSection.children, leaf('Exam Cancel', 'timer', '/assessment/exam-cancel')] }
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
 export function getMenu(): Promise<MenuResult> {
   if (MOCK_MENU) return Promise.resolve({ menu: stripLectureMaster(mockMenu), isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
@@ -1333,10 +1394,11 @@ export function getMenu(): Promise<MenuResult> {
       const withGraduateTranscript = ensureGraduateTranscript(withTranscriptPrint)
       const withTranscriptCollection = ensureTranscriptCollection(withGraduateTranscript)
       const withGownCollection = ensureGownCollection(withTranscriptCollection)
-      const finalMenu = stripLectureMaster(withGownCollection)
-      const withServiceTickets = ensureServiceTickets(withGraduateTranscript)
+      const withServiceTickets = ensureServiceTickets(withGownCollection)
       const withExamGrievances = ensureExamGrievances(withServiceTickets)
-      const finalMenu = stripLectureMaster(withExamGrievances)
+      const withGenerateResult = ensureGenerateResult(withExamGrievances)
+      const withExamCancel = ensureExamCancel(withGenerateResult)
+      const finalMenu = stripLectureMaster(withExamCancel)
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: stripLectureMaster(mockMenu), isFallback: true }))
