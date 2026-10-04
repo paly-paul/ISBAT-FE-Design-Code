@@ -226,9 +226,11 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Mark Entry — CBT', 'pencil-alt', '/assessment/mark-cbt'),
     leaf('Mark Entry — UE', 'pencil-alt', '/assessment/mark-ue'),
     leaf('Result & Moderation', 'bar-chart', '/assessment/moderation'),
+    leaf('Exam Mark Import', 'upload', '/assessment/exam-mark-import'),
     leaf('Generate Result', 'cogs', '/assessment/generate-result'),
     leaf('Transcript Print', 'printer', '/assessment/transcript-print'),
     leaf('Graduate Transcript', 'certificate', '/assessment/graduate-transcript'),
+    leaf('HEC Graduate Transcript', 'certificate', '/assessment/hec-graduate-transcript'),
     leaf('Transcript Collection', 'check-box', '/assessment/graduate-transcript/collection'),
     leaf('Gown Collection', 'check-box', '/assessment/gown-collection'),
   ]),
@@ -1392,6 +1394,24 @@ function ensureQuestionBankPractical(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+// New pages with no backend menu registration yet (exam-mark-import-page.md,
+// hec-graduate-transcript-page.md) — appended to Mark Entry & Results when
+// Assessment is present and the url isn't there already.
+function ensureMarkResultsLeaf(menu: MenuNode[], name: string, icon: string, url: string): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+  const assessModule = menu[assessIdx]
+  if (assessModule.children.some(s => s.children.some(l => l.url === url))) return menu
+  const markIdx = assessModule.children.findIndex(c => c.name === 'Mark Entry & Results')
+  if (markIdx === -1) return menu
+  const markSection = assessModule.children[markIdx]
+  const mergedAssess = { ...assessModule, children: [...assessModule.children] }
+  mergedAssess.children[markIdx] = { ...markSection, children: [...markSection.children, leaf(name, icon, url)] }
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
 export function getMenu(): Promise<MenuResult> {
   if (MOCK_MENU) return Promise.resolve({ menu: stripLectureMaster(mockMenu), isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
@@ -1430,7 +1450,9 @@ export function getMenu(): Promise<MenuResult> {
       const withGenerateResult = ensureGenerateResult(withExamGrievances)
       const withExamCancel = ensureExamCancel(withGenerateResult)
       const withQuestionBankPractical = ensureQuestionBankPractical(withExamCancel)
-      const finalMenu = stripLectureMaster(withQuestionBankPractical)
+      const withExamMarkImport = ensureMarkResultsLeaf(withQuestionBankPractical, 'Exam Mark Import', 'upload', '/assessment/exam-mark-import')
+      const withHecTranscript = ensureMarkResultsLeaf(withExamMarkImport, 'HEC Graduate Transcript', 'certificate', '/assessment/hec-graduate-transcript')
+      const finalMenu = stripLectureMaster(withHecTranscript)
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: stripLectureMaster(mockMenu), isFallback: true }))

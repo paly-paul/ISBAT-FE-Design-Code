@@ -52,8 +52,8 @@ export default function TranscriptPrintPage() {
         window.URL.revokeObjectURL(url)
         showToast(`Downloaded transcript for ${studentName}`)
       },
-      onError: () => {
-        showToast('Failed to download transcript. Please try again.', 'error')
+      onError: (err: any) => {
+        showToast(err?.code === 'forbidden' ? 'You do not have permission to print transcripts.' : err?.message || 'Failed to download transcript. Please try again.', 'error')
       }
     })
   }
@@ -72,8 +72,8 @@ export default function TranscriptPrintPage() {
         window.URL.revokeObjectURL(url)
         showToast(`Downloaded bulk transcripts successfully`)
       },
-      onError: () => {
-        showToast('Failed to download bulk transcripts. Please try again.', 'error')
+      onError: (err: any) => {
+        showToast(err?.code === 'forbidden' ? 'You do not have permission to print transcripts.' : err?.message || 'Failed to download bulk transcripts. Please try again.', 'error')
       }
     })
   }

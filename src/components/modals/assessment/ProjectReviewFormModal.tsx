@@ -70,7 +70,7 @@ export function ProjectReviewFormModal({ isOpen, onClose, proposalGuid, reviewGu
           onClose()
         },
         onError: (err: any) => {
-          setErrorMsg(err.response?.data?.message || 'Failed to update review.')
+          setErrorMsg(err?.message || 'Failed to update review.')
         }
       })
     } else {
@@ -80,7 +80,7 @@ export function ProjectReviewFormModal({ isOpen, onClose, proposalGuid, reviewGu
           onClose()
         },
         onError: (err: any) => {
-          setErrorMsg(err.response?.data?.message || 'Failed to create review.')
+          setErrorMsg(err?.message || 'Failed to create review.')
         }
       })
     }

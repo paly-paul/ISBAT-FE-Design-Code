@@ -14,6 +14,9 @@ const nextConfig = {
     { source: '/assessment/resit-schedule', destination: '/assessment/resit-scheduling?tab=exam', permanent: false },
     { source: '/assessment/resit-ct-schedule', destination: '/assessment/resit-scheduling?tab=ct', permanent: false },
     { source: '/assessment/resit-cw-schedule', destination: '/assessment/resit-scheduling?tab=cw', permanent: false },
+    // question-view-and-edit-page.md's route; view & edit lives in the
+    // question bank page alongside the import.
+    { source: '/assessment/questions', destination: '/assessment/cw-qbank', permanent: false },
   ],
   // TEMPORARY: proxies API calls through the Next.js dev server so the browser
   // talks to same-origin /api/* instead of the ngrok URL directly, sidestepping

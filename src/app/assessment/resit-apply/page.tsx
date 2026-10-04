@@ -21,6 +21,12 @@ import { SearchSelect } from '@/components/SearchSelect'
 
 export default function ResitApplyPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  // Toast doesn't dismiss itself; clear each one after 3.5s.
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 3500)
+    return () => clearTimeout(t)
+  }, [toast])
 
   // View state
   const [selectedStudent, setSelectedStudent] = useState<ResitEligibleStudentDto | null>(null)
@@ -31,18 +37,16 @@ export default function ResitApplyPage() {
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
 
-  // Debounce search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (search !== searchInput) {
-        setSearch(searchInput)
-        setPage(1)
-      }
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [searchInput, search])
+  // Search / Clear buttons (resit-apply-page.md, View 1). Only spaces = no search.
+  function doSearch() { setSearch(searchInput.trim()); setPage(1) }
+  function doClear() { setSearchInput(''); setSearch(''); setPage(1) }
 
   const { data: listData, isLoading: listLoading, refetch: refetchList } = useResitEligibleStudents({ page, pageSize: 10, search })
+
+  // Page beyond the last page → back to the last page.
+  useEffect(() => {
+    if (listData && listData.items.length === 0 && listData.totalCount > 0 && page > 1) setPage(Math.ceil(listData.totalCount / 10))
+  }, [listData, page])
 
   // Form view state
   const [editingGuid, setEditingGuid] = useState<string | null>(null)
@@ -51,10 +55,21 @@ export default function ResitApplyPage() {
   const [ue, setUe] = useState(false)
   const [ueType, setUeType] = useState<0 | 1>(0)
 
-  const { data: dropdownUnits } = useResitDropdownUnits(selectedStudent?.studentGuid || null)
+  const { data: dropdownUnits, refetch: refetchDropdown } = useResitDropdownUnits(selectedStudent?.studentGuid || null)
   const { data: checkboxState } = useResitCheckboxState(selectedStudent?.studentGuid || null, courseUnitGuid || null)
-  const { data: appliedUnits } = useResitAppliedUnits(selectedStudent?.studentGuid || null)
-  const { data: editData } = useResitApplicationForEdit(editingGuid)
+  const { data: appliedUnits, refetch: refetchApplied } = useResitAppliedUnits(selectedStudent?.studentGuid || null)
+  const { data: editData, isError: editFailed, error: editError } = useResitApplicationForEdit(editingGuid)
+  // Set when submit says the resit period is closed — the form stays disabled.
+  const [periodClosed, setPeriodClosed] = useState<string | null>(null)
+
+  // 404 on edit: deleted meanwhile — leave edit mode and reload the grid.
+  useEffect(() => {
+    if (!editFailed) return
+    setToast({ msg: (editError as { message?: string } | null)?.message || 'Resit application not found.', type: 'error' })
+    handleCancelEdit()
+    refetchApplied()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editFailed])
 
   const submitMutation = useSubmitResitApplication()
   const deleteMutation = useDeleteResitApplication()
@@ -107,9 +122,14 @@ export default function ResitApplyPage() {
         handleCancelEdit()
       },
       onError: (err) => {
-        // AuthError's message already holds the server's errors[0].
-        const msg = (err as { message?: string } | null)?.message || 'Failed to submit'
+        // AuthError: message = errors[0]; validation_error carries them all.
+        const e = err as { code?: string; message?: string; errors?: string[] } | null
+        const msg = e?.code === 'validation_error' && e.errors?.length ? e.errors.join(' ') : e?.message || 'Failed to submit'
         setToast({ msg, type: 'error' })
+        // bad_request cases (resit-apply-page.md, step 5.5).
+        if (/no current intake|no active resit/i.test(msg)) setPeriodClosed(msg)
+        else if (/not eligible/i.test(msg)) refetchDropdown()
+        else if (/could not be retrieved/i.test(msg)) { refetchApplied(); handleCancelEdit() }
       }
     })
   }
@@ -149,9 +169,13 @@ export default function ResitApplyPage() {
 
   const handleCloseModal = () => {
     setSelectedStudent(null)
+    setPeriodClosed(null)
     handleCancelEdit()
     refetchList()
   }
+
+  // Both parts already passed (possible in edit mode after results change).
+  const nothingLeft = !!courseUnitGuid && iaPassed && uePassed
 
   return (
     <div className="page active">
@@ -166,16 +190,18 @@ export default function ResitApplyPage() {
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-users"></i></span> Eligible Students</div>
           </div>
-          <div className="flex gap-2 mb-[14px]">
+          <div className="flex flex-wrap gap-2 mb-[14px]">
             <TableSearch
-                className="w-full sm:w-80"
+                className="w-full sm:w-96"
                 placeholder="Student Number / Registration Number / Student Name"
                 value={searchInput}
                 onChange={setSearchInput}
+                onEnter={doSearch}
                 results={[]}
                 minChars={999}
               />
-              <button className="btn btn-white" onClick={() => { setSearchInput(''); setSearch(''); setPage(1) }}>Clear</button>
+              <button className="btn btn-neu" onClick={doSearch}>Search</button>
+              <button className="btn btn-neu" onClick={doClear} disabled={!searchInput && !search}>Clear</button>
             </div>
           
           <ScrollTable>
@@ -194,7 +220,7 @@ export default function ResitApplyPage() {
                 {listLoading 
                   ? <TableLoadingState colSpan={6} />
                   : (!listData?.items || listData.items.length === 0) 
-                    ? <EmptyState colSpan={6} hasFilters={!!search} onClearFilters={() => { setSearchInput(''); setSearch(''); setPage(1) }} />
+                    ? <EmptyState colSpan={6} title="No students have pending resit units." hasFilters={!!search} onClearFilters={doClear} />
                     : listData.items.map(s => (
                       <tr key={s.studentGuid}>
                         <td>
@@ -290,7 +316,9 @@ export default function ResitApplyPage() {
                   {editingGuid && <span className="badge badge-blue">Editing</span>}
                 </div>
 
-                {(!dropdownUnits || dropdownUnits.length === 0) && !editingGuid ? (
+                {periodClosed ? (
+                  <div className="warn-box text-sm"><i className="lni lni-lock mt-0.5"></i><span>{periodClosed} Applications can't be made or changed now.</span></div>
+                ) : (!dropdownUnits || dropdownUnits.length === 0) && !editingGuid ? (
                   <div className="text-sm text-slate-500 flex items-center gap-2">
                     <i className="lni lni-checkmark-circle" style={{ color: 'var(--green)' }}></i> No units left to apply for.
                   </div>
@@ -362,7 +390,7 @@ export default function ResitApplyPage() {
                         <button
                           className="btn btn-primary flex-1 md:flex-none justify-center"
                           onClick={handleApply}
-                          disabled={!courseUnitGuid || (!cw && !ue) || submitMutation.isPending}
+                          disabled={!courseUnitGuid || (!cw && !ue) || nothingLeft || submitMutation.isPending}
                         >
                           {submitMutation.isPending ? 'Saving...' : editingGuid ? 'Update' : 'Apply'}
                         </button>
@@ -373,7 +401,7 @@ export default function ResitApplyPage() {
                     {(() => {
                       const hints = [
                         editingGuid && "The unit can't be changed while editing.",
-                        courseUnitGuid && iaPassed && uePassed && 'IA and UE are both passed for this unit.',
+                        nothingLeft && 'Nothing left to resit for this unit.',
                         courseUnitGuid && iaPassed && !uePassed && 'IA is passed — only UE can be resat.',
                         courseUnitGuid && uePassed && !iaPassed && 'UE is passed — only IA can be resat.',
                         isTheoryPracticalUnit && ueType === 1 && 'A practical resit is UE only.',
@@ -462,7 +490,7 @@ export default function ResitApplyPage() {
             <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
             <div className="perm-delete-title">Delete Application?</div>
             <div className="perm-delete-sub">
-              Are you sure you want to delete the resit application for {deleteTarget.unitName}? This cannot be undone.
+              Delete the resit application for {deleteTarget.unitName}?
             </div>
             <div className="perm-delete-actions">
               <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>

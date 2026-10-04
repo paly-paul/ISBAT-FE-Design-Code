@@ -110,7 +110,16 @@ export default function ExamCancelPage() {
       danger: true,
       onConfirm: () => cancelMut.mutate({ studentGuid, courseUnitGuid, category }, {
         onSuccess: () => showToast(`${categoryLabel} attempt cancelled. ${student!.studentName ?? 'The student'} can sit it again.`, 'success'),
-        onError: err => showToast(errMsg(err, 'Could not cancel the attempt.'), 'error'),
+        onError: err => {
+          // The legacy "Could not delete.....!" (404) means the delete matched
+          // nothing — no attempt of this kind exists in the current intake.
+          // Other 404s ("No assessment found…") already say what's wrong.
+          if (errCode(err) === 'not_found' && /could not delete/i.test(errMsg(err, ''))) {
+            showToast(`Nothing to cancel: ${student?.studentName ?? 'this student'} has no ${categoryLabel} attempt for ${unit?.courseUnitName ?? 'this unit'} in the current intake.`, 'warn')
+          } else {
+            showToast(errMsg(err, 'Could not cancel the attempt.'), 'error')
+          }
+        },
       }),
     })
   }

@@ -8,6 +8,7 @@ import DatePicker from '@/components/DatePicker'
 import { useIaTestSchedule, useUpdateIaTestSchedule } from '@/hooks/assessment/useIaTestSchedule'
 import { useExamRules } from '@/hooks/assessment/useExamRules'
 import Link from 'next/link'
+import { ExamRuleLookupModal } from '@/app/assessment/ia-creation/_components/ExamRuleLookupModal'
 
 function CbtScheduleContent() {
   const router = useRouter()
@@ -26,7 +27,10 @@ function CbtScheduleContent() {
   }
 
   // Fetch current schedule
-  const { data: schedule, isLoading } = useIaTestSchedule(testGuid)
+  const { data: schedule, isLoading, isError: loadFailed, error: loadError } = useIaTestSchedule(testGuid)
+  const [ruleError, setRuleError] = useState<string | null>(null)
+  const [testMissing, setTestMissing] = useState(false)
+  const [lookupOpen, setLookupOpen] = useState(false)
   const updateMut = useUpdateIaTestSchedule(testGuid || '')
 
   // Form State
@@ -117,15 +121,43 @@ function CbtScheduleContent() {
         router.push('/assessment/ia-creation')
       }, 1000)
     } catch (err: any) {
-      // In client.ts, API errors are thrown as AuthError with a code and message.
-      if (err.code === 'not_found' || err.message?.includes('404')) {
-        showToast('This Class Test or Exam Rule does not exist (404).', 'error')
-      } else if (err.code === 'bad_request' || err.code === 'validation_error') {
-        showToast(err.message || 'Validation failed. Check your inputs.', 'error')
+      // AuthError: `code` from the envelope, `message` = errors[0].
+      const msg: string = err?.message || ''
+      const aboutRule = /rule/i.test(msg)
+      if (err?.code === 'not_found' && aboutRule) {
+        // The picked rule no longer exists: clear it and ask for a re-pick.
+        setExamRuleGuid('')
+        setRuleError(msg || 'The selected exam rule no longer exists. Pick another one.')
+      } else if (err?.code === 'not_found') {
+        // The test itself is gone (deleted/changed since the grid loaded).
+        setTestMissing(true)
+        showToast(msg || 'This class test no longer exists.', 'error')
+      } else if (err?.code === 'bad_request' && aboutRule) {
+        // "Exam rule is not active" → inline on the rule field.
+        setRuleError(msg)
+      } else if (err?.code === 'validation_error') {
+        const all: string[] = err?.errors?.length ? err.errors : [msg || 'Validation failed. Check your inputs.']
+        showToast(all.join(' '), 'error')
       } else {
-        showToast(err.message || 'Failed to save schedule (404 / Route not found)', 'error')
+        showToast(msg || 'Failed to save the schedule.', 'error')
       }
     }
+  }
+
+  // Update-only page: a testGuid that doesn't resolve is an error, not a
+  // prompt to create (cbt-schedule-page.md, Business logic notes).
+  if (testGuid && (testMissing || (loadFailed && (loadError as { code?: string } | null)?.code === 'not_found'))) {
+    return (
+      <div className="page active">
+        <div className="card p-8 text-center max-w-xl mx-auto mt-10">
+          <i className="lni lni-warning text-3xl" style={{ color: 'var(--amber)' }}></i>
+          <div className="text-lg font-semibold text-g900 mt-3">This class test no longer exists</div>
+          <div className="text-sm text-g500 mt-1">It was deleted or changed after the Assessment Structure grid was loaded. Refresh the grid and pick the test again.</div>
+          <Link href="/assessment/ia-creation" className="btn btn-primary mt-5 inline-flex"><i className="lni lni-arrow-left"></i> Back to Assessment Structure</Link>
+        </div>
+        <Toast toast={toast} />
+      </div>
+    )
   }
 
   if (!testGuid) {
@@ -291,14 +323,25 @@ function CbtScheduleContent() {
           {/* Exam Rule Picker */}
           <div className="md:col-span-2">
             <label className="lbl">Exam Rule (Optional)</label>
-            <SearchSelect
-              options={ruleOptions}
-              value={examRuleGuid}
-              onChange={val => setExamRuleGuid(val)}
-              placeholder={rulesLoading ? "Loading rules..." : "Select Exam Rule..."}
-              className="w-full mt-1 max-w-md"
-              disabled={isLoading || rulesLoading}
-            />
+            <div className="flex gap-2 mt-1 max-w-xl">
+              <SearchSelect
+                options={ruleOptions}
+                value={examRuleGuid}
+                onChange={val => { setExamRuleGuid(val); setRuleError(null) }}
+                placeholder={rulesLoading ? "Loading rules..." : "Select Exam Rule..."}
+                className="flex-1 min-w-0"
+                disabled={isLoading || rulesLoading}
+              />
+              <button type="button" className="btn btn-neu" onClick={() => setLookupOpen(true)} disabled={isLoading} title="Search exam rules" aria-label="Search exam rules">
+                <i className="lni lni-search-alt"></i>
+              </button>
+              {/* Clearing unlinks the rule: Save sends examRuleGuid: null. */}
+              <button type="button" className="btn btn-neu" onClick={() => { setExamRuleGuid(''); setRuleError(null) }} disabled={isLoading || !examRuleGuid} title="Unlink exam rule">
+                Clear
+              </button>
+            </div>
+            {ruleError && <div className="text-xs mt-1" style={{ color: 'var(--red)' }}><i className="lni lni-warning"></i> {ruleError}</div>}
+            <ExamRuleLookupModal isOpen={lookupOpen} onClose={() => setLookupOpen(false)} onSelect={guid => { setExamRuleGuid(guid); setRuleError(null) }} />
           </div>
         </div>
 

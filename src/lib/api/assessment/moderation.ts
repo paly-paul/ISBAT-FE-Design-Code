@@ -94,10 +94,10 @@ export function getStudentModerationRows(studentGuid: string) {
         unitName: 'Algorithms',
         semesterName: 'Semester 3',
         iaTotal: 20,
-        iaModeration: 0,
+        iaMod: 0,
         iaMax: 30,
         ueTotal: 40,
-        ueModeration: 0,
+        ueMod: 0,
         ueMax: 70,
         passStatus: 'Pass'
       },

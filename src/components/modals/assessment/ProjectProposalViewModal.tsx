@@ -32,7 +32,7 @@ export function ProjectProposalViewModal({ isOpen, onClose, proposalGuid, row, o
         onToast('No synopsis file found for this proposal.', 'warn')
       }
     } catch (err: any) {
-      onToast(err.response?.data?.message || 'Failed to download synopsis.', 'error')
+      onToast(err?.message || 'Failed to download synopsis.', 'error')
     }
   }
 

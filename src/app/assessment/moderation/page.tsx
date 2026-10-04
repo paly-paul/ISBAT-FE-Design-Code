@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
 import { Toast } from '@/components/Toast'
@@ -105,8 +106,8 @@ export default function ModerationPage() {
                 <th>SEMESTER</th>
                 <th>UNIT CODE</th>
                 <th>UNIT NAME</th>
-                <th>IA (/30)</th>
-                <th>UE (/70)</th>
+                <th>IA</th>
+                <th>UE</th>
                 <th>TOTAL</th>
                 <th>STATUS</th>
                 <th>IA MOD</th>
@@ -158,7 +159,10 @@ function ModerationRowItem({ row, studentGuid, onSuccess, onError }: {
   const [isViewModalOpen, setViewModalOpen] = useState(false)
   const [isEditModalOpen, setEditModalOpen] = useState(false)
   
-  const computedTotal = (row.iaTotal || 0) + (row.iaMod || 0) + (row.ueTotal || 0) + (row.ueMod || 0)
+  // iaTotal / ueTotal already include the moderation (the update re-derives
+  // the base as total - currentMod — result-moderation-page.md), so it is
+  // not added again here.
+  const computedTotal = (row.iaTotal || 0) + (row.ueTotal || 0)
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -187,12 +191,12 @@ function ModerationRowItem({ row, studentGuid, onSuccess, onError }: {
         <td className="font-medium text-slate-900">{row.unitName}</td>
         <td>
           <div className="flex flex-col">
-            <span className="font-medium text-slate-800">{row.iaTotal}</span>
+            <span className="font-medium text-slate-800">{row.iaTotal} <span className="text-slate-400 font-normal">/ {row.iaMax}</span></span>
           </div>
         </td>
         <td>
           <div className="flex flex-col">
-            <span className="font-medium text-slate-800">{row.ueTotal}</span>
+            <span className="font-medium text-slate-800">{row.ueTotal} <span className="text-slate-400 font-normal">/ {row.ueMax}</span></span>
           </div>
         </td>
         <td className="font-bold text-slate-900">{computedTotal.toFixed(1)}</td>
@@ -232,13 +236,13 @@ function ModerationRowItem({ row, studentGuid, onSuccess, onError }: {
               <div className="grid grid-cols-3 gap-4 p-3 bg-slate-50 rounded-lg border border-slate-100">
                 <div>
                   <div className="text-[11px] font-semibold text-slate-500 uppercase">IA Total</div>
-                  <div className="font-bold text-lg">{row.iaTotal}</div>
-                  {row.iaMod > 0 && <div className="text-[11px] text-purple-600">+{row.iaMod} (grace)</div>}
+                  <div className="font-bold text-lg">{row.iaTotal} <span className="text-sm text-slate-400 font-normal">/ {row.iaMax}</span></div>
+                  {row.iaMod > 0 && <div className="text-[11px] text-purple-600">incl. +{row.iaMod} grace</div>}
                 </div>
                 <div>
                   <div className="text-[11px] font-semibold text-slate-500 uppercase">UE Total</div>
-                  <div className="font-bold text-lg">{row.ueTotal}</div>
-                  {row.ueMod > 0 && <div className="text-[11px] text-purple-600">+{row.ueMod} (grace)</div>}
+                  <div className="font-bold text-lg">{row.ueTotal} <span className="text-sm text-slate-400 font-normal">/ {row.ueMax}</span></div>
+                  {row.ueMod > 0 && <div className="text-[11px] text-purple-600">incl. +{row.ueMod} grace</div>}
                 </div>
                 <div>
                   <div className="text-[11px] font-semibold text-slate-500 uppercase">Status</div>
@@ -268,8 +272,11 @@ function EditModerationModal({ row, studentGuid, onClose, onSuccess, onError }: 
   const [ueMod, setUeMod] = useState<string>(row.ueMod?.toString() || '0')
   const updateMut = useUpdateModeration()
   const isPending = updateMut.isPending
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
   const handleSave = () => {
+    setSaveError(null)
     const payload = {
       iaMod: parseFloat(iaMod) || 0,
       ueMod: parseFloat(ueMod) || 0
@@ -280,8 +287,16 @@ function EditModerationModal({ row, studentGuid, onClose, onSuccess, onError }: 
         onClose()
       },
       onError: (err: any) => {
-        onError(err.response?.data?.errors?.[0] || 'Unable to apply this moderation.')
-        onClose()
+        if (err?.code === 'not_found') {
+          // The row no longer exists: close and re-fetch the grid.
+          onError(err?.message || 'This result no longer exists.')
+          queryClient.invalidateQueries({ queryKey: ['moderation-student-rows', studentGuid] })
+          onClose()
+          return
+        }
+        // 400 "Unable to apply this moderation." — the row is unchanged;
+        // keep the modal open so the value can be corrected.
+        setSaveError(err?.message || 'Unable to apply this moderation.')
       }
     })
   }
@@ -309,6 +324,8 @@ function EditModerationModal({ row, studentGuid, onClose, onSuccess, onError }: 
                <input type="number" className="ctrl w-full" value={ueMod} onChange={e => setUeMod(e.target.value)} min="0" step="0.5" disabled={isPending} />
              </div>
            </div>
+           <div className="text-xs text-g500 mt-3">Moderation can't take a component above 50% of its max. Set 0 to remove it.</div>
+           {saveError && <div className="danger-box mt-3 text-sm"><i className="lni lni-warning"></i> {saveError}</div>}
         </div>
         <div className="modal-ftr">
            <button className="btn btn-neu" onClick={onClose} disabled={isPending}>Cancel</button>

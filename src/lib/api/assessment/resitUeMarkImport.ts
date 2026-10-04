@@ -80,23 +80,26 @@ function addError(row: PreviewRow, column: string, msg: string) {
 // (48.499999999999); 6 decimals strips that without hiding a real 3rd decimal.
 function normalizeNumber(n: number) { return Math.round(n * 1e6) / 1e6 }
 
-// Reads the template's columns by header (case-insensitive), so a re-ordered
-// sheet still works. Fully blank rows are skipped.
+// Headers match ignoring case, spaces and dots ("Sl. No" = SLNO); order is
+// free and extra columns are ignored (resit-ue-mark-import-page.md, ② Upload).
+const normHeader = (h: string) => h.replace(/[\s.]/g, '').toUpperCase()
+
+// Reads the template's columns by header. Rows with a blank SLNO are skipped.
 export function parseSheet(sheet: SheetData, columns: ResitUeMarkColumn[]): ParsedSheet {
   const fileErrors: string[] = []
   const headerRow = sheet.rows[0] ?? []
-  const idx = new Map(headerRow.map((h, i) => [h.trim().toUpperCase(), i]))
-  const required = ['STUDENTNUM', ...columns.map(c => c.header.toUpperCase())]
+  const idx = new Map(headerRow.map((h, i) => [normHeader(h ?? ''), i]))
+  const required = ['SLNO', 'STUDENTNUM', ...columns.map(c => normHeader(c.header))]
   const missing = required.filter(h => !idx.has(h))
-  if (missing.length) fileErrors.push(`The sheet is missing the column${missing.length > 1 ? 's' : ''} ${missing.join(', ')}. Use the downloaded template.`)
+  if (missing.length) fileErrors.push(`The sheet is missing the column${missing.length > 1 ? 's' : ''} ${missing.join(', ')}. Download the template again.`)
 
   const rows: PreviewRow[] = []
   if (!missing.length) {
-    sheet.rows.slice(1).forEach((cells, i) => {
-      if (!cells.some(c => c?.trim())) return
+    sheet.rows.slice(1).forEach(cells => {
       const cell = (h: string) => (idx.has(h) ? cells[idx.get(h)!] ?? '' : '').trim()
+      if (!cell('SLNO')) return
       const row: PreviewRow = {
-        slNo: cell('SLNO') || String(i + 1),
+        slNo: cell('SLNO'),
         studentNum: cell('STUDENTNUM'),
         studentName: cell('STUDENTNAME') || null,
         marks: {},
@@ -104,7 +107,7 @@ export function parseSheet(sheet: SheetData, columns: ResitUeMarkColumn[]): Pars
         errors: {},
       }
       for (const col of columns) {
-        const text = cell(col.header.toUpperCase())
+        const text = cell(normHeader(col.header))
         row.raw[col.header] = text
         if (text === '') { row.marks[col.key] = null; continue }
         const n = Number(text)
@@ -113,8 +116,8 @@ export function parseSheet(sheet: SheetData, columns: ResitUeMarkColumn[]): Pars
       }
       rows.push(row)
     })
-    if (rows.length === 0) fileErrors.push('There are no rows to import.')
-    if (rows.length > MAX_IMPORT_ROWS) fileErrors.push(`At most ${MAX_IMPORT_ROWS} students can be imported at once.`)
+    if (rows.length === 0) fileErrors.push('There is no data in the sheet.')
+    if (rows.length > MAX_IMPORT_ROWS) fileErrors.push(`The sheet can have at most ${MAX_IMPORT_ROWS} students.`)
   }
   return { fileErrors, rows }
 }

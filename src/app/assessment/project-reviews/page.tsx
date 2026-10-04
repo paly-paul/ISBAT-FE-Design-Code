@@ -70,7 +70,7 @@ export default function ProjectReviewsPage() {
         setDeletingGuid(null)
       },
       onError: (err: any) => {
-        showToast(err.response?.data?.message || 'Failed to delete review', 'error')
+        showToast(err?.message || 'Failed to delete review', 'error')
       }
     })
   }

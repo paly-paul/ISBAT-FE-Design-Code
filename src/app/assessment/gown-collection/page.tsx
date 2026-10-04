@@ -16,7 +16,10 @@ export default function GownCollectionPage() {
   const [recordingRow, setRecordingRow] = useState<GownCollectionRow | null>(null)
   
   const [toastMessage, setToastMessage] = useState<{ msg: string, type: 'success' | 'error' | 'warn' | 'info' | 'danger' } | null>(null)
-  const showToast = (msg: string, type: 'success' | 'error' = 'success') => setToastMessage({ msg, type })
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage({ msg, type })
+    setTimeout(() => setToastMessage(null), 3500)
+  }
 
   // Debounce search input
   useEffect(() => {
@@ -140,7 +143,8 @@ function RecordCollectionModal({
 
     recordMut.mutate(row.studentGuid, {
       onSuccess: () => onSuccess(),
-      onError: (err: any) => onError(err.response?.data?.message || 'Failed to record collection.')
+      // AuthError's message already holds the server's errors[0].
+      onError: (err: any) => onError(err?.message || 'Failed to record collection.')
     })
   }
 
