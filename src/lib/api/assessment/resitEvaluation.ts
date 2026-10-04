@@ -1,6 +1,6 @@
 import { apiGet, apiPost, apiPut } from '@/lib/api/client'
 
-const MOCK_AUTH = true // Forced to true for UI verification (was: process.env.NEXT_PUBLIC_AUTH_MOCK === 'true')
+const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 // Resit IA Evaluation (resit-ia-evaluation/*.md) — lecturers mark the resit
 // coursework (Course Work 1) students submitted online. Every endpoint is

@@ -1,6 +1,6 @@
 import { apiGet, apiPost, apiPostForm, apiDelete } from '@/lib/api/client'
 
-const MOCK_AUTH = false // Set to false to hit the real backend APIs
+const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 export interface CourseUnitOption {
   courseUnitGuid: string

@@ -73,6 +73,7 @@ export default function IaEvaluationPage() {
     data: pendingUnitsData,
     isLoading: isPendingLoading,
     isFetching: isPendingFetching,
+    error: pendingError,
     refetch: refetchPending,
   } = usePendingEvaluations(selectedIntakeGuid, Boolean(selectedIntakeGuid))
   const pendingUnits = pendingUnitsData ?? EMPTY_ARRAY
@@ -81,6 +82,7 @@ export default function IaEvaluationPage() {
     data: evaluatedUnitsData,
     isLoading: isEvaluatedLoading,
     isFetching: isEvaluatedFetching,
+    error: evaluatedError,
     refetch: refetchEvaluated,
   } = useEvaluatedList(selectedIntakeGuid, Boolean(selectedIntakeGuid))
   const evaluatedUnits = evaluatedUnitsData ?? EMPTY_ARRAY
@@ -139,6 +141,7 @@ export default function IaEvaluationPage() {
     data: studentsResponse,
     isLoading: isStudentsLoading,
     isFetching: isStudentsFetching,
+    error: studentsError,
     refetch: refetchStudents,
   } = useStudentsForEvaluation(
     selectedCoursework?.category,
@@ -187,6 +190,7 @@ export default function IaEvaluationPage() {
     data: questionsData,
     isLoading: isQuestionsLoading,
     isFetching: isQuestionsFetching,
+    error: questionsError,
     refetch: refetchQuestions,
   } = useStudentQuestions(
     selectedCoursework?.category,
@@ -239,6 +243,13 @@ export default function IaEvaluationPage() {
     setTimeout(() => setToast(null), 3500)
   }
 
+  // Surface load failures — the API layer no longer falls back to mock data
+  const loadError = pendingError || evaluatedError || studentsError || questionsError
+  useEffect(() => {
+    if (loadError) showToast((loadError as Error).message || 'Failed to load evaluation data.', 'error')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadError])
+
   // ── Refresh Handler ───────────────────────────────────────────────────────
   const [isManualRefreshing, setIsManualRefreshing] = useState(false)
   const isRefreshing =
@@ -251,12 +262,14 @@ export default function IaEvaluationPage() {
   const handleRefresh = async () => {
     setIsManualRefreshing(true)
     try {
-      if (currentStep === 'dashboard') {
-        await Promise.allSettled([refetchPending(), refetchEvaluated()])
-      } else if (currentStep === 'roster') {
-        await refetchStudents()
-      } else if (currentStep === 'detail') {
-        await refetchQuestions()
+      const results =
+        currentStep === 'dashboard' ? await Promise.all([refetchPending(), refetchEvaluated()])
+        : currentStep === 'roster' ? [await refetchStudents()]
+        : currentStep === 'detail' ? [await refetchQuestions()]
+        : []
+      if (results.some(r => r.isError)) {
+        showToast('Failed to refresh data.', 'error')
+        return
       }
       showToast('Evaluation data refreshed from server!', 'success')
     } catch {

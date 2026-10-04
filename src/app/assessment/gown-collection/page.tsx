@@ -29,7 +29,7 @@ export default function GownCollectionPage() {
     return () => clearTimeout(timer)
   }, [searchInput])
 
-  const { data: searchResults, isFetching: isSearching } = useGownCollectionSearch(debouncedSearch)
+  const { data: searchResults, isFetching: isSearching, error: searchError } = useGownCollectionSearch(debouncedSearch)
 
   return (
     <div className="pg-cnt">
@@ -70,6 +70,8 @@ export default function GownCollectionPage() {
                 <EmptyState colSpan={6} title="Search for a student to view gown collection status." />
               ) : isSearching ? (
                 <TableLoadingState colSpan={6} title="Searching confirmed graduates..." />
+              ) : searchError ? (
+                <EmptyState colSpan={6} title={(searchError as Error).message || 'Failed to search confirmed graduates.'} />
               ) : !searchResults || searchResults.length === 0 ? (
                 <EmptyState colSpan={6} title="No confirmed graduates found matching this search." />
               ) : (
