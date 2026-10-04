@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
@@ -79,8 +79,18 @@ export default function ResitQuestionPrintPage() {
   }, [selectedCourseUnitGuid, courseUnits])
 
   const isFormValid = !!selectedIntakeGuid && !!selectedProgramGuid && !!selectedSemesterGuid && !!selectedCourseUnitGuid
-  const isTheory = selectedUnitType === 'Theory'
+  // Only Practical units use the /practical endpoints; anything else
+  // (Theory, or a type the list doesn't name) is printed as theory.
   const isPractical = selectedUnitType === 'Practical'
+  const isTheory = !isPractical
+  // Booklet print and all its downloads must use the same exam type, or the
+  // downloads 404 ("not printed for this exam type").
+  const bookletUeType = isPractical ? 1 : 0
+
+  // Pre-select the current intake (user can still change it).
+  useEffect(() => {
+    if (!selectedIntakeGuid && currentIntake?.intakeGuid) setSelectedIntakeGuid(currentIntake.intakeGuid)
+  }, [currentIntake, selectedIntakeGuid])
 
   // Handlers
   const handleProgramChange = (guid: string) => {
@@ -179,7 +189,7 @@ export default function ResitQuestionPrintPage() {
       semesterGuid: selectedSemesterGuid,
       courseUnitGuid: selectedCourseUnitGuid,
       academicIntakeGuid: selectedIntakeGuid,
-      ueType: 1, // Resit
+      ueType: bookletUeType,
       confirm
     }
 
@@ -204,6 +214,7 @@ export default function ResitQuestionPrintPage() {
       courseUnitGuid: selectedCourseUnitGuid,
       academicIntakeGuid: selectedIntakeGuid,
       questionBankIntakeGuid: selectedQPIntakeGuid || selectedIntakeGuid,
+      ueType: bookletUeType,
     }
 
     try {
@@ -369,7 +380,7 @@ export default function ResitQuestionPrintPage() {
                 Word Format
               </button>
 
-              {(!selectedUnitType || isTheory) && (
+              {isTheory && (
                 <button 
                   className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-primary hover:text-primary hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-sky-50 border-sky-100"
                   onClick={() => handleDownload('AnswerKey')}
@@ -454,19 +465,14 @@ export default function ResitQuestionPrintPage() {
       
       {/* Confirm Modal */}
       {showConfirmModal && (
-        <div className="modal show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Confirmation Required</h5>
-              </div>
-              <div className="modal-body text-center p-5">
-                <p>{confirmMessage}</p>
-                <div className="flex justify-center gap-3 mt-4">
-                  <button className="btn btn-neu" onClick={() => setShowConfirmModal(false)}>Cancel</button>
-                  <button className="btn btn-primary" onClick={executeConfirm}>Continue</button>
-                </div>
-              </div>
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setShowConfirmModal(false)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-warning"></i></div>
+            <div className="perm-delete-title">Confirmation Required</div>
+            <div className="perm-delete-sub">{confirmMessage}</div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setShowConfirmModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={executeConfirm}>Continue</button>
             </div>
           </div>
         </div>

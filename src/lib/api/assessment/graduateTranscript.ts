@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from '@/lib/api/client'
+import { apiGet, apiGetBlob, apiPost } from '@/lib/api/client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -7,24 +7,57 @@ export interface HecDropdownItem {
   label: string
 }
 
-export function getHecIntakesDropdown() {
+// GET /academic/intakes/hec-graduation-dropdown — intakes from 20222 on,
+// newest first. Label `description (intakeCode)` (hec-graduate-transcript-page.md).
+export function getHecIntakesDropdown(): Promise<HecDropdownItem[]> {
   if (MOCK_AUTH) {
     return Promise.resolve([
-      { value: 'intk-1', label: '2026 Intake A' },
-      { value: 'intk-2', label: '2026 Intake B' }
-    ] as HecDropdownItem[])
+      { value: 'hec-intk-20261', label: 'Spring 2026 (20261)' },
+      { value: 'hec-intk-20253', label: 'Fall 2025 (20253)' },
+      { value: 'hec-intk-20222', label: 'Summer 2022 (20222)' },
+    ])
   }
-  return apiGet<HecDropdownItem[]>('/api/v1/academic/intakes/hec-graduation-dropdown')
+  return apiGet<any[] | null>('/api/v1/academic/intakes/hec-graduation-dropdown').then(rows =>
+    (rows ?? []).map(r => ({
+      value: r.value ?? r.intakeGuid ?? r.guid,
+      label: r.label ?? (r.description ? `${r.description} (${r.intakeCode})` : String(r.intakeCode ?? '')),
+    })),
+  )
 }
 
-export function getHecProgramsDropdown() {
+// GET /academic/program-groups/hec-graduation-dropdown — HEC and HECHS only.
+// Label `name (id)`.
+export function getHecProgramsDropdown(): Promise<HecDropdownItem[]> {
   if (MOCK_AUTH) {
     return Promise.resolve([
-      { value: 'prog-1', label: 'BSc Information Technology' },
-      { value: 'prog-2', label: 'BSc Computer Science' }
-    ] as HecDropdownItem[])
+      { value: 'pg-hec', label: 'Higher Education Certificate (HEC)' },
+      { value: 'pg-hechs', label: 'Higher Education Certificate in Health Sciences (HECHS)' },
+    ])
   }
-  return apiGet<HecDropdownItem[]>('/api/v1/academic/program-groups/hec-graduation-dropdown')
+  return apiGet<any[] | null>('/api/v1/academic/program-groups/hec-graduation-dropdown').then(rows =>
+    (rows ?? []).map(r => ({
+      value: r.value ?? r.guid ?? r.programGroupGuid,
+      label: r.label ?? (r.name && r.id ? `${r.name} (${r.id})` : r.name ?? ''),
+    })),
+  )
+}
+
+// GET /academic/program-groups/dropdown — every program group (the general
+// Graduate Transcript page). The HEC page uses getHecProgramsDropdown.
+export function getProgramGroupsDropdown(): Promise<HecDropdownItem[]> {
+  if (MOCK_AUTH) {
+    return Promise.resolve([
+      { value: 'pg-1', label: 'Bachelor of Information Technology' },
+      { value: 'pg-2', label: 'Bachelor of Business Administration' },
+      { value: 'pg-3', label: 'Higher Education Certificate' },
+    ])
+  }
+  return apiGet<any[] | null>('/api/v1/academic/program-groups/dropdown').then(rows =>
+    (rows ?? []).map(r => ({
+      value: r.value ?? r.guid ?? r.programGroupGuid ?? r.id,
+      label: r.label ?? r.name ?? r.programGroupName ?? r.description ?? '',
+    })),
+  )
 }
 
 export interface GraduateTranscriptPendingRow {
@@ -101,6 +134,15 @@ export function searchGraduateTranscriptCollection(searchTerm: string) {
   const qs = new URLSearchParams()
   qs.set('searchTerm', searchTerm)
   return apiGet<GraduateTranscriptCollectionRow[]>(`/api/v1/assessment/graduate-transcript/collection/search?${qs.toString()}`)
+}
+
+// GET /graduate-transcript/{transcriptGuid}/pdf — the single-page certificate
+// with the QR and console number baked in.
+export function getGraduateTranscriptPdf(transcriptGuid: string): Promise<{ blob: Blob; filename: string | null }> {
+  if (MOCK_AUTH) {
+    return Promise.resolve({ blob: new Blob(['%PDF-1.4 mock graduate transcript'], { type: 'application/pdf' }), filename: `Graduate_Transcript_${transcriptGuid}.pdf` })
+  }
+  return apiGetBlob(`/api/v1/assessment/graduate-transcript/${encodeURIComponent(transcriptGuid)}/pdf`)
 }
 
 export interface RecordCollectionRequest {

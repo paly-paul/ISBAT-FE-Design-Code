@@ -12,7 +12,7 @@ import { RichTextDisplay } from '@/components/RichTextEditor'
 import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { EmployeeListItem } from '@/lib/api/employee/employee'
-import { getSessionIdentity, getLoggedInUserGuid, setSessionIdentity } from '@/lib/session'
+import { getSessionIdentity, getLoggedInUserGuid } from '@/lib/session'
 import {
   useSingleQuestionCategories,
   useSingleQuestionCourseUnits,
@@ -26,6 +26,7 @@ import {
   useQuestionBankPreview,
   useQuestionBankImport,
   useDeleteQuestionBank,
+  useQuestionBankCourseUnits,
   QuestionPreviewItem,
 } from '@/hooks/assessment/useQuestionBank'
 import { QuestionDto } from '@/lib/api/assessment/questions'
@@ -115,11 +116,16 @@ export default function QuestionBankUploadPage() {
     }
   }
 
-  const {
-    data: courseUnits,
-    isLoading: isLoadingCourseUnits,
-    isFetching: isFetchingCourseUnits,
-  } = useSingleQuestionCourseUnits(intakeGuid, loggedInUserGuid || undefined, Boolean(intakeGuid && loggedInUserGuid))
+  // Each tab uses its own course-unit endpoint. View & Edit: lecturerGuid is
+  // optional (question-view-and-edit-page.md), so it loads without one.
+  // Import: always scoped to the lecturer (question-bank-import-page.md).
+  const repoUnitsQuery = useSingleQuestionCourseUnits(intakeGuid, loggedInUserGuid || undefined, activeTab === 'repository')
+  const importUnitsQuery = useQuestionBankCourseUnits(intakeGuid, loggedInUserGuid, activeTab === 'import')
+  const unitsQuery = activeTab === 'import' ? importUnitsQuery : repoUnitsQuery
+  const courseUnits = unitsQuery.data
+  const isLoadingCourseUnits = unitsQuery.isLoading
+  const isFetchingCourseUnits = unitsQuery.isFetching
+  const needsLecturer = activeTab === 'import' && !loggedInUserGuid
 
   // Live Questions Query
   const {
@@ -158,27 +164,6 @@ export default function QuestionBankUploadPage() {
       }
     }
   }, [loggedInUserGuid])
-
-  // Fallback: match logged-in user's display name with employee directory if UUID not yet in session
-  useEffect(() => {
-    if (!loggedInUserGuid && employeesData && employeesData.length > 0) {
-      const identity = getSessionIdentity()
-      if (identity?.displayName) {
-        const norm = identity.displayName.toLowerCase().replace(/^(dr\.|mr\.|mrs\.|ms\.|prof\.)\s*/i, '').trim()
-        const match = employeesData.find((e: EmployeeListItem) => {
-          const empNorm = (e.empName || '').toLowerCase().replace(/^(dr\.|mr\.|mrs\.|ms\.|prof\.)\s*/i, '').trim()
-          return empNorm === norm || (e.empName && (
-            e.empName.toLowerCase().includes(norm) ||
-            norm.includes(e.empName.toLowerCase())
-          ))
-        })
-        if (match?.employeeGuid) {
-          setLoggedInUserGuid(match.employeeGuid)
-          setSessionIdentity({ employeeGuid: match.employeeGuid, userGuid: match.employeeGuid })
-        }
-      }
-    }
-  }, [loggedInUserGuid, employeesData])
 
   // ── Auto-select current intake ──────────────────────────────────────────────
   useEffect(() => {
@@ -652,15 +637,15 @@ export default function QuestionBankUploadPage() {
               placeholder={
                 !intakeGuid
                   ? 'Pick Academic Intake first'
-                  : !loggedInUserGuid
-                    ? 'Identifying logged-in faculty...'
+                  : needsLecturer
+                    ? 'Your staff record could not be identified — sign in again'
                     : isLoadingCourseUnits
-                      ? 'Loading assigned course units...'
+                      ? 'Loading course units...'
                       : courseUnits && courseUnits.length === 0
-                        ? 'No course units assigned to you'
+                        ? 'No course units found for this intake'
                         : 'Select course unit'
               }
-              disabled={!intakeGuid || !loggedInUserGuid || isLoadingCourseUnits}
+              disabled={!intakeGuid || needsLecturer || isLoadingCourseUnits}
             />
           </div>
         </div>

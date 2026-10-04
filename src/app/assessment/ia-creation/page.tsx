@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -71,6 +71,13 @@ export default function IaCreationPage() {
   )
   const createMut = useCreateIaStructure()
 
+  // Pre-select the current intake once the init call returns.
+  useEffect(() => {
+    if (selectedIntakeGuid || !initData?.intakes?.length) return
+    const current = initData.intakes.find(i => i.currentIntake)
+    if (current) setSelectedIntakeGuid(current.intakeGuid)
+  }, [initData, selectedIntakeGuid])
+
 
 
   function showToast(msg: string, type = '') {
@@ -102,12 +109,13 @@ export default function IaCreationPage() {
         semesterGuid: selectedSemesterGuid,
         intakeGuid: selectedIntakeGuid,
       })
-      refetchStructure()
       showToast('IA Structure created successfully.', 'success')
     } catch (err: any) {
-      const status = err?.status ?? err?.response?.status
-      if (status === 409) {
+      // AuthError carries the envelope's code, not the HTTP status.
+      if (err?.code === 'conflict') {
+        // Informational, not an error — and load the grid so it's visible.
         showToast('IA Structure already exists for this combination.', '')
+        refetchStructure()
       } else {
         showToast(err.message || 'Failed to create IA Structure.', 'error')
       }
@@ -115,7 +123,7 @@ export default function IaCreationPage() {
   }
 
   const canRefresh = !!selectedProgramGuid && !!selectedSemesterGuid && !!selectedIntakeGuid
-  const is404 = (structureError as any)?.status === 404
+  const is404 = (structureError as { code?: string } | null)?.code === 'not_found'
 
   return (
     <div id="page-ia-creation">
@@ -159,12 +167,12 @@ export default function IaCreationPage() {
               value={selectedIntakeGuid}
               onChange={val => setSelectedIntakeGuid(val)}
               disabled={initLoading}
-              options={(initData?.intakes ?? [])
-                .filter(i => i.currentIntake)
-                .map(i => ({
-                  value: i.intakeGuid,
-                  label: `${i.description ?? `Intake ${i.intakeCode}`} (Current)`,
-                }))}
+              // Every intake, past ones included — currentIntake is only the
+              // default (assessment-structure-page.md, Business logic notes).
+              options={(initData?.intakes ?? []).map(i => ({
+                value: i.intakeGuid,
+                label: `${i.description ?? `Intake ${i.intakeCode}`}${i.currentIntake ? ' (Current)' : ''}`,
+              }))}
             />
           </div>
 

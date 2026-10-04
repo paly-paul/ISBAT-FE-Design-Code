@@ -82,7 +82,7 @@ export default function ProjectProposalsPage() {
         setDeletingGuid(null)
       },
       onError: (err: any) => {
-        showToast(err.response?.data?.message || 'Failed to delete proposal.', 'error')
+        showToast(err?.message || 'Failed to delete proposal.', 'error')
         setIsConfirmDeleteOpen(false)
         setDeletingGuid(null)
       }
@@ -99,7 +99,7 @@ export default function ProjectProposalsPage() {
         showToast('No synopsis file found for this proposal.', 'warn')
       }
     } catch (err: any) {
-      showToast(err.response?.data?.message || 'Failed to download synopsis.', 'error')
+      showToast(err?.message || 'Failed to download synopsis.', 'error')
     }
   }
 

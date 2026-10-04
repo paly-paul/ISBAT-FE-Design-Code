@@ -1,5 +1,5 @@
 import { apiDelete, apiGet, apiPost, apiPut } from '../client'
-import { QuestionBankCategory, QuestionBankCourseUnit } from './questionBank'
+import { QuestionBankCategory, QuestionBankCourseUnit, getQuestionBankCourseUnits } from './questionBank'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -78,41 +78,20 @@ function normalizeCourseUnits(data: any): QuestionBankCourseUnit[] {
 }
 
 /**
- * Fetch course units for single-question and question-bank upload,
- * strictly scoped to the logged-in user's UUID (lecturerGuid) and academic intake.
+ * Course units for question view & edit (question-view-and-edit-page.md).
+ * `lecturerGuid` is optional here — sent, it scopes to that lecturer's
+ * units; omitted, every unit of the intake is returned. Question Bank
+ * Import uses its own endpoint (getQuestionBankCourseUnits), which always
+ * needs the lecturer.
  */
 export async function getSingleQuestionCourseUnits(intakeGuid: string, lecturerGuid?: string): Promise<QuestionBankCourseUnit[]> {
-  if (!intakeGuid && !lecturerGuid) {
-    return []
-  }
+  if (!intakeGuid) return []
+  if (MOCK_AUTH) return getQuestionBankCourseUnits(intakeGuid, lecturerGuid ?? '')
 
-  const params = new URLSearchParams()
-  if (intakeGuid) params.append('intakeGuid', intakeGuid)
+  const params = new URLSearchParams({ intakeGuid })
   if (lecturerGuid) params.append('lecturerGuid', lecturerGuid)
-
-  // 1. Try question-bank course-units endpoint scoped to lecturerGuid
-  try {
-    const data = await apiGet<any>(`/api/v1/assessment/question-bank/course-units?${params.toString()}`)
-    const normalized = normalizeCourseUnits(data)
-    if (normalized.length > 0) {
-      return normalized
-    }
-  } catch {
-    // Continue to next endpoint
-  }
-
-  // 2. Try questions course-units endpoint scoped to lecturerGuid
-  try {
-    const data = await apiGet<any>(`/api/v1/assessment/questions/course-units?${params.toString()}`)
-    const normalized = normalizeCourseUnits(data)
-    if (normalized.length > 0) {
-      return normalized
-    }
-  } catch {
-    // Both endpoints tried
-  }
-
-  return []
+  const data = await apiGet<any>(`/api/v1/assessment/questions/course-units?${params.toString()}`)
+  return normalizeCourseUnits(data)
 }
 
 /**

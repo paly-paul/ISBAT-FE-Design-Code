@@ -4,6 +4,8 @@ import {
   generateGraduateTranscripts,
   getHecIntakesDropdown,
   getHecProgramsDropdown,
+  getProgramGroupsDropdown,
+  getGraduateTranscriptPdf,
   GraduateTranscriptGenerateRequest,
   searchGraduateTranscriptCollection,
   recordGraduateTranscriptCollection,
@@ -22,6 +24,14 @@ export function useHecProgramsDropdown() {
   return useQuery({
     queryKey: ['hec-programs-dropdown'],
     queryFn: getHecProgramsDropdown,
+    staleTime: Infinity
+  })
+}
+
+export function useProgramGroupsDropdown() {
+  return useQuery({
+    queryKey: ['program-groups-dropdown'],
+    queryFn: getProgramGroupsDropdown,
     staleTime: Infinity
   })
 }
@@ -55,6 +65,10 @@ export function useGraduateTranscriptCollectionSearch(searchTerm: string) {
     enabled: !!searchTerm && searchTerm.length > 2,
     refetchOnWindowFocus: false
   })
+}
+
+export function useDownloadGraduateTranscriptPdf() {
+  return useMutation({ mutationFn: (transcriptGuid: string) => getGraduateTranscriptPdf(transcriptGuid) })
 }
 
 export function useRecordGraduateTranscriptCollection() {

@@ -7,6 +7,7 @@ import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useResitConfigs } from '@/hooks/assessment/useResitConfigs'
 import { useResitMarkUpdates, usePushResitMarkUpdate } from '@/hooks/assessment/useResitMarkUpdates'
@@ -45,7 +46,7 @@ export default function ResitMarkUpdatePage() {
     }
   }, [intakes, intakeGuid])
 
-  const { data: resitConfigsData, isLoading: configsLoading } = useResitConfigs(1, 50, intakeGuid || undefined)
+  const { data: resitConfigsData, isLoading: configsLoading, refetch: refetchConfigs } = useResitConfigs(1, 50, intakeGuid || undefined)
 
   useEffect(() => {
     if (resitConfigsData && resitConfigsData.items.length > 0 && intakeGuid) {
@@ -56,7 +57,7 @@ export default function ResitMarkUpdatePage() {
     }
   }, [resitConfigsData, intakeGuid])
 
-  const { data: markUpdatesData, isLoading: updatesLoading } = useResitMarkUpdates({
+  const { data: markUpdatesData, isLoading: updatesLoading, isError: updatesFailed, error: updatesError, refetch: refetchUpdates } = useResitMarkUpdates({
     intakeGuid,
     resitConfigGuid,
     status: statusTab,
@@ -83,6 +84,15 @@ export default function ResitMarkUpdatePage() {
   const firstColStyle = showAction ? undefined : { textAlign: 'left' as const }
 
   const summary = markUpdatesData?.summary || { ready: 0, pending: 0, pushed: 0 }
+  const noResit = !!resitConfigsData && resitConfigsData.items.length === 0
+  const listNotFound = updatesFailed && (updatesError as { code?: string } | null)?.code === 'not_found'
+
+  // 404 on the list = the resit doesn't belong to this session any more:
+  // reload the Resit dropdown (its effect re-selects the active one).
+  useEffect(() => {
+    if (listNotFound) refetchConfigs()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listNotFound])
 
   // Clear the resit too: until the new intake's resits load, the list would
   // otherwise query the new intake with the old intake's resit (→ 404). The
@@ -116,8 +126,11 @@ export default function ResitMarkUpdatePage() {
         showToast(`${iaMsg} ${ueMsg}`, 'success')
         setPushModalData(null)
       },
+      // 400 / 409: the server's message; 404: the application is gone. Reload
+      // the list either way (resit-mark-update-page.md, Error handling).
       onError: (err: any) => {
-        showToast(err?.message || 'Error pushing marks', 'error')
+        showToast(err?.code === 'not_found' ? 'This application no longer exists.' : err?.message || 'Error pushing marks', 'error')
+        setPushModalData(null)
         queryClient.invalidateQueries({ queryKey: RESIT_MARK_UPDATES_KEYS.lists() })
       }
     })
@@ -252,7 +265,16 @@ export default function ResitMarkUpdatePage() {
               </tr>
             </thead>
             <tbody>
-              {updatesLoading ? (
+              {noResit ? (
+                <EmptyState colSpan={colCount} title="No resit found for this academic session." hasFilters={false} />
+              ) : updatesFailed ? (
+                <tr><td colSpan={colCount} className="text-center py-8 text-sm">
+                  <span style={{ color: 'var(--red)' }}>
+                    {listNotFound ? 'Resit not found for the selected academic session.' : (updatesError as { message?: string } | null)?.message || 'Could not load the list.'}
+                  </span>{' '}
+                  {!listNotFound && <button className="btn btn-neu btn-sm ml-2" onClick={() => refetchUpdates()}><i className="lni lni-reload"></i> Retry</button>}
+                </td></tr>
+              ) : updatesLoading ? (
                 <TableLoadingState colSpan={colCount} title="Loading updates..." />
               ) : !markUpdatesData || markUpdatesData.rows.items.length === 0 ? (
                 <EmptyState
@@ -306,31 +328,14 @@ export default function ResitMarkUpdatePage() {
           </table>
         </ScrollTable>
 
-        {markUpdatesData && markUpdatesData.rows.totalCount > 0 && (
-          <div className="p-4 border-t border-gray-100 flex items-center justify-between">
-            <div className="text-sm text-gray-500">
-              Showing <span className="font-medium">{(page - 1) * pageSize + 1}</span> to <span className="font-medium">{Math.min(page * pageSize, markUpdatesData.rows.totalCount)}</span> of <span className="font-medium">{markUpdatesData.rows.totalCount}</span>
-            </div>
-            <div className="flex gap-1">
-              <button 
-                onClick={() => setPage(page - 1)}
-                disabled={page === 1}
-                className="px-3 py-1 border border-gray-200 rounded-md text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-              >
-                Prev
-              </button>
-              <div className="px-3 py-1 bg-primary text-white rounded-md text-sm font-medium">
-                {page}
-              </div>
-              <button 
-                onClick={() => setPage(page + 1)}
-                disabled={page * pageSize >= markUpdatesData.rows.totalCount}
-                className="px-3 py-1 border border-gray-200 rounded-md text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+        {markUpdatesData && markUpdatesData.rows.totalCount > pageSize && (
+          <Pagination
+            page={page}
+            totalPages={Math.ceil(markUpdatesData.rows.totalCount / pageSize)}
+            totalCount={markUpdatesData.rows.totalCount}
+            itemLabel="rows"
+            onPageChange={setPage}
+          />
         )}
       </div>
 

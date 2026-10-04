@@ -34,6 +34,21 @@ function errMsg(err: unknown, fallback: string) {
   return (err as { message?: string } | null)?.message || fallback
 }
 
+// mark / max as a small bar: red under 40%, amber 40–59%, green 60%+.
+function PercentBar({ mark, max }: { mark: number | null | undefined; max: number | null | undefined }) {
+  if (mark === null || mark === undefined || !max) return null
+  const pct = Math.round((mark / max) * 100)
+  const color = pct < 40 ? 'var(--red)' : pct < 60 ? 'var(--amber)' : 'var(--green)'
+  return (
+    <div className="flex items-center justify-end gap-2 mt-1">
+      <div className="prog-bar-track" style={{ height: 5, width: 64 }}>
+        <div className="prog-bar-fill" style={{ width: `${Math.min(100, Math.max(0, pct))}%`, background: color }} />
+      </div>
+      <span className="text-[11px]" style={{ color, minWidth: 34 }}>{pct}%</span>
+    </div>
+  )
+}
+
 export default function ResitIaResultsPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
@@ -56,7 +71,7 @@ export default function ResitIaResultsPage() {
   }, [intakes, intakeGuid])
   const intakeOptions = intakes.map(i => ({ value: i.intakeGuid, label: i.description ? `${i.description} (${i.intakeCode})` : String(i.intakeCode) }))
 
-  const { data: resitConfigsData, isLoading: resitsLoading } = useResitConfigs(1, 50, intakeGuid || undefined)
+  const { data: resitConfigsData, isLoading: resitsLoading, refetch: refetchResits } = useResitConfigs(1, 50, intakeGuid || undefined)
   const resitOptions = useMemo(() => [
     { value: '', label: 'All resits' },
     ...(resitConfigsData?.items ?? []).map(r => ({ value: r.resitConfigGuid, label: r.refCode || 'Unnamed resit' })),
@@ -82,6 +97,18 @@ export default function ResitIaResultsPage() {
     search: search || undefined,
   }
   const resultsQuery = useResitIaResults({ ...baseParams, page, pageSize }, !!intakeGuid)
+
+  // 404 "Resit not found for the selected academic session": toast, reload
+  // the Resit dropdown and fall back to All resits (resit-ia-result-page.md).
+  const resultsNotFound = resultsQuery.isError && (resultsQuery.error as { code?: string } | null)?.code === 'not_found'
+  useEffect(() => {
+    if (!resultsNotFound) return
+    showToast(errMsg(resultsQuery.error, 'Resit not found for the selected academic session.'), 'error')
+    refetchResits()
+    setResitConfigGuid('')
+    setPage(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resultsNotFound])
   const rows = resultsQuery.data?.items ?? []
   const totalCount = resultsQuery.data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
@@ -117,14 +144,10 @@ export default function ResitIaResultsPage() {
         </div>
 
         <div className="card" style={{ padding: 20 }}>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="fg mb-0">
               <label className="lbl">Academic Session <span className="req">*</span></label>
               <SearchSelect placeholder={intakesLoading ? 'Loading…' : 'Select academic session'} options={intakeOptions} value={intakeGuid} onChange={changeIntake} disabled={intakesLoading} />
-            </div>
-            <div className="fg mb-0">
-              <label className="lbl">Assessment Type <span className="req">*</span></label>
-              <SearchSelect options={CATEGORY_OPTIONS} value={String(category)} onChange={v => changeFilter(setCategory)(Number(v) as ResitIaCategory)} />
             </div>
             <div className="fg mb-0">
               <label className="lbl">Resit</label>
@@ -138,9 +161,22 @@ export default function ResitIaResultsPage() {
         </div>
 
         <div className="card">
-          <div className="card-hdr">
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-bar-chart"></i></span> Students Mark List</div>
-            <div className="flex gap-2 items-center flex-wrap">
+          <div className="flex items-center justify-between flex-wrap gap-2" style={{ paddingRight: 16, borderBottom: '1px solid var(--g200)' }}>
+            {/* Assessment type tabs (resit-ia-result-page.md) */}
+            <div className="tab-bar" style={{ borderBottom: 'none' }} role="tablist">
+              {CATEGORY_OPTIONS.map(c => (
+                <button
+                  key={c.value}
+                  role="tab"
+                  aria-selected={String(category) === c.value}
+                  className={`tab-btn${String(category) === c.value ? ' active' : ''}`}
+                  onClick={() => changeFilter(setCategory)(Number(c.value) as ResitIaCategory)}
+                >
+                  <i className={`lni ${c.value === '1' ? 'lni-pencil-alt' : 'lni-folder'}`}></i> {c.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2 items-center flex-wrap py-2">
               <div className="inp-wrap w-64">
                 <i className="lni lni-search-alt inp-icon"></i>
                 <input className="ctrl" placeholder="Student no., name, programme or unit…" maxLength={100} value={searchInput} onChange={e => setSearchInput(e.target.value)} />
@@ -164,7 +200,11 @@ export default function ResitIaResultsPage() {
             <div className="empty">
               <div className="empty-icon"><i className="lni lni-folder"></i></div>
               <div className="empty-title">No results</div>
-              <div className="empty-sub">{search ? 'No results match your search.' : 'No resit IA marks have been submitted for these filters yet.'}</div>
+              <div className="empty-sub">
+                {search
+                  ? 'No students, programmes or units match your search.'
+                  : `No resit ${category === 1 ? 'class test' : 'course work'} marks submitted for this session yet.`}
+              </div>
             </div>
           ) : (
             <ScrollTable>
@@ -172,23 +212,25 @@ export default function ResitIaResultsPage() {
                 <thead>
                   <tr>
                     <th style={{ width: 56 }}>#</th>
-                    <th>Student Number</th>
-                    <th>Student Name</th>
+                    <th>Student</th>
                     <th>Programme</th>
                     <th>Course Unit</th>
-                    <th style={{ textAlign: 'right' }}>Mark Scored</th>
+                    <th style={{ textAlign: 'right' }}>Mark</th>
                   </tr>
                 </thead>
                 <tbody style={{ opacity: resultsQuery.isFetching ? 0.6 : 1 }}>
                   {rows.map((r, i) => (
                     <tr key={`${r.studentNum}-${r.unitName}-${i}`}>
                       <td className="text-g500">{firstRow + i + 1}</td>
-                      <td className="font-mono">{r.studentNum ?? '—'}</td>
-                      <td><strong>{r.studentName ?? '—'}</strong></td>
+                      <td>
+                        <strong>{r.studentName ?? '—'}</strong>
+                        <div className="text-xs text-g500 font-mono">{r.studentNum ?? '—'}</div>
+                      </td>
                       <td>{r.programCode ?? '—'}</td>
-                      <td>{r.unitName ?? <span className="text-g400">Unit unavailable</span>}</td>
-                      <td className="font-mono" style={{ textAlign: 'right' }}>
+                      <td><div className="truncate max-w-[280px]" title={r.unitName ?? undefined}>{r.unitName ?? <span className="text-g400">Unit unavailable</span>}</div></td>
+                      <td className="font-mono" style={{ textAlign: 'right', minWidth: 130 }}>
                         <strong>{fmtMark(r.mark)}</strong> <span className="text-g400">/ {fmtMark(r.maxMark)}</span>
+                        <PercentBar mark={r.mark} max={r.maxMark} />
                       </td>
                     </tr>
                   ))}

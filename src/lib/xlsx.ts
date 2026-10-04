@@ -76,8 +76,7 @@ export interface SheetData {
   rows: string[][]
 }
 
-// Reads the first sheet of an .xlsx file.
-export async function readFirstSheet(file: Blob): Promise<SheetData> {
+async function openWorkbook(file: Blob) {
   const buf = new DataView(await file.arrayBuffer())
   const entries = readZipEntries(buf)
   const byName = new Map(entries.map(e => [e.name, e]))
@@ -85,12 +84,28 @@ export async function readFirstSheet(file: Blob): Promise<SheetData> {
     const e = byName.get(name)
     return e ? readZipEntry(buf, e) : null
   }
-
   const workbookXml = await read('xl/workbook.xml')
   if (!workbookXml) throw new Error('This file is not a valid Excel workbook (.xlsx).')
-  const workbook = parseXml(workbookXml)
-  const firstSheet = byTag(workbook, 'sheet')[0]
-  if (!firstSheet) throw new Error('The workbook has no sheets.')
+  const sheets = byTag(parseXml(workbookXml), 'sheet')
+  return { read, sheets }
+}
+
+// Names of every sheet, in workbook order.
+export async function listSheetNames(file: Blob): Promise<string[]> {
+  const { sheets } = await openWorkbook(file)
+  return sheets.map((s, i) => s.getAttribute('name') ?? `Sheet${i + 1}`)
+}
+
+// Reads the first sheet of an .xlsx file.
+export function readFirstSheet(file: Blob): Promise<SheetData> {
+  return readSheet(file)
+}
+
+// Reads one sheet by name (the first sheet when no name is given).
+export async function readSheet(file: Blob, name?: string): Promise<SheetData> {
+  const { read, sheets } = await openWorkbook(file)
+  const firstSheet = name === undefined ? sheets[0] : sheets.find(s => s.getAttribute('name') === name)
+  if (!firstSheet) throw new Error(name === undefined ? 'The workbook has no sheets.' : `The sheet "${name}" was not found in the workbook.`)
   const sheetName = firstSheet.getAttribute('name') ?? 'Sheet1'
   const relId = firstSheet.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id') ?? firstSheet.getAttribute('r:id')
 

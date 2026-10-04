@@ -99,7 +99,7 @@ export function ProjectProposalFormModal({ isOpen, onClose, proposalGuid, onSucc
           onClose()
         },
         onError: (err: any) => {
-          setErrorMsg(err.response?.data?.message || 'Failed to update proposal.')
+          setErrorMsg(err?.message || 'Failed to update proposal.')
         }
       })
     } else {
@@ -109,7 +109,7 @@ export function ProjectProposalFormModal({ isOpen, onClose, proposalGuid, onSucc
           onClose()
         },
         onError: (err: any) => {
-          setErrorMsg(err.response?.data?.message || 'Failed to create proposal.')
+          setErrorMsg(err?.message || 'Failed to create proposal.')
         }
       })
     }

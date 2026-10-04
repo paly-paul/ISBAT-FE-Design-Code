@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { TableSearch } from '@/components/TableSearch'
 import { useResitAppCourseUnits, useResitApplications } from '@/hooks/assessment/useResitApplications'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -9,194 +8,182 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 
+// Resit Applications (resit-applications-list-page.md) — read-only list of
+// every resit application under the active resit of the current intake.
+
+const PAGE_SIZE = 10
+const NO_RESIT_MSG = 'There is no active resit in this academic intake.'
+
+function errMsg(err: unknown, fallback: string) {
+  return (err as { message?: string } | null)?.message || fallback
+}
+
 export default function ResitApplicationsListPage() {
-  const [courseUnitGuid, setCourseUnitGuid] = useState<string>('')
+  const [courseUnitGuid, setCourseUnitGuid] = useState('')
   const [feeStatus, setFeeStatus] = useState<number | undefined>(undefined)
-  const [search, setSearch] = useState<string>('')
-  const [searchInput, setSearchInput] = useState<string>('') // for debounce/enter key
-  const [page, setPage] = useState<number>(1)
-  const pageSize = 10
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
 
   const { data: courseUnits, isLoading: courseUnitsLoading } = useResitAppCourseUnits()
-  
-  const { data: resitAppsData, isLoading: appsLoading } = useResitApplications({
+  const appsQuery = useResitApplications({
     courseUnitGuid: courseUnitGuid || undefined,
     feeStatus,
     search: search || undefined,
     page,
-    pageSize
+    pageSize: PAGE_SIZE,
   })
+  const data = appsQuery.data
+  const items = data?.applications.items ?? []
+  const totalCount = data?.applications.totalCount ?? 0
+  const summary = data?.summary ?? { total: 0, paid: 0, unpaid: 0 }
+  const noResit = !!data && data.resit === null
+  const filtered = !!courseUnitGuid || feeStatus !== undefined || !!search
 
+  // Page past the end (e.g. rows removed meanwhile) → go back to the last page.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (search !== searchInput) {
-        setSearch(searchInput)
-        setPage(1)
-      }
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [searchInput, search])
+    if (data && items.length === 0 && totalCount > 0 && page > 1) {
+      setPage(Math.max(1, Math.ceil(totalCount / PAGE_SIZE)))
+    }
+  }, [data, items.length, totalCount, page])
 
-  const handleCourseUnitChange = (val: string) => {
-    setCourseUnitGuid(val)
-    setPage(1)
-  }
+  function doSearch() { setSearch(searchInput.trim()); setPage(1) }
+  function doClear() { setSearchInput(''); setSearch(''); setPage(1) }
 
-  const handleStatusChange = (status: number | undefined) => {
-    setFeeStatus(status)
-    setPage(1)
-  }
+  const feeOptions: { value: number | undefined; label: string; count: number }[] = [
+    { value: undefined, label: 'All', count: summary.total },
+    { value: 1, label: 'Paid', count: summary.paid },
+    { value: 0, label: 'Unpaid', count: summary.unpaid },
+  ]
 
-  const handlePageChange = (newPage: number) => {
-    setPage(newPage)
-  }
-
-  const summary = resitAppsData?.summary || { total: 0, paid: 0, unpaid: 0 }
-  const noActiveResit = resitAppsData && resitAppsData.resit === null
+  const emptyTitle = noResit
+    ? NO_RESIT_MSG
+    : filtered ? 'No applications match the filters.' : 'No resit applications yet.'
 
   return (
     <div className="page active">
-      <div className="pg-hdr flex justify-between items-end">
+      <div className="pg-hdr">
         <div>
-          <h1 className="pg-title">Resit Applications</h1>
-          <p className="pg-sub">
-            {resitAppsData?.resit?.refCode 
-              ? `Applications for ${resitAppsData.resit.refCode}` 
-              : 'View and manage student resit applications'}
-          </p>
+          <div className="pg-title">Resit Applications</div>
+          <div className="pg-sub">
+            {data?.resit ? <>Active resit: <strong>{data.resit.refCode}</strong></> : appsQuery.isLoading ? 'Loading the active resit…' : 'No active resit'}
+          </div>
         </div>
       </div>
 
-        <div className="card">
-          <div className="card-hdr">
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-folder"></i></span> Applications List</div>
-          </div>
-          <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row gap-4 items-center justify-between">
-            {/* Tabs / Fee Status Filter */}
-            <div className="flex bg-gray-100 p-1 rounded-lg w-full md:w-auto">
-              <button 
-                onClick={() => handleStatusChange(undefined)}
-                className={`flex-1 md:flex-none px-4 py-2 text-sm font-medium rounded-md transition-all ${feeStatus === undefined ? 'bg-white shadow-sm text-primary' : 'text-gray-600 hover:text-gray-800'}`}
-              >
-                All ({summary.total})
-              </button>
-              <button 
-                onClick={() => handleStatusChange(1)}
-                className={`flex-1 md:flex-none px-4 py-2 text-sm font-medium rounded-md transition-all ${feeStatus === 1 ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-600 hover:text-gray-800'}`}
-              >
-                Paid ({summary.paid})
-              </button>
-              <button 
-                onClick={() => handleStatusChange(0)}
-                className={`flex-1 md:flex-none px-4 py-2 text-sm font-medium rounded-md transition-all ${feeStatus === 0 ? 'bg-white shadow-sm text-rose-600' : 'text-gray-600 hover:text-gray-800'}`}
-              >
-                Unpaid ({summary.unpaid})
-              </button>
-            </div>
+      {noResit && <div className="warn-box mb-5"><i className="lni lni-warning mt-0.5"></i><span>{NO_RESIT_MSG}</span></div>}
 
-            {/* Course Unit & Search */}
-            <div className="flex gap-3 w-full md:w-auto flex-col sm:flex-row">
-              <div className="w-full sm:w-64">
-                <SearchSelect
-                  placeholder="All Course Units"
-                  value={courseUnitGuid}
-                  onChange={handleCourseUnitChange}
-                  disabled={courseUnitsLoading}
-                  options={[
-                    { value: '', label: 'All Course Units' },
-                    ...(courseUnits ?? []).map((u: any) => ({
-                      value: u.courseUnitGuid,
-                      label: `${u.unitName} (${u.unitCode})`
-                    }))
-                  ]}
-                />
-              </div>
-              
-              <TableSearch
-                className="w-full sm:w-64"
-                placeholder="Search students or units..."
-                value={searchInput}
-                onChange={setSearchInput}
-                results={[]}
-                minChars={999}
+      <div className="card">
+        <div className="p-4 border-b border-slate-100 flex flex-col gap-3">
+          <div className="flex flex-col md:flex-row gap-3 md:items-end">
+            <div className="w-full md:w-80">
+              <label className="lbl">Course Unit</label>
+              <SearchSelect
+                placeholder="All units"
+                value={courseUnitGuid}
+                onChange={v => { setCourseUnitGuid(v); setPage(1) }}
+                disabled={courseUnitsLoading || noResit}
+                className="w-full mt-1"
+                options={[
+                  { value: '', label: 'All units' },
+                  ...(courseUnits ?? []).map(u => ({ value: u.courseUnitGuid, label: `${u.unitName} (${u.unitCode})` })),
+                ]}
               />
             </div>
+            <div>
+              <label className="lbl">Fee</label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {feeOptions.map(o => (
+                  <button
+                    key={o.label}
+                    className={`btn btn-sm ${feeStatus === o.value ? 'btn-primary' : 'btn-neu'}`}
+                    onClick={() => { setFeeStatus(o.value); setPage(1) }}
+                    disabled={noResit}
+                  >
+                    {o.label} <span className="font-mono">{o.count.toLocaleString()}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="relative w-full sm:w-96">
+              <i className="lni lni-search-alt absolute left-3 top-1/2 -translate-y-1/2 text-g400 pointer-events-none"></i>
+              <input
+                className="ctrl w-full"
+                style={{ paddingLeft: 34 }}
+                placeholder="Reg no, student no, name, unit code or name"
+                maxLength={100}
+                value={searchInput}
+                onChange={e => setSearchInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') doSearch() }}
+                disabled={noResit}
+              />
+            </div>
+            <button className="btn btn-neu" onClick={doSearch} disabled={noResit}>Search</button>
+            <button className="btn btn-neu" onClick={doClear} disabled={!searchInput && !search}>Clear</button>
+          </div>
+        </div>
 
-          <ScrollTable>
-            <table className="table w-full">
+        {appsQuery.isError ? (
+          <div className="empty">
+            <div className="empty-icon"><i className="lni lni-warning"></i></div>
+            <div className="empty-title">Couldn&apos;t load applications</div>
+            <div className="empty-sub">{errMsg(appsQuery.error, 'Please try again.')}</div>
+            <button className="btn btn-neu btn-sm mt-3" onClick={() => appsQuery.refetch()}><i className="lni lni-reload"></i> Retry</button>
+          </div>
+        ) : (
+          <ScrollTable className="no-sticky-col">
+            <table>
               <thead>
                 <tr>
-                  <th className="w-16">#</th>
-                  <th>Student No</th>
+                  <th style={{ textAlign: 'left' }}>Student No</th>
                   <th>Student Name</th>
                   <th>Programme</th>
+                  <th>Campus</th>
+                  <th>Code</th>
                   <th>Course Unit</th>
-                  <th>Resit For</th>
-                  <th className="text-center">Fee Status</th>
+                  <th>Type</th>
+                  <th className="text-center">CW</th>
+                  <th className="text-center">UE</th>
+                  <th className="text-center">Fee</th>
+                  <th>Email</th>
+                  <th>Phone</th>
                 </tr>
               </thead>
-              <tbody>
-                {appsLoading ? (
-                  <TableLoadingState colSpan={7} title="Loading applications..." />
-                ) : !resitAppsData || resitAppsData.applications.items.length === 0 ? (
-                  <EmptyState colSpan={7} title="No applications found" subtitle="No applications found matching your criteria." />
+              <tbody style={{ opacity: appsQuery.isFetching && !appsQuery.isLoading ? 0.6 : 1 }}>
+                {appsQuery.isLoading ? (
+                  <TableLoadingState colSpan={12} title="Loading applications..." />
+                ) : items.length === 0 ? (
+                  <EmptyState colSpan={12} title={emptyTitle} hasFilters={filtered && !noResit} onClearFilters={() => { setCourseUnitGuid(''); setFeeStatus(undefined); doClear() }} />
                 ) : (
-                  resitAppsData?.applications.items.map((app, index) => (
+                  items.map(app => (
                     <tr key={app.resitApplicationGuid}>
-                      <td className="text-gray-500">{(page - 1) * pageSize + index + 1}</td>
-                      <td className="font-medium text-primary whitespace-nowrap">{app.studentRegNo}</td>
-                      <td>
-                        <div className="font-semibold text-gray-800">{app.studentName}</div>
-                        {(app.email || app.phone) && (
-                          <div className="text-xs text-gray-500 flex gap-2 mt-1">
-                            {app.email && <span><i className="lni lni-envelope"></i> {app.email}</span>}
-                            {app.phone && <span><i className="lni lni-phone"></i> {app.phone}</span>}
-                          </div>
-                        )}
-                      </td>
-                      <td className="text-sm">
-                        <div className="truncate max-w-[200px]" title={app.programName}>{app.programName}</div>
-                        <div className="text-xs text-gray-500 truncate max-w-[200px]">{app.campusName}</div>
-                      </td>
-                      <td>
-                        <div className="font-medium text-gray-800">
-                          {app.unitName} <span className="text-gray-500 text-sm">({app.unitCode})</span>
-                        </div>
-                        <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
-                          {app.unitTypeName}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="flex gap-1">
-                          {app.cw && <span className="px-2 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded text-xs font-semibold">CW</span>}
-                          {app.ue && <span className="px-2 py-1 bg-blue-50 text-blue-600 border border-blue-100 rounded text-xs font-semibold">UE</span>}
-                        </div>
-                      </td>
+                      <td className="font-mono whitespace-nowrap" style={{ textAlign: 'left' }}>{app.studentRegNo || '—'}</td>
+                      <td><strong>{app.studentName || '—'}</strong></td>
+                      <td><div className="truncate max-w-[220px]" title={app.programName}>{app.programName || '—'}</div></td>
+                      <td><div className="truncate max-w-[180px]" title={app.campusName}>{app.campusName || '—'}</div></td>
+                      <td className="font-mono whitespace-nowrap">{app.unitCode}</td>
+                      <td><div className="truncate max-w-[220px]" title={app.unitName}>{app.unitName}</div></td>
+                      <td>{app.unitTypeName || '—'}</td>
+                      <td className="text-center">{app.cw ? <span className="badge badge-blue">Yes</span> : <span className="text-g400">No</span>}</td>
+                      <td className="text-center">{app.ue ? <span className="badge badge-blue">Yes</span> : <span className="text-g400">No</span>}</td>
                       <td className="text-center">
-                        {app.feeStatus === 1 ? (
-                          <span className="px-3 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full text-xs font-semibold">Paid</span>
-                        ) : (
-                          <span className="px-3 py-1 bg-rose-50 text-rose-600 border border-rose-100 rounded-full text-xs font-semibold">Unpaid</span>
-                        )}
+                        {app.feeStatus === 1 ? <span className="badge badge-green">Paid</span> : <span className="badge badge-amber">Unpaid</span>}
                       </td>
+                      <td>{app.email ? <a href={`mailto:${app.email}`} className="text-blue hover:underline">{app.email}</a> : '—'}</td>
+                      <td className="whitespace-nowrap">{app.phone ? <a href={`tel:${app.phone}`} className="text-blue hover:underline">{app.phone}</a> : '—'}</td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </ScrollTable>
+        )}
 
-          {/* Pagination */}
-          {resitAppsData && resitAppsData.applications.totalCount > 0 && (
-            <Pagination 
-              page={page} 
-              totalPages={Math.ceil(resitAppsData.applications.totalCount / pageSize)} 
-              totalCount={resitAppsData.applications.totalCount} 
-              itemLabel="applications" 
-              onPageChange={setPage} 
-            />
-          )}
+        {totalCount > PAGE_SIZE && (
+          <Pagination page={page} totalPages={Math.ceil(totalCount / PAGE_SIZE)} totalCount={totalCount} itemLabel="applications" onPageChange={setPage} />
+        )}
       </div>
     </div>
   )

@@ -164,7 +164,8 @@ function RecordCollectionModal({
       phone: isSelf ? null : phone.trim()
     }, {
       onSuccess: () => onSuccess(),
-      onError: (err: any) => onError(err.response?.data?.message || 'Failed to record collection.')
+      // AuthError's message already holds the server's errors[0].
+      onError: (err: any) => onError(err?.message || 'Failed to record collection.')
     })
   }
 

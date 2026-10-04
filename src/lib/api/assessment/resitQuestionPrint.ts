@@ -23,7 +23,7 @@ export interface ResitParams {
   courseUnitGuid: string
   academicIntakeGuid: string
   questionBankIntakeGuid?: string // Mostly for theory
-  ueType?: number // Mostly for booklet
+  ueType?: number // Booklet calls: 0 Theory, 1 Practical — print and every download must match
   confirm?: boolean
 }
 
@@ -165,6 +165,7 @@ export function getResitBookletAttendancePdf(paramsObj: ResitParams) {
     courseUnitGuid: paramsObj.courseUnitGuid?.toUpperCase() || '',
     academicIntakeGuid: paramsObj.academicIntakeGuid?.toUpperCase() || ''
   })
+  if (paramsObj.ueType !== undefined) params.append('ueType', String(paramsObj.ueType))
   return apiGetBlob(`/api/v1/assessment/resit-booklet/attendance/pdf?${params.toString()}`)
 }
 export function getResitBookletCoverPdf(paramsObj: ResitParams) {
@@ -175,6 +176,7 @@ export function getResitBookletCoverPdf(paramsObj: ResitParams) {
     courseUnitGuid: paramsObj.courseUnitGuid?.toUpperCase() || '',
     academicIntakeGuid: paramsObj.academicIntakeGuid?.toUpperCase() || ''
   })
+  if (paramsObj.ueType !== undefined) params.append('ueType', String(paramsObj.ueType))
   return apiGetBlob(`/api/v1/assessment/resit-booklet/cover/pdf?${params.toString()}`)
 }
 export function getResitBookletConsolidatedPdf(paramsObj: ResitParams) {
@@ -185,5 +187,6 @@ export function getResitBookletConsolidatedPdf(paramsObj: ResitParams) {
     courseUnitGuid: paramsObj.courseUnitGuid?.toUpperCase() || '',
     academicIntakeGuid: paramsObj.academicIntakeGuid?.toUpperCase() || ''
   })
+  if (paramsObj.ueType !== undefined) params.append('ueType', String(paramsObj.ueType))
   return apiGetBlob(`/api/v1/assessment/resit-booklet/consolidated/pdf?${params.toString()}`)
 }

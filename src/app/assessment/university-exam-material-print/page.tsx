@@ -130,7 +130,9 @@ export default function UniversityExamMaterialPrintPage() {
       } else if (res.outcome === 'ConfirmationRequired') {
         confirmAndExecute(res.message || 'Questions are already printed. Do you want to reprint the same?', () => handlePrintQP(true))
       } else if (res.outcome === 'Printed' || res.outcome === 'Reprinted') {
-        showToast(`Question Paper ${res.outcome}!`, 'success')
+        showToast(`Question Paper ${res.outcome}! Downloading the PDF…`, 'success')
+        // Spec step 3: on Printed/Reprinted, proceed to the PDF download.
+        await handleDownload('QPPDF')
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to print QP', 'error')
@@ -181,6 +183,8 @@ export default function UniversityExamMaterialPrintPage() {
         } else {
           showToast(`Booklet printed! (Total: ${res.totalStudentCount})`, 'success')
         }
+        // Spec step 2: once confirmationRequired is false, download the booklet PDF.
+        await handleDownload('BookletPDF')
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to print booklet', 'error')
@@ -438,19 +442,14 @@ export default function UniversityExamMaterialPrintPage() {
       
       {/* Confirm Modal */}
       {showConfirmModal && (
-        <div className="modal show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Confirmation Required</h5>
-              </div>
-              <div className="modal-body text-center p-5">
-                <p>{confirmMessage}</p>
-                <div className="flex justify-center gap-3 mt-4">
-                  <button className="btn btn-neu" onClick={() => setShowConfirmModal(false)}>Cancel</button>
-                  <button className="btn btn-primary" onClick={executeConfirm}>Continue</button>
-                </div>
-              </div>
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setShowConfirmModal(false)}>
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-warning"></i></div>
+            <div className="perm-delete-title">Confirmation Required</div>
+            <div className="perm-delete-sub">{confirmMessage}</div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setShowConfirmModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={executeConfirm}>Continue</button>
             </div>
           </div>
         </div>

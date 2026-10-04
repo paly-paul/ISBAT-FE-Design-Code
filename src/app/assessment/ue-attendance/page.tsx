@@ -40,6 +40,7 @@ export default function UeAttendancePage() {
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type })
+    setTimeout(() => setToast(null), 3500)
   }
 
   // 1. Init
@@ -118,7 +119,7 @@ export default function UeAttendancePage() {
       queryClient.invalidateQueries({ queryKey: ['ueAttendanceStudents'] })
     },
     onError: (err: any) => {
-      showToast(err?.response?.data?.message || 'Failed to save attendance', 'error')
+      showToast(err?.message || 'Failed to save attendance', 'error')
     }
   })
 
