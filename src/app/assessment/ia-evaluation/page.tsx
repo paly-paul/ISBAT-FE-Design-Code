@@ -714,137 +714,163 @@ export default function IaEvaluationPage() {
               </div>
             </div>
 
-            {/* Coursework Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                  <tr>
-                    <th className="p-3 text-left w-28">Unit Code</th>
-                    <th className="p-3 text-left">Course Unit Name</th>
-                    <th className="p-3 text-left w-36">Category</th>
-                    <th className="p-3 text-center w-24">Enrolled</th>
-                    <th className="p-3 text-center w-24">Attended</th>
-                    <th className="p-3 text-center w-24">Evaluated</th>
-                    <th className="p-3 text-center w-24">Pending</th>
-                    <th className="p-3 text-center w-36">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {dashboardTab === 'pending' ? (
-                    isPendingLoading || isPendingFetching ? (
-                      <TableLoadingState
-                        colSpan={8}
-                        title="Loading pending coursework units…"
-                        subtitle="Fetching pending evaluation tasks from server..."
-                      />
-                    ) : filteredPendingUnits.length === 0 ? (
-                      <EmptyState
-                        colSpan={8}
-                        title="No pending coursework units"
-                        subtitle={
-                          selectedCategory || dashboardSearch
-                            ? 'No coursework units match your category or search filter.'
-                            : 'All coursework and tests for this intake have been completed!'
-                        }
-                        hasFilters={Boolean(selectedCategory || dashboardSearch)}
-                        onClearFilters={() => {
-                          setSelectedCategory('')
-                          setDashboardSearch('')
-                        }}
-                      />
-                    ) : (
-                      filteredPendingUnits.map((u, idx) => (
-                        <tr
-                          key={`${u.category}-${u.courseworkOrTestGuid}-${idx}`}
-                          onClick={() => handleOpenCourseworkRoster(u)}
-                          className="hover:bg-blue-50/50 cursor-pointer transition-colors"
-                        >
-                          <td className="p-3 font-mono font-bold text-slate-800">{u.unitCode || '—'}</td>
-                          <td className="p-3 font-medium text-slate-800">{u.unitName || '—'}</td>
-                          <td className="p-3">
-                            <span className="badge badge-purple text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                              {u.categoryLabel}
-                            </span>
-                          </td>
-                          <td className="p-3 text-center text-slate-600">{u.studyingCount}</td>
-                          <td className="p-3 text-center font-semibold text-slate-700">{u.attendedCount}</td>
-                          <td className="p-3 text-center text-emerald-700 font-semibold">{u.evaluatedCount}</td>
-                          <td className="p-3 text-center">
-                            <span className="bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded-full text-[10.5px]">
-                              {u.pendingCount}
-                            </span>
-                          </td>
-                          <td className="p-3 text-center" onClick={e => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenCourseworkRoster(u)}
-                              className="btn btn-primary btn-sm text-[11px] font-semibold flex items-center justify-center gap-1 mx-auto"
-                            >
-                              <span>Open Roster</span>
-                              <i className="lni lni-arrow-right"></i>
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )
-                  ) : isEvaluatedLoading || isEvaluatedFetching ? (
-                    <TableLoadingState
-                      colSpan={8}
-                      title="Loading evaluated coursework history…"
-                      subtitle="Fetching completed evaluation records from server..."
-                    />
-                  ) : filteredEvaluatedUnits.length === 0 ? (
-                    <EmptyState
-                      colSpan={8}
-                      title="No evaluated coursework units"
-                      subtitle={
-                        selectedCategory || dashboardSearch
-                          ? 'No completed units match your category or search filter.'
-                          : 'No coursework units have been finalized yet for this intake.'
-                      }
-                      hasFilters={Boolean(selectedCategory || dashboardSearch)}
-                      onClearFilters={() => {
-                        setSelectedCategory('')
-                        setDashboardSearch('')
-                      }}
-                    />
-                  ) : (
-                    filteredEvaluatedUnits.map((u, idx) => (
-                      <tr
+            {/* Coursework Cards */}
+            <div className="p-5 bg-slate-50/50">
+              {dashboardTab === 'pending' ? (
+                isPendingLoading || isPendingFetching ? (
+                  <TableLoadingState
+                    colSpan={1}
+                    title="Loading pending coursework units…"
+                    subtitle="Fetching pending evaluation tasks from server..."
+                  />
+                ) : filteredPendingUnits.length === 0 ? (
+                  <EmptyState
+                    colSpan={1}
+                    title="No pending coursework units"
+                    subtitle={
+                      selectedCategory || dashboardSearch
+                        ? 'No coursework units match your category or search filter.'
+                        : 'All coursework and tests for this intake have been completed!'
+                    }
+                    hasFilters={Boolean(selectedCategory || dashboardSearch)}
+                    onClearFilters={() => {
+                      setSelectedCategory('')
+                      setDashboardSearch('')
+                    }}
+                  />
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                    {filteredPendingUnits.map((u, idx) => (
+                      <div
                         key={`${u.category}-${u.courseworkOrTestGuid}-${idx}`}
                         onClick={() => handleOpenCourseworkRoster(u)}
-                        className="hover:bg-slate-50 cursor-pointer transition-colors"
+                        className="group relative bg-white border border-slate-200 hover:border-blue-300 rounded-2xl p-5 shadow-sm hover:shadow-xl hover:shadow-blue-900/5 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col"
                       >
-                        <td className="p-3 font-mono font-bold text-slate-800">{u.unitCode || '—'}</td>
-                        <td className="p-3 font-medium text-slate-800">{u.unitName || '—'}</td>
-                        <td className="p-3">
-                          <span className="badge badge-purple text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-50 to-indigo-50/50 rounded-bl-full -z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                        <div className="flex justify-between items-start mb-4 gap-3">
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase mb-1 truncate">
+                              {u.unitCode || 'NO CODE'}
+                            </span>
+                            <h3 className="text-sm font-extrabold text-slate-800 line-clamp-2 leading-snug group-hover:text-blue-700 transition-colors">
+                              {u.unitName || 'Unnamed Unit'}
+                            </h3>
+                          </div>
+                          <span className="badge badge-purple text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 shadow-sm border border-purple-100">
                             {u.categoryLabel}
                           </span>
-                        </td>
-                        <td className="p-3 text-center text-slate-600">{u.studyingCount}</td>
-                        <td className="p-3 text-center text-slate-600 font-semibold">{u.attendedCount}</td>
-                        <td className="p-3 text-center font-bold text-emerald-700">{u.evaluatedCount}</td>
-                        <td className="p-3 text-center">
-                          <span className="bg-emerald-100 text-emerald-800 text-[10.5px] font-bold px-2 py-0.5 rounded-full">
-                            ✓ Complete
-                          </span>
-                        </td>
-                        <td className="p-3 text-center" onClick={e => e.stopPropagation()}>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 mb-5 flex-1">
+                          <div className="bg-slate-50/80 rounded-xl p-3 flex flex-col items-center justify-center border border-slate-100 group-hover:bg-white group-hover:border-slate-200 transition-colors">
+                            <span className="text-xl font-black text-slate-700">{u.attendedCount}</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-0.5">Attended</span>
+                          </div>
+                          <div className="bg-amber-50/80 rounded-xl p-3 flex flex-col items-center justify-center border border-amber-100/50 group-hover:bg-amber-50 group-hover:border-amber-200 transition-colors">
+                            <span className="text-xl font-black text-amber-600">{u.pendingCount}</span>
+                            <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wide mt-0.5">Pending</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-auto">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                            <i className="lni lni-users text-slate-400"></i>
+                            {u.studyingCount} Enrolled
+                          </div>
                           <button
                             type="button"
-                            onClick={() => handleOpenCourseworkRoster(u)}
-                            className="btn btn-neu btn-sm text-[11px] font-semibold flex items-center justify-center gap-1 mx-auto"
+                            className="btn btn-primary btn-sm rounded-lg px-4 text-[11px] font-bold shadow-md shadow-blue-500/20 group-hover:shadow-blue-500/40 transition-shadow flex items-center gap-2"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenCourseworkRoster(u);
+                            }}
                           >
-                            <i className="lni lni-eye"></i>
-                            <span>View Roster</span>
+                            Open Roster
+                            <i className="lni lni-arrow-right group-hover:translate-x-0.5 transition-transform"></i>
                           </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : isEvaluatedLoading || isEvaluatedFetching ? (
+                <TableLoadingState
+                  colSpan={1}
+                  title="Loading evaluated coursework history…"
+                  subtitle="Fetching completed evaluation records from server..."
+                />
+              ) : filteredEvaluatedUnits.length === 0 ? (
+                <EmptyState
+                  colSpan={1}
+                  title="No evaluated coursework units"
+                  subtitle={
+                    selectedCategory || dashboardSearch
+                      ? 'No completed units match your category or search filter.'
+                      : 'No coursework units have been finalized yet for this intake.'
+                  }
+                  hasFilters={Boolean(selectedCategory || dashboardSearch)}
+                  onClearFilters={() => {
+                    setSelectedCategory('')
+                    setDashboardSearch('')
+                  }}
+                />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {filteredEvaluatedUnits.map((u, idx) => (
+                    <div
+                      key={`${u.category}-${u.courseworkOrTestGuid}-${idx}`}
+                      onClick={() => handleOpenCourseworkRoster(u)}
+                      className="group relative bg-white border border-slate-200 hover:border-emerald-300 rounded-2xl p-5 shadow-sm hover:shadow-xl hover:shadow-emerald-900/5 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col"
+                    >
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-50 to-teal-50/50 rounded-bl-full -z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                      <div className="flex justify-between items-start mb-4 gap-3">
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase mb-1 truncate">
+                            {u.unitCode || 'NO CODE'}
+                          </span>
+                          <h3 className="text-sm font-extrabold text-slate-800 line-clamp-2 leading-snug group-hover:text-emerald-700 transition-colors">
+                            {u.unitName || 'Unnamed Unit'}
+                          </h3>
+                        </div>
+                        <span className="badge badge-purple text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 shadow-sm border border-purple-100">
+                          {u.categoryLabel}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 mb-5 flex-1">
+                        <div className="bg-slate-50/80 rounded-xl p-3 flex flex-col items-center justify-center border border-slate-100 group-hover:bg-white group-hover:border-slate-200 transition-colors">
+                          <span className="text-xl font-black text-slate-700">{u.attendedCount}</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-0.5">Attended</span>
+                        </div>
+                        <div className="bg-emerald-50/80 rounded-xl p-3 flex flex-col items-center justify-center border border-emerald-100/50 group-hover:bg-emerald-50 group-hover:border-emerald-200 transition-colors">
+                          <span className="text-xl font-black text-emerald-600">{u.evaluatedCount}</span>
+                          <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mt-0.5 flex items-center gap-1">
+                            <i className="lni lni-checkmark-circle"></i> Done
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-auto">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                          <i className="lni lni-users text-slate-400"></i>
+                          {u.studyingCount} Enrolled
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-neu btn-sm rounded-lg px-4 text-[11px] font-bold shadow-sm group-hover:shadow-md transition-shadow flex items-center gap-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenCourseworkRoster(u);
+                          }}
+                        >
+                          <i className="lni lni-eye"></i>
+                          View Roster
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

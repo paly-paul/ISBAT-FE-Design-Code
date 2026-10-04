@@ -210,6 +210,7 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
   section('University Exam (UE)', [
     leaf('UE Schedule', 'calendar', '/assessment/ue-schedule'),
     leaf('Question Paper Vetting', 'upload', '/assessment/qp-vetting'),
+    leaf('UE Practical QBank', 'upload', '/assessment/question-bank-practical'),
     leaf('Hall Ticket Issuance', 'ticket', '/assessment/hall-ticket'),
     leaf('Hall Ticket Print', 'printer', '/assessment/hall-print'),
     leaf('UE Material Print', 'printer', '/assessment/university-exam-material-print'),
@@ -1361,6 +1362,36 @@ function ensureExamCancel(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+function ensureQuestionBankPractical(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const ueIdx = assessModule.children.findIndex(c => c.name === 'University Exam (UE)')
+  if (ueIdx === -1) return menu
+
+  const ueSection = assessModule.children[ueIdx]
+  if (ueSection.children.some(l => l.url === '/assessment/question-bank-practical')) return menu
+
+  const children = [...ueSection.children]
+  const qpIdx = children.findIndex(l => l.name === 'Question Paper Vetting')
+  const newLeaf = leaf('UE Practical QBank', 'upload', '/assessment/question-bank-practical')
+  if (qpIdx !== -1) {
+    children.splice(qpIdx + 1, 0, newLeaf)
+  } else {
+    children.push(newLeaf)
+  }
+
+  const mergedSection = { ...ueSection, children }
+  const mergedAssess = { ...assessModule }
+  mergedAssess.children = [...assessModule.children]
+  mergedAssess.children[ueIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
 export function getMenu(): Promise<MenuResult> {
   if (MOCK_MENU) return Promise.resolve({ menu: stripLectureMaster(mockMenu), isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
@@ -1398,7 +1429,8 @@ export function getMenu(): Promise<MenuResult> {
       const withExamGrievances = ensureExamGrievances(withServiceTickets)
       const withGenerateResult = ensureGenerateResult(withExamGrievances)
       const withExamCancel = ensureExamCancel(withGenerateResult)
-      const finalMenu = stripLectureMaster(withExamCancel)
+      const withQuestionBankPractical = ensureQuestionBankPractical(withExamCancel)
+      const finalMenu = stripLectureMaster(withQuestionBankPractical)
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: stripLectureMaster(mockMenu), isFallback: true }))
