@@ -5,11 +5,15 @@ interface ExamRuleLookupModalProps {
   isOpen: boolean
   onClose: () => void
   onSelect: (guid: string) => void
+  // Resit coursework uses Section A only — tint those columns.
+  highlightSectionA?: boolean
 }
 
-export function ExamRuleLookupModal({ isOpen, onClose, onSelect }: ExamRuleLookupModalProps) {
+export function ExamRuleLookupModal({ isOpen, onClose, onSelect, highlightSectionA }: ExamRuleLookupModalProps) {
   const { data, isLoading } = useExamRules(1, 100, '', isOpen)
   const rules = data?.items?.filter(r => r.status !== 3) || []
+  const secAHead = highlightSectionA ? { background: 'var(--b700)' } : undefined
+  const secACell = highlightSectionA ? { background: 'var(--b50)', color: 'var(--b800)', fontWeight: 600 } : undefined
 
   if (!isOpen) return null
 
@@ -32,10 +36,10 @@ export function ExamRuleLookupModal({ isOpen, onClose, onSelect }: ExamRuleLooku
                 <tr className="bg-[#001f5c] text-white">
                   <th className="py-2 px-3 border-r border-white/20">Rule Code</th>
                   <th className="py-2 px-3 border-r border-white/20">Rule Name</th>
-                  <th className="py-2 px-2 border-r border-white/20 text-center leading-tight">Sec. A<br/>Total Qns</th>
-                  <th className="py-2 px-2 border-r border-white/20 text-center leading-tight">Sec. A Max<br/>Attempting Qns</th>
-                  <th className="py-2 px-2 border-r border-white/20 text-center leading-tight">Sec. A Max<br/>Marks</th>
-                  <th className="py-2 px-2 border-r border-white/20 text-center leading-tight">Sec. A Type<br/>(MCQ/DQ)</th>
+                  <th className="py-2 px-2 border-r border-white/20 text-center leading-tight" style={secAHead}>Sec. A<br/>Total Qns</th>
+                  <th className="py-2 px-2 border-r border-white/20 text-center leading-tight" style={secAHead}>Sec. A Max<br/>Attempting Qns</th>
+                  <th className="py-2 px-2 border-r border-white/20 text-center leading-tight" style={secAHead}>Sec. A Max<br/>Marks</th>
+                  <th className="py-2 px-2 border-r border-white/20 text-center leading-tight" style={secAHead}>Sec. A Type<br/>(MCQ/DQ)</th>
                   <th className="py-2 px-2 border-r border-white/20 text-center leading-tight">Sec. B<br/>Total Qns</th>
                   <th className="py-2 px-2 border-r border-white/20 text-center leading-tight">Sec. B Max<br/>Attempting Qns</th>
                   <th className="py-2 px-2 border-r border-white/20 text-center leading-tight">Sec. B Max<br/>Marks</th>
@@ -72,10 +76,10 @@ export function ExamRuleLookupModal({ isOpen, onClose, onSelect }: ExamRuleLooku
                         <td className="px-3 py-2 border-r border-slate-200 font-medium text-[13px] whitespace-nowrap">{rule.ruleName}</td>
                         
                         {/* Sec A */}
-                        <td className="px-2 py-2 border-r border-slate-200 text-center text-slate-600">{sA?.maxQuestions ?? 0}</td>
-                        <td className="px-2 py-2 border-r border-slate-200 text-center text-slate-600">{sA?.attemptQuestions ?? 0}</td>
-                        <td className="px-2 py-2 border-r border-slate-200 text-center text-slate-600">{sA?.mark ?? 0}</td>
-                        <td className="px-2 py-2 border-r border-slate-200 text-center text-slate-600">{getType(sA?.type)}</td>
+                        <td className="px-2 py-2 border-r border-slate-200 text-center text-slate-600" style={secACell}>{sA?.maxQuestions ?? 0}</td>
+                        <td className="px-2 py-2 border-r border-slate-200 text-center text-slate-600" style={secACell}>{sA?.attemptQuestions ?? 0}</td>
+                        <td className="px-2 py-2 border-r border-slate-200 text-center text-slate-600" style={secACell}>{sA?.mark ?? 0}</td>
+                        <td className="px-2 py-2 border-r border-slate-200 text-center text-slate-600" style={secACell}>{getType(sA?.type)}</td>
 
                         {/* Sec B */}
                         <td className="px-2 py-2 border-r border-slate-200 text-center text-slate-600">{sB?.maxQuestions ?? 0}</td>

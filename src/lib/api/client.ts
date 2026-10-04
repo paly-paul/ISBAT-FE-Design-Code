@@ -391,13 +391,13 @@ export async function apiPut<T>(path: string, body: unknown, retried = false): P
   if (res.ok) {
     if (!envelope) return null as T
     if (!envelope.success) {
-      throw new AuthError(envelope.code ?? 'unknown', envelope.errors?.[0] ?? envelope.message ?? undefined)
+      throw new AuthError(envelope.code ?? 'unknown', envelope.errors?.[0] ?? envelope.message ?? undefined, Array.isArray(envelope.errors) ? envelope.errors : undefined)
     }
     return envelope.data as T
   }
 
   const { code, message } = extractErrorInfo(envelope)
-  throw new AuthError(code, message || responseText || `HTTP ${res.status}`)
+  throw new AuthError(code, message || responseText || `HTTP ${res.status}`, Array.isArray(envelope?.errors) ? envelope.errors : undefined)
 }
 
 export async function apiPatch<T>(path: string, body: unknown, retried = false): Promise<T> {

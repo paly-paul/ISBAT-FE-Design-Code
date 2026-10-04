@@ -8,6 +8,13 @@ const nextConfig = {
       headers: [{ key: 'Vary', value: 'User-Agent' }],
     },
   ],
+  // The separate resit schedule pages were merged into Resit Scheduling
+  // (resit-scheduling-page.md#routes).
+  redirects: async () => [
+    { source: '/assessment/resit-schedule', destination: '/assessment/resit-scheduling?tab=exam', permanent: false },
+    { source: '/assessment/resit-ct-schedule', destination: '/assessment/resit-scheduling?tab=ct', permanent: false },
+    { source: '/assessment/resit-cw-schedule', destination: '/assessment/resit-scheduling?tab=cw', permanent: false },
+  ],
   // TEMPORARY: proxies API calls through the Next.js dev server so the browser
   // talks to same-origin /api/* instead of the ngrok URL directly, sidestepping
   // the backend's missing CORS policy. Remove once the backend adds CORS headers
