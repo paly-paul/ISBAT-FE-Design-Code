@@ -119,7 +119,7 @@ export default function AssessmentTypesPage() {
                 <th>Code</th>
                 <th>Name</th>
                 <th className="text-right">Fee Clearance</th>
-                <th className="text-right">Display Fee Clearance</th>
+                <th className="text-right">Actual Fee Clearance</th>
               </tr>
             </thead>
             <tbody>
