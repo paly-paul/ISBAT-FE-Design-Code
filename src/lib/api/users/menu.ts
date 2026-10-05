@@ -1415,8 +1415,36 @@ function ensureMarkResultsLeaf(menu: MenuNode[], name: string, icon: string, url
   return mergedMenu
 }
 
+function stripUnintegratedPages(menu: MenuNode[]): MenuNode[] {
+  const hiddenUrls = [
+    '/assessment/resit-calendar',
+    '/assessment/resit-seating',
+    '/assessment/reeval',
+    '/assessment/recheck',
+  ]
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const resitIdx = assessModule.children.findIndex(c => c.name === 'Resit & Disputes')
+  if (resitIdx === -1) return menu
+
+  const resitSection = assessModule.children[resitIdx]
+  const filteredChildren = resitSection.children.filter(l => !l.url || !hiddenUrls.includes(l.url))
+
+  if (filteredChildren.length === resitSection.children.length) return menu
+
+  const mergedSection = { ...resitSection, children: filteredChildren }
+  const mergedAssess = { ...assessModule, children: [...assessModule.children] }
+  mergedAssess.children[resitIdx] = mergedSection
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
+
 export function getMenu(): Promise<MenuResult> {
-  if (MOCK_MENU) return Promise.resolve({ menu: stripLectureMaster(mockMenu), isFallback: false })
+  if (MOCK_MENU) return Promise.resolve({ menu: stripUnintegratedPages(stripLectureMaster(mockMenu)), isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
     .then(data => {
       const menu = data ?? []
@@ -1455,8 +1483,8 @@ export function getMenu(): Promise<MenuResult> {
       const withQuestionBankPractical = ensureQuestionBankPractical(withExamCancel)
       const withExamMarkImport = ensureMarkResultsLeaf(withQuestionBankPractical, 'Exam Mark Import', 'upload', '/assessment/exam-mark-import')
       const withHecTranscript = ensureMarkResultsLeaf(withExamMarkImport, 'HEC Graduate Transcript', 'certificate', '/assessment/hec-graduate-transcript')
-      const finalMenu = stripLectureMaster(withHecTranscript)
+      const finalMenu = stripUnintegratedPages(stripLectureMaster(withHecTranscript))
       return { menu: finalMenu, isFallback: false }
     })
-    .catch(() => ({ menu: stripLectureMaster(mockMenu), isFallback: true }))
+    .catch(() => ({ menu: stripUnintegratedPages(stripLectureMaster(mockMenu)), isFallback: true }))
 }
