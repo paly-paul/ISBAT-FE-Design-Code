@@ -1266,7 +1266,7 @@ Previously scattered under "Academics" (Faculty Master only) and
 ## Assessment
 
 New module/rail — had no entry in the previous version of this doc. Mirrors
-`ASSESSMENT_SECTIONS` in `menu.ts` — 54 pages across 9 sections. Only four
+`ASSESSMENT_SECTIONS` in `menu.ts` — 44 pages across 8 sections. Only four
 pages gate on `permissions.xxx` in code today (`Fee Clearance Master`,
 `Exam Rules Master`, `Question FAQs` and `Resit Master`, each on
 `add`/`edit`/`delete`); every other leaf is `{}`. `Question Paper Vetting`
@@ -1365,23 +1365,9 @@ calls `usePagePermissions()` but doesn't check any action yet.
       "permissions": null,
       "children": [
         {
-          "name": "CW Overview",
-          "icon": "lni lni-folder",
-          "url": "/assessment/cw-overview",
-          "permissions": {},
-          "children": []
-        },
-        {
           "name": "Question Bank Upload",
           "icon": "lni lni-upload",
           "url": "/assessment/cw-qbank",
-          "permissions": {},
-          "children": []
-        },
-        {
-          "name": "CW Submissions",
-          "icon": "lni lni-files",
-          "url": "/assessment/cw-submissions",
           "permissions": {},
           "children": []
         },
@@ -1415,27 +1401,6 @@ calls `usePagePermissions()` but doesn't check any action yet.
       "permissions": null,
       "children": [
         {
-          "name": "CBT Overview",
-          "icon": "lni lni-folder",
-          "url": "/assessment/cbt-overview",
-          "permissions": {},
-          "children": []
-        },
-        {
-          "name": "CBT Question Upload",
-          "icon": "lni lni-upload",
-          "url": "/assessment/cbt-qupload",
-          "permissions": {},
-          "children": []
-        },
-        {
-          "name": "CBT Monitor",
-          "icon": "lni lni-display",
-          "url": "/assessment/cbt-monitor",
-          "permissions": {},
-          "children": []
-        },
-        {
           "name": "Exam Cancel",
           "icon": "lni lni-timer",
           "url": "/assessment/exam-cancel",
@@ -1450,13 +1415,6 @@ calls `usePagePermissions()` but doesn't check any action yet.
       "url": null,
       "permissions": null,
       "children": [
-        {
-          "name": "UE Schedule",
-          "icon": "lni lni-calendar",
-          "url": "/assessment/ue-schedule",
-          "permissions": {},
-          "children": []
-        },
         {
           "name": "Question Paper Vetting",
           "icon": "lni lni-upload",
@@ -1542,20 +1500,6 @@ calls `usePagePermissions()` but doesn't check any action yet.
       "url": null,
       "permissions": null,
       "children": [
-        {
-          "name": "Mark Entry — CW",
-          "icon": "lni lni-pencil-alt",
-          "url": "/assessment/mark-cw",
-          "permissions": {},
-          "children": []
-        },
-        {
-          "name": "Mark Entry — CBT",
-          "icon": "lni lni-pencil-alt",
-          "url": "/assessment/mark-cbt",
-          "permissions": {},
-          "children": []
-        },
         {
           "name": "Mark Entry — UE",
           "icon": "lni lni-pencil-alt",
@@ -1706,28 +1650,6 @@ calls `usePagePermissions()` but doesn't check any action yet.
           "children": []
         }
       ]
-    },
-    {
-      "name": "Reports",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
-        {
-          "name": "Pending QP Upload",
-          "icon": "lni lni-folder",
-          "url": "/assessment/rpt-pending-qp",
-          "permissions": {},
-          "children": []
-        },
-        {
-          "name": "Faculty Summary",
-          "icon": "lni lni-users",
-          "url": "/assessment/rpt-faculty",
-          "permissions": {},
-          "children": []
-        }
-      ]
     }
   ]
 }
@@ -1764,9 +1686,9 @@ calls `usePagePermissions()` but doesn't check any action yet.
 >   real mode `ensureProjectProposals()` appends both to the end of the
 >   section, or inserts just `Project Reviews` right after `Project
 >   Proposals` if only that one is missing.
-> - `Exam Cancel` follows `CBT Monitor`. It cancels Class Test / coursework
->   attempts and grants Class Test extra time; `ensureExamCancel()` appends it
->   to the end of the section in real mode.
+> - `Exam Cancel` is now the only leaf in `Class Test (CBT)`. It cancels
+>   Class Test / coursework attempts and grants Class Test extra time;
+>   `ensureExamCancel()` appends it to the end of the section in real mode.
 
 > **`University Exam (UE)` additions:** `UE Practical QBank` sits right after
 > `Question Paper Vetting`, and seven more leaves follow `Hall Ticket Print`.
@@ -1835,20 +1757,27 @@ calls `usePagePermissions()` but doesn't check any action yet.
 > `Exam Grievances` (`/assessment/exam-grievances`) is the last leaf in the
 > section. No backend menu registration or deployed APIs yet;
 > `ensureExamGrievances()` appends it to the end of the section in real mode.
->
-> **Removed from the menu (2026-10-05):** `Resit Calendar`
-> (`/assessment/resit-calendar`), `Resit Seating Allocator`
-> (`/assessment/resit-seating`), `CW Reevaluation` (`/assessment/reeval`) and
-> `CW Recheck Hub` (`/assessment/recheck`) are commented out in
-> `ASSESSMENT_SECTIONS`. Their pages still exist on disk — see the "no
-> sidebar/menu entry" table below. The backend should drop these leaves from
-> its menu response.
 
 > **`Student Services` section:** holds a single leaf, `Service Tickets`
-> (`/assessment/service-tickets`), and sits before `Reports`. No backend menu
+> (`/assessment/service-tickets`), and is the last section. No backend menu
 > registration or deployed APIs yet. In real mode `ensureServiceTickets()`
-> adds the section before `Reports` (or at the end), or appends the leaf to an
-> existing `Student Services` section.
+> adds the section before `Reports` if the backend still returns one (or at
+> the end), or appends the leaf to an existing `Student Services` section.
+
+> **Removed from the menu (2026-10-05):** the leaves below are commented out
+> in `ASSESSMENT_SECTIONS`, and the whole `Reports` section with them. Their
+> pages still exist on disk — see the "no sidebar/menu entry" table below.
+> The backend should drop these leaves (and the `Reports` section) from its
+> menu response.
+>
+> | Section | Removed leaves |
+> |---|---|
+> | `Coursework (CW)` | `CW Overview` (`/assessment/cw-overview`), `CW Submissions` (`/assessment/cw-submissions`) |
+> | `Class Test (CBT)` | `CBT Overview` (`/assessment/cbt-overview`), `CBT Question Upload` (`/assessment/cbt-qupload`), `CBT Monitor` (`/assessment/cbt-monitor`) |
+> | `University Exam (UE)` | `UE Schedule` (`/assessment/ue-schedule`) |
+> | `Mark Entry & Results` | `Mark Entry — CW` (`/assessment/mark-cw`), `Mark Entry — CBT` (`/assessment/mark-cbt`) |
+> | `Resit & Disputes` | `Resit Calendar` (`/assessment/resit-calendar`), `Resit Seating Allocator` (`/assessment/resit-seating`), `CW Reevaluation` (`/assessment/reeval`), `CW Recheck Hub` (`/assessment/recheck`) |
+> | `Reports` (whole section) | `Pending QP Upload` (`/assessment/rpt-pending-qp`), `Faculty Summary` (`/assessment/rpt-faculty`) |
 
 > `Result & Moderation` is also guarded by `ensureResultModeration()`, which
 > appends it to `Mark Entry & Results` if the backend omits it.
@@ -1913,6 +1842,16 @@ routes with no inbound navigation left in the codebase at all.
 | Resit Seating Allocator | `/assessment/resit-seating` | Removed from `Resit & Disputes` 2026-10-05; no inbound nav. |
 | CW Reevaluation | `/assessment/reeval` | Removed from `Resit & Disputes` 2026-10-05; no inbound nav. |
 | CW Recheck Hub | `/assessment/recheck` | Removed from `Resit & Disputes` 2026-10-05; no inbound nav. |
+| CW Overview | `/assessment/cw-overview` | Removed from `Coursework (CW)` 2026-10-05; no inbound nav. |
+| CW Submissions | `/assessment/cw-submissions` | Removed from `Coursework (CW)` 2026-10-05; no inbound nav. |
+| CBT Overview | `/assessment/cbt-overview` | Removed from `Class Test (CBT)` 2026-10-05; no inbound nav. |
+| CBT Question Upload | `/assessment/cbt-qupload` | Removed from `Class Test (CBT)` 2026-10-05; no inbound nav. |
+| CBT Monitor | `/assessment/cbt-monitor` | Removed from `Class Test (CBT)` 2026-10-05; no inbound nav. |
+| UE Schedule | `/assessment/ue-schedule` | Removed from `University Exam (UE)` 2026-10-05; no inbound nav. |
+| Mark Entry — CW | `/assessment/mark-cw` | Removed from `Mark Entry & Results` 2026-10-05; no inbound nav. |
+| Mark Entry — CBT | `/assessment/mark-cbt` | Removed from `Mark Entry & Results` 2026-10-05; no inbound nav. |
+| Pending QP Upload | `/assessment/rpt-pending-qp` | Whole Assessment `Reports` section hidden 2026-10-05; no inbound nav. |
+| Faculty Summary | `/assessment/rpt-faculty` | Whole Assessment `Reports` section hidden 2026-10-05; no inbound nav. |
 | University Exam (legacy) | `/academic/university-exam` | Superseded by the Assessment module's UE pages (`/assessment/ue-*`); no inbound nav found. |
 | ODeL Student Preview | `/academic/odel-student-preview` | Reached via `nav('acad-dashboard')`/back-link only; not linked *to* from anywhere found — appears to be a preview/demo page. |
 | CBT Schedule | `/assessment/cbt-schedule` | No longer in `ASSESSMENT_SECTIONS`' `Class Test (CBT)` section; page still exists on disk but has no inbound sidebar link. |
