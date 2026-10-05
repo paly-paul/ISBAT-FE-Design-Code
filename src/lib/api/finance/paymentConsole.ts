@@ -769,7 +769,16 @@ const mockLedgerOthers: LedgerOthersDto[] = [
   { ledgerOthersGuid: 'ldo-mock-4', ledgerCode: 'CTM', ledgerName: 'Caution Money' },
   { ledgerOthersGuid: 'ldo-mock-5', ledgerCode: 'UNF', ledgerName: 'Uniform Fee' },
   { ledgerOthersGuid: 'ldo-mock-6', ledgerCode: 'OTH', ledgerName: 'Other Fee' },
+  { ledgerOthersGuid: 'ldo-mock-7', ledgerCode: 'RSF', ledgerName: 'Resit Fee' },
 ]
+
+// The ledger-others catalogue carries no "is resit" flag, so the resit
+// ledger is recognised by its code/name. Picking it on the Other Payment tab
+// auto-fills and locks the row's amount from get-resit-fee.md. Swap this
+// for a real identifier (e.g. a gen-set lookup) once the backend exposes one.
+export function isResitLedger(l: Pick<LedgerOthersDto, 'ledgerCode' | 'ledgerName'>): boolean {
+  return /resit/i.test(l.ledgerName) || /resit/i.test(l.ledgerCode)
+}
 
 export function getLedgerOthers(): Promise<LedgerOthersDto[]> {
   if (MOCK_AUTH) return Promise.resolve(mockLedgerOthers)
