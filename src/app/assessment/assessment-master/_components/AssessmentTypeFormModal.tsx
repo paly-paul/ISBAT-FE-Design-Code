@@ -175,7 +175,7 @@ export function AssessmentTypeFormModal({ isOpen, onClose, showToast, editingGui
             </div>
 
             <div className="fg">
-              <label className="lbl">Display Fee Clearance</label>
+              <label className="lbl">Actual Fee Clearance</label>
               <input className="ctrl" type="number" min="0" step="0.01" placeholder="0.00" 
                 value={form.displayFeeClearance}
                 onChange={e => set('displayFeeClearance', e.target.value)}
