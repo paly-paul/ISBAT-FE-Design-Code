@@ -236,7 +236,7 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
   ]),
   section('Resit & Disputes', [
     leaf('Resit Master', 'cogs', '/assessment/resit-configs'),
-    leaf('Resit Calendar', 'calendar', '/assessment/resit-calendar'),
+    // leaf('Resit Calendar', 'calendar', '/assessment/resit-calendar'),
     leaf('Resit Applications', 'folder', '/assessment/resit-applications'),
     leaf('Resit Apply', 'pencil-alt', '/assessment/resit-apply'),
     leaf('Resit Scheduling', 'calendar', '/assessment/resit-scheduling'),
@@ -244,9 +244,9 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Resit IA Result', 'bar-chart', '/assessment/resit-ia-results'),
     leaf('Resit UE Mark Import', 'upload', '/assessment/resit-ue-mark-import'),
     leaf('Resit Mark Update', 'reload', '/assessment/resit-mark-update'),
-    leaf('Resit Seating Allocator', 'users', '/assessment/resit-seating'),
-    leaf('CW Reevaluation', 'reload', '/assessment/reeval'),
-    leaf('CW Recheck Hub', 'search-alt', '/assessment/recheck'),
+    // leaf('Resit Seating Allocator', 'users', '/assessment/resit-seating'),
+    // leaf('CW Reevaluation', 'reload', '/assessment/reeval'),
+    // leaf('CW Recheck Hub', 'search-alt', '/assessment/recheck'),
     leaf('Exam Grievances', 'files', '/assessment/exam-grievances'),
   ]),
   section('Student Services', [

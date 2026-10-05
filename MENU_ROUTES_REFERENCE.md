@@ -8,7 +8,11 @@ the merged/final tree built in `src/lib/api/users/menu.ts` (mockMenu plus its
 `ensureCourseAllocation`, `ensureProgrammeApproval`, `ensureEmployeeApprovals`,
 `ensureAssessmentMaster`, `ensureResitMaster`, `ensureResitApplications`,
 `ensureResitMarkUpdate`, `ensureResitEvaluation`, `ensureResitIaResults`, `ensureResitUeMarkImport`, `ensureUeMaterialPrint`, `ensureUeAttendance`,
-`ensureUeMarkImport`, `ensureResultModeration`, `mergeFinanceSections`,
+`ensureUeMarkImport`, `ensureQuestionBankPractical`, `ensureResultModeration`,
+`ensureGenerateResult`, `ensureMarkResultsLeaf`, `ensureTranscriptPrint`,
+`ensureGraduateTranscript`, `ensureTranscriptCollection`,
+`ensureGownCollection`, `ensureProjectProposals`, `ensureExamCancel`,
+`ensureExamGrievances`, `ensureServiceTickets`, `mergeFinanceSections`,
 `mergeStudentSections`, `mergeConfigSections`), the actual
 `page.tsx` routes on disk
 under `src/app/*`, and `src/components/Sidebar.tsx` (the single source of
@@ -1262,8 +1266,11 @@ Previously scattered under "Academics" (Faculty Master only) and
 ## Assessment
 
 New module/rail — had no entry in the previous version of this doc. Mirrors
-`ASSESSMENT_SECTIONS` in `menu.ts`. None of its 45 pages gate on
-`permissions.xxx` in code yet (all `{}`) — it's the newest module in the app.
+`ASSESSMENT_SECTIONS` in `menu.ts` — 54 pages across 9 sections. Only four
+pages gate on `permissions.xxx` in code today (`Fee Clearance Master`,
+`Exam Rules Master`, `Question FAQs` and `Resit Master`, each on
+`add`/`edit`/`delete`); every other leaf is `{}`. `Question Paper Vetting`
+calls `usePagePermissions()` but doesn't check any action yet.
 
 ```json
 {
@@ -1297,21 +1304,21 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "name": "Fee Clearance Master",
           "icon": "lni lni-list",
           "url": "/assessment/assessment-master",
-          "permissions": {},
+          "permissions": { "add": true, "edit": true, "delete": true },
           "children": []
         },
         {
           "name": "Exam Rules Master",
           "icon": "lni lni-files",
           "url": "/assessment/exam-rules",
-          "permissions": {},
+          "permissions": { "add": true, "edit": true, "delete": true },
           "children": []
         },
         {
           "name": "Question FAQs",
           "icon": "lni lni-comments",
           "url": "/assessment/question-faqs",
-          "permissions": {},
+          "permissions": { "add": true, "edit": true, "delete": true },
           "children": []
         },
         {
@@ -1321,7 +1328,7 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "permissions": {},
           "children": []
         },
-        { 
+        {
           "name": "Assessment Schedule",
           "icon": "lni lni-calendar",
           "url": "/assessment/schedule",
@@ -1384,6 +1391,20 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "url": "/assessment/cw-rectify",
           "permissions": {},
           "children": []
+        },
+        {
+          "name": "Project Proposals",
+          "icon": "lni lni-folder",
+          "url": "/assessment/project-proposals",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Project Reviews",
+          "icon": "lni lni-folder",
+          "url": "/assessment/project-reviews",
+          "permissions": {},
+          "children": []
         }
       ]
     },
@@ -1413,6 +1434,13 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "url": "/assessment/cbt-monitor",
           "permissions": {},
           "children": []
+        },
+        {
+          "name": "Exam Cancel",
+          "icon": "lni lni-timer",
+          "url": "/assessment/exam-cancel",
+          "permissions": {},
+          "children": []
         }
       ]
     },
@@ -1433,6 +1461,13 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "name": "Question Paper Vetting",
           "icon": "lni lni-upload",
           "url": "/assessment/qp-vetting",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "UE Practical QBank",
+          "icon": "lni lni-upload",
+          "url": "/assessment/question-bank-practical",
           "permissions": {},
           "children": []
         },
@@ -1534,6 +1569,55 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "url": "/assessment/moderation",
           "permissions": {},
           "children": []
+        },
+        {
+          "name": "Exam Mark Import",
+          "icon": "lni lni-upload",
+          "url": "/assessment/exam-mark-import",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Generate Result",
+          "icon": "lni lni-cogs",
+          "url": "/assessment/generate-result",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Transcript Print",
+          "icon": "lni lni-printer",
+          "url": "/assessment/transcript-print",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Graduate Transcript",
+          "icon": "lni lni-certificate",
+          "url": "/assessment/graduate-transcript",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "HEC Graduate Transcript",
+          "icon": "lni lni-certificate",
+          "url": "/assessment/hec-graduate-transcript",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Transcript Collection",
+          "icon": "lni lni-check-box",
+          "url": "/assessment/graduate-transcript/collection",
+          "permissions": {},
+          "children": []
+        },
+        {
+          "name": "Gown Collection",
+          "icon": "lni lni-check-box",
+          "url": "/assessment/gown-collection",
+          "permissions": {},
+          "children": []
         }
       ]
     },
@@ -1547,14 +1631,7 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "name": "Resit Master",
           "icon": "lni lni-cogs",
           "url": "/assessment/resit-configs",
-          "permissions": {},
-          "children": []
-        },
-        {
-          "name": "Resit Calendar",
-          "icon": "lni lni-calendar",
-          "url": "/assessment/resit-calendar",
-          "permissions": {},
+          "permissions": { "add": true, "edit": true, "delete": true },
           "children": []
         },
         {
@@ -1607,23 +1684,24 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
           "children": []
         },
         {
-          "name": "Resit Seating Allocator",
-          "icon": "lni lni-users",
-          "url": "/assessment/resit-seating",
+          "name": "Exam Grievances",
+          "icon": "lni lni-files",
+          "url": "/assessment/exam-grievances",
           "permissions": {},
           "children": []
-        },
+        }
+      ]
+    },
+    {
+      "name": "Student Services",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
         {
-          "name": "CW Reevaluation",
-          "icon": "lni lni-reload",
-          "url": "/assessment/reeval",
-          "permissions": {},
-          "children": []
-        },
-        {
-          "name": "CW Recheck Hub",
-          "icon": "lni lni-search-alt",
-          "url": "/assessment/recheck",
+          "name": "Service Tickets",
+          "icon": "lni lni-ticket",
+          "url": "/assessment/service-tickets",
           "permissions": {},
           "children": []
         }
@@ -1664,7 +1742,7 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
 > does — `ensureAssessmentMaster()` matches on the current name. `IA
 > Evaluation` (2026-09-18) is inserted right after `IA Creation` by the same
 > function. `Resit Master` is the equivalent addition to `Resit & Disputes`
-> (`ensureResitMaster()`), inserted before `Resit Calendar`. `CBT Schedule`
+> (`ensureResitMaster()`), inserted at the top of the section. `CBT Schedule`
 > was dropped from `Class Test (CBT)` — its page still exists on disk but is
 > no longer linked from this menu; see the "no sidebar/menu entry" table
 > below.
@@ -1679,12 +1757,25 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
 > `QP Upload & Vetting` was renamed to `Question Paper Vetting` (2026-09-18,
 > same route, `/assessment/qp-vetting`) to match the page's updated copy.
 
-> **`University Exam (UE)` additions:** seven new leaves follow `Hall Ticket
-> Print`. None has a backend menu registration yet, so each is patched into
-> the real tree by an `ensure*` function:
+> **`Coursework (CW)` and `Class Test (CBT)` additions:** none has a backend
+> menu registration yet.
+>
+> - `Project Proposals` and `Project Reviews` follow `CW Rectification`. In
+>   real mode `ensureProjectProposals()` appends both to the end of the
+>   section, or inserts just `Project Reviews` right after `Project
+>   Proposals` if only that one is missing.
+> - `Exam Cancel` follows `CBT Monitor`. It cancels Class Test / coursework
+>   attempts and grants Class Test extra time; `ensureExamCancel()` appends it
+>   to the end of the section in real mode.
+
+> **`University Exam (UE)` additions:** `UE Practical QBank` sits right after
+> `Question Paper Vetting`, and seven more leaves follow `Hall Ticket Print`.
+> None has a backend menu registration yet, so each is patched into the real
+> tree by an `ensure*` function:
 >
 > | Leaves | Patched in by | Real-mode position |
 > |---|---|---|
+> | `UE Practical QBank` | `ensureQuestionBankPractical()` | Right after `Question Paper Vetting` (end of section if that's missing) |
 > | `UE Material Print`, `UE QP/Booklet Print`, `UE Practical QP Print`, `UE Project Booklet Print`, `Resit Question Print` | `ensureUeMaterialPrint()` | Appended at the end, as a group. The function only checks for `UE Material Print`, so the other four are added only when that one is missing too. |
 > | `UE Attendance` | `ensureUeAttendance()` | Appended at the end |
 > | `UE Mark Import` | `ensureUeMarkImport()` | Appended at the end |
@@ -1693,14 +1784,29 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
 > `Resit & Disputes` because it's one of the print-pack pages, not the resit
 > workflow.
 
-> **`Resit & Disputes` additions:** four new leaves sit between `Resit
-> Calendar` and `Resit Seating Allocator` in `ASSESSMENT_SECTIONS`. In real
-> mode:
+> **`Mark Entry & Results` additions:** seven leaves follow `Result &
+> Moderation`, none with a backend menu registration yet:
+>
+> | Leaf | Patched in by | Real-mode position |
+> |---|---|---|
+> | `Exam Mark Import` | `ensureMarkResultsLeaf()` | Appended at the end |
+> | `Generate Result` | `ensureGenerateResult()` | Right after `Result & Moderation` (end of section if that's missing) |
+> | `Transcript Print` | `ensureTranscriptPrint()` | Appended at the end |
+> | `Graduate Transcript` | `ensureGraduateTranscript()` | Appended at the end |
+> | `HEC Graduate Transcript` | `ensureMarkResultsLeaf()` | Appended at the end |
+> | `Transcript Collection` | `ensureTranscriptCollection()` | Appended at the end |
+> | `Gown Collection` | `ensureGownCollection()` | Right after `Transcript Collection` (end of section if that's missing) |
+>
+> The ensure functions run in a fixed order in `getMenu()`, so the real-mode
+> order can differ from the mock order shown above. If the backend registers
+> these leaves, return them in the mock order.
+
+> **`Resit & Disputes` additions:** four new leaves sit right after `Resit
+> Master` in `ASSESSMENT_SECTIONS`. In real mode:
 >
 > - `Resit Applications`, `Resit Apply` and `Resit Scheduling` are appended
->   to the end of the section by `ensureResitApplications()`, after `CW
->   Recheck Hub`, so the real-mode order differs from the mock order shown
->   above.
+>   to the end of the section by `ensureResitApplications()`, so the
+>   real-mode order can differ from the mock order shown above.
 > - `Resit Mark Update` is inserted right after `Resit Scheduling` by
 >   `ensureResitMarkUpdate()`. It's appended at the end if `Resit Scheduling`
 >   isn't present.
@@ -1726,7 +1832,23 @@ New module/rail — had no entry in the previous version of this doc. Mirrors
 > the section). The backend defines `assessment.resituemarkimport.get` /
 > `.import`, neither enforced yet, so `permissions` is `{}`.
 >
-> That brings the Assessment module to 43 pages.
+> `Exam Grievances` (`/assessment/exam-grievances`) is the last leaf in the
+> section. No backend menu registration or deployed APIs yet;
+> `ensureExamGrievances()` appends it to the end of the section in real mode.
+>
+> **Removed from the menu (2026-10-05):** `Resit Calendar`
+> (`/assessment/resit-calendar`), `Resit Seating Allocator`
+> (`/assessment/resit-seating`), `CW Reevaluation` (`/assessment/reeval`) and
+> `CW Recheck Hub` (`/assessment/recheck`) are commented out in
+> `ASSESSMENT_SECTIONS`. Their pages still exist on disk — see the "no
+> sidebar/menu entry" table below. The backend should drop these leaves from
+> its menu response.
+
+> **`Student Services` section:** holds a single leaf, `Service Tickets`
+> (`/assessment/service-tickets`), and sits before `Reports`. No backend menu
+> registration or deployed APIs yet. In real mode `ensureServiceTickets()`
+> adds the section before `Reports` (or at the end), or appends the leaf to an
+> existing `Student Services` section.
 
 > `Result & Moderation` is also guarded by `ensureResultModeration()`, which
 > appends it to `Mark Entry & Results` if the backend omits it.
@@ -1787,12 +1909,21 @@ routes with no inbound navigation left in the codebase at all.
 | Grievance Management | `/academic/grievance` | Placeholder — "Module Not Yet Defined" per the page's own copy; no inbound nav. |
 | Qualification Equating | `/academic/qual-equating` | Standalone equating-request page; no inbound nav found. |
 | Results | `/academic/results` | Placeholder — page states this functionality is "owned by the Assessment Module" and pending a KT session. |
+| Resit Calendar | `/assessment/resit-calendar` | Removed from `Resit & Disputes` 2026-10-05; no inbound nav. |
+| Resit Seating Allocator | `/assessment/resit-seating` | Removed from `Resit & Disputes` 2026-10-05; no inbound nav. |
+| CW Reevaluation | `/assessment/reeval` | Removed from `Resit & Disputes` 2026-10-05; no inbound nav. |
+| CW Recheck Hub | `/assessment/recheck` | Removed from `Resit & Disputes` 2026-10-05; no inbound nav. |
 | University Exam (legacy) | `/academic/university-exam` | Superseded by the Assessment module's UE pages (`/assessment/ue-*`); no inbound nav found. |
 | ODeL Student Preview | `/academic/odel-student-preview` | Reached via `nav('acad-dashboard')`/back-link only; not linked *to* from anywhere found — appears to be a preview/demo page. |
 | CBT Schedule | `/assessment/cbt-schedule` | No longer in `ASSESSMENT_SECTIONS`' `Class Test (CBT)` section; page still exists on disk but has no inbound sidebar link. |
 | Learning Mode Report | `/student/learning-mode-report` | Hidden from the sidebar 2026-10-01 (its `Reports` section is commented out in `menu.ts`); page still exists on disk. |
 | Student Services | `/student/services` | Whole `Services` section hidden 2026-09-02; page still exists on disk. |
 | Ledger Adjustments | `/finance/ledger-adjustments` | Still in the menu tree, but filtered out client-side by `Sidebar.tsx`'s `HIDDEN_ITEM_IDS`, so it's unreachable from the sidebar. |
+| Question Bank Import | `/assessment/question-bank-import` | Alias that re-exports `Question Bank Upload` (`/assessment/cw-qbank`); no inbound nav. |
+| Payment Console Adjustments | `/finance/payment-console-adjustments` | Redirects to `/finance/payment-console` — its "Apply Advance" flow moved into Payment Console (2026-09-08). Kept only so old links still work. |
+| Student Statement (old route) | `/student/statement` | Redirects to `/finance/student-statements`. Kept only so old links still work. |
+| Notifications | `/notifications` | Opened from the bell dropdown in `Header.tsx`, not the sidebar. |
+| My Profile | `/profile` | Opened from the profile dropdown in `Header.tsx`, not the sidebar. |
 
 ---
 
