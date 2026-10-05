@@ -194,21 +194,21 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('IA Evaluation', 'checkmark-circle', '/assessment/ia-evaluation'),
   ]),
   section('Coursework (CW)', [
-    leaf('CW Overview', 'folder', '/assessment/cw-overview'),
+    // leaf('CW Overview', 'folder', '/assessment/cw-overview'),
     leaf('Question Bank Upload', 'upload', '/assessment/cw-qbank'),
-    leaf('CW Submissions', 'files', '/assessment/cw-submissions'),
+    // leaf('CW Submissions', 'files', '/assessment/cw-submissions'),
     leaf('CW Rectification', 'reload', '/assessment/cw-rectify'),
     leaf('Project Proposals', 'folder', '/assessment/project-proposals'),
     leaf('Project Reviews', 'folder', '/assessment/project-reviews'),
   ]),
   section('Class Test (CBT)', [
-    leaf('CBT Overview', 'folder', '/assessment/cbt-overview'),
-    leaf('CBT Question Upload', 'upload', '/assessment/cbt-qupload'),
-    leaf('CBT Monitor', 'display', '/assessment/cbt-monitor'),
+    // leaf('CBT Overview', 'folder', '/assessment/cbt-overview'),
+    // leaf('CBT Question Upload', 'upload', '/assessment/cbt-qupload'),
+    // leaf('CBT Monitor', 'display', '/assessment/cbt-monitor'),
     leaf('Exam Cancel', 'timer', '/assessment/exam-cancel'),
   ]),
   section('University Exam (UE)', [
-    leaf('UE Schedule', 'calendar', '/assessment/ue-schedule'),
+    // leaf('UE Schedule', 'calendar', '/assessment/ue-schedule'),
     leaf('Question Paper Vetting', 'upload', '/assessment/qp-vetting'),
     leaf('UE Practical QBank', 'upload', '/assessment/question-bank-practical'),
     leaf('Hall Ticket Issuance', 'ticket', '/assessment/hall-ticket'),
@@ -222,8 +222,8 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('UE Mark Import', 'upload', '/assessment/ue-mark-import'),
   ]),
   section('Mark Entry & Results', [
-    leaf('Mark Entry — CW', 'pencil-alt', '/assessment/mark-cw'),
-    leaf('Mark Entry — CBT', 'pencil-alt', '/assessment/mark-cbt'),
+    // leaf('Mark Entry — CW', 'pencil-alt', '/assessment/mark-cw'),
+    // leaf('Mark Entry — CBT', 'pencil-alt', '/assessment/mark-cbt'),
     leaf('Mark Entry — UE', 'pencil-alt', '/assessment/mark-ue'),
     leaf('Result & Moderation', 'bar-chart', '/assessment/moderation'),
     leaf('Exam Mark Import', 'upload', '/assessment/exam-mark-import'),
@@ -252,10 +252,13 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
   section('Student Services', [
     leaf('Service Tickets', 'ticket', '/assessment/service-tickets'),
   ]),
-  section('Reports', [
-    leaf('Pending QP Upload', 'folder', '/assessment/rpt-pending-qp'),
-    leaf('Faculty Summary', 'users', '/assessment/rpt-faculty'),
-  ]),
+  // Reports section hidden from the sidebar per request, 2026-10-05 — both
+  // pages still exist on disk. Commented out whole since Sidebar.tsx renders
+  // a childless section as a disabled "Soon" item.
+  // section('Reports', [
+  //   leaf('Pending QP Upload', 'folder', '/assessment/rpt-pending-qp'),
+  //   leaf('Faculty Summary', 'users', '/assessment/rpt-faculty'),
+  // ]),
 ]
 
 // Mirrors docs/MENU_ROUTES_REFERENCE.md — full access to everything, matching
