@@ -62,3 +62,17 @@ export function getPaymentOthers(params: PaymentOtherListParams): Promise<Paymen
   return apiGet<PaymentOtherListResponse | null>(`/api/v1/finance/other-payment?${qs.toString()}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
+
+// Confirmed via get-resit-fee.md (repo root) — previews the resit fee the
+// student owes so the Other Payment tab can auto-fill and lock the amount
+// once the resit ledger is picked (legacy txtAmount.Enabled = false). Always
+// in UGX; 0 when nothing is unpaid or there's no active resit config. The
+// POST re-verifies the amount server-side, so this is a preview only.
+// 404 (application not found) / 400 (no intake, or Assessment's fee call
+// failed) surface as thrown errors with the backend message.
+export function getResitFee(studentGuid: string, applicationGuid: string): Promise<number> {
+  if (MOCK_AUTH) return Promise.resolve(1130000)
+  const qs = new URLSearchParams({ studentGuid, applicationGuid })
+  return apiGet<{ amount: number } | null>(`/api/v1/finance/other-payment/resit-fee?${qs.toString()}`)
+    .then(data => data?.amount ?? 0)
+}

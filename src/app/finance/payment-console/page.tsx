@@ -43,8 +43,8 @@ import {
   CurrentSemesterPayableTotal,
   PaymentHistoryEntry,
 } from '@/hooks/finance/usePaymentConsole'
-import { usePaymentOthersList } from '@/hooks/finance/usePaymentOthers'
-import { refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
+import { usePaymentOthersList, useResitFee } from '@/hooks/finance/usePaymentOthers'
+import { isResitLedger, refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
 import { formatDate, formatDateTime } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -390,7 +390,15 @@ export default function PaymentConsolePage() {
     setOtherLedgerRows(prev => prev.length <= 1 ? prev : prev.filter(r => r.id !== id))
   }
   function updateOtherLedgerRow(id: number, field: 'ledgerOthersGuid' | 'amount', value: string) {
-    setOtherLedgerRows(prev => prev.map(r => r.id === id ? { ...r, [field]: field === 'amount' ? value.replace(/[^0-9.]/g, '') : value } : r))
+    setOtherLedgerRows(prev => prev.map(r => {
+      if (r.id !== id) return r
+      if (field === 'amount') return { ...r, amount: value.replace(/[^0-9.]/g, '') }
+      // Switching onto or off the resit ledger clears the amount — onto it,
+      // the resit-fee effect below fills it in; off it, the locked fee
+      // shouldn't carry over to a ledger the cashier types into.
+      const touchesResit = r.ledgerOthersGuid === resitLedgerGuid || value === resitLedgerGuid
+      return { ...r, ledgerOthersGuid: value, amount: touchesResit ? '' : r.amount }
+    }))
   }
   // Sum of every row's amount, in the one shared Currency picked below —
   // drives both the Total row under the table and the "Amount to Collect"
@@ -951,6 +959,25 @@ export default function PaymentConsolePage() {
   const { data: ledgerOthers = [] } = useLedgerOthers()
   const createPaymentOther = useCreatePaymentOther()
 
+  // Resit fee auto-fill (get-resit-fee.md) — picking the resit ledger in any
+  // Ledger row fills that row's amount from the backend and locks it, same
+  // as the legacy page's txtAmount.Enabled = false. The fee is always UGX,
+  // and the API needs a real studentGuid (an applicant-only record can't owe
+  // a resit fee), so both are checked again on submit in otherSaveEntry.
+  const resitLedgerGuid = ledgerOthers.find(isResitLedger)?.ledgerOthersGuid ?? null
+  const hasResitRow = !!resitLedgerGuid && otherLedgerRows.some(r => r.ledgerOthersGuid === resitLedgerGuid)
+  const {
+    data: resitFee, isFetching: isResitFeeLoading, isError: isResitFeeError, error: resitFeeError,
+  } = useResitFee(studentGuid, selectedApplicationGuid, activePayTab === 'other' && hasResitRow)
+  const resitFeeErrorMsg = resitFeeError instanceof Error ? resitFeeError.message : 'Could not fetch the resit fee.'
+  useEffect(() => {
+    if (!resitLedgerGuid || resitFee === undefined) return
+    const amount = String(resitFee)
+    setOtherLedgerRows(prev => prev.some(r => r.ledgerOthersGuid === resitLedgerGuid && r.amount !== amount)
+      ? prev.map(r => r.ledgerOthersGuid === resitLedgerGuid ? { ...r, amount } : r)
+      : prev)
+  }, [resitFee, resitLedgerGuid, hasResitRow])
+
   function handleSearchClick() {
     const term = search.trim()
     if (!term) { showToast('Please enter a student number or name.', 'warn'); return }
@@ -1048,6 +1075,17 @@ export default function PaymentConsolePage() {
   // to fix and retry the remainder.
   async function otherSaveEntry() {
     if (!profile || !selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
+
+    // Resit row checks run first — their amount is locked, so the generic
+    // "needs an amount greater than 0" message below would be misleading.
+    if (hasResitRow) {
+      if (!studentGuid) { showToast('The resit fee can only be collected from a registered student.', 'warn'); return }
+      if (isResitFeeLoading) { showToast('Still fetching the resit fee — please wait a moment.', 'warn'); return }
+      if (isResitFeeError) { showToast(resitFeeErrorMsg, 'error'); return }
+      if (resitFee === 0) { showToast('This student has no resit fee to pay. Remove the resit ledger row.', 'warn'); return }
+      const currencyCode = currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyCode
+      if (currencyCode && currencyCode !== 'UGX') { showToast('The resit fee is in UGX — switch the currency to UGX.', 'warn'); return }
+    }
 
     const validRows = otherLedgerRows.filter(r => r.ledgerOthersGuid && parseFloat(r.amount) > 0)
     const ledgerNoAmount = otherLedgerRows.find(r => r.ledgerOthersGuid && !(parseFloat(r.amount) > 0))
@@ -1821,7 +1859,17 @@ export default function PaymentConsolePage() {
                       <span style={{ textAlign: 'left' }}>Ledger</span>
                       <span>Ledger Amount</span>
                     </div>
-                    {otherLedgerRows.map(row => (
+                    {otherLedgerRows.map(row => {
+                      const isResitRow = !!resitLedgerGuid && row.ledgerOthersGuid === resitLedgerGuid
+                      // Status under a locked resit amount — only shown when
+                      // there's something to say beyond the filled number.
+                      const resitNote = !isResitRow ? null
+                        : !studentGuid ? { text: 'Resit fee needs a registered student.', color: 'var(--amber)' }
+                        : isResitFeeLoading ? { text: 'Fetching resit fee…', color: 'var(--g400)' }
+                        : isResitFeeError ? { text: resitFeeErrorMsg, color: 'var(--red)' }
+                        : resitFee === 0 ? { text: 'No resit fee owed.', color: 'var(--amber)' }
+                        : null
+                      return (
                       <div className="recgrid-row recgrid-body" key={row.id}>
                         <span style={{ textAlign: 'left' }}>
                           <SearchSelect
@@ -1847,6 +1895,8 @@ export default function PaymentConsolePage() {
                               inputMode="decimal"
                               placeholder="0.00"
                               value={row.amount}
+                              disabled={isResitRow}
+                              title={isResitRow ? 'Resit fee is set automatically and cannot be edited' : undefined}
                               onChange={e => updateOtherLedgerRow(row.id, 'amount', e.target.value)}
                             />
                             {otherLedgerRows.length > 1 && (
@@ -1860,9 +1910,13 @@ export default function PaymentConsolePage() {
                               </button>
                             )}
                           </div>
+                          {resitNote && (
+                            <div style={{ fontSize: 'var(--fs-xs)', color: resitNote.color, textAlign: 'right', marginTop: 4 }}>{resitNote.text}</div>
+                          )}
                         </span>
                       </div>
-                    ))}
+                      )
+                    })}
                     <div className="recgrid-foot recgrid-total">
                       <span style={{ gridColumn: '1 / 2' }}>Total</span>
                       <span>{fmtAmt(otherLedgerRowsTotal)}</span>
