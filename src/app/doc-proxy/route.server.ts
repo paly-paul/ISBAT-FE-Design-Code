@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 
-// TEMPORARY: same idea as the /api rewrite in next.config.mjs — the S3 bucket
+// Server builds only (route.server.ts — see pageExtensions in
+// next.config.mjs): dev and Vercel. The static S3 build fetches documents
+// directly instead. Same idea as the /api rewrite — the S3 bucket
 // behind our presigned document URLs has no CORS policy, so the browser can't
 // fetch() them for the in-page preview (lib/documentViewer.ts). This fetches
 // server-side instead and streams the bytes back same-origin, with
