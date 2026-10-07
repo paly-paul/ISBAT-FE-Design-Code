@@ -1,34 +1,36 @@
+import { PHASE_DEVELOPMENT_SERVER } from 'next/constants.js'
+
 const API_GATEWAY_URL = process.env.API_GATEWAY_URL ?? process.env.NEXT_PUBLIC_API_GATEWAY_URL
 
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  headers: async () => [
-    {
-      source: '/(.*)',
-      headers: [{ key: 'Vary', value: 'User-Agent' }],
-    },
-  ],
-  // The separate resit schedule pages were merged into Resit Scheduling
-  // (resit-scheduling-page.md#routes).
-  redirects: async () => [
-    { source: '/assessment/resit-schedule', destination: '/assessment/resit-scheduling?tab=exam', permanent: false },
-    { source: '/assessment/resit-ct-schedule', destination: '/assessment/resit-scheduling?tab=ct', permanent: false },
-    { source: '/assessment/resit-cw-schedule', destination: '/assessment/resit-scheduling?tab=cw', permanent: false },
-    // question-view-and-edit-page.md's route; view & edit lives in the
-    // question bank page alongside the import.
-    { source: '/assessment/questions', destination: '/assessment/cw-qbank', permanent: false },
-  ],
-  // TEMPORARY: proxies API calls through the Next.js dev server so the browser
-  // talks to same-origin /api/* instead of the ngrok URL directly, sidestepping
-  // the backend's missing CORS policy. Remove once the backend adds CORS headers
-  // for the frontend origin, and point NEXT_PUBLIC_API_GATEWAY_URL at it directly.
-  // Skip the rewrite entirely when API_GATEWAY_URL isn't set — interpolating
-  // an unset env var produces the literal string "undefined", which Next.js
-  // rejects as an invalid rewrite destination and fails the whole build.
-  // /hubs/* proxies the SignalR notifications hub the same way /api/* does
-  // above — same-origin so the browser's httpOnly session cookie is sent
-  // automatically (SignalR connects with withCredentials: true), and the
-  // same CORS gap sidestepped for /api applies here too.
+// Two deploy targets share one codebase:
+//
+//  - S3 (default `next build`): a static export to out/. Nothing may need a
+//    Node server — no rewrites, redirects, headers, middleware or
+//    request-time route handlers. Each route is <route>/index.html
+//    (trailingSlash) so S3 / CloudFront serve it as a directory index, and
+//    CloudFront routes /api/* and /hubs/* to the API gateway.
+//
+//  - Vercel (`VERCEL=1`, set by Vercel's build) and `next dev`: a normal
+//    Next.js server build. It proxies /api/* and /hubs/* to the gateway so
+//    the browser stays same-origin (sidestepping the backend's missing CORS
+//    policy; /hubs is the SignalR notifications hub, same-origin so the
+//    httpOnly session cookie is sent), and serves the `*.server.ts` routes —
+//    currently src/app/doc-proxy, the S3 document preview proxy.
+const isServerBuild = (phase) => phase === PHASE_DEVELOPMENT_SERVER || process.env.VERCEL === '1'
+
+const staticExportConfig = {
+  output: 'export',
+  trailingSlash: true,
+  images: { unoptimized: true },
+}
+
+const serverConfig = {
+  pageExtensions: ['server.ts', 'tsx', 'ts', 'jsx', 'js'],
+  // Read by src/lib/documentViewer.ts — only server builds have /doc-proxy.
+  env: { NEXT_PUBLIC_DOC_PROXY: 'true' },
+  // Skipped when API_GATEWAY_URL isn't set — interpolating an unset env var
+  // produces the literal string "undefined", which Next.js rejects as an
+  // invalid rewrite destination and fails the whole build.
   rewrites: async () =>
     API_GATEWAY_URL
       ? [
@@ -38,5 +40,7 @@ const nextConfig = {
       : [],
 }
 
-export default nextConfig
-  
+/** @type {(phase: string) => import('next').NextConfig} */
+export default function nextConfig(phase) {
+  return isServerBuild(phase) ? serverConfig : staticExportConfig
+}

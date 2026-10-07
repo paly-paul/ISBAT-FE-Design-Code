@@ -13,6 +13,8 @@ npm run type-check   # tsc --noEmit (no test runner — verify types only)
 
 No test framework is configured. There is no `npm test`.
 
+`npm run build` is a **static export** to `out/` (deployed to S3 behind CloudFront) — see `next.config.mjs`. Nothing may need a Node server at runtime: no middleware, no request-time route handlers, no `rewrites`/`redirects`/`headers` in the build config, no server-only APIs (`cookies()`, `headers()`, dynamic `searchParams` props). Server-only routes are named `*.server.ts` (e.g. `src/app/doc-proxy/route.server.ts`) and are built only for `next dev` and Vercel (`VERCEL=1`), which get a normal server build with the `/api` proxy. In production `/api/*` and `/hubs/*` reach the backend through CloudFront, not Next.js. `NEXT_PUBLIC_*` vars are baked in at build time.
+
 ## Project Overview
 
 **ISBAT University ERP — Academic Module** (`isbat-academic-portal`).
