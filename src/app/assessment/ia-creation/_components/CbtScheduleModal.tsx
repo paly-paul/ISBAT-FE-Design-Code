@@ -311,15 +311,6 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
                 />
               </div>
             </div>
-            
-            <div className="mt-8 bg-[#eff6ff] border border-[#dbeafe] rounded-md p-3 flex gap-3 text-[12.5px] text-[#3b82f6] items-start">
-              <div className="mt-0.5 text-[#2563eb]">
-                <i className="lni lni-information"></i>
-              </div>
-              <div>
-                Timing is controlled server-side. Balance time is saved to database on every student action (Save Next, Previous, Submit, Window Close) to handle connectivity interruptions.
-              </div>
-            </div>
 
             {/* Footer */}
             <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-slate-200">

@@ -12,6 +12,8 @@ import { dialCode } from '@/lib/api/academic/country'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
 import { useCreateEnquiry } from '@/hooks/admission/useEnquiries'
+import { createdEnquiryGuid } from '@/lib/api/admission/enquiry'
+import { EnquiryEmailVerifyModal } from '@/components/modals/admission/EnquiryEmailVerifyModal'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
 import { sanitizePhoneInput } from '@/lib/errorMessages'
@@ -32,6 +34,11 @@ export default function OnDeskEnquiryPage() {
   const permissions = usePagePermissions()
   const [saved, setSaved] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
+  // After a save, the candidate's email is verified with a 6-digit OTP
+  // (EnquiryEmailVerifyModal) before the success popup — skippable, and
+  // also available later from the Enquiry List.
+  const [verifyFor, setVerifyFor] = useState<{ guid: string; email: string; name: string } | null>(null)
+  const [emailVerified, setEmailVerified] = useState<boolean | null>(null)
 
   const { data: enquirySources = [] } = useEnquirySourceMasters()
   const createEnquiry = useCreateEnquiry()
@@ -65,7 +72,6 @@ export default function OnDeskEnquiryPage() {
   const [intakeGuid, setIntakeGuid]   = useState('')
   const [campusGuid, setCampusGuid]   = useState('')
   const [programGuid, setProgramGuid] = useState('')
-  const [sourceGuid, setSourceGuid]   = useState('')
   // Country used to be hardcoded to 'UG' on every create — now a real
   // required field (POST rejects with "'Request Country Guid' must not be
   // empty." otherwise), sourced from the same GET /api/v1/users/countries
@@ -119,7 +125,10 @@ export default function OnDeskEnquiryPage() {
   const intakeOptions  = (currentIntakes.length ? currentIntakes : intakes).map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   const campusOptions  = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions = programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
-  const sourceOptions  = enquirySources.map(s => ({ value: s.enquirySourceGuid, label: s.enquirySourceName }))
+  // On-Desk enquiries are always walk-ins, so the source is fixed to the
+  // "Direct" entry of the Enquiry Source master (ADM-054) rather than picked.
+  const directSource = enquirySources.find(s => /^directb/i.test(s.enquirySourceName.trim()))
+  const sourceGuid = directSource?.enquirySourceGuid ?? ''
   const countryOptions = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
   // dialCode(), not countryPrefix — see the note on dialCode in
   // lib/api/academic/country.ts for why (countryPrefix isn't a phone
@@ -155,7 +164,7 @@ export default function OnDeskEnquiryPage() {
     if (!enquiryDate)       e.enquiryDate = 'Enquiry Date is required'
     if (!intakeGuid)        e.intakeGuid = 'Please select an Intake'
     if (!campusGuid)        e.campusGuid = 'Please select a Campus'
-    if (!sourceGuid)        e.sourceGuid = 'Please select an Enquiry Source'
+    if (!sourceGuid)        e.sourceGuid = 'No "Direct" enquiry source exists — add it in Config › Enquiry Source first'
     if (!countryGuid)       e.countryGuid = 'Please select a Country'
     setErrors(e)
     return Object.keys(e).length === 0
@@ -164,7 +173,7 @@ export default function OnDeskEnquiryPage() {
   function resetForm() {
     setFirstName(''); setLastName(''); setGender(''); setPhoneCode('+256'); setPhone(''); setEmail(''); setDob('')
     setEnquiryDate(todayAtMidnight().slice(0, 10))
-    setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setSourceGuid(''); setCountryGuid(''); setNotes('')
+    setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setCountryGuid(''); setNotes('')
     setErrors({})
   }
 
@@ -192,7 +201,13 @@ export default function OnDeskEnquiryPage() {
         enquiryTag: null,
       },
       {
-        onSuccess: () => setSaved(true),
+        onSuccess: res => {
+          const guid = createdEnquiryGuid(res)
+          // No guid in the create response → nothing to verify against here;
+          // the Enquiry List's Verify Email action covers it.
+          if (guid && email.trim()) setVerifyFor({ guid, email: email.trim(), name: `${firstName.trim()} ${lastName.trim()}`.trim() })
+          else setSaved(true)
+        },
         onError: (error: Error) => {
           const code = error instanceof AuthError ? error.code : undefined
           setFailure(error.message || `Failed to save enquiry${code ? ` (${code})` : ''}. Please try again.`)
@@ -203,6 +218,7 @@ export default function OnDeskEnquiryPage() {
 
   function handleSavedClose() {
     setSaved(false)
+    setEmailVerified(null)
     resetForm()
   }
 
@@ -266,7 +282,7 @@ export default function OnDeskEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Enquiry Source <span className="text-clr-red">*</span></label>
-            <SearchSelect placeholder="— select —" options={sourceOptions} value={sourceGuid} onChange={val => { setSourceGuid(val); clearError('sourceGuid') }} />
+            <input className="ctrl" readOnly value={directSource?.enquirySourceName ?? 'Direct'} title="On-Desk enquiries are always Direct" />
             {errors.sourceGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.sourceGuid}</p>}
           </div>
           <div className="fg">
@@ -318,10 +334,28 @@ export default function OnDeskEnquiryPage() {
       {saved && (
         <div className="modal-overlay open">
           <div className="modal" style={{ maxWidth: 400 }}>
-            <SuccessPopup title="Enquiry Saved!" subtitle="The enquiry has been recorded successfully." onClose={handleSavedClose} />
+            <SuccessPopup
+              title="Enquiry Saved!"
+              subtitle={emailVerified === true
+                ? 'The enquiry has been recorded and the email verified.'
+                : emailVerified === false
+                  ? 'The enquiry has been recorded. The email isn’t verified yet — you can verify it from the Enquiry List.'
+                  : 'The enquiry has been recorded successfully.'}
+              onClose={handleSavedClose}
+            />
           </div>
         </div>
       )}
+
+      <EnquiryEmailVerifyModal
+        isOpen={!!verifyFor}
+        enquiryGuid={verifyFor?.guid ?? null}
+        email={verifyFor?.email ?? ''}
+        studentName={verifyFor?.name}
+        afterCreate
+        onVerified={() => setEmailVerified(true)}
+        onClose={() => { setEmailVerified(v => v ?? false); setVerifyFor(null); setSaved(true) }}
+      />
 
       {failure && (
         <div className="modal-overlay open">

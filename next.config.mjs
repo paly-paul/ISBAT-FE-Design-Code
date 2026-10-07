@@ -1,6 +1,10 @@
 import { PHASE_DEVELOPMENT_SERVER } from 'next/constants.js'
 
-const API_GATEWAY_URL = process.env.API_GATEWAY_URL ?? process.env.NEXT_PUBLIC_API_GATEWAY_URL
+const configuredGatewayUrl = (process.env.API_GATEWAY_URL ?? process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? '').trim()
+// The gateway may be given as the host or the /api root (the GitLab pipeline
+// uses …/api/). The rewrites below append /api and /hubs, so drop a trailing
+// /api so it isn't doubled.
+const API_GATEWAY_URL = configuredGatewayUrl.replace(/\/+$/, '').replace(/\/api$/, '')
 
 // Two deploy targets share one codebase:
 //
