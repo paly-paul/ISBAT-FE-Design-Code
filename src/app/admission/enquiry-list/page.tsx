@@ -10,6 +10,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { EnquiryFormModal } from '@/components/modals/admission/EnquiryFormModal'
 import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignModal'
+import { EnquiryEmailVerifyModal } from '@/components/modals/admission/EnquiryEmailVerifyModal'
+import type { Enquiry } from '@/hooks/admission/useEnquiries'
 import { useEnquiries, useEnquiryCounts, useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
@@ -53,6 +55,8 @@ export default function EnquiryListPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [viewingGuid, setViewingGuid] = useState<string | null>(null)
+  // Row whose email is being verified (EnquiryEmailVerifyModal).
+  const [verifying, setVerifying] = useState<Enquiry | null>(null)
   const [search, setSearch] = useState('')
   const [channel, setChannel] = useState('')
   const [intakeGuid, setIntakeGuid] = useState('')
@@ -243,12 +247,22 @@ export default function EnquiryListPage() {
                     <ActionMenu>
                       <button className="btn btn-neu btn-sm" onClick={() => router.push(`/admission/payment?enquiryGuid=${r.enquiryGuid}`)}><i className="lni lni-arrow-right" /> Convert</button>
                       {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.enquiryGuid)}><i className="lni lni-eye" /> View</button>}
+                      {/* Hidden only once the API confirms the email is verified;
+                          an unknown status still offers it — the API answers
+                          "Email already verified." if it is. */}
+                      {permissions.edit && r.email && r.emailVerified !== true && (
+                        <button className="btn btn-neu btn-sm" onClick={() => setVerifying(r)}><i className="lni lni-envelope" /> Verify Email</button>
+                      )}
                     </ActionMenu>
                   </td>
                   <td className="font-mono text-sm">{r.enquiryCode}</td>
                   <td>{r.studentName}</td>
                   <td className="text-sm text-g600">{r.mobile}</td>
-                  <td className="text-sm text-g600">{r.email}</td>
+                  <td className="text-sm text-g600">
+                    {r.email}
+                    {r.email && r.emailVerified === true && <span className="eq-email-flag ok" title="Email verified" aria-label="Email verified"><i className="lni lni-checkmark-circle" /></span>}
+                    {r.email && r.emailVerified === false && <span className="eq-email-flag no" title="Email not verified" aria-label="Email not verified"><i className="lni lni-warning" /></span>}
+                  </td>
                   <td>{resolveProgramName(r)}</td>
                   <td>{sourceBadge(r.sourceName)}</td>
                   <td className="text-sm text-g600">{r.enquiryDate.slice(0, 10)}</td>
@@ -289,6 +303,14 @@ export default function EnquiryListPage() {
           updateEnquiry={updateEnquiry}
         />
       )}
+      <EnquiryEmailVerifyModal
+        isOpen={!!verifying}
+        enquiryGuid={verifying?.enquiryGuid ?? null}
+        email={verifying?.email ?? ''}
+        studentName={verifying?.studentName}
+        onVerified={() => showToast(`Email verified for ${verifying?.studentName ?? 'the enquiry'}`, 'ok')}
+        onClose={() => setVerifying(null)}
+      />
       <Toast toast={toast} />
     </div>
   )

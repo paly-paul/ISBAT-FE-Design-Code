@@ -1485,6 +1485,34 @@ function stripUnintegratedPages(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+export interface AppPage {
+  name: string
+  url: string
+  module: string
+  section: string | null
+}
+
+// Every navigable page in a menu tree, flattened — for "did you mean"
+// suggestions and page search on the 404 page. Pass the user's own
+// (RBAC-filtered) menu from getMenu()/useMenu(), so only pages they can open
+// are offered. The real /me/menu sends bare slugs ("permission-master");
+// those resolve against the module's route segment ("Activity Log" →
+// /activity-log/…), same as the sidebar's resolveHref.
+export function flattenMenuPages(menu: MenuNode[]): AppPage[] {
+  const pages: AppPage[] = []
+  for (const m of menu) {
+    const base = '/' + m.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+    const walk = (nodes: MenuNode[], section: string | null) => {
+      for (const n of nodes) {
+        if (n.url) pages.push({ name: n.name, url: n.url.startsWith('/') ? n.url : `${base}/${n.url}`, module: m.name, section })
+        if (n.children.length) walk(n.children, n.url ? section : n.name)
+      }
+    }
+    walk(m.children, null)
+  }
+  return pages
+}
+
 export function getMenu(): Promise<MenuResult> {
   if (MOCK_MENU) return Promise.resolve({ menu: stripUnintegratedPages(stripLectureMaster(mockMenu)), isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')

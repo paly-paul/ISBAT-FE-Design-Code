@@ -92,6 +92,10 @@ export interface Enquiry {
   enquiryStatusCode: string | null
   followUpStatusName: string | null
   followUpStatusCode: string | null
+  // Set once the candidate's email is confirmed via the email-otp/verify
+  // endpoint below. Optional — not yet confirmed on a real list/detail
+  // response; treat a missing value as "unknown", not "unverified".
+  emailVerified?: boolean | null
 }
 
 interface EnquiryListResult {
@@ -172,6 +176,54 @@ export function createEnquiry(input: EnquiryInput): Promise<unknown> {
     return Promise.resolve(enquiry)
   }
   return apiPost<unknown>('/api/v1/admissions/enquiries', input)
+}
+
+// The create response's shape isn't confirmed — it may be the new enquiry
+// (with enquiryGuid), a bare guid string, or nothing. Returns the guid when
+// one can be found, so the forms can go straight on to email verification.
+export function createdEnquiryGuid(response: unknown): string | null {
+  if (typeof response === 'string' && response.trim()) return response.trim()
+  if (response && typeof response === 'object') {
+    const r = response as { enquiryGuid?: unknown; guid?: unknown }
+    const guid = r.enquiryGuid ?? r.guid
+    if (typeof guid === 'string' && guid) return guid
+  }
+  return null
+}
+
+// ---- Email verification (post-enquiry-email-otp-request.md / -verify.md) ----
+
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@')
+  return domain ? `${local.slice(0, 2)}***@${domain}` : email
+}
+
+// POST /enquiries/{guid}/email-otp/request — emails a 6-digit OTP to the
+// enquiry's address and resolves to that address, masked ("pe***@gmail.com").
+// Calling again overwrites the previous OTP (no cooldown). 400 "Email already
+// verified." once verified; 404 when the enquiry doesn't exist.
+export function requestEnquiryEmailOtp(enquiryGuid: string): Promise<string> {
+  if (MOCK_AUTH) {
+    const existing = mockEnquiries.find(e => e.enquiryGuid === enquiryGuid)
+    if (existing?.emailVerified) return Promise.reject(new Error('Email already verified.'))
+    return Promise.resolve(maskEmail(existing?.email || 'candidate@example.com'))
+  }
+  return apiPost<string | null>(`/api/v1/admissions/enquiries/${enquiryGuid}/email-otp/request`, {})
+    .then(masked => masked ?? '')
+}
+
+// POST /enquiries/{guid}/email-otp/verify — { otp } must be exactly 6
+// digits. 400 "Invalid or expired OTP." on a wrong/expired code, and "Too
+// many failed attempts. Please request a new OTP." after 3 misses (a new
+// request resets the counter). Mock mode accepts 123456, same as login.
+export function verifyEnquiryEmailOtp(enquiryGuid: string, otp: string): Promise<boolean> {
+  if (MOCK_AUTH) {
+    if (otp !== '123456') return Promise.reject(new Error('Invalid or expired OTP.'))
+    const existing = mockEnquiries.find(e => e.enquiryGuid === enquiryGuid)
+    if (existing) existing.emailVerified = true
+    return Promise.resolve(true)
+  }
+  return apiPost<boolean>(`/api/v1/admissions/enquiries/${enquiryGuid}/email-otp/verify`, { otp })
 }
 
 // List query for the enquiry-list page. Real: paginated, page/pageSize

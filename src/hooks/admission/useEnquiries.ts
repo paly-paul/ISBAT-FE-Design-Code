@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createEnquiry, Enquiry, EnquiryCounts, EnquiryCountsFilters, EnquiryInput, EnquiryUpdateInput, getEnquiries, getEnquiryById, getEnquiryCounts, updateEnquiry } from '@/lib/api/admission/enquiry'
+import { createEnquiry, Enquiry, EnquiryCounts, EnquiryCountsFilters, EnquiryInput, EnquiryUpdateInput, getEnquiries, getEnquiryById, getEnquiryCounts, updateEnquiry, requestEnquiryEmailOtp, verifyEnquiryEmailOtp } from '@/lib/api/admission/enquiry'
 
 const ENQUIRIES_KEY = ['enquiries']
 const ENQUIRY_COUNTS_KEY = ['enquiry-counts']
@@ -61,6 +61,22 @@ export function useUpdateEnquiry() {
     onSuccess: (_data, { guid }) => {
       queryClient.invalidateQueries({ queryKey: ENQUIRIES_KEY })
       queryClient.invalidateQueries({ queryKey: [...ENQUIRIES_KEY, guid] })
+    },
+  })
+}
+
+export function useRequestEnquiryEmailOtp() {
+  return useMutation({ mutationFn: (enquiryGuid: string) => requestEnquiryEmailOtp(enquiryGuid) })
+}
+
+// Success flips emailVerified on the enquiry, so its cached copies refresh.
+export function useVerifyEnquiryEmailOtp() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ enquiryGuid, otp }: { enquiryGuid: string; otp: string }) => verifyEnquiryEmailOtp(enquiryGuid, otp),
+    onSuccess: (_data, { enquiryGuid }) => {
+      queryClient.invalidateQueries({ queryKey: ENQUIRIES_KEY })
+      queryClient.invalidateQueries({ queryKey: [...ENQUIRIES_KEY, enquiryGuid] })
     },
   })
 }
