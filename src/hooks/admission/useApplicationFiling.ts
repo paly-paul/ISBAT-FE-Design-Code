@@ -75,17 +75,14 @@ export function useSearchApplicationsForFilingInfinite(searchTerm: string, pageS
 // Best-effort enrichment for the Filing page's Personal Info prefill — GET
 // /application-filling/by-payment/{paymentGuid} only returns data for a
 // genuinely COMPLETED application (see getApplicationByPaymentGuid's own
-// comment), so this 400s for the common "still mid-filing" case. retry:
-// false since that 400 is a deterministic business rule, not a transient
-// failure — retrying it would just delay the caller's fallback with no
-// chance of a different result. Callers should read `isError` as "nothing
+// comment), so this 400s for the common "still mid-filing" case — a
+// deterministic business rule. Callers should read `isError` as "nothing
 // to enrich with" rather than surfacing it as a hard failure.
 export function useApplicationByPaymentGuid(paymentGuid: string | null | undefined, enabled: boolean) {
   return useQuery({
     queryKey: [...FILING_KEY, 'by-payment', paymentGuid],
     queryFn: () => getApplicationByPaymentGuid(paymentGuid as string),
     enabled: enabled && !!paymentGuid,
-    retry: false,
   })
 }
 

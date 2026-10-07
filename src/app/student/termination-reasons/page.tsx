@@ -151,7 +151,7 @@ export default function Page() {
       </div>
 
       {formModal && (
-        <div className="modal-overlay open" onClick={() => setFormModal(null)}>
+        <div className="modal-overlay open">
           <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title">{formModal.mode === 'add' ? 'Add' : 'Edit'} Termination Reason</div>

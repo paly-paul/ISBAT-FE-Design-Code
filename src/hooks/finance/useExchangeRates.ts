@@ -27,14 +27,15 @@ const EXCHANGE_RATES_KEY = ['exchange-rates']
 // updated elsewhere until the page was hard-reloaded. A short staleTime
 // plus refetchOnWindowFocus means switching back to a tab showing this
 // re-checks for a newer rate within a minute, without turning into a
-// constant background poll.
+// constant background poll. Never on a failed query — a 403 would
+// otherwise be re-sent on every tab switch.
 export function useExchangeRatesByDate(date: string, enabled = true) {
   return useQuery({
     queryKey: [...EXCHANGE_RATES_KEY, 'by-date', date],
     queryFn: () => getExchangeRatesByDate(date),
     enabled: enabled && !!date,
     staleTime: 60_000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: query => query.state.status !== 'error',
   })
 }
 
@@ -57,7 +58,7 @@ export function useExchangeRateExists(currencyGuid: string | null, date: string,
     queryFn: () => getExchangeRateExists(currencyGuid as string, date),
     enabled: enabled && !!currencyGuid && !!date,
     staleTime: 60_000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: query => query.state.status !== 'error',
   })
 }
 

@@ -17,7 +17,7 @@ interface Props extends ModalProps {
 // shows on Profile straight away. There's no un-assign endpoint — re-posting
 // a different category is how a sponsor is changed.
 export function StudentSponsorModal({ isOpen, onClose, showToast, studentGuid, studentName }: Props) {
-  // retry: false inside useSponsorDetails — an error here is a real 401
+  // An error from useSponsorDetails is a real 401
   // ("not authorized to view sponsor details for students in this campus",
   // seen live 2026-08-25), not "no assignment" (that resolves to null).
   const { data: sponsorDetail, isLoading, error } = useSponsorDetails(studentGuid, isOpen)
@@ -55,7 +55,7 @@ export function StudentSponsorModal({ isOpen, onClose, showToast, studentGuid, s
   }
 
   return (
-    <div className="modal-overlay open" onClick={onClose}>
+    <div className="modal-overlay open">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr"><div className="modal-title"><i className="lni lni-handshake"></i> Sponsor Assignment</div><button className="modal-close" onClick={onClose}>✕</button></div>
         <div>

@@ -42,7 +42,7 @@ export function StudentLearningModeModal({ isOpen, onClose, showToast, studentGu
   }
 
   return (
-    <div className="modal-overlay open" onClick={onClose}>
+    <div className="modal-overlay open">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr"><div className="modal-title"><i className="lni lni-display"></i> Learning Mode</div><button className="modal-close" onClick={onClose}>✕</button></div>
         <div>

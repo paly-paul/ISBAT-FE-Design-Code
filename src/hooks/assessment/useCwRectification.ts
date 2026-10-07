@@ -29,8 +29,6 @@ export function useCwIntakes(enabled = true) {
     queryFn: () => getCwIntakes(),
     enabled,
     staleTime: 5 * 60 * 1000,
-    retry: false,
-    refetchOnWindowFocus: false,
   })
 }
 
@@ -44,8 +42,6 @@ export function useCwCourseUnits(intakeGuid: string | undefined, enabled = true)
     queryFn: () => getCwCourseUnits(intakeGuid!),
     enabled: Boolean(intakeGuid) && enabled,
     staleTime: 5 * 60 * 1000,
-    retry: false,
-    refetchOnWindowFocus: false,
   })
 }
 
@@ -63,8 +59,6 @@ export function useCwCourseworks(
     queryFn: () => getCwCourseworks(intakeGuid!, courseUnitGuid!),
     enabled: Boolean(intakeGuid && courseUnitGuid) && enabled,
     staleTime: 5 * 60 * 1000,
-    retry: false,
-    refetchOnWindowFocus: false,
   })
 }
 
@@ -83,8 +77,6 @@ export function useCwStudents(
     queryFn: () => getCwStudents(intakeGuid!, courseUnitGuid!, courseworkNumber!),
     enabled: Boolean(intakeGuid && courseUnitGuid && courseworkNumber) && enabled,
     staleTime: 5 * 60 * 1000,
-    retry: false,
-    refetchOnWindowFocus: false,
   })
 }
 
@@ -102,8 +94,6 @@ export function useCwSubmissionSummary(
     queryFn: () => getCwSubmissionSummary(courseworkGuid!, studentGuid!),
     enabled: Boolean(courseworkGuid && studentGuid) && enabled,
     staleTime: 5 * 60 * 1000,
-    retry: false,
-    refetchOnWindowFocus: false,
   })
 }
 
@@ -121,8 +111,6 @@ export function useCwRecheck(
     queryFn: () => getCwRecheck(courseworkGuid!, studentGuid!),
     enabled: Boolean(courseworkGuid && studentGuid) && enabled,
     staleTime: 5 * 60 * 1000,
-    retry: false,
-    refetchOnWindowFocus: false,
   })
 }
 

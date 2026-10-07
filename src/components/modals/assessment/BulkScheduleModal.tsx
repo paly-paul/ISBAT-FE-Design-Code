@@ -431,7 +431,7 @@ export function BulkScheduleModal({
   const termLabel = scope.term === 1 ? 'Term 1' : scope.term === 2 ? 'Term 2' : 'Both (Term 1 & 2)'
 
   return (
-    <div className="modal-overlay open" onClick={onClose} style={{ zIndex: 650 }}>
+    <div className="modal-overlay open" style={{ zIndex: 650 }}>
       <div
         className="modal modal-md flex flex-col"
         onClick={e => e.stopPropagation()}

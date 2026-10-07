@@ -768,7 +768,6 @@ export default function CwRectificationPage() {
       {confirmAction && (
         <div
           className="modal-overlay open"
-          onClick={() => !isMutating && setConfirmAction(null)}
           style={{ zIndex: 650 }}
         >
           <div

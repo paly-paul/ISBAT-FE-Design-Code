@@ -31,7 +31,7 @@ export function DocumentPreviewModal({ isOpen, onClose, url, title = 'Document P
   if (!isOpen || !url) return null
 
   return (
-    <div className="modal-overlay open" onClick={onClose}>
+    <div className="modal-overlay open">
       <div className="modal modal-80" onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', height: '90vh', overflow: 'hidden' }}>
         <div className="modal-hdr modal-hdr-blue shrink-0">
           <div className="modal-title"><i className="lni lni-eye"></i> {title}</div>

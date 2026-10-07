@@ -41,8 +41,6 @@ export function useGraduateTranscriptPending(academicIntakeGuid: string | null, 
     queryKey: ['graduate-transcript-pending', academicIntakeGuid, programGuid],
     queryFn: () => getGraduateTranscriptPending(academicIntakeGuid!, programGuid || undefined),
     enabled: !!academicIntakeGuid,
-    refetchOnWindowFocus: false,
-    retry: false,
     staleTime: 1000 * 60 * 5 // 5 minutes
   })
 }
@@ -63,7 +61,6 @@ export function useGraduateTranscriptCollectionSearch(searchTerm: string) {
     queryKey: ['graduate-transcript-collection-search', searchTerm],
     queryFn: () => searchGraduateTranscriptCollection(searchTerm),
     enabled: !!searchTerm && searchTerm.length > 2,
-    refetchOnWindowFocus: false
   })
 }
 

@@ -146,10 +146,26 @@ export function Providers({ children }: { children: React.ReactNode }) {
   // save on that same data, or a full reload) — this was already true for
   // every hook that set staleTime: Infinity individually before this change,
   // just now it's the default instead of an opt-in.
+  //
+  // No automatic retries, anywhere. A failed request (403 forbidden, 404,
+  // 400, 5xx) is shown to the user once and only re-sent when they click
+  // Retry or something invalidates it — the client never re-asks the server
+  // on its own. react-query's defaults otherwise retry 3× and, since a
+  // failed query has no data and so always counts as stale, re-fire it on
+  // every window focus, remount and reconnect, which hammered endpoints the
+  // user has no permission for. A hook needing live updates must opt in
+  // explicitly (refetchInterval / refetchOnWindowFocus), never inherit it.
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: Infinity,
+        retry: false,
+        retryOnMount: false,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+      },
+      mutations: {
+        retry: false,
       },
     },
   }))

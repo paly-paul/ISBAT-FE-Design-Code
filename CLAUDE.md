@@ -86,7 +86,7 @@ interface ModalProps {
   nav?: (id: string) => void
 }
 ```
-Modals return `null` when `!isOpen`. Click on `.modal-overlay` closes; `e.stopPropagation()` on `.modal` prevents bubble.
+Modals return `null` when `!isOpen`. Clicking outside (on `.modal-overlay` or `.drawer-overlay`) does **not** close — only the ✕ / Cancel / Close buttons do, so a stray click can't throw away a half-filled form. Don't add `onClick` to the overlay.
 
 ### Design system
 The app uses a **custom CSS design token system** defined in `src/app/globals.css`. Tailwind is present but most styles use the custom CSS classes (`.btn`, `.card`, `.pg-hdr`, `.sb-item`, `.modal`, `.badge-*`, etc.) rather than Tailwind utilities. When adding UI, prefer the existing semantic classes over new Tailwind utilities.

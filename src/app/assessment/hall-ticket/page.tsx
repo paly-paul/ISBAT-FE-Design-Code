@@ -69,22 +69,27 @@ export default function HallTicketIssuancePage() {
   const pageRows = students.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   // ---- Selected student ----------------------------------------------------
+  // Kept across term changes — eligibility is keyed by term, so the
+  // clearance card re-checks the same student. A different intake is a
+  // different set of registered students, so that drops the selection.
   const [selected, setSelected] = useState<HallTicketSearchResultDto | null>(null)
-  // A different intake/term is a different ticket — drop the selection.
-  useEffect(() => { setSelected(null) }, [intakeGuid, term])
+  useEffect(() => { setSelected(null) }, [intakeGuid])
   const { data: elig, isFetching: checking, isError: eligError, error: eligErr } = useHallTicketEligibility(selected?.studentGuid ?? null, intakeGuid || null, term)
   const issue = useIssueHallTicket()
 
   function handleIssue() {
     if (!selected || !elig?.canIssue) return
     issue.mutate({ studentGuid: selected.studentGuid, intakeGuid, term }, {
-      onSuccess: () => {
-        showToast(`Hall ticket issued to ${selected.studentName ?? 'the student'}.`, 'ok')
+      // "Already issued" is a success too — the server refreshed the
+      // existing ticket's issue date rather than creating a new one.
+      onSuccess: ({ alreadyIssued }) => {
+        const who = selected.studentName ?? 'the student'
+        showToast(alreadyIssued ? `${who} already had a Term ${term} hall ticket — its issue date has been updated to today.` : `Hall ticket issued to ${who}.`, 'ok')
         // Per the page doc: clear the selection and the search box.
         setSelected(null); setSearchInput(''); setSearch('')
       },
-      // A 400 here means a clearance changed since the check — the
-      // eligibility query is invalidated either way, so it re-renders fresh.
+      // A 400 here means a clearance changed since the check, or Finance
+      // couldn't be reached on the server's re-check.
       onError: (e: Error) => showToast(e.message || 'Could not issue the hall ticket.', 'error'),
     })
   }
@@ -139,8 +144,10 @@ export default function HallTicketIssuancePage() {
               {checking ? (
                 <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Checking clearances…</div>
               ) : eligError || !elig ? (
-                // e.g. course unit flags couldn't load — the API fails with
-                // a 400 rather than passing, so show it as an error.
+                // A Finance status (fee / Guild / NCHE) or the course unit
+                // lookup couldn't load — the API fails with a 400 naming it
+                // rather than reporting "not cleared", so show it as an
+                // error, never as a red clearance line.
                 <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}>
                   <i className="lni lni-warning"></i> {eligErr instanceof Error && eligErr.message ? eligErr.message : 'Couldn’t check eligibility. Please try again.'}
                 </div>
@@ -283,7 +290,7 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
   }
 
   return (
-    <div className="modal-overlay open" onClick={onClose}>
+    <div className="modal-overlay open">
       <div className="modal modal-xl" style={{ display: 'flex', flexDirection: 'column', maxHeight: '88vh' }} onClick={e => e.stopPropagation()}>
         <div className="modal-hdr"><div className="modal-title"><i className="lni lni-ticket"></i> Bulk Issue &amp; Status — Term {term}</div><button className="modal-close" onClick={onClose}>✕</button></div>
         <div style={{ overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
@@ -320,8 +327,9 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
                 <strong>{summary.totalConsidered}</strong> considered — <strong style={{ color: 'var(--green)' }}>{summary.issued}</strong> issued,{' '}
                 <strong>{summary.alreadyIssued}</strong> already issued, <strong style={{ color: 'var(--amber)' }}>{summary.ineligible}</strong> ineligible,{' '}
                 <strong style={{ color: 'var(--red)' }}>{summary.failed}</strong> failed.
-                {summary.ineligible > 0 && ' Select an ineligible student on the main page to see which clearance is missing.'}
-                {summary.failed > 0 && ' Failed means the server couldn’t run the check (not that the student is ineligible) — select one on the main page to see the error, and retry once it’s fixed.'}
+                {summary.alreadyIssued > 0 && ' Students who already had a ticket were skipped (their issue date is unchanged).'}
+                {summary.ineligible > 0 && ' Ineligible means a clearance came back not cleared — select the student on the main page to see which one.'}
+                {summary.failed > 0 && ' Failed means the check couldn’t be completed — for example a fee status could not be loaded from Finance — not that the student is ineligible. Select one on the main page to see the error, and retry once it’s fixed.'}
               </div>
             </div>
           )}

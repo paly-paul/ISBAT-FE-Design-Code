@@ -1645,7 +1645,7 @@ export default function PaymentConsolePage() {
               inline here rather than split into its own component — see
               showPaymentHistory's own comment for why. */}
           {showPaymentHistory && profile && (
-            <div className="modal-overlay open" onClick={() => setShowPaymentHistory(false)}>
+            <div className="modal-overlay open">
               <div className="modal modal-lg" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
                 <div className="modal-hdr modal-hdr-blue" style={{ flexShrink: 0 }}>
                   <div className="modal-title"><i className="lni lni-folder"></i> Payment History</div>
@@ -2991,7 +2991,7 @@ export default function PaymentConsolePage() {
           actually settled, ledger by ledger. Moved from the standalone
           Payment Console Adjustments page as-is. */}
       {breakdownGuid && (
-        <div className="modal-overlay open" onClick={() => setBreakdownGuid(null)}>
+        <div className="modal-overlay open">
           <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr modal-hdr-blue">
               <div className="modal-title"><i className="lni lni-list"></i> Adjustment Ledger Breakdown</div>

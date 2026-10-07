@@ -40,7 +40,6 @@ export function useExamGrievance(grievanceGuid: string | null) {
     queryFn: () => getExamGrievance(grievanceGuid as string),
     enabled: !!grievanceGuid,
     staleTime: 0,
-    retry: false,
   })
 }
 

@@ -778,7 +778,7 @@ function ExamScheduleDrawer({ mode, guid, readOnly, readOnlyReason, units, units
   // Portalled to <body>: the tab panel's enter animation leaves a transform
   // on its wrapper, which would otherwise trap this fixed overlay inside it.
   return createPortal(
-    <div className="drawer-overlay" onClick={requestClose}>
+    <div className="drawer-overlay">
       <div className="drawer" role="dialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()}>
         <div className="drawer-hdr">
           <div className="flex items-center gap-2">

@@ -43,7 +43,6 @@ export function useIaCreationStructure(
         intakeGuid as string
       ),
     enabled: !!programGuid && !!semesterGuid && !!intakeGuid,
-    retry: false,
   })
 }
 

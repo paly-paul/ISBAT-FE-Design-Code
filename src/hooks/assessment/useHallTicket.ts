@@ -29,7 +29,6 @@ export function useHallTicketEligibility(studentGuid: string | null, intakeGuid:
     queryFn: () => getHallTicketEligibility(studentGuid as string, intakeGuid as string, term),
     enabled: !!studentGuid && !!intakeGuid,
     staleTime: 0,
-    retry: false,
   })
 }
 

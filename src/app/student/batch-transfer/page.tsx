@@ -260,7 +260,7 @@ function BatchTransferContent() {
       </div>
 
       {confirmOpen && student && targetBatchOpt && (
-        <div className="modal-overlay open" onClick={() => setConfirmOpen(false)}>
+        <div className="modal-overlay open">
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr"><div className="modal-title"><i className="lni lni-warning" style={{ color: 'var(--red)' }}></i> Confirm Batch Transfer</div><button className="modal-close" onClick={() => setConfirmOpen(false)}>✕</button></div>
             <div>

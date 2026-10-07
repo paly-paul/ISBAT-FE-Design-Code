@@ -98,7 +98,7 @@ export function EditPaymentOtherModal({ isOpen, onClose, showToast, target }: Ed
   }
 
   return (
-    <div className="modal-overlay open" onClick={handleClose}>
+    <div className="modal-overlay open">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-pencil-alt"></i> Edit Payment — {target.label}</div>

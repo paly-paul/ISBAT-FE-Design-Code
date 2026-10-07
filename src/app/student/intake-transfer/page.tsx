@@ -335,7 +335,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
       )}
 
       {confirmOpen && candidate && targetSemesterOpt && targetBatchOpt && targetFeeHeadOpt && (
-        <div className="modal-overlay open" onClick={() => setConfirmOpen(false)}>
+        <div className="modal-overlay open">
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr"><div className="modal-title"><i className="lni lni-warning" style={{ color: 'var(--red)' }}></i> Confirm Rejoin</div><button className="modal-close" onClick={() => setConfirmOpen(false)}>✕</button></div>
             <div>
@@ -477,7 +477,7 @@ function DefermentPanel({ showToast }: { showToast: (msg: string, type?: string)
       )}
 
       {confirmOpen && student && target && (
-        <div className="modal-overlay open" onClick={() => setConfirmOpen(false)}>
+        <div className="modal-overlay open">
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr"><div className="modal-title"><i className="lni lni-warning" style={{ color: 'var(--red)' }}></i> Confirm Intake Transfer</div><button className="modal-close" onClick={() => setConfirmOpen(false)}>✕</button></div>
             <div>

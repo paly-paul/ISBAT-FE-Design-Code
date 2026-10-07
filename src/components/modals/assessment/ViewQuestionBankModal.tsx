@@ -211,7 +211,7 @@ export function ViewQuestionBankModal({
 
   return (
     <>
-      <div className="modal-overlay open" onClick={onClose} style={{ zIndex: 520 }}>
+      <div className="modal-overlay open" style={{ zIndex: 520 }}>
         <div
           className="modal modal-xl flex flex-col"
           onClick={(e) => e.stopPropagation()}
@@ -480,7 +480,7 @@ export function ViewQuestionBankModal({
 
       {/* ── Sub-modal for Detailed View ─────────────────────────────────────── */}
       {viewingDetailQuestion && (
-        <div className="modal-overlay open" onClick={() => setViewingDetailQuestion(null)} style={{ zIndex: 610 }}>
+        <div className="modal-overlay open" style={{ zIndex: 610 }}>
           <div
             className="modal modal-md flex flex-col"
             onClick={(e) => e.stopPropagation()}

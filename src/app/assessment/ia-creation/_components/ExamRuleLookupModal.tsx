@@ -18,7 +18,7 @@ export function ExamRuleLookupModal({ isOpen, onClose, onSelect, highlightSectio
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay open" onClick={onClose} style={{ zIndex: 1100 }}>
+    <div className="modal-overlay open" style={{ zIndex: 1100 }}>
       <div className="modal modal-flex" style={{ maxWidth: '1000px', borderRadius: '12px' }} onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue" style={{ display: 'flex', alignItems: 'center', padding: '16px 20px' }}>
           <div className="modal-title text-white font-medium text-base">

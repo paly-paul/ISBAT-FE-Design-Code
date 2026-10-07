@@ -367,6 +367,9 @@ const mockMenu: MenuNode[] = [
   ]),
 
   module_('Assessment', 'pencil-alt', ASSESSMENT_SECTIONS),
+  // Listed here directly — mergeConfigSections only patches a Config module
+  // the real response already has, so the mock tree must carry its own.
+  module_('Config', 'cog', CONFIG_SECTIONS),
   module_('Activity Log', 'list', [
     section('Audit Trail', [
       leaf('Activity Log', 'list', '/activity-log/logs'),
