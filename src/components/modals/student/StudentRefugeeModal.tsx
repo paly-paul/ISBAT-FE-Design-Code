@@ -35,6 +35,7 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
 
   const [countryGuid, setCountryGuid] = useState('')
   const [refugeeId, setRefugeeId] = useState('')
+  const [remarks, setRemarks] = useState('')
   const [docFile, setDocFile] = useState<File | null>(null)
   // Supporting-document preview — same popup as Student Profile's refugee
   // row. Images render as <img>; anything else (PDF, etc.) goes in an
@@ -47,6 +48,7 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
     if (!isOpen) return
     setCountryGuid('')
     setRefugeeId('')
+    setRemarks('')
     setDocFile(null)
     setDocPreviewOpen(false)
     setEditing(false)
@@ -54,17 +56,25 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
 
   if (!isOpen || !studentGuid) return null
 
-  // Refugee status changes the student's applicable fees, so every
-  // successful assign/edit/remove continues straight to Fee Structure
-  // Transfer with this student preloaded.
+  // Assign/edit only raise a request, so they continue to the approval page
+  // with this student's review open; Fee Structure Transfer follows once it's
+  // approved there. Remove takes effect immediately, so it still goes
+  // straight to Fee Structure Transfer. `notice` carries the success message
+  // across — the toast here would unmount with this page.
+  function goToApproval(guid: string, notice: 'submitted' | 'updated') {
+    onClose()
+    router.push(`/student/refugee-approval?studentGuid=${encodeURIComponent(guid)}&notice=${notice}`)
+  }
+
   function goToFeeTransfer(guid: string) {
     onClose()
-    router.push(`/student/fee-structure-transfer?studentGuid=${encodeURIComponent(guid)}`)
+    router.push(`/student/fee-structure-transfer?studentGuid=${encodeURIComponent(guid)}&notice=refugee-removed`)
   }
 
   function startEdit() {
     setCountryGuid('')
     setRefugeeId(refugeeDetail?.refugeeId ?? '')
+    setRemarks(refugeeDetail?.remarks ?? '')
     setDocFile(null)
     setEditing(true)
   }
@@ -74,17 +84,20 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
     if (!countryGuid) { showToast('Country is required.', 'warn'); return }
     if (!refugeeId.trim()) { showToast('Refugee ID is required.', 'warn'); return }
     if (refugeeId.trim().length > 20) { showToast('Refugee ID must be 20 characters or fewer.', 'warn'); return }
+    if (!remarks.trim()) { showToast('Remarks are required.', 'warn'); return }
     if (!docFile) { showToast('A supporting document is required.', 'warn'); return }
     const guid = studentGuid
-    const payload = { studentGuid: guid, countryGuid, refugeeId: refugeeId.trim(), document: docFile }
+    const payload = { studentGuid: guid, countryGuid, refugeeId: refugeeId.trim(), remarks: remarks.trim(), document: docFile }
+    // Both assign and edit only raise a request now — it takes effect once
+    // approved on /student/refugee-approval.
     if (editing) {
       updateRefugeeStatus.mutate(payload, {
-        onSuccess: () => { showToast('Refugee status updated', 'ok'); goToFeeTransfer(guid) },
+        onSuccess: () => goToApproval(guid, 'updated'),
         onError: (error: Error) => showToast(error.message || 'Could not update refugee status', 'err'),
       })
     } else {
       assignRefugeeStatus.mutate(payload, {
-        onSuccess: () => { showToast('Refugee status granted', 'ok'); goToFeeTransfer(guid) },
+        onSuccess: () => goToApproval(guid, 'submitted'),
         onError: (error: Error) => showToast(error.message || 'Could not assign refugee status', 'err'),
       })
     }
@@ -94,7 +107,7 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
     if (!studentGuid) return
     const guid = studentGuid
     removeRefugeeStatus.mutate(guid, {
-      onSuccess: () => { showToast('Refugee status removed', 'ok'); goToFeeTransfer(guid) },
+      onSuccess: () => goToFeeTransfer(guid),
       onError: (error: Error) => showToast(error.message || 'Could not remove refugee status', 'err'),
     })
   }
@@ -113,8 +126,13 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
             <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading refugee status…</div>
           ) : refugeeDetail && !editing ? (
             <>
-              <div className="info-box mb-3"><i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12.5 }}>This student already has refugee status on record.</div></div>
+              <div className="info-box mb-3"><i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12.5 }}>
+                {refugeeDetail.refugeeAssignmentStatus === 1
+                  ? 'A refugee status request for this student is pending approval.'
+                  : 'This student already has refugee status on record.'}
+              </div></div>
               <div className="fg"><label className="lbl">Refugee ID</label><input className="ctrl" readOnly value={refugeeDetail.refugeeId ?? '—'} /></div>
+              <div className="fg"><label className="lbl">Remarks</label><input className="ctrl" readOnly value={refugeeDetail.remarks || '—'} /></div>
               <div className="fg">
                 <label className="lbl">Supporting Document</label>
                 {refugeeDocUrl
@@ -129,6 +147,7 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
                 <SearchSelect placeholder="-- Select Country --" options={countryOptions} value={countryGuid} onChange={setCountryGuid} />
               </div>
               <div className="fg"><label className="lbl">Refugee ID <span className="req">*</span></label><input className="ctrl" maxLength={20} value={refugeeId} onChange={e => setRefugeeId(e.target.value)} placeholder="Refugee document/registration number" /></div>
+              <div className="fg"><label className="lbl">Remarks <span className="req">*</span></label><textarea className="ctrl" rows={2} value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="e.g. UNHCR verified" /></div>
               <div className="fg">
                 <label className="lbl">Supporting Document <span className="req">*</span></label>
                 <input className="ctrl" type="file" onChange={e => setDocFile(e.target.files?.[0] ?? null)} />

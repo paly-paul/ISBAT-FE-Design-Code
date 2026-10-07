@@ -94,6 +94,10 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
     // backend page registration yet, so the Operations merge in getMenu()
     // appends it as a missing leaf in real mode too.
     leaf('Learning Mode Approval', 'checkmark-circle', '/student/learning-mode-approval'),
+    // Approval queue for refugee-status requests (assign now only raises a
+    // request — post-approve-refugee-status.md, 2026-10-05). Same "appended
+    // as a missing leaf in real mode" situation as Learning Mode Approval.
+    leaf('Refugee Status Approval', 'checkmark-circle', '/student/refugee-approval'),
     // Re-enabled and renamed from "Intake Transfer" to "Dropout Rejoin",
     // 2026-09-03 — same route (/student/intake-transfer), matching the page's
     // own "Dropout Rejoin" mode tab (its "Deferment / Period Shift" tab was
@@ -139,6 +143,10 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
     // picker behind POST /students/{studentGuid}/terminate. Added 2026-09-15
     // alongside the Refund-Eligibility Search work.
     leaf('Termination Reason Master', 'shield', '/student/termination-reasons'),
+    // Course feedback forms + questions per intake (feedback-master/*.md,
+    // 2026-10-06) — no backend page registration yet, so the Settings merge
+    // in mergeStudentSections appends it in real mode too.
+    leaf('Feedback Master', 'comments', '/student/feedback-master'),
   ]),
 ]
 
@@ -213,6 +221,9 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('UE Practical QBank', 'upload', '/assessment/question-bank-practical'),
     leaf('Hall Ticket Issuance', 'ticket', '/assessment/hall-ticket'),
     leaf('Hall Ticket Print', 'printer', '/assessment/hall-print'),
+    // Whole-intake combined PDF (hall-ticket-print-all-page.md, 2026-10-06)
+    // — injected in real mode by ensureHallTicketPrintAll below.
+    leaf('Hall Ticket Print All', 'printer', '/assessment/hall-ticket-print-all'),
     leaf('UE Material Print', 'printer', '/assessment/university-exam-material-print'),
     leaf('UE QP/Booklet Print', 'printer', '/assessment/university-exam-qp-booklet-print'),
     leaf('UE Practical QP Print', 'printer', '/assessment/university-exam-practical-qp-print'),
@@ -531,6 +542,7 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
     const missingSettingsLeaves = [
       leaf('Specialization Management', 'graduation', '/student/specialization'),
       leaf('Termination Reason Master', 'shield', '/student/termination-reasons'),
+      leaf('Feedback Master', 'comments', '/student/feedback-master'),
     ].filter(l => !existingSettingsLeaves.has(l.name))
     if (orderedLeaves.length !== settingsSection.children.length || missingSettingsLeaves.length > 0) {
       const children = [...studentModule.children]
@@ -900,6 +912,33 @@ function ensureUeMaterialPrint(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+
+// Hall Ticket Print All (2026-10-06) has no backend page registration yet —
+// slotted right after Hall Ticket Print when present, else at the end of UE.
+function ensureHallTicketPrintAll(menu: MenuNode[]): MenuNode[] {
+  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessIdx === -1) return menu
+
+  const assessModule = menu[assessIdx]
+  const ueIdx = assessModule.children.findIndex(c => c.name === 'University Exam (UE)')
+  if (ueIdx === -1) return menu
+
+  const ueSection = assessModule.children[ueIdx]
+  if (ueSection.children.some(l => l.url === '/assessment/hall-ticket-print-all')) return menu
+
+  const children = [...ueSection.children]
+  const printIdx = children.findIndex(l => l.url === '/assessment/hall-print')
+  const newLeaf = leaf('Hall Ticket Print All', 'printer', '/assessment/hall-ticket-print-all')
+  if (printIdx !== -1) children.splice(printIdx + 1, 0, newLeaf)
+  else children.push(newLeaf)
+
+  const mergedAssess = { ...assessModule, children: [...assessModule.children] }
+  mergedAssess.children[ueIdx] = { ...ueSection, children }
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessIdx] = mergedAssess
+  return mergedMenu
+}
 
 function ensureResitApplications(menu: MenuNode[]): MenuNode[] {
   const assessIdx = menu.findIndex(n => n.name === 'Assessment')
@@ -1468,7 +1507,8 @@ export function getMenu(): Promise<MenuResult> {
       const withResitIaResults = ensureResitIaResults(withResitEvaluation)
       const withResitUeImport = ensureResitUeMarkImport(withResitIaResults)
       const withUePrint = ensureUeMaterialPrint(withResitUeImport)
-      const withUeAttendance = ensureUeAttendance(withUePrint)
+      const withHallPrintAll = ensureHallTicketPrintAll(withUePrint)
+      const withUeAttendance = ensureUeAttendance(withHallPrintAll)
       const withUeMarkImport = ensureUeMarkImport(withUeAttendance)
       const withModeration = ensureResultModeration(withUeMarkImport)
       const withProjectProposals = ensureProjectProposals(withModeration)
