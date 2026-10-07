@@ -204,7 +204,7 @@ export function AddSlotModal({ isOpen, onClose, showToast, mode, intakeGuid, ter
   const isSubmitting = createTimetableMutation.isPending || updateTimetableMutation.isPending
 
   return (
-    <div className="modal-overlay open" id="add-slot-modal" onClick={handleClose}>
+    <div className="modal-overlay open" id="add-slot-modal">
       <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-calendar"></i> {isEdit ? 'Edit Schedule' : 'Create New Schedule'}</div>

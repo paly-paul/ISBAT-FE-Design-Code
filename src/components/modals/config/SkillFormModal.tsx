@@ -89,7 +89,7 @@ export function SkillFormModal({ isOpen, onClose, showToast, mode, skill, create
   }
 
   return (
-    <div className="modal-overlay open" id={isEdit ? 'edit-skill-modal' : 'new-skill-modal'} onClick={handleClose}>
+    <div className="modal-overlay open" id={isEdit ? 'edit-skill-modal' : 'new-skill-modal'}>
       <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className={`lni ${isEdit ? 'lni-pencil' : 'lni-bulb'}`}></i> {isEdit ? 'Edit Skill' : 'Add Skill'}</div>

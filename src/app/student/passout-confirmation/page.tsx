@@ -246,7 +246,7 @@ function PassoutConfirmationContent() {
       </div>
 
       {confirmOpen && candidate && (
-        <div className="modal-overlay open confirm-modal-overlay" onClick={successInfo ? undefined : closeConfirmModal}>
+        <div className="modal-overlay open confirm-modal-overlay">
           <div className="modal modal-md confirm-modal-pop" onClick={e => e.stopPropagation()}>
             {successInfo ? (
               <SuccessPopup title={successInfo.title} subtitle={successInfo.subtitle} onClose={closeConfirmModal} />

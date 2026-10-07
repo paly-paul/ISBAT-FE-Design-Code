@@ -133,7 +133,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
 
   if (saved) {
     return (
-      <div className="modal-overlay open" onClick={onClose}>
+      <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
           <SuccessPopup
             title="University Exam Scheduled!"
@@ -146,7 +146,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
   }
 
   return (
-    <div className="modal-overlay open" onClick={onClose}>
+    <div className="modal-overlay open">
       <div className="modal modal-md modal-flex" style={{ maxWidth: '700px', borderRadius: '12px' }} onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="modal-hdr modal-hdr-blue" style={{ display: 'flex', alignItems: 'center', padding: '16px 20px' }}>

@@ -39,7 +39,6 @@ export function useServiceTicket(ticketGuid: string | null) {
     queryFn: () => getServiceTicket(ticketGuid as string),
     enabled: !!ticketGuid,
     staleTime: 0,
-    retry: false,
   })
 }
 

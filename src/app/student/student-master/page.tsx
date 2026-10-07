@@ -36,9 +36,10 @@ const PAGE_SIZE = 10
 // for how multiple selections turn into real results. Semester holds
 // semCodes, not guids — sent as /students/filter's semCode param. Two
 // separate intake filters: intakeGuid is the joined intake (T_STUDENT.
-// INTAKEGUID), now set only via the `joined=` URL param; academicIntake
-// holds intake codes (e.g. "20241") from the active history row, set from
-// the header intake dropdown or the Academic Intake column's funnel.
+// INTAKEGUID), set only from the header intake dropdown (no default);
+// academicIntake holds intake codes (e.g. "20241") from the active history
+// row, set only from the Academic Intake column's funnel and defaulting to
+// the current academic intake.
 // Status holds regStatus codes (e.g. "5"), sent as regStatus.
 interface ColumnFilterState {
   programGuid: string[]
@@ -213,22 +214,22 @@ function StudentMasterContent() {
   // one request covers every programme's semester with that code.
   const { groups: semCodeGroups } = useSemesterCodeGroups()
 
-  // Academic Intake column funnel options (by intake code), also the label
-  // lookup for the header intake dropdown's trigger (the dropdown itself
-  // pages intakes server-side via IntakeSearchPicker). `intakes` is the dropdown list loaded above
+  // Academic Intake column funnel options (by intake code), and the label
+  // lookup for the header joined-intake dropdown's trigger (by intakeGuid —
+  // the dropdown itself pages intakes server-side via IntakeSearchPicker).
+  // The two filters are independent: colFilters.intakeGuid (header, no
+  // default) vs colFilters.academicIntake (column funnel, defaults to the
+  // current intake). `intakes` is the dropdown list loaded above
   // (GET /academic/intakes/dropdown — every intake, newest first).
   // description may be null — label as "description (intakeCode)".
-  const intakeOptions = intakes.map(i => ({ value: String(i.intakeCode), label: i.description ? `${i.description} (${i.intakeCode})` : String(i.intakeCode) }))
-  // The header dropdown drives Academic Intake (2026-10-06) — the same
-  // filter as the column funnel, so its current-intake default is visible
-  // up front instead of a hidden "1 filter active". The joined-intake filter
-  // no longer has a header control; a `joined=` URL param still applies.
-  const [pickedIntakeLabel, setPickedIntakeLabel] = useState<string | null>(null)
-  const selectedIntakeLabel = colFilters.academicIntake.length === 0
+  const intakeLabel = (i: { intakeCode: string | number; description?: string | null }) => i.description ? `${i.description} (${i.intakeCode})` : String(i.intakeCode)
+  const intakeOptions = intakes.map(i => ({ value: String(i.intakeCode), label: intakeLabel(i) }))
+  const joinedIntakeGuid = colFilters.intakeGuid[0]
+  const joinedIntake = joinedIntakeGuid ? intakes.find(i => i.intakeGuid === joinedIntakeGuid) : undefined
+  const [joinedIntakeLabel, setJoinedIntakeLabel] = useState<string | null>(null)
+  const selectedIntakeLabel = !joinedIntakeGuid
     ? null
-    : colFilters.academicIntake.length > 1
-      ? `${colFilters.academicIntake.length} intakes`
-      : intakeOptions.find(o => o.value === colFilters.academicIntake[0])?.label ?? pickedIntakeLabel ?? colFilters.academicIntake[0]
+    : joinedIntake ? intakeLabel(joinedIntake) : joinedIntakeLabel ?? joinedIntakeGuid
 
   const hasColFilters = colFilters.programGuid.length > 0 || colFilters.semCode.length > 0 || colFilters.batchGuid.length > 0 || colFilters.intakeGuid.length > 0 || colFilters.academicIntake.length > 0 || colFilters.regStatus.length > 0
 
@@ -275,10 +276,10 @@ function StudentMasterContent() {
             <div className="flex gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
               <IntakeSearchPicker
                 className="w-56"
-                placeholder="All intakes"
+                placeholder="All joined intakes"
                 selectedLabel={selectedIntakeLabel}
-                onSelect={i => { setPickedIntakeLabel(i.description ? `${i.description} (${i.intakeCode})` : String(i.intakeCode)); updateColFilters({ academicIntake: [String(i.intakeCode)] }) }}
-                onClear={() => updateColFilters({ academicIntake: [] })}
+                onSelect={i => { setJoinedIntakeLabel(intakeLabel(i)); updateColFilters({ intakeGuid: [i.intakeGuid] }) }}
+                onClear={() => updateColFilters({ intakeGuid: [] })}
               />
               <TableSearch
                 className="w-56"

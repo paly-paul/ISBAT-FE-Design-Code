@@ -261,7 +261,7 @@ export default function ResitApplyPage() {
         </div>
 
       {selectedStudent && (
-        <div className="modal-overlay open" onClick={handleCloseModal}>
+        <div className="modal-overlay open">
           {/* .modal-flex fixes height at 85vh; size to content instead, capped there. */}
           <div className="modal modal-flex" style={{ maxWidth: 900, borderRadius: 12, height: 'auto', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
             {/* Header */}

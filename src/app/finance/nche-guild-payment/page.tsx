@@ -546,7 +546,7 @@ export default function NcheGuildPaymentPage() {
             {/* Payment History — popup (2026-09-15), same modal-overlay/
                 modal-lg shell as Payment Console's own showPaymentHistory. */}
             {showHistory && (
-              <div className="modal-overlay open" onClick={() => setShowHistory(false)}>
+              <div className="modal-overlay open">
                 <div className="modal modal-lg" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
                   <div className="modal-hdr modal-hdr-blue" style={{ flexShrink: 0 }}>
                     <div className="modal-title"><i className="lni lni-folder"></i> Payment History</div>
@@ -703,7 +703,7 @@ export default function NcheGuildPaymentPage() {
           shared SuccessPopup once the mutation actually succeeds instead
           of closing outright. */}
       {confirmAction && (
-        <div className="modal-overlay open confirm-modal-overlay" onClick={successInfo ? undefined : closeConfirm}>
+        <div className="modal-overlay open confirm-modal-overlay">
           <div className="modal modal-sm confirm-modal-pop" onClick={e => e.stopPropagation()}>
             {successInfo ? (
               <SuccessPopup title={successInfo.title} subtitle={successInfo.subtitle} onClose={closeConfirm} />

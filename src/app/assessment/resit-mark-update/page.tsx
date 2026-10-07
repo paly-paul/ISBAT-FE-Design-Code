@@ -340,7 +340,7 @@ export default function ResitMarkUpdatePage() {
       </div>
 
       {pushModalData && (
-        <div className="modal-overlay open" onClick={() => !pushMutation.isPending && setPushModalData(null)}>
+        <div className="modal-overlay open">
           <div className="modal modal-flex" style={{ maxWidth: 560, borderRadius: 12, height: 'auto', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="modal-hdr modal-hdr-blue" style={{ display: 'flex', alignItems: 'center', padding: '16px 20px' }}>

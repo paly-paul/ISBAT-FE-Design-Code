@@ -34,7 +34,6 @@ export function useStudentStatement(studentGuid: string | null) {
     enabled: !!studentGuid,
     staleTime: 5 * 60 * 1000,
     gcTime: Infinity,
-    retry: false,
   })
 }
 
@@ -45,7 +44,6 @@ export function useStudentFeeSummary(studentGuid: string | null) {
     enabled: !!studentGuid,
     staleTime: 5 * 60 * 1000,
     gcTime: Infinity,
-    retry: false,
   })
 }
 

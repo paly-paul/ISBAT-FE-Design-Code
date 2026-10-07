@@ -461,7 +461,7 @@ function ImportDrawer({ exam, showToast, onClose, onOpenExam }: DrawerProps) {
   const STEPS: { n: Step; label: string }[] = [{ n: 1, label: 'Template' }, { n: 2, label: 'Upload' }, { n: 3, label: 'Review & save' }]
 
   return createPortal(
-    <div className="drawer-overlay" onClick={requestClose}>
+    <div className="drawer-overlay">
       <div className="drawer" style={{ width: 960 }} role="dialog" aria-modal="true" aria-label={`Import marks ${exam.unitCode}`} onClick={e => e.stopPropagation()}>
         <div className="drawer-hdr">
           <div className="flex items-start gap-3">

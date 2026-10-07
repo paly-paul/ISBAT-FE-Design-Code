@@ -1,4 +1,4 @@
-import { apiGet, apiGetBlob, apiPost } from '../client'
+import { apiGet, apiGetBlob, apiPost, apiPostWithMessage } from '../client'
 
 // Hall Ticket Issue endpoints (assessment-attendance-service/assessment/
 // hall-ticket-issue/*.md). Backs three pages, per their page docs
@@ -10,6 +10,11 @@ import { apiGet, apiGetBlob, apiPost } from '../client'
 
 export type HallTicketTerm = 1 | 2
 
+// A failed Finance or Academic lookup is a 400 (one of "Could not load fee
+// clearance from Finance.", "Could not load guild fee status from
+// Finance.", "Could not load NCHE fee status from Finance.", "Could not
+// load course unit assessment flags.") — never a false flag below, so a
+// red "Not cleared" always means the check really came back not cleared.
 export interface HallTicketEligibilityDto {
   // null only on the already-issued short-circuit.
   studentName: string | null
@@ -33,11 +38,19 @@ export function getHallTicketEligibility(studentGuid: string, intakeGuid: string
 }
 
 // Idempotent — re-issuing an already-issued student succeeds without a
-// duplicate (post-issue.md).
-export function issueHallTicket(payload: { studentGuid: string; intakeGuid: string; term: HallTicketTerm }): Promise<boolean> {
-  return apiPost<boolean>('/api/v1/assessment/hall-ticket-issue', payload)
+// duplicate and without re-running eligibility; the existing ticket's issue
+// date is refreshed to today and `message` is "Hall ticket already issued."
+// instead of "Hall ticket issued successfully." (post-issue.md). Treat both
+// as success.
+export async function issueHallTicket(payload: { studentGuid: string; intakeGuid: string; term: HallTicketTerm }): Promise<{ alreadyIssued: boolean }> {
+  const { message } = await apiPostWithMessage<boolean>('/api/v1/assessment/hall-ticket-issue', payload)
+  return { alreadyIssued: /already issued/i.test(message ?? '') }
 }
 
+// alreadyIssued students are skipped and their issue date is NOT refreshed
+// (unlike single issue). ineligible = a clearance came back not cleared;
+// failed = the check itself couldn't run, including a Finance fee status
+// that couldn't be loaded (post-bulk-issue.md).
 export interface BulkIssueResponseDto {
   totalConsidered: number
   issued: number

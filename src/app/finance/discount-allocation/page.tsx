@@ -698,7 +698,7 @@ function DiscountAllocationContent() {
           vs. from next semester has real financial consequences either
           way. */}
       {showCancelConfirm && discountDetail && (
-        <div className="modal-overlay open" onClick={() => setShowCancelConfirm(false)}>
+        <div className="modal-overlay open">
           <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr modal-hdr-blue">
               <div className="modal-title"><i className="lni lni-warning"></i> Cancel Discount</div>

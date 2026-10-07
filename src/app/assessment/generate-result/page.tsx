@@ -540,7 +540,7 @@ export default function GenerateResultPage() {
 
       {/* Generate summary */}
       {generated && (
-        <div className="modal-overlay open" onClick={() => setGenerated(null)}>
+        <div className="modal-overlay open">
           <div className="modal modal-flex" style={{ maxWidth: 620, borderRadius: 12, height: 'auto', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
             <div className="modal-hdr modal-hdr-blue" style={{ display: 'flex', alignItems: 'center', padding: '16px 20px' }}>
               <div className="modal-title text-white font-medium text-base" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

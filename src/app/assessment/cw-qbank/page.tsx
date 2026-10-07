@@ -1435,7 +1435,7 @@ export default function QuestionBankUploadPage() {
 
       {/* ── Question Details View Modal ─────────────────────────────────────── */}
       {viewingQuestion && (
-        <div className="modal-overlay open" onClick={() => setViewingQuestion(null)} style={{ zIndex: 640 }}>
+        <div className="modal-overlay open" style={{ zIndex: 640 }}>
           <div
             className="modal modal-lg flex flex-col"
             onClick={e => e.stopPropagation()}
@@ -1544,7 +1544,7 @@ export default function QuestionBankUploadPage() {
 
       {/* ── Single Question Delete Confirmation Modal ──────────────────────── */}
       {questionToDelete && (
-        <div className="modal-overlay open" onClick={() => setQuestionToDelete(null)} style={{ zIndex: 670 }}>
+        <div className="modal-overlay open" style={{ zIndex: 670 }}>
           <div
             className="modal modal-md flex flex-col"
             onClick={e => e.stopPropagation()}
@@ -1609,7 +1609,7 @@ export default function QuestionBankUploadPage() {
 
       {/* ── Bulk Delete Bank Questions Modal ────────────────────────────────── */}
       {showDeleteBankModal && (
-        <div className="modal-overlay open" onClick={() => setShowDeleteBankModal(false)} style={{ zIndex: 670 }}>
+        <div className="modal-overlay open" style={{ zIndex: 670 }}>
           <div
             className="modal modal-md flex flex-col"
             onClick={e => e.stopPropagation()}
@@ -1686,7 +1686,7 @@ export default function QuestionBankUploadPage() {
 
       {/* ── Success Popup Modal ─────────────────────────────────────────────── */}
       {successModal && (
-        <div className="modal-overlay open" onClick={() => setSuccessModal(null)} style={{ zIndex: 680 }}>
+        <div className="modal-overlay open" style={{ zIndex: 680 }}>
           <div
             className="modal modal-sm flex flex-col"
             onClick={e => e.stopPropagation()}
