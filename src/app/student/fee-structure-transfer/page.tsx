@@ -1,5 +1,5 @@
 'use client'
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -25,12 +25,26 @@ function FeeStructureTransferContent() {
   const permissions = { add: true, edit: true, delete: true }
   const router = useRouter()
   const searchParams = useSearchParams()
-  // Student Master's Refugee Status modal redirects here as
-  // /student/fee-structure-transfer?studentGuid=<guid> after an assign/edit/
-  // remove — same deep-link convention as Batch Transfer.
+  // The refugee flow redirects here as
+  // /student/fee-structure-transfer?studentGuid=<guid> after an approval
+  // (Refugee Status Approval) or a removal — same deep-link convention as
+  // Batch Transfer.
   const studentGuidParam = searchParams.get('studentGuid')
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  // Success message handed over by the refugee flow's redirect
+  // (?notice=refugee-approved|refugee-removed) — the previous page's own
+  // toast unmounts on navigation. Ref-guarded against Strict Mode's double
+  // effect.
+  const noticeShown = useRef(false)
+  useEffect(() => {
+    if (noticeShown.current) return
+    noticeShown.current = true
+    const notice = searchParams.get('notice')
+    if (notice === 'refugee-approved') showToast('Refugee status approved — review the fee structure below', 'ok')
+    else if (notice === 'refugee-removed') showToast('Refugee status removed — review the fee structure below', 'ok')
+  }, [searchParams])
 
   const [student, setStudent] = useState<StudentDto | null>(null)
 

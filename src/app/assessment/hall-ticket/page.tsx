@@ -1,502 +1,369 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { ScrollTable } from '@/components/ScrollTable'
-import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Pagination } from '@/components/Pagination'
 import { Toast } from '@/components/Toast'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { BaselinePanel } from '@/components/student/BaselinePanel'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
+import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
+import {
+  useHallTicketSearch,
+  useHallTicketEligibility,
+  useHallTicketScopeStudents,
+  useIssueHallTicket,
+  useBulkIssueHallTickets,
+  BulkIssueResponseDto,
+  HallTicketIssueStatus,
+  HallTicketTerm,
+} from '@/hooks/assessment/useHallTicket'
+import type { HallTicketSearchResultDto } from '@/lib/api/student/hallTicketSearch'
 
-import { getIntakes, Intake } from '@/lib/api/academic/intake'
-import { getHallTicketSearch, HallTicketSearchResultDto } from '@/lib/api/student/hallTicketSearch'
-import { getHallTicketEligibility, issueHallTicket, issueBulkHallTickets, getHallTicketPdfUrl, getBulkHallTicketPdfUrl, HallTicketEligibilityDto, BulkIssueResponseDto, getBulkIssuedHallTickets, BulkIssuedStudentDto, getHallTicketQrImageUrl } from '@/lib/api/assessment/hallTicketIssue'
+// Hall Ticket Eligibility & Issue (pages/assessment/hall-ticket-eligibility-
+// and-issue-page.md) — successor to legacy frmTrnUEHallTicketIssue. This
+// page only ISSUES; printing lives on /assessment/hall-print (one student)
+// and /assessment/hall-ticket-print-all (whole intake).
+//  1. Intake + term — sent with every call.
+//  2. Search → GET /students/hall-ticket-search (registered students of the intake).
+//  3. Select a row → GET /eligibility, one call for every clearance.
+//  4. Issue → POST /, shown only when canIssue (the server re-checks).
+//  5/6. Bulk issue + issue status → POST /bulk and GET /bulk in one modal,
+//     scoped to the intake or one program/semester.
+
+const PAGE_SIZE = 10
+const TERM_OPTIONS = [{ value: '1', label: 'Term 1' }, { value: '2', label: 'Term 2' }]
+const STATUS_OPTIONS = [
+  { value: '', label: 'All students' },
+  { value: 'NotIssued', label: 'Not issued' },
+  { value: 'Issued', label: 'Issued' },
+]
 
 export default function HallTicketIssuancePage() {
-  const [term, setTerm] = useState('Term 1')
+  const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  // ---- Scope ---------------------------------------------------------------
+  // Every intake is listed; preselects the current academic intake.
+  const { data: intakes = [] } = useIntakesDropdown()
+  const [intakeGuid, setIntakeGuid] = useState('')
+  useEffect(() => {
+    if (intakeGuid || intakes.length === 0) return
+    setIntakeGuid((intakes.find(i => i.currentIntake) ?? intakes[0]).intakeGuid)
+  }, [intakes, intakeGuid])
+  const intakeOptions = intakes.map(i => ({ value: i.intakeGuid, label: i.description ? `${i.description} (${i.intakeCode})` : String(i.intakeCode) }))
+  const [term, setTerm] = useState<HallTicketTerm>(1)
+
+  // ---- Search --------------------------------------------------------------
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => { if (searchInput.trim() !== search) { setSearch(searchInput.trim()); setPage(1) } }, 400)
+    return () => clearTimeout(t)
+  }, [searchInput, search])
+  const { data: students = [], isFetching: searching, isError: searchError } = useHallTicketSearch(search, intakeGuid || null)
   const [page, setPage] = useState(1)
+  const totalPages = Math.max(1, Math.ceil(students.length / PAGE_SIZE))
+  const pageRows = students.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  const [intakes, setIntakes] = useState<Intake[]>([])
-  const [selectedIntake, setSelectedIntake] = useState<string>('')
+  // ---- Selected student ----------------------------------------------------
+  const [selected, setSelected] = useState<HallTicketSearchResultDto | null>(null)
+  // A different intake/term is a different ticket — drop the selection.
+  useEffect(() => { setSelected(null) }, [intakeGuid, term])
+  const { data: elig, isFetching: checking, isError: eligError, error: eligErr } = useHallTicketEligibility(selected?.studentGuid ?? null, intakeGuid || null, term)
+  const issue = useIssueHallTicket()
 
-  const [students, setStudents] = useState<HallTicketSearchResultDto[]>([])
-  const [isSearching, setIsSearching] = useState(false)
-
-  const [selectedStudent, setSelectedStudent] = useState<HallTicketSearchResultDto | null>(null)
-  const [eligibility, setEligibility] = useState<HallTicketEligibilityDto | null>(null)
-  const [isCheckingEligibility, setIsCheckingEligibility] = useState(false)
-
-  const [isIssuing, setIsIssuing] = useState(false)
-  const [isBulkIssuing, setIsBulkIssuing] = useState(false)
-  const [showIssuedModal, setShowIssuedModal] = useState(false)
-  const [issuedStudents, setIssuedStudents] = useState<BulkIssuedStudentDto[]>([])
-  const [isFetchingIssued, setIsFetchingIssued] = useState(false)
-
-  const [toast, setToast] = useState<{ msg: string, type: string } | null>(null)
-  const topCardRef = useRef<HTMLDivElement>(null)
-  const tableRef = useRef<HTMLDivElement>(null)
-
-  const showToast = (msg: string, type: string = 'success') => {
-    setToast({ msg, type })
-    setTimeout(() => setToast(null), 3000)
-  }
-
-  // Fetch intakes on mount
-  useEffect(() => {
-    getIntakes().then(data => {
-      setIntakes(data)
-      const current = data.find(i => i.currentAdmissionIntake) || data[0]
-      if (current) setSelectedIntake(current.intakeGuid)
-    }).catch(err => console.error('Failed to load intakes:', err))
-  }, [])
-
-  // Search debounced
-  useEffect(() => {
-    if (!selectedIntake) return
-    const timer = setTimeout(() => {
-      setIsSearching(true)
-      getHallTicketSearch(search, selectedIntake).then(data => {
-        setStudents(data || [])
-        if (search.trim() !== '' && data && data.length > 0) {
-          setTimeout(() => {
-            tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          }, 100)
-        }
-      }).catch(err => {
-        console.error('Search error:', err)
-        setStudents([])
-      }).finally(() => setIsSearching(false))
-    }, 500)
-
-    return () => clearTimeout(timer)
-  }, [search, selectedIntake])
-
-  // Clear selection when term or intake changes
-  useEffect(() => {
-    setSelectedStudent(null)
-    setEligibility(null)
-  }, [term, selectedIntake])
-
-  const handleRowClick = (student: HallTicketSearchResultDto) => {
-    setSelectedStudent(student)
-    setIsCheckingEligibility(true)
-    setEligibility(null)
-
-    setTimeout(() => {
-      topCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }, 100)
-
-    const termNum = term === 'Term 1' ? 1 : 2
-    getHallTicketEligibility(student.studentGuid, selectedIntake, termNum)
-      .then(data => {
-        setEligibility(data)
-      })
-      .catch(err => {
-        console.error('Eligibility error:', err)
-        showToast(err.message || 'Failed to load eligibility', 'error')
-      })
-      .finally(() => setIsCheckingEligibility(false))
-  }
-
-  const handleIssue = () => {
-    if (!selectedStudent || !selectedIntake || !eligibility?.canIssue) return
-
-    setIsIssuing(true)
-    const termNum = term === 'Term 1' ? 1 : 2
-
-    issueHallTicket({
-      studentGuid: selectedStudent.studentGuid,
-      intakeGuid: selectedIntake,
-      term: termNum
+  function handleIssue() {
+    if (!selected || !elig?.canIssue) return
+    issue.mutate({ studentGuid: selected.studentGuid, intakeGuid, term }, {
+      onSuccess: () => {
+        showToast(`Hall ticket issued to ${selected.studentName ?? 'the student'}.`, 'ok')
+        // Per the page doc: clear the selection and the search box.
+        setSelected(null); setSearchInput(''); setSearch('')
+      },
+      // A 400 here means a clearance changed since the check — the
+      // eligibility query is invalidated either way, so it re-renders fresh.
+      onError: (e: Error) => showToast(e.message || 'Could not issue the hall ticket.', 'error'),
     })
-      .then(() => {
-        showToast('Hall ticket issued successfully', 'success')
-        setEligibility(prev => prev ? { ...prev, alreadyIssued: true, canIssue: false } : null)
-      })
-      .catch(err => {
-        console.error('Issue error:', err)
-        showToast(err.message || 'Failed to issue hall ticket', 'error')
-        // Re-fetch eligibility if blocked
-        if (err.code === 'bad_request') {
-          handleRowClick(selectedStudent)
-        }
-      })
-      .finally(() => setIsIssuing(false))
   }
 
-  const handleViewIssuedList = () => {
-    if (!selectedIntake) return
-    setShowIssuedModal(true)
-    setIsFetchingIssued(true)
-    getBulkIssuedHallTickets(selectedIntake, term === 'Term 1' ? 1 : 2)
-      .then(data => setIssuedStudents(data || []))
-      .catch(err => {
-        console.error('Failed to load issued list:', err)
-        showToast('Failed to load issued list', 'error')
-      })
-      .finally(() => setIsFetchingIssued(false))
-  }
-
-  const handleBulkIssue = () => {
-    if (!selectedIntake) return
-    if (!window.confirm('Are you sure you want to bulk issue hall tickets for ALL eligible students in this intake? This action may take some time.')) return
-
-    setIsBulkIssuing(true)
-    issueBulkHallTickets({ intakeGuid: selectedIntake, term: term === 'Term 1' ? 1 : 2 })
-      .then((res) => {
-        showToast(
-          `Processed ${res.totalConsidered} students. Issued: ${res.issued}, Ineligible: ${res.ineligible}, Already Issued: ${res.alreadyIssued}, Failed: ${res.failed}`,
-          res.issued > 0 ? 'success' : 'info'
-        )
-        // Re-evaluate eligibility for the selected student to update their UI
-        if (selectedStudent) {
-          handleRowClick(selectedStudent)
-        }
-      })
-      .catch(err => {
-        console.error('Bulk issue error:', err)
-        showToast(err.message || 'Failed to bulk issue hall tickets', 'error')
-      })
-      .finally(() => setIsBulkIssuing(false))
-  }
+  const [bulkOpen, setBulkOpen] = useState(false)
 
   return (
-    <div className="page active h-full flex flex-col bg-slate-50/50">
-      <div className="pg-hdr shrink-0 pb-4">
-        <div>
-          <div className="pg-title text-2xl font-bold text-slate-800">Hall Ticket Issuance</div>
-          <div className="pg-sub text-slate-500 mt-1">Search and clear students to issue hall tickets for examinations</div>
+    <>
+      <div className="page active">
+        <div className="pg-hdr">
+          <div><div className="pg-title">Hall Ticket Issuance</div><div className="pg-sub">Check a student&apos;s exam clearances and issue their University Exam hall ticket</div></div>
+          <button className="btn btn-neu" onClick={() => setBulkOpen(true)} disabled={!intakeGuid}><i className="lni lni-ticket"></i> Bulk Issue &amp; Status</button>
         </div>
-      </div>
 
-      {/* Modern Filter Bar */}
-      <div className="bg-white border border-slate-200/80 rounded-xl p-3 shadow-sm mb-5 shrink-0">
-        <div className="flex flex-col md:flex-row gap-4 items-center">
-          <div className="w-full md:w-48">
-            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Term</label>
-            <SearchSelect
-              options={[{ value: 'Term 1', label: 'Term 1' }, { value: 'Term 2', label: 'Term 2' }]}
-              value={term} onChange={setTerm} className="w-full"
+        <div className="card">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="fg">
+              <label className="lbl">Academic Intake <span className="req">*</span></label>
+              <SearchSelect placeholder="— Select Intake —" options={intakeOptions} value={intakeGuid} onChange={setIntakeGuid} />
+            </div>
+            <div className="fg">
+              <label className="lbl">Term <span className="req">*</span></label>
+              <SearchSelect options={TERM_OPTIONS} value={String(term)} onChange={v => setTerm(v === '2' ? 2 : 1)} />
+            </div>
+            <div className="fg">
+              <label className="lbl">Search Student</label>
+              <div className="inp-wrap">
+                <i className="lni lni-search-alt inp-icon"></i>
+                <input className="ctrl" placeholder="Student No., Reg No. or name…" value={searchInput} onChange={e => setSearchInput(e.target.value)} disabled={!intakeGuid} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {selected && (
+          <>
+            <BaselinePanel
+              label="Selected Student"
+              items={[
+                { label: 'Student', value: elig?.studentName ?? selected.studentName ?? '—' },
+                { label: 'Reg No.', value: selected.studentRegNo ?? '—', accent: true },
+                { label: 'Programme', value: selected.programName || '—' },
+                { label: 'Semester', value: selected.semCode || '—' },
+                { label: 'Batch', value: selected.batchCode || '—' },
+              ]}
             />
-          </div>
-          <div className="w-full md:w-80">
-            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Academic Session (Intake)</label>
-            <SearchSelect
-              options={intakes.map(i => ({ value: i.intakeGuid, label: i.description }))}
-              value={selectedIntake} onChange={setSelectedIntake} className="w-full"
-            />
-          </div>
-          <div className="flex-1 w-full relative group">
-            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Search Student</label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 group-focus-within:text-blue-500 transition-colors">
-                <i className="lni lni-search-alt text-lg"></i>
-              </span>
-              <input
-                type="text"
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-10 pr-4 text-sm text-slate-700 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none placeholder-slate-400"
-                placeholder="Type name or registration number..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-            {/* Top-Bottom Layout */}
-      <div className="flex flex-col gap-5 flex-1 min-h-0">
-        
-        {/* Top: Horizontal Clearance Panel */}
-        <div ref={topCardRef} className="bg-white border border-slate-200/80 rounded-xl shadow-sm shrink-0 flex flex-col md:flex-row items-stretch min-h-[140px]">
-          {!selectedStudent ? (
-             <div className="flex-1 flex flex-col items-center justify-center text-slate-400 py-10">
-               <div className="w-14 h-14 rounded-full bg-slate-50 flex items-center justify-center mb-3">
-                 <i className="lni lni-user text-2xl"></i>
-               </div>
-               <p className="text-sm font-medium text-slate-500">Select a student from the list below</p>
-               <p className="text-xs mt-1">Their clearance details will appear here.</p>
-             </div>
-          ) : (
-             <>
-               {/* Section 1: Student Details */}
-               <div className="flex-[1.4] flex items-center p-5 md:border-r border-b md:border-b-0 border-slate-100 bg-slate-50/30 min-w-0">
-                 <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#0066b2] to-indigo-600 text-white flex items-center justify-center text-2xl font-bold mr-4 shrink-0 shadow-sm">
-                   {selectedStudent.studentName.charAt(0)}
-                 </div>
-                 <div className="min-w-0">
-                   <h2 className="text-lg font-bold text-slate-900 leading-tight truncate" title={selectedStudent.studentName}>{selectedStudent.studentName}</h2>
-                   <p className="text-[#0066b2] font-mono font-bold text-sm mb-1">{selectedStudent.studentRegNo}</p>
-                   <p className="text-xs text-slate-500 truncate font-medium" title={selectedStudent.programName}>
-                     {selectedStudent.programName}
-                   </p>
-                   <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider mt-0.5">
-                     Sem {selectedStudent.semCode} • {selectedStudent.batchCode}
-                   </p>
-                 </div>
-               </div>
-               
-               {/* Section 2: Checklist */}
-               <div className="flex-[1.1] p-5 md:border-r border-b md:border-b-0 border-slate-100 relative bg-white min-w-0">
-                 {isCheckingEligibility ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 z-10 text-blue-500">
-                       <i className="lni lni-spinner-solid animate-spin text-3xl mb-2"></i>
-                       <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Evaluating</p>
-                    </div>
-                 ) : eligibility?.alreadyIssued ? (
-                    <div className="flex h-full items-center justify-center gap-5 text-emerald-600 animate-in fade-in duration-300">
-                       <div className="w-20 h-20 bg-white p-1 rounded-lg border border-emerald-100 shadow-sm shrink-0 overflow-hidden relative">
-                         <img src={getHallTicketQrImageUrl(selectedStudent.studentGuid, term === 'Term 1' ? 1 : 2)} alt="QR Code" className="w-full h-full object-cover" />
-                       </div>
-                       <div className="flex flex-col">
-                         <h4 className="font-bold text-lg leading-tight text-emerald-700">Ticket Issued</h4>
-                         <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600/70 mt-1">Ready for use</p>
-                       </div>
-                    </div>
-                 ) : eligibility ? (
-                    <div className="flex flex-col h-full justify-center">
-                       <div className="flex justify-between items-center mb-3">
-                         <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                           <i className="lni lni-checkmark-circle text-emerald-600"></i> Clearance Status
-                         </h3>
-                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${term === 'Term 1' ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}`}>
-                           {term}
-                         </span>
-                       </div>
-                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                         <ChecklistItem label="Coursework (CW)" isOk={eligibility.cwOk} />
-                         <ChecklistItem label="Mock CBT" isOk={eligibility.ctOk} />
-                         <ChecklistItem label="Tuition Fee" isOk={eligibility.feeOk} />
-                         {term === 'Term 2' ? (
-                           <ChecklistItem label="NCHE & Guild" isOk={eligibility.ncheOk !== false && eligibility.guildOk !== false} />
-                         ) : (
-                           <div className="flex items-center text-[11px] font-medium text-slate-400 italic bg-slate-50 rounded px-2">No extra fees for Term 1</div>
-                         )}
-                       </div>
-                    </div>
-                 ) : null}
-               </div>
-
-               {/* Section 3: Action Button */}
-               <div className="w-full md:w-64 p-5 flex flex-col justify-center bg-slate-50/50 items-stretch">
-                  {!eligibility?.alreadyIssued ? (
-                    <>
-                      <button 
-                        onClick={handleIssue}
-                        disabled={!eligibility?.canIssue || isIssuing || isCheckingEligibility}
-                        className={`w-full py-4 rounded-xl font-bold text-[13px] uppercase tracking-wider flex flex-col items-center justify-center gap-2 transition-all duration-200
-                          ${eligibility?.canIssue
-                            ? 'bg-[#0066b2] hover:bg-blue-700 text-white shadow-lg shadow-blue-500/30 transform hover:-translate-y-0.5' 
-                            : 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-200'
-                          }`}
-                      >
-                        {isIssuing ? (
-                          <><i className="lni lni-spinner-solid animate-spin text-2xl"></i> Issuing...</>
-                        ) : (
-                          <><i className="lni lni-ticket text-3xl mb-1"></i> Issue Ticket</>
-                        )}
-                      </button>
-                      {eligibility && !eligibility.canIssue && !isCheckingEligibility && (
-                        <p className="text-center text-rose-500 text-[10px] font-bold mt-3 uppercase tracking-wider flex items-center justify-center gap-1 animate-pulse">
-                          <i className="lni lni-cross-circle text-sm"></i> Blocked
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <button 
-                      onClick={() => window.open(getHallTicketPdfUrl(selectedStudent!.studentGuid, selectedIntake, term === 'Term 1' ? 1 : 2), '_blank')}
-                      className="w-full py-4 rounded-xl font-bold text-[13px] uppercase tracking-wider flex flex-col items-center justify-center gap-2 transition-all duration-200 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/30 transform hover:-translate-y-0.5"
-                    >
-                      <i className="lni lni-printer text-3xl mb-1"></i> Print Ticket
-                    </button>
-                  )}
-               </div>
-             </>
-          )}
-        </div>
-
-        {/* Bottom: Student List */}
-        <div ref={tableRef} className="flex-1 flex flex-col bg-white border border-slate-200/80 rounded-xl shadow-sm overflow-hidden min-h-[300px]">
-          <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-            <div className="flex items-center gap-3">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                <i className="lni lni-users text-blue-600"></i> Students in Session
-              </h3>
-              <div className="text-[11px] font-semibold text-slate-500 bg-slate-200/60 px-2 py-0.5 rounded-full">
-                {students.length} Records
+            <div className="card">
+              <div className="card-hdr">
+                <div className="card-title"><i className="lni lni-checkmark-circle"></i> Clearance — Term {term}</div>
+                <button className="btn btn-neu btn-sm" onClick={() => setSelected(null)}><i className="lni lni-close"></i> Clear</button>
               </div>
-            </div>
-
-            {selectedIntake && (
-              <div className="flex gap-2">
-                <button
-                  onClick={handleBulkIssue}
-                  disabled={isBulkIssuing}
-                  className="px-3 py-1.5 text-[11px] font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isBulkIssuing ? (
-                    <><i className="lni lni-spinner-solid animate-spin"></i> Processing...</>
-                  ) : (
-                    <><i className="lni lni-ticket"></i> Bulk Issue All</>
-                  )}
-                </button>
-                <button
-                  onClick={handleViewIssuedList}
-                  className="px-3 py-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-md transition-colors flex items-center gap-1.5"
-                >
-                  <i className="lni lni-printer"></i> Bulk Print All
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-auto">
-            <table className="w-full text-left text-[13px]">
-              <thead className="sticky top-0 bg-white/95 backdrop-blur z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                <tr className="text-slate-500 font-semibold border-b border-slate-200">
-                  <th className="py-3 px-4 font-semibold text-xs">Reg. No.</th>
-                  <th className="py-3 px-4 font-semibold text-xs">Student</th>
-                  <th className="py-3 px-4 font-semibold text-xs">Program</th>
-                  <th className="py-3 px-4 font-semibold text-xs text-center">Semester</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {isSearching ? (
-                  <TableLoadingState colSpan={4} title="Searching records..." subtitle="Please wait while we fetch the students." />
-                ) : students.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-24">
-                      <div className="flex flex-col items-center justify-center text-slate-400">
-                        <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-3">
-                          <i className="lni lni-search-alt text-2xl"></i>
-                        </div>
-                        <p className="text-sm font-medium text-slate-500">No students found</p>
-                        <p className="text-xs mt-1">Try adjusting your search or selected intake.</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  students.map(student => {
-                    const isSelected = selectedStudent?.studentGuid === student.studentGuid;
-                    return (
-                      <tr
-                        key={student.studentGuid}
-                        onClick={() => handleRowClick(student)}
-                        className={`cursor-pointer group transition-all duration-200 ${isSelected ? 'bg-blue-50/60 shadow-[inset_3px_0_0_var(--blue)]' : 'hover:bg-slate-50'
-                          }`}
-                      >
-                        <td className="py-3 px-4">
-                          <span className={`font-mono font-semibold ${isSelected ? 'text-blue-700' : 'text-slate-600 group-hover:text-blue-600'}`}>
-                            {student.studentRegNo}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 font-medium text-slate-800">
-                          {student.studentName}
-                        </td>
-                        <td className="py-3 px-4 text-slate-600 text-xs truncate max-w-[200px]" title={student.programName}>
-                          {student.programName}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={`px-2 py-1 rounded text-[11px] font-bold ${isSelected ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
-                            {student.semCode}
-                          </span>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {students.length > 0 && (
-            <div className="p-3 border-t border-slate-100 bg-slate-50/50">
-              <Pagination page={1} totalPages={1} totalCount={students.length} onPageChange={setPage} />
-            </div>
-          )}
-        </div>
-      </div>
-
-      <Toast toast={toast} />
-
-      {/* Issued List Modal */}
-      {showIssuedModal && (
-        <div className="modal-overlay open" onClick={() => setShowIssuedModal(false)} style={{ zIndex: 650 }}>
-          <div className="modal modal-lg flex flex-col" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
-            
-            <div className="modal-hdr modal-hdr-blue shrink-0">
-              <div className="modal-title flex items-center gap-2">
-                <i className="lni lni-ticket"></i>
-                <span>Hall Tickets Issued for {term}</span>
-              </div>
-              <button type="button" className="modal-close" onClick={() => setShowIssuedModal(false)}>
-                <i className="lni lni-close"></i>
-              </button>
-            </div>
-            
-            <div className="modal-body p-0 flex-1 overflow-auto bg-slate-50">
-              {isFetchingIssued ? (
-                <div className="flex flex-col items-center justify-center py-20 text-blue-500">
-                  <i className="lni lni-spinner-solid animate-spin text-4xl mb-3"></i>
-                  <p className="text-sm font-medium text-slate-500">Fetching records...</p>
+              {checking ? (
+                <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Checking clearances…</div>
+              ) : eligError || !elig ? (
+                // e.g. course unit flags couldn't load — the API fails with
+                // a 400 rather than passing, so show it as an error.
+                <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}>
+                  <i className="lni lni-warning"></i> {eligErr instanceof Error && eligErr.message ? eligErr.message : 'Couldn’t check eligibility. Please try again.'}
                 </div>
-              ) : issuedStudents.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                  <i className="lni lni-empty-file text-5xl mb-3"></i>
-                  <p className="text-sm font-medium text-slate-500">No tickets have been issued yet for this term.</p>
+              ) : elig.alreadyIssued ? (
+                <div className="info-box">
+                  <i className="lni lni-checkmark-circle" style={{ color: 'var(--green)', fontSize: 15, flexShrink: 0 }}></i>
+                  <div style={{ fontSize: 12.5 }}>
+                    Hall ticket already issued for Term {term}.{' '}
+                    <Link href="/assessment/hall-print" style={{ color: 'var(--b700)', fontWeight: 600 }}>Print it on Hall Ticket Print →</Link>
+                  </div>
                 </div>
               ) : (
-                <table className="w-full text-left text-[13px] bg-white">
-                  <thead className="sticky top-0 bg-slate-50/95 backdrop-blur z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                    <tr className="text-slate-500 font-semibold border-b border-slate-200">
-                      <th className="py-3 px-5 font-semibold text-xs">Reg. No.</th>
-                      <th className="py-3 px-5 font-semibold text-xs">Student Name</th>
-                      <th className="py-3 px-5 font-semibold text-xs">Program</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {issuedStudents.map(student => (
-                      <tr key={student.studentGuid} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-3 px-5 font-mono font-semibold text-slate-700">{student.studentRegNo}</td>
-                        <td className="py-3 px-5 font-medium text-slate-900">{student.studentName}</td>
-                        <td className="py-3 px-5 text-slate-500 text-xs truncate max-w-[200px]" title={student.programName}>{student.programName}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+                    <ClearanceLine
+                      label="Fee clearance"
+                      ok={elig.feeOk}
+                      note={elig.isFeeExcepted ? 'No fee clearance needed' : elig.isExempted ? 'Exemption student' : `Needs ${term === 1 ? '50%' : '100%'} of fees paid`}
+                    />
+                    <ClearanceLine label="Coursework" ok={elig.cwOk} note="First coursework submitted on every unit with coursework" />
+                    <ClearanceLine label="Class test" ok={elig.ctOk} note="First class test submitted on every unit with a mid-semester test" />
+                    {/* Term 2 only — both are null for Term 1. */}
+                    {elig.guildOk !== null && <ClearanceLine label="Guild fee" ok={elig.guildOk} note="Current-semester Guild fee paid" />}
+                    {elig.ncheOk !== null && <ClearanceLine label="NCHE" ok={elig.ncheOk} note="NCHE status for the semester is Paid" />}
+                  </div>
+                  <div className="flex gap-2" style={{ justifyContent: 'flex-end', alignItems: 'center' }}>
+                    {elig.canIssue ? (
+                      <button className="btn btn-primary" onClick={handleIssue} disabled={issue.isPending}>
+                        <i className="lni lni-ticket"></i> {issue.isPending ? 'Issuing…' : 'Issue Hall Ticket'}
+                      </button>
+                    ) : (
+                      <span className="badge badge-red"><i className="lni lni-ban"></i> Not eligible — clear the failing items above first</span>
+                    )}
+                  </div>
+                </>
               )}
             </div>
-            
-            <div className="modal-ftr shrink-0 flex justify-between items-center bg-white border-t border-slate-200">
-              <span className="text-xs font-semibold text-slate-500">Total: {issuedStudents.length} Students</span>
-              <div className="flex gap-2">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowIssuedModal(false)}>
-                  Close
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => window.open(getBulkHallTicketPdfUrl(selectedIntake, term === 'Term 1' ? 1 : 2), '_blank')}
-                  className="btn btn-primary flex items-center gap-2"
-                >
-                  <i className="lni lni-printer"></i> Print Batch PDF
-                </button>
-              </div>
-            </div>
+          </>
+        )}
+
+        <div className="card">
+          <div className="card-hdr">
+            <div className="card-title"><i className="lni lni-users"></i> Students</div>
+            {students.length > 0 && <span className="badge badge-blue">{students.length} found</span>}
           </div>
+          <ScrollTable>
+            <table>
+              <thead><tr><th>Reg No.</th><th>Name</th><th>Programme</th><th>Semester</th><th>Batch</th></tr></thead>
+              <tbody>
+                {!search ? (
+                  <tr><td colSpan={5} className="text-g400 text-center" style={{ padding: 24 }}>Search for a student by number or name to check their clearances.</td></tr>
+                ) : searching && students.length === 0 ? (
+                  <TableLoadingState colSpan={5} />
+                ) : searchError ? (
+                  <tr><td colSpan={5} className="text-clr-red text-center" style={{ padding: 24 }}><i className="lni lni-warning"></i> Couldn&apos;t search students. Please try again.</td></tr>
+                ) : students.length === 0 ? (
+                  <tr><td colSpan={5} className="text-g400 text-center" style={{ padding: 24 }}>No registered student of this intake matches &quot;{search}&quot;.</td></tr>
+                ) : pageRows.map(s => (
+                  <tr key={s.studentGuid} onClick={() => setSelected(s)} style={{ cursor: 'pointer', background: selected?.studentGuid === s.studentGuid ? 'var(--b50)' : undefined }}>
+                    <td className="font-mono">{s.studentRegNo ?? '—'}</td>
+                    <td className="font-semibold">{s.studentName ?? '—'}</td>
+                    <td>{s.programName || '—'}</td>
+                    <td>{s.semCode || '—'}</td>
+                    <td>{s.batchCode || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollTable>
+          {students.length > PAGE_SIZE && <Pagination page={page} totalPages={totalPages} totalCount={students.length} itemLabel="students" onPageChange={setPage} />}
         </div>
-      )}
+      </div>
+
+      <BulkIssueModal
+        isOpen={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        intakeGuid={intakeGuid}
+        intakeLabel={intakeOptions.find(o => o.value === intakeGuid)?.label ?? ''}
+        term={term}
+        showToast={showToast}
+      />
+      <Toast toast={toast} />
+    </>
+  )
+}
+
+function ClearanceLine({ label, ok, note }: { label: string; ok: boolean; note: string }) {
+  return (
+    <div className="flex items-center gap-3" style={{ padding: '8px 10px', borderRadius: 'var(--rsm)', border: `1px solid var(--${ok ? 'green' : 'red'}-bd)`, background: `var(--${ok ? 'green' : 'red'}-bg)` }}>
+      <i className={`lni ${ok ? 'lni-checkmark-circle' : 'lni-cross-circle'}`} style={{ color: `var(--${ok ? 'green' : 'red'})`, fontSize: 18, flexShrink: 0 }}></i>
+      <div>
+        <div style={{ fontSize: 12.5, fontWeight: 600 }}>{label} — {ok ? 'Cleared' : 'Not cleared'}</div>
+        <div className="text-g500" style={{ fontSize: 11 }}>{note}</div>
+      </div>
     </div>
   )
 }
 
-function ChecklistItem({ label, isOk }: { label: string, isOk: boolean | null }) {
-  if (isOk === null) return null;
+// Bulk issue (POST /bulk) + issue status list (GET /bulk), per steps 5–6:
+// filter Not issued, bulk issue, and the list reloads to show who's left.
+// Program + semester narrow the scope; leaving program empty = whole intake.
+function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showToast }: {
+  isOpen: boolean
+  onClose: () => void
+  intakeGuid: string
+  intakeLabel: string
+  term: HallTicketTerm
+  showToast: (msg: string, type?: string) => void
+}) {
+  const [programGuid, setProgramGuid] = useState('')
+  const [semesterGuid, setSemesterGuid] = useState('')
+  const [status, setStatus] = useState<HallTicketIssueStatus | ''>('NotIssued')
+  const [summary, setSummary] = useState<BulkIssueResponseDto | null>(null)
+  const [page, setPage] = useState(1)
+  useEffect(() => { if (isOpen) { setSummary(null); setPage(1) } }, [isOpen])
+
+  const { data: programs = [] } = useProgramDropdown(undefined, isOpen)
+  const { data: semesters = [] } = useSemestersForProgram(programGuid || null, isOpen)
+  // The API needs program and semester together — a program alone isn't a scope.
+  const scopeIncomplete = !!programGuid && !semesterGuid
+  const scope = { intakeGuid, term, programGuid: programGuid || null, semesterGuid: semesterGuid || null }
+  const { data: rows = [], isFetching, isError } = useHallTicketScopeStudents(scope, status || null, isOpen && !scopeIncomplete)
+  const bulk = useBulkIssueHallTickets()
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
+
+  if (!isOpen) return null
+
+  const scopeLabel = programGuid
+    ? `${programs.find(p => p.programGuid === programGuid)?.programName ?? 'programme'}${semesterGuid ? ` · ${semesters.find(s => s.semesterGuid === semesterGuid)?.semName ?? ''}` : ''}`
+    : `the whole of ${intakeLabel || 'this intake'}`
+
+  function handleBulkIssue() {
+    if (scopeIncomplete) return
+    if (!window.confirm(`Issue Term ${term} hall tickets to every eligible student in ${scopeLabel}? Students who already have one are skipped. This may take a while.`)) return
+    setSummary(null)
+    bulk.mutate(scope, {
+      onSuccess: res => { setSummary(res); setPage(1) },
+      onError: (e: Error) => showToast(e.message || 'Bulk issue failed.', 'error'),
+    })
+  }
+
   return (
-    <div className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${isOk ? 'bg-emerald-50/40 border-emerald-100/60' : 'bg-rose-50/40 border-rose-100/60'}`}>
-      <div className={`w-5 h-5 shrink-0 rounded-full flex items-center justify-center text-[10px] font-bold ${isOk ? 'bg-emerald-500 text-white shadow-sm' : 'bg-rose-500 text-white shadow-sm'}`}>
-        <i className={`lni ${isOk ? 'lni-checkmark' : 'lni-close'}`}></i>
+    <div className="modal-overlay open" onClick={onClose}>
+      <div className="modal modal-xl" style={{ display: 'flex', flexDirection: 'column', maxHeight: '88vh' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-hdr"><div className="modal-title"><i className="lni lni-ticket"></i> Bulk Issue &amp; Status — Term {term}</div><button className="modal-close" onClick={onClose}>✕</button></div>
+        <div style={{ overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="fg">
+              <label className="lbl">Programme</label>
+              <SearchSelect
+                placeholder="All programmes"
+                options={[{ value: '', label: 'All programmes (whole intake)' }, ...programs.map(p => ({ value: p.programGuid, label: p.programName }))]}
+                value={programGuid}
+                onChange={v => { setProgramGuid(v); setSemesterGuid(''); setPage(1) }}
+              />
+            </div>
+            <div className="fg">
+              <label className="lbl">Semester {programGuid && <span className="req">*</span>}</label>
+              <SearchSelect
+                placeholder={programGuid ? '— Select Semester —' : 'Pick a programme first'}
+                options={semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))}
+                value={semesterGuid}
+                onChange={v => { setSemesterGuid(v); setPage(1) }}
+                disabled={!programGuid}
+              />
+            </div>
+            <div className="fg">
+              <label className="lbl">Show</label>
+              <SearchSelect options={STATUS_OPTIONS} value={status} onChange={v => { setStatus(v as HallTicketIssueStatus | ''); setPage(1) }} />
+            </div>
+          </div>
+
+          {summary && (
+            <div className="info-box mb-3">
+              <i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i>
+              <div style={{ fontSize: 12.5 }}>
+                <strong>{summary.totalConsidered}</strong> considered — <strong style={{ color: 'var(--green)' }}>{summary.issued}</strong> issued,{' '}
+                <strong>{summary.alreadyIssued}</strong> already issued, <strong style={{ color: 'var(--amber)' }}>{summary.ineligible}</strong> ineligible,{' '}
+                <strong style={{ color: 'var(--red)' }}>{summary.failed}</strong> failed.
+                {summary.ineligible > 0 && ' Select an ineligible student on the main page to see which clearance is missing.'}
+                {summary.failed > 0 && ' Failed means the server couldn’t run the check (not that the student is ineligible) — select one on the main page to see the error, and retry once it’s fixed.'}
+              </div>
+            </div>
+          )}
+
+          {scopeIncomplete ? (
+            <div className="text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>Pick a semester to scope to this programme.</div>
+          ) : (
+            <>
+              <ScrollTable>
+                <table>
+                  <thead><tr><th>Reg No.</th><th>Name</th><th>Status</th><th>Programme</th><th>Sem</th><th>Batch</th></tr></thead>
+                  <tbody>
+                    {isFetching && rows.length === 0 ? (
+                      <TableLoadingState colSpan={6} />
+                    ) : isError ? (
+                      <tr><td colSpan={6} className="text-clr-red text-center" style={{ padding: 24 }}><i className="lni lni-warning"></i> Couldn&apos;t load students. Please try again.</td></tr>
+                    ) : rows.length === 0 ? (
+                      <tr><td colSpan={6} className="text-g400 text-center" style={{ padding: 24 }}>No students {status === 'Issued' ? 'with an issued ticket' : status === 'NotIssued' ? 'left without a ticket' : ''} in this scope.</td></tr>
+                    ) : rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(r => (
+                      <tr key={r.studentGuid}>
+                        <td className="font-mono">{r.studentRegNo ?? '—'}</td>
+                        <td>{r.studentName ?? '—'}</td>
+                        <td><span className={`badge ${r.status === 'Issued' ? 'badge-green' : 'badge-amber'}`}>{r.status === 'Issued' ? 'Issued' : 'Not issued'}</span></td>
+                        <td>{r.programName || '—'}</td>
+                        <td>{r.semCode || '—'}</td>
+                        <td>{r.batchCode || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </ScrollTable>
+              {rows.length > PAGE_SIZE && <Pagination page={page} totalPages={totalPages} totalCount={rows.length} itemLabel="students" onPageChange={setPage} />}
+            </>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-neu" onClick={onClose} disabled={bulk.isPending}>Close</button>
+          <button className="btn btn-primary" onClick={handleBulkIssue} disabled={bulk.isPending || scopeIncomplete || !intakeGuid}>
+            <i className="lni lni-ticket"></i> {bulk.isPending ? 'Issuing…' : 'Bulk Issue'}
+          </button>
+        </div>
       </div>
-      <span className={`text-[11px] font-semibold leading-tight ${isOk ? 'text-emerald-800' : 'text-rose-800'}`}>{label}</span>
     </div>
   )
 }

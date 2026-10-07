@@ -1731,7 +1731,7 @@ export default function PaymentConsolePage() {
                       <>
                       <ScrollTable className="no-sticky-col">
                         <table>
-                          <thead><tr><th style={{ width: 40 }}></th><th>Date</th><th>Category</th><th>Ledger</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
+                          <thead><tr><th style={{ width: 40 }}></th><th>Date</th><th>Ledger</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
                           <tbody>
                             {otherHistoryItems.map(h => (
                               <tr key={h.paymentOtherGuid}>
@@ -1748,14 +1748,18 @@ export default function PaymentConsolePage() {
                                   </ActionMenu>
                                 </td>
                                 <td>{h.payDate.slice(0, 10)}</td>
-                                <td>{PAYMENT_CATEGORY_LABELS[2]}</td>
                                 <td>
-                                  {h.ledger ? (
-                                    <>
-                                      {h.ledger.ledgerName}
-                                      <span className="text-g400" style={{ display: 'block', fontSize: 11 }}>{h.ledger.ledgerCode}</span>
-                                    </>
-                                  ) : '—'}
+                                  {/* One line per ledger — a payment can cover several
+                                      (get-payment-others.md, 2026-09-10); each line's
+                                      own amount is shown only when there's more than one. */}
+                                  {h.ledgers?.length ? h.ledgers.map((l, i) => (
+                                    <div key={l.ledger?.ledgerGuid ?? i} style={{ marginTop: i ? 4 : 0 }}>
+                                      {l.ledger?.ledgerName ?? '—'}
+                                      <span className="text-g400" style={{ display: 'block', fontSize: 11 }}>
+                                        {l.ledger?.ledgerCode}{h.ledgers.length > 1 && ` · ${l.amount.toLocaleString()}`}
+                                      </span>
+                                    </div>
+                                  )) : '—'}
                                 </td>
                                 <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
                                 <td>{h.currency.currencyCode}</td>

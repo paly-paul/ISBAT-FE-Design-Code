@@ -31,7 +31,10 @@ export interface PaymentOtherDto {
   // (get-payment-advances.md) rather than fresh cash — such rows can't be
   // edited directly (PUT /api/v1/finance/other-payment/{guid} rejects them).
   advance: number
-  ledger: { ledgerGuid: string; ledgerCode: string; ledgerName: string } | null
+  // One entry per ledger the payment covers (2026-09-10: the single `ledger`
+  // ref was replaced by this array). Always at least one; `amount` above is
+  // the sum of these lines.
+  ledgers: { ledger: { ledgerGuid: string; ledgerCode: string; ledgerName: string } | null; amount: number }[]
   // Raw PaymentGroupCategory byte (1 Tuition/2 Other/3 Nche/4 Guild) — only
   // set when this row was created as part of a unified payment. Nullable;
   // every row from THIS endpoint is Other regardless of whether it's set.

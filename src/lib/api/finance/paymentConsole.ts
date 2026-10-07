@@ -775,9 +775,13 @@ const mockLedgerOthers: LedgerOthersDto[] = [
 // The ledger-others catalogue carries no "is resit" flag, so the resit
 // ledger is recognised by its code/name. Picking it on the Other Payment tab
 // auto-fills and locks the row's amount from get-resit-fee.md. Swap this
-// for a real identifier (e.g. a gen-set lookup) once the backend exposes one.
+// for a real identifier once the backend exposes one — it identifies the
+// ledger by the RESIT general setting (post-payment-other.md), which no
+// frontend-facing endpoint returns yet. Matches "Resit", "Re-sit", "Re sit"
+// and "Re_sit" in either field.
+const RESIT_PATTERN = /re[\s\-_]?sit/i
 export function isResitLedger(l: Pick<LedgerOthersDto, 'ledgerCode' | 'ledgerName'>): boolean {
-  return /resit/i.test(l.ledgerName) || /resit/i.test(l.ledgerCode)
+  return RESIT_PATTERN.test(l.ledgerName ?? '') || RESIT_PATTERN.test(l.ledgerCode ?? '')
 }
 
 export function getLedgerOthers(): Promise<LedgerOthersDto[]> {
