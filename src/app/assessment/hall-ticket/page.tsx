@@ -46,14 +46,12 @@ export default function HallTicketIssuancePage() {
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
   // ---- Scope ---------------------------------------------------------------
-  // Every intake is listed; preselects the current academic intake.
-  const { data: intakes = [] } = useIntakesDropdown()
-  const [intakeGuid, setIntakeGuid] = useState('')
-  useEffect(() => {
-    if (intakeGuid || intakes.length === 0) return
-    setIntakeGuid((intakes.find(i => i.currentIntake) ?? intakes[0]).intakeGuid)
-  }, [intakes, intakeGuid])
-  const intakeOptions = intakes.map(i => ({ value: i.intakeGuid, label: i.description ? `${i.description} (${i.intakeCode})` : String(i.intakeCode) }))
+  // Hall tickets are only issued for the current academic intake — the field
+  // is locked to it, not a choice.
+  const { data: intakes = [], isLoading: intakesLoading } = useIntakesDropdown()
+  const currentIntake = intakes.find(i => i.currentIntake)
+  const intakeGuid = currentIntake?.intakeGuid ?? ''
+  const intakeLabel = currentIntake ? (currentIntake.description ? `${currentIntake.description} (${currentIntake.intakeCode})` : String(currentIntake.intakeCode)) : ''
   const [term, setTerm] = useState<HallTicketTerm>(1)
 
   // ---- Search --------------------------------------------------------------
@@ -70,10 +68,8 @@ export default function HallTicketIssuancePage() {
 
   // ---- Selected student ----------------------------------------------------
   // Kept across term changes — eligibility is keyed by term, so the
-  // clearance card re-checks the same student. A different intake is a
-  // different set of registered students, so that drops the selection.
+  // clearance card re-checks the same student.
   const [selected, setSelected] = useState<HallTicketSearchResultDto | null>(null)
-  useEffect(() => { setSelected(null) }, [intakeGuid])
   const { data: elig, isFetching: checking, isError: eligError, error: eligErr } = useHallTicketEligibility(selected?.studentGuid ?? null, intakeGuid || null, term)
   const issue = useIssueHallTicket()
 
@@ -107,8 +103,24 @@ export default function HallTicketIssuancePage() {
         <div className="card">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="fg">
-              <label className="lbl">Academic Intake <span className="req">*</span></label>
-              <SearchSelect placeholder="— Select Intake —" options={intakeOptions} value={intakeGuid} onChange={setIntakeGuid} />
+              <label className="lbl">Academic Intake</label>
+              {/* readOnly, not disabled — the field has a real value, and the
+                  grey .ctrl:disabled style reads as "unavailable". The lock
+                  icon says it's fixed. */}
+              <div className="inp-wrap">
+                <i className="lni lni-lock-alt inp-icon"></i>
+                <input
+                  className="ctrl"
+                  value={intakesLoading ? 'Loading…' : intakeLabel || 'No current intake set'}
+                  readOnly
+                  tabIndex={-1}
+                  style={{ cursor: 'default', fontWeight: 600 }}
+                  title="Hall tickets are issued for the current academic intake only"
+                />
+              </div>
+              {!intakesLoading && !currentIntake && (
+                <p className="text-clr-red" style={{ fontSize: 11.5, marginTop: 4 }}>No intake is marked as the current academic intake. Set one in Intake Master to issue hall tickets.</p>
+              )}
             </div>
             <div className="fg">
               <label className="lbl">Term <span className="req">*</span></label>
@@ -225,7 +237,7 @@ export default function HallTicketIssuancePage() {
         isOpen={bulkOpen}
         onClose={() => setBulkOpen(false)}
         intakeGuid={intakeGuid}
-        intakeLabel={intakeOptions.find(o => o.value === intakeGuid)?.label ?? ''}
+        intakeLabel={intakeLabel}
         term={term}
         showToast={showToast}
       />

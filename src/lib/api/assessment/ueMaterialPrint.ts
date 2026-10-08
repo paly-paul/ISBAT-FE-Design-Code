@@ -1,4 +1,4 @@
-import { apiPost, apiGet, apiGetBlob, apiDelete } from '@/lib/api/client'
+import { apiPost, apiGet, apiGetBlob, apiDeleteWithMessage } from '@/lib/api/client'
 
 export interface UePrintParams {
   programGuid: string
@@ -34,7 +34,7 @@ export function getUeQuestionPrintCourseUnits(programGuid: string, semesterGuid:
     programGuid: programGuid?.toUpperCase() || '',
     semesterGuid: semesterGuid?.toUpperCase() || ''
   })
-  return apiGet<any[]>(`/api/v1/assessment/ue-question-print/course-units?${params.toString()}`)
+  return apiGet<{ courseUnitGuid: string; courseUnitCode: string; courseUnitName: string }[]>(`/api/v1/assessment/ue-question-print/course-units?${params.toString()}`)
 }
 
 // -- Theory Actions --
@@ -74,7 +74,8 @@ export function deleteUeQuestionTheory(data: UePrintParams) {
     intakeGuid: data.intakeGuid?.toUpperCase() || ''
   })
   if (data.confirm !== undefined) params.append('confirm', String(data.confirm))
-  return apiDelete<any>(`/api/v1/assessment/ue-question-print/theory?${params.toString()}`)
+  // Callers need both `data` (false = confirm step) and the message.
+  return apiDeleteWithMessage<boolean>(`/api/v1/assessment/ue-question-print/theory?${params.toString()}`)
 }
 
 export function downloadUeQuestionTheoryAnswerKey(paramsObj: UePrintParams) {

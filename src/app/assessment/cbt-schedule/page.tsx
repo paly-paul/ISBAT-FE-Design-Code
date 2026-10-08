@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
+import TimePicker from '@/components/TimePicker'
 import { useIaTestSchedule, useUpdateIaTestSchedule } from '@/hooks/assessment/useIaTestSchedule'
 import { useExamRules } from '@/hooks/assessment/useExamRules'
 import Link from 'next/link'
@@ -231,8 +232,8 @@ function CbtScheduleContent() {
                 <div className="flex-1">
                   <DatePicker value={startDate} onChange={setStartDate} />
                 </div>
-                <div className="w-[110px]">
-                  <input type="time" className="ctrl w-full" value={startTime} onChange={e => setStartTime(e.target.value)} />
+                <div className="w-[140px]">
+                  <TimePicker value={startTime} onChange={setStartTime} />
                 </div>
               </div>
             </div>
@@ -242,8 +243,8 @@ function CbtScheduleContent() {
                 <div className="flex-1">
                   <DatePicker value={endDate} onChange={setEndDate} />
                 </div>
-                <div className="w-[110px]">
-                  <input type="time" className="ctrl w-full" value={endTime} onChange={e => setEndTime(e.target.value)} />
+                <div className="w-[140px]">
+                  <TimePicker value={endTime} onChange={setEndTime} />
                 </div>
               </div>
             </div>

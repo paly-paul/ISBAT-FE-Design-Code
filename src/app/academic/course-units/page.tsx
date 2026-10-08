@@ -256,6 +256,7 @@ export default function Page() {
                 value={programFilter}
                 onSearch={setProgramSearch}
                 onOpenChange={setProgramPickerOpen}
+                isLoading={programQuery.isLoading}
                 hasNextPage={programQuery.hasNextPage}
                 isFetchingNextPage={programQuery.isFetchingNextPage}
                 onLoadMore={() => programQuery.fetchNextPage()}

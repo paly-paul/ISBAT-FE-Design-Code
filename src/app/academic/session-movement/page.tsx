@@ -230,6 +230,7 @@ export default function SessionMovementPage() {
                 value={intakeGuid}
                 onSearch={setIntakeSearch}
                 onOpenChange={setIntakePickerOpen}
+                isLoading={intakeQuery.isLoading}
                 hasNextPage={intakeQuery.hasNextPage}
                 isFetchingNextPage={intakeQuery.isFetchingNextPage}
                 onLoadMore={() => intakeQuery.fetchNextPage()}
@@ -244,6 +245,7 @@ export default function SessionMovementPage() {
                 value={campusGuid}
                 onSearch={setCampusSearch}
                 onOpenChange={setCampusPickerOpen}
+                isLoading={campusQuery.isLoading}
                 hasNextPage={campusQuery.hasNextPage}
                 isFetchingNextPage={campusQuery.isFetchingNextPage}
                 onLoadMore={() => campusQuery.fetchNextPage()}

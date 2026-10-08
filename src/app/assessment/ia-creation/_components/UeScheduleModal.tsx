@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
+import TimeRangePicker, { isTimeRangeValid } from '@/components/TimeRangePicker'
 import { useIaUeSchedule, useUpdateIaUeSchedule } from '@/hooks/assessment/useIaUeSchedule'
 import { useExamRules } from '@/hooks/assessment/useExamRules'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
@@ -93,9 +94,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
     }
     
     // Check if end time is after start time
-    const startDt = new Date(`1970-01-01T${startTime}`)
-    const endDt = new Date(`1970-01-01T${endTime}`)
-    if (endDt <= startDt) {
+    if (!isTimeRangeValid(startTime, endTime)) {
       showToast('End Time must be after Start Time', 'error')
       return
     }
@@ -179,16 +178,8 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
               </div>
 
               {/* Times */}
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="lbl">Start Time <span className="text-red-500">*</span></label>
-                  <input type="time" className="ctrl w-full mt-1" value={startTime} onChange={e => setStartTime(e.target.value)} />
-                </div>
-                <div className="flex-1">
-                  <label className="lbl">End Time <span className="text-red-500">*</span></label>
-                  <input type="time" className="ctrl w-full mt-1" value={endTime} onChange={e => setEndTime(e.target.value)} />
-                </div>
-              </div>
+              <TimeRangePicker start={startTime} end={endTime} onStartChange={setStartTime} onEndChange={setEndTime} required />
+
 
               {/* Marks */}
               <div>
