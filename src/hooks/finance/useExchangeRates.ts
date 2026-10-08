@@ -29,13 +29,17 @@ const EXCHANGE_RATES_KEY = ['exchange-rates']
 // re-checks for a newer rate within a minute, without turning into a
 // constant background poll. Never on a failed query — a 403 would
 // otherwise be re-sent on every tab switch.
+//
+// 'always' (not just "when stale"): a rate set in another tab within the
+// 60s staleTime was otherwise missed when switching back — e.g. Application
+// Payment kept the old rate after it was set on Payment Console.
 export function useExchangeRatesByDate(date: string, enabled = true) {
   return useQuery({
     queryKey: [...EXCHANGE_RATES_KEY, 'by-date', date],
     queryFn: () => getExchangeRatesByDate(date),
     enabled: enabled && !!date,
     staleTime: 60_000,
-    refetchOnWindowFocus: query => query.state.status !== 'error',
+    refetchOnWindowFocus: query => (query.state.status !== 'error' ? 'always' : false),
   })
 }
 
@@ -58,7 +62,7 @@ export function useExchangeRateExists(currencyGuid: string | null, date: string,
     queryFn: () => getExchangeRateExists(currencyGuid as string, date),
     enabled: enabled && !!currencyGuid && !!date,
     staleTime: 60_000,
-    refetchOnWindowFocus: query => query.state.status !== 'error',
+    refetchOnWindowFocus: query => (query.state.status !== 'error' ? 'always' : false),
   })
 }
 
