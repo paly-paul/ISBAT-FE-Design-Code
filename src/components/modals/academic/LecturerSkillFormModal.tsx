@@ -214,6 +214,7 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
             options={employeeOptions}
             value={employeeGuid}
             onSearch={setEmployeeSearch}
+            isLoading={employeeQuery.isLoading}
             hasNextPage={employeeQuery.hasNextPage}
             isFetchingNextPage={employeeQuery.isFetchingNextPage}
             onLoadMore={() => employeeQuery.fetchNextPage()}
@@ -233,6 +234,7 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
                   options={skillOptions}
                   value={skillIds[0] ?? ''}
                   onSearch={setSkillSearch}
+                  isLoading={skillQuery.isLoading}
                   hasNextPage={skillQuery.hasNextPage}
                   isFetchingNextPage={skillQuery.isFetchingNextPage}
                   onLoadMore={() => skillQuery.fetchNextPage()}
@@ -256,6 +258,7 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
                 options={skillOptions}
                 value={skillIds}
                 onSearch={setSkillSearch}
+                isLoading={skillQuery.isLoading}
                 hasNextPage={skillQuery.hasNextPage}
                 isFetchingNextPage={skillQuery.isFetchingNextPage}
                 onLoadMore={() => skillQuery.fetchNextPage()}

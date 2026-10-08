@@ -408,6 +408,7 @@ export default function BulkExamSchedulerPage() {
                   value={intakeGuid}
                   onSearch={setIntakeSearch}
                   onOpenChange={setIntakePickerOpen}
+                  isLoading={intakeQuery.isLoading}
                   hasNextPage={intakeQuery.hasNextPage}
                   isFetchingNextPage={intakeQuery.isFetchingNextPage}
                   onLoadMore={() => intakeQuery.fetchNextPage()}
@@ -450,6 +451,7 @@ export default function BulkExamSchedulerPage() {
                   value={campusGuid}
                   onSearch={setCampusSearch}
                   onOpenChange={setCampusPickerOpen}
+                  isLoading={campusQuery.isLoading}
                   hasNextPage={campusQuery.hasNextPage}
                   isFetchingNextPage={campusQuery.isFetchingNextPage}
                   onLoadMore={() => campusQuery.fetchNextPage()}

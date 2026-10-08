@@ -305,6 +305,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               disabled={isEdit}
               onSearch={setIntakeSearch}
               onOpenChange={setIntakePickerOpen}
+              isLoading={intakeQuery.isLoading}
               hasNextPage={intakeQuery.hasNextPage}
               isFetchingNextPage={intakeQuery.isFetchingNextPage}
               onLoadMore={() => intakeQuery.fetchNextPage()}
@@ -321,6 +322,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               disabled={isEdit}
               onSearch={setProgramSearch}
               onOpenChange={setProgramPickerOpen}
+              isLoading={programQuery.isLoading}
               hasNextPage={programQuery.hasNextPage}
               isFetchingNextPage={programQuery.isFetchingNextPage}
               onLoadMore={() => programQuery.fetchNextPage()}
@@ -341,6 +343,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               value={streamGuid}
               onSearch={setStreamSearch}
               onOpenChange={setStreamPickerOpen}
+              isLoading={streamQuery.isLoading}
               hasNextPage={streamQuery.hasNextPage}
               isFetchingNextPage={streamQuery.isFetchingNextPage}
               onLoadMore={() => streamQuery.fetchNextPage()}
@@ -361,6 +364,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               value={inChargeGuid}
               onSearch={setEmployeeSearch}
               onOpenChange={setEmployeePickerOpen}
+              isLoading={employeeQuery.isLoading}
               hasNextPage={employeeQuery.hasNextPage}
               isFetchingNextPage={employeeQuery.isFetchingNextPage}
               onLoadMore={() => employeeQuery.fetchNextPage()}
@@ -376,6 +380,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               value={pHeadGuid}
               onSearch={setEmployeeSearch}
               onOpenChange={setEmployeePickerOpen}
+              isLoading={employeeQuery.isLoading}
               hasNextPage={employeeQuery.hasNextPage}
               isFetchingNextPage={employeeQuery.isFetchingNextPage}
               onLoadMore={() => employeeQuery.fetchNextPage()}

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
+import TimePicker from '@/components/TimePicker'
 import { useIaCwSchedule, useUpdateIaCwSchedule } from '@/hooks/assessment/useIaCwSchedule'
 import { useExamRules } from '@/hooks/assessment/useExamRules'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
@@ -177,8 +178,8 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
                   <div className="flex-1">
                     <DatePicker value={startDate} onChange={setStartDate} />
                   </div>
-                  <div className="w-[110px]">
-                    <input type="time" className="ctrl w-full" value={startTime} onChange={e => setStartTime(e.target.value)} />
+                  <div className="w-[140px]">
+                    <TimePicker value={startTime} onChange={setStartTime} />
                   </div>
                 </div>
               </div>
@@ -188,8 +189,8 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
                   <div className="flex-1">
                     <DatePicker value={endDate} onChange={setEndDate} />
                   </div>
-                  <div className="w-[110px]">
-                    <input type="time" className="ctrl w-full" value={endTime} onChange={e => setEndTime(e.target.value)} />
+                  <div className="w-[140px]">
+                    <TimePicker value={endTime} onChange={setEndTime} />
                   </div>
                 </div>
               </div>

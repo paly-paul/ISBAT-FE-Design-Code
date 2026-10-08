@@ -1733,6 +1733,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     options={programGroupOptions}
                     onSearch={setProgramGroupSearch}
                     onOpenChange={setProgramGroupPickerOpen}
+                    isLoading={programGroupQuery.isLoading}
                     hasNextPage={programGroupQuery.hasNextPage}
                     isFetchingNextPage={programGroupQuery.isFetchingNextPage}
                     onLoadMore={() => programGroupQuery.fetchNextPage()}
@@ -1764,6 +1765,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     options={programLevelOptions}
                     onSearch={setProgramLevelSearch}
                     onOpenChange={setProgramLevelPickerOpen}
+                    isLoading={programLevelQuery.isLoading}
                     hasNextPage={programLevelQuery.hasNextPage}
                     isFetchingNextPage={programLevelQuery.isFetchingNextPage}
                     onLoadMore={() => programLevelQuery.fetchNextPage()}
@@ -2140,6 +2142,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                         onChange={updateSharedFeeCurrency}
                         onSearch={setCurrencySearch}
                         onOpenChange={setCurrencyPickerOpen}
+                        isLoading={currencyQuery.isLoading}
                         hasNextPage={currencyQuery.hasNextPage}
                         isFetchingNextPage={currencyQuery.isFetchingNextPage}
                         onLoadMore={() => currencyQuery.fetchNextPage()}

@@ -76,7 +76,13 @@ export default function CourseAllocationPage() {
   const employees = useMemo(() => flattenUniquePages(lecturerQuery.data?.pages ?? [], employee => employee.employeeGuid), [lecturerQuery.data])
   const faculties = useMemo(() => flattenUniquePages(facultyQuery.data?.pages ?? [], faculty => faculty.facultyGuid), [facultyQuery.data])
   const intakeOptions = intakes.map(i => ({ value: i.intakeGuid, label: `${i.description} (${i.intakeCode})` }))
+  // The options are only the current search's results, and closing the
+  // picker resets the search — so a lecturer picked from a search would drop
+  // out of the list and the field would fall back to the placeholder. Keep
+  // the picked option and pin it into the list.
+  const [pickedLecturer, setPickedLecturer] = useState<{ value: string; label: string } | null>(null)
   const lecturerOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
+  if (pickedLecturer && pickedLecturer.value === lecturerGuid && !lecturerOptions.some(o => o.value === lecturerGuid)) lecturerOptions.unshift(pickedLecturer)
   const facultyOptions = faculties.map(f => ({ value: f.facultyGuid, label: `${f.facultyCode} — ${f.facultyName}` }))
 
   const [search, setSearch] = useState('')
@@ -207,6 +213,7 @@ export default function CourseAllocationPage() {
               value={intakeGuid}
               onSearch={setIntakeSearch}
               onOpenChange={setIntakePickerOpen}
+              isLoading={intakeQuery.isLoading}
               hasNextPage={intakeQuery.hasNextPage}
               isFetchingNextPage={intakeQuery.isFetchingNextPage}
               onLoadMore={() => intakeQuery.fetchNextPage()}
@@ -231,6 +238,7 @@ export default function CourseAllocationPage() {
               value={schoolGuid}
               onSearch={setFacultySearch}
               onOpenChange={setFacultyPickerOpen}
+              isLoading={facultyQuery.isLoading}
               hasNextPage={facultyQuery.hasNextPage}
               isFetchingNextPage={facultyQuery.isFetchingNextPage}
               onLoadMore={() => facultyQuery.fetchNextPage()}
@@ -246,10 +254,13 @@ export default function CourseAllocationPage() {
               value={lecturerGuid}
               onSearch={setLecturerSearch}
               onOpenChange={setLecturerPickerOpen}
+              // Also loading while the 300ms debounce is pending — otherwise
+              // the old results are filtered by the new text and flash "No matches".
+              isLoading={(lecturerQuery.isFetching && !lecturerQuery.isFetchingNextPage) || lecturerSearch.trim() !== committedLecturerSearch}
               hasNextPage={lecturerQuery.hasNextPage}
               isFetchingNextPage={lecturerQuery.isFetchingNextPage}
               onLoadMore={() => lecturerQuery.fetchNextPage()}
-              onChange={val => { setLecturerGuid(val); if (errors.lecturerGuid) setErrors(p => ({ ...p, lecturerGuid: '' })) }}
+              onChange={val => { setPickedLecturer(lecturerOptions.find(o => o.value === val) ?? null); setLecturerGuid(val); if (errors.lecturerGuid) setErrors(p => ({ ...p, lecturerGuid: '' })) }}
             />
             {errors.lecturerGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lecturerGuid}</p>}
           </div>

@@ -190,6 +190,7 @@ export function RepTagFormModal({ isOpen, onClose, showToast, mode, courseUnitRe
               value={programLevelGuid}
               onSearch={setLevelSearch}
               onOpenChange={setLevelPickerOpen}
+              isLoading={levelQuery.isLoading}
               hasNextPage={levelQuery.hasNextPage}
               isFetchingNextPage={levelQuery.isFetchingNextPage}
               onLoadMore={() => levelQuery.fetchNextPage()}

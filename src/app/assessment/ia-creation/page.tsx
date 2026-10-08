@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -46,7 +46,6 @@ export default function IaCreationPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
 
   // ── Selections ──────────────────────────────────
-  const [selectedIntakeGuid, setSelectedIntakeGuid] = useState<string>('')
   const [selectedProgramGuid, setSelectedProgramGuid] = useState<string>('')
   const [selectedSemesterGuid, setSelectedSemesterGuid] = useState<string>('')
 
@@ -58,6 +57,12 @@ export default function IaCreationPage() {
 
   // ── Data fetching ─────────────────────────────────
   const { data: initData, isLoading: initLoading } = useIaCreationInit()
+  // Structures are only created/edited for the current academic intake — the
+  // session is locked to it, not a choice. (assessment-structure-page.md lists
+  // every intake; locked at the product owner's request.)
+  const currentIntake = initData?.intakes?.find(i => i.currentIntake)
+  const selectedIntakeGuid = currentIntake?.intakeGuid ?? ''
+  const intakeLabel = currentIntake ? (currentIntake.description ?? `Intake ${currentIntake.intakeCode}`) : ''
   const { data: semesters, isLoading: semLoading } = useIaCreationSemesters(selectedProgramGuid || null)
   const {
     data: structureRows,
@@ -70,13 +75,6 @@ export default function IaCreationPage() {
     selectedIntakeGuid || null
   )
   const createMut = useCreateIaStructure()
-
-  // Pre-select the current intake once the init call returns.
-  useEffect(() => {
-    if (selectedIntakeGuid || !initData?.intakes?.length) return
-    const current = initData.intakes.find(i => i.currentIntake)
-    if (current) setSelectedIntakeGuid(current.intakeGuid)
-  }, [initData, selectedIntakeGuid])
 
 
 
@@ -92,7 +90,7 @@ export default function IaCreationPage() {
 
   function handleRefresh() {
     if (!selectedProgramGuid || !selectedSemesterGuid || !selectedIntakeGuid) {
-      showToast('Please select Programme, Semester, and Academic Session first.', 'error')
+      showToast(selectedIntakeGuid ? 'Please select Programme and Semester first.' : 'No current academic intake is set.', 'error')
       return
     }
     refetchStructure()
@@ -100,7 +98,7 @@ export default function IaCreationPage() {
 
   async function handleCreate() {
     if (!selectedProgramGuid || !selectedSemesterGuid || !selectedIntakeGuid) {
-      showToast('Please select Programme, Semester, and Academic Session first.', 'error')
+      showToast(selectedIntakeGuid ? 'Please select Programme and Semester first.' : 'No current academic intake is set.', 'error')
       return
     }
     try {
@@ -162,18 +160,22 @@ export default function IaCreationPage() {
           {/* Academic Session */}
           <div className="fg mb-0">
             <label className="lbl">Academic Session</label>
-            <SearchSelect
-              placeholder="— Select Session —"
-              value={selectedIntakeGuid}
-              onChange={val => setSelectedIntakeGuid(val)}
-              disabled={initLoading}
-              // Every intake, past ones included — currentIntake is only the
-              // default (assessment-structure-page.md, Business logic notes).
-              options={(initData?.intakes ?? []).map(i => ({
-                value: i.intakeGuid,
-                label: `${i.description ?? `Intake ${i.intakeCode}`}${i.currentIntake ? ' (Current)' : ''}`,
-              }))}
-            />
+            {/* readOnly, not disabled — the grey .ctrl:disabled style reads as
+                "unavailable"; the lock icon says it's fixed. */}
+            <div className="inp-wrap">
+              <i className="lni lni-lock-alt inp-icon"></i>
+              <input
+                className="ctrl"
+                value={initLoading ? 'Loading…' : intakeLabel ? `${intakeLabel} (Current)` : 'No current intake set'}
+                readOnly
+                tabIndex={-1}
+                style={{ cursor: 'default', fontWeight: 600 }}
+                title="Assessment structures are set up for the current academic session only"
+              />
+            </div>
+            {!initLoading && !currentIntake && (
+              <p className="text-clr-red" style={{ fontSize: 11.5, marginTop: 4 }}>No intake is marked as the current academic intake. Set one in Intake Master to create assessment structures.</p>
+            )}
           </div>
 
           {/* Programme */}
