@@ -5,7 +5,8 @@ import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { applicantProfileHref } from '@/lib/applicantProfileLink'
 import { useVettingApplicationDetail, useWaitApplication } from '@/hooks/admission/useVetting'
-import { VetApplicationInput } from '@/lib/api/admission/vetting'
+import { NO_CURRENT_INTAKE_MESSAGE, NOT_CURRENT_INTAKE_MESSAGE, VetApplicationInput } from '@/lib/api/admission/vetting'
+import { useCurrentAdmissionIntake } from '@/hooks/academic/useIntakes'
 import { AuthError } from '@/lib/api/client'
 
 // A friendlier label than the raw documentType string from the wire
@@ -33,6 +34,20 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
   const intakeDisplay = detail
     ? String(detail.intakeName || detail.intakeCode || detail.intake || '—')
     : '—'
+
+  // Approve (action 2) is only accepted for the current admission intake
+  // (2026-10 handoff). Work it out up front so the button can say why it's
+  // off instead of failing on click. Only blocks on a confirmed answer — while
+  // loading or if the lookup fails, Approve stays on and the server decides
+  // (its message still shows in the failure popup).
+  const currentIntake = useCurrentAdmissionIntake(isOpen)
+  const approveBlockedReason: string | null = !detail || !currentIntake.isSuccess
+    ? null
+    : !currentIntake.data
+      ? NO_CURRENT_INTAKE_MESSAGE
+      : detail.intakeGuid && detail.intakeGuid !== currentIntake.data.intakeGuid
+        ? `${NOT_CURRENT_INTAKE_MESSAGE} This application is for ${intakeDisplay}; the current admission intake is ${currentIntake.data.intakeCode} — ${currentIntake.data.description}.`
+        : null
 
   const [remarks, setRemarks] = useState('')
   const [approved, setApproved] = useState(false)
@@ -263,11 +278,17 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
         </div>
 
         <div className="modal-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+          {approveBlockedReason && (
+            <div className="warn-box" role="note" style={{ fontSize: 13 }}>
+              <i className="lni lni-lock" aria-hidden="true" style={{ marginTop: 2 }}></i>
+              <span>{approveBlockedReason} You can still reject it or place it on hold.</span>
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-3">
             <button className="btn btn-amber w-full justify-center" disabled={waitApplication.isPending} onClick={handleWait}>
               <i className="lni lni-timer" /> {waitApplication.isPending ? 'Saving…' : 'Wait for Original Documents'}
             </button>
-            <button className="btn btn-success w-full justify-center" disabled={vetApplication.isPending} onClick={handleApprove}>
+            <button className="btn btn-success w-full justify-center" disabled={vetApplication.isPending || !!approveBlockedReason} title={approveBlockedReason ?? undefined} onClick={handleApprove}>
               <i className="lni lni-checkmark" /> {vetApplication.isPending ? 'Approving…' : 'Approve & Issue Provisional Letter'}
             </button>
             <button className="btn btn-danger w-full justify-center" onClick={onReject}><i className="lni lni-close" /> Reject Application</button>

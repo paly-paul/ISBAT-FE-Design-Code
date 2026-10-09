@@ -18,6 +18,7 @@ import { AuthError } from '@/lib/api/client'
 import { sanitizeNameInput } from '@/lib/errorMessages'
 import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
+import { isWithinRecentWindow, monthsAgoYmd, RECENT_DATE_MONTHS, todayYmd } from '@/lib/date'
 
 // Today's date at midnight, formatted the same way the confirmed payload
 // sample uses (no timezone offset) — matches enquiryDate/dob's "T00:00:00" shape.
@@ -34,6 +35,9 @@ const NAME_MAX = 50
 // Backend mobile rule: digits only, 7 to 15 (regex ^\d{7,15}$).
 const PHONE_MIN = 7
 const PHONE_MAX = 15
+// POST /enquiries: enquiryDate must be within the last 3 months and not in
+// the future — same window as Application Payment's payDate (lib/date.ts).
+const ENQUIRY_DATE_RANGE_MESSAGE = 'Enquiry date must be within the last 3 months and not in the future.'
 
 export default function KioskEnquiryPage() {
   const router = useRouter()
@@ -179,7 +183,8 @@ export default function KioskEnquiryPage() {
     else if (!isValidEnquiryEmail(email)) e.email = 'Enter a valid email'
     else if (!isVerifiedFor(verifiedEmail, email)) e.email = 'Verify the email before saving'
     if (!dob)               e.dob       = 'Date of Birth is required'
-    if (!enquiryDate)       e.enquiryDate = 'Enquiry Date is required'
+    if (!enquiryDate)       e.enquiryDate = 'Enquiry date is required.'
+    else if (!isWithinRecentWindow(enquiryDate)) e.enquiryDate = ENQUIRY_DATE_RANGE_MESSAGE
     if (!intakeGuid)        e.intakeGuid = 'Please select an Intake'
     if (!campusGuid)        e.campusGuid = 'Please select a Campus'
     if (!sourceGuid)        e.sourceGuid = 'Please select an Enquiry Source'
@@ -230,6 +235,12 @@ export default function KioskEnquiryPage() {
           if (/not verified|verification token is required/i.test(msg)) {
             setVerifiedEmail(null)
             const e = { email: /required/i.test(msg) ? 'Verify the email before saving' : 'Email verification expired or doesn’t match this email. Verify it again, then save.' }
+            setErrors(prev => ({ ...prev, ...e }))
+            scrollToFirstError(e)
+            return
+          }
+          if (code === 'validation_error' && /enquiry date/i.test(msg)) {
+            const e = { enquiryDate: msg }
             setErrors(prev => ({ ...prev, ...e }))
             scrollToFirstError(e)
             return
@@ -304,7 +315,14 @@ export default function KioskEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Enquiry Date <span className="text-clr-red">*</span></label>
-            <DatePicker value={enquiryDate} onChange={v => { setEnquiryDate(v); clearError('enquiryDate') }} hasError={!!errors.enquiryDate} />
+            <DatePicker
+              value={enquiryDate}
+              onChange={v => { setEnquiryDate(v); clearError('enquiryDate') }}
+              minYmd={monthsAgoYmd(RECENT_DATE_MONTHS)}
+              maxYmd={todayYmd()}
+              rangeMessage={ENQUIRY_DATE_RANGE_MESSAGE}
+              hasError={!!errors.enquiryDate}
+            />
             {errors.enquiryDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryDate}</p>}
           </div>
           <div className="fg">

@@ -326,9 +326,11 @@ const mockCountries: CountryDropdownDto[] = [
   { intCountry: 4, countryName: 'Tanzania', dialCode: 'TZ', isDefault: false },
 ]
 
-export function getFilingCountries(): Promise<CountryDropdownDto[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockCountries)
-  return apiGet<CountryDropdownDto[] | null>('/api/v1/admissions/application-filling/countries').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+// Optional ?search= on country name (case-insensitive contains, 2026-10).
+export function getFilingCountries(search?: string): Promise<CountryDropdownDto[]> {
+  const term = search?.trim()
+  if (MOCK_AUTH) return Promise.resolve(term ? mockCountries.filter(c => c.countryName.toLowerCase().includes(term.toLowerCase())) : mockCountries)
+  return apiGet<CountryDropdownDto[] | null>(`/api/v1/admissions/application-filling/countries${term ? `?search=${encodeURIComponent(term)}` : ''}`).then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Backs /admission/applicants — confirmed via a real GET response (see
@@ -338,11 +340,9 @@ export function getFilingCountries(): Promise<CountryDropdownDto[]> {
 // which silently dropped anything past row 1000 once the real table grew
 // past that (same "confirmed live" gap enquiry-list and course-units hit
 // with the identical pattern). Switched to real per-page fetches, same fix
-// as enquiry-list's getEnquiries. `search` is NOT confirmed against a real
-// backend sample the way page/pageSize are — appended as `&search=` on the
-// same "match the convention already used elsewhere, degrade to today's
-// unfiltered-page behavior if the backend ignores it" assumption enquiry-
-// list's own getEnquiries used.
+// as enquiry-list's getEnquiries. `search` is CONFIRMED (2026-10 backend
+// handoff): exact match on reference number, phone or email, or a
+// case-insensitive "contains" on the applicant name.
 export function getApplications(page = 1, pageSize = 10, search = ''): Promise<ApplicationListResponse> {
   if (MOCK_AUTH) {
     return Promise.resolve({ items: mockApplications, totalCount: mockApplications.length, pageNumber: page, pageSize })

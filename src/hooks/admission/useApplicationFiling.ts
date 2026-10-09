@@ -28,10 +28,10 @@ export function useApplications(page: number, pageSize: number, search = '') {
   })
 }
 
-export function useFilingCountries() {
+export function useFilingCountries(search = '') {
   return useQuery({
-    queryKey: [...FILING_KEY, 'countries'],
-    queryFn: () => getFilingCountries(),
+    queryKey: [...FILING_KEY, 'countries', search],
+    queryFn: () => getFilingCountries(search),
     staleTime: Infinity,
     gcTime: Infinity,
   })

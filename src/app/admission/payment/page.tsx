@@ -33,7 +33,7 @@ import {
 } from '@/hooks/admission/useApplicationPayments'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput } from '@/lib/errorMessages'
-import { formatDate } from '@/lib/date'
+import { formatDate, monthsAgoYmd, RECENT_DATE_MONTHS } from '@/lib/date'
 import { setFilingPrefillRef } from '@/lib/filingHandoff'
 import { flattenUniquePages } from '@/lib/pagination'
 
@@ -108,6 +108,14 @@ function getTodayYmd(): string {
   const month = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+// POST /application-payments: payDate must be within the last 3 months and
+// not in the future (validation_error otherwise). Window maths lives in
+// lib/date.ts, shared with the enquiry forms' enquiryDate.
+const PAY_DATE_RANGE_MESSAGE = 'Payment date must be within the last 3 months and not in the future.'
+function getPaymentDateMinYmd(): string {
+  return monthsAgoYmd(RECENT_DATE_MONTHS)
 }
 
 const initialForm: FormData = {
@@ -700,6 +708,12 @@ function PaymentPageContent() {
       showToast(`Please fill: ${missing.join(', ')}`, 'error')
       return
     }
+    // The picker already blocks out-of-range dates, but a form left open past
+    // midnight (or a restored draft) can still hold one.
+    if (form.paymentDate < getPaymentDateMinYmd() || form.paymentDate > getTodayYmd()) {
+      showToast(PAY_DATE_RANGE_MESSAGE, 'error')
+      return
+    }
     // Never save a payment against a guessed rate.
     if (!isWaived && exRate == null) {
       const missingHere = (selectedCurrency?.currencyGuid === usdCurrency?.currencyGuid && usdRateMissing)
@@ -1085,7 +1099,15 @@ function PaymentPageContent() {
 
             <div className="g2 mt-4">
               <Field label="Payment Date" req>
-                <DatePicker value={form.paymentDate} onChange={v => set('paymentDate', v)} maxYmd={new Date().toISOString().slice(0, 10)} />
+                <DatePicker
+                  value={form.paymentDate}
+                  onChange={v => set('paymentDate', v)}
+                  // Local "today", not toISOString() — that's UTC, which in
+                  // Uganda (UTC+3) is still yesterday until 03:00.
+                  minYmd={getPaymentDateMinYmd()}
+                  maxYmd={getTodayYmd()}
+                  rangeMessage={PAY_DATE_RANGE_MESSAGE}
+                />
               </Field>
             </div>
 
