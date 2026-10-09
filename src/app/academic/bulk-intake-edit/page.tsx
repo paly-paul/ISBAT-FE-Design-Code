@@ -566,7 +566,7 @@ export default function Page() {
         const dismiss = () => { if (!inFlight) setConfirmAction(null) }
         const closeSuccess = () => { setConfirmAction(null); setSuccessInfo(null) }
         return (
-        <div className="modal-overlay open confirm-modal-overlay" onClick={successInfo ? undefined : dismiss}>
+        <div className="modal-overlay open confirm-modal-overlay">
           <div className="modal modal-sm confirm-modal-pop" onClick={e => e.stopPropagation()}>
             {successInfo ? (
               // Same swap-the-modal-body-to-SuccessPopup pattern used across

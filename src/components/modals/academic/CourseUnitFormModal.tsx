@@ -699,6 +699,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
                 value={repetitionTagGuid}
                 onSearch={setRepetitionTagSearch}
                 onOpenChange={setRepetitionTagPickerOpen}
+                isLoading={repetitionTagQuery.isLoading}
                 hasNextPage={repetitionTagQuery.hasNextPage}
                 isFetchingNextPage={repetitionTagQuery.isFetchingNextPage}
                 onLoadMore={() => repetitionTagQuery.fetchNextPage()}

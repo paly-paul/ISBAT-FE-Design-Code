@@ -386,7 +386,7 @@ function GrievancePanel({ grievanceGuid, statuses, onClose, onSaved, onStale }: 
   }
 
   return (
-    <div className="drawer-overlay" onClick={requestClose}>
+    <div className="drawer-overlay">
       <div className="drawer" role="dialog" aria-modal="true" aria-label="Exam grievance" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="drawer-hdr">

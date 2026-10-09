@@ -16,7 +16,10 @@ const BULK_EMAIL_KEY = ['bulk-email']
 
 // Re-fetch every 5 s while a job is still running. react-query's default
 // refetchIntervalInBackground: false already pauses this while the browser
-// tab is hidden, and the query stops polling when the page unmounts.
+// tab is hidden, and the query stops polling when the page unmounts. Any
+// failed poll (403, 404, 5xx) stops it for good — state.data still holds
+// the last "running" snapshot after an error, so checking data alone would
+// keep re-sending a request the server already refused.
 export const BULK_EMAIL_POLL_MS = 5000
 
 // List: polls while any visible row is Draft/Resolving/Processing. Rows are
@@ -27,7 +30,7 @@ export function useBulkEmails(params: BulkEmailListParams) {
     queryKey: [...BULK_EMAIL_KEY, 'list', params],
     queryFn: () => getBulkEmails(params),
     placeholderData: keepPreviousData,
-    refetchInterval: query => (query.state.data?.items.some(j => isJobActive(j.status)) ? BULK_EMAIL_POLL_MS : false),
+    refetchInterval: query => (query.state.status !== 'error' && query.state.data?.items.some(j => isJobActive(j.status)) ? BULK_EMAIL_POLL_MS : false),
   })
 }
 
@@ -36,9 +39,7 @@ export function useBulkEmail(jobGuid: string | null) {
     queryKey: [...BULK_EMAIL_KEY, 'detail', jobGuid],
     queryFn: () => getBulkEmail(jobGuid as string),
     enabled: !!jobGuid,
-    // A 404 won't start existing on a retry.
-    retry: (count, err: any) => err?.code !== 'not_found' && count < 2,
-    refetchInterval: query => (isJobActive(query.state.data?.status) ? BULK_EMAIL_POLL_MS : false),
+    refetchInterval: query => (query.state.status !== 'error' && isJobActive(query.state.data?.status) ? BULK_EMAIL_POLL_MS : false),
   })
 }
 
@@ -50,8 +51,7 @@ export function useBulkEmailRecipients(jobGuid: string | null, params: BulkEmail
     queryFn: () => getBulkEmailRecipients(jobGuid as string, params),
     enabled: !!jobGuid,
     placeholderData: keepPreviousData,
-    retry: (count, err: any) => err?.code !== 'not_found' && count < 2,
-    refetchInterval: jobActive ? BULK_EMAIL_POLL_MS : false,
+    refetchInterval: query => (jobActive && query.state.status !== 'error' ? BULK_EMAIL_POLL_MS : false),
   })
 }
 

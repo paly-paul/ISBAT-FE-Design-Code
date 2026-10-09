@@ -308,7 +308,7 @@ export function RefundLedgerPicker({ applicationGuid, studentGuid, showToast, on
       </div>
 
       {showHistory && (
-        <div className="modal-overlay open" onClick={() => setShowHistory(false)}>
+        <div className="modal-overlay open">
           <div className="modal modal-lg" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
             <div className="modal-hdr modal-hdr-blue" style={{ flexShrink: 0 }}>
               <div className="modal-title"><i className="lni lni-folder"></i> Refund History</div>

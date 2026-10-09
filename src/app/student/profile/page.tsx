@@ -11,6 +11,7 @@ import { useSponsorDetails } from '@/hooks/student/useSponsor'
 import { useStudentRefugeeDetails } from '@/hooks/student/useRefugee'
 import { useDropoutStudents } from '@/hooks/student/useDropoutRejoin'
 import { useCountries } from '@/hooks/config/useCountries'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { formatDate } from '@/lib/date'
 // import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -115,6 +116,19 @@ function StudentProfileContent() {
   // reliable on every real response seen so far, so it's the fallback
   // everywhere this page used to read studentNum directly.
   const studentNo = student?.studentNum || student?.studentRegNo || '—'
+
+  // Intakes arrive as bare codes (joinedIntake "20222" on the detail,
+  // academicIntake 20241 on Student Master's list rows) — resolved to their
+  // description via the intakes dropdown. A code missing from it still shows
+  // as the raw code rather than nothing.
+  const { data: intakes = [] } = useIntakesDropdown()
+  function intakeInfo(code: string | number | null | undefined) {
+    if (code === null || code === undefined || code === '') return null
+    const match = intakes.find(i => String(i.intakeCode) === String(code))
+    return { code: String(code), label: match?.description ? `${match.description} (${code})` : String(code), isCurrent: !!match?.currentIntake }
+  }
+  const joinedIntake = intakeInfo(detail?.joinedIntake)
+  const academicIntake = intakeInfo(student?.academicIntake ?? detail?.academicIntake)
 
   // Real ID-card record — GET /students/id-cards/{studentGuid}. Resolves to
   // null when the student has no card yet (404 not_found is the common case,
@@ -438,7 +452,7 @@ function StudentProfileContent() {
                   <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={student.batchCode || detail?.batch || '—'}>{student.batchCode || detail?.batch || '—'}</span></div>
                   <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Semester</span><span className="pc-hero-fact-val" title={student.semesterName || detail?.semester || '—'}>{student.semesterName || detail?.semester || '—'}</span></div>
                   <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val" title={detail?.campus || '—'}>{detail?.campus || '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Intake</span><span className="pc-hero-fact-val" title={detail?.joinedIntake || '—'}>{detail?.joinedIntake || '—'}</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Joined Intake</span><span className="pc-hero-fact-val" title={joinedIntake?.label || '—'}>{joinedIntake?.label || '—'}</span></div>
                 </div>
               </div>
               <div className="stu-meta-row">
@@ -499,6 +513,25 @@ function StudentProfileContent() {
                     <div className="fg"><label className="lbl">Programme</label><input className="ctrl" readOnly value={student.programName || detail?.programme || '—'} /></div>
                     <div className="fg"><label className="lbl">Current Batch</label><input className="ctrl" readOnly value={student.batchCode || detail?.batch || '—'} /></div>
                     <div className="fg"><label className="lbl">Current Semester</label><input className="ctrl" readOnly value={student.semesterName || detail?.semester || '—'} /></div>
+                  </div>
+                </div>
+                <div className="card">
+                  <div className="card-hdr"><div className="card-title"><i className="lni lni-calendar"></i> Intake Details</div><span className="badge badge-grey">Read-only</span></div>
+                  <div className="g3">
+                    <div className="fg">
+                      <label className="lbl">Joined Intake</label>
+                      <input className="ctrl" readOnly value={joinedIntake?.label || '—'} />
+                      <div className="text-g500" style={{ fontSize: 11, marginTop: 4 }}>The intake the student was admitted in.</div>
+                    </div>
+                    <div className="fg">
+                      <label className="lbl">Academic Intake {academicIntake?.isCurrent && <span className="badge badge-green" style={{ marginLeft: 4 }}>Current</span>}</label>
+                      <input className="ctrl" readOnly value={academicIntake?.label || '—'} />
+                      <div className="text-g500" style={{ fontSize: 11, marginTop: 4 }}>The intake the student is currently studying in.</div>
+                    </div>
+                    <div className="fg">
+                      <label className="lbl">Registration Date</label>
+                      <input className="ctrl" readOnly value={detail?.regDate ? formatDate(detail.regDate) : '—'} />
+                    </div>
                   </div>
                   <div className="info-box"><i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12 }}>To change Batch, Programme, Learning Mode, or Intake — use the quick-action buttons in the banner above or navigate via the Operations section in the sidebar.</div></div>
                 </div>
@@ -739,7 +772,7 @@ function StudentProfileContent() {
       </div>
 
       {docPreviewOpen && refugeeDocUrl && (
-        <div className="modal-overlay open" onClick={() => setDocPreviewOpen(false)}>
+        <div className="modal-overlay open">
           <div className="modal modal-xl" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr"><div className="modal-title"><i className="lni lni-files"></i> Refugee Supporting Document</div><button className="modal-close" onClick={() => setDocPreviewOpen(false)}>✕</button></div>
             <div style={{ height: '70vh', background: 'var(--g100)', borderRadius: 'var(--rsm)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

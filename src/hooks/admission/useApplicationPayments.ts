@@ -30,7 +30,7 @@ export function useUnconvertedEnquiries(intakeGuid: string, page: number, pageSi
 }
 
 // Real server-paginated, scroll-to-load-more variant of the same endpoint —
-// backs the Payment page's Enquiry picker (EnquirySearchPicker), replacing
+// backs the Payment page's Enquiry dropdown, replacing
 // the old single pageSize=1000 "fetch nearly everything for this intake up
 // front" SearchSelect. Same useInfiniteQuery + fetch-next-on-scroll
 // mechanism as useSearchCourseUnitsInfinite (useCourseUnits.ts). searchTerm

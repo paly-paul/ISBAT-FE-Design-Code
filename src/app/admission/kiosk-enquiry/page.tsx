@@ -12,9 +12,11 @@ import { dialCode } from '@/lib/api/academic/country'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
 import { useCreateEnquiry } from '@/hooks/admission/useEnquiries'
+import { createdEnquiryGuid } from '@/lib/api/admission/enquiry'
+import { EnquiryEmailVerifyModal } from '@/components/modals/admission/EnquiryEmailVerifyModal'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
-import { sanitizePhoneInput } from '@/lib/errorMessages'
+import { sanitizePhoneInput, sanitizeNameInput } from '@/lib/errorMessages'
 import { flattenUniquePages } from '@/lib/pagination'
 
 // Today's date at midnight, formatted the same way the confirmed payload
@@ -32,6 +34,11 @@ export default function KioskEnquiryPage() {
   const permissions = usePagePermissions()
   const [saved, setSaved] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
+  // After a save, the candidate's email is verified with a 6-digit OTP
+  // (EnquiryEmailVerifyModal) before the success popup — skippable, and
+  // also available later from the Enquiry List.
+  const [verifyFor, setVerifyFor] = useState<{ guid: string; email: string; name: string } | null>(null)
+  const [emailVerified, setEmailVerified] = useState<boolean | null>(null)
 
   const { data: enquirySources = [] } = useEnquirySourceMasters()
   const createEnquiry = useCreateEnquiry()
@@ -148,7 +155,9 @@ export default function KioskEnquiryPage() {
   function validate() {
     const e: Record<string, string> = {}
     if (!firstName.trim()) e.firstName = 'First Name is required'
+    else if (!/\p{L}/u.test(firstName)) e.firstName = 'First Name must contain letters'
     if (!lastName.trim())  e.lastName  = 'Last Name is required'
+    else if (!/\p{L}/u.test(lastName))  e.lastName  = 'Last Name must contain letters'
     if (!phone.trim())     e.phone     = 'Phone is required'
     if (!email.trim())     e.email     = 'Email is required'
     if (!dob)               e.dob       = 'Date of Birth is required'
@@ -192,7 +201,13 @@ export default function KioskEnquiryPage() {
         enquiryTag: null,
       },
       {
-        onSuccess: () => setSaved(true),
+        onSuccess: res => {
+          const guid = createdEnquiryGuid(res)
+          // No guid in the create response → nothing to verify against here;
+          // the Enquiry List's Verify Email action covers it.
+          if (guid && email.trim()) setVerifyFor({ guid, email: email.trim(), name: `${firstName.trim()} ${lastName.trim()}`.trim() })
+          else setSaved(true)
+        },
         onError: (error: Error) => {
           const code = error instanceof AuthError ? error.code : undefined
           setFailure(error.message || `Failed to save enquiry${code ? ` (${code})` : ''}. Please try again.`)
@@ -203,6 +218,7 @@ export default function KioskEnquiryPage() {
 
   function handleSavedClose() {
     setSaved(false)
+    setEmailVerified(null)
     resetForm()
   }
 
@@ -220,12 +236,12 @@ export default function KioskEnquiryPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="fg">
             <label className="lbl">First Name <span className="text-clr-red">*</span></label>
-            <input className="ctrl" placeholder="e.g. Brian" value={firstName} onChange={e => { setFirstName(e.target.value); clearError('firstName') }} style={errors.firstName ? { borderColor: 'var(--red)' } : undefined} />
+            <input className="ctrl" placeholder="e.g. Brian" value={firstName} onChange={e => { setFirstName(sanitizeNameInput(e.target.value)); clearError('firstName') }} style={errors.firstName ? { borderColor: 'var(--red)' } : undefined} />
             {errors.firstName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.firstName}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Last Name <span className="text-clr-red">*</span></label>
-            <input className="ctrl" placeholder="e.g. Kamya" value={lastName} onChange={e => { setLastName(e.target.value); clearError('lastName') }} style={errors.lastName ? { borderColor: 'var(--red)' } : undefined} />
+            <input className="ctrl" placeholder="e.g. Kamya" value={lastName} onChange={e => { setLastName(sanitizeNameInput(e.target.value)); clearError('lastName') }} style={errors.lastName ? { borderColor: 'var(--red)' } : undefined} />
             {errors.lastName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lastName}</p>}
           </div>
           <div className="fg">
@@ -313,10 +329,28 @@ export default function KioskEnquiryPage() {
       {saved && (
         <div className="modal-overlay open">
           <div className="modal" style={{ maxWidth: 400 }}>
-            <SuccessPopup title="Enquiry Saved!" subtitle="The enquiry has been recorded successfully." onClose={handleSavedClose} />
+            <SuccessPopup
+              title="Enquiry Saved!"
+              subtitle={emailVerified === true
+                ? 'The enquiry has been recorded and the email verified.'
+                : emailVerified === false
+                  ? 'The enquiry has been recorded. The email isn’t verified yet — you can verify it from the Enquiry List.'
+                  : 'The enquiry has been recorded successfully.'}
+              onClose={handleSavedClose}
+            />
           </div>
         </div>
       )}
+
+      <EnquiryEmailVerifyModal
+        isOpen={!!verifyFor}
+        enquiryGuid={verifyFor?.guid ?? null}
+        email={verifyFor?.email ?? ''}
+        studentName={verifyFor?.name}
+        afterCreate
+        onVerified={() => setEmailVerified(true)}
+        onClose={() => { setEmailVerified(v => v ?? false); setVerifyFor(null); setSaved(true) }}
+      />
 
       {failure && (
         <div className="modal-overlay open">

@@ -353,7 +353,7 @@ export default function TerminateStudentPage() {
           NCHE & Guild Payment's own Delete confirm step uses. Termination
           is irreversible, same reasoning as that Delete action. */}
       {confirmOpen && (
-        <div className="modal-overlay open confirm-modal-overlay" onClick={successInfo ? undefined : closeConfirm}>
+        <div className="modal-overlay open confirm-modal-overlay">
           <div className="modal modal-sm confirm-modal-pop" onClick={e => e.stopPropagation()}>
             {successInfo ? (
               <SuccessPopup title={successInfo.title} subtitle={successInfo.subtitle} onClose={closeConfirm} />

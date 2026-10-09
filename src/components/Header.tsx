@@ -21,10 +21,14 @@ interface HeaderProps {
 
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/)
-  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || 'U'
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase()
 }
 
-export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, profileRef, onSignOut, displayName = 'Administrator' }: HeaderProps) {
+// No made-up name when the session hasn't supplied one — the avatar falls
+// back to a plain user icon and the name is simply left out.
+export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, profileRef, onSignOut, displayName }: HeaderProps) {
+  const name = displayName?.trim() ?? ''
+  const initials = initialsOf(name)
   const [signingOut, setSigningOut] = useState(false)
   const queryClient = useQueryClient()
   const router = useRouter()
@@ -150,12 +154,12 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
             )}
           </div>
           <div className="hdr-user" ref={profileRef} onClick={() => setProfileOpen(p => !p)}>
-            <div className="hdr-avatar">{initialsOf(displayName)}</div>
-            <span>{displayName}</span>
+            <div className="hdr-avatar">{initials || <i className="lni lni-user"></i>}</div>
+            {name && <span>{name}</span>}
             {profileOpen && (
               <div className="profile-dropdown">
                 <div className="profile-dropdown-info">
-                  <div className="profile-dropdown-name">{displayName}</div>
+                  {name && <div className="profile-dropdown-name">{name}</div>}
                   <div className="profile-dropdown-role">System Admin · Academic</div>
                 </div>
                 <div className="profile-dropdown-divider" />

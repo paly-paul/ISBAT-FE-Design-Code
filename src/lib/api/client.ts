@@ -228,7 +228,19 @@ function extractErrorInfo(envelope: unknown): { code: string; message?: string }
   return { code: 'unknown', message: (Array.isArray(e.errors) ? e.errors[0] : undefined) ?? e.message ?? e.title ?? undefined }
 }
 
-export async function apiPost<T>(path: string, body: unknown, retried = false): Promise<T> {
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  const { data, message } = await apiPostWithMessage<T>(path, body)
+  if (data && typeof data === 'object' && !Array.isArray(data) && message) {
+    (data as any).message = message
+  }
+  return data
+}
+
+// Same as apiPost, but also returns the envelope's `message` — for endpoints
+// whose success message carries meaning a primitive `data` can't hold, e.g.
+// hall ticket issue's `data: true` with "Hall ticket already issued."
+// (post-issue.md).
+export async function apiPostWithMessage<T>(path: string, body: unknown, retried = false): Promise<{ data: T; message: string | null }> {
   const res = await fetch(buildUrl(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...NGROK_HEADERS },
@@ -241,22 +253,18 @@ export async function apiPost<T>(path: string, body: unknown, retried = false): 
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
     await handleUnauthorized(path)
-    return apiPost<T>(path, body, true)
+    return apiPostWithMessage<T>(path, body, true)
   }
 
   if (res.ok) {
     // Some endpoints (e.g. login) authenticate purely via Set-Cookie and
     // respond 2xx with no parseable JSON body — that's a legitimate success,
     // not an error, so resolve with null data rather than throwing.
-    if (!envelope) return null as T
+    if (!envelope) return { data: null as T, message: null }
     if (!envelope.success) {
       throw new AuthError(envelope.code ?? 'unknown', envelope.errors?.[0] ?? envelope.message ?? undefined, Array.isArray(envelope.errors) ? envelope.errors : undefined)
     }
-    const data = envelope.data as any
-    if (data && typeof data === 'object' && !Array.isArray(data) && envelope.message) {
-      data.message = envelope.message
-    }
-    return data as T
+    return { data: envelope.data as T, message: envelope.message }
   }
 
   const { code, message } = extractErrorInfo(envelope)

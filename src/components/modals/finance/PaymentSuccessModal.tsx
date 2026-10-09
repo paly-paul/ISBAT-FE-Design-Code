@@ -23,7 +23,7 @@ export function PaymentSuccessModal({ isOpen, onClose, title, rows, notices }: P
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay open" onClick={onClose}>
+    <div className="modal-overlay open">
       <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr" style={{ background: 'var(--green-bg)' }}>
           <div className="modal-title"><i className="lni lni-checkmark-circle" style={{ color: 'var(--green)' }}></i> {title}</div>

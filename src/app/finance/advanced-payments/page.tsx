@@ -68,7 +68,6 @@ export default function Page() {
       queryFn: () => getStudentProfile(applicationGuid),
       staleTime: Infinity,
       gcTime: Infinity,
-      retry: false,
     })),
   })
   const profileByApplication = useMemo(() => {

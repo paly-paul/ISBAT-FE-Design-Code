@@ -97,7 +97,7 @@ export function ViewApplicantModal({ isOpen, onClose, applicant }: ViewApplicant
   })
 
   return (
-    <div className="modal-overlay open" onClick={onClose}>
+    <div className="modal-overlay open">
       <div
         className="modal modal-80 modal-flex"
         style={{ height: 'auto', maxHeight: '85vh' }}

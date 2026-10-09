@@ -28,10 +28,7 @@ const ENQUIRY_PICKER_PAGE_SIZE = 20
 // stores and submits the selected enquiry's real GUID. Reuses SearchSelect's
 // own CSS classes (.ss-trigger, .ss-opts, etc.) for a matching look without
 // duplicating its styles. The search box here only filters what's already
-// loaded — client-side, purely for display — it never asks the server to
-// search, since that would silently change an enquiry's position and send
-// a different (still wrong) number than picking the same enquiry after
-// scrolling to it normally would.
+// loaded, client-side.
 function EnquiryPicker({ value, onChange, enabled, hasError }: { value: string; onChange: (v: string) => void; enabled: boolean; hasError?: boolean }) {
   const [open, setOpen] = useState(false)
   const [filterText, setFilterText] = useState('')
@@ -127,18 +124,15 @@ function EnquiryPicker({ value, onChange, enabled, hasError }: { value: string; 
   )
 }
 
-// Today's date at midnight, matching the confirmed payload sample's format.
-function todayAtMidnight() {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}T00:00:00`
+// The API checks follow-up dates against today's *UTC* date
+// (post-enquiry-followup.md) — not the local one, which in Uganda (UTC+3) is
+// a day ahead between midnight and 03:00.
+function todayUtcYmd() {
+  return new Date().toISOString().slice(0, 10)
 }
 
-// followUpStatus/followUpMode/enquiryStatus/interestLevel remain numeric
-// fields whose mapping is still pending backend confirmation. The enquiry
-// itself is sent by its real GUID.
+const REMARKS_MAX = 300
+
 export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp }: NewFollowUpLogModalProps) {
   const { data: followUpStatuses = [] } = useFollowUpStatuses(isOpen)
   const { data: followUpModes = [] }   = useFollowUpModes(isOpen)
@@ -159,30 +153,33 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
   )
 
   const advisorOptions      = employees.map(e => ({ value: e.employeeGuid, label: e.empName }))
-  const followUpStatusOptions = followUpStatuses.map((s, i) => ({ value: String(i), label: s.followUpStatusName }))
-  const followUpModeOptions   = followUpModes.map((m, i) => ({ value: String(i), label: m.followUpModeName }))
-  const enquiryStatusOptions  = enquiryStatuses.map((s, i) => ({ value: String(i), label: s.enquiryStatusName }))
-  const interestLevelOptions  = interestLevels.map((l, i) => ({ value: String(i), label: l.interestLevelName }))
+  const followUpStatusOptions = followUpStatuses.map(s => ({ value: s.followUpStatusGuid, label: s.followUpStatusName }))
+  const followUpModeOptions   = followUpModes.map(m => ({ value: m.followUpModeGuid, label: m.followUpModeName }))
+  const enquiryStatusOptions  = enquiryStatuses.map(s => ({ value: s.enquiryStatusGuid, label: s.enquiryStatusName }))
+  const interestLevelOptions  = interestLevels.map(l => ({ value: l.interestLevelGuid, label: l.interestLevelName }))
 
   const [saved, setSaved]     = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
-  const [enquiryGuid, setEnquiryGuid]         = useState('')
-  const [advisorGuid, setAdvisorGuid]         = useState('')
-  const [followUpDate, setFollowUpDate]       = useState(() => todayAtMidnight().slice(0, 10))
-  const [statusIdx, setStatusIdx]             = useState('')
-  const [modeIdx, setModeIdx]                 = useState('')
-  const [enquiryStatusIdx, setEnquiryStatusIdx] = useState('')
-  const [levelIdx, setLevelIdx]               = useState('')
-  const [nextFollowDate, setNextFollowDate]   = useState('')
-  const [remarks, setRemarks]                 = useState('')
-  const [errors, setErrors]                   = useState<Record<string, string>>({})
+  const [enquiryGuid, setEnquiryGuid]               = useState('')
+  const [advisorGuid, setAdvisorGuid]               = useState('')
+  const [followUpStatusGuid, setFollowUpStatusGuid] = useState('')
+  const [followUpModeGuid, setFollowUpModeGuid]     = useState('')
+  const [enquiryStatusGuid, setEnquiryStatusGuid]   = useState('')
+  const [interestLevelGuid, setInterestLevelGuid]   = useState('')
+  const [nextFollowDate, setNextFollowDate]         = useState('')
+  const [remarks, setRemarks]                       = useState('')
+  const [errors, setErrors]                         = useState<Record<string, string>>({})
 
   if (!isOpen) return null
 
+  // Follow-up date isn't a choice — the API only accepts today.
+  const today = todayUtcYmd()
+  const todayLabel = new Date(`${today}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+
   function handleClose() {
     setSaved(false); setFailure(null)
-    setEnquiryGuid(''); setAdvisorGuid(''); setFollowUpDate(todayAtMidnight().slice(0, 10))
-    setStatusIdx(''); setModeIdx(''); setEnquiryStatusIdx(''); setLevelIdx('')
+    setEnquiryGuid(''); setAdvisorGuid('')
+    setFollowUpStatusGuid(''); setFollowUpModeGuid(''); setEnquiryStatusGuid(''); setInterestLevelGuid('')
     setNextFollowDate(''); setRemarks(''); setErrors({})
     onClose()
   }
@@ -192,12 +189,13 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
     if (!enquiryGuid || enquiryGuid === '0' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(enquiryGuid)) {
       e.enquiryIdx = 'Please select a valid Enquiry'
     }
-    if (!advisorGuid)      e.advisorGuid = 'Please select an Advisor'
-    if (!followUpDate)     e.followUpDate = 'Follow-up Date is required'
-    if (!statusIdx)        e.statusIdx = 'Please select a Follow-up Status'
-    if (!modeIdx)          e.modeIdx = 'Please select a Follow-up Mode'
-    if (!enquiryStatusIdx) e.enquiryStatusIdx = 'Please select an Enquiry Status'
-    if (!remarks.trim())   e.remarks = 'Remarks are required'
+    if (!advisorGuid)        e.advisorGuid = 'Please select an Advisor'
+    if (!followUpStatusGuid) e.followUpStatusGuid = 'Please select a Follow-up Status'
+    if (!followUpModeGuid)   e.followUpModeGuid = 'Please select a Follow-up Mode'
+    if (!enquiryStatusGuid)  e.enquiryStatusGuid = 'Please select an Enquiry Status'
+    if (nextFollowDate && nextFollowDate < today) e.nextFollowDate = 'Next follow-up date must be today or a future date'
+    if (!remarks.trim())     e.remarks = 'Remarks are required'
+    else if (remarks.trim().length > REMARKS_MAX) e.remarks = `Remarks can be at most ${REMARKS_MAX} characters`
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -208,11 +206,11 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
       {
         enquiryGuid,
         advisorGuid,
-        followUpDate: `${followUpDate}T00:00:00`,
-        followUpStatus: Number(statusIdx) + 1,
-        followUpMode: Number(modeIdx) + 1,
-        enquiryStatus: Number(enquiryStatusIdx) + 1,
-        interestLevel: levelIdx ? Number(levelIdx) + 1 : null,
+        followUpDate: `${today}T00:00:00`,
+        followUpStatusGuid,
+        followUpModeGuid,
+        enquiryStatusGuid,
+        interestLevelGuid: interestLevelGuid || null,
         nextFollowDate: nextFollowDate ? `${nextFollowDate}T00:00:00` : null,
         remarks: remarks.trim(),
       },
@@ -274,36 +272,40 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
             {errors.advisorGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.advisorGuid}</p>}
           </div>
           <div className="fg">
-            <div className="lbl">Follow-up Date <span className="req">*</span></div>
-            <DatePicker value={followUpDate} onChange={setFollowUpDate} hasError={!!errors.followUpDate} />
-            {errors.followUpDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.followUpDate}</p>}
+            <div className="lbl">Follow-up Date</div>
+            {/* Locked to today — same read-only lock style as the current-intake fields. */}
+            <div className="inp-wrap">
+              <i className="lni lni-lock-alt inp-icon"></i>
+              <input className="ctrl" value={todayLabel} readOnly tabIndex={-1} style={{ cursor: 'default', fontWeight: 600 }} title="A follow-up is always logged for today" />
+            </div>
           </div>
           <div className="fg">
             <div className="lbl">Follow-up Status <span className="req">*</span></div>
-            <SearchSelect placeholder="— select —" options={followUpStatusOptions} value={statusIdx} onChange={setStatusIdx} />
-            {errors.statusIdx && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.statusIdx}</p>}
+            <SearchSelect placeholder="— select —" options={followUpStatusOptions} value={followUpStatusGuid} onChange={setFollowUpStatusGuid} />
+            {errors.followUpStatusGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.followUpStatusGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Follow-up Mode <span className="req">*</span></div>
-            <SearchSelect placeholder="— select —" options={followUpModeOptions} value={modeIdx} onChange={setModeIdx} />
-            {errors.modeIdx && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.modeIdx}</p>}
+            <SearchSelect placeholder="— select —" options={followUpModeOptions} value={followUpModeGuid} onChange={setFollowUpModeGuid} />
+            {errors.followUpModeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.followUpModeGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Enquiry Status <span className="req">*</span></div>
-            <SearchSelect placeholder="— select —" options={enquiryStatusOptions} value={enquiryStatusIdx} onChange={setEnquiryStatusIdx} />
-            {errors.enquiryStatusIdx && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryStatusIdx}</p>}
+            <SearchSelect placeholder="— select —" options={enquiryStatusOptions} value={enquiryStatusGuid} onChange={setEnquiryStatusGuid} />
+            {errors.enquiryStatusGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryStatusGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Interest Level</div>
-            <SearchSelect placeholder="— optional —" options={interestLevelOptions} value={levelIdx} onChange={setLevelIdx} />
+            <SearchSelect placeholder="— optional —" options={interestLevelOptions} value={interestLevelGuid} onChange={setInterestLevelGuid} />
           </div>
           <div className="fg">
             <div className="lbl">Next Follow-up Date</div>
-            <DatePicker value={nextFollowDate} onChange={setNextFollowDate} />
+            <DatePicker value={nextFollowDate} onChange={setNextFollowDate} hasError={!!errors.nextFollowDate} />
+            {errors.nextFollowDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.nextFollowDate}</p>}
           </div>
           <div className="fg" style={{ gridColumn: 'span 2' }}>
-            <div className="lbl">Remarks <span className="req">*</span></div>
-            <textarea className="ctrl" rows={3} placeholder="e.g. Called student, interested in Diploma program." value={remarks} onChange={e => setRemarks(e.target.value)} />
+            <div className="lbl">Remarks <span className="req">*</span> <span className="text-g400" style={{ fontWeight: 400 }}>({remarks.trim().length}/{REMARKS_MAX})</span></div>
+            <textarea className="ctrl" rows={3} maxLength={REMARKS_MAX} placeholder="e.g. Called student, interested in Diploma program." value={remarks} onChange={e => setRemarks(e.target.value)} />
             {errors.remarks && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.remarks}</p>}
           </div>
         </div>

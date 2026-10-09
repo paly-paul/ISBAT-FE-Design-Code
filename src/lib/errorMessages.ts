@@ -44,6 +44,13 @@ export function sanitizePhoneInput(value: string, allowPlus = true): string {
   return allowPlus ? value.replace(/[^0-9+\s-]/g, '') : value.replace(/[^0-9\s-]/g, '')
 }
 
+// Person-name fields: letters (any script, so accented names work), spaces,
+// apostrophes, hyphens and dots — "O'Brien", "Mary-Jane", "Nakato Jr.".
+// Digits and other symbols are dropped as they're typed or pasted.
+export function sanitizeNameInput(value: string): string {
+  return value.replace(/[^\p{L}\p{M}\s'’.-]/gu, '')
+}
+
 export function validatePassword(pw: string): string | null {
   if (!pw) return 'Password is required.'
   // if (pw.length < 8) return 'Password must be at least 8 characters.'

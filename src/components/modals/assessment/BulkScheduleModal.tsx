@@ -12,6 +12,7 @@ import {
   updateBulkMockSchedule,
 } from '@/lib/api/assessment/iaBulkSchedule'
 import { getExamRules, ExamRuleDto } from '@/lib/api/assessment/examRule'
+import TimeRangePicker from '@/components/TimeRangePicker'
 
 export type BulkAssessmentType = 'CW' | 'CLASS_TEST' | 'CA' | 'UE' | 'MOCK'
 
@@ -431,7 +432,7 @@ export function BulkScheduleModal({
   const termLabel = scope.term === 1 ? 'Term 1' : scope.term === 2 ? 'Term 2' : 'Both (Term 1 & 2)'
 
   return (
-    <div className="modal-overlay open" onClick={onClose} style={{ zIndex: 650 }}>
+    <div className="modal-overlay open" style={{ zIndex: 650 }}>
       <div
         className="modal modal-md flex flex-col"
         onClick={e => e.stopPropagation()}
@@ -651,28 +652,14 @@ export function BulkScheduleModal({
                       required
                     />
                   </div>
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      Start Time <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="time"
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
-                      value={startTime}
-                      onChange={e => setStartTime(e.target.value)}
+                  <div className="sm:col-span-2">
+                    <TimeRangePicker
+                      start={startTime}
+                      end={endTime}
+                      onStartChange={setStartTime}
+                      onEndChange={setEndTime}
                       required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      End Time <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="time"
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
-                      value={endTime}
-                      onChange={e => setEndTime(e.target.value)}
-                      required
+                      labelClassName="block text-slate-700 font-semibold"
                     />
                   </div>
                 </div>

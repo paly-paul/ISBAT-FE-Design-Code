@@ -13,11 +13,25 @@ import {
   useDeleteUeQuestionPractical
 } from '@/hooks/assessment/useUePracticalPrint'
 import {
+  useUeQuestionPrintCourseUnits,
   usePrintUeQuestionTheory,
   useDownloadUeQuestionTheoryWord,
   usePrintUeBooklet,
   useDownloadUeBookletPdf
 } from '@/hooks/assessment/useUeMaterialPrint'
+import { AuthError } from '@/lib/api/client'
+
+// The QP print outcome enum may arrive by name or by number (0 Printed,
+// 1 Reprinted, 2 ExamRuleNotSet, 3 QuestionsNotAvailable,
+// 4 ConfirmationRequired) — normalise to the name.
+const OUTCOME_NAMES = ['Printed', 'Reprinted', 'ExamRuleNotSet', 'QuestionsNotAvailable', 'ConfirmationRequired'] as const
+type QpOutcome = typeof OUTCOME_NAMES[number]
+function normaliseOutcome(raw: unknown): QpOutcome | null {
+  if (typeof raw === 'number') return OUTCOME_NAMES[raw] ?? null
+  const s = String(raw ?? '')
+  if (/^\d+$/.test(s)) return OUTCOME_NAMES[Number(s)] ?? null
+  return OUTCOME_NAMES.find(n => n.toLowerCase() === s.toLowerCase()) ?? null
+}
 
 export default function UniversityExamQpBookletPrintPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
@@ -43,27 +57,38 @@ export default function UniversityExamQpBookletPrintPage() {
   const { data: currentIntake, isLoading: intakeLoading } = useCurrentAcademicIntake()
   const { data: programs, isLoading: programsLoading } = usePrograms()
   const { data: semesters, isLoading: semLoading } = useSemesters(selectedProgramGuid || null)
-  const { data: allProgramUnits, isLoading: unitsLoading } = useProgramUnits(selectedProgramGuid || null)
+  // Course Unit list comes from /ue-question-print/course-units (per the page
+  // doc): current-intake planned units only, lecturer-scoped, combination
+  // units expanded. The full curriculum from program-course-units listed
+  // unplanned units too, which the print endpoints then reject.
+  const { data: courseUnits = [], isLoading: unitsLoading } = useUeQuestionPrintCourseUnits(
+    selectedProgramGuid, selectedSemesterGuid, !!selectedProgramGuid && !!selectedSemesterGuid,
+  )
+  // That list carries no unit type, so read it from program-course-units.
+  const { data: allProgramUnits, isLoading: typesLoading } = useProgramUnits(selectedProgramGuid || null)
 
   const intakeGuid = currentIntake?.intakeGuid || ''
 
-  const courseUnits = useMemo(() => {
-    if (!allProgramUnits || !selectedSemesterGuid) return []
-    return allProgramUnits.filter((u: any) => u.semesterGuid === selectedSemesterGuid)
-  }, [allProgramUnits, selectedSemesterGuid])
+  const selectedUnit = courseUnits.find(u => u.courseUnitGuid === selectedCourseUnitGuid)
 
-  const selectedUnit = useMemo(() => {
-    return courseUnits.find((u: any) => u.courseUnitGuid === selectedCourseUnitGuid)
-  }, [courseUnits, selectedCourseUnitGuid])
+  // A combination member may sit outside this semester's curriculum rows,
+  // so fall back to matching the unit anywhere in the programme.
+  const unitTypeName = useMemo(() => {
+    if (!selectedCourseUnitGuid || !allProgramUnits) return ''
+    const match = allProgramUnits.find(u => u.courseUnitGuid === selectedCourseUnitGuid && u.semesterGuid === selectedSemesterGuid)
+      ?? allProgramUnits.find(u => u.courseUnitGuid === selectedCourseUnitGuid)
+    return match?.unitTypeName ?? ''
+  }, [allProgramUnits, selectedCourseUnitGuid, selectedSemesterGuid])
+  // Type unknown → let the user pick Theory/Practical, same as Combined,
+  // rather than silently printing it as Theory.
+  const needsComponentPick = !!selectedCourseUnitGuid && !typesLoading && (unitTypeName === 'Combined' || !['Theory', 'Practical', 'Project'].includes(unitTypeName))
 
-  const unitTypeName = selectedUnit?.unitTypeName || ''
-  
   const effectiveType = useMemo(() => {
-    if (unitTypeName === 'Combined') return combinedType
+    if (needsComponentPick) return combinedType
     if (unitTypeName === 'Project') return 'Project'
     if (unitTypeName === 'Practical') return 'Practical'
-    return 'Theory' // default or actual theory
-  }, [unitTypeName, combinedType])
+    return 'Theory'
+  }, [needsComponentPick, unitTypeName, combinedType])
 
   const isFormValid = !!intakeGuid && !!selectedProgramGuid && !!selectedSemesterGuid && !!selectedCourseUnitGuid
 
@@ -135,21 +160,26 @@ export default function UniversityExamQpBookletPrintPage() {
       confirm
     }
     try {
-      let res: any
-      if (effectiveType === 'Practical') {
-        res = await printPracticalMut.mutateAsync(req)
-      } else {
-        res = await printTheoryMut.mutateAsync(req)
-      }
+      const res: { outcome: unknown; message?: string } | null = effectiveType === 'Practical'
+        ? await printPracticalMut.mutateAsync(req)
+        : await printTheoryMut.mutateAsync(req)
+      const outcome = normaliseOutcome(res?.outcome)
 
-      if (res.outcome === 'ExamRuleNotSet') {
-        showToast('University Exam not yet Scheduled!!', 'error')
-      } else if (res.outcome === 'QuestionsNotAvailable') {
-        showToast('Questions are not yet uploaded!!', 'error')
-      } else if (res.outcome === 'ConfirmationRequired') {
-        confirmAndExecute(res.message || 'Questions are already printed. Do you want to reprint the same?', () => handlePrintQP(true))
-      } else if (res.outcome === 'Printed' || res.outcome === 'Reprinted') {
-        showToast(`Question Paper ${res.outcome}!`, 'success')
+      // All of these are HTTP 200 — branch on the outcome, and show the
+      // server's own message (it carries the legacy dialog wording).
+      if (outcome === 'ExamRuleNotSet') {
+        showToast(res?.message || 'University Exam not yet Scheduled!!', 'error')
+      } else if (outcome === 'QuestionsNotAvailable') {
+        showToast(res?.message || 'Questions are not yet uploaded!!', 'error')
+      } else if (outcome === 'ConfirmationRequired') {
+        confirmAndExecute(res?.message || 'Questions are already printed. Do you want to reprint the same?', () => handlePrintQP(true))
+      } else if (outcome === 'Printed' || outcome === 'Reprinted') {
+        // "QP Print in MS Word" — printing is only half of it; hand the
+        // user the Word file straight away.
+        showToast(`${res?.message || `Question paper ${outcome.toLowerCase()}.`} Downloading the Word file…`, 'success')
+        await handleDownload('QPWord')
+      } else {
+        showToast(res?.message || 'Unexpected response from the server — the question paper may not have been printed.', 'error')
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to print QP', 'error')
@@ -174,7 +204,9 @@ export default function UniversityExamQpBookletPrintPage() {
         showToast(res.message || 'Deleted successfully!', 'success')
       }
     } catch (err: any) {
-      showToast(err.message || 'Could not delete QP.', 'error')
+      // 404 = nothing printed yet (or exam not scheduled) — nothing to delete.
+      if (err instanceof AuthError && err.code === 'not_found') showToast('There is no printed practical QP to delete for this unit.', 'warn')
+      else showToast(err.message || 'Could not delete QP.', 'error')
     }
   }
 
@@ -276,15 +308,18 @@ export default function UniversityExamQpBookletPrintPage() {
               value={selectedCourseUnitGuid}
               onChange={handleCourseUnitChange}
               disabled={!selectedSemesterGuid || unitsLoading}
-              options={courseUnits.map((u: any) => ({
-                value: u.courseUnitGuid,
-                label: `${u.courseUnitCode} - ${u.courseUnitName} (${u.unitTypeName})`,
-              }))}
+              options={courseUnits.map(u => {
+                const type = allProgramUnits?.find(p => p.courseUnitGuid === u.courseUnitGuid)?.unitTypeName
+                return { value: u.courseUnitGuid, label: `${u.courseUnitCode} - ${u.courseUnitName}${type ? ` (${type})` : ''}` }
+              })}
             />
+            {!!selectedProgramGuid && !!selectedSemesterGuid && !unitsLoading && courseUnits.length === 0 && (
+              <p className="text-g500" style={{ fontSize: 11.5, marginTop: 4 }}>No course units of this semester are planned for the current intake{currentIntake ? ` (${currentIntake.description || currentIntake.intakeCode})` : ''}.</p>
+            )}
           </div>
         </div>
-        
-        {unitTypeName === 'Combined' && (
+
+        {needsComponentPick && (
           <div className="p-4 px-6 bg-slate-50 border-b border-gray-100 flex items-center gap-6">
             <span className="font-semibold text-sm text-gray-700">Select Exam Component:</span>
             <label className="flex items-center gap-2 cursor-pointer">

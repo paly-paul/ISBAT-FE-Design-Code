@@ -116,7 +116,7 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
 
   return (
     <>
-    <div className="modal-overlay open" onClick={onClose}>
+    <div className="modal-overlay open">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr"><div className="modal-title"><i className="lni lni-shield"></i> Refugee Status</div><button className="modal-close" onClick={onClose}>✕</button></div>
         <div>
@@ -185,7 +185,7 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
     {/* Sibling of the main overlay (not nested) so a click on this
         overlay doesn't bubble up and close the Refugee Status modal too. */}
     {docPreviewOpen && refugeeDocUrl && (
-      <div className="modal-overlay open" onClick={() => setDocPreviewOpen(false)}>
+      <div className="modal-overlay open">
         <div className="modal modal-xl" onClick={e => e.stopPropagation()}>
           <div className="modal-hdr"><div className="modal-title"><i className="lni lni-files"></i> Refugee Supporting Document</div><button className="modal-close" onClick={() => setDocPreviewOpen(false)}>✕</button></div>
           <div style={{ height: '70vh', background: 'var(--g100)', borderRadius: 'var(--rsm)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

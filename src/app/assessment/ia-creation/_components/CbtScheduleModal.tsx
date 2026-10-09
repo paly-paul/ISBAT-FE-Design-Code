@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
+import TimePicker from '@/components/TimePicker'
 import { useIaTestSchedule, useUpdateIaTestSchedule } from '@/hooks/assessment/useIaTestSchedule'
 import { useExamRules } from '@/hooks/assessment/useExamRules'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
@@ -156,7 +157,7 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
 
   if (saved) {
     return (
-      <div className="modal-overlay open" onClick={onClose}>
+      <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
           <SuccessPopup
             title="Class Test Scheduled!"
@@ -169,7 +170,7 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
   }
 
   return (
-    <div className="modal-overlay open" onClick={onClose}>
+    <div className="modal-overlay open">
       <div className="modal modal-md modal-flex" style={{ maxWidth: '700px', borderRadius: '12px' }} onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="modal-hdr modal-hdr-blue" style={{ display: 'flex', alignItems: 'center', padding: '16px 20px' }}>
@@ -200,8 +201,8 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
                   <div className="flex-1">
                     <DatePicker value={startDate} onChange={setStartDate} />
                   </div>
-                  <div className="w-[110px]">
-                    <input type="time" className="ctrl w-full" value={startTime} onChange={e => setStartTime(e.target.value)} />
+                  <div className="w-[140px]">
+                    <TimePicker value={startTime} onChange={setStartTime} />
                   </div>
                 </div>
               </div>
@@ -211,8 +212,8 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
                   <div className="flex-1">
                     <DatePicker value={endDate} onChange={setEndDate} />
                   </div>
-                  <div className="w-[110px]">
-                    <input type="time" className="ctrl w-full" value={endTime} onChange={e => setEndTime(e.target.value)} />
+                  <div className="w-[140px]">
+                    <TimePicker value={endTime} onChange={setEndTime} />
                   </div>
                 </div>
               </div>
@@ -309,15 +310,6 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
                   className="w-full mt-1"
                   disabled={isLoading || rulesLoading}
                 />
-              </div>
-            </div>
-            
-            <div className="mt-8 bg-[#eff6ff] border border-[#dbeafe] rounded-md p-3 flex gap-3 text-[12.5px] text-[#3b82f6] items-start">
-              <div className="mt-0.5 text-[#2563eb]">
-                <i className="lni lni-information"></i>
-              </div>
-              <div>
-                Timing is controlled server-side. Balance time is saved to database on every student action (Save Next, Previous, Submit, Window Close) to handle connectivity interruptions.
               </div>
             </div>
 

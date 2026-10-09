@@ -34,7 +34,6 @@ export function useExamCancelStudent(studentGuid: string | null) {
     queryKey: EXAM_CANCEL_KEYS.student(studentGuid ?? ''),
     queryFn: () => getExamCancelStudent(studentGuid as string),
     enabled: !!studentGuid,
-    retry: false,
   })
 }
 
@@ -43,7 +42,6 @@ export function useExamCancelCourseUnits(studentGuid: string | null) {
     queryKey: EXAM_CANCEL_KEYS.units(studentGuid ?? ''),
     queryFn: () => getExamCancelCourseUnits(studentGuid as string),
     enabled: !!studentGuid,
-    retry: false,
   })
 }
 
@@ -54,7 +52,6 @@ export function useExamStatus(studentGuid: string | null, courseUnitGuid: string
     queryFn: () => getExamStatus(studentGuid as string, courseUnitGuid as string),
     enabled: !!studentGuid && !!courseUnitGuid,
     staleTime: 0,
-    retry: false,
   })
 }
 

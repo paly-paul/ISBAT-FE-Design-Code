@@ -150,7 +150,7 @@ export function NewAdvanceDepositModal({ isOpen, onClose, showToast }: ModalProp
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay open" onClick={handleClose}>
+    <div className="modal-overlay open">
       <div className="modal modal-md" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }} onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue" style={{ flexShrink: 0 }}>
           <div className="modal-title"><i className="lni lni-arrow-up-circle"></i> New Advance Deposit</div>

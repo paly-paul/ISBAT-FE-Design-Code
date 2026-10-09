@@ -1,5 +1,5 @@
 'use client'
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -242,19 +242,27 @@ export default function FilingPage() {
   )
   const loadedApplicants = applicantPages?.pages.flatMap(p => p.items) ?? []
   // Server already filtered by committedApplicantSearch — no client-side
-  // re-filter needed (or wanted: the server is the source of truth for what
-  // matches, same as every other confirmed-real search in this app).
-  const visibleSearchItems = loadedApplicants
+  // re-filter needed (the server is the source of truth for what matches).
 
   // Same scrollTop > 0 guard the other infinite-scroll dropdowns in this
-  // app use (CourseUnitSearchPicker, Payment Console's student search) — a
-  // plain distance-to-bottom check alone fires spuriously on a short list
-  // right after a new page loads, even with no user interaction.
+  // app use — a plain distance-to-bottom check alone fires spuriously on a
+  // short list right after a new page loads.
   function handleApplicantScroll(e: React.UIEvent<HTMLDivElement>) {
     if (!hasMoreApplicants || isFetchingMoreApplicants) return
     const el = e.currentTarget
     if (el.scrollTop > 0 && el.scrollHeight - el.scrollTop - el.clientHeight < 48) fetchNextApplicantPage()
   }
+
+  // Closes the results on an outside click, same as Payment Console's search.
+  const applicantBoxRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!showApplicantDropdown) return
+    function handle(e: MouseEvent) {
+      if (!applicantBoxRef.current?.contains(e.target as Node)) setShowApplicantDropdown(false)
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [showApplicantDropdown])
 
   // Auto-carries the appRefNo over from Payment's "Proceed to Filing" button
   // (see lib/filingHandoff.ts) instead of leaving the counsellor to manually
@@ -279,8 +287,6 @@ export default function FilingPage() {
     if (!ref) return
     setPrefillRef(ref)
     setPrefillAttempt(0)
-    setApplicantSearch(ref)
-    setShowApplicantDropdown(true)
   }, [])
 
   // Deliberately unscoped by intake, unlike the interactive dropdown above —
@@ -1035,39 +1041,53 @@ export default function FilingPage() {
         <div className="g2">
           <div className="fg">
             <label className="lbl">Applicant<span className="req">*</span></label>
-            <div className="relative">
-              <input className="ctrl" placeholder="Search applicant ref no, name, email or phone..."
-                value={selectedApplication ? `${selectedApplication.appRefNo} — ${applicantName(selectedApplication)}` : applicantSearch}
-                onChange={e => { setApplicantSearch(e.target.value); setShowApplicantDropdown(true); setSelectedApplication(null) }}
-                onFocus={() => setShowApplicantDropdown(true)} />
+            {/* Same search bar + results list as Payment Console's Student
+                Search: icon input, floating list, name over ref · phone · email.
+                Server-searched (debounced 300ms), scroll to load more. */}
+            <div style={{ position: 'relative' }} ref={applicantBoxRef}>
+              <div className="inp-wrap">
+                <span className="inp-icon"><i className="lni lni-search-alt"></i></span>
+                <input
+                  className="ctrl"
+                  type="text"
+                  placeholder="e.g. APP20261/388 or Masereka Elijah"
+                  value={selectedApplication ? `${applicantName(selectedApplication) || '—'} (${selectedApplication.appRefNo})` : applicantSearch}
+                  onChange={e => { setApplicantSearch(e.target.value); setShowApplicantDropdown(true); setSelectedApplication(null) }}
+                  onFocus={() => setShowApplicantDropdown(true)}
+                />
+              </div>
               {showApplicantDropdown && (
                 <div
-                  className="applicant-dd absolute left-0 right-0 top-full mt-1 bg-white border border-g200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto"
+                  className="mt-1"
+                  style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
+                    background: 'var(--white)', border: '1.5px solid var(--b200)', borderRadius: 'var(--rsm)',
+                    boxShadow: 'var(--neu-out)', maxHeight: 260, overflowY: 'auto',
+                  }}
                   onScroll={handleApplicantScroll}
                 >
                   {!applicantSearch.trim() ? (
-                    <div className="p-3 text-sm text-g400 flex items-center gap-2"><i className="lni lni-search-alt" /> Type to search…</div>
-                  ) : isSearchingApplicants && loadedApplicants.length === 0 ? (
-                    <div className="p-3 text-sm text-g400 flex items-center gap-2"><i className="lni lni-reload" /> Searching…</div>
+                    <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>Type a name, ref no, phone or email to search.</div>
+                  ) : (isSearchingApplicants || applicantSearch.trim() !== committedApplicantSearch) && loadedApplicants.length === 0 ? (
+                    <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>Searching…</div>
                   ) : isApplicantSearchError && loadedApplicants.length === 0 ? (
-                    <div className="p-3 text-sm text-clr-red flex items-center gap-2"><i className="lni lni-warning" /> Search failed. Please try again.</div>
-                  ) : visibleSearchItems.length === 0 ? (
-                    <div className="p-3 text-sm text-g400">
-                      No results {hasMoreApplicants ? 'in what’s loaded so far — keep scrolling to search further.' : 'found.'}
-                    </div>
+                    <div className="text-clr-red px-3 py-2" style={{ fontSize: 12.5 }}><i className="lni lni-warning"></i> Search failed. Please try again.</div>
+                  ) : loadedApplicants.length === 0 ? (
+                    <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>No matching applications found.</div>
                   ) : (
                     <>
-                      {visibleSearchItems.map(a => (
-                        <button key={a.appRefNo} className="applicant-row" onClick={() => selectApplication(a)}>
-                          <span className="av-chip">{initials(applicantName(a))}</span>
-                          <span className="flex-1 min-w-0 flex flex-col">
-                            <span className="font-semibold text-g800 truncate">{applicantName(a) || '—'}</span>
-                            <span className="text-xs text-g400">{a.appRefNo}</span>
-                          </span>
-                        </button>
+                      {loadedApplicants.map(a => (
+                        <div
+                          key={a.appRefNo}
+                          className="cursor-pointer px-3 py-2 hover:bg-b50 border-b border-g100 last:border-b-0"
+                          onClick={() => selectApplication(a)}
+                        >
+                          <div className="font-bold">{applicantName(a) || '—'}</div>
+                          <div className="text-g500" style={{ fontSize: 11 }}>{a.appRefNo} · {a.phone || '—'} · {a.emailId || '—'}</div>
+                        </div>
                       ))}
                       {isFetchingMoreApplicants && (
-                        <div className="p-2 text-center text-xs text-g400"><i className="lni lni-reload" /> Loading more…</div>
+                        <div className="text-g400 px-3 py-2" style={{ fontSize: 12 }}>Loading more…</div>
                       )}
                     </>
                   )}

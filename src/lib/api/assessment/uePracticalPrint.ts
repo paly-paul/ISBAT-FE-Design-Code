@@ -1,4 +1,4 @@
-import { apiPost, apiGetBlob, apiDelete } from '@/lib/api/client'
+import { apiPost, apiGetBlob, apiDeleteWithMessage } from '@/lib/api/client'
 
 export interface UePracticalPrintParams {
   programGuid: string
@@ -54,5 +54,8 @@ export function deleteUeQuestionPractical(data: UePracticalPrintParams) {
     intakeGuid: data.intakeGuid || ''
   })
   if (data.confirm !== undefined) params.append('confirm', String(data.confirm))
-  return apiDelete<any>(`/api/v1/assessment/ue-question-print/practical?${params.toString()}`)
+  // The confirm step answers `data: false` + a "You are about to delete…"
+  // message (delete-practical.md) — plain apiDelete drops the message and
+  // returns the bare boolean, so callers need both.
+  return apiDeleteWithMessage<boolean>(`/api/v1/assessment/ue-question-print/practical?${params.toString()}`)
 }

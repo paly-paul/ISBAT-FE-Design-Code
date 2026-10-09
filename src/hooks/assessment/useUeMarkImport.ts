@@ -31,7 +31,6 @@ export function useUeMarkImportExam(
     queryKey: ['ue-mark-import-exam', programGuid, semesterGuid, courseUnitGuid, intakeGuid, ueType],
     queryFn: () => getUeMarkImportExam(programGuid, semesterGuid, courseUnitGuid, intakeGuid, ueType),
     enabled: enabled && !!programGuid && !!semesterGuid && !!courseUnitGuid && !!intakeGuid,
-    retry: false,
   })
 }
 

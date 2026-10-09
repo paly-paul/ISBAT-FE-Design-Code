@@ -202,6 +202,7 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
                 value={programLevel}
                 onSearch={setLevelSearch}
                 onOpenChange={setLevelPickerOpen}
+                isLoading={levelQuery.isLoading}
                 hasNextPage={levelQuery.hasNextPage}
                 isFetchingNextPage={levelQuery.isFetchingNextPage}
                 onLoadMore={() => levelQuery.fetchNextPage()}
@@ -241,6 +242,7 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
                 value={programLevel}
                 onSearch={setLevelSearch}
                 onOpenChange={setLevelPickerOpen}
+                isLoading={levelQuery.isLoading}
                 hasNextPage={levelQuery.hasNextPage}
                 isFetchingNextPage={levelQuery.isFetchingNextPage}
                 onLoadMore={() => levelQuery.fetchNextPage()}

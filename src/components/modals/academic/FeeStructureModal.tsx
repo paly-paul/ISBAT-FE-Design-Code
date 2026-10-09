@@ -615,6 +615,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                 disabled={mode === 'edit'}
                 onSearch={setProgramSearch}
                 onOpenChange={setProgramPickerOpen}
+                isLoading={programQuery.isLoading}
                 hasNextPage={programQuery.hasNextPage}
                 isFetchingNextPage={programQuery.isFetchingNextPage}
                 onLoadMore={() => programQuery.fetchNextPage()}
@@ -672,6 +673,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                   options={copySourceOptions}
                   onSearch={setCopySearch}
                   onOpenChange={setCopyPickerOpen}
+                  isLoading={copyQuery.isLoading}
                   hasNextPage={copyQuery.hasNextPage}
                   isFetchingNextPage={copyQuery.isFetchingNextPage}
                   onLoadMore={() => copyQuery.fetchNextPage()}
@@ -744,6 +746,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                     onChange={updateSharedFeeCurrency}
                     onSearch={setCurrencySearch}
                     onOpenChange={setCurrencyPickerOpen}
+                    isLoading={currencyQuery.isLoading}
                     hasNextPage={currencyQuery.hasNextPage}
                     isFetchingNextPage={currencyQuery.isFetchingNextPage}
                     onLoadMore={() => currencyQuery.fetchNextPage()}

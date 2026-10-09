@@ -8,7 +8,6 @@ import { ImportSourceModal } from '@/components/modals/admission/ImportSourceMod
 import { ImportCrmModal } from '@/components/modals/admission/ImportCrmModal'
 import { ImportOdelModal } from '@/components/modals/admission/ImportOdelModal'
 import { SearchSelect } from '@/components/SearchSelect'
-import { EnquirySearchPicker } from '@/components/EnquirySearchPicker'
 import DatePicker from '@/components/DatePicker'
 import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
@@ -19,6 +18,9 @@ import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
+import { useExchangeRateExists } from '@/hooks/finance/useExchangeRates'
+import { TodayExchangeRateModal } from '@/components/modals/finance/TodayExchangeRateModal'
+import { RatesAlreadySetNote } from '@/components/finance/RatesAlreadySetNote'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { Country, dialCode } from '@/lib/api/academic/country'
@@ -27,6 +29,7 @@ import {
   useApplicationPaymentExemptionTypes,
   useApplicationPaymentTypes,
   useCreateApplicationPayment,
+  useUnconvertedEnquiriesInfinite,
 } from '@/hooks/admission/useApplicationPayments'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput } from '@/lib/errorMessages'
@@ -70,6 +73,12 @@ const COUNTRY_CODES = [
 // Create wants was wrong; payDate genuinely needs the dd/MMM/yyyy string
 // (e.g. "06/Aug/2026"), not an ISO timestamp.
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+// Local date, same "today" every Finance page uses for exchange rates.
+function todayYmd() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
 function formatPaymentDate(yyyyMmDd: string): string {
   const [y, m, d] = yyyyMmDd.split('-').map(Number)
   if (!y || !m || !d) return ''
@@ -240,19 +249,6 @@ function PaymentPageContent() {
     amountLabel?: string; methodLabel?: string; dateLabel?: string
   }>({})
 
-  // Displayed exchange rates — kept as controlled state (not just readOnly
-  // display) so the submitted exRate actually matches what's shown here.
-  const [usdRate, setUsdRate] = useState('3720')
-  const [kesRate, setKesRate] = useState('28.5')
-  // Purely decorative — the rates are seeded, not actually re-fetched — but
-  // the Refresh button doing nothing visible on click reads as broken, so a
-  // brief icon-spin gives it the "did something" feedback a real refresh
-  // would have.
-  const [isRefreshingRates, setIsRefreshingRates] = useState(false)
-  function refreshRates() {
-    setIsRefreshingRates(true)
-    setTimeout(() => setIsRefreshingRates(false), 600)
-  }
 
   // Receipt Upload drag-and-drop highlight — same treatment as Filing's own
   // file zones.
@@ -366,9 +362,9 @@ function PaymentPageContent() {
   // and restricted to not-yet-converted enquiries (GET
   // .../unconverted-enquiries?intakeGuid=...&page=...&pageSize=...),
   // replacing the old generic "first 100 of 11k+" useEnquiries() list — only
-  // enabled once an Intake is actually picked. Fetched via
-  // EnquirySearchPicker's own real server-paginated, scroll-to-load-more
-  // hook (useUnconvertedEnquiriesInfinite) rather than a single capped
+  // enabled once an Intake is actually picked. Fetched via the
+  // server-paginated, scroll-to-load-more useUnconvertedEnquiriesInfinite
+  // (see the Enquiry dropdown below) rather than a single capped
   // pageSize=1000 snapshot of the whole intake.
   const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, intakePickerOpen)
   const campusQuery = useSearchCampusesInfinite(committedCampusSearch, 20, campusPickerOpen)
@@ -536,12 +532,27 @@ function PaymentPageContent() {
     }
   }, [currencies, form.currencyGuid])
 
-  // Label shown in EnquirySearchPicker's closed box once something's
-  // selected — sourced from selectedEnquiry (the full-detail fetch above),
-  // not the picker's own paged list, so a ?enquiryGuid= handoff from
-  // enquiry-followup(-master) still shows a real label even before that
-  // specific enquiry has been paged into the picker's own search results.
+  // Enquiry dropdown — the shared SearchSelect over unconverted enquiries for
+  // the intake, server-searched (debounced) with scroll-to-load-more.
+  const [committedEnquirySearch, setCommittedEnquirySearch] = useState('')
+  const [enquiryPickerOpen, setEnquiryPickerOpen] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setCommittedEnquirySearch(enquirySearch.trim()), 300)
+    return () => clearTimeout(t)
+  }, [enquirySearch])
+  const enquiryQuery = useUnconvertedEnquiriesInfinite(form.intakeGuid, committedEnquirySearch, 20, enquiryPickerOpen && !!form.intakeGuid)
+  const enquiryOptions = useMemo(
+    () => flattenUniquePages(enquiryQuery.data?.pages ?? [], e => e.enquiryGuid)
+      .map(e => ({ value: e.enquiryGuid, label: `${e.studentName} (${e.enquiryCode})` })),
+    [enquiryQuery.data],
+  )
+  // Sourced from selectedEnquiry (the full-detail fetch above), not the
+  // paged list, so a ?enquiryGuid= handoff from enquiry-followup(-master)
+  // shows a real label before that enquiry has been paged into the list.
   const selectedEnquiryLabel = selectedEnquiry ? `${selectedEnquiry.studentName} (${selectedEnquiry.enquiryCode})` : null
+  if (form.enquiryGuid && selectedEnquiryLabel && !enquiryOptions.some(o => o.value === form.enquiryGuid)) {
+    enquiryOptions.unshift({ value: form.enquiryGuid, label: selectedEnquiryLabel })
+  }
 
   const intakeOptions   = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   const campusOptions   = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
@@ -607,10 +618,41 @@ function PaymentPageContent() {
   // amtPer (a percentage of something unconfirmed), so there's nothing to
   // auto-fill from yet.
 
+  // Today's rates, fetched per currency via GET /exchange-rates/exists
+  // (exRate = UGX per 1 unit of the currency). The base currency is 1 by
+  // definition. KSH, not KES — that's the backend Currency Master's code.
+  const today = todayYmd()
+  const baseCurrency = currencies.find(c => c.isDefault === 1)
+  const usdCurrency  = currencies.find(c => c.currencyCode === 'USD')
+  const kshCurrency  = currencies.find(c => c.currencyCode === 'KSH')
+  const usdRateQuery = useExchangeRateExists(usdCurrency?.currencyGuid ?? null, today)
+  const kshRateQuery = useExchangeRateExists(kshCurrency?.currencyGuid ?? null, today)
+  const usdRate = usdRateQuery.data?.exists ? usdRateQuery.data.exRate : null
+  const kshRate = kshRateQuery.data?.exists ? kshRateQuery.data.exRate : null
+  const usdRateMissing = !!usdCurrency && usdRateQuery.isSuccess && !usdRateQuery.data?.exists
+
+  const kshRateMissing = !!kshCurrency && kshRateQuery.isSuccess && !kshRateQuery.data?.exists
+  // Rate-entry popup, opened on a given currency (the user can switch it).
+  const [rateModalCurrencyGuid, setRateModalCurrencyGuid] = useState<string | undefined>(undefined)
+  function openRateModal(currencyGuid?: string) { setRateModalCurrencyGuid(currencyGuid); openModal('exchange-rate') }
+  const [ratesSetNote, setRatesSetNote] = useState(false)
+  const rateCurrencies = currencies.filter(c => c.currencyGuid !== baseCurrency?.currencyGuid)
+
+  // No USD rate for today → ask for it once, as soon as that's known. After
+  // a Cancel it stays closed; the bar's "Enter rate" button (or submitting a
+  // USD payment) reopens it.
+  const usdPromptShown = useRef(false)
+  useEffect(() => {
+    if (usdRateMissing && !usdPromptShown.current) { usdPromptShown.current = true; openRateModal(usdCurrency?.currencyGuid) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usdRateMissing])
+
   const selectedCurrency = currencies.find(c => c.currencyGuid === form.currencyGuid)
-  const exRate = selectedCurrency?.currencyCode === 'USD' ? Number(usdRate) || 1
-    : selectedCurrency?.currencyCode === 'KES' ? Number(kesRate) || 1
-    : 1
+  const exRate: number | null = !selectedCurrency ? null
+    : selectedCurrency.currencyGuid === baseCurrency?.currencyGuid ? 1
+    : selectedCurrency.currencyGuid === usdCurrency?.currencyGuid ? usdRate
+    : selectedCurrency.currencyGuid === kshCurrency?.currencyGuid ? kshRate
+    : null
 
   useEffect(() => {
     if (form.receiptBookGuid && !matchingReceiptBooks.some(r => r.receiptBookGuid === form.receiptBookGuid)) {
@@ -658,6 +700,14 @@ function PaymentPageContent() {
       showToast(`Please fill: ${missing.join(', ')}`, 'error')
       return
     }
+    // Never save a payment against a guessed rate.
+    if (!isWaived && exRate == null) {
+      const missingHere = (selectedCurrency?.currencyGuid === usdCurrency?.currencyGuid && usdRateMissing)
+        || (selectedCurrency?.currencyGuid === kshCurrency?.currencyGuid && kshRateMissing)
+      if (selectedCurrency && missingHere) openRateModal(selectedCurrency.currencyGuid)
+      else showToast(`No ${selectedCurrency?.currencyCode ?? ''} exchange rate is available for today. Enter it in Finance → Exchange Rates first.`, 'error')
+      return
+    }
 
     const payload = {
       enquiryGuid: form.enquiryGuid,
@@ -678,7 +728,7 @@ function PaymentPageContent() {
       payType: form.exemptionTypeGuid ? null : Number(form.payType || 1),
       amount: form.exemptionTypeGuid ? null : Number(form.feeAmount || 0),
       currencyGuid: form.exemptionTypeGuid ? null : form.currencyGuid || null,
-      exRate: form.exemptionTypeGuid ? null : exRate || 1,
+      exRate: form.exemptionTypeGuid ? null : exRate,
       bankGuid: selectedBankGuid,
       receiptBookGuid: form.exemptionTypeGuid ? null : form.receiptBookGuid || null,
       remarks: form.remarks.trim() || null,
@@ -734,21 +784,49 @@ function PaymentPageContent() {
         <div className="card flex items-center gap-3 px-4 py-2.5 mb-4" style={{ flexWrap: 'wrap' }}>
           <i className="lni lni-protection text-b500" style={{ fontSize: 16, flexShrink: 0 }} />
           <span className="font-semibold text-g700" style={{ flexShrink: 0, fontSize: 'var(--fs-xs)' }}>Today&apos;s Exchange Rates</span>
-          <span className="badge-green text-[11px] px-2 py-0.5 rounded-md font-semibold">Auto-fetched</span>
-          <div className="flex items-center gap-1.5 ml-2">
-            <span className="text-g500" style={{ fontSize: 'var(--fs-xs)' }}>1 USD =</span>
-            <input className="ctrl text-center font-semibold" style={{ width: 70, padding: '3px 6px', fontSize: 13 }} value={usdRate} onChange={e => setUsdRate(e.target.value)} readOnly />
-            <span className="badge-blue text-[11px] px-1.5 py-0.5 rounded font-bold">UGX</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-g500" style={{ fontSize: 'var(--fs-xs)' }}>1 KES =</span>
-            <input className="ctrl text-center font-semibold" style={{ width: 70, padding: '3px 6px', fontSize: 13 }} value={kesRate} onChange={e => setKesRate(e.target.value)} readOnly />
-            <span className="badge-blue text-[11px] px-1.5 py-0.5 rounded font-bold">UGX</span>
-          </div>
-          <span className="text-[11px] text-g400 ml-auto">Last updated: Today 08:30 AM</span>
-          <button className={`btn btn-neu btn-sm${isRefreshingRates ? ' pmt-refresh-spin' : ''}`} style={{ gap: 5 }} onClick={refreshRates}>
-            <i className="lni lni-reload" style={{ fontSize: 12 }} /> Refresh
+          {[
+            { code: 'USD', currency: usdCurrency, query: usdRateQuery, rate: usdRate, onEnter: () => openRateModal(usdCurrency?.currencyGuid) },
+            { code: 'KSH', currency: kshCurrency, query: kshRateQuery, rate: kshRate, onEnter: () => openRateModal(kshCurrency?.currencyGuid) },
+          ].map(({ code, currency, query, rate, onEnter }) => (
+            <div key={code} className="flex items-center gap-1.5 ml-2">
+              <span className="text-g500" style={{ fontSize: 'var(--fs-xs)' }}>1 {code} =</span>
+              {!currency ? (
+                <span className="text-g400" style={{ fontSize: 12 }}>not in Currency Master</span>
+              ) : query.isLoading ? (
+                <span className="text-g400" style={{ fontSize: 12 }}>Loading…</span>
+              ) : query.isError ? (
+                <span className="text-clr-red" style={{ fontSize: 12 }}><i className="lni lni-warning" /> Couldn&apos;t load</span>
+              ) : rate != null ? (
+                <span className="font-semibold text-g800" style={{ fontSize: 13 }}>{rate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              ) : (
+                <button
+                  className="btn btn-sm"
+                  style={{ background: 'var(--amber-bg)', border: '1px solid var(--amber-bd)', color: 'var(--amber)', padding: '2px 8px', gap: 4 }}
+                  onClick={onEnter}
+                  title={`No ${code} rate for today — click to enter it`}
+                >
+                  <i className="lni lni-pencil" style={{ fontSize: 11 }} /> Set {code} rate
+                </button>
+              )}
+              <span className="badge-blue text-[11px] px-1.5 py-0.5 rounded font-bold">{baseCurrency?.currencyCode ?? 'UGX'}</span>
+            </div>
+          ))}
+          <span className="text-[11px] text-g400 ml-auto">Rates for {formatDate(`${today}T00:00:00`)}</span>
+          {/* Opens the rate popup (with its currency dropdown) on the first
+              currency still missing today's rate, else the first one. */}
+          <button
+            className="btn btn-primary btn-sm"
+            style={{ gap: 5 }}
+            onClick={() => {
+              // Both of today's rates already set — nothing to enter here.
+              if (usdRate != null && kshRate != null) { setRatesSetNote(true); return }
+              openRateModal((usdRateMissing ? usdCurrency : kshRateMissing ? kshCurrency : undefined)?.currencyGuid)
+            }}
+            disabled={rateCurrencies.length === 0}
+          >
+            <i className="lni lni-plus" style={{ fontSize: 12 }} /> Set Exchange Rate
           </button>
+          {ratesSetNote && <RatesAlreadySetNote codes={['USD', 'KSH']} onDismiss={() => setRatesSetNote(false)} />}
         </div>
 
         {/* Page header */}
@@ -761,9 +839,11 @@ function PaymentPageContent() {
             <button className="btn btn-neu btn-sm" onClick={() => leaveTo('/admission/dashboard')}>
               <i className="lni lni-arrow-left" /> Back
             </button>
+            {/* Hidden for now — the Enquiry dropdown above already pulls in an enquiry.
             <button className="btn btn-neu btn-sm" onClick={() => openModal('import-source')}>
               <i className="lni lni-download" /> Import from Enquiry
             </button>
+            */}
             <button className="btn btn-neu btn-sm" onClick={() => openModal('import-odel')}>
               <i className="lni lni-cloud-download" /> Import from ODel App
             </button>
@@ -836,13 +916,18 @@ function PaymentPageContent() {
                 />
               </Field>
               <Field label="Enquiry" req>
-                <EnquirySearchPicker
-                  intakeGuid={form.intakeGuid}
-                  selectedLabel={form.enquiryGuid ? selectedEnquiryLabel : null}
-                  onSelect={e => set('enquiryGuid', e.enquiryGuid)}
-                  onClear={() => set('enquiryGuid', '')}
+                <SearchSelect
+                  options={enquiryOptions}
+                  value={form.enquiryGuid}
                   placeholder={form.intakeGuid ? '-- Select Enquiry --' : '-- Select Intake First --'}
+                  onChange={v => set('enquiryGuid', v)}
+                  onSearch={setEnquirySearch}
+                  onOpenChange={setEnquiryPickerOpen}
                   disabled={!form.intakeGuid}
+                  isLoading={(enquiryQuery.isFetching && !enquiryQuery.isFetchingNextPage) || enquirySearch.trim() !== committedEnquirySearch}
+                  hasNextPage={enquiryQuery.hasNextPage}
+                  isFetchingNextPage={enquiryQuery.isFetchingNextPage}
+                  onLoadMore={() => enquiryQuery.fetchNextPage()}
                 />
               </Field>
             </div>
@@ -1167,6 +1252,15 @@ function PaymentPageContent() {
       <ImportSourceModal isOpen={openModals.has('import-source')} onClose={() => closeModal('import-source')} showToast={showToast} />
       <ImportCrmModal isOpen={openModals.has('import-crm')} onClose={() => closeModal('import-crm')} showToast={showToast} />
       <ImportOdelModal isOpen={openModals.has('import-odel')} onClose={() => closeModal('import-odel')} showToast={showToast} />
+      <TodayExchangeRateModal
+        isOpen={openModals.has('exchange-rate')}
+        onClose={() => closeModal('exchange-rate')}
+        currencies={rateCurrencies}
+        initialCurrencyGuid={rateModalCurrencyGuid}
+        baseCode={baseCurrency?.currencyCode ?? 'UGX'}
+        date={today}
+        onSaved={(code, rate) => { closeModal('exchange-rate'); showToast(`Today's ${code} rate saved: 1 ${code} = ${rate} ${baseCurrency?.currencyCode ?? 'UGX'}.`, 'success') }}
+      />
       <Toast toast={toast} />
 
       {showSuccessPopup && (

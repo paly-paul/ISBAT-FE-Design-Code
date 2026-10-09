@@ -460,7 +460,7 @@ export default function FeedbackMasterPage() {
       </div>
 
       {createOpen && (
-        <div className="modal-overlay open" onClick={() => setCreateOpen(false)}>
+        <div className="modal-overlay open">
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
               <div className="modal-title"><i className="lni lni-plus"></i> New Feedback Form</div>

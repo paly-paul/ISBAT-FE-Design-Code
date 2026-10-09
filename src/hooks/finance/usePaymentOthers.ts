@@ -17,15 +17,13 @@ export function usePaymentOthersList(params: PaymentOtherListParams, enabled: bo
 
 // Lives under PAYMENT_OTHERS_KEY on purpose — useCreatePaymentOther already
 // invalidates that whole family, so a just-paid resit fee refetches (and
-// drops to 0) without any extra wiring. retry: false — a 400 here ("no
-// intake assigned") won't fix itself on retry, same reasoning as
-// usePayableLedgers.
+// drops to 0) without any extra wiring. A 400 here means "no intake
+// assigned".
 export function useResitFee(studentGuid: string | null, applicationGuid: string | null, enabled: boolean) {
   return useQuery({
     queryKey: [...PAYMENT_OTHERS_KEY, 'resit-fee', studentGuid, applicationGuid],
     queryFn: () => getResitFee(studentGuid as string, applicationGuid as string),
     enabled: enabled && !!studentGuid && !!applicationGuid,
-    retry: false,
   })
 }
 

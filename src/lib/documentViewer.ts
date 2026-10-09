@@ -142,10 +142,13 @@ export async function resolveDocumentPreview(url: string): Promise<DocumentPrevi
       : { kind: 'unsupported', src: null, revoke: noop }
   }
 
-  // The S3 bucket has no CORS policy, so remote URLs go through the
-  // same-origin /doc-proxy route (app/doc-proxy/route.ts). blob: URLs (mock
-  // mode) are already local.
-  const fetchUrl = url.startsWith('blob:') ? url : `/doc-proxy?url=${encodeURIComponent(url)}`
+  // Server builds (dev, Vercel) route remote documents through the
+  // same-origin /doc-proxy route (app/doc-proxy/route.server.ts), since the
+  // documents bucket has no CORS policy. The static S3 build has no server,
+  // so it fetches S3 directly — that bucket must allow GET from the frontend
+  // origin. blob: URLs (mock mode) are already local.
+  const viaProxy = process.env.NEXT_PUBLIC_DOC_PROXY === 'true' && !url.startsWith('blob:')
+  const fetchUrl = viaProxy ? `/doc-proxy?url=${encodeURIComponent(url)}` : url
   const res = await fetch(fetchUrl)
   if (!res.ok) throw new Error('Failed to load document')
   const raw = await res.blob()

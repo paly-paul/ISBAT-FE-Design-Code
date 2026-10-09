@@ -6,7 +6,6 @@ export function useUeDetailedMarks(universityExamGuid: string | null) {
     queryKey: ['ue-detailed-marks', universityExamGuid],
     queryFn: () => getUeDetailedMarks(universityExamGuid!),
     enabled: !!universityExamGuid,
-    retry: false,
   })
 }
 

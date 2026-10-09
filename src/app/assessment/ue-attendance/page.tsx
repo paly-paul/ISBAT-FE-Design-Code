@@ -89,7 +89,6 @@ export default function UeAttendancePage() {
     queryKey: ['ueAttendanceSchedule', programGuid, semesterGuid, unitGuid, intakeGuid, derivedUeType],
     queryFn: () => getUeAttendanceSchedule(programGuid, semesterGuid, unitGuid, intakeGuid, derivedUeType),
     enabled: isReadyForData,
-    retry: false
   })
 
   // 5. Students
@@ -97,7 +96,6 @@ export default function UeAttendancePage() {
     queryKey: ['ueAttendanceStudents', programGuid, semesterGuid, unitGuid, intakeGuid, derivedUeType, selectedUnit?.unitCat],
     queryFn: () => getUeAttendanceStudents(programGuid, semesterGuid, unitGuid, intakeGuid, derivedUeType, selectedUnit!.unitCat),
     enabled: isReadyForData && !!schedule, // Only load students if schedule exists
-    retry: false
   })
 
   // Sync local attendance state when students fetch

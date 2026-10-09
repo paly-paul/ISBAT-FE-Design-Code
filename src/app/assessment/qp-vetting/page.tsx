@@ -601,7 +601,7 @@ export default function QpUploadVettingPage() {
 
       {/* ── Confirm Verification Dialog ──────────────────────────────────────── */}
       {isVerifyDialogOpen && (
-        <div className="modal-overlay open" onClick={() => setIsVerifyDialogOpen(false)} style={{ zIndex: 650 }}>
+        <div className="modal-overlay open" style={{ zIndex: 650 }}>
           <div className="modal modal-md flex flex-col" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
             <div className="modal-hdr modal-hdr-blue shrink-0">
               <div className="modal-title flex items-center gap-2">
@@ -676,7 +676,7 @@ export default function QpUploadVettingPage() {
 
       {/* ── Success Popup Modal ──────────────────────────────────────────────── */}
       {successModal && (
-        <div className="modal-overlay open" onClick={() => setSuccessModal(null)} style={{ zIndex: 700 }}>
+        <div className="modal-overlay open" style={{ zIndex: 700 }}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <SuccessPopup
               title={successModal.title}

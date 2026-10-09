@@ -45,7 +45,7 @@ export function ProjectProposalViewModal({ isOpen, onClose, proposalGuid, row, o
   }
 
   return (
-    <div className="modal-overlay open" onClick={onClose}>
+    <div className="modal-overlay open">
       <div className="modal modal-flex max-w-2xl w-full" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title">

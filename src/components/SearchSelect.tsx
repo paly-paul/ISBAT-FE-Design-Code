@@ -59,8 +59,14 @@ export function SearchSelect({
   const inputRef   = useRef<HTMLInputElement>(null)
   const optsRef    = useRef<HTMLDivElement>(null)
 
+  // With server-side search (onSearch) the options are only the current
+  // search's results, and closing the dropdown resets the search — so an
+  // option picked from a search drops out of `options` and the trigger fell
+  // back to the placeholder. Remember the picked option to keep its label.
+  const [picked, setPicked] = useState<Opt | null>(null)
+
   const current  = controlled ? value! : internal
-  const selected = normalised.find(o => o.value === current)
+  const selected = normalised.find(o => o.value === current) ?? (picked && picked.value === current ? picked : undefined)
 
   const searchTokens = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const visible = searchTokens.length > 0
@@ -159,6 +165,7 @@ export function SearchSelect({
   }, [open, onOpenChange])
 
   function select(val: string) {
+    setPicked(normalised.find(o => o.value === val) ?? null)
     if (controlled) onChange?.(val)
     else { setInternal(val); onChange?.(val) }
     setOpen(false)

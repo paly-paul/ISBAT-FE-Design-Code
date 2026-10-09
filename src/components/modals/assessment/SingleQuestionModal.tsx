@@ -192,7 +192,7 @@ export function SingleQuestionModal({
   const isPending = createMut.isPending || updateMut.isPending
 
   return (
-    <div className="modal-overlay open" onClick={onClose} style={{ zIndex: 650 }}>
+    <div className="modal-overlay open" style={{ zIndex: 650 }}>
       <div
         className="modal modal-lg flex flex-col"
         onClick={e => e.stopPropagation()}
