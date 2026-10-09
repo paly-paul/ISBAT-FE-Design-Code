@@ -39,6 +39,7 @@ import {
 } from '@/hooks/academic/useProgramFeeStructure'
 import { AuthError } from '@/lib/api/client'
 import { flattenUniquePages } from '@/lib/pagination'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Toggle between UGX and USD.
 const LOCAL_OR_FOREIGN_OPTS = [
@@ -896,6 +897,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     // Intake no longer has a dropdown to validate at all — it's auto-filled
     // from the Current Academic Intake (see the effect below).
     setStep1Errors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
@@ -1710,7 +1712,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     onChange={e => { setProgramCode(e.target.value); if (step1Errors.programCode) setStep1Errors(p => ({ ...p, programCode: '' })) }}
                     style={step1Errors.programCode ? { borderColor: 'var(--red)' } : undefined}
                   />
-                  {step1Errors.programCode && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programCode}</p>}
+                  {step1Errors.programCode && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programCode}</p>}
                 </div>
                 <div className="fg span2">
                   <div className="lbl">Programme Name <span className="req">*</span></div>
@@ -1721,7 +1723,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     onChange={e => { setProgramName(e.target.value); if (step1Errors.programName) setStep1Errors(p => ({ ...p, programName: '' })) }}
                     style={step1Errors.programName ? { borderColor: 'var(--red)' } : undefined}
                   />
-                  {step1Errors.programName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programName}</p>}
+                  {step1Errors.programName && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programName}</p>}
                 </div>
 
                 <div className="fg">
@@ -1738,7 +1740,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     isFetchingNextPage={programGroupQuery.isFetchingNextPage}
                     onLoadMore={() => programGroupQuery.fetchNextPage()}
                   />
-                  {step1Errors.programGroupGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programGroupGuid}</p>}
+                  {step1Errors.programGroupGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programGroupGuid}</p>}
                 </div>
                 <div className="fg span2">
                   <div className="lbl" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1770,7 +1772,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     isFetchingNextPage={programLevelQuery.isFetchingNextPage}
                     onLoadMore={() => programLevelQuery.fetchNextPage()}
                   />
-                  {step1Errors.programLevelGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programLevelGuid}</p>}
+                  {step1Errors.programLevelGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programLevelGuid}</p>}
                   <div className="flex gap-2 flex-wrap mt-2">
                     <span className="lvl-chip"><span className="lvl-chip-lbl">No. of Years</span><span className="lvl-chip-val">{selectedProgramLevel?.yearCount ?? '—'}</span></span>
                     <span className="lvl-chip"><span className="lvl-chip-lbl">No. of Semesters</span><span className="lvl-chip-val">{selectedProgramLevel?.semCount ?? '—'}</span></span>
@@ -1823,7 +1825,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                       : 'Please select the programme\'s base currency.'}
                   </div>
                   {(step1Errors.appFee || step1Errors.lateFee || step1Errors.currencyCode) && (
-                    <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.appFee || step1Errors.lateFee || step1Errors.currencyCode}</p>
+                    <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.appFee || step1Errors.lateFee || step1Errors.currencyCode}</p>
                   )}
                 </div>
 
@@ -1835,7 +1837,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     onSelect={i => { setIntakeGuid(i.intakeGuid); if (step1Errors.intakeGuid) setStep1Errors(p => ({ ...p, intakeGuid: '' })) }}
                     onClear={() => setIntakeGuid('')}
                   />
-                  {step1Errors.intakeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.intakeGuid}</p>}
+                  {step1Errors.intakeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.intakeGuid}</p>}
                 </div>
                 <div className="fg span2">
                   <div className="lbl">Specialization(s)</div>

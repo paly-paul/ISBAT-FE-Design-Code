@@ -10,6 +10,7 @@ import { useProgramGroup } from '@/hooks/academic/useProgramGroups'
 import { useSearchProgramLevelsInfinite } from '@/hooks/academic/useProgramLevels'
 import { AuthError } from '@/lib/api/client'
 import { flattenUniquePages } from '@/lib/pagination'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Add and Edit share this form — differ in prefill, the post-save redirect
 // (Add only), and which mutation runs.
@@ -95,6 +96,7 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
     if (!groupName.trim()) e.groupName = 'Group Name is required'
     if (!programLevel)     e.programLevel = 'Select a programme level before proceeding'
     setErrors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
@@ -208,7 +210,7 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
                 onLoadMore={() => levelQuery.fetchNextPage()}
                 onChange={v => { setProgramLevel(v); clearError('programLevel') }}
               />
-              {errors.programLevel && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programLevel}</p>}
+              {errors.programLevel && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programLevel}</p>}
             </div>
           )}
           <div className="fg">
@@ -220,7 +222,7 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
               onChange={e => { setGroupCode(e.target.value); clearError('groupCode') }}
               style={errors.groupCode ? { borderColor: 'var(--red)' } : undefined}
             />
-            {errors.groupCode && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.groupCode}</p>}
+            {errors.groupCode && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.groupCode}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Group Name <span className="req">*</span></div>
@@ -231,7 +233,7 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
               onChange={e => { setGroupName(e.target.value); clearError('groupName') }}
               style={errors.groupName ? { borderColor: 'var(--red)' } : undefined}
             />
-            {errors.groupName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.groupName}</p>}
+            {errors.groupName && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.groupName}</p>}
           </div>
           {isEdit && (
             <div className="fg span2">
@@ -248,7 +250,7 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
                 onLoadMore={() => levelQuery.fetchNextPage()}
                 onChange={v => { setProgramLevel(v); clearError('programLevel') }}
               />
-              {errors.programLevel && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programLevel}</p>}
+              {errors.programLevel && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programLevel}</p>}
             </div>
           )}
         </div>

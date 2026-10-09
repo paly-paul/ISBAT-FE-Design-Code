@@ -6,6 +6,7 @@ import { FailurePopup } from '../shared/FailurePopup'
 import { CooperateInput } from '@/lib/api/finance/cooperate'
 import { useCooperate } from '@/hooks/finance/useCooperates'
 import { AuthError } from '@/lib/api/client'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Add and Edit share this form — differ in prefill and which mutation runs.
 interface CooperateFormModalProps extends ModalProps {
@@ -55,6 +56,7 @@ export function CooperateFormModal({ isOpen, onClose, showToast, mode, cooperate
     if (!cooperateCode.trim()) e.cooperateCode = 'Cooperate Code is required'
     if (!cooperateName.trim()) e.cooperateName = 'Cooperate Name is required'
     setErrors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
@@ -146,7 +148,7 @@ export function CooperateFormModal({ isOpen, onClose, showToast, mode, cooperate
               onChange={e => { setCooperateCode(e.target.value.toUpperCase()); clearError('cooperateCode') }}
               style={errors.cooperateCode ? { borderColor: 'var(--red)' } : undefined}
             />
-            {errors.cooperateCode && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.cooperateCode}</p>}
+            {errors.cooperateCode && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.cooperateCode}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Cooperate Name <span className="req">*</span></div>
@@ -158,7 +160,7 @@ export function CooperateFormModal({ isOpen, onClose, showToast, mode, cooperate
               onChange={e => { setCooperateName(e.target.value); clearError('cooperateName') }}
               style={errors.cooperateName ? { borderColor: 'var(--red)' } : undefined}
             />
-            {errors.cooperateName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.cooperateName}</p>}
+            {errors.cooperateName && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.cooperateName}</p>}
           </div>
         </div>
         <div className="modal-footer">

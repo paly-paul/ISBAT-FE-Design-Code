@@ -2,63 +2,89 @@
 import { useEffect, useRef, useState } from 'react'
 import OtpInput from '@/components/OtpInput'
 import { useRequestEnquiryEmailOtp, useVerifyEnquiryEmailOtp } from '@/hooks/admission/useEnquiries'
+import { AuthError } from '@/lib/api/client'
 
-// Verifies an enquiry's email with a 6-digit OTP (post-enquiry-email-otp-
-// request.md / -verify.md). Sends the code as soon as it opens, so it's used
-// right after an enquiry is saved (`afterCreate`: the copy says so and Cancel
-// reads "Skip for now") and from the Enquiry List's "Verify Email" action.
+// Verifies a candidate's email with a 6-digit OTP BEFORE the enquiry is
+// created (post-enquiry-email-otp-request.md / -verify.md). Sends the code as
+// soon as it opens; on success hands the verificationToken back to the form,
+// which must send it with POST /enquiries.
 //
-// The server allows 3 wrong codes per OTP and a code lasts 10 minutes; a
-// resend issues a fresh code and resets both. The 30s resend wait below is a
-// UI guard against double-sends only — the API itself has no cooldown.
+// Limits (server-enforced, see the 2026-10 enquiry handoff):
+// - 5 sends per email per 24h, Send and Resend alike. too_many_requests is the
+//   only source of truth — no client-side counter, since the limit survives
+//   refreshes and other browsers.
+// - No limit on wrong guesses per code, so the copy never mentions "tries".
+// The 30s resend wait is a UI guard against double-sends burning that daily
+// allowance, not an API rule.
 const RESEND_WAIT_S = 30
 const EMPTY = ['', '', '', '', '', '']
+const LIMIT_MESSAGE = 'You have reached the OTP limit for this email. Try again tomorrow.'
+
+export interface VerifiedEmail {
+  email: string
+  token: string
+  // Epoch ms; the token is rejected by create after validityMinutes (30).
+  expiresAt: number
+}
 
 interface Props {
   isOpen: boolean
-  enquiryGuid: string | null
   email: string
   studentName?: string
-  afterCreate?: boolean
   onClose: () => void
-  onVerified: () => void
+  onVerified: (verified: VerifiedEmail) => void
+  // The email has used its daily sends — the form disables Verify for it.
+  onLimitReached: (email: string) => void
 }
 
-export function EnquiryEmailVerifyModal({ isOpen, enquiryGuid, email, studentName, afterCreate, onClose, onVerified }: Props) {
+function errorCode(e: Error) {
+  return e instanceof AuthError ? e.code : undefined
+}
+
+export function EnquiryEmailVerifyModal({ isOpen, email, studentName, onClose, onVerified, onLimitReached }: Props) {
   const requestOtp = useRequestEnquiryEmailOtp()
   const verifyOtp = useVerifyEnquiryEmailOtp()
-  const [masked, setMasked] = useState<string | null>(null)
+  // Only ever held in memory; each (re)send replaces it.
+  const [challenge, setChallenge] = useState<{ token: string; masked: string; expiryMinutes: number } | null>(null)
   const [digits, setDigits] = useState<string[]>(EMPTY)
   const [error, setError] = useState<string | null>(null)
-  const [locked, setLocked] = useState(false)
-  const [verified, setVerified] = useState(false)
+  const [limited, setLimited] = useState(false)
   const [wait, setWait] = useState(0)
   const sentFor = useRef<string | null>(null)
 
   function send() {
-    if (!enquiryGuid) return
     setError(null)
-    setLocked(false)
     setDigits(EMPTY)
-    requestOtp.mutate(enquiryGuid, {
-      onSuccess: m => { setMasked(m || email); setWait(RESEND_WAIT_S) },
+    requestOtp.mutate(email, {
+      onSuccess: c => {
+        setChallenge({ token: c.challengeToken, masked: c.maskedEmail || email, expiryMinutes: c.expiryMinutes || 10 })
+        setWait(RESEND_WAIT_S)
+      },
       onError: (e: Error) => {
-        // Already verified (e.g. by another advisor) — nothing left to do.
-        if (/already verified/i.test(e.message)) { setVerified(true); onVerified(); return }
-        setError(e.message || 'Couldn’t send the code. Please try again.')
+        const code = errorCode(e)
+        if (code === 'too_many_requests') {
+          setLimited(true)
+          setWait(0)
+          setError(LIMIT_MESSAGE)
+          onLimitReached(email)
+        } else if (code === 'validation_error') {
+          setError('Enter a valid email.')
+        } else {
+          setError(e.message || 'Couldn’t send the code. Please try again.')
+        }
       },
     })
   }
 
-  // Send once per enquiry each time the modal opens.
+  // Send once per email each time the modal opens.
   useEffect(() => {
     if (!isOpen) { sentFor.current = null; return }
-    if (!enquiryGuid || sentFor.current === enquiryGuid) return
-    sentFor.current = enquiryGuid
-    setMasked(null); setVerified(false)
+    if (!email || sentFor.current === email) return
+    sentFor.current = email
+    setChallenge(null); setLimited(false)
     send()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, enquiryGuid])
+  }, [isOpen, email])
 
   useEffect(() => {
     if (wait <= 0) return
@@ -66,27 +92,27 @@ export function EnquiryEmailVerifyModal({ isOpen, enquiryGuid, email, studentNam
     return () => clearTimeout(t)
   }, [wait])
 
-  if (!isOpen || !enquiryGuid) return null
+  if (!isOpen) return null
 
   const code = digits.join('')
 
   function handleVerify() {
-    if (!enquiryGuid || code.length !== 6) return
+    if (!challenge || !/^\d{6}$/.test(code)) return
     setError(null)
-    verifyOtp.mutate({ enquiryGuid, otp: code }, {
-      onSuccess: () => { setVerified(true); onVerified() },
+    verifyOtp.mutate({ email, challengeToken: challenge.token, otp: code }, {
+      onSuccess: v => {
+        onVerified({ email, token: v.verificationToken, expiresAt: Date.now() + (v.validityMinutes || 30) * 60_000 })
+      },
       onError: (e: Error) => {
-        const msg = e.message || 'Couldn’t verify the code. Please try again.'
-        setError(msg)
         setDigits(EMPTY)
-        // Out of attempts — only a new code helps, so stop offering Verify.
-        if (/too many/i.test(msg)) { setLocked(true); setWait(0) }
+        setError(errorCode(e) === 'bad_request'
+          ? 'Wrong or expired code. Check it and try again, or send a new code.'
+          : e.message || 'Couldn’t verify the code. Please try again.')
       },
     })
   }
 
   const sending = requestOtp.isPending
-  const target = masked ?? email
 
   return (
     <div className="modal-overlay open">
@@ -96,49 +122,38 @@ export function EnquiryEmailVerifyModal({ isOpen, enquiryGuid, email, studentNam
           <button className="modal-close" onClick={onClose} aria-label="Close"><i className="lni lni-close"></i></button>
         </div>
 
-        {verified ? (
-          <div className="eq-verify">
-            <div className="eq-verify-icon ok"><i className="lni lni-checkmark"></i></div>
-            <div className="eq-verify-title">Email verified</div>
-            <div className="eq-verify-sub"><strong>{target}</strong>{studentName ? ` is confirmed for ${studentName}.` : ' is confirmed.'}</div>
+        <div className="eq-verify">
+          <div className="eq-verify-icon"><i className="lni lni-envelope"></i></div>
+          <div className="eq-verify-title">Confirm the candidate&apos;s email</div>
+          <div className="eq-verify-sub" aria-live="polite">
+            {sending && !challenge
+              ? 'Sending a 6-digit code…'
+              : challenge
+                ? <>We sent a 6-digit code to <strong>{challenge.masked}</strong>. Ask {studentName || 'the candidate'} to read it out. It expires in {challenge.expiryMinutes} minutes.</>
+                : <>We&apos;ll send a 6-digit code to <strong>{email}</strong>.</>}
           </div>
-        ) : (
-          <div className="eq-verify">
-            {afterCreate && <div className="eq-verify-saved"><i className="lni lni-checkmark-circle"></i> Enquiry saved</div>}
-            <div className="eq-verify-icon"><i className="lni lni-envelope"></i></div>
-            <div className="eq-verify-title">Confirm the candidate&apos;s email</div>
-            <div className="eq-verify-sub" aria-live="polite">
-              {sending && !masked
-                ? 'Sending a 6-digit code…'
-                : <>We sent a 6-digit code to <strong>{target}</strong>. Ask {studentName || 'the candidate'} to read it out — it expires in 10 minutes.</>}
-            </div>
 
-            <div className={`eq-otp${locked ? ' locked' : ''}`}>
-              <OtpInput value={digits} onChange={d => { setDigits(d); if (error && !locked) setError(null) }} />
-            </div>
+          <div className={`eq-otp${!challenge ? ' locked' : ''}`}>
+            <OtpInput value={digits} onChange={d => { setDigits(d); if (error && !limited) setError(null) }} />
+          </div>
 
-            {error && <div className="eq-verify-error" role="alert"><i className="lni lni-warning"></i> {error}</div>}
+          {error && <div className="eq-verify-error" role="alert"><i className="lni lni-warning"></i> {error}</div>}
 
+          {!limited && (
             <div className="eq-verify-resend">
               Didn&apos;t get it?{' '}
               <button type="button" className="pm-link" style={{ marginLeft: 0 }} disabled={sending || wait > 0} onClick={send}>
                 {sending ? 'Sending…' : wait > 0 ? `Resend in ${wait}s` : 'Send a new code'}
               </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="modal-footer">
-          {verified ? (
-            <button className="btn btn-primary" onClick={onClose}>Done</button>
-          ) : (
-            <>
-              <button className="btn btn-neu" onClick={onClose}>{afterCreate ? 'Skip for now' : 'Cancel'}</button>
-              <button className="btn btn-primary" disabled={code.length !== 6 || locked || verifyOtp.isPending || sending} onClick={handleVerify}>
-                <i className="lni lni-checkmark-circle"></i> {verifyOtp.isPending ? 'Verifying…' : 'Verify'}
-              </button>
-            </>
-          )}
+          <button className="btn btn-neu" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" disabled={!challenge || code.length !== 6 || verifyOtp.isPending || sending} onClick={handleVerify}>
+            <i className="lni lni-checkmark-circle"></i> {verifyOtp.isPending ? 'Verifying…' : 'Verify'}
+          </button>
         </div>
       </div>
     </div>

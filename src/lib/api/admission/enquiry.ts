@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut } from '../client'
+import { apiGet, apiPost, apiPut, AuthError } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -38,6 +38,11 @@ export interface EnquiryInput {
   // enquirySourceName from the (separate) Enquiry Source master.
   sourceName: string | null
   enquiryTag: string | null
+  // Required since the 2026-10 enquiry handoff: the verificationToken from
+  // POST /enquiries/email-otp/verify (see verifyEnquiryEmailOtp below). Must
+  // have been issued for this same email (trimmed, case-insensitive) within
+  // the last 30 minutes, or the create is rejected and nothing is saved.
+  emailVerificationToken: string
 }
 
 // Confirmed field-for-field against a real GET /api/v1/admissions/enquiries/:guid
@@ -83,7 +88,13 @@ export interface Enquiry {
   nextFollowDate: string | null
   enquiryTag: string | null
   isbatSourceGuid: string | null
+  // Free-text source typed on the enquiry — unchanged by the 2026-10
+  // handoff. The two names below are the resolved master-record names for
+  // enquirySourceGuid / isbatSourceGuid, returned on list, get, create and
+  // update. Optional so older cached rows/mocks still type-check.
   sourceName: string | null
+  enquirySourceName?: string | null
+  isbatSourceName?: string | null
   campusName: string | null
   campusCode: string | null
   programName: string | null
@@ -92,9 +103,9 @@ export interface Enquiry {
   enquiryStatusCode: string | null
   followUpStatusName: string | null
   followUpStatusCode: string | null
-  // Set once the candidate's email is confirmed via the email-otp/verify
-  // endpoint below. Optional — not yet confirmed on a real list/detail
-  // response; treat a missing value as "unknown", not "unverified".
+  // Always true for enquiries created since email verification became a
+  // precondition of create (2026-10). Older enquiries may still be false,
+  // and there's no longer any endpoint to verify an existing enquiry.
   emailVerified?: boolean | null
 }
 
@@ -136,6 +147,10 @@ const mockEnquiries: Enquiry[] = []
 
 export function createEnquiry(input: EnquiryInput): Promise<unknown> {
   if (MOCK_AUTH) {
+    const verifiedFor = mockVerificationTokens.get(input.emailVerificationToken)
+    if (!verifiedFor || verifiedFor.expiresAt < Date.now() || verifiedFor.email !== normalizeEmail(input.email ?? '')) {
+      return Promise.reject(new AuthError('bad_request', NOT_VERIFIED_MESSAGE))
+    }
     const enquiry: Enquiry = {
       enquiryGuid: String(mockEnquirySeq),
       enquiryCode: `EQ-MOCK-${mockEnquirySeq++}`,
@@ -159,6 +174,9 @@ export function createEnquiry(input: EnquiryInput): Promise<unknown> {
       enquiryTag: input.enquiryTag,
       isbatSourceGuid: input.isbatSourceGuid,
       sourceName: input.sourceName,
+      enquirySourceName: input.sourceName,
+      isbatSourceName: null,
+      emailVerified: true,
       advisorGuid: null,
       followUpStatusGuid: null,
       enquiryStatusGuid: null,
@@ -178,52 +196,80 @@ export function createEnquiry(input: EnquiryInput): Promise<unknown> {
   return apiPost<unknown>('/api/v1/admissions/enquiries', input)
 }
 
-// The create response's shape isn't confirmed — it may be the new enquiry
-// (with enquiryGuid), a bare guid string, or nothing. Returns the guid when
-// one can be found, so the forms can go straight on to email verification.
-export function createdEnquiryGuid(response: unknown): string | null {
-  if (typeof response === 'string' && response.trim()) return response.trim()
-  if (response && typeof response === 'object') {
-    const r = response as { enquiryGuid?: unknown; guid?: unknown }
-    const guid = r.enquiryGuid ?? r.guid
-    if (typeof guid === 'string' && guid) return guid
-  }
-  return null
+// ---- Email verification (post-enquiry-email-otp-request.md / -verify.md) ----
+//
+// Verification now happens BEFORE an enquiry exists: request an OTP for an
+// email, verify it, then pass the verificationToken to createEnquiry. The old
+// per-enquiry endpoints (/enquiries/{guid}/email-otp/...) were removed.
+
+export interface EnquiryEmailOtpChallenge {
+  // Needed to verify; a resend returns a new one that replaces the old.
+  challengeToken: string
+  maskedEmail: string
+  expiryMinutes: number
 }
 
-// ---- Email verification (post-enquiry-email-otp-request.md / -verify.md) ----
+export interface EnquiryEmailVerification {
+  verificationToken: string
+  validityMinutes: number
+}
+
+// Exact server message for a missing/expired/mismatched token on create, so
+// callers can tell it apart from other bad_request failures.
+export const NOT_VERIFIED_MESSAGE = 'Email is not verified. Verify the email with an OTP before submitting the enquiry.'
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase()
+}
 
 function maskEmail(email: string): string {
   const [local, domain] = email.split('@')
   return domain ? `${local.slice(0, 2)}***@${domain}` : email
 }
 
-// POST /enquiries/{guid}/email-otp/request — emails a 6-digit OTP to the
-// enquiry's address and resolves to that address, masked ("pe***@gmail.com").
-// Calling again overwrites the previous OTP (no cooldown). 400 "Email already
-// verified." once verified; 404 when the enquiry doesn't exist.
-export function requestEnquiryEmailOtp(enquiryGuid: string): Promise<string> {
+// Mock-only stand-ins for server state: sends per email (the real limit is 5
+// per email per 24h, shared by Send and Resend) and issued tokens.
+const MOCK_MAX_SENDS = 5
+const mockOtpSends = new Map<string, number>()
+const mockChallenges = new Map<string, { email: string; expiresAt: number }>()
+const mockVerificationTokens = new Map<string, { email: string; expiresAt: number }>()
+let mockTokenSeq = 1
+
+// POST /enquiries/email-otp/request — emails a 6-digit OTP valid for
+// expiryMinutes (10). 400 too_many_requests once the email has had 5 sends in
+// 24h; that response is the only source of truth for the limit (it survives
+// refreshes and other browsers), so the UI must not keep its own counter.
+export function requestEnquiryEmailOtp(email: string): Promise<EnquiryEmailOtpChallenge> {
   if (MOCK_AUTH) {
-    const existing = mockEnquiries.find(e => e.enquiryGuid === enquiryGuid)
-    if (existing?.emailVerified) return Promise.reject(new Error('Email already verified.'))
-    return Promise.resolve(maskEmail(existing?.email || 'candidate@example.com'))
+    const key = normalizeEmail(email)
+    const sends = mockOtpSends.get(key) ?? 0
+    if (sends >= MOCK_MAX_SENDS) {
+      return Promise.reject(new AuthError('too_many_requests', 'Too many OTP requests for this email. Please try again later.'))
+    }
+    mockOtpSends.set(key, sends + 1)
+    const challengeToken = `mock-challenge-${mockTokenSeq++}`
+    mockChallenges.set(challengeToken, { email: key, expiresAt: Date.now() + 10 * 60_000 })
+    return Promise.resolve({ challengeToken, maskedEmail: maskEmail(key), expiryMinutes: 10 })
   }
-  return apiPost<string | null>(`/api/v1/admissions/enquiries/${enquiryGuid}/email-otp/request`, {})
-    .then(masked => masked ?? '')
+  return apiPost<EnquiryEmailOtpChallenge>('/api/v1/admissions/enquiries/email-otp/request', { email: email.trim() })
 }
 
-// POST /enquiries/{guid}/email-otp/verify — { otp } must be exactly 6
-// digits. 400 "Invalid or expired OTP." on a wrong/expired code, and "Too
-// many failed attempts. Please request a new OTP." after 3 misses (a new
-// request resets the counter). Mock mode accepts 123456, same as login.
-export function verifyEnquiryEmailOtp(enquiryGuid: string, otp: string): Promise<boolean> {
+// POST /enquiries/email-otp/verify — email must be the one the challenge was
+// issued for. 400 bad_request "Invalid or expired OTP." on a wrong code, an
+// expired challenge or a different email. There is no per-challenge guess
+// limit. Mock mode accepts 123456, same as login.
+export function verifyEnquiryEmailOtp(email: string, challengeToken: string, otp: string): Promise<EnquiryEmailVerification> {
   if (MOCK_AUTH) {
-    if (otp !== '123456') return Promise.reject(new Error('Invalid or expired OTP.'))
-    const existing = mockEnquiries.find(e => e.enquiryGuid === enquiryGuid)
-    if (existing) existing.emailVerified = true
-    return Promise.resolve(true)
+    const key = normalizeEmail(email)
+    const challenge = mockChallenges.get(challengeToken)
+    if (otp !== '123456' || !challenge || challenge.email !== key || challenge.expiresAt < Date.now()) {
+      return Promise.reject(new AuthError('bad_request', 'Invalid or expired OTP.'))
+    }
+    const verificationToken = `mock-verified-${mockTokenSeq++}`
+    mockVerificationTokens.set(verificationToken, { email: key, expiresAt: Date.now() + 30 * 60_000 })
+    return Promise.resolve({ verificationToken, validityMinutes: 30 })
   }
-  return apiPost<boolean>(`/api/v1/admissions/enquiries/${enquiryGuid}/email-otp/verify`, { otp })
+  return apiPost<EnquiryEmailVerification>('/api/v1/admissions/enquiries/email-otp/verify', { email: email.trim(), challengeToken, otp })
 }
 
 // List query for the enquiry-list page. Real: paginated, page/pageSize

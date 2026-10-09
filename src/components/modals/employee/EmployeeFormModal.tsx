@@ -12,6 +12,7 @@ import { useSearchDesignationsInfinite } from '@/hooks/config/useDesignations'
 import { useCountries } from '@/hooks/config/useCountries'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { flattenUniquePages } from '@/lib/pagination'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Add and Edit share this form — differ in prefill and which mutation runs.
 
@@ -237,6 +238,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
     if (isEdit && !employeeGuid) return
     const validationErrors = validate()
     setErrors(validationErrors)
+    scrollToFirstError(validationErrors)
     if (Object.keys(validationErrors).length > 0) return
 
     const selectedCategory = CATEGORIES.find(c => c.label === category) ?? CATEGORIES[0]
@@ -309,33 +311,33 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
             <div className="fg">
               <div className="lbl">Category <span className="req">*</span></div>
               <SearchSelect options={CATEGORIES.map(c => c.label)} value={category} onChange={v => { setCategory(v); clearError('category') }} />
-              {errors.category && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.category}</p>}
+              {errors.category && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.category}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Title <span className="req">*</span></div>
               <SearchSelect placeholder="Select…" options={TITLES} value={title} onChange={v => { setTitle(v); clearError('title') }} />
-              {errors.title && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.title}</p>}
+              {errors.title && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.title}</p>}
             </div>
             <div className="fg">
               <div className="lbl">First Name <span className="req">*</span></div>
               <input className="ctrl" type="text" placeholder={isEdit ? undefined : 'First name'} value={firstName} onChange={e => { setFirstName(e.target.value); clearError('firstName') }} style={errors.firstName ? { borderColor: 'var(--red)' } : undefined} />
-              {errors.firstName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.firstName}</p>}
+              {errors.firstName && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.firstName}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Surname <span className="req">*</span></div>
               <input className="ctrl" type="text" placeholder={isEdit ? undefined : 'Surname'} value={surname} onChange={e => { setSurname(e.target.value); clearError('surname') }} style={errors.surname ? { borderColor: 'var(--red)' } : undefined} />
-              {errors.surname && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.surname}</p>}
+              {errors.surname && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.surname}</p>}
             </div>
             <div className="fg"><div className="lbl">Other Name</div><input className="ctrl" type="text" placeholder="Other name" value={otherName} onChange={e => setOtherName(e.target.value)} /></div>
             <div className="fg">
               <div className="lbl">Email <span className="req">*</span></div>
               <input className="ctrl" type="email" placeholder={isEdit ? undefined : 'auto-generated'} value={emailId} onChange={e => { setEmailId(e.target.value); clearError('emailId') }} style={errors.emailId ? { borderColor: 'var(--red)' } : undefined} />
-              {errors.emailId && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.emailId}</p>}
+              {errors.emailId && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.emailId}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Sex <span className="req">*</span></div>
               <SearchSelect placeholder="Select…" options={SEXES} value={sex} onChange={v => { setSex(v); clearError('sex') }} />
-              {errors.sex && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.sex}</p>}
+              {errors.sex && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.sex}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Date of Birth <span className="req">*</span></div>
@@ -345,12 +347,12 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
                 onChange={v => { setBirthDate(v); clearError('birthDate') }}
                 hasError={!!errors.birthDate}
               />
-              {errors.birthDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.birthDate}</p>}
+              {errors.birthDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.birthDate}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Place of Birth <span className="req">*</span></div>
               <input className="ctrl" type="text" placeholder={isEdit ? undefined : 'e.g. Kampala'} value={placeOfBirth} onChange={e => { setPlaceOfBirth(e.target.value); clearError('placeOfBirth') }} style={errors.placeOfBirth ? { borderColor: 'var(--red)' } : undefined} />
-              {errors.placeOfBirth && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.placeOfBirth}</p>}
+              {errors.placeOfBirth && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.placeOfBirth}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Country</div>
@@ -359,12 +361,12 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
             <div className="fg">
               <div className="lbl">National ID Type <span className="req">*</span></div>
               <input className="ctrl" type="text" placeholder={isEdit ? undefined : 'e.g. 1'} value={natId} onChange={e => { setNatId(e.target.value); clearError('natId') }} style={errors.natId ? { borderColor: 'var(--red)' } : undefined} />
-              {errors.natId && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.natId}</p>}
+              {errors.natId && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.natId}</p>}
             </div>
             <div className="fg">
               <div className="lbl">National ID Number</div>
               <input className="ctrl" type="text" placeholder={isEdit ? undefined : 'e.g. CM12345678'} value={nationalId} onChange={e => { setNationalId(e.target.value); clearError('nationalId') }} style={errors.nationalId ? { borderColor: 'var(--red)' } : undefined} />
-              {errors.nationalId && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.nationalId}</p>}
+              {errors.nationalId && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.nationalId}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Religion</div>
@@ -373,7 +375,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
             <div className="fg">
               <div className="lbl">Marital Status <span className="req">*</span></div>
               <SearchSelect placeholder="Select…" options={MARITAL_STATUSES} value={maritalStatus} onChange={v => { setMaritalStatus(v); clearError('maritalStatus') }} />
-              {errors.maritalStatus && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.maritalStatus}</p>}
+              {errors.maritalStatus && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.maritalStatus}</p>}
             </div>
             {/* Enabled on Add too now (2026-09-15, per request) — still only
                 actually resolves to a submittable guid when it matches
@@ -394,7 +396,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
                 isFetchingNextPage={deptQuery.isFetchingNextPage}
                 onLoadMore={() => deptQuery.fetchNextPage()}
               />
-              {errors.department && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.department}</p>}
+              {errors.department && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.department}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Designation <span className="req">*</span></div>
@@ -409,7 +411,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
                 isFetchingNextPage={designationQuery.isFetchingNextPage}
                 onLoadMore={() => designationQuery.fetchNextPage()}
               />
-              {errors.designation && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.designation}</p>}
+              {errors.designation && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.designation}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Campus Assignment</div>

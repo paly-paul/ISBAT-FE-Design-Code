@@ -10,7 +10,6 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { EnquiryFormModal } from '@/components/modals/admission/EnquiryFormModal'
 import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignModal'
-import { EnquiryEmailVerifyModal } from '@/components/modals/admission/EnquiryEmailVerifyModal'
 import type { Enquiry } from '@/hooks/admission/useEnquiries'
 import { useEnquiries, useEnquiryCounts, useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
@@ -42,11 +41,10 @@ function statusBadge(statusName: string | undefined) {
   return <span className="badge badge-blue">{statusName}</span>
 }
 
-// sourceName (from the Enquiry Source master, set via the create form's
-// "Enquiry Source" dropdown) is already a real resolved string — no need to
-// fall back to the raw enquirySourceGuid.
-function sourceBadge(sourceName: string | null) {
-  return <span className="badge badge-grey">{sourceName ?? '—'}</span>
+// Channel shows the enquiry's own sourceName (e.g. "Direct"), per the backend
+// team (2026-10-09) — not enquirySourceName or isbatSourceName.
+function sourceBadge(r: Enquiry) {
+  return <span className="badge badge-grey">{r.sourceName || '—'}</span>
 }
 
 export default function EnquiryListPage() {
@@ -55,8 +53,6 @@ export default function EnquiryListPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [viewingGuid, setViewingGuid] = useState<string | null>(null)
-  // Row whose email is being verified (EnquiryEmailVerifyModal).
-  const [verifying, setVerifying] = useState<Enquiry | null>(null)
   const [search, setSearch] = useState('')
   const [channel, setChannel] = useState('')
   const [intakeGuid, setIntakeGuid] = useState('')
@@ -247,12 +243,10 @@ export default function EnquiryListPage() {
                     <ActionMenu>
                       <button className="btn btn-neu btn-sm" onClick={() => router.push(`/admission/payment?enquiryGuid=${r.enquiryGuid}`)}><i className="lni lni-arrow-right" /> Convert</button>
                       {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.enquiryGuid)}><i className="lni lni-eye" /> View</button>}
-                      {/* Hidden only once the API confirms the email is verified;
-                          an unknown status still offers it — the API answers
-                          "Email already verified." if it is. */}
-                      {permissions.edit && r.email && r.emailVerified !== true && (
-                        <button className="btn btn-neu btn-sm" onClick={() => setVerifying(r)}><i className="lni lni-envelope" /> Verify Email</button>
-                      )}
+                      {/* No "Verify Email" here any more: email is verified before
+                          an enquiry can be created (2026-10), and the per-enquiry
+                          verify endpoints were removed. Older unverified rows keep
+                          their warning flag in the Email column. */}
                     </ActionMenu>
                   </td>
                   <td className="font-mono text-sm">{r.enquiryCode}</td>
@@ -264,7 +258,7 @@ export default function EnquiryListPage() {
                     {r.email && r.emailVerified === false && <span className="eq-email-flag no" title="Email not verified" aria-label="Email not verified"><i className="lni lni-warning" /></span>}
                   </td>
                   <td>{resolveProgramName(r)}</td>
-                  <td>{sourceBadge(r.sourceName)}</td>
+                  <td>{sourceBadge(r)}</td>
                   <td className="text-sm text-g600">{r.enquiryDate.slice(0, 10)}</td>
                   <td>{statusBadge(resolveStatusName(r.enquiryStatusGuid))}</td>
                 </tr>
@@ -303,14 +297,6 @@ export default function EnquiryListPage() {
           updateEnquiry={updateEnquiry}
         />
       )}
-      <EnquiryEmailVerifyModal
-        isOpen={!!verifying}
-        enquiryGuid={verifying?.enquiryGuid ?? null}
-        email={verifying?.email ?? ''}
-        studentName={verifying?.studentName}
-        onVerified={() => showToast(`Email verified for ${verifying?.studentName ?? 'the enquiry'}`, 'ok')}
-        onClose={() => setVerifying(null)}
-      />
       <Toast toast={toast} />
     </div>
   )

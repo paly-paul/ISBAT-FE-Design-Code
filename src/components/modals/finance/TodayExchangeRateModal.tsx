@@ -127,8 +127,8 @@ export function TodayExchangeRateModal({ isOpen, onClose, currencies, initialCur
                 {!error && <p className="text-g500" style={{ fontSize: 11.5, marginTop: 6 }}>How many {baseCode} make 1 {currencyCode || 'unit'}.</p>}
               </>
             )}
-            {existing.isError && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 6 }}>Couldn&apos;t check today&apos;s {currencyCode} rate. Close and try again.</p>}
-            {error && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 6 }}>{error}</p>}
+            {existing.isError && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 6 }}>Couldn&apos;t check today&apos;s {currencyCode} rate. Close and try again.</p>}
+            {error && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 6 }}>{error}</p>}
           </div>
         </div>
 

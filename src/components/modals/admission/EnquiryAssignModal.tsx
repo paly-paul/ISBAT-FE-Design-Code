@@ -12,6 +12,7 @@ import { useCampuses } from '@/hooks/config/useCampuses'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { AuthError } from '@/lib/api/client'
 import { flattenUniquePages } from '@/lib/pagination'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 interface EnquiryAssignModalProps extends ModalProps {
   enquiryGuid: string | null
@@ -96,6 +97,7 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
     const e: Record<string, string> = {}
     if (!campusGuid) e.campusGuid = 'Please select a Campus'
     setErrors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
@@ -190,7 +192,8 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
             <div className="fg m-0"><div className="lbl">Phone</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.mobile}</div></div>
             <div className="fg m-0"><div className="lbl">Email</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.email || '—'}</div></div>
             <div className="fg m-0"><div className="lbl">Enquiry Date</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.enquiryDate.slice(0, 10)}</div></div>
-            <div className="fg m-0"><div className="lbl">Source</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.sourceName || '—'}</div></div>
+            <div className="fg m-0"><div className="lbl">Source</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.enquirySourceName || enquiry.sourceName || '—'}</div></div>
+            {enquiry.isbatSourceName && <div className="fg m-0"><div className="lbl">Isbat Source</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.isbatSourceName}</div></div>}
             <div className="fg m-0"><div className="lbl">Intake</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{resolveIntakeLabel(enquiry.intakeGuid)}</div></div>
             <div className="fg m-0"><div className="lbl">Campus</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{resolveCampusName(enquiry.campusGuid)}</div></div>
             <div className="fg m-0"><div className="lbl">Status</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.enquiryStatusName || '—'}</div></div>
@@ -226,7 +229,7 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
                 value={campusGuid}
                 onChange={val => { setCampusGuid(val); if (errors.campusGuid) setErrors(p => ({ ...p, campusGuid: '' })) }}
               />
-              {errors.campusGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campusGuid}</p>}
+              {errors.campusGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campusGuid}</p>}
             </div>
           </div>
         </div>

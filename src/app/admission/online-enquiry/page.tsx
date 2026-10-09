@@ -12,12 +12,12 @@ import { dialCode } from '@/lib/api/academic/country'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
 import { useCreateEnquiry } from '@/hooks/admission/useEnquiries'
-import { createdEnquiryGuid } from '@/lib/api/admission/enquiry'
-import { EnquiryEmailVerifyModal } from '@/components/modals/admission/EnquiryEmailVerifyModal'
+import { EnquiryEmailField, EnquirySaveStatus, VerifiedEmail, isValidEnquiryEmail, isVerifiedFor } from '@/components/EnquiryEmailField'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
-import { sanitizePhoneInput, sanitizeNameInput } from '@/lib/errorMessages'
+import { sanitizeNameInput } from '@/lib/errorMessages'
 import { flattenUniquePages } from '@/lib/pagination'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Today's date at midnight, formatted the same way the confirmed payload
 // sample uses (no timezone offset) — matches enquiryDate/dob's "T00:00:00" shape.
@@ -29,16 +29,20 @@ function todayAtMidnight() {
   return `${y}-${m}-${d}T00:00:00`
 }
 
+// Backend cap on studentName (first + last joined by a space).
+const NAME_MAX = 50
+// Backend mobile rule: digits only, 7 to 15 (regex ^\d{7,15}$).
+const PHONE_MIN = 7
+const PHONE_MAX = 15
+
 export default function OnlineEnquiryPage() {
   const router = useRouter()
   const permissions = usePagePermissions()
   const [saved, setSaved] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
-  // After a save, the candidate's email is verified with a 6-digit OTP
-  // (EnquiryEmailVerifyModal) before the success popup — skippable, and
-  // also available later from the Enquiry List.
-  const [verifyFor, setVerifyFor] = useState<{ guid: string; email: string; name: string } | null>(null)
-  const [emailVerified, setEmailVerified] = useState<boolean | null>(null)
+  // Email must be OTP-verified BEFORE save (2026-10 enquiry handoff): the
+  // token from EnquiryEmailField goes out as emailVerificationToken.
+  const [verifiedEmail, setVerifiedEmail] = useState<VerifiedEmail | null>(null)
 
   const { data: enquirySources = [] }      = useEnquirySourceMasters()
   const createEnquiry = useCreateEnquiry()
@@ -154,6 +158,10 @@ export default function OnlineEnquiryPage() {
   const phoneCodeOptions = Array.from(
     new Map(countries.map(c => [dialCode(c), `${dialCode(c)} · ${c.countryName}`])).entries(),
   ).map(([value, label]) => ({ value, label }))
+  // Countries only load once a picker opens, so the default +256 had no
+  // matching option and the closed dropdown rendered blank. Keep the current
+  // code listed until the real option (with its country name) arrives.
+  if (phoneCode && !phoneCodeOptions.some(o => o.value === phoneCode)) phoneCodeOptions.unshift({ value: phoneCode, label: phoneCode })
 
   // Selecting a Country also points the phone code at that country's own
   // dial code — still just a UX default, freely overridable via the phone
@@ -171,14 +179,24 @@ export default function OnlineEnquiryPage() {
     setErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
   }
 
+  // Joined the way it's sent. Curly apostrophes (O’Neil) become straight
+  // ones — the backend allows apostrophes, not typographic quotes.
+  function studentName() {
+    return `${firstName.trim()} ${lastName.trim()}`.trim().replace(/[’‘]/g, "'")
+  }
+
   function validate() {
     const e: Record<string, string> = {}
     if (!firstName.trim()) e.firstName = 'First Name is required'
-    else if (!/\p{L}/u.test(firstName)) e.firstName = 'First Name must contain letters'
+    else if (!/^\p{L}/u.test(firstName.trim())) e.firstName = 'First Name must start with a letter'
     if (!lastName.trim())  e.lastName  = 'Last Name is required'
-    else if (!/\p{L}/u.test(lastName))  e.lastName  = 'Last Name must contain letters'
+    else if (!/^\p{L}/u.test(lastName.trim()))  e.lastName  = 'Last Name must start with a letter'
+    else if (studentName().length > NAME_MAX) e.lastName = `First and last name together must be ${NAME_MAX} characters or fewer (now ${studentName().length})`
     if (!phone.trim())     e.phone     = 'Phone is required'
+    else if (phone.length < PHONE_MIN) e.phone = `Phone must be ${PHONE_MIN} to ${PHONE_MAX} digits`
     if (!email.trim())     e.email     = 'Email is required'
+    else if (!isValidEnquiryEmail(email)) e.email = 'Enter a valid email'
+    else if (!isVerifiedFor(verifiedEmail, email)) e.email = 'Verify the email before saving'
     if (!dob)               e.dob       = 'Date of Birth is required'
     if (!enquiryDate)       e.enquiryDate = 'Enquiry Date is required'
     if (!intakeGuid)        e.intakeGuid = 'Please select an Intake'
@@ -186,11 +204,12 @@ export default function OnlineEnquiryPage() {
     if (!sourceGuid)        e.sourceGuid = 'Please select an Enquiry Source'
     if (!countryGuid)       e.countryGuid = 'Please select a Country'
     setErrors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
   function resetForm() {
-    setFirstName(''); setLastName(''); setGender(''); setPhoneCode('+256'); setPhone(''); setEmail(''); setDob('')
+    setFirstName(''); setLastName(''); setGender(''); setPhoneCode('+256'); setPhone(''); setEmail(''); setVerifiedEmail(null); setDob('')
     setEnquiryDate(todayAtMidnight().slice(0, 10))
     setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setSourceGuid(''); setCountryGuid(''); setNotes('')
     setErrors({})
@@ -204,10 +223,11 @@ export default function OnlineEnquiryPage() {
         intakeGuid,
         campusGuid,
         enquirySourceGuid: sourceGuid,
-        studentName: `${firstName.trim()} ${lastName.trim()}`.trim(),
+        studentName: studentName(),
         enquiryDate: `${enquiryDate}T00:00:00`,
         mobile: phone.trim(),
-        email: email.trim() || null,
+        email: email.trim(),
+        emailVerificationToken: verifiedEmail?.token ?? '',
         countryGuid,
         dob: `${dob}T00:00:00`,
         remarks: notes.trim() || null,
@@ -220,16 +240,26 @@ export default function OnlineEnquiryPage() {
         enquiryTag: null,
       },
       {
-        onSuccess: res => {
-          const guid = createdEnquiryGuid(res)
-          // No guid in the create response → nothing to verify against here;
-          // the Enquiry List's Verify Email action covers it.
-          if (guid && email.trim()) setVerifyFor({ guid, email: email.trim(), name: `${firstName.trim()} ${lastName.trim()}`.trim() })
-          else setSaved(true)
-        },
+        onSuccess: () => setSaved(true),
         onError: (error: Error) => {
           const code = error instanceof AuthError ? error.code : undefined
-          setFailure(error.message || `Failed to save enquiry${code ? ` (${code})` : ''}. Please try again.`)
+          const msg = error.message || ''
+          // Token missing, expired (30 min) or issued for another email —
+          // send the user back to verify again.
+          if (/not verified|verification token is required/i.test(msg)) {
+            setVerifiedEmail(null)
+            const e = { email: /required/i.test(msg) ? 'Verify the email before saving' : 'Email verification expired or doesn’t match this email. Verify it again, then save.' }
+            setErrors(prev => ({ ...prev, ...e }))
+            scrollToFirstError(e)
+            return
+          }
+          if (code === 'validation_error' && /student name/i.test(msg)) {
+            const e = { firstName: msg }
+            setErrors(prev => ({ ...prev, ...e }))
+            scrollToFirstError(e)
+            return
+          }
+          setFailure(msg || `Failed to save enquiry${code ? ` (${code})` : ''}. Please try again.`)
         },
       },
     )
@@ -237,7 +267,6 @@ export default function OnlineEnquiryPage() {
 
   function handleSavedClose() {
     setSaved(false)
-    setEmailVerified(null)
     resetForm()
   }
 
@@ -256,12 +285,12 @@ export default function OnlineEnquiryPage() {
           <div className="fg">
             <label className="lbl">First Name <span className="text-clr-red">*</span></label>
             <input className="ctrl" placeholder="e.g. Brian" value={firstName} onChange={e => { setFirstName(sanitizeNameInput(e.target.value)); clearError('firstName') }} style={errors.firstName ? { borderColor: 'var(--red)' } : undefined} />
-            {errors.firstName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.firstName}</p>}
+            {errors.firstName && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.firstName}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Last Name <span className="text-clr-red">*</span></label>
             <input className="ctrl" placeholder="e.g. Kamya" value={lastName} onChange={e => { setLastName(sanitizeNameInput(e.target.value)); clearError('lastName') }} style={errors.lastName ? { borderColor: 'var(--red)' } : undefined} />
-            {errors.lastName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lastName}</p>}
+            {errors.lastName && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lastName}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Gender</label>
@@ -282,29 +311,36 @@ export default function OnlineEnquiryPage() {
                 onLoadMore={() => countryQuery.fetchNextPage()}
                 style={{ width: 108, flexShrink: 0 }}
               />
-              <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="7XX XXX XXX" value={phone} onChange={e => { setPhone(sanitizePhoneInput(e.target.value, false)); clearError('phone') }} style={errors.phone ? { borderColor: 'var(--red)' } : undefined} />
+              <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="e.g. 772123456" maxLength={PHONE_MAX} value={phone} onChange={e => { setPhone(e.target.value.replace(/\D/g, '').slice(0, PHONE_MAX)); clearError('phone') }} style={errors.phone ? { borderColor: 'var(--red)' } : undefined} />
             </div>
-            {errors.phone && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.phone}</p>}
+            {errors.phone && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.phone}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Email <span className="text-clr-red">*</span></label>
-            <input className="ctrl" type="email" placeholder="candidate@example.com" value={email} onChange={e => { setEmail(e.target.value); clearError('email') }} style={errors.email ? { borderColor: 'var(--red)' } : undefined} />
-            {errors.email && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.email}</p>}
+            <EnquiryEmailField
+              email={email}
+              onEmailChange={setEmail}
+              verified={verifiedEmail}
+              onVerifiedChange={setVerifiedEmail}
+              error={errors.email}
+              onClearError={() => clearError('email')}
+              studentName={studentName() || undefined}
+            />
           </div>
           <div className="fg">
             <label className="lbl">Date of Birth <span className="text-clr-red">*</span></label>
             <DatePicker value={dob} onChange={v => { setDob(v); clearError('dob') }} hasError={!!errors.dob} />
-            {errors.dob && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.dob}</p>}
+            {errors.dob && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.dob}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Enquiry Date <span className="text-clr-red">*</span></label>
             <DatePicker value={enquiryDate} onChange={v => { setEnquiryDate(v); clearError('enquiryDate') }} hasError={!!errors.enquiryDate} />
-            {errors.enquiryDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryDate}</p>}
+            {errors.enquiryDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryDate}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Campus <span className="text-clr-red">*</span></label>
             <SearchSelect placeholder="— select —" options={campusOptions} value={campusGuid} onChange={setCampus} onSearch={setCampusSearch} onOpenChange={setCampusPickerOpen} isLoading={campusQuery.isLoading} hasNextPage={campusQuery.hasNextPage} isFetchingNextPage={campusQuery.isFetchingNextPage} onLoadMore={() => campusQuery.fetchNextPage()} />
-            {errors.campusGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campusGuid}</p>}
+            {errors.campusGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campusGuid}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Programme Interest</label>
@@ -325,17 +361,17 @@ export default function OnlineEnquiryPage() {
           <div className="fg">
             <label className="lbl">Preferred Intake <span className="text-clr-red">*</span></label>
             <SearchSelect placeholder="— select —" options={intakeOptions} value={intakeGuid} onChange={val => { setIntakeGuid(val); clearError('intakeGuid') }} onSearch={setIntakeSearch} onOpenChange={setIntakePickerOpen} isLoading={intakeQuery.isLoading} hasNextPage={intakeQuery.hasNextPage} isFetchingNextPage={intakeQuery.isFetchingNextPage} onLoadMore={() => intakeQuery.fetchNextPage()} />
-            {errors.intakeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
+            {errors.intakeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Enquiry Source <span className="text-clr-red">*</span></label>
             <SearchSelect placeholder="— select —" options={sourceOptions} value={sourceGuid} onChange={val => { setSourceGuid(val); clearError('sourceGuid') }} />
-            {errors.sourceGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.sourceGuid}</p>}
+            {errors.sourceGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.sourceGuid}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Country <span className="text-clr-red">*</span></label>
             <SearchSelect placeholder="— select —" options={countryOptions} value={countryGuid} onChange={selectCountry} onSearch={setCountrySearch} onOpenChange={setCountryPickerOpen} isLoading={countryQuery.isLoading} hasNextPage={countryQuery.hasNextPage} isFetchingNextPage={countryQuery.isFetchingNextPage} onLoadMore={() => countryQuery.fetchNextPage()} />
-            {errors.countryGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.countryGuid}</p>}
+            {errors.countryGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.countryGuid}</p>}
           </div>
           {/* Preferred Study Mode had no counterpart on POST /api/v1/admissions/enquiries
               (Full-time/Weekend/Evening/ODL) — dropped rather than collecting data that
@@ -348,13 +384,20 @@ export default function OnlineEnquiryPage() {
           </div>
         </div>
         <div className="sec-divider" />
-        <div className="flex justify-end gap-2">
-          <button className="btn btn-ghost" onClick={() => router.push('/admission/enquiry-list')}>Cancel</button>
+        <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
           {permissions.add && (
-            <button className="btn btn-primary" disabled={createEnquiry.isPending} onClick={handleSave}>
-              {createEnquiry.isPending ? 'Saving…' : 'Save Enquiry'}
-            </button>
+            <div className="mr-auto">
+              <EnquirySaveStatus verified={isVerifiedFor(verifiedEmail, email)} />
+            </div>
           )}
+          <div className="flex gap-2">
+            <button className="btn btn-ghost" onClick={() => router.push('/admission/enquiry-list')}>Cancel</button>
+            {permissions.add && (
+              <button className="btn btn-primary" disabled={createEnquiry.isPending || !isVerifiedFor(verifiedEmail, email)} onClick={handleSave}>
+                {createEnquiry.isPending ? 'Saving…' : 'Save Enquiry'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -363,26 +406,13 @@ export default function OnlineEnquiryPage() {
           <div className="modal" style={{ maxWidth: 400 }}>
             <SuccessPopup
               title="Enquiry Saved!"
-              subtitle={emailVerified === true
-                ? 'The enquiry has been recorded and the email verified.'
-                : emailVerified === false
-                  ? 'The enquiry has been recorded. The email isn’t verified yet — you can verify it from the Enquiry List.'
-                  : 'The enquiry has been recorded successfully.'}
+              subtitle="The enquiry has been recorded and the email verified."
               onClose={handleSavedClose}
             />
           </div>
         </div>
       )}
 
-      <EnquiryEmailVerifyModal
-        isOpen={!!verifyFor}
-        enquiryGuid={verifyFor?.guid ?? null}
-        email={verifyFor?.email ?? ''}
-        studentName={verifyFor?.name}
-        afterCreate
-        onVerified={() => setEmailVerified(true)}
-        onClose={() => { setEmailVerified(v => v ?? false); setVerifyFor(null); setSaved(true) }}
-      />
 
       {failure && (
         <div className="modal-overlay open">
