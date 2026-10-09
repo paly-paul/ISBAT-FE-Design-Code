@@ -32,6 +32,24 @@ interface BatchFormModalProps extends ModalProps {
   }
 }
 
+// The backend compares dates as UTC calendar days (post-batch.md / put-batch.md).
+function todayUtcYmd() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function displayYmd(ymd: string) {
+  return ymd ? ymd.split('-').reverse().join('/') : '—'
+}
+
+// Server "not found" messages (all HTTP 400) → the field the user should fix.
+const NOT_FOUND_FIELDS: [RegExp, string, string][] = [
+  [/intake not found/i,     'intakeGuid',    'This intake no longer exists, or has no month / financial year set. Pick another intake.'],
+  [/program not found/i,    'programGuid',   'This programme no longer exists. Pick another programme.'],
+  [/semester not found/i,   'semesterGuid',  'This semester no longer exists. Pick another semester.'],
+  [/stream not found/i,     'streamGuid',    'This specialization no longer exists. Pick another one.'],
+  [/batch time not found/i, 'batchTimeGuid', 'This batch time no longer exists. Pick another batch time.'],
+]
+
 // Programme/Semester/Stream/Batch Time/Batch In-Charge/Intake are all real guids (BatchCreateInput/
 // BatchUpdateInput in lib/api/academic/batch.ts). bInCharge/pHead come back as the all-zero sentinel
 // guid from GET /batches/:guid when unassigned — treated as unset.
@@ -166,7 +184,18 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
     }
   }, [isOpen, isEdit, batch])
 
+  // put-batch.md "ended-batch" rule: once the current end date is before
+  // today (UTC), the only accepted edit is extending bEndDate past today with
+  // every other field unchanged. Lock everything else so the user can't build
+  // an update the server will reject.
+  const originalEnd = isEdit && batch?.bEndDate ? batch.bEndDate.slice(0, 10) : ''
+  const isEnded = !!originalEnd && originalEnd < todayUtcYmd()
+
   if (!isOpen) return null
+
+  function clearError(field: string) {
+    setErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
+  }
 
   function handleClose() {
     setSaved(false); setFailure(null)
@@ -184,6 +213,18 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
     if (!streamGuid)     e.streamGuid = 'Please select a Specialization'
     if (!batchTimeGuid)  e.batchTimeGuid = 'Please select a Batch Time'
     if (!inChargeGuid)   e.inChargeGuid = 'Please select a Batch In-Charge'
+    // Create rejects an intake without Month / FinancialYear as "Intake not
+    // found." — catch it here with a clearer reason.
+    const intake = selectedIntake.data
+    if (!isEdit && intakeGuid && intake && (!intake.month || !intake.financialYear)) {
+      e.intakeGuid = 'This intake has no month or financial year set. Update it in Intake Master first.'
+    }
+    // PUT enforces end > start; create doesn't, but a batch that ends before
+    // it starts is never intended, so both modes check it.
+    if (startDate && endDate && endDate <= startDate) e.endDate = 'End date must be after the start date'
+    if (isEnded && (!endDate || endDate <= todayUtcYmd())) {
+      e.endDate = 'This batch has ended. Extend the end date to a date after today to save.'
+    }
     setErrors(e)
     scrollToFirstError(e)
     return Object.keys(e).length === 0
@@ -203,12 +244,36 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
       pHead: pHeadGuid || null,
       active,
     }
+    // An ended batch must send stream / start / in-charge / head back exactly
+    // as stored (the server compares them), so use the raw fetched values
+    // rather than the form's normalised copies (e.g. all-zero guid → null).
+    if (isEnded && batch) {
+      input.streamGuid = batch.streamGuid
+      input.bStartDate = batch.bStartDate
+      input.bInCharge = batch.bInCharge
+      input.pHead = batch.pHead
+    }
     const onSuccess = () => {
       setSaved(true)
       showToast(isEdit ? 'Batch updated successfully' : 'Batch created successfully', 'success')
     }
     const onError = (error: Error) => {
-      const message = error.message || `Failed to ${isEdit ? 'update' : 'create'} batch. Please try again.`
+      const msg = error.message || ''
+      // Field-level problems go back onto the form instead of a dead-end popup.
+      const fieldHit = NOT_FOUND_FIELDS.find(([re]) => re.test(msg))
+      const fieldErrors: Record<string, string> | null = fieldHit
+        ? { [fieldHit[1]]: fieldHit[2] }
+        : /end ?date must be after/i.test(msg)
+          ? { endDate: 'End date must be after the start date' }
+          : null
+      if (fieldErrors) {
+        setErrors(prev => ({ ...prev, ...fieldErrors }))
+        scrollToFirstError(fieldErrors)
+        return
+      }
+      const message = /batch already exists/i.test(msg)
+        ? 'A batch already exists for this programme, intake and batch time combination.'
+        : msg || `Failed to ${isEdit ? 'update' : 'create'} batch. Please try again.`
       setFailure(message)
       showToast(message, 'danger')
     }
@@ -292,6 +357,15 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
         </div>
 
         <div className="g3">
+          {isEnded && (
+            <div className="warn-box" role="note" style={{ gridColumn: '1 / -1' }}>
+              <i className="lni lni-timer" aria-hidden="true" style={{ marginTop: 2 }}></i>
+              <span>
+                This batch ended on <strong>{displayYmd(originalEnd)}</strong>. To reactivate it, set a new
+                end date after today. Other details can&apos;t be changed while the batch has ended.
+              </span>
+            </div>
+          )}
           {/* Intake/Programme/Semester/Batch Time are locked on Edit — the
               batch's students are already enrolled against this exact
               combination, so changing any of them here would silently
@@ -343,13 +417,14 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               placeholder="— Select specialization —"
               options={streamOptions}
               value={streamGuid}
+              disabled={isEnded}
               onSearch={setStreamSearch}
               onOpenChange={setStreamPickerOpen}
               isLoading={streamQuery.isLoading}
               hasNextPage={streamQuery.hasNextPage}
               isFetchingNextPage={streamQuery.isFetchingNextPage}
               onLoadMore={() => streamQuery.fetchNextPage()}
-              onChange={val => { setStreamGuid(val); if (errors.streamGuid) setErrors(p => ({ ...p, streamGuid: '' })) }}
+              onChange={isEnded ? undefined : (val => { setStreamGuid(val); clearError('streamGuid') })}
             />
             {errors.streamGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.streamGuid}</p>}
           </div>
@@ -364,13 +439,14 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               placeholder="— Select faculty member —"
               options={advisorOptionsList}
               value={inChargeGuid}
+              disabled={isEnded}
               onSearch={setEmployeeSearch}
               onOpenChange={setEmployeePickerOpen}
               isLoading={employeeQuery.isLoading}
               hasNextPage={employeeQuery.hasNextPage}
               isFetchingNextPage={employeeQuery.isFetchingNextPage}
               onLoadMore={() => employeeQuery.fetchNextPage()}
-              onChange={val => { setInChargeGuid(val); if (errors.inChargeGuid) setErrors(p => ({ ...p, inChargeGuid: '' })) }}
+              onChange={isEnded ? undefined : (val => { setInChargeGuid(val); clearError('inChargeGuid') })}
             />
             {errors.inChargeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.inChargeGuid}</p>}
           </div>
@@ -380,17 +456,28 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               placeholder="— Select faculty member —"
               options={advisorOptionsList}
               value={pHeadGuid}
+              disabled={isEnded}
               onSearch={setEmployeeSearch}
               onOpenChange={setEmployeePickerOpen}
               isLoading={employeeQuery.isLoading}
               hasNextPage={employeeQuery.hasNextPage}
               isFetchingNextPage={employeeQuery.isFetchingNextPage}
               onLoadMore={() => employeeQuery.fetchNextPage()}
-              onChange={setPHeadGuid}
+              onChange={isEnded ? undefined : setPHeadGuid}
             />
           </div>
-          <div className="fg"><div className="lbl">Start Date</div><DatePicker value={startDate} onChange={setStartDate} /></div>
-          <div className="fg"><div className="lbl">End Date</div><DatePicker value={endDate} onChange={setEndDate} /></div>
+          <div className="fg">
+            <div className="lbl">Start Date</div>
+            {isEnded
+              // DatePicker has no disabled mode — show the locked value read-only.
+              ? <input className="ctrl" readOnly value={displayYmd(startDate)} style={{ background: 'var(--surface)', color: 'var(--g700)', cursor: 'default' }} aria-label="Start date (locked)" />
+              : <DatePicker value={startDate} onChange={v => { setStartDate(v); clearError('endDate') }} />}
+          </div>
+          <div className="fg">
+            <div className="lbl">End Date {isEnded && <span className="req">*</span>}</div>
+            <DatePicker value={endDate} onChange={v => { setEndDate(v); clearError('endDate') }} hasError={!!errors.endDate} />
+            {errors.endDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.endDate}</p>}
+          </div>
           {isEdit && (
             <div className="fg">
               <div className="lbl">Status <span className="req">*</span></div>

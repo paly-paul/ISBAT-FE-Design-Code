@@ -131,7 +131,7 @@ export default function OnDeskEnquiryPage() {
   const programOptions = programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   // On-Desk enquiries are always walk-ins, so the source is fixed to the
   // "Direct" entry of the Enquiry Source master (ADM-054) rather than picked.
-  const directSource = enquirySources.find(s => /^directb/i.test(s.enquirySourceName.trim()))
+  const directSource = enquirySources.find(s => /^direct\b/i.test(s.enquirySourceName.trim()))
   const sourceGuid = directSource?.enquirySourceGuid ?? ''
   const countryOptions = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
   // dialCode(), not countryPrefix — see the note on dialCode in
