@@ -79,13 +79,14 @@ export default function EnquiryFollowupPage() {
         </div>
       </div>
 
-      {/* Only Total Follow-ups is wired to real data (totalCount) — the old
-          Overdue/Due Today/Upcoming/Completed tiles depended on a
-          client-only status bucket that doesn't exist on the real
-          EnquiryFollowUpListDto, so they're dropped rather than faked. */}
+      {/* Only this tile is wired to real data — the old Overdue/Due
+          Today/Upcoming/Completed tiles depended on a client-only status
+          bucket that doesn't exist on the real EnquiryFollowUpListDto, so
+          they're dropped rather than faked. It counts this advisor's
+          enquiries still in follow-up (one row per enquiry), not logs. */}
       <div className="stats-row">
         <div className="stat-card">
-          <div className="flex items-center gap-2 mb-1"><i className="lni lni-users text-b500" /><span className="text-sm text-g500">Total Follow-ups</span></div>
+          <div className="flex items-center gap-2 mb-1"><i className="lni lni-users text-b500" /><span className="text-sm text-g500">My Enquiries in Follow-up</span></div>
           <p className="text-2xl font-semibold text-g900">{allRows.length.toLocaleString()}</p>
         </div>
       </div>

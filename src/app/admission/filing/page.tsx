@@ -118,6 +118,16 @@ function Select({ options, placeholder, value, onChange }: { options: string[]; 
 }
 function FileZone({ hint = 'Click to upload', file, onChange, hasError }: { hint?: string; file?: File | null; onChange?: (f: File | null) => void; hasError?: boolean }) {
   const [dragActive, setDragActive] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  // A picked file used to be replaceable but never removable. Clearing also
+  // resets the native input, or re-picking the same file wouldn't fire
+  // onChange. Only clears the local pick — a document already saved to the
+  // application isn't deleted server-side.
+  function removeFile(e: React.MouseEvent) {
+    e.preventDefault(); e.stopPropagation()
+    if (inputRef.current) inputRef.current.value = ''
+    onChange?.(null)
+  }
   return (
     <div
       className={`file-zone${dragActive ? ' drag-active' : ''}`}
@@ -130,9 +140,22 @@ function FileZone({ hint = 'Click to upload', file, onChange, hasError }: { hint
         if (dropped) onChange?.(dropped)
       }}
     >
-      <input type="file" onChange={e => onChange?.(e.target.files?.[0] ?? null)} />
+      <input ref={inputRef} type="file" onChange={e => onChange?.(e.target.files?.[0] ?? null)} />
       <i className={`lni ${file ? 'lni-checkmark-circle' : 'lni-cloud-upload'} file-zone-icon`} style={file ? { color: 'var(--green)' } : undefined} />
       <p>{file ? file.name : hint}</p>
+      {file && onChange && (
+        // Sits above the full-size invisible file input (z-index), so this
+        // click removes instead of opening the file dialog.
+        <button
+          type="button"
+          className="btn btn-neu btn-sm"
+          style={{ position: 'relative', zIndex: 1, marginTop: 8 }}
+          onClick={removeFile}
+          aria-label={`Remove ${file.name}`}
+        >
+          <i className="lni lni-trash-can" aria-hidden="true" /> Remove
+        </button>
+      )}
     </div>
   )
 }

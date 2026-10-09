@@ -194,7 +194,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
     if (!followUpStatusGuid) e.followUpStatusGuid = 'Please select a Follow-up Status'
     if (!followUpModeGuid)   e.followUpModeGuid = 'Please select a Follow-up Mode'
     if (!enquiryStatusGuid)  e.enquiryStatusGuid = 'Please select an Enquiry Status'
-    if (nextFollowDate && nextFollowDate < today) e.nextFollowDate = 'Next follow-up date must be today or a future date'
+    if (nextFollowDate && nextFollowDate < today) e.nextFollowDate = `Next follow-up date can’t be before the follow-up date (${todayLabel})`
     if (!remarks.trim())     e.remarks = 'Remarks are required'
     else if (remarks.trim().length > REMARKS_MAX) e.remarks = `Remarks can be at most ${REMARKS_MAX} characters`
     setErrors(e)
@@ -302,7 +302,15 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
           </div>
           <div className="fg">
             <div className="lbl">Next Follow-up Date</div>
-            <DatePicker value={nextFollowDate} onChange={setNextFollowDate} hasError={!!errors.nextFollowDate} />
+            {/* Can't be before this follow-up's own date (always today — see
+                followUpDate in handleSave). Same day is allowed. */}
+            <DatePicker
+              value={nextFollowDate}
+              onChange={v => { setNextFollowDate(v); setErrors(p => ({ ...p, nextFollowDate: '' })) }}
+              minYmd={today}
+              rangeMessage={`Next follow-up date can’t be before the follow-up date (${todayLabel})`}
+              hasError={!!errors.nextFollowDate}
+            />
             {errors.nextFollowDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.nextFollowDate}</p>}
           </div>
           <div className="fg" style={{ gridColumn: 'span 2' }}>

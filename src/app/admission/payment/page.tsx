@@ -9,7 +9,7 @@ import { ImportCrmModal } from '@/components/modals/admission/ImportCrmModal'
 import { ImportOdelModal } from '@/components/modals/admission/ImportOdelModal'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
-import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
+import { useIntake, useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
 import { useSearchCountriesInfinite } from '@/hooks/config/useCountries'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
@@ -24,6 +24,7 @@ import { RatesAlreadySetNote } from '@/components/finance/RatesAlreadySetNote'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
 import { Country, dialCode } from '@/lib/api/academic/country'
+import { EMPTY_GUID } from '@/lib/api/academic/batch'
 import { useEnquiry, useEnquiries } from '@/hooks/admission/useEnquiries'
 import {
   useApplicationPaymentExemptionTypes,
@@ -499,7 +500,12 @@ function PaymentPageContent() {
         lastName: rest.join(' '),
         phone: selectedEnquiry.mobile ?? prev.phone,
         email: selectedEnquiry.email ?? prev.email,
-        countryGuid: matchedCountry?.countryGuid ?? (selectedEnquiry as any).countryGuid ?? prev.countryGuid,
+        // An enquiry with no country comes back as the all-zero guid — treat
+        // that as "none" so the field asks for a country instead of holding
+        // an invalid value (which also blocked the default-country prefill).
+        countryGuid: matchedCountry?.countryGuid
+          ?? (selectedEnquiry.countryGuid && selectedEnquiry.countryGuid !== EMPTY_GUID ? selectedEnquiry.countryGuid : '')
+          ?? prev.countryGuid,
         phoneCode: phoneDial ?? prev.phoneCode,
         remarks: selectedEnquiry.remarks ?? prev.remarks,
       }))
@@ -562,10 +568,40 @@ function PaymentPageContent() {
     enquiryOptions.unshift({ value: form.enquiryGuid, label: selectedEnquiryLabel })
   }
 
-  const intakeOptions   = intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
-  const campusOptions   = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
-  const programOptions  = programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
-  const countryOptions  = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
+  // These pickers only load their options when opened, so a value set by the
+  // enquiry prefill (Convert → ?enquiryGuid=) had no matching option and the
+  // field — and the Preview panel's labelFor() — showed blank. Keep the
+  // selected value listed with a label from data we already have until the
+  // real option pages in.
+  const { data: selectedIntakeDetail } = useIntake(form.intakeGuid || null, !!form.intakeGuid)
+  function withSelected(options: Option[], value: string, label: string | null | undefined): Option[] {
+    return value && label && !options.some(o => o.value === value) ? [{ value, label }, ...options] : options
+  }
+  const enquiryMatches = (field: 'campusGuid' | 'programGuid' | 'countryGuid', value: string) =>
+    !!selectedEnquiry && !!value && selectedEnquiry[field] === value
+
+  const intakeOptions   = withSelected(
+    intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })),
+    form.intakeGuid,
+    selectedIntakeDetail?.intakeGuid === form.intakeGuid ? `${selectedIntakeDetail.intakeCode} — ${selectedIntakeDetail.description}` : null,
+  )
+  const campusOptions   = withSelected(
+    campuses.map(c => ({ value: c.campusGuid, label: c.campusName })),
+    form.campusGuid,
+    enquiryMatches('campusGuid', form.campusGuid) ? selectedEnquiry!.campusName : null,
+  )
+  const programOptions  = withSelected(
+    programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` })),
+    form.programGuid,
+    enquiryMatches('programGuid', form.programGuid) && selectedEnquiry!.programName
+      ? `${selectedEnquiry!.programName}${selectedEnquiry!.programCode ? ` (${selectedEnquiry!.programCode})` : ''}`
+      : null,
+  )
+  const countryOptions  = withSelected(
+    countries.map(c => ({ value: c.countryGuid, label: c.countryName })),
+    form.countryGuid,
+    enquiryMatches('countryGuid', form.countryGuid) ? selectedEnquiry!.countryName : null,
+  )
   const phoneCodeOptions = countries.length
     ? Array.from(
         new Map(countries.map(c => [dialCode(c), `${dialCode(c)} · ${c.countryName}`])).entries(),
