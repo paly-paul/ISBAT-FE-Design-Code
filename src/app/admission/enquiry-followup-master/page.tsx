@@ -117,7 +117,9 @@ export default function EnquiryFollowupMasterPage() {
           EnquiryFollowUpListDto, so they're dropped rather than faked. */}
       <div className="stats-row">
         <div className="stat-card">
-          <div className="flex items-center gap-2 mb-1"><i className="lni lni-users text-b500" /><span className="text-sm text-g500">Total Follow-ups</span></div>
+          {/* Counts enquiries still in follow-up (one row per enquiry), not
+              follow-up logs — it drops when a follow-up closes an enquiry. */}
+          <div className="flex items-center gap-2 mb-1"><i className="lni lni-users text-b500" /><span className="text-sm text-g500">Enquiries in Follow-up</span></div>
           <p className="text-2xl font-semibold text-g900">{totalCount.toLocaleString()}</p>
         </div>
       </div>
