@@ -11,6 +11,7 @@ import { useCourseUnit, useUpsertCourseUnitOutlines } from '@/hooks/academic/use
 import { useSearchRepetitionTagsInfinite } from '@/hooks/academic/useRepetitionTags'
 import { AuthError } from '@/lib/api/client'
 import { flattenUniquePages } from '@/lib/pagination'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Add and Edit share this form — differ in prefill, whether Step 1 POSTs or
 // PUTs the unit details, and whether there's an existing-syllabus panel to show.
@@ -260,6 +261,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
     if (!unitName.trim())  e.unitName     = 'Unit Name is required'
     if (!credits)          e.credits      = 'Credits is required'
     setErrors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
@@ -275,14 +277,16 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
     })
     setTopicTaughtByErrors(missingTaughtBy)
 
+    // Jump to the first chapter with a missing title or No of Classes value
+    // so the error is actually visible — it could otherwise be sitting in a
+    // chapter the user isn't currently looking at — then scroll to it.
+    const firstBadChapter = chapters.findIndex((_, ci) =>
+      !!chapErrs[ci] || Array.from(missingTaughtBy).some(key => key.startsWith(`${ci}-`))
+    )
+    if (firstBadChapter !== -1) setActiveChapterIdx(firstBadChapter)
+    scrollToFirstError([...chapErrs, ...Array.from(missingTaughtBy)])
+
     if (missingTaughtBy.size > 0) {
-      // Jump to the first chapter with a missing No of Classes value so the
-      // error is actually visible — it could otherwise be sitting in a
-      // chapter the user isn't currently looking at.
-      const firstBadChapter = chapters.findIndex((_, ci) =>
-        Array.from(missingTaughtBy).some(key => key.startsWith(`${ci}-`))
-      )
-      if (firstBadChapter !== -1) setActiveChapterIdx(firstBadChapter)
       showToast('Enter No of Classes for every topic before saving', 'error')
     }
 
@@ -653,7 +657,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
                 value={unitCode}
                 onChange={e => { setUnitCode(e.target.value); if (errors.unitCode) setErrors(p => ({ ...p, unitCode: '' })) }}
               />
-              {errors.unitCode && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.unitCode}</p>}
+              {errors.unitCode && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.unitCode}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Unit Name <span className="req">*</span></div>
@@ -664,7 +668,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
                 value={unitName}
                 onChange={e => { setUnitName(e.target.value); if (errors.unitName) setErrors(p => ({ ...p, unitName: '' })) }}
               />
-              {errors.unitName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.unitName}</p>}
+              {errors.unitName && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.unitName}</p>}
             </div>
             <div className="fg">
               <div className="lbl">No. of Chapters</div>
@@ -677,7 +681,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
                 value={numChapters}
                 onChange={e => { setNumChapters(e.target.value); if (errors.numChapters) setErrors(p => ({ ...p, numChapters: '' })) }}
               />
-              {errors.numChapters && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.numChapters}</p>}
+              {errors.numChapters && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.numChapters}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Credits <span className="req">*</span></div>
@@ -690,7 +694,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
                 value={credits}
                 onChange={e => { setCredits(e.target.value); if (errors.credits) setErrors(p => ({ ...p, credits: '' })) }}
               />
-              {errors.credits && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.credits}</p>}
+              {errors.credits && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.credits}</p>}
             </div>
             <div className="fg span2">
               <div className="lbl">Repetition Tag</div>
@@ -1004,7 +1008,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
                         onChange={e => setChapterTitle(activeChapterIdx, e.target.value)}
                         placeholder={`Chapter ${activeChapterIdx + 1} title`}
                       />
-                      {chapterErrors[activeChapterIdx] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{chapterErrors[activeChapterIdx]}</p>}
+                      {chapterErrors[activeChapterIdx] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{chapterErrors[activeChapterIdx]}</p>}
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr 150px 130px 30px', gap: 6, padding: '0 0 6px', fontSize: 10.5, fontWeight: 700, color: 'var(--g400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -1059,7 +1063,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
                         )
                       })}
                       {activeChapter.topics.some((_, ti) => topicTaughtByErrors.has(`${activeChapterIdx}-${ti}`)) && (
-                        <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 2 }}>No of Classes is required for every topic</p>
+                        <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 2 }}>No of Classes is required for every topic</p>
                       )}
                       <button className="btn btn-neu btn-sm mt-1" style={{ alignSelf: 'flex-start', fontSize: 11 }} onClick={() => addTopic(activeChapterIdx)}>
                         <i className="lni lni-plus"></i> Add Topic

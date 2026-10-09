@@ -9,6 +9,7 @@ import { useRepetitionTag } from '@/hooks/academic/useRepetitionTags'
 import { useSearchProgramLevelsInfinite } from '@/hooks/academic/useProgramLevels'
 import { AuthError } from '@/lib/api/client'
 import { flattenUniquePages } from '@/lib/pagination'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Add and Edit share this form — differ in prefill and which mutation runs.
 interface RepTagFormModalProps extends ModalProps {
@@ -87,6 +88,7 @@ export function RepTagFormModal({ isOpen, onClose, showToast, mode, courseUnitRe
     if (!tagName.trim()) e.tagName = 'Description is required'
     if (!programLevelGuid) e.programLevelGuid = 'Please select a Programme Level'
     setErrors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
@@ -181,7 +183,7 @@ export function RepTagFormModal({ isOpen, onClose, showToast, mode, courseUnitRe
               onChange={e => { setTagCode(e.target.value.toUpperCase()); clearError('tagCode') }}
               style={errors.tagCode ? { borderColor: 'var(--red)' } : undefined}
             />
-            {errors.tagCode && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.tagCode}</p>}
+            {errors.tagCode && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.tagCode}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Programme Level <span className="req">*</span></div>
@@ -197,7 +199,7 @@ export function RepTagFormModal({ isOpen, onClose, showToast, mode, courseUnitRe
               onChange={v => { setProgramLevelGuid(v); clearError('programLevelGuid') }}
               options={programLevelOptions}
             />
-            {errors.programLevelGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programLevelGuid}</p>}
+            {errors.programLevelGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programLevelGuid}</p>}
           </div>
           <div className="fg span2">
             <div className="lbl">Description <span className="req">*</span></div>
@@ -209,7 +211,7 @@ export function RepTagFormModal({ isOpen, onClose, showToast, mode, courseUnitRe
               onChange={e => { setTagName(e.target.value); clearError('tagName') }}
               style={errors.tagName ? { borderColor: 'var(--red)' } : undefined}
             />
-            {errors.tagName && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.tagName}</p>}
+            {errors.tagName && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.tagName}</p>}
           </div>
         </div>
         <div className="modal-footer">

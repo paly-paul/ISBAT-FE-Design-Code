@@ -5,6 +5,7 @@ import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { VetApplicationInput } from '@/lib/api/admission/vetting'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 interface Props extends ModalProps {
   applicationGuid: string | null
@@ -34,6 +35,7 @@ export function RejectModal({ isOpen, onClose, showToast, applicationGuid, vetAp
     if (!reason)          e.reason  = 'Please select a Rejection Reason'
     if (!remarks.trim())  e.remarks = 'Detailed Remarks are required'
     setErrors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
@@ -94,7 +96,7 @@ export function RejectModal({ isOpen, onClose, showToast, applicationGuid, vetAp
             value={reason}
             onChange={v => { setReason(v); if (errors.reason) setErrors(p => ({ ...p, reason: '' })) }}
           />
-          {errors.reason && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.reason}</p>}
+          {errors.reason && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.reason}</p>}
         </div>
 
         <div className="fg mb-3">
@@ -102,7 +104,7 @@ export function RejectModal({ isOpen, onClose, showToast, applicationGuid, vetAp
           <textarea className="ctrl" rows={3} placeholder="Provide detailed remarks for the rejection..." value={remarks}
             onChange={e => { setRemarks(e.target.value); if (errors.remarks) setErrors(p => ({ ...p, remarks: '' })) }}
             style={errors.remarks ? { borderColor: 'var(--red)' } : undefined} />
-          {errors.remarks && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.remarks}</p>}
+          {errors.remarks && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.remarks}</p>}
         </div>
 
         <div className="modal-footer">

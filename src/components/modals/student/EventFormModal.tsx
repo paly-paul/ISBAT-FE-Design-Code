@@ -8,6 +8,7 @@ import DatePicker from '@/components/DatePicker'
 import { EventInput, eventDateToYmd, ymdToEventDate } from '@/lib/api/student/eventManagement'
 import { useEvent } from '@/hooks/student/useEventManagement'
 import { AuthError } from '@/lib/api/client'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 const SUBJECT_MAX = 100
 const BODY_MAX = 5000
@@ -73,6 +74,7 @@ export function EventFormModal({ isOpen, onClose, showToast, mode, eventGuid, cr
     if (!eventBody.trim()) e.eventBody = 'Event is required'
     else if (eventBody.trim().length > BODY_MAX) e.eventBody = `Event must be ${BODY_MAX} characters or fewer`
     setErrors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
@@ -167,12 +169,12 @@ export function EventFormModal({ isOpen, onClose, showToast, mode, eventGuid, cr
               onChange={e => { setSubject(e.target.value); clearError('subject') }}
               style={errors.subject ? { borderColor: 'var(--red)' } : undefined}
             />
-            {errors.subject && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.subject}</p>}
+            {errors.subject && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.subject}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Event Date <span className="req">*</span></div>
             <DatePicker value={eventDateYmd} onChange={v => { setEventDateYmd(v); clearError('eventDateYmd') }} hasError={!!errors.eventDateYmd} />
-            {errors.eventDateYmd && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.eventDateYmd}</p>}
+            {errors.eventDateYmd && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.eventDateYmd}</p>}
           </div>
           <div className="fg span2">
             <div className="lbl">Event <span className="req">*</span></div>
@@ -185,7 +187,7 @@ export function EventFormModal({ isOpen, onClose, showToast, mode, eventGuid, cr
               onChange={e => { setEventBody(e.target.value); clearError('eventBody') }}
               style={errors.eventBody ? { borderColor: 'var(--red)' } : undefined}
             />
-            {errors.eventBody && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.eventBody}</p>}
+            {errors.eventBody && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.eventBody}</p>}
           </div>
         </div>
         <div className="modal-footer">

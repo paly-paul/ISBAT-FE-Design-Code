@@ -8,6 +8,7 @@ import DatePicker from '@/components/DatePicker'
 import { AuthError } from '@/lib/api/client'
 import { CreateIntakeInput } from '@/lib/api/academic/intake'
 import { useIntake } from '@/hooks/academic/useIntakes'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Create and Edit share this form now — same fields, same calendar UI.
 //
@@ -114,6 +115,37 @@ function blankCalendarEntry(id: number): CalendarEntryForm {
     semStart: '', lumpsumDate: '', term1EndDate: '', term2StartDate: '', term2End: '',
     resitStartDate: '', resitEndDate: '', finalExamStartDate: '', finalExamEndDate: '', clearanceDate: '',
   }
+}
+
+type CalendarField = keyof Omit<CalendarEntryForm, 'id'>
+
+// Every field computeOrderErrors() can flag — updateEntry() re-checks all of
+// them (across every entry) on each change so a pair error clears as soon as
+// EITHER side is fixed, not just the side that originally got flagged.
+const ORDER_CHECKED_FIELDS: CalendarField[] = [
+  'term2End', 'admissionLateFeeDate', 'admissionEndDate',
+  'reentryLateFeeDate', 'reentryEndDate', 'resitEndDate', 'finalExamEndDate',
+]
+
+const MS_PER_WEEK = 1000 * 60 * 60 * 24 * 7
+
+// A semester's span in whole weeks, rounded up, or null until both ends are set.
+// Rounded up, not to nearest — the backend re-validates semesterEndDate
+// against semStart + (durationInWeeks - 2) weeks, so rounding down here
+// (Math.round can round down) computes a shorter span than what the user
+// actually selected and rejects a perfectly valid end date.
+function semesterSpanWeeks(entry: CalendarEntryForm | undefined): number | null {
+  if (!entry?.semStart || !entry?.term2End) return null
+  const ms = new Date(entry.term2End).getTime() - new Date(entry.semStart).getTime()
+  return ms > 0 ? Math.ceil(ms / MS_PER_WEEK) : null
+}
+
+// The longest any semester may run, in weeks. durationInWeeks is sent as
+// this + 2 (see handleSave), and the backend caps every entry's
+// semesterEndDate at semesterStartDate + (durationInWeeks - 2) weeks — so
+// it's the 1st semester's span, and every later semester must fit inside it.
+function maxSemesterWeeks(entries: CalendarEntryForm[]): number {
+  return semesterSpanWeeks(entries[0]) ?? (DEFAULT_SEMESTER_WEEKS - 2)
 }
 
 // Per-entry error keys are namespaced by the entry's local id so two
@@ -263,14 +295,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
   // Estimate the visible duration in weeks from the first semester's dates —
   // durationInWeeks is a single intake-level field, not per-semester.
   function calcDurationWeeks(): number | null {
-    const first = calendarEntries[0]
-    if (!first?.semStart || !first?.term2End) return null
-    const ms = new Date(first.term2End).getTime() - new Date(first.semStart).getTime()
-    // Round up, not to nearest — the backend re-validates semesterEndDate
-    // against semStart + (durationInWeeks - 2) weeks, so rounding down here
-    // (Math.round can round down) computes a shorter span than what the user
-    // actually selected and rejects a perfectly valid end date.
-    return ms > 0 ? Math.ceil(ms / (1000 * 60 * 60 * 24 * 7)) : null
+    return semesterSpanWeeks(calendarEntries[0])
   }
 
   function calcDuration() {
@@ -303,19 +328,19 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
   // user types/picks — a field only appears here when both sides of its
   // pair are actually filled in) and validate()'s on-submit step-2 pass, so
   // the two can never drift into different messages for the same rule.
-  function computeOrderErrors(entry: CalendarEntryForm, idx: number): Partial<Record<keyof Omit<CalendarEntryForm, 'id'>, string>> {
-    const out: Partial<Record<keyof Omit<CalendarEntryForm, 'id'>, string>> = {}
+  function computeOrderErrors(entry: CalendarEntryForm, idx: number, maxWeeks: number): Partial<Record<CalendarField, string>> {
+    const out: Partial<Record<CalendarField, string>> = {}
 
     const startDate = parseDate(entry.semStart)
     const endDate   = parseDate(entry.term2End)
-    // No client-side cap on how far term2End can be from semStart — the
-    // backend enforces its own max-end-date rule (semesterStartDate +
-    // (durationInWeeks - 2) weeks), but durationInWeeks itself is derived
-    // from the first entry's own dates (see calcDurationWeeks() / handleSave),
-    // so that check is satisfied by construction. A validation_error would
-    // still surface via the failure screen if the backend ever disagrees.
     if (startDate && endDate && endDate < startDate) {
       out.term2End = `Semester ${idx + 1} end date must be on or after its start date`
+    } else if (idx > 0 && startDate && endDate && endDate.getTime() > startDate.getTime() + maxWeeks * MS_PER_WEEK) {
+      // Backend cap: semesterEndDate <= semesterStartDate + (durationInWeeks - 2)
+      // weeks. durationInWeeks comes from the 1st semester's own span (see
+      // maxSemesterWeeks()), so semester 1 always fits, but later ones don't
+      // automatically.
+      out.term2End = `Semester ${idx + 1} can't run longer than the 1st semester (${maxWeeks} weeks)`
     }
 
     const admissionStart   = parseDate(entry.admissionStartDate)
@@ -399,32 +424,33 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
     setActiveIdx(prev => (prev >= idx && prev > 0 ? prev - 1 : prev))
   }
 
-  function updateEntry(id: number, field: keyof Omit<CalendarEntryForm, 'id'>, value: string) {
-    let idx = -1
-    let updatedEntry: CalendarEntryForm | null = null
-    setCalendarEntries(prev => prev.map((en, i) => {
-      if (en.id !== id) return en
-      idx = i
-      updatedEntry = { ...en, [field]: value }
-      return updatedEntry
-    }))
+  function updateEntry(id: number, field: CalendarField, value: string) {
+    let nextEntries: CalendarEntryForm[] = []
+    setCalendarEntries(prev => {
+      nextEntries = prev.map(en => (en.id === id ? { ...en, [field]: value } : en))
+      return nextEntries
+    })
 
     // Clear the just-edited field's own error (required or otherwise), then
-    // live-recompute this entry's five date-order pairs against the new
-    // value — same rules validate() applies on submit, just re-run on every
-    // change so a pair error shows up (or clears) the moment the offending
-    // date is picked instead of only after clicking Continue/Save.
+    // live-recompute the date-order rules for EVERY entry — same rules
+    // validate() applies on submit, just re-run on every change so a pair
+    // error shows up (or clears) the moment the offending date is picked.
+    // Every entry, not just this one, because semester 1's span sets the
+    // max length for all the others (see maxSemesterWeeks()).
     setErrors(p => {
       const next = { ...p }
       delete next[errKey(id, field)]
-      if (updatedEntry) {
-        const orderErrors = computeOrderErrors(updatedEntry, idx)
-        ;(Object.keys(orderErrors) as (keyof Omit<CalendarEntryForm, 'id'>)[]).forEach(f => {
-          const orderKey = errKey(id, f)
+      const maxWeeks = maxSemesterWeeks(nextEntries)
+      nextEntries.forEach((en, i) => {
+        const orderErrors = computeOrderErrors(en, i, maxWeeks)
+        ORDER_CHECKED_FIELDS.forEach(f => {
+          const orderKey = errKey(en.id, f)
           if (orderErrors[f]) next[orderKey] = orderErrors[f]!
-          else delete next[orderKey]
+          // Only clear a filled field — an empty one may be carrying its
+          // on-submit "required" error, which a date-order pass has no say over.
+          else if (en[f]) delete next[orderKey]
         })
-      }
+      })
       return next
     })
   }
@@ -433,11 +459,19 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
     const e: Record<string, string> = {}
 
     if (stepNumber === 1) {
+      // The dropdowns can only produce valid values on Create, but Edit
+      // prefills from the saved record, which may hold legacy values outside
+      // the backend's ranges (financialYear/examYear > 0, intakes 1 or 2,
+      // examMonth 1–12) — catch those here instead of as a validation_error.
       if (!description.trim())    e.description   = 'Description is required'
       if (!financialYear.trim())  e.financialYear  = 'Financial Year is required'
+      else if (!(Number(financialYear) > 0)) e.financialYear = 'Please select a valid Financial Year'
       if (!examYear.trim())       e.examYear       = 'Exam Year is required'
+      else if (!(Number(examYear) > 0)) e.examYear = 'Please select a valid Exam Year'
       if (!examMonth)             e.examMonth      = 'Please select an Exam Month'
+      else if (!MONTHS.some(m => m.value === examMonth)) e.examMonth = 'Please select a valid Exam Month'
       if (!intakeSeq.trim())      e.intakeSeq      = 'Intakes is required'
+      else if (!INTAKE_SEQUENCES.some(s => s.value === intakeSeq)) e.intakeSeq = 'Intakes must be Spring or Fall'
       // Confirmed required by the backend (validation_error: "must not be
       // empty") despite CreateIntakeInput typing these as nullable.
       if (!lastDateForReRegistration) e.lastDateForReRegistration = 'Last Date for Re-registration is required'
@@ -452,6 +486,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
     }
 
     if (stepNumber === 2) {
+      const maxWeeks = maxSemesterWeeks(calendarEntries)
       calendarEntries.forEach((entry, idx) => {
         if (!entry.semStart)      e[errKey(entry.id, 'semStart')]      = `Semester ${idx + 1} start date is required`
         if (!entry.term1EndDate)  e[errKey(entry.id, 'term1EndDate')]  = `Semester ${idx + 1} term 1 end date is required`
@@ -462,15 +497,23 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
         // the user types/picks — re-run here too as the on-submit backstop
         // (e.g. a pair left in a bad state from before this page had live
         // validation, or restored from Edit's initial load).
-        const orderErrors = computeOrderErrors(entry, idx)
-        ;(Object.keys(orderErrors) as (keyof Omit<CalendarEntryForm, 'id'>)[]).forEach(f => {
+        const orderErrors = computeOrderErrors(entry, idx, maxWeeks)
+        ;(Object.keys(orderErrors) as CalendarField[]).forEach(f => {
           const msg = orderErrors[f]
           if (msg) e[errKey(entry.id, f)] = msg
         })
       })
+
+      // Only the active semester's fields are rendered, so open the first
+      // semester that has an error before scrollToFirstError() looks for it.
+      const firstBadIdx = calendarEntries.findIndex(entry =>
+        Object.keys(e).some(key => key.startsWith(`${entry.id}:`))
+      )
+      if (firstBadIdx !== -1) setActiveIdx(firstBadIdx)
     }
 
     setErrors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
@@ -564,7 +607,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
       // (durationInWeeks - 2) weeks, so this has to be the actual semester
       // span (+2 buffer weeks), not a fixed nominal number — see
       // DEFAULT_SEMESTER_WEEKS comment above for the confirmed evidence.
-      durationInWeeks: (calcDurationWeeks() ?? (DEFAULT_SEMESTER_WEEKS - 2)) + 2,
+      durationInWeeks: maxSemesterWeeks(calendarEntries) + 2,
       lastDateForReRegistration: toApiDate(lastDateForReRegistration),
       currentIntake,
       grievanceStartDate: toApiDate(grievanceStartDate),
@@ -632,7 +675,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
                   }}
                   options={getFinancialYearOptions(isEdit ? financialYear : undefined)}
                 />
-                {errors.financialYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.financialYear}</p>}
+                {errors.financialYear && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.financialYear}</p>}
               </div>
               <div className="fg">
                 <div className="lbl">Intakes <span className="req">*</span></div>
@@ -642,7 +685,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
                   onChange={v => { setIntakeSeq(v); if (errors.intakeSeq) setErrors(p => ({ ...p, intakeSeq: '' })) }}
                   options={INTAKE_SEQUENCES}
                 />
-                {errors.intakeSeq && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeSeq}</p>}
+                {errors.intakeSeq && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeSeq}</p>}
               </div>
               <div className="fg">
                 <div className="lbl">Description <span className="req">*</span></div>
@@ -654,7 +697,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
                   value={description}
                   onChange={e => { setDescription(e.target.value); setDescriptionTouched(true); if (errors.description) setErrors(p => ({ ...p, description: '' })) }}
                 />
-                {errors.description && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.description}</p>}
+                {errors.description && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.description}</p>}
               </div>
               <div className="fg">
                 <div className="lbl">Intake Code</div>
@@ -675,7 +718,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
                   onChange={v => { setExamYear(v); if (errors.examYear) setErrors(p => ({ ...p, examYear: '' })) }}
                   options={getExamYearOptions(financialYear, isEdit ? examYear : undefined)}
                 />
-                {errors.examYear && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.examYear}</p>}
+                {errors.examYear && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.examYear}</p>}
               </div>
               <div className="fg">
                 <div className="lbl">Exam Month <span className="req">*</span></div>
@@ -685,7 +728,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
                   onChange={v => { setExamMonth(v); if (errors.examMonth) setErrors(p => ({ ...p, examMonth: '' })) }}
                   options={MONTHS}
                 />
-                {errors.examMonth && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.examMonth}</p>}
+                {errors.examMonth && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.examMonth}</p>}
               </div>
               <div className="fg" style={{ gridColumn: 'span 3' }}>
                 <div className="lbl">Set As</div>
@@ -713,7 +756,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
               <div className="fg">
                 <div className="lbl">Last Date for Re-registration <span className="req">*</span></div>
                 <DatePicker value={lastDateForReRegistration} onChange={v => { setLastDateForReRegistration(v); if (errors.lastDateForReRegistration) setErrors(p => ({ ...p, lastDateForReRegistration: '' })) }} hasError={!!errors.lastDateForReRegistration} />
-                {errors.lastDateForReRegistration && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lastDateForReRegistration}</p>}
+                {errors.lastDateForReRegistration && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lastDateForReRegistration}</p>}
               </div>
               <div className="fg">
                 <div className="lbl">Grievance Start Date <span className="req">*</span></div>
@@ -733,7 +776,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
                   }}
                   hasError={!!errors.grievanceStartDate}
                 />
-                {errors.grievanceStartDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.grievanceStartDate}</p>}
+                {errors.grievanceStartDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.grievanceStartDate}</p>}
               </div>
               <div className="fg">
                 <div className="lbl">Grievance End Date <span className="req">*</span></div>
@@ -745,7 +788,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
                   }}
                   hasError={!!errors.grievanceEndDate}
                 />
-                {errors.grievanceEndDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.grievanceEndDate}</p>}
+                {errors.grievanceEndDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.grievanceEndDate}</p>}
               </div>
             </div>
           </div>
@@ -819,21 +862,21 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
                     <div style={CATEGORY_CARD_STYLE}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
                         <div className="fg"><div className="lbl">Admission Start Date</div><DatePicker value={active.admissionStartDate} onChange={v => updateEntry(active.id, 'admissionStartDate', v)} /></div>
-                        <div className="fg"><div className="lbl">Admission End Date</div><DatePicker value={active.admissionEndDate} onChange={v => updateEntry(active.id, 'admissionEndDate', v)} hasError={!!errors[errKey(active.id, 'admissionEndDate')]} />{errors[errKey(active.id, 'admissionEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'admissionEndDate')]}</p>}</div>
-                        <div className="fg"><div className="lbl">Admission Late Fee Date</div><DatePicker value={active.admissionLateFeeDate} onChange={v => updateEntry(active.id, 'admissionLateFeeDate', v)} hasError={!!errors[errKey(active.id, 'admissionLateFeeDate')]} />{errors[errKey(active.id, 'admissionLateFeeDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'admissionLateFeeDate')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Admission End Date</div><DatePicker value={active.admissionEndDate} onChange={v => updateEntry(active.id, 'admissionEndDate', v)} hasError={!!errors[errKey(active.id, 'admissionEndDate')]} />{errors[errKey(active.id, 'admissionEndDate')] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'admissionEndDate')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Admission Late Fee Date</div><DatePicker value={active.admissionLateFeeDate} onChange={v => updateEntry(active.id, 'admissionLateFeeDate', v)} hasError={!!errors[errKey(active.id, 'admissionLateFeeDate')]} />{errors[errKey(active.id, 'admissionLateFeeDate')] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'admissionLateFeeDate')]}</p>}</div>
                         <div className="fg"><div className="lbl">Re-entry Start Date</div><DatePicker value={active.reentryStartDate} onChange={v => updateEntry(active.id, 'reentryStartDate', v)} /></div>
-                        <div className="fg"><div className="lbl">Re-entry End Date</div><DatePicker value={active.reentryEndDate} onChange={v => updateEntry(active.id, 'reentryEndDate', v)} hasError={!!errors[errKey(active.id, 'reentryEndDate')]} />{errors[errKey(active.id, 'reentryEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'reentryEndDate')]}</p>}</div>
-                        <div className="fg"><div className="lbl">Re-entry Late Fee Date</div><DatePicker value={active.reentryLateFeeDate} onChange={v => updateEntry(active.id, 'reentryLateFeeDate', v)} hasError={!!errors[errKey(active.id, 'reentryLateFeeDate')]} />{errors[errKey(active.id, 'reentryLateFeeDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'reentryLateFeeDate')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Re-entry End Date</div><DatePicker value={active.reentryEndDate} onChange={v => updateEntry(active.id, 'reentryEndDate', v)} hasError={!!errors[errKey(active.id, 'reentryEndDate')]} />{errors[errKey(active.id, 'reentryEndDate')] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'reentryEndDate')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Re-entry Late Fee Date</div><DatePicker value={active.reentryLateFeeDate} onChange={v => updateEntry(active.id, 'reentryLateFeeDate', v)} hasError={!!errors[errKey(active.id, 'reentryLateFeeDate')]} />{errors[errKey(active.id, 'reentryLateFeeDate')] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'reentryLateFeeDate')]}</p>}</div>
                       </div>
                     </div>
 
                     <div style={{ ...CATEGORY_CARD_STYLE, marginTop: '1.25rem' }}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
-                        <div className="fg"><div className="lbl">Semester/Term 1 Start Date</div><DatePicker value={active.semStart} onChange={v => updateEntry(active.id, 'semStart', v)} hasError={!!errors[errKey(active.id, 'semStart')]} />{errors[errKey(active.id, 'semStart')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'semStart')]}</p>}</div>
-                        <div className="fg"><div className="lbl">Term 1 End Date</div><DatePicker value={active.term1EndDate} onChange={v => updateEntry(active.id, 'term1EndDate', v)} hasError={!!errors[errKey(active.id, 'term1EndDate')]} />{errors[errKey(active.id, 'term1EndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'term1EndDate')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Semester/Term 1 Start Date <span className="req">*</span></div><DatePicker value={active.semStart} onChange={v => updateEntry(active.id, 'semStart', v)} hasError={!!errors[errKey(active.id, 'semStart')]} />{errors[errKey(active.id, 'semStart')] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'semStart')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Term 1 End Date <span className="req">*</span></div><DatePicker value={active.term1EndDate} onChange={v => updateEntry(active.id, 'term1EndDate', v)} hasError={!!errors[errKey(active.id, 'term1EndDate')]} />{errors[errKey(active.id, 'term1EndDate')] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'term1EndDate')]}</p>}</div>
                         <div className="fg"><div className="lbl">Lump Sum Date</div><DatePicker value={active.lumpsumDate} onChange={v => updateEntry(active.id, 'lumpsumDate', v)} /></div>
-                        <div className="fg"><div className="lbl">Term 2 Start Date</div><DatePicker value={active.term2StartDate} onChange={v => updateEntry(active.id, 'term2StartDate', v)} hasError={!!errors[errKey(active.id, 'term2StartDate')]} />{errors[errKey(active.id, 'term2StartDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'term2StartDate')]}</p>}</div>
-                        <div className="fg"><div className="lbl">Semester/Term 2 End Date</div><DatePicker value={active.term2End} onChange={v => updateEntry(active.id, 'term2End', v)} hasError={!!errors[errKey(active.id, 'term2End')]} />{errors[errKey(active.id, 'term2End')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'term2End')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Term 2 Start Date <span className="req">*</span></div><DatePicker value={active.term2StartDate} onChange={v => updateEntry(active.id, 'term2StartDate', v)} hasError={!!errors[errKey(active.id, 'term2StartDate')]} />{errors[errKey(active.id, 'term2StartDate')] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'term2StartDate')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Semester/Term 2 End Date <span className="req">*</span></div><DatePicker value={active.term2End} onChange={v => updateEntry(active.id, 'term2End', v)} hasError={!!errors[errKey(active.id, 'term2End')]} />{errors[errKey(active.id, 'term2End')] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'term2End')]}</p>}</div>
                         {activeIdx === 0 && (
                           <div className="fg">
                             <div className="lbl">Duration (weeks)</div>
@@ -853,10 +896,10 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
                     <div style={{ ...CATEGORY_CARD_STYLE, marginTop: '1.25rem' }}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
                         <div className="fg"><div className="lbl">Resit Start Date</div><DatePicker value={active.resitStartDate} onChange={v => updateEntry(active.id, 'resitStartDate', v)} /></div>
-                        <div className="fg"><div className="lbl">Resit End Date</div><DatePicker value={active.resitEndDate} onChange={v => updateEntry(active.id, 'resitEndDate', v)} hasError={!!errors[errKey(active.id, 'resitEndDate')]} />{errors[errKey(active.id, 'resitEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'resitEndDate')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Resit End Date</div><DatePicker value={active.resitEndDate} onChange={v => updateEntry(active.id, 'resitEndDate', v)} hasError={!!errors[errKey(active.id, 'resitEndDate')]} />{errors[errKey(active.id, 'resitEndDate')] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'resitEndDate')]}</p>}</div>
                         <div className="fg"><div className="lbl">Clearance Date (80%)</div><DatePicker value={active.clearanceDate} onChange={v => updateEntry(active.id, 'clearanceDate', v)} /></div>
                         <div className="fg"><div className="lbl">Final Exam Start Date</div><DatePicker value={active.finalExamStartDate} onChange={v => updateEntry(active.id, 'finalExamStartDate', v)} /></div>
-                        <div className="fg"><div className="lbl">Final Exam End Date</div><DatePicker value={active.finalExamEndDate} onChange={v => updateEntry(active.id, 'finalExamEndDate', v)} hasError={!!errors[errKey(active.id, 'finalExamEndDate')]} />{errors[errKey(active.id, 'finalExamEndDate')] && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'finalExamEndDate')]}</p>}</div>
+                        <div className="fg"><div className="lbl">Final Exam End Date</div><DatePicker value={active.finalExamEndDate} onChange={v => updateEntry(active.id, 'finalExamEndDate', v)} hasError={!!errors[errKey(active.id, 'finalExamEndDate')]} />{errors[errKey(active.id, 'finalExamEndDate')] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'finalExamEndDate')]}</p>}</div>
                       </div>
                     </div>
                   </>

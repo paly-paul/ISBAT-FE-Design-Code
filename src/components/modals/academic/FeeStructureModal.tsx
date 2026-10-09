@@ -814,7 +814,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                 )
               })}
               {(anyCurrencyGaps || anyLedgerGaps) && (
-                <p style={{ color: 'var(--red)', fontSize: 12 }}>Select a currency and ledger for every fee item before saving.</p>
+                <p className="field-err" style={{ color: 'var(--red)', fontSize: 12 }}>Select a currency and ledger for every fee item before saving.</p>
               )}
               <div className="flex justify-end mt-2">
                 <button className="btn btn-primary" onClick={handleSubmitAll} disabled={!allComplete || submitting}>

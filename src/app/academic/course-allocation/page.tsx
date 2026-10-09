@@ -15,6 +15,7 @@ import { useProgramPlannings, useCreateProgramPlanning, useDeleteProgramPlanning
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
 import { flattenUniquePages } from '@/lib/pagination'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Confirmed via allocation/*.md — real endpoints now (was UI-only mock
 // against the legacy ISMS "Course Allottee" screen this page was first
@@ -130,6 +131,7 @@ export default function CourseAllocationPage() {
     if (!schoolGuid) e.schoolGuid = 'School / Faculty is required'
     if (!courseUnit) e.courseUnit = 'Course Unit is required'
     setErrors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
@@ -219,7 +221,7 @@ export default function CourseAllocationPage() {
               onLoadMore={() => intakeQuery.fetchNextPage()}
               onChange={val => { setIntakeGuid(val); if (errors.intakeGuid) setErrors(p => ({ ...p, intakeGuid: '' })) }}
             />
-            {errors.intakeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
+            {errors.intakeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Term</div>
@@ -244,7 +246,7 @@ export default function CourseAllocationPage() {
               onLoadMore={() => facultyQuery.fetchNextPage()}
               onChange={val => { setSchoolGuid(val); if (errors.schoolGuid) setErrors(p => ({ ...p, schoolGuid: '' })) }}
             />
-            {errors.schoolGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.schoolGuid}</p>}
+            {errors.schoolGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.schoolGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Lecturer Name <span className="req">*</span></div>
@@ -262,7 +264,7 @@ export default function CourseAllocationPage() {
               onLoadMore={() => lecturerQuery.fetchNextPage()}
               onChange={val => { setPickedLecturer(lecturerOptions.find(o => o.value === val) ?? null); setLecturerGuid(val); if (errors.lecturerGuid) setErrors(p => ({ ...p, lecturerGuid: '' })) }}
             />
-            {errors.lecturerGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lecturerGuid}</p>}
+            {errors.lecturerGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lecturerGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Course Unit <span className="req">*</span></div>
@@ -301,7 +303,7 @@ export default function CourseAllocationPage() {
                 </span>
               </div>
             )}
-            {errors.courseUnit && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.courseUnit}</p>}
+            {errors.courseUnit && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.courseUnit}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Teaching Load <span className="text-g400" style={{ fontWeight: 500 }}>(optional)</span></div>

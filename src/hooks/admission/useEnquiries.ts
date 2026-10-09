@@ -65,19 +65,17 @@ export function useUpdateEnquiry() {
   })
 }
 
+// Email OTP for a not-yet-created enquiry. Neither call touches an existing
+// enquiry, so there's nothing to invalidate — the verificationToken is just
+// handed on to useCreateEnquiry.
 export function useRequestEnquiryEmailOtp() {
-  return useMutation({ mutationFn: (enquiryGuid: string) => requestEnquiryEmailOtp(enquiryGuid) })
+  return useMutation({ mutationFn: (email: string) => requestEnquiryEmailOtp(email) })
 }
 
-// Success flips emailVerified on the enquiry, so its cached copies refresh.
 export function useVerifyEnquiryEmailOtp() {
-  const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ enquiryGuid, otp }: { enquiryGuid: string; otp: string }) => verifyEnquiryEmailOtp(enquiryGuid, otp),
-    onSuccess: (_data, { enquiryGuid }) => {
-      queryClient.invalidateQueries({ queryKey: ENQUIRIES_KEY })
-      queryClient.invalidateQueries({ queryKey: [...ENQUIRIES_KEY, enquiryGuid] })
-    },
+    mutationFn: ({ email, challengeToken, otp }: { email: string; challengeToken: string; otp: string }) =>
+      verifyEnquiryEmailOtp(email, challengeToken, otp),
   })
 }
 

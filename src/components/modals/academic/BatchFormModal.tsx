@@ -15,6 +15,7 @@ import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 import { useEmployee, useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
 import { flattenUniquePages } from '@/lib/pagination'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Create and Edit share this form — same fields, just different prefill,
 // locked fields, and which mutation runs on submit.
@@ -184,6 +185,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
     if (!batchTimeGuid)  e.batchTimeGuid = 'Please select a Batch Time'
     if (!inChargeGuid)   e.inChargeGuid = 'Please select a Batch In-Charge'
     setErrors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
@@ -311,7 +313,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               onLoadMore={() => intakeQuery.fetchNextPage()}
               onChange={isEdit ? undefined : (val => { setIntakeGuid(val); if (errors.intakeGuid) setErrors(p => ({ ...p, intakeGuid: '' })) })}
             />
-            {errors.intakeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
+            {errors.intakeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Programme <span className="req">*</span></div>
@@ -328,12 +330,12 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               onLoadMore={() => programQuery.fetchNextPage()}
               onChange={isEdit ? undefined : (val => { setProgramGuid(val); setSemesterGuid(''); if (errors.programGuid) setErrors(p => ({ ...p, programGuid: '' })) })}
             />
-            {errors.programGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programGuid}</p>}
+            {errors.programGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Semester <span className="req">*</span></div>
             <SearchSelect placeholder={programGuid ? '— Select semester —' : 'Select a programme first'} options={semesterOptions} value={semesterGuid} disabled={isEdit} onChange={isEdit ? undefined : (val => { setSemesterGuid(val); if (errors.semesterGuid) setErrors(p => ({ ...p, semesterGuid: '' })) })} />
-            {errors.semesterGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.semesterGuid}</p>}
+            {errors.semesterGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.semesterGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Specialization <span className="req">*</span></div>
@@ -349,12 +351,12 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               onLoadMore={() => streamQuery.fetchNextPage()}
               onChange={val => { setStreamGuid(val); if (errors.streamGuid) setErrors(p => ({ ...p, streamGuid: '' })) }}
             />
-            {errors.streamGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.streamGuid}</p>}
+            {errors.streamGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.streamGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Batch Time <span className="req">*</span></div>
             <SearchSelect placeholder="— Select batch time —" options={batchTimeOptions} value={batchTimeGuid} disabled={isEdit} onChange={isEdit ? undefined : (val => { setBatchTimeGuid(val); if (errors.batchTimeGuid) setErrors(p => ({ ...p, batchTimeGuid: '' })) })} />
-            {errors.batchTimeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.batchTimeGuid}</p>}
+            {errors.batchTimeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.batchTimeGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Batch In-Charge <span className="req">*</span></div>
@@ -370,7 +372,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               onLoadMore={() => employeeQuery.fetchNextPage()}
               onChange={val => { setInChargeGuid(val); if (errors.inChargeGuid) setErrors(p => ({ ...p, inChargeGuid: '' })) }}
             />
-            {errors.inChargeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.inChargeGuid}</p>}
+            {errors.inChargeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.inChargeGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Programme Head</div>

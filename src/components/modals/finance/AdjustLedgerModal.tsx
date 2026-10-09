@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 export interface AdjustLedgerTarget {
   semester: string
@@ -41,6 +42,7 @@ export function AdjustLedgerModal({ isOpen, onClose, showToast, target }: Adjust
     if (!newAmount.trim()) e.newAmount = 'New amount is required'
     if (!justification.trim()) e.justification = 'Justification is required for the audit trail'
     setErrors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
@@ -75,7 +77,7 @@ export function AdjustLedgerModal({ isOpen, onClose, showToast, target }: Adjust
                 onChange={e => { setNewAmount(e.target.value); if (errors.newAmount) setErrors(p => ({ ...p, newAmount: '' })) }}
                 style={errors.newAmount ? { borderColor: 'var(--red)' } : undefined}
               />
-              {errors.newAmount && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.newAmount}</p>}
+              {errors.newAmount && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.newAmount}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Currency</div>
@@ -92,7 +94,7 @@ export function AdjustLedgerModal({ isOpen, onClose, showToast, target }: Adjust
                 onChange={e => { setJustification(e.target.value); if (errors.justification) setErrors(p => ({ ...p, justification: '' })) }}
                 style={errors.justification ? { borderColor: 'var(--red)' } : undefined}
               />
-              {errors.justification && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.justification}</p>}
+              {errors.justification && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.justification}</p>}
             </div>
           </div>
         </div>

@@ -6,6 +6,7 @@ import { FailurePopup } from '../shared/FailurePopup'
 import { RoomInput } from '@/lib/api/academic/room'
 import { useRoom } from '@/hooks/academic/useRooms'
 import { AuthError } from '@/lib/api/client'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Add and Edit share this form — differ in prefill and which mutation runs.
 interface RoomFormModalProps extends ModalProps {
@@ -63,6 +64,7 @@ export function RoomFormModal({ isOpen, onClose, showToast, mode, roomGuid, crea
     // 10-char cap per post-room.md's CreateRoomCommandValidator.
     else if (roomCode.trim().length > 10) e.roomCode = 'Room Code must not exceed 10 characters'
     setErrors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
@@ -173,7 +175,7 @@ export function RoomFormModal({ isOpen, onClose, showToast, mode, roomGuid, crea
               onChange={e => { setRoomCode(e.target.value); clearError('roomCode') }}
               style={errors.roomCode ? { borderColor: 'var(--red)' } : undefined}
             />
-            {errors.roomCode && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.roomCode}</p>}
+            {errors.roomCode && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.roomCode}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Capacity</div>

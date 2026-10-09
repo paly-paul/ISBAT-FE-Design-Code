@@ -13,6 +13,7 @@ import { useFollowUpModes } from '@/hooks/admission/useFollowUpModes'
 import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
 import { useInterestLevels } from '@/hooks/admission/useInterestLevels'
 import { useEnquiryFollowUpsInfinite } from '@/hooks/admission/useEnquiryFollowUps'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 interface NewFollowUpLogModalProps extends ModalProps {
   createFollowUp: {
@@ -197,6 +198,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
     if (!remarks.trim())     e.remarks = 'Remarks are required'
     else if (remarks.trim().length > REMARKS_MAX) e.remarks = `Remarks can be at most ${REMARKS_MAX} characters`
     setErrors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
@@ -253,7 +255,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
           <div className="fg" style={{ gridColumn: 'span 2' }}>
             <div className="lbl">Enquiry <span className="req">*</span></div>
             <EnquiryPicker value={enquiryGuid} onChange={setEnquiryGuid} enabled={isOpen} hasError={!!errors.enquiryIdx} />
-            {errors.enquiryIdx && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryIdx}</p>}
+            {errors.enquiryIdx && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryIdx}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Advisor <span className="req">*</span></div>
@@ -269,7 +271,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
               isFetchingNextPage={employeeQuery.isFetchingNextPage}
               onLoadMore={() => employeeQuery.fetchNextPage()}
             />
-            {errors.advisorGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.advisorGuid}</p>}
+            {errors.advisorGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.advisorGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Follow-up Date</div>
@@ -282,17 +284,17 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
           <div className="fg">
             <div className="lbl">Follow-up Status <span className="req">*</span></div>
             <SearchSelect placeholder="— select —" options={followUpStatusOptions} value={followUpStatusGuid} onChange={setFollowUpStatusGuid} />
-            {errors.followUpStatusGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.followUpStatusGuid}</p>}
+            {errors.followUpStatusGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.followUpStatusGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Follow-up Mode <span className="req">*</span></div>
             <SearchSelect placeholder="— select —" options={followUpModeOptions} value={followUpModeGuid} onChange={setFollowUpModeGuid} />
-            {errors.followUpModeGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.followUpModeGuid}</p>}
+            {errors.followUpModeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.followUpModeGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Enquiry Status <span className="req">*</span></div>
             <SearchSelect placeholder="— select —" options={enquiryStatusOptions} value={enquiryStatusGuid} onChange={setEnquiryStatusGuid} />
-            {errors.enquiryStatusGuid && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryStatusGuid}</p>}
+            {errors.enquiryStatusGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryStatusGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Interest Level</div>
@@ -301,12 +303,12 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
           <div className="fg">
             <div className="lbl">Next Follow-up Date</div>
             <DatePicker value={nextFollowDate} onChange={setNextFollowDate} hasError={!!errors.nextFollowDate} />
-            {errors.nextFollowDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.nextFollowDate}</p>}
+            {errors.nextFollowDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.nextFollowDate}</p>}
           </div>
           <div className="fg" style={{ gridColumn: 'span 2' }}>
             <div className="lbl">Remarks <span className="req">*</span> <span className="text-g400" style={{ fontWeight: 400 }}>({remarks.trim().length}/{REMARKS_MAX})</span></div>
             <textarea className="ctrl" rows={3} maxLength={REMARKS_MAX} placeholder="e.g. Called student, interested in Diploma program." value={remarks} onChange={e => setRemarks(e.target.value)} />
-            {errors.remarks && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.remarks}</p>}
+            {errors.remarks && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.remarks}</p>}
           </div>
         </div>
 

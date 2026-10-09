@@ -10,6 +10,7 @@ import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useAnnouncement, AnnouncementCreateInput, AnnouncementUpdateInput } from '@/hooks/student/useAnnouncementManagement'
 import { AuthError } from '@/lib/api/client'
 import { openDocumentForViewing } from '@/lib/documentViewer'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 const SUBJECT_MAX = 150
 
@@ -96,6 +97,7 @@ export function AnnouncementFormModal({ isOpen, onClose, showToast, mode, announ
     if (!announceDate) e.announceDate = 'Visible Upto is required'
     if (isHtmlEmpty(body)) e.body = 'Announcement is required'
     setErrors(e)
+    scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
@@ -198,12 +200,12 @@ export function AnnouncementFormModal({ isOpen, onClose, showToast, mode, announ
               onChange={e => { setSubject(e.target.value); clearError('subject') }}
               style={errors.subject ? { borderColor: 'var(--red)' } : isEdit ? { background: 'var(--g100)', color: 'var(--g500)' } : undefined}
             />
-            {errors.subject && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.subject}</p>}
+            {errors.subject && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.subject}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Visible Upto <span className="req">*</span></div>
             <DatePicker value={announceDate} onChange={v => { setAnnounceDate(v); clearError('announceDate') }} hasError={!!errors.announceDate} />
-            {errors.announceDate && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.announceDate}</p>}
+            {errors.announceDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.announceDate}</p>}
           </div>
           <div className="fg span2">
             <div className="lbl">Programme</div>
@@ -218,7 +220,7 @@ export function AnnouncementFormModal({ isOpen, onClose, showToast, mode, announ
           <div className="fg span2">
             <div className="lbl">Announcement <span className="req">*</span></div>
             <RichTextEditor value={body} onChange={v => { setBody(v); clearError('body') }} placeholder="Type the announcement here…" minHeight={180} />
-            {errors.body && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.body}</p>}
+            {errors.body && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.body}</p>}
           </div>
           <div className="fg span2">
             <div className="lbl">Attachment (optional)</div>
