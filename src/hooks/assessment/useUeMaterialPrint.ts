@@ -1,6 +1,7 @@
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { getProgramDropdown } from '@/lib/api/academic/programMaster'
 import { getSemestersForProgram } from '@/lib/api/academic/semester'
+import { getProgramCourseUnits } from '@/lib/api/academic/programCourseUnits'
 import {
   getUeQuestionPrintCourseUnits,
   printUeBooklet,
@@ -37,6 +38,17 @@ export function useUeQuestionPrintCourseUnits(programGuid: string, semesterGuid:
     queryKey: ['ue-question-print-course-units', programGuid, semesterGuid],
     queryFn: () => getUeQuestionPrintCourseUnits(programGuid, semesterGuid),
     enabled,
+  })
+}
+
+// The current-intake course-unit endpoint owns the dropdown population. Its
+// response does not reliably include unit type, so this lookup is used only
+// to decide how the selected unit should be printed.
+export function useUeMaterialPrintProgramUnits(programGuid: string | null) {
+  return useQuery({
+    queryKey: ['ue-material-print-program-course-units', programGuid],
+    queryFn: () => getProgramCourseUnits(programGuid!),
+    enabled: !!programGuid,
   })
 }
 
