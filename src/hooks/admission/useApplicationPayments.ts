@@ -9,10 +9,12 @@ import {
 
 const APPLICATION_PAYMENTS_KEY = ['application-payments']
 
-export function useApplicationPaymentExemptionTypes() {
+// `search` is optional server-side filtering (part of the key, so each term
+// caches separately); omit it for the full list.
+export function useApplicationPaymentExemptionTypes(search = '') {
   return useQuery({
-    queryKey: [...APPLICATION_PAYMENTS_KEY, 'exemption-types'],
-    queryFn: () => getApplicationPaymentExemptionTypes(),
+    queryKey: [...APPLICATION_PAYMENTS_KEY, 'exemption-types', search],
+    queryFn: () => getApplicationPaymentExemptionTypes(search),
     staleTime: Infinity,
     gcTime: Infinity,
   })
@@ -33,9 +35,9 @@ export function useUnconvertedEnquiries(intakeGuid: string, page: number, pageSi
 // backs the Payment page's Enquiry dropdown, replacing
 // the old single pageSize=1000 "fetch nearly everything for this intake up
 // front" SearchSelect. Same useInfiniteQuery + fetch-next-on-scroll
-// mechanism as useSearchCourseUnitsInfinite (useCourseUnits.ts). searchTerm
-// is CONFIRMED real server-side (2026-09-08, see getUnconvertedEnquiries)
-// and part of the query key — each typed term's pages are cached
+// mechanism as useSearchCourseUnitsInfinite (useCourseUnits.ts). The typed
+// term goes out as ?search= (student name / enquiry code, see
+// getUnconvertedEnquiries) and is part of the query key — each typed term's pages are cached
 // separately, no client-side re-filtering.
 export function useUnconvertedEnquiriesInfinite(intakeGuid: string, searchTerm: string, pageSize: number, enabled: boolean) {
   return useInfiniteQuery({
@@ -52,10 +54,10 @@ export function useUnconvertedEnquiriesInfinite(intakeGuid: string, searchTerm: 
   })
 }
 
-export function useApplicationPaymentTypes() {
+export function useApplicationPaymentTypes(search = '') {
   return useQuery({
-    queryKey: [...APPLICATION_PAYMENTS_KEY, 'payment-types'],
-    queryFn: () => getApplicationPaymentTypes(),
+    queryKey: [...APPLICATION_PAYMENTS_KEY, 'payment-types', search],
+    queryFn: () => getApplicationPaymentTypes(search),
     staleTime: Infinity,
     gcTime: Infinity,
   })

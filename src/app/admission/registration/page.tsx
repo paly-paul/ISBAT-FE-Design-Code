@@ -1,20 +1,18 @@
 'use client'
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
-import { SearchSelect } from '@/components/SearchSelect'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { OnboardModal } from '@/components/modals/admission/OnboardModal'
 import { CompleteRegistrationModal } from '@/components/modals/admission/CompleteRegistrationModal'
 import { Pagination } from '@/components/Pagination'
 import { useRegistrarDeskApplications, useRegistrarDeskCounts, RegisterStudentResponse } from '@/hooks/admission/useRegistrarDesk'
-import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
+import { useCurrentAdmissionIntake } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
-import { flattenUniquePages } from '@/lib/pagination'
 
 const PAGE_SIZE = 10
 
@@ -39,30 +37,20 @@ export default function RegistrationPage() {
   const [selectedApplicationGuid, setSelectedApplicationGuid] = useState<string | null>(null)
   const [registeredResult, setRegisteredResult] = useState<RegisterStudentResponse | null>(null)
   const [search, setSearch] = useState('')
-  const [filterIntake, setFilterIntake] = useState('all')
   const [page, setPage] = useState(1)
-  const [intakeSearch, setIntakeSearch] = useState('')
-  const [committedIntakeSearch, setCommittedIntakeSearch] = useState('')
-  const [intakePickerOpen, setIntakePickerOpen] = useState(false)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
 
   function updateSearch(value: string) { setSearch(value); setPage(1) }
-  function updateIntakeFilter(value: string) { setFilterIntake(value); setPage(1) }
 
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedIntakeSearch(intakeSearch.trim()), 250)
-    return () => clearTimeout(timer)
-  }, [intakeSearch])
-
-  const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, intakePickerOpen)
-  const intakes = useMemo(
-    () => flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid),
-    [intakeQuery.data],
-  )
-  const intakeOptions = [{ value: 'all', label: 'All Intakes' }, ...intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))]
+  // The registrar desk is current-admission-intake only (2026-10 handoff):
+  // the list API returns nothing else, and detail/register reject other
+  // intakes. So the old intake filter is gone — this just labels which
+  // intake the desk is working on.
+  const currentIntake = useCurrentAdmissionIntake()
+  const noCurrentIntake = currentIntake.isSuccess && !currentIntake.data
 
   const searchTrimmed = search.trim()
   // An App Ref No starts with "APP", "ADM", contains "/", or is digits (e.g. APP20261/7117, ADM-26-0019, 7117).
@@ -74,7 +62,8 @@ export default function RegistrationPage() {
   const { data, isLoading } = useRegistrarDeskApplications(page, PAGE_SIZE, {
     appRefNo: looksLikeAppRefNo ? (searchTrimmed || undefined) : undefined,
     studentName: !looksLikeAppRefNo ? (searchTrimmed || undefined) : undefined,
-    intakeGuid: filterIntake !== 'all' ? filterIntake : undefined,
+    // No intakeGuid/intakeName — the server scopes to the current admission
+    // intake itself (and returns an empty list for any other).
   })
   const { data: counts } = useRegistrarDeskCounts()
 
@@ -142,32 +131,36 @@ export default function RegistrationPage() {
               onChange={updateSearch}
               results={searchMatches.map(r => ({ id: r.applicationGuid, primary: r.appRefNo, secondary: r.studentName }))}
             />
-            <SearchSelect
-              options={intakeOptions}
-              value={filterIntake}
-              onChange={updateIntakeFilter}
-              onSearch={setIntakeSearch}
-              onOpenChange={setIntakePickerOpen}
-              isLoading={intakeQuery.isLoading}
-              hasNextPage={intakeQuery.hasNextPage}
-              isFetchingNextPage={intakeQuery.isFetchingNextPage}
-              onLoadMore={() => intakeQuery.fetchNextPage()}
-            />
+            {currentIntake.data && (
+              <span
+                className="badge badge-blue"
+                style={{ padding: '6px 10px', gap: 6 }}
+                title="The registrar desk only works on the current admission intake"
+              >
+                <i className="lni lni-lock" aria-hidden="true" /> Intake: {currentIntake.data.intakeCode} — {currentIntake.data.description}
+              </span>
+            )}
           </div>
         </div>
+        {noCurrentIntake && (
+          <div className="warn-box mb-4" role="note">
+            <i className="lni lni-warning" aria-hidden="true" style={{ marginTop: 2 }} />
+            <span>No current admission intake is configured, so there&apos;s nothing to register. Set one in Academic › Intake Master.</span>
+          </div>
+        )}
         <ScrollTable>
           <table>
             <thead>
               <tr className="text-left text-g500 border-b border-g200">
                 <th style={{ width: 48 }}></th><th className="pb-2 font-medium">App. Ref</th><th className="pb-2 font-medium">Student Name</th>
-                <th className="pb-2 font-medium">Programme</th><th className="pb-2 font-medium">Intake</th><th className="pb-2 font-medium">Reg. Fee</th>
+                <th className="pb-2 font-medium">Programme</th><th className="pb-2 font-medium">Reg. Fee</th>
               </tr>
             </thead>
             <tbody>
               {isLoading
-                ? <TableLoadingState colSpan={6} />
+                ? <TableLoadingState colSpan={5} />
                 : items.length === 0
-                  ? <EmptyState colSpan={6} hasFilters={!!search.trim() || filterIntake !== 'all'} onClearFilters={() => { setSearch(''); setFilterIntake('all'); setPage(1) }} />
+                  ? <EmptyState colSpan={5} hasFilters={!!search.trim()} onClearFilters={() => { setSearch(''); setPage(1) }} />
                   : null}
               {items.map(r => (
                 <tr key={r.applicationGuid} className="border-b border-g100 hover:bg-g50">
@@ -187,7 +180,6 @@ export default function RegistrationPage() {
                   <td className="py-2.5 font-mono text-xs text-b600">{r.appRefNo}</td>
                   <td className="py-2.5 text-g800">{r.studentName}</td>
                   <td className="py-2.5">{r.programName}</td>
-                  <td className="py-2.5">{r.intakeName}</td>
                   <td className="py-2.5"><span className={r.regPaid ? 'badge badge-green' : 'badge badge-red'}>{r.regPaid ? 'Paid' : 'Not Paid'}</span></td>
                 </tr>
               ))}

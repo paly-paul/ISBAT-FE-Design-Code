@@ -14,10 +14,11 @@ import { useBatch, useBatches } from '@/hooks/academic/useBatches'
 import { useCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
-import { sanitizePhoneInput } from '@/lib/errorMessages'
+import { sanitizePhoneInput, sanitizeNameInput } from '@/lib/errorMessages'
 import { consumeFilingPrefillRef } from '@/lib/filingHandoff'
 import { getEnquiryById, getEnquiries } from '@/lib/api/admission/enquiry'
 import { flattenUniquePages } from '@/lib/pagination'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import {
   FilingApplicationSearchResult,
   useApplicationByPaymentGuid,
@@ -84,35 +85,43 @@ function emptyQualRow(id: number): QualRow {
   return { id, institution: '', university: '', passYear: '', grade: '', yearsTaken: '', proofFile: null, savedId: null }
 }
 
-function Field({ label, req, children, span }: { label: string; req?: boolean; span?: number; children: React.ReactNode }) {
+// Qualification duration (yearsTaken) — whole years, per the API.
+const QUAL_DURATION_MIN = 1
+const QUAL_DURATION_MAX = 10
+
+// `error` renders the same inline field message the academic forms use
+// (.field-err, picked up by scrollToFirstError).
+function Field({ label, req, children, span, error }: { label: string; req?: boolean; span?: number; children: React.ReactNode; error?: string }) {
   return (
     <div className={span === 2 ? 'fg span2' : span === 3 ? 'fg span3' : 'fg'}>
       <label className="lbl">{label}{req && <span className="req">*</span>}</label>
       {children}
+      {error && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{error}</p>}
     </div>
   )
 }
-function Input({ placeholder, type = 'text', readOnly, value, onChange }: { placeholder?: string; type?: string; readOnly?: boolean; value?: string; onChange?: (v: string) => void }) {
+function Input({ placeholder, type = 'text', readOnly, value, onChange, inputMode, maxLength, hasError, minYmd, maxYmd, rangeMessage }: { placeholder?: string; type?: string; readOnly?: boolean; value?: string; onChange?: (v: string) => void; inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']; maxLength?: number; hasError?: boolean; minYmd?: string; maxYmd?: string; rangeMessage?: string }) {
   if (type === 'date' && !readOnly) {
-    return <DatePicker value={value} onChange={v => onChange?.(v)} placeholder={placeholder} />
+    return <DatePicker value={value} onChange={v => onChange?.(v)} placeholder={placeholder} minYmd={minYmd} maxYmd={maxYmd} rangeMessage={rangeMessage} hasError={hasError} />
   }
   // .no-spinner strips the native up/down arrows on type="number" fields
-  // (Year, Duration (Years) below) — same class already used for Exchange
-  // Rates' number inputs elsewhere in the app.
+  // (Year below) — same class already used for Exchange Rates' number
+  // inputs elsewhere in the app.
   const className = type === 'number' ? 'ctrl no-spinner' : 'ctrl'
   if (value !== undefined) {
-    return <input className={className} type={type} placeholder={placeholder} readOnly={readOnly} value={value} onChange={e => onChange?.(e.target.value)} />
+    return <input className={className} type={type} placeholder={placeholder} readOnly={readOnly} inputMode={inputMode} maxLength={maxLength} value={value} onChange={e => onChange?.(e.target.value)} style={hasError ? { borderColor: 'var(--red)' } : undefined} aria-invalid={hasError || undefined} />
   }
   return <input className={className} type={type} placeholder={placeholder} readOnly={readOnly} />
 }
 function Select({ options, placeholder, value, onChange }: { options: string[]; placeholder?: string; value?: string; onChange?: (v: string) => void }) {
   return <SearchSelect placeholder={placeholder || 'Select...'} options={options} value={value} onChange={onChange} />
 }
-function FileZone({ hint = 'Click to upload', file, onChange }: { hint?: string; file?: File | null; onChange?: (f: File | null) => void }) {
+function FileZone({ hint = 'Click to upload', file, onChange, hasError }: { hint?: string; file?: File | null; onChange?: (f: File | null) => void; hasError?: boolean }) {
   const [dragActive, setDragActive] = useState(false)
   return (
     <div
       className={`file-zone${dragActive ? ' drag-active' : ''}`}
+      style={hasError ? { borderColor: 'var(--red)' } : undefined}
       onDragOver={e => { e.preventDefault(); setDragActive(true) }}
       onDragLeave={() => setDragActive(false)}
       onDrop={e => {
@@ -445,6 +454,8 @@ export default function FilingPage() {
   const [passportFile, setPassportFile] = useState<File | null>(null)
   const [vStartDate, setVStartDate] = useState('')
   const [vEndDate, setVEndDate] = useState('')
+  // Inline errors on the General tab (currently just the visa date pair).
+  const [generalErrors, setGeneralErrors] = useState<Record<string, string>>({})
   const [visaFile, setVisaFile] = useState<File | null>(null)
   const [isRefugee, setIsRefugee] = useState(false)
   const [refugeeId, setRefugeeId] = useState('')
@@ -698,6 +709,18 @@ export default function FilingPage() {
       return
     }
     if (isRefugee && !refugeeId.trim()) { showToast('Refugee ID is required for refugee students', 'error'); return }
+    const e: Record<string, string> = {}
+    // Typing can't add digits (sanitizeNameInput), but names prefilled from
+    // the enquiry or an earlier record can still contain them.
+    if (!firstName.trim()) e.firstName = 'First Name is required'
+    else if (/\d/.test(firstName)) e.firstName = 'First Name can’t contain numbers'
+    if (!lastName.trim()) e.lastName = 'Last Name is required'
+    else if (/\d/.test(lastName)) e.lastName = 'Last Name can’t contain numbers'
+    // The pickers already block an out-of-order pair, but dates prefilled
+    // from an earlier record can still arrive that way.
+    if (vStartDate && vEndDate && vStartDate > vEndDate) e.vEndDate = 'Visa expiry can’t be before the visa start date'
+    setGeneralErrors(e)
+    if (Object.keys(e).length) { scrollToFirstError(e); return }
 
     // The selected application already carries the real intakeCode from the
     // server-side search response; no separate intake list lookup is needed.
@@ -750,14 +773,53 @@ export default function FilingPage() {
   const saveQualification = useSaveQualification()
   const deleteQualification = useDeleteQualification()
 
+  // Inline field errors per qualification row, keyed by row id then field.
+  const [qualErrors, setQualErrors] = useState<Record<number, Record<string, string>>>({})
+
   function updateQualRow(id: number, patch: Partial<QualRow>) {
     setQualRows(rows => rows.map(r => (r.id === id ? { ...r, ...patch } : r)))
+    // Editing a field clears its own message, like the academic forms.
+    setQualErrors(prev => {
+      const rowErrs = prev[id]
+      if (!rowErrs || !Object.keys(patch).some(k => rowErrs[k])) return prev
+      const next = { ...rowErrs }
+      for (const k of Object.keys(patch)) delete next[k]
+      return { ...prev, [id]: next }
+    })
+  }
+
+  // Required checks plus the POST /application-filling/qualifications rules
+  // (2026-10 handoff). Rule messages match the API's own wording.
+  function qualRowErrors(row: QualRow): Record<string, string> {
+    const e: Record<string, string> = {}
+    if (!row.institution.trim()) e.institution = 'Institution is required'
+    else if (!/\p{L}/u.test(row.institution)) e.institution = 'Institution name must contain letters and cannot be only numbers.'
+    if (!row.university.trim()) e.university = 'University / Awarding Board is required'
+    else if (!/\p{L}/u.test(row.university)) e.university = 'University / board name must contain letters and cannot be only numbers.'
+    if (!row.passYear) e.passYear = 'Year is required'
+    if (!row.grade.trim()) e.grade = 'Grade is required'
+    const years = Number(row.yearsTaken)
+    if (!row.yearsTaken) e.yearsTaken = 'Duration is required'
+    else if (!Number.isInteger(years) || years < QUAL_DURATION_MIN || years > QUAL_DURATION_MAX) e.yearsTaken = 'Duration must be between 1 and 10 years.'
+    if (!row.proofFile) e.proofFile = 'Proof Document is required'
+    return e
+  }
+
+  // Server-side rule failures that belong to a specific field.
+  function qualServerFieldError(message: string): Record<string, string> | null {
+    if (/institution name/i.test(message)) return { institution: message }
+    if (/university \/ board name/i.test(message)) return { university: message }
+    if (/duration must be/i.test(message)) return { yearsTaken: message }
+    return null
   }
 
   function handleSaveQualRow(row: QualRow) {
     if (!selectedApplication) { showToast('Select an application above first', 'error'); return }
-    if (!row.institution.trim() || !row.university.trim() || !row.passYear || !row.grade.trim() || !row.yearsTaken || !row.proofFile) {
-      showToast('Institution, University, Year, Grade, Duration and Proof Document are all required', 'error'); return
+    const errs = qualRowErrors(row)
+    if (Object.keys(errs).length) {
+      setQualErrors(prev => ({ ...prev, [row.id]: errs }))
+      scrollToFirstError(errs)
+      return
     }
     saveQualification.mutate(
       {
@@ -767,11 +829,16 @@ export default function FilingPage() {
         passYear: Number(row.passYear),
         grade: row.grade.trim(),
         yearsTaken: Number(row.yearsTaken),
-        proofFile: row.proofFile,
+        // Non-null: qualRowErrors above requires a proof file.
+        proofFile: row.proofFile!,
       },
       {
         onSuccess: res => { updateQualRow(row.id, { savedId: res.intApplicationQual }); showToast('Qualification saved', 'success') },
-        onError: (error: Error) => showToast(error.message || 'Failed to save qualification', 'error'),
+        onError: (error: Error) => {
+          const fieldErr = qualServerFieldError(error.message || '')
+          if (fieldErr) { setQualErrors(prev => ({ ...prev, [row.id]: { ...prev[row.id], ...fieldErr } })); scrollToFirstError(fieldErr); return }
+          showToast(error.message || 'Failed to save qualification', 'error')
+        },
       },
     )
   }
@@ -800,23 +867,19 @@ export default function FilingPage() {
       return
     }
 
-    // Validate all unsaved rows
-    for (let i = 0; i < qualRows.length; i++) {
-      const row = qualRows[i]
-      if (row.savedId != null) continue
-      const missing: string[] = []
-      if (!row.institution.trim()) missing.push('Institution')
-      if (!row.university.trim()) missing.push('University / Awarding Board')
-      if (!row.passYear) missing.push('Year')
-      if (!row.grade.trim()) missing.push('Grade')
-      if (!row.yearsTaken) missing.push('Duration')
-      if (!row.proofFile) missing.push('Proof Document')
-
-      if (missing.length > 0) {
-        showToast(`Qualification #${i + 1}: Please fill ${missing.join(', ')}`, 'error')
-        return
-      }
+    // Validate every unsaved row at once and show each problem under its own
+    // field, scrolling to the first one.
+    const allErrors: Record<number, Record<string, string>> = {}
+    for (const row of unsavedRows) {
+      const errs = qualRowErrors(row)
+      if (Object.keys(errs).length) allErrors[row.id] = errs
     }
+    if (Object.keys(allErrors).length) {
+      setQualErrors(allErrors)
+      scrollToFirstError(allErrors)
+      return
+    }
+    setQualErrors({})
 
     setIsSavingAllQuals(true)
     try {
@@ -831,6 +894,8 @@ export default function FilingPage() {
             yearsTaken: Number(row.yearsTaken),
             proofFile: row.proofFile!,
           }).then(res => ({ id: row.id, savedId: res.intApplicationQual }))
+            // Remember which row failed so a field-level message can land on it.
+            .catch((err: Error) => { throw Object.assign(err, { qualRowId: row.id }) })
         )
       )
 
@@ -843,7 +908,14 @@ export default function FilingPage() {
 
       showToast(`${unsavedRows.length} qualification${unsavedRows.length > 1 ? 's' : ''} saved successfully`, 'success')
     } catch (error: any) {
-      showToast(error?.message || 'Failed to save one or more qualifications', 'error')
+      const fieldErr = qualServerFieldError(error?.message || '')
+      if (fieldErr && error?.qualRowId != null) {
+        const rowId: number = error.qualRowId
+        setQualErrors(prev => ({ ...prev, [rowId]: { ...prev[rowId], ...fieldErr } }))
+        scrollToFirstError(fieldErr)
+      } else {
+        showToast(error?.message || 'Failed to save one or more qualifications', 'error')
+      }
     } finally {
       setIsSavingAllQuals(false)
     }
@@ -851,6 +923,7 @@ export default function FilingPage() {
 
   function renderQualRow(row: QualRow, index: number) {
     const saved = row.savedId != null
+    const err = qualErrors[row.id] ?? {}
     return (
       <div key={row.id} className={`qual-card mb-3 p-3 rounded-lg border border-g200${saved ? ' saved' : ''}`}>
         <div className="flex items-center gap-2 mb-2">
@@ -858,17 +931,34 @@ export default function FilingPage() {
           <span className="text-xs font-semibold text-g500">Qualification {index + 1}</span>
         </div>
         <div className="g3">
-          <Field label="Institution" req><Input placeholder="School / University" value={row.institution} onChange={v => updateQualRow(row.id, { institution: v })} readOnly={saved} /></Field>
-          <Field label="University / Awarding Board" req><Input placeholder="e.g. Makerere University" value={row.university} onChange={v => updateQualRow(row.id, { university: v })} readOnly={saved} /></Field>
-          <Field label="Year" req><Input type="number" placeholder="2023" value={row.passYear} onChange={v => updateQualRow(row.id, { passYear: v })} readOnly={saved} /></Field>
+          <Field label="Institution" req error={err.institution}><Input placeholder="School / University" value={row.institution} onChange={v => updateQualRow(row.id, { institution: v })} readOnly={saved} hasError={!!err.institution} /></Field>
+          <Field label="University / Awarding Board" req error={err.university}><Input placeholder="e.g. Makerere University" value={row.university} onChange={v => updateQualRow(row.id, { university: v })} readOnly={saved} hasError={!!err.university} /></Field>
+          <Field label="Year" req error={err.passYear}><Input type="number" placeholder="2023" value={row.passYear} onChange={v => updateQualRow(row.id, { passYear: v })} readOnly={saved} hasError={!!err.passYear} /></Field>
         </div>
         <div className="g3 mt-3">
-          <Field label="Grade" req><Input placeholder="e.g. First Class, 4.2 CGPA" value={row.grade} onChange={v => updateQualRow(row.id, { grade: v })} readOnly={saved} /></Field>
-          <Field label="Duration (Years)" req><Input type="number" placeholder="3" value={row.yearsTaken} onChange={v => updateQualRow(row.id, { yearsTaken: v })} readOnly={saved} /></Field>
-          <Field label="Proof Document" req>
+          <Field label="Grade" req error={err.grade}><Input placeholder="e.g. First Class, 4.2 CGPA" value={row.grade} onChange={v => updateQualRow(row.id, { grade: v })} readOnly={saved} hasError={!!err.grade} /></Field>
+          <Field label="Duration (Years)" req error={err.yearsTaken}>
+            {/* Whole years 1–10 only (API rule). Text + numeric keypad rather
+                than type="number", which lets through "e", decimals and
+                negatives; keystrokes that would leave 1–10 are ignored. */}
+            <Input
+              inputMode="numeric"
+              maxLength={2}
+              placeholder="1–10"
+              value={row.yearsTaken}
+              readOnly={saved}
+              hasError={!!err.yearsTaken}
+              onChange={v => {
+                const digits = v.replace(/\D/g, '')
+                const n = Number(digits)
+                if (digits === '' || (n >= QUAL_DURATION_MIN && n <= QUAL_DURATION_MAX)) updateQualRow(row.id, { yearsTaken: digits })
+              }}
+            />
+          </Field>
+          <Field label="Proof Document" req error={err.proofFile}>
             {saved
               ? <p className="text-sm text-g500 mt-1">{row.proofFile?.name ?? 'Uploaded'}</p>
-              : <FileZone file={row.proofFile} onChange={f => updateQualRow(row.id, { proofFile: f })} />}
+              : <FileZone file={row.proofFile} onChange={f => updateQualRow(row.id, { proofFile: f })} hasError={!!err.proofFile} />}
           </Field>
         </div>
         <div className="flex justify-end items-center gap-2 mt-3">
@@ -1172,9 +1262,9 @@ export default function FilingPage() {
                   {summaryPanel}
                   <div className="filing-form-col">
                     <div className="g3">
-                      <Field label="First Name" req><Input placeholder="First name" value={firstName} onChange={setFirstName} /></Field>
+                      <Field label="First Name" req error={generalErrors.firstName}><Input placeholder="First name" value={firstName} onChange={v => { setFirstName(sanitizeNameInput(v)); setGeneralErrors(p => ({ ...p, firstName: '' })) }} hasError={!!generalErrors.firstName} /></Field>
                       {/* <Field label="Middle Name"><Input placeholder="Middle name" /></Field> */}
-                      <Field label="Last Name" req><Input placeholder="Last name" value={lastName} onChange={setLastName} /></Field>
+                      <Field label="Last Name" req error={generalErrors.lastName}><Input placeholder="Last name" value={lastName} onChange={v => { setLastName(sanitizeNameInput(v)); setGeneralErrors(p => ({ ...p, lastName: '' })) }} hasError={!!generalErrors.lastName} /></Field>
                       <Field label="Gender" req><Select options={GENDERS} value={gender} onChange={setGender} /></Field>
                     </div>
                     <div className="g3 mt-3">
@@ -1262,8 +1352,29 @@ export default function FilingPage() {
                           {/* <Field label="Passport Expiry"><Input type="date" /></Field><Field label="Country of Issue"><Select options={COUNTRIES_OF_ISSUE} /></Field>
                           <Field label="Visa Number"><Input placeholder="VIS-XXXX" /></Field>
                           <Field label="Visa Type"><Select options={['Student', 'Work', 'Tourist', 'Diplomatic']} /></Field> */}
-                          <Field label="Visa Start Date"><Input type="date" value={vStartDate} onChange={setVStartDate} /></Field>
-                          <Field label="Visa Expiry"><Input type="date" value={vEndDate} onChange={setVEndDate} /></Field>
+                          {/* Start can't be after expiry and expiry can't be before
+                              start (same day is fine) — each picker is bounded by
+                              the other's value. */}
+                          <Field label="Visa Start Date" error={generalErrors.vStartDate}>
+                            <Input
+                              type="date"
+                              value={vStartDate}
+                              onChange={v => { setVStartDate(v); setGeneralErrors(p => ({ ...p, vStartDate: '', vEndDate: '' })) }}
+                              maxYmd={vEndDate || undefined}
+                              rangeMessage="Visa start date can’t be after the visa expiry"
+                              hasError={!!generalErrors.vStartDate}
+                            />
+                          </Field>
+                          <Field label="Visa Expiry" error={generalErrors.vEndDate}>
+                            <Input
+                              type="date"
+                              value={vEndDate}
+                              onChange={v => { setVEndDate(v); setGeneralErrors(p => ({ ...p, vStartDate: '', vEndDate: '' })) }}
+                              minYmd={vStartDate || undefined}
+                              rangeMessage="Visa expiry can’t be before the visa start date"
+                              hasError={!!generalErrors.vEndDate}
+                            />
+                          </Field>
                           <Field label="Visa Copy"><FileZone file={visaFile} onChange={setVisaFile} /></Field>
                         </div>
                       </>

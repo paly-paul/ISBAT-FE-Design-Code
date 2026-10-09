@@ -165,9 +165,26 @@ const mockPaymentTypes: PaymentTypeDto[] = [
   { intPaymentType: 4, paymentTypeName: 'DD' },
 ]
 
-export function getApplicationPaymentBanks(): Promise<BankAccountInfoDto[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockBanks)
-  return apiGet<BankAccountInfoDto[] | null>('/api/v1/admissions/application-payments/dropdowns/banks').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+// Optional ?search= (case-insensitive "contains") on the dropdown endpoints
+// below, added server-side 2026-10. Omitted = unchanged behaviour. Builds the
+// query string with any existing params so search can't clobber them.
+function withSearch(path: string, params: Record<string, string>, search?: string): string {
+  const qs = new URLSearchParams(params)
+  if (search?.trim()) qs.set('search', search.trim())
+  const q = qs.toString()
+  return q ? `${path}?${q}` : path
+}
+
+// Mock-only stand-in for the server's case-insensitive "contains" match.
+function mockMatch<T>(rows: T[], search: string | undefined, fields: (row: T) => (string | null | undefined)[]): T[] {
+  const term = search?.trim().toLowerCase()
+  return term ? rows.filter(r => fields(r).some(v => v?.toLowerCase().includes(term))) : rows
+}
+
+// search matches bank name, account code and short code.
+export function getApplicationPaymentBanks(search?: string): Promise<BankAccountInfoDto[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockMatch(mockBanks, search, b => [b.bankName]))
+  return apiGet<BankAccountInfoDto[] | null>(withSearch('/api/v1/admissions/application-payments/dropdowns/banks', {}, search)).then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 interface UnconvertedEnquiriesResult {
@@ -193,38 +210,42 @@ interface UnconvertedEnquiriesResult {
 // isn't independently verified, only each param on its own, but both are
 // standard query filters on the same list endpoint so they're assumed
 // combinable here.
+// `search` (student name or enquiry code, contains) is the documented
+// param as of 2026-10; the earlier `searchTerm` guess is no longer sent.
 export function getUnconvertedEnquiries(intakeGuid: string, page = 1, pageSize = 100, searchTerm?: string): Promise<UnconvertedEnquiriesResult> {
   if (MOCK_AUTH) return Promise.resolve({ items: [], totalCount: 0, pageNumber: page, pageSize })
-  const term = searchTerm?.trim()
-  const searchParam = term ? `&searchTerm=${encodeURIComponent(term)}&search=${encodeURIComponent(term)}` : ''
   return apiGet<UnconvertedEnquiriesResult | null>(
-    `/api/v1/admissions/application-payments/unconverted-enquiries?intakeGuid=${intakeGuid}&page=${page}&pageSize=${pageSize}${searchParam}`,
+    withSearch('/api/v1/admissions/application-payments/unconverted-enquiries', { intakeGuid, page: String(page), pageSize: String(pageSize) }, searchTerm),
   ).then(data => {
     if (Array.isArray(data)) return { items: data, totalCount: data.length, pageNumber: page, pageSize }
     return data ?? { items: [], totalCount: 0, pageNumber: page, pageSize }
   })
 }
 
-export function getApplicationPaymentBatches(programGuid: string, semesterGuid: string, batchTimeGuid: string): Promise<BatchInfoDto[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockBatches)
+// search matches batch code.
+export function getApplicationPaymentBatches(programGuid: string, semesterGuid: string, batchTimeGuid: string, search?: string): Promise<BatchInfoDto[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockMatch(mockBatches, search, b => [b.batchCode]))
   return apiGet<BatchInfoDto[] | null>(
-    `/api/v1/admissions/application-payments/dropdowns/batches?programGuid=${programGuid}&semesterGuid=${semesterGuid}&batchTimeGuid=${batchTimeGuid}`,
+    withSearch('/api/v1/admissions/application-payments/dropdowns/batches', { programGuid, semesterGuid, batchTimeGuid }, search),
   ).then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
-export function getApplicationPaymentExemptionTypes(): Promise<ExemptionTypeDto[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockExemptionTypes)
-  return apiGet<ExemptionTypeDto[] | null>('/api/v1/admissions/application-payments/dropdowns/exemption-types').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+// search matches the label.
+export function getApplicationPaymentExemptionTypes(search?: string): Promise<ExemptionTypeDto[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockMatch(mockExemptionTypes, search, e => [e.label]))
+  return apiGet<ExemptionTypeDto[] | null>(withSearch('/api/v1/admissions/application-payments/dropdowns/exemption-types', {}, search)).then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
-export function getApplicationPaymentFees(programGuid: string): Promise<ProgramFeeHeadInfoDto[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockFees)
-  return apiGet<ProgramFeeHeadInfoDto[] | null>(`/api/v1/admissions/application-payments/dropdowns/fees?programGuid=${programGuid}`).then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+// search matches fee code and description.
+export function getApplicationPaymentFees(programGuid: string, search?: string): Promise<ProgramFeeHeadInfoDto[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockMatch(mockFees, search, f => [f.feeCode, f.feeDesc]))
+  return apiGet<ProgramFeeHeadInfoDto[] | null>(withSearch('/api/v1/admissions/application-payments/dropdowns/fees', { programGuid }, search)).then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
-export function getApplicationPaymentTypes(): Promise<PaymentTypeDto[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockPaymentTypes)
-  return apiGet<PaymentTypeDto[] | null>('/api/v1/admissions/application-payments/dropdowns/payment-types').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+// search matches the payment type name.
+export function getApplicationPaymentTypes(search?: string): Promise<PaymentTypeDto[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockMatch(mockPaymentTypes, search, t => [t.paymentTypeName]))
+  return apiGet<PaymentTypeDto[] | null>(withSearch('/api/v1/admissions/application-payments/dropdowns/payment-types', {}, search)).then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // Dropdowns/ReceiptBooks.bru (GET .../dropdowns/receipt-books) is NOT wired
@@ -234,6 +255,9 @@ export function getApplicationPaymentTypes(): Promise<PaymentTypeDto[]> {
 // uses the generic, already-working GET /api/v1/finance/receipt-books
 // (lib/api/finance/receiptBook.ts, useReceiptBooks()) instead — same
 // receiptBookGuid/bookCode shape, confirmed via a real response.
+// (2026-10: that endpoint now also takes ?search= on book code, but
+// `category` is still required and its values are still unknown, so it
+// stays unwired.)
 
 export function createApplicationPayment(input: ApplicationPaymentInput): Promise<CreateApplicationPaymentResponse> {
   if (MOCK_AUTH) {

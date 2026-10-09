@@ -7,6 +7,10 @@ interface Props {
   onChange: (ymd: string) => void
   placeholder?: string
   maxYmd?: string // optional max allowed date (yyyy-mm-dd)
+  minYmd?: string // optional min allowed date (yyyy-mm-dd)
+  // Shown when a typed/picked date falls outside min/max. Defaults keep the
+  // original "no future dates" wording for max-only callers.
+  rangeMessage?: string
   // Mirrors the app-wide "red border on the .ctrl element" validation
   // convention used by plain <input>s elsewhere — lets call sites keep that
   // same visual behavior after swapping from a native date input to this.
@@ -57,7 +61,14 @@ function compareYmd(left?: string, right?: string) {
   return leftD - rightD
 }
 
-export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy', maxYmd, hasError }: Props) {
+export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy', maxYmd, minYmd, rangeMessage, hasError }: Props) {
+  // null when ymd is allowed, otherwise the message to show.
+  function outOfRange(ymd: string): string | null {
+    if (maxYmd && compareYmd(ymd, maxYmd) > 0) return rangeMessage ?? 'Date cannot be in the future'
+    if (minYmd && compareYmd(ymd, minYmd) < 0) return rangeMessage ?? 'Date is too far in the past'
+    return null
+  }
+
   const [open, setOpen] = useState(false)
   const [display, setDisplay] = useState<string>(toDisplay(value))
   const [viewDate, setViewDate] = useState<Date>(ymdToDate(value) ?? new Date())
@@ -117,8 +128,9 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
     const d = new Date(viewDate)
     d.setDate(day)
     const ymd = dateToYmd(d)
-    if (maxYmd && compareYmd(ymd, maxYmd) > 0) {
-      setError('Date cannot be in the future')
+    const rangeError = outOfRange(ymd)
+    if (rangeError) {
+      setError(rangeError)
       return
     }
     setError('')
@@ -142,14 +154,15 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
 
   // Shared by both onBlur (typed text is left incomplete/abandoned) and
   // onChange (typed text just became a complete 8-digit date) — same
-  // dd/mm/yyyy → ymd parse + max-date check either way.
+  // dd/mm/yyyy → ymd parse + min/max-date check either way.
   function commitDisplay(text: string) {
     const m = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
     if (m) {
       const [, dd, mm, yyyy] = m
       const ymd = `${yyyy}-${mm}-${dd}`
-      if (maxYmd && compareYmd(ymd, maxYmd) > 0) {
-        setError('Date cannot be in the future')
+      const rangeError = outOfRange(ymd)
+      if (rangeError) {
+        setError(rangeError)
         return
       }
       setError('')
@@ -268,7 +281,7 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
                 const selected = selDate && selDate.getFullYear() === viewDate.getFullYear() && selDate.getMonth() === viewDate.getMonth() && selDate.getDate() === cell
                 const cellDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), cell as number)
                 const cellYmd = dateToYmd(cellDate)
-                const disabled = !!maxYmd && compareYmd(cellYmd, maxYmd) > 0
+                const disabled = outOfRange(cellYmd) !== null
                 const isToday = cellYmd === dateToYmd(new Date())
                 return (
                   <button
