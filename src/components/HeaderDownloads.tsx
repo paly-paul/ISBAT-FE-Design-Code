@@ -4,12 +4,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Toast } from '@/components/Toast'
 import { AuthError } from '@/lib/api/client'
 import { onHubReconnected, onReportStatus, ReportStatusEvent } from '@/lib/notificationsHub'
-import { fixLocalDownloadUrl, getReportJobDownload, getReportJobs, parseUtcNoZ, ReportJob, REPORT_STATUS } from '@/lib/api/finance/discountReport'
+import { getReportJobs, parseUtcNoZ, ReportJob, REPORT_STATUS } from '@/lib/api/finance/discountReport'
 import {
-  REPORT_JOBS_KEY, getUnseen, getValidLiveLink, markSeen, markUnseen, setLiveLink, subscribeUnseen, updateReportJob,
+  REPORT_JOBS_KEY, downloadReportJob, getUnseen, isTrackedInline, markUnseen, setLiveLink, subscribeUnseen, updateReportJob,
 } from '@/lib/reportDownloads'
-
-const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 // The header's Downloads icon, just before the bell: the signed-in user's
 // own report exports (finance-service/reports/get-report-jobs.md).
@@ -57,11 +55,13 @@ export function HeaderDownloads() {
       completedAt: s.status === REPORT_STATUS.Completed ? s.occurredAtUtc.replace(/Z$/, '') : prev?.completedAt ?? null,
       expiresAt: prev?.expiresAt ?? null,
     }))
+    // No toast for a job a page is already showing inline (its own button).
+    const inline = isTrackedInline(s.reportJobGuid)
     if (s.status === REPORT_STATUS.Completed) {
       if (s.downloadUrl && s.downloadUrlExpiresAtUtc) setLiveLink(s.reportJobGuid, s.downloadUrl, s.downloadUrlExpiresAtUtc)
       markUnseen(s.reportJobGuid)
-      showToast(`${s.reportName} is ready. Open Downloads to save it.`, 'success')
-    } else if (s.status === REPORT_STATUS.Failed) {
+      if (!inline) showToast(`${s.reportName} is ready. Open Downloads to save it.`, 'success')
+    } else if (s.status === REPORT_STATUS.Failed && !inline) {
       showToast(s.errorMessage || `${s.reportName} could not be generated`, 'error')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -80,20 +80,11 @@ export function HeaderDownloads() {
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
   }, [open])
 
-  function openLink(url: string) {
-    if (MOCK_AUTH) { showToast('Mock mode: no real file to download', 'info'); return }
-    window.location.href = fixLocalDownloadUrl(url)
-  }
-
   async function handleDownload(job: ReportJob) {
-    // The pushed link while it's valid; otherwise a fresh one per click.
-    const live = getValidLiveLink(job.reportJobGuid)
-    if (live) { markSeen(job.reportJobGuid); openLink(live); return }
     setBusyGuid(job.reportJobGuid)
     try {
-      const link = await getReportJobDownload(job.reportJobGuid)
-      markSeen(job.reportJobGuid)
-      openLink(link.url)
+      const opened = await downloadReportJob(job.reportJobGuid)
+      if (!opened) showToast('Mock mode: no real file to download', 'info')
     } catch (err) {
       if (err instanceof AuthError && err.code === 'report_expired') {
         showToast('This report has expired. Please export it again.', 'error')

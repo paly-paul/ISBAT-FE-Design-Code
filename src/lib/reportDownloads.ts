@@ -5,7 +5,7 @@
 // the short-lived download links pushed with a Completed event, and which
 // finished files haven't been downloaded yet this session (the green dot).
 import type { QueryClient } from '@tanstack/react-query'
-import type { ReportJob } from '@/lib/api/finance/discountReport'
+import { fixLocalDownloadUrl, getReportJobDownload, type ReportJob } from '@/lib/api/finance/discountReport'
 
 export const REPORT_JOBS_KEY = ['finance', 'report-jobs'] as const
 
@@ -54,3 +54,28 @@ export function markSeen(guid: string) {
 // For useSyncExternalStore.
 export function subscribeUnseen(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } }
 export function getUnseen() { return unseen }
+
+// ── Jobs a page is already showing inline ─────────────────────────────────
+// The Discount Report page turns its Export button into Processing… and then
+// Download for the job it started, so the header skips its "ready"/"failed"
+// toast for that job instead of announcing it twice.
+const inlineTracked = new Set<string>()
+export function trackInline(guid: string) { inlineTracked.add(guid); return () => { inlineTracked.delete(guid) } }
+export function isTrackedInline(guid: string) { return inlineTracked.has(guid) }
+
+// ── Download ──────────────────────────────────────────────────────────────
+
+const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
+
+// Opens the finished file: the link pushed with the Completed event while
+// it's still valid, otherwise a fresh ~10-minute link fetched for this click
+// (get-report-job-download.md). Returns false in mock mode, where there's no
+// real file. Throws the API error (e.g. AuthError 'report_expired') for the
+// caller to show.
+export async function downloadReportJob(guid: string): Promise<boolean> {
+  const url = getValidLiveLink(guid) ?? (await getReportJobDownload(guid)).url
+  markSeen(guid)
+  if (MOCK_AUTH) return false
+  window.location.href = fixLocalDownloadUrl(url)
+  return true
+}
