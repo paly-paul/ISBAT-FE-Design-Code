@@ -233,7 +233,7 @@ export default function Page() {
             <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
             <div className="perm-delete-title">Delete {deleteTarget.groupName}?</div>
             <div className="perm-delete-sub">
-              This will permanently delete this programme group. This can&apos;t be undone.
+              This will delete this programme group. Programmes in this group are not checked first and will keep pointing to it, so reassign them before deleting.
             </div>
             <div className="perm-delete-actions">
               <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>

@@ -128,13 +128,14 @@ export interface BatchDropdownItem {
   batchCode: string
 }
 
-// GET /api/v1/academic/batches/dropdown?programGuid=&semesterGuid= — per the
-// bulk-email page doc (get-batch-dropdown.md isn't available locally, so the
-// item shape is assumed to match Batch's own guid/code fields). Unwrapped
-// defensively, same as the other dropdown wrappers.
-export function getBatchDropdown(programGuid?: string, semesterGuid?: string): Promise<BatchDropdownItem[]> {
+// GET /api/v1/academic/batches/dropdown — every param optional and
+// combinable (get-batches-dropdown.md). intakeGuid scopes to batches linked
+// to that intake via its session (T_SESSION_MANAGEMENT → T_SESSION_BATCH).
+// Item shape { batchGuid, batchCode } confirmed by the same doc.
+export function getBatchDropdown(programGuid?: string, semesterGuid?: string, intakeGuid?: string): Promise<BatchDropdownItem[]> {
   if (MOCK_AUTH) return Promise.resolve(mockBatches.map(b => ({ batchGuid: b.batchGuid, batchCode: b.batchCode })))
   const params = new URLSearchParams()
+  if (intakeGuid) params.set('intakeGuid', intakeGuid)
   if (programGuid) params.set('programGuid', programGuid)
   if (semesterGuid) params.set('semesterGuid', semesterGuid)
   const query = params.toString() ? `?${params.toString()}` : ''

@@ -35,8 +35,10 @@ import {
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput } from '@/lib/errorMessages'
 import { formatDate, monthsAgoYmd, RECENT_DATE_MONTHS } from '@/lib/date'
-import { setFilingPrefillRef } from '@/lib/filingHandoff'
+import { setFilingPrefill } from '@/lib/filingHandoff'
+import type { NewPaymentHandoff } from '@/lib/api/admission/applicationFiling'
 import { flattenUniquePages } from '@/lib/pagination'
+import { FIELD_ERROR_CLASS, scrollToFirstError } from '@/lib/scrollToFirstError'
 
 const PIPELINE = [
   { label: 'App. Payment',  desc: 'Current step', status: 'active' },
@@ -115,6 +117,8 @@ function getTodayYmd(): string {
 // not in the future (validation_error otherwise). Window maths lives in
 // lib/date.ts, shared with the enquiry forms' enquiryDate.
 const PAY_DATE_RANGE_MESSAGE = 'Payment date must be within the last 3 months and not in the future.'
+// POST /application-payments: studentName (first + last) max 50 chars.
+const STUDENT_NAME_MAX = 50
 function getPaymentDateMinYmd(): string {
   return monthsAgoYmd(RECENT_DATE_MONTHS)
 }
@@ -130,11 +134,18 @@ const initialForm: FormData = {
   bankGuid: '', remarks: '',
 }
 
-function Field({ label, req, children, span2 }: { label: string; req?: boolean; children: React.ReactNode; span2?: boolean }) {
+type FieldErrors = Partial<Record<keyof FormData, string>>
+
+function FieldError({ msg }: { msg?: string }) {
+  return msg ? <p className={FIELD_ERROR_CLASS} style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{msg}</p> : null
+}
+
+function Field({ label, req, children, span2, error }: { label: string; req?: boolean; children: React.ReactNode; span2?: boolean; error?: string }) {
   return (
     <div className={`fg${span2 ? ' span2' : ''}`}>
       <label className="lbl">{label}{req && <span className="req"> *</span>}</label>
       {children}
+      <FieldError msg={error} />
     </div>
   )
 }
@@ -256,6 +267,8 @@ function PaymentPageContent() {
     appRefNo?: string; paymentCode?: string; receiptNo?: number | null
     studentName?: string; programLabel?: string; campusLabel?: string; intakeLabel?: string
     amountLabel?: string; methodLabel?: string; dateLabel?: string
+    // Handed to Filing by "Proceed to Filing" (lib/filingHandoff.ts).
+    filing?: NewPaymentHandoff
   }>({})
 
 
@@ -293,6 +306,14 @@ function PaymentPageContent() {
 
   const set = (k: keyof FormData, v: string) => setForm(prev => ({ ...prev, [k]: v }))
 
+  // Inline errors from the last Save attempt. Each one stays visible only
+  // while its field still holds the value it was raised for, so editing a
+  // field clears its error without every setter having to do it.
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [errorSnapshot, setErrorSnapshot] = useState<FormData | null>(null)
+  const errorFor = (k: keyof FormData) =>
+    fieldErrors[k] && errorSnapshot && form[k] === errorSnapshot[k] ? fieldErrors[k] : undefined
+
   // Warn on leaving with unfilled work — same beforeunload + confirm-on-nav
   // pattern as the Filing page's hasUnsavedWork/confirmLeave. "Unsaved" here
   // means the form has drifted from its blank initial state and the payment
@@ -325,7 +346,7 @@ function PaymentPageContent() {
   // the data behind.
   function leaveTo(path: string) {
     if (!confirmLeave()) return
-    setForm({ ...initialForm })
+    setForm({ ...initialForm }); setFieldErrors({})
     setPayProofFile(null)
     appliedEnquiryGuidRef.current = null
     router.push(path)
@@ -719,35 +740,51 @@ function PaymentPageContent() {
   }, [currencies])
 
   function handleSubmit() {
-    const missing: string[] = []
-    if (!form.enquiryGuid) missing.push('Enquiry')
-    if (!form.firstName) missing.push('First Name')
-    if (!form.lastName) missing.push('Last Name')
-    if (!form.phone) missing.push('Phone')
-    if (!form.intakeGuid) missing.push('Intake')
-    if (!form.countryGuid) missing.push('Country')
-    if (!form.campusGuid) missing.push('Campus')
-    if (!form.programGuid) missing.push('Programme')
-    if (!form.semesterGuid) missing.push('Semester')
-    if (!form.batchTimeGuid) missing.push('Batch Time')
-    if (!form.batchGuid) missing.push('Batch')
-    if (!form.feeHdGuid) missing.push('Fee Structure')
-    if (!form.paymentDate) missing.push('Payment Date')
+    const studentName = `${form.firstName} ${form.lastName}`.trim()
+    // Spaces/hyphens are allowed while typing ("700 000 000"); the API's
+    // mobile is a long, so only the digits are sent.
+    const mobileDigits = form.phone.replace(/[\s-]/g, '')
+    // Required fields, then the post-application-payment.md rules a filled-in
+    // value can still break. One message per field, shown under it.
+    const e: FieldErrors = {}
+    const req = (k: keyof FormData, label: string) => { if (!form[k]) e[k] = `${label} is required` }
+    req('intakeGuid', 'Intake')
+    req('enquiryGuid', 'Enquiry')
+    req('firstName', 'First Name')
+    req('lastName', 'Last Name')
+    req('phone', 'Phone')
+    req('countryGuid', 'Country')
+    req('campusGuid', 'Campus')
+    req('programGuid', 'Programme')
+    req('feeHdGuid', 'Fee Structure')
+    req('semesterGuid', 'Semester')
+    req('batchTimeGuid', 'Batch Time')
+    req('batchGuid', 'Batch')
     if (!isWaived) {
-      if (!form.payType) missing.push('Payment Method')
-      if (!form.currencyGuid) missing.push('Currency')
-      if (!form.receiptBookGuid) missing.push('Receipt Book')
-      if (!form.feeAmount) missing.push('Application Fee Amount')
-      if (isBank && !form.bankGuid) missing.push('Bank Name')
+      req('payType', 'Payment Method')
+      req('receiptBookGuid', 'Receipt Book')
+      req('feeAmount', 'Application Fee Amount')
+      req('currencyGuid', 'Currency')
     }
-    if (missing.length) {
-      showToast(`Please fill: ${missing.join(', ')}`, 'error')
-      return
-    }
+    req('paymentDate', 'Payment Date')
+    if (!isWaived && isBank) req('bankGuid', 'Bank Name')
+
+    if (!e.lastName && studentName.length > STUDENT_NAME_MAX) e.lastName = `First and last name together must be ${STUDENT_NAME_MAX} characters or fewer (now ${studentName.length})`
+    // mobile is a number server-side: digits only, and no leading 0 (the
+    // dial code is picked separately).
+    if (!e.phone && !/^\d+$/.test(mobileDigits)) e.phone = 'Phone must contain digits only'
+    else if (!e.phone && mobileDigits.startsWith('0')) e.phone = 'Phone must not start with 0. Drop the leading 0; the country code is picked separately'
+    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) e.email = 'Enter a valid email'
+    if (!isWaived && !e.feeAmount && !(Number(form.feeAmount) > 0)) e.feeAmount = 'Application Fee Amount must be greater than 0'
     // The picker already blocks out-of-range dates, but a form left open past
     // midnight (or a restored draft) can still hold one.
-    if (form.paymentDate < getPaymentDateMinYmd() || form.paymentDate > getTodayYmd()) {
-      showToast(PAY_DATE_RANGE_MESSAGE, 'error')
+    if (!e.paymentDate && (form.paymentDate < getPaymentDateMinYmd() || form.paymentDate > getTodayYmd())) e.paymentDate = PAY_DATE_RANGE_MESSAGE
+
+    setFieldErrors(e)
+    setErrorSnapshot({ ...form })
+    if (Object.keys(e).length) {
+      showToast('Please fix the highlighted fields', 'error')
+      scrollToFirstError(e)
       return
     }
     // Never save a payment against a guessed rate.
@@ -762,7 +799,7 @@ function PaymentPageContent() {
     const payload = {
       enquiryGuid: form.enquiryGuid,
       oDelIntApplication: 0,
-      studentName: `${form.firstName} ${form.lastName}`.trim(),
+      studentName,
       intakeGuid: form.intakeGuid,
       campusGuid: form.campusGuid,
       programGuid: form.programGuid,
@@ -771,7 +808,7 @@ function PaymentPageContent() {
       batchTimeGuid: form.batchTimeGuid,
       feeHdGuid: form.feeHdGuid,
       countryGuid: form.countryGuid,
-      mobile: form.phone.trim(),
+      mobile: mobileDigits,
       email: form.email.trim() || null,
       exemptionTypeGuid: form.exemptionTypeGuid || null,
       payDate: formatPaymentDate(form.paymentDate),
@@ -784,11 +821,6 @@ function PaymentPageContent() {
       remarks: form.remarks.trim() || null,
       payProofFile,
     }
-
-    console.log('[application payment] submitting payload', {
-      ...payload,
-      payProofFile: payProofFile ? { name: payProofFile.name, size: payProofFile.size, type: payProofFile.type } : null,
-    })
 
     createPayment.mutate(payload,
       {
@@ -806,6 +838,24 @@ function PaymentPageContent() {
             amountLabel: isWaived ? 'Waived' : `${form.feeAmount} ${selectedCurrency?.currencyCode ?? ''}`,
             methodLabel: isWaived ? 'Waived' : labelFor(payTypeOptions, form.payType),
             dateLabel: formatDate(form.paymentDate || new Date()),
+            filing: response?.paymentGuid && response.appRefNo ? {
+              paymentGuid: response.paymentGuid,
+              appRefNo: response.appRefNo,
+              studentName,
+              mobile: mobileDigits || null,
+              email: form.email.trim() || null,
+              intakeCode: (intakes.find(i => i.intakeGuid === form.intakeGuid) ?? (selectedIntakeDetail?.intakeGuid === form.intakeGuid ? selectedIntakeDetail : undefined))?.intakeCode ?? null,
+              intakeGuid: form.intakeGuid || null,
+              enquiryGuid: form.enquiryGuid || null,
+              countryGuid: form.countryGuid || null,
+              campusGuid: form.campusGuid,
+              programGuid: form.programGuid,
+              programName: labelFor(programOptions, form.programGuid) || null,
+              semesterGuid: form.semesterGuid,
+              batchTimeGuid: form.batchTimeGuid,
+              batchGuid: form.batchGuid,
+              feeHdGuid: form.feeHdGuid,
+            } : undefined,
           })
           setShowReceipt(true)
           setShowSuccessPopup(true)
@@ -819,7 +869,7 @@ function PaymentPageContent() {
   }
 
   function handleClear() {
-    setForm({ ...initialForm, currencyGuid: getDefaultFinanceCurrencyGuid(currencies) }); setShowReceipt(false); setPayProofFile(null); setSavedReceipt({})
+    setForm({ ...initialForm, currencyGuid: getDefaultFinanceCurrencyGuid(currencies) }); setFieldErrors({}); setShowReceipt(false); setPayProofFile(null); setSavedReceipt({})
     setEnquirySearch('')
     appliedEnquiryGuidRef.current = null
   }
@@ -951,7 +1001,7 @@ function PaymentPageContent() {
             </div>
 
             <div className="g2 mb-4">
-              <Field label="Intake" req>
+              <Field label="Intake" req error={errorFor('intakeGuid')}>
                 <SearchSelect
                   options={intakeOptions}
                   value={form.intakeGuid}
@@ -965,7 +1015,7 @@ function PaymentPageContent() {
                   onLoadMore={() => intakeQuery.fetchNextPage()}
                 />
               </Field>
-              <Field label="Enquiry" req>
+              <Field label="Enquiry" req error={errorFor('enquiryGuid')}>
                 <SearchSelect
                   options={enquiryOptions}
                   value={form.enquiryGuid}
@@ -985,13 +1035,13 @@ function PaymentPageContent() {
             <p className="text-[10px] font-bold tracking-widest uppercase text-b500 mb-3">Candidate Details</p>
 
             <div className="g2">
-              <Field label="First Name" req>
+              <Field label="First Name" req error={errorFor('firstName')}>
                 <input className="ctrl" placeholder="e.g. Sarah" value={form.firstName} onChange={e => set('firstName', e.target.value)} />
               </Field>
-              <Field label="Last Name" req>
+              <Field label="Last Name" req error={errorFor('lastName')}>
                 <input className="ctrl" placeholder="e.g. Nakato" value={form.lastName} onChange={e => set('lastName', e.target.value)} />
               </Field>
-              <Field label="Phone" req>
+              <Field label="Phone" req error={errorFor('phone')}>
                 <div className="flex gap-2">
                   <SearchSelect
                     options={phoneCodeOptions.length ? phoneCodeOptions : COUNTRY_CODES}
@@ -1008,13 +1058,13 @@ function PaymentPageContent() {
                   <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="700 000 000" value={form.phone} onChange={e => set('phone', sanitizePhoneInput(e.target.value, false))} />
                 </div>
               </Field>
-              <Field label="Email">
+              <Field label="Email" error={errorFor('email')}>
                 <div className="inp-wrap">
                   <i className="inp-icon lni lni-envelope" />
                   <input className="ctrl" type="email" placeholder="applicant@email.com" value={form.email} onChange={e => set('email', e.target.value)} />
                 </div>
               </Field>
-              <Field label="Country" req>
+              <Field label="Country" req error={errorFor('countryGuid')}>
                 <SearchSelect
                   options={countryOptions}
                   value={form.countryGuid}
@@ -1028,7 +1078,7 @@ function PaymentPageContent() {
                   onLoadMore={() => countryQuery.fetchNextPage()}
                 />
               </Field>
-              <Field label="Campus" req>
+              <Field label="Campus" req error={errorFor('campusGuid')}>
                 <SearchSelect
                   options={campusOptions}
                   value={form.campusGuid}
@@ -1042,7 +1092,7 @@ function PaymentPageContent() {
                   onLoadMore={() => campusQuery.fetchNextPage()}
                 />
               </Field>
-              <Field label="Interested Programme" req>
+              <Field label="Interested Programme" req error={errorFor('programGuid')}>
                 <SearchSelect
                   options={programOptions}
                   value={form.programGuid}
@@ -1057,16 +1107,16 @@ function PaymentPageContent() {
                   onLoadMore={() => programQuery.fetchNextPage()}
                 />
               </Field>
-              <Field label="Fee Structure" req>
+              <Field label="Fee Structure" req error={errorFor('feeHdGuid')}>
                 <SearchSelect options={feeOptions} value={form.feeHdGuid} placeholder={form.programGuid ? '-- Select Fee Structure --' : '-- Select Programme First --'} onChange={v => set('feeHdGuid', v)} />
               </Field>
-              <Field label="Semester" req>
+              <Field label="Semester" req error={errorFor('semesterGuid')}>
                 <SearchSelect options={semesterOptions} value={form.semesterGuid} placeholder={form.programGuid ? '-- Select Semester --' : '-- Select Programme First --'} onChange={setSemester} />
               </Field>
-              <Field label="Batch Time" req>
+              <Field label="Batch Time" req error={errorFor('batchTimeGuid')}>
                 <SearchSelect options={batchTimeOptions} value={form.batchTimeGuid} placeholder="-- Select --" onChange={setBatchTime} />
               </Field>
-              <Field label="Batch" req>
+              <Field label="Batch" req error={errorFor('batchGuid')}>
                 <SearchSelect
                   options={batchOptions}
                   value={form.batchGuid}
@@ -1098,10 +1148,10 @@ function PaymentPageContent() {
                   disabled (not just optional) once an Exemption Type is
                   picked, per Application_Payment_Change_Requests_Final_
                   Updated.md #5. */}
-              <Field label="Payment Method" req={!isWaived}>
+              <Field label="Payment Method" req={!isWaived} error={errorFor('payType')}>
                 <SearchSelect options={payTypeOptions} value={form.payType} placeholder="-- Select Payment Method --" onChange={v => set('payType', v)} disabled={isWaived} />
               </Field>
-              <Field label="Receipt Book" req={!isWaived}>
+              <Field label="Receipt Book" req={!isWaived} error={errorFor('receiptBookGuid')}>
                 <SearchSelect options={receiptBookOptions} value={form.receiptBookGuid} placeholder="-- Select Receipt Book --" onChange={v => set('receiptBookGuid', v)} disabled={isWaived} />
               </Field>
             </div>
@@ -1118,7 +1168,9 @@ function PaymentPageContent() {
                       pattern="[0-9.]*"
                       className="amt-val-input"
                       value={form.feeAmount}
-                      onChange={e => set('feeAmount', e.target.value)}
+                      // Digits and one decimal point only; the API rejects
+                      // anything that isn't a number above 0.
+                      onChange={e => set('feeAmount', e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1'))}
                       disabled={isWaived}
                     />
                     <SearchSelect options={currencyOptions} value={form.currencyGuid} onChange={v => set('currencyGuid', v)}
@@ -1131,10 +1183,11 @@ function PaymentPageContent() {
                 </div>
                 <span className="badge-amber text-xs px-2 py-1 rounded-md font-bold">{selectedCurrency?.currencyCode ?? '—'}</span>
               </div>
+              <FieldError msg={errorFor('feeAmount') ?? errorFor('currencyGuid')} />
             </div>
 
             <div className="g2 mt-4">
-              <Field label="Payment Date" req>
+              <Field label="Payment Date" req error={errorFor('paymentDate')}>
                 <DatePicker
                   value={form.paymentDate}
                   onChange={v => set('paymentDate', v)}
@@ -1169,7 +1222,7 @@ function PaymentPageContent() {
             {showBankDetails && (
               <div className="mt-4 p-4 rounded-xl bg-g50 border border-g200">
                 <h3 className="font-semibold text-g700 mb-3" style={{ fontSize: 'var(--fs-sm)' }}>Bank Transfer Details</h3>
-                <Field label="Bank Name" req>
+                <Field label="Bank Name" req error={errorFor('bankGuid')}>
                   <select className="ctrl" value={form.bankGuid} onChange={e => set('bankGuid', e.target.value)} disabled={isWaived}>
                     <option value="">Select bank</option>
                     {bankOptions.map(option => (
@@ -1250,11 +1303,9 @@ function PaymentPageContent() {
                 <button
                   className="btn btn-primary btn-sm ml-auto"
                   onClick={() => {
-                    // Carries the appRefNo over so Filing can auto-search/select this
-                    // application instead of the counsellor having to retype it —
-                    // see the note above savedReceipt's state declaration for why this
-                    // couldn't just reuse live `form` state.
-                    if (savedReceipt.appRefNo) setFilingPrefillRef(savedReceipt.appRefNo)
+                    // Hands the saved payment to Filing so it opens straight on
+                    // this applicant (see lib/filingHandoff.ts).
+                    if (savedReceipt.filing) setFilingPrefill(savedReceipt.filing)
                     router.push('/admission/filing')
                   }}
                 >

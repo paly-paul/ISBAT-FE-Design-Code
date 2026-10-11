@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoom, deleteRoom, getRoomById, getRooms, Room, RoomInput, RoomListResult, updateRoom } from '@/lib/api/academic/room'
 
 const ROOMS_KEY = ['rooms']
@@ -15,15 +16,41 @@ export function useRooms(enabled = true) {
   })
 }
 
-// Paged room list for the Room Management table itself.
-export function useRoomsPaged(enabled = true, pageNumber = 1, pageSize = 10) {
-  return useQuery<RoomListResult>({
-    queryKey: [...ROOMS_KEY, 'paged', pageNumber, pageSize],
-    queryFn: () => getRooms('', pageNumber, pageSize),
+// Paged room list for the Room Management table itself. keepPreviousData
+// keeps the current page (and its totalCount) on screen while the next page
+// loads, instead of dropping to "no data" for a moment on every page change.
+// `search` narrows the table server-side (?search=, room code/location) and
+// is part of the key, so each term's pages cache separately.
+export function useRoomsPaged(enabled = true, pageNumber = 1, pageSize = 10, search = '') {
+  const queryClient = useQueryClient()
+  const query = useQuery<RoomListResult>({
+    queryKey: [...ROOMS_KEY, 'paged', search, pageNumber, pageSize],
+    queryFn: () => getRooms(search, pageNumber, pageSize),
+    placeholderData: keepPreviousData,
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,
   })
+
+  // Warm the neighbouring pages in the background once this one has landed,
+  // so Next/Previous show cached rows instantly instead of waiting on a
+  // round trip. prefetchQuery is a no-op for pages already cached.
+  const totalCount = query.data?.totalCount
+  const isRealData = !!query.data && !query.isPlaceholderData
+  useEffect(() => {
+    if (!enabled || !isRealData || totalCount == null) return
+    const lastPage = Math.max(1, Math.ceil(totalCount / pageSize))
+    for (const p of [pageNumber + 1, pageNumber - 1]) {
+      if (p < 1 || p > lastPage) continue
+      queryClient.prefetchQuery({
+        queryKey: [...ROOMS_KEY, 'paged', search, p, pageSize],
+        queryFn: () => getRooms(search, p, pageSize),
+        staleTime: Infinity,
+      })
+    }
+  }, [enabled, isRealData, totalCount, pageNumber, pageSize, search, queryClient])
+
+  return query
 }
 
 // Server-side search for Room Management's search box — hits the same list

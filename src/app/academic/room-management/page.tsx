@@ -32,12 +32,6 @@ export default function Page() {
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  const { data, isLoading } = useRoomsPaged(true, page, PAGE_SIZE)
-  const rows = data?.items ?? []
-  const totalCount = data?.totalCount ?? 0
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  const safePage = Math.min(page, totalPages)
-
   // Debounced so the backend's confirmed ?search= (get-rooms.md) isn't hit
   // on every keystroke, and held at '' (falling back to the unfiltered list)
   // until MIN_SEARCH_CHARS is met — same convention as Intake/Skill's
@@ -49,10 +43,23 @@ export default function Page() {
     const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
     return () => clearTimeout(t)
   }, [search])
+  // A new term starts from its own first page.
+  useEffect(() => { setPage(1) }, [debouncedSearch])
+
+  // The table now shows the search results (it used to ignore the search
+  // box entirely and only the dropdown preview reacted).
+  const { data, isLoading, isFetching, isPlaceholderData } = useRoomsPaged(true, page, PAGE_SIZE, debouncedSearch)
+  const rows = data?.items ?? []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
 
   const { data: searchResults, isFetching: isSearching } = useRoomSearch(debouncedSearch)
   const searchTrimmed = search.trim()
   const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isSearching)
+  // Show the loading state only while a *new search term's* results are on
+  // the way — not on plain page changes, which keep the current rows up.
+  const tableSearchPending = searchPending || (isFetching && isPlaceholderData && page === 1)
 
   const createRoom = useCreateRoom()
   const updateRoom = useUpdateRoom()
@@ -71,11 +78,13 @@ export default function Page() {
         .slice(0, 8)
     : []
 
-  // Re-filter client-side is removed per ACA-020 — search box now operates
-  // completely independently of the table content below it.
+  // Pull the page back in range (e.g. after deleting the last room on the
+  // last page) — but only from a real response. While a page is loading
+  // there's no totalCount yet, and clamping against that snapped every
+  // "Next" straight back to page 1.
   useEffect(() => {
-    if (page !== safePage) setPage(safePage)
-  }, [page, safePage])
+    if (data && page !== safePage) setPage(safePage)
+  }, [data, page, safePage])
 
   function openEditModal(guid: string) {
     setEditingRoomGuid(guid)
@@ -136,12 +145,12 @@ export default function Page() {
                 </tr>
               </thead>
               <tbody>
-                {(isLoading || searchPending)
+                {(isLoading || tableSearchPending)
                   ? <TableLoadingState colSpan={999} />
                   : rows.length === 0
                     ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
                     : null}
-                {!(isLoading || searchPending) && rows.map((r) => (
+                {!(isLoading || tableSearchPending) && rows.map((r) => (
                   <tr key={r.roomGuid}>
                     <td>
                       <ActionMenu>

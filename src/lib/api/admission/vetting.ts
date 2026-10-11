@@ -231,16 +231,10 @@ export function getVettingApplicationDetail(applicationGuid: string): Promise<Ve
 // the Submitted-only (action==1) vetting queue.
 export function waitApplication(applicationGuid: string, remarks?: string | null): Promise<boolean> {
   if (MOCK_AUTH) {
-    console.debug('[vetting API] waitApplication mock', { applicationGuid, remarks })
     return Promise.resolve(true)
   }
   const url = `/api/v1/admissions/vetting/applications/${applicationGuid}/wait`
-  console.debug('[vetting API] waitApplication request', { url, applicationGuid, remarks })
   return apiPost<boolean>(url, { remarks: remarks ?? null })
-    .then(result => {
-      console.debug('[vetting API] waitApplication response', { applicationGuid, result })
-      return result
-    })
 }
 
 // Server messages when Approve (action 2) is refused (2026-10 handoff): only
@@ -254,7 +248,6 @@ export const NO_CURRENT_INTAKE_MESSAGE = 'No current admission intake is configu
 // Filling, not Vetting").
 export function vetApplication(applicationGuid: string, input: VetApplicationInput): Promise<VetApplicationResponse> {
   if (MOCK_AUTH) {
-    console.debug('[vetting API] vetApplication mock', { applicationGuid, input })
     const item = mockQueue.find(i => i.applicationGuid === applicationGuid)
     if (input.action === 2 && item?.intakeGuid !== 'a1b2c3d4-0000-4000-8000-000000000002') {
       return Promise.reject(new Error(NOT_CURRENT_INTAKE_MESSAGE))
@@ -262,12 +255,7 @@ export function vetApplication(applicationGuid: string, input: VetApplicationInp
     return Promise.resolve({ intApplication: item?.intApplication ?? 0, appRefNo: item?.appRefNo ?? '', action: input.action })
   }
   const url = `/api/v1/admissions/application-filling/${applicationGuid}/vet`
-  console.debug('[vetting API] vetApplication request', { url, applicationGuid, input })
   return apiPost<VetApplicationResponse>(url, input)
-    .then(result => {
-      console.debug('[vetting API] vetApplication response', { applicationGuid, result })
-      return result
-    })
 }
 
 // ---- Rejections (GET /api/v1/admissions/vetting/rejections) ----

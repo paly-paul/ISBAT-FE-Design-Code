@@ -23,14 +23,12 @@ export function useProgramGroups(enabled = true) {
   })
 }
 
-// Server-side search for Programme Group's search box — hits the same list
-// endpoint with the backend's own ?search= param instead of filtering the
-// already-fetched full list client-side. Kept as its own hook/query key so
+// Search for Programme Group's search box. Kept as its own hook/query key so
 // useProgramGroups() above still stays the plain unfiltered, cached list —
 // only enabled while the search box actually has a query in it, at which
 // point the page falls back to that shared unfiltered list instead of
-// issuing a redundant identical request. Not confirmed against a spec (see
-// the note on getProgramGroups), so the caller re-filters client-side too.
+// issuing a redundant identical request. The endpoint has no ?search=, so
+// getProgramGroups filters client-side (see its note).
 export function useProgramGroupSearch(search: string) {
   const q = search.trim()
   return useQuery({
@@ -86,8 +84,10 @@ export function useProgramGroupsByGuids(guids: string[]) {
 }
 
 export function useCreateProgramGroup() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: ProgramGroupInput) => createProgramGroup(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRAM_GROUPS_KEY }),
   })
 }
 

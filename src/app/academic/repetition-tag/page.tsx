@@ -13,6 +13,7 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useRepetitionTagsPaged, useCreateRepetitionTag, useUpdateRepetitionTag, useDeleteRepetitionTag, RepetitionTag } from '@/hooks/academic/useRepetitionTags'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { AuthError } from '@/lib/api/client'
 
 const PAGE_SIZE = 10
 // Don't narrow the table (or open the search dropdown) until the user's
@@ -52,7 +53,16 @@ export default function Page() {
     if (!deleteTarget) return
     deleteRepetitionTag.mutate(deleteTarget.courseUnitRepetitionGuid, {
       onSuccess: () => { setDeleteTarget(null); showToast('Repetition tag deleted successfully') },
-      onError: (error: Error) => showToast(error.message || 'Failed to delete repetition tag', 'error'),
+      onError: (error: Error) => {
+        // delete-course-unit-repetition.md: tag_in_use while any course unit
+        // still points at this tag — say how to free it up.
+        if (error instanceof AuthError && error.code === 'tag_in_use') {
+          setDeleteTarget(null)
+          showToast(`"${deleteTarget.tagCode}" is still used by one or more course units. Change or clear their repetition tag in Course Units, then delete it.`, 'error')
+          return
+        }
+        showToast(error.message || 'Failed to delete repetition tag', 'error')
+      },
     })
   }
 

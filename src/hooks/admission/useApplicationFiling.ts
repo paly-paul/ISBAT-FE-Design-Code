@@ -46,7 +46,6 @@ export function useSearchApplicationsForFiling(searchTerm: string, pageNumber: n
     enabled,
   })
 }
-
 // Real server-paginated, scroll-to-load-more variant for the Filing page's
 // interactive applicant-search dropdown — same useInfiniteQuery +
 // fetch-next-on-scroll mechanism as useSearchCourseUnitsInfinite

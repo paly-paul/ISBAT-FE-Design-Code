@@ -18,6 +18,7 @@ import { getIntakesPaged } from '@/lib/api/academic/intake'
 import { getCampusesPaged } from '@/lib/api/academic/campus'
 import { getProgramMastersPage } from '@/lib/api/academic/programMaster'
 import { formatDate } from '@/lib/date'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Real server-side pagination — only DISPLAY_PAGE_SIZE rows are ever
 // requested for the page currently on screen (studentName search is also a
@@ -60,6 +61,9 @@ function timeAgo(dateStr: string | null): string {
 }
 
 export default function VettingPage() {
+  // Approve/Reject/Wait have no server-side permission check, so gate them
+  // on this page's edit permission (post-vet-application.md).
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [activeTab, setActiveTab] = useState<Tab>('queue')
@@ -397,6 +401,7 @@ export default function VettingPage() {
         applicationGuid={selectedApplicationGuid}
         vetApplication={vetApplicationMutation}
         onReject={handleReject}
+        canVet={permissions.edit}
       />
       <RejectModal
         isOpen={openModals.has('reject-modal')}

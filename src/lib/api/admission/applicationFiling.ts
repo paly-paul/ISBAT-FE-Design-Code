@@ -542,6 +542,57 @@ export function searchApplicationsForFiling(searchTerm: string, pageNumber = 1, 
   ).then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }
 
+// What Payment hands to Filing after "Proceed to Filing": the just-created
+// payment, straight from the POST response plus the form values it came
+// from. No lookup on the Filing side: a just-paid applicant exists only as a
+// payment record (no application row until General Details is saved), and
+// searching for it by appRefNo proved unreliable.
+export interface NewPaymentHandoff {
+  paymentGuid: string
+  appRefNo: string
+  studentName: string
+  mobile: string | null
+  email: string | null
+  intakeCode: number | null
+  intakeGuid: string | null
+  enquiryGuid: string | null
+  countryGuid: string | null
+  campusGuid: string
+  programGuid: string
+  programName: string | null
+  semesterGuid: string
+  batchTimeGuid: string
+  batchGuid: string
+  feeHdGuid: string
+}
+
+// Same shape a dropdown pick produces (mapApplicationPaymentToSearchResult),
+// so selecting it behaves identically. applicationGuid is the paymentGuid,
+// which is what the by-payment detail lookup takes.
+export function filingResultFromNewPayment(p: NewPaymentHandoff): FilingApplicationSearchResult {
+  return {
+    ...mapApplicationPaymentToSearchResult({
+      paymentGuid: p.paymentGuid,
+      appRefNo: p.appRefNo,
+      studentName: p.studentName,
+      mobile: p.mobile ? Number(p.mobile) : null,
+      email: p.email,
+      intakeCode: p.intakeCode,
+      enquiryGuid: p.enquiryGuid,
+      countryGuid: p.countryGuid,
+      campusGuid: p.campusGuid,
+      programGuid: p.programGuid,
+      programName: p.programName,
+      semesterGuid: p.semesterGuid,
+      batchTimeGuid: p.batchTimeGuid,
+      batchGuid: p.batchGuid,
+      feeHdGuid: p.feeHdGuid,
+      createdDate: new Date().toISOString(),
+    } as unknown as ApplicationPaymentRecord),
+    intakeGuid: p.intakeGuid,
+  }
+}
+
 // Real server page of application-payments/current-intake, filtered
 // server-side by searchTerm (name and AppRefNo both match, per the backend
 // team) and mapped onto the Filing search shape — backs the Filing page's

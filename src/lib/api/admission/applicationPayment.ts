@@ -264,11 +264,6 @@ export function createApplicationPayment(input: ApplicationPaymentInput): Promis
     return Promise.resolve({ intApplication: Math.floor(Math.random() * 100000), studentName: input.studentName })
   }
 
-  console.log('[application payment API] createApplicationPayment input', {
-    ...input,
-    payProofFile: input.payProofFile ? { name: input.payProofFile.name, size: input.payProofFile.size, type: input.payProofFile.type } : null,
-  })
-
   const formData = new FormData()
   formData.append('enquiryGuid', input.enquiryGuid)
   formData.append('oDelIntApplication', String(input.oDelIntApplication ?? 0))

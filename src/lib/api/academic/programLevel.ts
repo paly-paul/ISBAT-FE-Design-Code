@@ -2,7 +2,9 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// Represents a programme level record returned by the API.
+// ProgramLevelDto, per erp-docs/api/academic-service/academic/program-levels.
+// semCount is derived server-side (yearCount * 2). currencyCode/currencyName
+// are resolved from Finance and come back as '' (not null) when unresolvable.
 export interface ProgramLevel {
   programLevelGuid: string
   levelCode: string
@@ -12,14 +14,9 @@ export interface ProgramLevel {
   minCreditLoad: number
   appFee: number
   lateFee: number
-  intCurrency: number
+  currencyGuid: string
   currencyCode: string
   currencyName: string
-  // Not confirmed present on GET (list/by-guid) — only proven via the real
-  // Create/Update payload requiring it (see ProgramLevelInput below; the
-  // backend rejected intCurrency with "Currency is required"). Optional
-  // until a real GET response confirms it's echoed back.
-  currencyGuid?: string
 }
 
 // Previous hardcoded rows (pre GET /api/v1/academic/program-levels
@@ -35,12 +32,12 @@ export interface ProgramLevel {
 // ]
 
 const mockProgramLevels: ProgramLevel[] = [
-  { programLevelGuid: '1', levelCode: 'CERT', levelName: 'Certificate / HEC',          yearCount: 1, semCount: 2, minCreditLoad: 48,  appFee: 50000, lateFee: 10000, intCurrency: 1, currencyCode: 'UGX', currencyName: 'Uganda Shilling' },
-  { programLevelGuid: '2', levelCode: 'DIP',  levelName: 'Diploma',                    yearCount: 2, semCount: 4, minCreditLoad: 96,  appFee: 50000, lateFee: 10000, intCurrency: 1, currencyCode: 'UGX', currencyName: 'Uganda Shilling' },
-  { programLevelGuid: '3', levelCode: 'BACH', levelName: "Bachelor's Degree",          yearCount: 3, semCount: 6, minCreditLoad: 132, appFee: 50000, lateFee: 10000, intCurrency: 1, currencyCode: 'UGX', currencyName: 'Uganda Shilling' },
-  { programLevelGuid: '4', levelCode: 'ENG',  levelName: 'Bachelor of Engineering',    yearCount: 4, semCount: 8, minCreditLoad: 160, appFee: 50000, lateFee: 10000, intCurrency: 1, currencyCode: 'UGX', currencyName: 'Uganda Shilling' },
-  { programLevelGuid: '5', levelCode: 'MAST', levelName: "Master's Degree",            yearCount: 2, semCount: 4, minCreditLoad: 72,  appFee: 50000, lateFee: 10000, intCurrency: 1, currencyCode: 'UGX', currencyName: 'Uganda Shilling' },
-  { programLevelGuid: '6', levelCode: 'PHD',  levelName: 'Doctor of Philosophy (PhD)', yearCount: 3, semCount: 6, minCreditLoad: 0,   appFee: 50000, lateFee: 10000, intCurrency: 1, currencyCode: 'UGX', currencyName: 'Uganda Shilling' },
+  { programLevelGuid: '1', levelCode: 'CERT', levelName: 'Certificate / HEC',          yearCount: 1, semCount: 2, minCreditLoad: 48,  appFee: 50000, lateFee: 10000, currencyGuid: 'ugx', currencyCode: 'UGX', currencyName: 'Uganda Shilling' },
+  { programLevelGuid: '2', levelCode: 'DIP',  levelName: 'Diploma',                    yearCount: 2, semCount: 4, minCreditLoad: 96,  appFee: 50000, lateFee: 10000, currencyGuid: 'ugx', currencyCode: 'UGX', currencyName: 'Uganda Shilling' },
+  { programLevelGuid: '3', levelCode: 'BACH', levelName: "Bachelor's Degree",          yearCount: 3, semCount: 6, minCreditLoad: 132, appFee: 50000, lateFee: 10000, currencyGuid: 'ugx', currencyCode: 'UGX', currencyName: 'Uganda Shilling' },
+  { programLevelGuid: '4', levelCode: 'ENG',  levelName: 'Bachelor of Engineering',    yearCount: 4, semCount: 8, minCreditLoad: 160, appFee: 50000, lateFee: 10000, currencyGuid: 'ugx', currencyCode: 'UGX', currencyName: 'Uganda Shilling' },
+  { programLevelGuid: '5', levelCode: 'MAST', levelName: "Master's Degree",            yearCount: 2, semCount: 4, minCreditLoad: 72,  appFee: 50000, lateFee: 10000, currencyGuid: 'ugx', currencyCode: 'UGX', currencyName: 'Uganda Shilling' },
+  { programLevelGuid: '6', levelCode: 'PHD',  levelName: 'Doctor of Philosophy (PhD)', yearCount: 3, semCount: 6, minCreditLoad: 1,   appFee: 50000, lateFee: 10000, currencyGuid: 'ugx', currencyCode: 'UGX', currencyName: 'Uganda Shilling' },
 ]
 
 // Fetch programme levels, optionally filtered by search text.
@@ -57,34 +54,27 @@ export interface ProgramLevelListResponse {
   pageSize: number
 }
 
-// Server-paged/searchable variant for dropdowns. The plain list function
-// above remains unchanged for existing table and resolver consumers.
+// Paged view over the list endpoint for the table and the infinite-scroll
+// pickers. GET /program-levels is UNPAGED (it returns every level, filtered
+// only by ?search=), so paging happens here: each page slices the full
+// result, and totalCount is the real filtered total. Sending page/pageSize
+// to the backend did nothing, and made every "page" the whole list.
 export function getProgramLevelsPaged(page = 1, pageSize = 20, search = ''): Promise<ProgramLevelListResponse> {
   const q = search.trim()
-  if (MOCK_AUTH) {
-    const filtered = q
+  const all = MOCK_AUTH
+    ? Promise.resolve(q
       ? mockProgramLevels.filter(level => `${level.levelCode} ${level.levelName}`.toLowerCase().includes(q.toLowerCase()))
-      : mockProgramLevels
+      : mockProgramLevels)
+    : getProgramLevels(q)
+  return all.then(rows => {
     const start = (page - 1) * pageSize
-    return Promise.resolve({ items: filtered.slice(start, start + pageSize), totalCount: filtered.length, pageNumber: page, pageSize })
-  }
-  const params = new URLSearchParams({ page: String(page), pageNumber: String(page), pageSize: String(pageSize) })
-  if (q) params.set('search', q)
-  return apiGet<any>(`/api/v1/academic/program-levels?${params.toString()}`).then(data => {
-    const items: ProgramLevel[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
-    return {
-      items,
-      totalCount: typeof data?.totalCount === 'number' ? data.totalCount : items.length,
-      pageNumber: data?.pageNumber ?? page,
-      pageSize: data?.pageSize ?? pageSize,
-    }
+    return { items: rows.slice(start, start + pageSize), totalCount: rows.length, pageNumber: page, pageSize }
   })
 }
 
-// Payload used when creating or updating a programme level.
-// Confirmed via real testing: the backend rejects intCurrency (Currency
-// Master's legacy int) with "Currency is required" — it wants currencyGuid
-// instead, matching ProcBank/Exchange-Rate's convention elsewhere.
+// Body for POST and PUT. semCount is not accepted (derived server-side).
+// currencyGuid is required on both, even though PUT's DTO marks it nullable,
+// because the validator still rejects it when it's missing.
 export interface ProgramLevelInput {
   levelCode: string
   levelName: string
@@ -105,14 +95,11 @@ export function createProgramLevel(input: ProgramLevelInput): Promise<ProgramLev
       levelCode: input.levelCode,
       levelName: input.levelName,
       yearCount: input.yearCount,
-      // Not part of the confirmed create payload — mock-only placeholder.
       semCount: input.yearCount * 2,
       minCreditLoad: input.minCreditLoad,
       appFee: input.appFee,
       lateFee: input.lateFee,
-      // Server-resolved from currencyGuid on the real GET response — no
-      // local currency list to cross-reference against here.
-      intCurrency: 0,
+      // Server-resolved from currencyGuid on the real response.
       currencyCode: '',
       currencyName: '',
       currencyGuid: input.currencyGuid,
@@ -138,7 +125,7 @@ export function updateProgramLevel(guid: string, input: ProgramLevelInput): Prom
   if (MOCK_AUTH) {
     const existing = mockProgramLevels.find(p => p.programLevelGuid === guid)
     if (!existing) return Promise.reject(new Error('Programme level not found'))
-    Object.assign(existing, input)
+    Object.assign(existing, input, { semCount: input.yearCount * 2 })
     return Promise.resolve(existing)
   }
   return apiPut<ProgramLevel>(`/api/v1/academic/program-levels/${guid}`, input)

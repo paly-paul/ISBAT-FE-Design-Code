@@ -36,6 +36,11 @@ export function monthsAgoYmd(months: number): string {
   return toYmd(target)
 }
 
+// Same calendar day `years` years ago (29 Feb clamps to 28 Feb).
+export function yearsAgoYmd(years: number): string {
+  return monthsAgoYmd(years * 12)
+}
+
 // Window shared by Application Payment's payDate and Enquiry's enquiryDate:
 // within the last 3 months, never in the future.
 export const RECENT_DATE_MONTHS = 3

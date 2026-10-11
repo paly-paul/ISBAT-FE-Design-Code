@@ -190,9 +190,6 @@ export default function EnquiryFollowupMasterPage() {
         enquiryGuid={viewingGuid}
         updateEnquiry={updateEnquiry}
       />
-      {/* intEnquiry/followUpStatus/followUpMode/enquiryStatus/interestLevel
-          are sent as list position, not a confirmed backend id — see the
-          note on EnquiryFollowUpInput in lib/api/admission/enquiryFollowUp.ts. */}
       <NewFollowUpLogModal
         isOpen={openModals.has('new-followup-log-modal')}
         onClose={() => closeModal('new-followup-log-modal')}
