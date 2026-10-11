@@ -75,6 +75,9 @@ const FINANCE_PAYMENT_SECTIONS: MenuNode[] = [
   ]),
   section('Reports & Statements', [
     leaf('Financial Reports', 'bar-chart', 'financial-reports'),
+    // discount-report-page.md, 2026-10-11 — no backend page registration
+    // yet; mergeFinanceSections adds it to a real Reports & Statements too.
+    leaf('Discount Report', 'tag', 'reports/discount'),
     leaf('Student Statement', 'files', 'student-statements'),
   ]),
 ]
@@ -438,6 +441,24 @@ function mergeFinanceSections(menu: MenuNode[]): MenuNode[] {
       else children.push(...missingLeaves)
       const mergedFinanceChildren = [...financeModule.children]
       mergedFinanceChildren[collectionIdx] = { ...collectionSection, children }
+      financeModule = { ...financeModule, children: mergedFinanceChildren }
+    }
+  }
+
+  // Same leaf-level fixup for Reports & Statements: when the backend already
+  // returns the section, the whole-section check below never adds the new
+  // Discount Report page to it. Slotted after Financial Reports.
+  const reportsIdx = financeModule.children.findIndex(c => c.name === 'Reports & Statements')
+  if (reportsIdx !== -1) {
+    const reportsSection = financeModule.children[reportsIdx]
+    if (!reportsSection.children.some(l => l.url === 'reports/discount' || l.name === 'Discount Report')) {
+      const children = [...reportsSection.children]
+      const afterIdx = children.findIndex(l => l.name === 'Financial Reports')
+      const discountLeaf = leaf('Discount Report', 'tag', 'reports/discount')
+      if (afterIdx !== -1) children.splice(afterIdx + 1, 0, discountLeaf)
+      else children.push(discountLeaf)
+      const mergedFinanceChildren = [...financeModule.children]
+      mergedFinanceChildren[reportsIdx] = { ...reportsSection, children }
       financeModule = { ...financeModule, children: mergedFinanceChildren }
     }
   }
