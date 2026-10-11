@@ -8,6 +8,7 @@ import { useMarkNotificationRead, useNotificationsPreview, useUnreadCount } from
 import { notificationHref, notificationVisual, NotificationItem } from '@/lib/api/notifications'
 import { endNotificationsSession } from '@/lib/notificationsHub'
 import { timeAgo } from '@/lib/date'
+import { HeaderDownloads } from '@/components/HeaderDownloads'
 
 interface HeaderProps {
   panelOpen: boolean
@@ -100,6 +101,7 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
         <div className="hdr-right">
           <div className="hdr-module-pill acad"><i className="lni lni-graduation"></i> Academic</div>
           <div className="hdr-intake">Spring 2026 (20261)</div>
+          <HeaderDownloads />
           <div
             className="hdr-bell-wrap"
             onMouseEnter={() => setBellOpen(true)}

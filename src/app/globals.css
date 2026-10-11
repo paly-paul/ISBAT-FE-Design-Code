@@ -12032,3 +12032,91 @@ body:has(.drawer-overlay) {
     transition: none;
   }
 }
+
+/* ── Discount Report (finance/reports/discount) ─────────────────────────── */
+/* Downloads icon in the app header (HeaderDownloads.tsx), just before the
+   bell and styled like it: spinner + count while exports run, a dot when a
+   finished file hasn't been downloaded yet. */
+.hdr-dl-wrap { position: relative; display: flex; }
+.hdr-dl-count {
+  position: absolute; top: -3px; right: -3px; min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 999px; background: var(--b500); color: #fff;
+  font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
+  font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px var(--white);
+}
+.hdr-dl-dot {
+  position: absolute; top: 1px; right: 1px; width: 9px; height: 9px;
+  border-radius: 50%; background: var(--green); box-shadow: 0 0 0 2px var(--white);
+}
+.rpt-dl-pop {
+  /* Above the toast stack (z 9999), same as .hdr-bell-dropdown. */
+  position: absolute; top: calc(100% + 10px); right: -8px; z-index: 10050;
+  width: min(420px, calc(100vw - 32px));
+  background: var(--white); border: 1.5px solid var(--g200); border-radius: var(--rsm);
+  box-shadow: 0 12px 32px -8px rgba(15, 23, 42, .22), 0 2px 6px rgba(15, 23, 42, .06);
+  overflow: hidden;
+}
+.rpt-dl-pop-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-bottom: 1px solid var(--g100);
+  font-weight: 600; font-size: 13.5px; color: var(--g900);
+}
+.rpt-dl-list { max-height: 360px; overflow-y: auto; }
+.rpt-dl-item {
+  display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+  border-bottom: 1px solid var(--g100);
+}
+.rpt-dl-item:last-child { border-bottom: 0; }
+.rpt-dl-item-main { flex: 1; min-width: 0; }
+.rpt-dl-item-name { font-size: 13px; font-weight: 600; color: var(--g800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rpt-dl-item-meta { font-size: var(--fs-xs); color: var(--g500); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.rpt-dl-item-meta.err { color: var(--red); white-space: normal; }
+
+/* Filters: collapsible body, plus a one-line recap of the filters the
+   current result was built from, shown while collapsed. */
+.rpt-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 18px; }
+.rpt-filter-grid .span2 { grid-column: span 2; }
+@media (max-width: 1024px) { .rpt-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .rpt-filter-grid { grid-template-columns: 1fr; } .rpt-filter-grid .span2 { grid-column: auto; } }
+.rpt-recap { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.rpt-chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px;
+  border-radius: 999px; background: var(--b50); border: 1px solid var(--b100);
+  color: var(--b800); font-size: var(--fs-sm); font-weight: 500; max-width: 100%;
+}
+.rpt-chip-lbl { color: var(--b600); font-weight: 600; }
+
+/* Results use the app's standard table (ScrollTable + global table styles).
+   Only additions: rows scroll vertically inside the box for infinite scroll,
+   with the blue header row kept in view, and the per-currency summary pinned
+   under it. */
+.rpt-results-hdr { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.rpt-count { font-size: 13.5px; color: var(--g600); font-variant-numeric: tabular-nums; }
+.rpt-count strong { color: var(--g900); font-weight: 700; }
+.tbl-wrap.rpt-scroll { overflow-y: auto; max-height: calc(100vh - 380px); min-height: 280px; }
+/* Above the sticky first-column cells (td:first-child is z-index 2), or the
+   pinned Date cells scroll over the header's Date cell. */
+.tbl-wrap.rpt-scroll thead { position: sticky; top: 0; z-index: 4; }
+.tbl-wrap.rpt-scroll .num { text-align: right; font-variant-numeric: tabular-nums; }
+.rpt-amt { font-weight: 600; color: var(--g900); }
+.rpt-cur { color: var(--g500); font-weight: 500; margin-left: 5px; font-size: var(--fs-sm); }
+.rpt-mono { font-family: var(--font-mono); font-size: 12.5px; }
+.rpt-foot-row td { text-align: center; color: var(--g500); font-size: 12.5px; }
+.rpt-foot-row:hover td { background: var(--white); }
+
+.rpt-summary {
+  display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: center;
+  margin-top: 12px; padding: 12px 16px;
+  border: 1.5px solid var(--g200); border-radius: var(--rsm); background: var(--surface);
+}
+.rpt-sum-cur { display: flex; align-items: baseline; gap: 10px; font-variant-numeric: tabular-nums; }
+.rpt-sum-code { font-weight: 700; font-size: 12.5px; color: var(--b700); letter-spacing: .03em; }
+.rpt-sum-total { font-weight: 700; font-size: 15px; color: var(--g900); }
+.rpt-sum-meta { font-size: var(--fs-sm); color: var(--g500); }
+.rpt-sum-note { margin-left: auto; font-size: var(--fs-xs); color: var(--g400); }
+
+.rpt-empty { text-align: center; padding: 56px 20px; color: var(--g500); }
+.rpt-empty i { font-size: 30px; color: var(--g300); display: block; margin-bottom: 10px; }
+.rpt-empty-title { font-weight: 600; color: var(--g700); font-size: 14.5px; margin-bottom: 4px; }
+
+@media (prefers-reduced-motion: reduce) { .hdr-dl-wrap .spin { animation: none; } }
