@@ -33,6 +33,10 @@ export interface ProgramPlanningListParams {
   unitGuid?: string | null
   schoolGuid?: string | null
   intakeGuid?: string | null
+  // Documented filter (get-program-plannings.md); combines with the others (AND).
+  lecturerGuid?: string | null
+  // NOT supported by the endpoint — it's ignored server-side. Kept only so
+  // mock mode / older callers type-check; search on screen instead.
   search?: string | null
 }
 
@@ -64,6 +68,7 @@ export function getProgramPlannings(params: ProgramPlanningListParams = {}, page
       (!params.unitGuid || p.unitGuid === params.unitGuid)
       && (!params.schoolGuid || p.schoolGuid === params.schoolGuid)
       && (!params.intakeGuid || p.intakeGuid === params.intakeGuid)
+      && (!params.lecturerGuid || p.lecturerGuid === params.lecturerGuid)
       && (!q || `${p.employeeName ?? ''} ${p.courseUnitCode ?? ''} ${p.courseUnitName ?? ''}`.toLowerCase().includes(q)),
     )
     const start = (pageNumber - 1) * pageSize
@@ -83,6 +88,7 @@ export function getProgramPlannings(params: ProgramPlanningListParams = {}, page
   if (params.unitGuid) qs.set('unitGuid', params.unitGuid)
   if (params.schoolGuid) qs.set('schoolGuid', params.schoolGuid)
   if (params.intakeGuid) qs.set('intakeGuid', params.intakeGuid)
+  if (params.lecturerGuid) qs.set('lecturerGuid', params.lecturerGuid)
   if (q) qs.set('search', q)
 
   return apiGet<ProgramPlanningListResult | ProgramPlanningDto[] | null>(`/api/v1/academic/program-plannings?${qs.toString()}`)

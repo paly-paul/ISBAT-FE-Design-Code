@@ -14,6 +14,7 @@ import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
 import { useInterestLevels } from '@/hooks/admission/useInterestLevels'
 import { useEnquiryFollowUpsInfinite } from '@/hooks/admission/useEnquiryFollowUps'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
+import { AuthError } from '@/lib/api/client'
 
 interface NewFollowUpLogModalProps extends ModalProps {
   createFollowUp: {
@@ -185,9 +186,15 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
     onClose()
   }
 
+  function clearError(field: string) {
+    setErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
+  }
+
   function validate() {
     const e: Record<string, string> = {}
-    if (!enquiryGuid || enquiryGuid === '0' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(enquiryGuid)) {
+    // Any GUID shape: a version/variant-strict pattern rejected real
+    // database GUIDs that aren't RFC v1–v5 (e.g. sequential ones).
+    if (!enquiryGuid || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(enquiryGuid)) {
       e.enquiryIdx = 'Please select a valid Enquiry'
     }
     if (!advisorGuid)        e.advisorGuid = 'Please select an Advisor'
@@ -218,7 +225,31 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
       },
       {
         onSuccess: () => { setSaved(true); showToast('Follow-up logged successfully') },
-        onError: (error: Error) => setFailure(error.message || 'Failed to log follow-up. Please try again.'),
+        onError: (error: Error) => {
+          // Documented create errors that belong to one field, by message.
+          const code = error instanceof AuthError ? error.code : undefined
+          const msg = error.message || ''
+          const field =
+            code === 'not_found' && /^enquiry not found/i.test(msg) ? 'enquiryIdx'
+            : code === 'not_found' && /^follow-up status/i.test(msg) ? 'followUpStatusGuid'
+            : code === 'not_found' && /^follow-up mode/i.test(msg) ? 'followUpModeGuid'
+            : code === 'not_found' && /^enquiry status/i.test(msg) ? 'enquiryStatusGuid'
+            : code === 'not_found' && /^interest level/i.test(msg) ? 'interestLevelGuid'
+            : code === 'validation_error' && /next follow-up date/i.test(msg) ? 'nextFollowDate'
+            : code === 'validation_error' && /remarks/i.test(msg) ? 'remarks'
+            : null
+          if (field) {
+            const e = { [field]: msg }
+            setErrors(prev => ({ ...prev, ...e }))
+            scrollToFirstError(e)
+            return
+          }
+          // "Follow-up date must be today's date." can only happen if the
+          // modal stayed open across midnight UTC; reopening fixes it.
+          setFailure(/follow-up date must be today/i.test(msg)
+            ? 'The day changed while this form was open. Close it, reopen, and save again.'
+            : msg || 'Failed to log follow-up. Please try again.')
+        },
       },
     )
   }
@@ -254,7 +285,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
         <div className="g2">
           <div className="fg" style={{ gridColumn: 'span 2' }}>
             <div className="lbl">Enquiry <span className="req">*</span></div>
-            <EnquiryPicker value={enquiryGuid} onChange={setEnquiryGuid} enabled={isOpen} hasError={!!errors.enquiryIdx} />
+            <EnquiryPicker value={enquiryGuid} onChange={v => { setEnquiryGuid(v); clearError('enquiryIdx') }} enabled={isOpen} hasError={!!errors.enquiryIdx} />
             {errors.enquiryIdx && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryIdx}</p>}
           </div>
           <div className="fg">
@@ -263,7 +294,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
               placeholder="— select —"
               options={advisorOptions}
               value={advisorGuid}
-              onChange={setAdvisorGuid}
+              onChange={v => { setAdvisorGuid(v); clearError('advisorGuid') }}
               onSearch={setEmployeeSearch}
               onOpenChange={setEmployeePickerOpen}
               isLoading={employeeQuery.isLoading}
@@ -283,22 +314,23 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
           </div>
           <div className="fg">
             <div className="lbl">Follow-up Status <span className="req">*</span></div>
-            <SearchSelect placeholder="— select —" options={followUpStatusOptions} value={followUpStatusGuid} onChange={setFollowUpStatusGuid} />
+            <SearchSelect placeholder="— select —" options={followUpStatusOptions} value={followUpStatusGuid} onChange={v => { setFollowUpStatusGuid(v); clearError('followUpStatusGuid') }} />
             {errors.followUpStatusGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.followUpStatusGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Follow-up Mode <span className="req">*</span></div>
-            <SearchSelect placeholder="— select —" options={followUpModeOptions} value={followUpModeGuid} onChange={setFollowUpModeGuid} />
+            <SearchSelect placeholder="— select —" options={followUpModeOptions} value={followUpModeGuid} onChange={v => { setFollowUpModeGuid(v); clearError('followUpModeGuid') }} />
             {errors.followUpModeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.followUpModeGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Enquiry Status <span className="req">*</span></div>
-            <SearchSelect placeholder="— select —" options={enquiryStatusOptions} value={enquiryStatusGuid} onChange={setEnquiryStatusGuid} />
+            <SearchSelect placeholder="— select —" options={enquiryStatusOptions} value={enquiryStatusGuid} onChange={v => { setEnquiryStatusGuid(v); clearError('enquiryStatusGuid') }} />
             {errors.enquiryStatusGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryStatusGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Interest Level</div>
-            <SearchSelect placeholder="— optional —" options={interestLevelOptions} value={interestLevelGuid} onChange={setInterestLevelGuid} />
+            <SearchSelect placeholder="— optional —" options={interestLevelOptions} value={interestLevelGuid} onChange={v => { setInterestLevelGuid(v); clearError('interestLevelGuid') }} />
+            {errors.interestLevelGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.interestLevelGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Next Follow-up Date</div>
@@ -315,7 +347,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
           </div>
           <div className="fg" style={{ gridColumn: 'span 2' }}>
             <div className="lbl">Remarks <span className="req">*</span> <span className="text-g400" style={{ fontWeight: 400 }}>({remarks.trim().length}/{REMARKS_MAX})</span></div>
-            <textarea className="ctrl" rows={3} maxLength={REMARKS_MAX} placeholder="e.g. Called student, interested in Diploma program." value={remarks} onChange={e => setRemarks(e.target.value)} />
+            <textarea className="ctrl" rows={3} maxLength={REMARKS_MAX} placeholder="e.g. Called student, interested in Diploma program." value={remarks} onChange={e => { setRemarks(e.target.value); clearError('remarks') }} />
             {errors.remarks && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.remarks}</p>}
           </div>
         </div>

@@ -85,27 +85,42 @@ export function ProgrammeLevelFormModal({ isOpen, onClose, showToast, mode, prog
     setErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
   }
 
+  // Mirrors Create/UpdateProgramLevelCommandValidator: code ≤ 10, name ≤ 50,
+  // yearCount and minCreditLoad > 0, fees whole numbers ≥ 0, currency required.
   function validate() {
     const e: Record<string, string> = {}
     if (!levelCode.trim()) e.levelCode = 'Level Code is required'
+    else if (levelCode.trim().length > 10) e.levelCode = 'Level Code must be 10 characters or fewer'
     if (!levelName.trim()) e.levelName = 'Level Name is required'
-    if (!yearCount || +yearCount <= 0) e.yearCount = 'Year Count must be greater than 0'
-    if (!minCreditLoad || +minCreditLoad < 0) e.minCreditLoad = 'Minimum Credit Load is required'
-    if (!appFee || +appFee < 0) e.appFee = 'Application Fee is required'
-    if (!lateFee || +lateFee < 0) e.lateFee = 'Late Fee is required'
+    else if (levelName.trim().length > 50) e.levelName = 'Level Name must be 50 characters or fewer'
+    if (!yearCount) e.yearCount = 'Year Count is required'
+    else if (!Number.isInteger(+yearCount) || +yearCount <= 0) e.yearCount = 'Year Count must be a whole number greater than 0'
+    if (!minCreditLoad) e.minCreditLoad = 'Minimum Credit Load is required'
+    else if (!Number.isInteger(+minCreditLoad) || +minCreditLoad <= 0) e.minCreditLoad = 'Minimum Credit Load must be a whole number greater than 0'
+    if (!appFee) e.appFee = 'Application Fee is required'
+    else if (!Number.isInteger(+appFee) || +appFee < 0) e.appFee = 'Application Fee must be a whole number, 0 or more'
+    if (!lateFee) e.lateFee = 'Late Fee is required'
+    else if (!Number.isInteger(+lateFee) || +lateFee < 0) e.lateFee = 'Late Fee must be a whole number, 0 or more'
     if (!currency) e.currency = 'Select a currency before proceeding'
     setErrors(e)
     scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
-  // Map known backend failures to a field error where the cause is
-  // actionable right there (duplicate levelCode); anything else shows the
-  // failure popup instead.
+  // Map the documented backend failures to the field they're about; anything
+  // else shows the failure popup.
   function handleSaveError(error: Error) {
     const code = error instanceof AuthError ? error.code : undefined
-    if (code === 'bad_request') {
+    if (code === 'duplicate_level_code') {
       setErrors(prev => ({ ...prev, levelCode: error.message || 'A programme level with this code already exists.' }))
+      scrollToFirstError({ levelCode: 'x' })
+      return
+    }
+    // 404 on save is either the level itself (edit) or the currency failing
+    // to resolve in Finance; the message tells them apart.
+    if (code === 'not_found' && /currency/i.test(error.message)) {
+      setErrors(prev => ({ ...prev, currency: 'This currency could not be found in Finance. Pick another one.' }))
+      scrollToFirstError({ currency: 'x' })
       return
     }
     setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} programme level. Please try again.`)
@@ -113,9 +128,10 @@ export function ProgrammeLevelFormModal({ isOpen, onClose, showToast, mode, prog
 
   function handleSubmit() {
     if (!validate()) return
+    // Backend stores code/name untrimmed, so trim here.
     const input: ProgramLevelInput = {
-      levelCode,
-      levelName,
+      levelCode: levelCode.trim(),
+      levelName: levelName.trim(),
       yearCount: +yearCount,
       minCreditLoad: +minCreditLoad,
       appFee: +appFee,
@@ -207,6 +223,7 @@ export function ProgrammeLevelFormModal({ isOpen, onClose, showToast, mode, prog
             <input
               className="ctrl"
               placeholder="e.g. DIP"
+              maxLength={10}
               value={levelCode}
               onChange={e => { setLevelCode(e.target.value); clearError('levelCode') }}
               style={errors.levelCode ? { borderColor: 'var(--red)' } : undefined}
@@ -218,6 +235,7 @@ export function ProgrammeLevelFormModal({ isOpen, onClose, showToast, mode, prog
             <input
               className="ctrl"
               placeholder="e.g. Diploma"
+              maxLength={50}
               value={levelName}
               onChange={e => { setLevelName(e.target.value); clearError('levelName') }}
               style={errors.levelName ? { borderColor: 'var(--red)' } : undefined}
@@ -244,7 +262,7 @@ export function ProgrammeLevelFormModal({ isOpen, onClose, showToast, mode, prog
               className="ctrl"
               type="number"
               placeholder="e.g. 15"
-              min={0}
+              min={1}
               value={minCreditLoad}
               onChange={e => { setMinCreditLoad(e.target.value); clearError('minCreditLoad') }}
               style={errors.minCreditLoad ? { borderColor: 'var(--red)' } : undefined}

@@ -172,9 +172,13 @@ export default function RegistrationPage() {
                           status. The Reg. Fee column below still shows
                           Paid/Not Paid as information, just no longer
                           blocks the action. */}
-                      <button className="btn btn-neu btn-sm" onClick={() => handleRegister(r.applicationGuid)}>
-                        <i className="lni lni-graduation" /> Register
-                      </button>
+                      {/* Register creates a student and can't be undone, so it
+                          needs the page's add permission. */}
+                      {permissions.add && (
+                        <button className="btn btn-neu btn-sm" onClick={() => handleRegister(r.applicationGuid)}>
+                          <i className="lni lni-graduation" /> Register
+                        </button>
+                      )}
                     </ActionMenu>
                   </td>
                   <td className="py-2.5 font-mono text-xs text-b600">{r.appRefNo}</td>

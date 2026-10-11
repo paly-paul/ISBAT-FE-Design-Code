@@ -18,7 +18,7 @@ import { AuthError } from '@/lib/api/client'
 import { sanitizeNameInput } from '@/lib/errorMessages'
 import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
-import { isWithinRecentWindow, monthsAgoYmd, RECENT_DATE_MONTHS, todayYmd } from '@/lib/date'
+import { isWithinRecentWindow, monthsAgoYmd, RECENT_DATE_MONTHS, todayYmd, yearsAgoYmd } from '@/lib/date'
 
 // Today's date at midnight, formatted the same way the confirmed payload
 // sample uses (no timezone offset) — matches enquiryDate/dob's "T00:00:00" shape.
@@ -38,6 +38,16 @@ const PHONE_MAX = 15
 // POST /enquiries: enquiryDate must be within the last 3 months and not in
 // the future — same window as Application Payment's payDate (lib/date.ts).
 const ENQUIRY_DATE_RANGE_MESSAGE = 'Enquiry date must be within the last 3 months and not in the future.'
+// POST /enquiries: dob must make the student at least 10 years old.
+const MIN_AGE_YEARS = 10
+const DOB_RANGE_MESSAGE = `Student must be at least ${MIN_AGE_YEARS} years old.`
+// Backend cap on remarks.
+const REMARKS_MAX = 100
+const GENDER_OPTIONS = [
+  { value: '0', label: 'Male' },
+  { value: '1', label: 'Female' },
+  { value: '2', label: 'Other' },
+]
 
 export default function OnlineEnquiryPage() {
   const router = useRouter()
@@ -53,15 +63,8 @@ export default function OnlineEnquiryPage() {
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName]   = useState('')
-  // UI-only for now (2026-09-15, per request) — EnquiryInput (lib/api/
-  // admission/enquiry.ts) is confirmed field-for-field against a real
-  // Create.bru payload and has no gender field, unlike Application Filing's
-  // own confirmed gender byte (0=Female/1=Male). Captured here but
-  // deliberately NOT sent on save (see handleSave below) until a gender
-  // field is confirmed on the real Enquiry create endpoint — same
-  // "don't collect data that goes nowhere" caution this page's own dropped
-  // Preferred Study Mode field already applied, just kept instead of
-  // dropped this time, per request.
+  // Sent as gender: 0 = Male, 1 = Female, 2 = Other (post-enquiry.md).
+  // Optional, so blank goes out as null.
   const [gender, setGender] = useState('')
   // Split the same way Payment's own Phone field does — a cosmetic
   // country-code dropdown (real-data counterpart of Payment's own
@@ -202,6 +205,8 @@ export default function OnlineEnquiryPage() {
     else if (!isValidEnquiryEmail(email)) e.email = 'Enter a valid email'
     else if (!isVerifiedFor(verifiedEmail, email)) e.email = 'Verify the email before saving'
     if (!dob)               e.dob       = 'Date of Birth is required'
+    else if (dob > yearsAgoYmd(MIN_AGE_YEARS)) e.dob = DOB_RANGE_MESSAGE
+    if (notes.trim().length > REMARKS_MAX) e.notes = `Notes must be ${REMARKS_MAX} characters or fewer`
     if (!enquiryDate)       e.enquiryDate = 'Enquiry date is required.'
     else if (!isWithinRecentWindow(enquiryDate)) e.enquiryDate = ENQUIRY_DATE_RANGE_MESSAGE
     if (!intakeGuid)        e.intakeGuid = 'Please select an Intake'
@@ -235,9 +240,9 @@ export default function OnlineEnquiryPage() {
         emailVerificationToken: verifiedEmail?.token ?? '',
         countryGuid,
         dob: `${dob}T00:00:00`,
+        gender: gender === '' ? null : +gender,
         remarks: notes.trim() || null,
         programGuid: programGuid || null,
-        // gender intentionally omitted — see the note on its useState above.
         // No Isbat Enquiry Source picker on this form yet — see the note in
         // lib/api/admission/enquiry.ts.
         isbatSourceGuid: null,
@@ -260,6 +265,21 @@ export default function OnlineEnquiryPage() {
           }
           if (code === 'validation_error' && /enquiry date/i.test(msg)) {
             const e = { enquiryDate: msg }
+            setErrors(prev => ({ ...prev, ...e }))
+            scrollToFirstError(e)
+            return
+          }
+          // Remaining documented create errors, matched by their message.
+          const fieldFor =
+            code === 'validation_error' && /mobile/i.test(msg) ? 'phone'
+            : code === 'validation_error' && /age must be|dob|birth/i.test(msg) ? 'dob'
+            : code === 'validation_error' && /remarks/i.test(msg) ? 'notes'
+            : code === 'validation_error' && /email/i.test(msg) ? 'email'
+            : code === 'not_found' && /^intake/i.test(msg) ? 'intakeGuid'
+            : code === 'not_found' && /^enquiry source/i.test(msg) ? 'sourceGuid'
+            : null
+          if (fieldFor) {
+            const e = { [fieldFor]: msg }
             setErrors(prev => ({ ...prev, ...e }))
             scrollToFirstError(e)
             return
@@ -305,7 +325,7 @@ export default function OnlineEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Gender</label>
-            <SearchSelect placeholder="— select —" options={['Male', 'Female']} value={gender} onChange={setGender} />
+            <SearchSelect placeholder="— select —" options={GENDER_OPTIONS} value={gender} onChange={setGender} />
           </div>
           <div className="fg">
             <label className="lbl">Phone <span className="text-clr-red">*</span></label>
@@ -340,7 +360,7 @@ export default function OnlineEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Date of Birth <span className="text-clr-red">*</span></label>
-            <DatePicker value={dob} onChange={v => { setDob(v); clearError('dob') }} hasError={!!errors.dob} />
+            <DatePicker value={dob} onChange={v => { setDob(v); clearError('dob') }} maxYmd={yearsAgoYmd(MIN_AGE_YEARS)} rangeMessage={DOB_RANGE_MESSAGE} hasError={!!errors.dob} />
             {errors.dob && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.dob}</p>}
           </div>
           <div className="fg">
@@ -398,7 +418,8 @@ export default function OnlineEnquiryPage() {
               (Online Enquiry specifically), so there's nothing left to pick here. */}
           <div className="fg col-span-1 md:col-span-2 lg:col-span-3">
             <label className="lbl">Enquiry Notes</label>
-            <textarea className="ctrl" rows={2} placeholder="Additional notes about the enquiry..." value={notes} onChange={e => setNotes(e.target.value)} />
+            <textarea className="ctrl" rows={2} placeholder="Additional notes about the enquiry..." maxLength={REMARKS_MAX} value={notes} onChange={e => { setNotes(e.target.value); clearError('notes') }} style={errors.notes ? { borderColor: 'var(--red)' } : undefined} />
+            {errors.notes && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.notes}</p>}
           </div>
         </div>
         <div className="sec-divider" />
@@ -411,7 +432,7 @@ export default function OnlineEnquiryPage() {
           <div className="flex gap-2">
             <button className="btn btn-ghost" onClick={() => router.push('/admission/enquiry-list')}>Cancel</button>
             {permissions.add && (
-              <button className="btn btn-primary" disabled={createEnquiry.isPending || !isVerifiedFor(verifiedEmail, email)} onClick={handleSave}>
+              <button className="btn btn-primary" disabled={createEnquiry.isPending} onClick={handleSave}>
                 {createEnquiry.isPending ? 'Saving…' : 'Save Enquiry'}
               </button>
             )}

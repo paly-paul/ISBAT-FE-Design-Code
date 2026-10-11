@@ -7,6 +7,9 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { useBatchSummary } from '@/hooks/academic/useBatchSummary'
+import { useBatchCodesForIntake } from '@/hooks/academic/useBatches'
+import { InfiniteSearchSelect } from '@/components/InfiniteSearchSelect'
+import { getIntakesPaged } from '@/lib/api/academic/intake'
 
 // Ported from isbat_student_module.html's Batch Summary page. Campus
 // dropdown loads from GET /academic/campus/dropdown on mount
@@ -48,27 +51,44 @@ function semesterLabelFromCode(semCode: number): string {
 const PAGE_SIZE = 10
 
 export default function Page() {
-  const [intake, setIntake] = useState('Spring 2026')
   const [campusGuid, setCampusGuid] = useState('')
   const [page, setPage] = useState(1)
   const { data: campuses = [] } = useCampusDropdown()
-  const { data, isLoading } = useBatchSummary(campusGuid || null, page, PAGE_SIZE)
+  // The endpoint returns every batch for the campus in one go (no server
+  // paging — see useBatchSummary), so page it here. Before, the table showed
+  // the whole list on page 1 and the same list again on every other page.
+  const { data, isLoading } = useBatchSummary(campusGuid || null)
 
-  const rows = data?.items ?? []
-  const totalCount = data?.totalCount ?? 0
+  // Intake filter. The summary rows have no intake field and the endpoint
+  // takes no intake param, so fetch the intake's batch codes from
+  // GET /batches/dropdown?intakeGuid= and keep only matching rows.
+  const [intakeGuid, setIntakeGuid] = useState('')
+  const intakeBatches = useBatchCodesForIntake(intakeGuid || null)
+  const intakeLoading = !!intakeGuid && intakeBatches.isLoading
+
+  const allRows = useMemo(() => {
+    const items = data?.items ?? []
+    if (!intakeGuid) return items
+    const codes = intakeBatches.data
+    return codes ? items.filter(r => codes.has(r.batchCode)) : []
+  }, [data, intakeGuid, intakeBatches.data])
+  const totalCount = allRows.length
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
-  const stats = useMemo(() => statsFromRows(rows), [rows])
+  const rows = allRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  // Stat tiles cover every batch for the campus, not just the visible page.
+  const stats = useMemo(() => statsFromRows(allRows), [allRows])
 
   // Land back on page 1 whenever the campus filter changes — the previous
   // page offset almost never lands on a valid page of the newly-filtered set.
-  useEffect(() => { setPage(1) }, [campusGuid])
+  useEffect(() => { setPage(1) }, [campusGuid, intakeGuid])
 
-  // Keep the page state clamped if the backend-reported totalCount drops
-  // (for example after a stricter campus filter).
+  // Keep the page state clamped if the list shrinks (e.g. a stricter campus
+  // filter) — only against loaded data, so a pending fetch can't bounce
+  // the page back to 1.
   useEffect(() => {
-    if (page !== safePage) setPage(safePage)
-  }, [page, safePage])
+    if (data && page !== safePage) setPage(safePage)
+  }, [data, page, safePage])
 
   return (
     <div className="page active" id="page-batch-summary">
@@ -82,18 +102,24 @@ export default function Page() {
             value={campusGuid}
             onChange={setCampusGuid}
           />
-          <SearchSelect
-            style={{ width: 200 }}
-            options={['Spring 2026', 'Fall 2025', 'Spring 2025']}
-            value={intake}
-            onChange={setIntake}
-          />
+          {/* Real intakes now (was a hardcoded, unused list). Filters the
+              summary via the intake's batch codes — see intakeBatches. */}
+          <div style={{ width: 220 }}>
+            <InfiniteSearchSelect
+              queryKey={['intakes', 'batch-summary']}
+              fetchPage={getIntakesPaged}
+              toOption={i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })}
+              allLabel="All Intakes"
+              value={intakeGuid}
+              onChange={setIntakeGuid}
+            />
+          </div>
           <button className="btn btn-neu btn-sm"><i className="lni lni-download"></i> Export</button>
         </div>
       </div>
 
       <div className="stats-row">
-        <div className="stat-card"><div className="stat-lbl">Total Batches</div><div className="stat-num" style={{ color: 'var(--b700)' }}>{stats.totalBatches}</div><div className="stat-sub">{campusGuid ? 'At this campus' : 'Active this intake'}</div></div>
+        <div className="stat-card"><div className="stat-lbl">Total Batches</div><div className="stat-num" style={{ color: 'var(--b700)' }}>{stats.totalBatches}</div><div className="stat-sub">{[campusGuid && 'At this campus', intakeGuid && 'In this intake'].filter(Boolean).join(' · ') || 'Across all campuses'}</div></div>
         <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Students</div><div className="stat-num" style={{ color: 'var(--green)' }}>{stats.totalStudents}</div><div className="stat-sub up">Across all batches</div></div>
         <div className="stat-card"><div className="stat-lbl">Avg Batch Size</div><div className="stat-num">{stats.avgBatchSize}</div><div className="stat-sub">students / batch</div></div>
       </div>
@@ -115,10 +141,10 @@ export default function Page() {
               </tr>
             </thead>
             <tbody>
-              {isLoading
+              {(isLoading || intakeLoading)
                 ? <TableLoadingState colSpan={6} />
                 : rows.length === 0
-                  ? <EmptyState colSpan={6} hasFilters={!!campusGuid} onClearFilters={() => setCampusGuid('')} />
+                  ? <EmptyState colSpan={6} hasFilters={!!campusGuid || !!intakeGuid} onClearFilters={() => { setCampusGuid(''); setIntakeGuid('') }} />
                   : rows.map((r, i) => (
                     // batchGuid alone isn't a safe key — the real endpoint's
                     // field names aren't confirmed yet (see file header) and

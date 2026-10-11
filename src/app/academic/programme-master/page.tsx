@@ -17,6 +17,7 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useCreateProgramMaster, useDeleteProgramMasterComplete, useProgramMastersPaged, useUpdateProgramMasterComplete } from '@/hooks/academic/useProgramMaster'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
 import { formatDate } from '@/lib/date'
 
 const PAGE_SIZE = 10
@@ -120,6 +121,7 @@ export default function Page() {
     const specializationNames = (p.streams ?? []).map(stream => stream.streamName).filter(Boolean)
     return {
       programGuid: p.programGuid,
+      programLevelGuid: p.programLevelGuid,
       progCode: p.programCode,
       progName: p.programName,
       group: p.programGroupName ?? '—',
@@ -142,7 +144,10 @@ export default function Page() {
 
   const groupFilterOpts = Array.from(new Set(rows.map(r => r.group)))
   const levelFilterOpts = Array.from(new Set(rows.map(r => r.level)))
-  const levelDropdownOpts = Array.from(new Set(rows.map(r => r.level.split(' · ')[0])))
+  // Options come from the Programme Level master, not from the rows on this
+  // page (which only offered levels that happened to be on screen).
+  const { data: programLevels = [] } = useProgramLevels()
+  const levelDropdownOpts = programLevels.map(l => ({ value: l.programLevelGuid, label: l.levelName }))
 
   // Live preview shown in the search dropdown as the user types — matches
   // the same code/name test as the table's own search filter below, just
@@ -155,10 +160,9 @@ export default function Page() {
     : []
 
   const filteredRows = rows.filter(r => {
-    // The dropdown only offers the bare level name (Bachelor/Master/…), while
-    // r.level is that name plus the "· Nyr / Nsem" suffix — match on prefix
-    // rather than exact equality so this stays in sync with the column filter.
-    if (levelFilter && !r.level.startsWith(levelFilter)) return false
+    // levelFilter is a programLevelGuid. GET /program-master has no level
+    // param, so this still only narrows the current page.
+    if (levelFilter && r.programLevelGuid !== levelFilter) return false
     if (statusFilter && r.admissionStatus !== statusFilter) return false
     // Re-filter client-side on top of whatever the server sent back — rows
     // is already search-scoped (see useProgramMastersPaged above), but this
@@ -364,7 +368,7 @@ export default function Page() {
             <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
             <div className="perm-delete-title">Delete {deleteTarget.progName}?</div>
             <div className="perm-delete-sub">
-              This will permanently delete this programme version and all its course units and fee structures. This can&apos;t be undone.
+              This will delete this programme version and all its course units and fee structures. Enrolled students and timetable entries are not checked first, so make sure nothing still uses it.
             </div>
             <div className="perm-delete-actions">
               <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>

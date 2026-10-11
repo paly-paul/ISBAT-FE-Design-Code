@@ -15,7 +15,7 @@ import { useCountries, useSearchCountriesInfinite } from '@/hooks/config/useCoun
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput, sanitizeNameInput } from '@/lib/errorMessages'
-import { consumeFilingPrefillRef } from '@/lib/filingHandoff'
+import { consumeFilingPrefill } from '@/lib/filingHandoff'
 import { getEnquiryById, getEnquiries } from '@/lib/api/admission/enquiry'
 import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
@@ -25,11 +25,11 @@ import {
   useDeleteQualification,
   useSaveGeneral,
   useSaveQualification,
-  useSearchApplicationsForFiling,
   useSearchApplicationsForFilingInfinite,
   useSubmitApplication,
   useUploadPhoto,
 } from '@/hooks/admission/useApplicationFiling'
+import { filingResultFromNewPayment } from '@/lib/api/admission/applicationFiling'
 
 // Family Details tab removed per the Application Filling requirements doc
 // (req. 10) — sponsorship fields already live in Personal Info.
@@ -88,6 +88,13 @@ function emptyQualRow(id: number): QualRow {
 // Qualification duration (yearsTaken) — whole years, per the API.
 const QUAL_DURATION_MIN = 1
 const QUAL_DURATION_MAX = 10
+// POST /application-filling/qualifications limits.
+const QUAL_TEXT_MAX = 200
+const QUAL_GRADE_MAX = 50
+const PASS_YEAR_MIN = 1950
+// POST /application-filling/photo: extension-checked only.
+const PHOTO_EXT_RE = /\.(jpe?g|png|bmp)$/i
+const PHOTO_TYPE_MESSAGE = 'Only JPG, PNG, or BMP images are accepted.'
 
 // `error` renders the same inline field message the academic forms use
 // (.field-err, picked up by scrollToFirstError).
@@ -175,6 +182,15 @@ function applicantName(a: FilingApplicationSearchResult): string {
   return [a.firstName, a.lastName].filter(Boolean).join(' ').trim()
 }
 
+// A selected applicant shows as "NAME (APPREF)" in the search box; editing
+// it (e.g. one backspace) turned that whole label into the search term,
+// which the server (matching name OR appRefNo) never matches. When the text
+// still carries the "(APPREF" part, search by that reference instead.
+function applicantSearchTerm(text: string): string {
+  const ref = text.match(/\(([^()]*)\)?\s*$/)?.[1]?.trim()
+  return ref && ref.length >= 2 ? ref : text.trim()
+}
+
 // One row in the Documents tab's "Uploaded Documents" list (req. 11: view/
 // download uploaded documents). Two sources of a document, handled
 // differently since only one of them is actually viewable client-side:
@@ -249,7 +265,7 @@ export default function FilingPage() {
   // isn't fired on every single keystroke.
   const [committedApplicantSearch, setCommittedApplicantSearch] = useState('')
   useEffect(() => {
-    const t = setTimeout(() => setCommittedApplicantSearch(applicantSearch.trim()), 300)
+    const t = setTimeout(() => setCommittedApplicantSearch(applicantSearchTerm(applicantSearch)), 300)
     return () => clearTimeout(t)
   }, [applicantSearch])
   useEffect(() => {
@@ -296,79 +312,16 @@ export default function FilingPage() {
     return () => document.removeEventListener('mousedown', handle)
   }, [showApplicantDropdown])
 
-  // Auto-carries the appRefNo over from Payment's "Proceed to Filing" button
-  // (see lib/filingHandoff.ts) instead of leaving the counsellor to manually
-  // retype/remember it right after generating a receipt — read once on
-  // mount, consumed immediately so a later manual visit/refresh doesn't
-  // keep re-triggering this. Kept as its own dedicated one-shot lookup
-  // (bypassing the 300ms debounce above) rather than waiting on the
-  // interactive dropdown's own debounced search, so the auto-select fires
-  // as soon as possible after landing on the page. pageSize can stay small
-  // now that searchTerm is a real server-side filter (see
-  // getApplicationPayments) — the exact appRefNo should land on page 1 —
-  // where this previously needed pageSize=12000 to reliably find it via
-  // client-side filtering over a near-complete unfiltered fetch.
-  const [prefillRef, setPrefillRef] = useState<string | null>(null)
-  // Retry budget for the lookup effect below — see its own comment for why
-  // this exists at all.
-  const [prefillAttempt, setPrefillAttempt] = useState(0)
-  const PREFILL_MAX_ATTEMPTS = 4
-  const PREFILL_RETRY_MS = 900
+  // Payment's "Proceed to Filing" hands over the just-saved payment itself
+  // (lib/filingHandoff.ts). Select it directly, the same as a dropdown pick:
+  // no search, because a just-paid applicant has no application row yet.
+  // Read once on mount and consumed, so a refresh or later visit doesn't
+  // reopen it.
   useEffect(() => {
-    const ref = consumeFilingPrefillRef()
-    if (!ref) return
-    setPrefillRef(ref)
-    setPrefillAttempt(0)
-  }, [])
-
-  // Deliberately unscoped by intake, unlike the interactive dropdown above —
-  // this is a direct lookup of one already-known appRefNo handed off from a
-  // just-created payment (see lib/filingHandoff.ts), not a browse. Passing
-  // effectiveIntakeCode here was the actual bug behind the "Could not find
-  // application… yet" toast below: effectiveIntakeCode falls back to
-  // whichever intake has the highest intakeCode when none is flagged
-  // current (see that constant's own comment), so a payment just recorded
-  // against an OLDER intake (e.g. appRefNo APP20242/7144 — intake 20242)
-  // was being filtered out by a newer intake's ?intakeCode= scope every
-  // single time, not just occasionally — no amount of "try again in a
-  // moment" would ever have found it.
-  const { data: prefillResults, refetch: refetchPrefill } = useSearchApplicationsForFiling(
-    prefillRef ?? '', 1, 20, !!prefillRef,
-  )
-  // Once the search this triggers actually comes back, auto-select the
-  // matching row so the counsellor lands straight on a filled Personal Info
-  // tab instead of still having to click it from the dropdown.
-  //
-  // Confirmed live (2026-09-10): this lookup can genuinely lose a
-  // read-after-write race against the backend right after Payment's POST
-  // resolves — it fires immediately, with no debounce, while the
-  // interactive dropdown search just above it (committedApplicantSearch)
-  // is debounced 300ms and can end up finding the same application a beat
-  // later. Firing once and giving up produced exactly that: the toast
-  // below telling the user to "try searching again in a moment" while the
-  // dropdown, searching a moment later on its own, already had. Retry a
-  // few times ourselves instead of just suggesting it — only surface the
-  // toast once the retry budget is actually exhausted.
-  useEffect(() => {
-    if (!prefillRef || !prefillResults) return
-    const ref = prefillRef
-    const match = prefillResults.items.find(a => a.appRefNo === ref)
-    if (match) {
-      setPrefillRef(null)
-      selectApplication(match)
-      return
-    }
-    if (prefillAttempt < PREFILL_MAX_ATTEMPTS) {
-      const t = setTimeout(() => {
-        setPrefillAttempt(a => a + 1)
-        refetchPrefill()
-      }, PREFILL_RETRY_MS)
-      return () => clearTimeout(t)
-    }
-    setPrefillRef(null)
-    showToast(`Could not find application ${ref} yet — try searching again in a moment, or check the reference number`, 'error')
+    const payment = consumeFilingPrefill()
+    if (payment) selectApplication(filingResultFromNewPayment(payment))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefillResults])
+  }, [])
 
   // Once an application is picked, warn on leaving until it's actually been
   // submitted for vetting — covers tab close/refresh/typing a new URL/
@@ -590,7 +543,16 @@ export default function FilingPage() {
   }, [countries, countrySearchResults])
 
   // Passport/Visa/Refugee sections only apply to non-home-country nationals.
-  const isForeign = countryGuid !== '' && !countries.find(c => c.countryGuid === countryGuid)?.defaultCountry
+  // Compares against the ONE home country (defaultCountry == 1) instead of
+  // reading the picked country's own flag as truthy: a flag that comes back
+  // as "0" (string) is truthy, which made every nationality look like home
+  // and kept these sections locked. Number() accepts 1 or "1"; Uganda by
+  // code/name is the fallback if no country is flagged.
+  const homeCountryGuid = (
+    countries.find(c => Number(c.defaultCountry) === 1)
+    ?? countries.find(c => c.countryCode?.toUpperCase() === 'UGA' || c.countryName?.trim().toLowerCase() === 'uganda')
+  )?.countryGuid
+  const isForeign = countryGuid !== '' && !!homeCountryGuid && countryGuid !== homeCountryGuid
 
   // Per the requirements doc (req. 8): entering any Passport or Visa detail
   // locks out Refugee Details entirely. Clearing isRefugee/refugeeId/
@@ -731,7 +693,6 @@ export default function FilingPage() {
       showToast('This application is missing Campus/Programme/Fee Structure data — check the source record', 'error')
       return
     }
-    if (isRefugee && !refugeeId.trim()) { showToast('Refugee ID is required for refugee students', 'error'); return }
     const e: Record<string, string> = {}
     // Typing can't add digits (sanitizeNameInput), but names prefilled from
     // the enquiry or an earlier record can still contain them.
@@ -742,6 +703,8 @@ export default function FilingPage() {
     // The pickers already block an out-of-order pair, but dates prefilled
     // from an earlier record can still arrive that way.
     if (vStartDate && vEndDate && vStartDate > vEndDate) e.vEndDate = 'Visa expiry can’t be before the visa start date'
+    // API: refugeeId required when refugee = 1.
+    if (isRefugee && !refugeeId.trim()) e.refugeeId = 'Refugee ID is required when refugee status is selected.'
     setGeneralErrors(e)
     if (Object.keys(e).length) { scrollToFirstError(e); return }
 
@@ -785,7 +748,15 @@ export default function FilingPage() {
           setIntApplication(res.intApplication); setGeneralSaved(true)
           showToast('Application details saved', 'success'); setActiveTab('qualifications')
         },
-        onError: (error: Error) => showToast(error.message || 'Failed to save application details', 'error'),
+        onError: (error: Error) => {
+          if (/refugee id/i.test(error.message)) {
+            const fe = { refugeeId: error.message }
+            setGeneralErrors(prev => ({ ...prev, ...fe }))
+            scrollToFirstError(fe)
+            return
+          }
+          showToast(error.message || 'Failed to save application details', 'error')
+        },
       },
     )
   }
@@ -817,10 +788,17 @@ export default function FilingPage() {
     const e: Record<string, string> = {}
     if (!row.institution.trim()) e.institution = 'Institution is required'
     else if (!/\p{L}/u.test(row.institution)) e.institution = 'Institution name must contain letters and cannot be only numbers.'
+    else if (row.institution.trim().length > QUAL_TEXT_MAX) e.institution = `Institution must be ${QUAL_TEXT_MAX} characters or fewer`
     if (!row.university.trim()) e.university = 'University / Awarding Board is required'
     else if (!/\p{L}/u.test(row.university)) e.university = 'University / board name must contain letters and cannot be only numbers.'
+    else if (row.university.trim().length > QUAL_TEXT_MAX) e.university = `University / Awarding Board must be ${QUAL_TEXT_MAX} characters or fewer`
+    // Server checks against the current UTC year.
+    const passYear = Number(row.passYear)
+    const thisYear = new Date().getUTCFullYear()
     if (!row.passYear) e.passYear = 'Year is required'
+    else if (!Number.isInteger(passYear) || passYear < PASS_YEAR_MIN || passYear > thisYear) e.passYear = `Year must be between ${PASS_YEAR_MIN} and ${thisYear}`
     if (!row.grade.trim()) e.grade = 'Grade is required'
+    else if (row.grade.trim().length > QUAL_GRADE_MAX) e.grade = `Grade must be ${QUAL_GRADE_MAX} characters or fewer`
     const years = Number(row.yearsTaken)
     if (!row.yearsTaken) e.yearsTaken = 'Duration is required'
     else if (!Number.isInteger(years) || years < QUAL_DURATION_MIN || years > QUAL_DURATION_MAX) e.yearsTaken = 'Duration must be between 1 and 10 years.'
@@ -833,6 +811,9 @@ export default function FilingPage() {
     if (/institution name/i.test(message)) return { institution: message }
     if (/university \/ board name/i.test(message)) return { university: message }
     if (/duration must be/i.test(message)) return { yearsTaken: message }
+    if (/pass ?year|year of completion/i.test(message)) return { passYear: message }
+    if (/grade/i.test(message)) return { grade: message }
+    if (/proof document/i.test(message)) return { proofFile: message }
     return null
   }
 
@@ -954,12 +935,12 @@ export default function FilingPage() {
           <span className="text-xs font-semibold text-g500">Qualification {index + 1}</span>
         </div>
         <div className="g3">
-          <Field label="Institution" req error={err.institution}><Input placeholder="School / University" value={row.institution} onChange={v => updateQualRow(row.id, { institution: v })} readOnly={saved} hasError={!!err.institution} /></Field>
-          <Field label="University / Awarding Board" req error={err.university}><Input placeholder="e.g. Makerere University" value={row.university} onChange={v => updateQualRow(row.id, { university: v })} readOnly={saved} hasError={!!err.university} /></Field>
+          <Field label="Institution" req error={err.institution}><Input placeholder="School / University" maxLength={QUAL_TEXT_MAX} value={row.institution} onChange={v => updateQualRow(row.id, { institution: v })} readOnly={saved} hasError={!!err.institution} /></Field>
+          <Field label="University / Awarding Board" req error={err.university}><Input placeholder="e.g. Makerere University" maxLength={QUAL_TEXT_MAX} value={row.university} onChange={v => updateQualRow(row.id, { university: v })} readOnly={saved} hasError={!!err.university} /></Field>
           <Field label="Year" req error={err.passYear}><Input type="number" placeholder="2023" value={row.passYear} onChange={v => updateQualRow(row.id, { passYear: v })} readOnly={saved} hasError={!!err.passYear} /></Field>
         </div>
         <div className="g3 mt-3">
-          <Field label="Grade" req error={err.grade}><Input placeholder="e.g. First Class, 4.2 CGPA" value={row.grade} onChange={v => updateQualRow(row.id, { grade: v })} readOnly={saved} hasError={!!err.grade} /></Field>
+          <Field label="Grade" req error={err.grade}><Input placeholder="e.g. First Class, 4.2 CGPA" maxLength={QUAL_GRADE_MAX} value={row.grade} onChange={v => updateQualRow(row.id, { grade: v })} readOnly={saved} hasError={!!err.grade} /></Field>
           <Field label="Duration (Years)" req error={err.yearsTaken}>
             {/* Whole years 1–10 only (API rule). Text + numeric keypad rather
                 than type="number", which lets through "e", decimals and
@@ -1003,13 +984,14 @@ export default function FilingPage() {
 
   // ── Documents / Photo / Submit ──────────────────────────────────────────
   const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoError, setPhotoError] = useState<string | null>(null)
   const [photoSaved, setPhotoSaved] = useState(false)
   const uploadPhoto = useUploadPhoto()
   const submitApplication = useSubmitApplication()
 
   useEffect(() => {
     setPhotoSaved(!!selectedApplication?.studUserFileName)
-    setPhotoFile(null)
+    setPhotoFile(null); setPhotoError(null)
   }, [selectedApplication])
 
   const hasPhoto = photoSaved || !!selectedApplication?.studUserFileName
@@ -1025,12 +1007,21 @@ export default function FilingPage() {
 
   function handleSavePhoto() {
     if (!selectedApplication || !photoFile) {
-      showToast('Please select a photo file first', 'warn')
+      setPhotoError('Please select a photo file first')
+      scrollToFirstError({ photo: 'x' })
+      return
+    }
+    if (!PHOTO_EXT_RE.test(photoFile.name)) {
+      setPhotoError(PHOTO_TYPE_MESSAGE)
+      scrollToFirstError({ photo: 'x' })
       return
     }
     uploadPhoto.mutate({ appRefNo: selectedApplication.appRefNo, photo: photoFile }, {
       onSuccess: () => { setPhotoSaved(true); showToast('Photo uploaded successfully', 'success') },
-      onError: (error: Error) => showToast(error.message || 'Failed to upload photo', 'error'),
+      onError: (error: Error) => {
+        if (/jpg|png|bmp|photo/i.test(error.message)) { setPhotoError(error.message); scrollToFirstError({ photo: 'x' }); return }
+        showToast(error.message || 'Failed to upload photo', 'error')
+      },
     })
   }
 
@@ -1416,7 +1407,7 @@ export default function FilingPage() {
                         </label>
                         {isRefugee && (
                           <div className="g3 mt-3">
-                            <Field label="Refugee ID" req><Input placeholder="Refugee ID number" value={refugeeId} onChange={setRefugeeId} /></Field>
+                            <Field label="Refugee ID" req error={generalErrors.refugeeId}><Input placeholder="Refugee ID number" value={refugeeId} onChange={v => { setRefugeeId(v); setGeneralErrors(p => ({ ...p, refugeeId: "" })) }} hasError={!!generalErrors.refugeeId} /></Field>
                             {/* <Field label="UNHCR Case Number"><Input placeholder="UNH-XXXX" /></Field> */}
                             <Field label="Refugee Certificate"><FileZone file={refugeeFile} onChange={setRefugeeFile} /></Field>
                           </div>
@@ -1520,11 +1511,16 @@ export default function FilingPage() {
                   <div className="filing-form-col">
                     <div className="sec-divider">Student Photo</div>
                     <div className="g2 mt-3">
-                      <Field label="Photo" req>
+                      <Field label="Photo" req error={photoError ?? undefined}>
                         <FileZone
                           hint="Click to upload passport-style photo (JPG/JPEG/PNG/BMP)"
                           file={photoFile}
-                          onChange={f => { setPhotoFile(f); if (f) setPhotoSaved(false) }}
+                          onChange={f => {
+                            // Reject other types on pick so they never reach upload.
+                            if (f && !PHOTO_EXT_RE.test(f.name)) { setPhotoError(PHOTO_TYPE_MESSAGE); return }
+                            setPhotoError(null)
+                            setPhotoFile(f); if (f) setPhotoSaved(false)
+                          }}
                         />
                       </Field>
                       <div className="flex flex-col items-start justify-end gap-1">

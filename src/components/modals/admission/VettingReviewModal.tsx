@@ -25,9 +25,14 @@ interface Props extends ModalProps {
     isPending: boolean
   }
   onReject: () => void
+  // The vet and wait endpoints have no permission check server-side (see
+  // post-vet-application.md), so the UI is the only gate. Defaults to true.
+  canVet?: boolean
 }
 
-export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid, vetApplication, onReject }: Props) {
+const WAIT_REMARKS_MAX = 500
+
+export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid, vetApplication, onReject, canVet = true }: Props) {
   const { data: detail, isLoading, isError, error } = useVettingApplicationDetail(applicationGuid, isOpen)
   const waitApplication = useWaitApplication()
 
@@ -270,8 +275,9 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
               )}
 
               <div className="fg">
-                <label className="lbl">Vetting Remarks</label>
-                <textarea className="ctrl" rows={3} placeholder="Enter notes — used for the Wait action's remarks; Approve/Reject send their own justification separately." value={remarks} onChange={e => setRemarks(e.target.value)} />
+                <label className="lbl">Vetting Remarks <span className="text-g400" style={{ fontWeight: 400 }}>({remarks.trim().length}/{WAIT_REMARKS_MAX})</span></label>
+                {/* POST .../wait caps remarks at 500 chars. */}
+                <textarea className="ctrl" rows={3} maxLength={WAIT_REMARKS_MAX} placeholder="Enter notes — used for the Wait action's remarks; Approve/Reject send their own justification separately." value={remarks} onChange={e => setRemarks(e.target.value)} />
               </div>
             </div>
           </div>
@@ -284,6 +290,12 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
               <span>{approveBlockedReason} You can still reject it or place it on hold.</span>
             </div>
           )}
+          {!canVet ? (
+            <div className="info-box" role="note" style={{ fontSize: 13 }}>
+              <i className="lni lni-eye" aria-hidden="true"></i>
+              <span>View only. You don&apos;t have permission to approve, reject or hold applications.</span>
+            </div>
+          ) : (
           <div className="grid grid-cols-3 gap-3">
             <button className="btn btn-amber w-full justify-center" disabled={waitApplication.isPending} onClick={handleWait}>
               <i className="lni lni-timer" /> {waitApplication.isPending ? 'Saving…' : 'Wait for Original Documents'}
@@ -293,6 +305,7 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
             </button>
             <button className="btn btn-danger w-full justify-center" onClick={onReject}><i className="lni lni-close" /> Reject Application</button>
           </div>
+          )}
         </div>
       </div>
     </div>

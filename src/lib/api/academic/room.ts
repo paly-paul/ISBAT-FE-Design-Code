@@ -65,11 +65,23 @@ export function getRooms(search = '', pageNumber = 1, pageSize = 1000): Promise<
         ? (data as Partial<RoomListResult>)
         : null
 
+      // Room Management pagination bug (QA, 2026-10): the endpoint currently
+      // ignores page/pageSize and returns every room, so page 1 showed them
+      // all and every other page showed the same rows. If we got back more
+      // rows than asked for, it didn't page — take the requested window
+      // ourselves. A correctly paged response (≤ pageSize rows) passes
+      // through untouched, so this stops mattering once the backend pages.
+      const unpaged = items.length > pageSize
+      const totalCount = unpaged
+        ? Math.max(items.length, typeof envelope?.totalCount === 'number' ? envelope.totalCount : 0)
+        : typeof envelope?.totalCount === 'number' ? envelope.totalCount : items.length
+      const start = (pageNumber - 1) * pageSize
+
       return {
-        items,
-        totalCount: typeof envelope?.totalCount === 'number' ? envelope.totalCount : items.length,
-        pageNumber: typeof envelope?.pageNumber === 'number' ? envelope.pageNumber : pageNumber,
-        pageSize: typeof envelope?.pageSize === 'number' ? envelope.pageSize : pageSize,
+        items: unpaged ? items.slice(start, start + pageSize) : items,
+        totalCount,
+        pageNumber,
+        pageSize,
       }
     })
 }

@@ -107,7 +107,16 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
       { guid: enquiryGuid, input: { advisorGuid: advisorGuid || null, programGuid: programGuid || null, campusGuid } },
       {
         onSuccess: () => { setSaved(true); showToast('Enquiry updated successfully') },
-        onError: (error: Error) => setFailure(error.message || 'Failed to update enquiry. Please try again.'),
+        onError: (error: Error) => {
+          // Only campus has a field to point at; the rest go to the popup.
+          if (error instanceof AuthError && error.code === 'validation_error' && /campus/i.test(error.message)) {
+            const e = { campusGuid: error.message }
+            setErrors(prev => ({ ...prev, ...e }))
+            scrollToFirstError(e)
+            return
+          }
+          setFailure(error.message || 'Failed to update enquiry. Please try again.')
+        },
       },
     )
   }
@@ -204,6 +213,9 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
           <div className="g2">
             <div className="fg">
               <div className="lbl">Advisor</div>
+              {/* Editable on request. put-enquiry.md says the advisor comes
+                  from the latest follow-up, so this may not stick; see
+                  EnquiryUpdateInput. */}
               <SearchSelect placeholder="— unassigned —" options={advisorOptions} value={advisorGuid} onChange={setAdvisorGuid} />
             </div>
             <div className="fg">

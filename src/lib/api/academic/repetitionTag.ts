@@ -7,6 +7,9 @@ export interface RepetitionTag {
   courseUnitRepetitionGuid: string
   tagCode: string
   tagName: string
+  // Returned by GET /course-unit-repetitions(/{guid}) per the API docs —
+  // lets Edit prefill the level directly. Optional for older mocks.
+  programLevelGuid?: string
   intLevel: number
   levelCode: string
   levelName: string

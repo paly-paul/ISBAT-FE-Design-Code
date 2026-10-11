@@ -15,6 +15,10 @@ interface Props extends ModalProps {
   }
 }
 
+// POST /application-filling/{guid}/vet: justificationReg max 500 chars.
+const JUSTIFICATION_MAX = 500
+const SEPARATOR = ' — '
+
 // Brought in line with the rest of the app's real-hook-layer modal
 // convention (SuccessPopup/FailurePopup) — this used to just toast on both
 // success and failure, unlike VettingReviewModal's own Approve action right
@@ -28,12 +32,17 @@ export function RejectModal({ isOpen, onClose, showToast, applicationGuid, vetAp
 
   if (!isOpen) return null
 
+  // The reason and remarks are sent joined as justificationReg, which the
+  // API caps at 500 chars, so remarks get whatever the reason leaves.
+  const remarksMax = JUSTIFICATION_MAX - (reason ? `${reason}${SEPARATOR}`.length : 0)
+
   function handleClose() { setReason(''); setRemarks(''); setErrors({}); setSaved(false); setFailure(null); onClose() }
 
   function validate() {
     const e: Record<string, string> = {}
     if (!reason)          e.reason  = 'Please select a Rejection Reason'
     if (!remarks.trim())  e.remarks = 'Detailed Remarks are required'
+    else if (remarks.trim().length > remarksMax) e.remarks = `Remarks must be ${remarksMax} characters or fewer with this reason (now ${remarks.trim().length})`
     setErrors(e)
     scrollToFirstError(e)
     return Object.keys(e).length === 0
@@ -47,7 +56,7 @@ export function RejectModal({ isOpen, onClose, showToast, applicationGuid, vetAp
     vetApplication.mutate(
       // action: 3 = Rejected — RegistrarDecision now matches the persisted
       // status enum's own numbering (2=Approved, 3=Rejected).
-      { applicationGuid, input: { action: 3, justificationReg: `${reason} — ${remarks.trim()}` } },
+      { applicationGuid, input: { action: 3, justificationReg: `${reason}${SEPARATOR}${remarks.trim()}` } },
       {
         onSuccess: () => { setSaved(true); showToast('Application rejected successfully.', 'warning') },
         onError: (err: Error) => setFailure(err.message || 'Failed to reject application.'),
@@ -100,8 +109,8 @@ export function RejectModal({ isOpen, onClose, showToast, applicationGuid, vetAp
         </div>
 
         <div className="fg mb-3">
-          <label className="lbl">Detailed Remarks <span className="req">*</span></label>
-          <textarea className="ctrl" rows={3} placeholder="Provide detailed remarks for the rejection..." value={remarks}
+          <label className="lbl">Detailed Remarks <span className="req">*</span> <span className="text-g400" style={{ fontWeight: 400 }}>({remarks.trim().length}/{remarksMax})</span></label>
+          <textarea className="ctrl" rows={3} placeholder="Provide detailed remarks for the rejection..." maxLength={remarksMax} value={remarks}
             onChange={e => { setRemarks(e.target.value); if (errors.remarks) setErrors(p => ({ ...p, remarks: '' })) }}
             style={errors.remarks ? { borderColor: 'var(--red)' } : undefined} />
           {errors.remarks && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.remarks}</p>}

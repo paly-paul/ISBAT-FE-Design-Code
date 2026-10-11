@@ -27,6 +27,8 @@ export interface EnquiryInput {
   // (which has no guid at all).
   countryGuid: string
   dob: string
+  // Optional per post-enquiry.md: 0 = Male, 1 = Female, 2 = Other.
+  gender: number | null
   remarks: string | null
   programGuid: string | null
   // Isbat Enquiry Source guid (enquirySource.ts's isbatSourceGuid) — a
@@ -82,7 +84,10 @@ export interface Enquiry {
   dob: string
   remarks: string | null
   programGuid: string | null
+  // From the enquiry's latest follow-up. advisorName is resolved on GET only
+  // (null on POST/PUT responses).
   advisorGuid: string | null
+  advisorName?: string | null
   followUpStatusGuid: string | null
   enquiryStatusGuid: string | null
   nextFollowDate: string | null
@@ -128,13 +133,13 @@ export interface EnquiryCounts {
   odelSourceCount: number
 }
 
-// Confirmed via Update.bru — a materially different, narrower shape than
-// EnquiryInput: "assign advisor, change status, assign program/campus."
-// All fields optional except campusGuid per the docs. enquiryStatus is
-// deliberately left out — it's a number with no confirmed source (the
-// Enquiry Status master only exposes a guid) — until that's resolved.
+// UpdateEnquiryRequest (put-enquiry.md): status, programme and campus;
+// campusGuid is the one required field. advisorGuid is still sent (kept
+// editable on request), but put-enquiry.md says the advisor comes from the
+// latest follow-up, so the backend may ignore it.
 export interface EnquiryUpdateInput {
   advisorGuid?: string | null
+  enquiryStatusGuid?: string | null
   programGuid?: string | null
   campusGuid: string
 }
@@ -325,8 +330,7 @@ export function getEnquiryById(guid: string): Promise<Enquiry> {
   return apiGet<Enquiry>(`/api/v1/admissions/enquiries/${guid}`)
 }
 
-// Assign advisor/programme/campus and (once confirmed) status on an
-// existing enquiry.
+// Change status/programme/campus on an existing enquiry.
 export function updateEnquiry(guid: string, input: EnquiryUpdateInput): Promise<Enquiry> {
   if (MOCK_AUTH) {
     const existing = mockEnquiries.find(e => e.enquiryGuid === guid)

@@ -14,6 +14,7 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useCreateProgramLevel, useDeleteProgramLevel, useProgramLevelsPaged, useUpdateProgramLevel, ProgramLevel } from '@/hooks/academic/useProgramLevels'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { AuthError } from '@/lib/api/client'
 
 const PAGE_SIZE = 10
 // Don't narrow the table (or open the search dropdown) until the user's
@@ -112,7 +113,16 @@ export default function Page() {
     if (!deleteTarget) return
     deleteProgramLevel.mutate(deleteTarget.programLevelGuid, {
       onSuccess: () => { setDeleteTarget(null); showToast('Programme Level deleted successfully') },
-      onError: (error: Error) => showToast(error.message || 'Failed to delete programme level', 'error'),
+      onError: (error: Error) => {
+        // The backend blocks the delete while programme groups or programmes
+        // still reference this level.
+        if (error instanceof AuthError && error.code === 'level_in_use') {
+          setDeleteTarget(null)
+          showToast(`${deleteTarget.levelCode} is still used by programme groups or programmes. Move or delete those first.`, 'error')
+          return
+        }
+        showToast(error.message || 'Failed to delete programme level', 'error')
+      },
     })
   }
 
@@ -263,7 +273,7 @@ export default function Page() {
             <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
             <div className="perm-delete-title">Delete {deleteTarget.levelName}?</div>
             <div className="perm-delete-sub">
-              This will permanently delete this programme level. This can&apos;t be undone.
+              This will delete this programme level. You can only delete a level that no programme group or programme uses.
             </div>
             <div className="perm-delete-actions">
               <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>

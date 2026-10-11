@@ -90,23 +90,33 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
     setErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
   }
 
+  // Mirrors SaveProgramGroupRequestValidator: code ≤ 10, name ≤ 200, level required.
   function validate() {
     const e: Record<string, string> = {}
     if (!groupCode.trim()) e.groupCode = 'Group Code is required'
+    else if (groupCode.trim().length > 10) e.groupCode = 'Group Code must be 10 characters or fewer'
     if (!groupName.trim()) e.groupName = 'Group Name is required'
+    else if (groupName.trim().length > 200) e.groupName = 'Group Name must be 200 characters or fewer'
     if (!programLevel)     e.programLevel = 'Select a programme level before proceeding'
     setErrors(e)
     scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
-  // Map known backend failures to a field error where the cause is
-  // actionable right there (duplicate groupCode); anything else shows the
-  // failure popup instead.
+  // Map the documented backend failures to the field they're about; anything
+  // else shows the failure popup.
   function handleSaveError(error: Error) {
     const code = error instanceof AuthError ? error.code : undefined
-    if (code === 'bad_request') {
+    // Duplicate code is a 409 `conflict`, not a 400.
+    if (code === 'conflict') {
       setErrors(prev => ({ ...prev, groupCode: error.message || 'A programme group with this code already exists.' }))
+      scrollToFirstError({ groupCode: 'x' })
+      return
+    }
+    // 404 is either the group itself (edit) or the level; the message tells them apart.
+    if (code === 'not_found' && /level/i.test(error.message)) {
+      setErrors(prev => ({ ...prev, programLevel: 'This programme level no longer exists. Pick another one.' }))
+      scrollToFirstError({ programLevel: 'x' })
       return
     }
     setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} programme group. Please try again.`)
@@ -114,7 +124,8 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
 
   function handleSubmit() {
     if (!validate()) return
-    const input: ProgramGroupInput = { groupCode, groupName, programLevelGuid: programLevel }
+    // Backend stores code/name untrimmed, so trim here.
+    const input: ProgramGroupInput = { groupCode: groupCode.trim(), groupName: groupName.trim(), programLevelGuid: programLevel }
 
     if (isEdit && programGroupGuid) {
       updateProgramGroup.mutate(
@@ -218,6 +229,7 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
             <input
               className="ctrl"
               placeholder="e.g. SCI"
+              maxLength={10}
               value={groupCode}
               onChange={e => { setGroupCode(e.target.value); clearError('groupCode') }}
               style={errors.groupCode ? { borderColor: 'var(--red)' } : undefined}
@@ -229,6 +241,7 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
             <input
               className="ctrl"
               placeholder="e.g. Science Group"
+              maxLength={200}
               value={groupName}
               onChange={e => { setGroupName(e.target.value); clearError('groupName') }}
               style={errors.groupName ? { borderColor: 'var(--red)' } : undefined}

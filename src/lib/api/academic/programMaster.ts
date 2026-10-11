@@ -246,11 +246,14 @@ export function createProgramMaster(input: ProgramMasterInput): Promise<ProgramM
   formData.append('pgmStatus', String(input.pgmStatus))
   formData.append('noIa', String(input.noIa))
   formData.append('programGroupGuid', input.programGroupGuid)
-  formData.append('unitCount', String(input.unitCount))
+  // Optional, but the validator rejects 0 when present, so a blank field
+  // must be omitted rather than sent as 0.
+  if (input.unitCount > 0) formData.append('unitCount', String(input.unitCount))
   formData.append('appFee', String(input.appFee))
   formData.append('lateFee', String(input.lateFee))
-  formData.append('facultyGuid', input.facultyGuid)
-  formData.append('currencyGuid', input.currencyGuid)
+  // Guid? fields: an empty string fails model binding with a 400, so omit.
+  if (input.facultyGuid) formData.append('facultyGuid', input.facultyGuid)
+  if (input.currencyGuid) formData.append('currencyGuid', input.currencyGuid)
   // Accreditation Date is optional (no required marker in Step 1) —
   // confirmed per program_master_frontend_fixes.md that sending "T00:00:00"
   // with no actual date picked was a real bug, not a harmless placeholder.
@@ -345,11 +348,14 @@ export function createProgramMasterStep1(input: ProgramMasterCreateInput): Promi
   formData.append('pgmStatus', String(input.pgmStatus))
   formData.append('noIa', String(input.noIa))
   formData.append('programGroupGuid', input.programGroupGuid)
-  formData.append('unitCount', String(input.unitCount))
+  // Optional, but the validator rejects 0 when present, so a blank field
+  // must be omitted rather than sent as 0.
+  if (input.unitCount > 0) formData.append('unitCount', String(input.unitCount))
   formData.append('appFee', String(input.appFee))
   formData.append('lateFee', String(input.lateFee))
-  formData.append('facultyGuid', input.facultyGuid)
-  formData.append('currencyGuid', input.currencyGuid)
+  // Guid? fields: an empty string fails model binding with a 400, so omit.
+  if (input.facultyGuid) formData.append('facultyGuid', input.facultyGuid)
+  if (input.currencyGuid) formData.append('currencyGuid', input.currencyGuid)
   // Same "omit rather than send a bogus/empty value" conventions as
   // createProgramMaster above — see its comments on these same fields.
   if (input.dateAcc) formData.append('dateAcc', input.dateAcc)
@@ -729,12 +735,15 @@ export function updateProgramMasterComplete(programGuid: string, input: ProgramM
   formData.append('pgmStatus', String(input.pgmStatus))
   formData.append('noIa', String(input.noIa))
   formData.append('programGroupGuid', input.programGroupGuid)
-  formData.append('unitCount', String(input.unitCount))
+  // Optional, but the validator rejects 0 when present, so a blank field
+  // must be omitted rather than sent as 0.
+  if (input.unitCount > 0) formData.append('unitCount', String(input.unitCount))
   formData.append('appFee', String(input.appFee))
   formData.append('lateFee', String(input.lateFee))
   formData.append('programLevelGuid', input.programLevelGuid)
-  formData.append('facultyGuid', input.facultyGuid)
-  formData.append('currencyGuid', input.currencyGuid)
+  // Guid? fields: an empty string fails model binding with a 400, so omit.
+  if (input.facultyGuid) formData.append('facultyGuid', input.facultyGuid)
+  if (input.currencyGuid) formData.append('currencyGuid', input.currencyGuid)
   // Same "omit rather than send a bogus date" fix as Create — see the note
   // on ProgramMasterInput.dateAcc.
   if (input.dateAcc) formData.append('dateAcc', input.dateAcc)

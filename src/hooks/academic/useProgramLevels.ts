@@ -82,8 +82,10 @@ export function useProgramLevelsByGuids(guids: string[]) {
 }
 
 export function useCreateProgramLevel() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: ProgramLevelInput) => createProgramLevel(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRAM_LEVELS_KEY }),
   })
 }
 

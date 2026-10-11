@@ -44,6 +44,19 @@ export function useBatchDropdown(programGuid: string | null, semesterGuid: strin
   })
 }
 
+// Batch codes in one intake — used to filter Batch Summary by intake, whose
+// own rows carry no intake field (rows are matched on batchCode).
+export function useBatchCodesForIntake(intakeGuid: string | null) {
+  return useQuery({
+    queryKey: [...BATCHES_KEY, 'dropdown', 'intake', intakeGuid],
+    queryFn: () => getBatchDropdown(undefined, undefined, intakeGuid as string)
+      .then(items => new Set(items.map(b => b.batchCode))),
+    enabled: !!intakeGuid,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
 export function useCreateBatch() {
   return useMutation({
     mutationFn: (input: BatchCreateInput) => createBatch(input),
