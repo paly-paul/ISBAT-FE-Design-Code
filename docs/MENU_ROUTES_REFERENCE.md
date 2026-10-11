@@ -517,6 +517,7 @@ action. Real access control still has to be enforced by each API.
 | Payment Collection | Exchange Rates | `/finance/exchange-rates` | `get` `add` `edit` `delete` | `add` `edit` `delete` | `edit` = save rates |
 | Payment Collection | Advanced Payments | `/finance/advanced-payments` | `get` `add` | `create` | `add` = new deposit |
 | Reports & Statements | Financial Reports | `/finance/financial-reports` | `get` `export` | none |  |
+| Reports & Statements | Discount Report | `/finance/reports/discount` | `get` `export` | none | Preview + Excel export; each user sees only their own exports. Downloads icon lives in the app header |
 | Reports & Statements | Student Statement | `/finance/student-statements` | `get` `print` | none |  |
 | Finance Core | Cooperates | `/finance/cooperates` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Finance Core | Discounts | `/finance/discounts` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
@@ -625,6 +626,13 @@ action. Real access control still has to be enforced by each API.
           "name": "Financial Reports",
           "icon": "lni lni-bar-chart",
           "url": "/finance/financial-reports",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        },
+        {
+          "name": "Discount Report",
+          "icon": "lni lni-tag",
+          "url": "/finance/reports/discount",
           "permissions": { "get": true, "export": true },
           "children": []
         },
