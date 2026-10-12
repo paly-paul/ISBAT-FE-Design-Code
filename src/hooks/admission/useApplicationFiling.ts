@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import {
   deleteQualification,
   exportApplicationsCsv,
+  getApplicationByGuid,
   getApplicationByPaymentGuid,
   getApplications,
   getFilingApplicationsPage,
@@ -82,6 +83,16 @@ export function useApplicationByPaymentGuid(paymentGuid: string | null | undefin
     queryKey: [...FILING_KEY, 'by-payment', paymentGuid],
     queryFn: () => getApplicationByPaymentGuid(paymentGuid as string),
     enabled: enabled && !!paymentGuid,
+  })
+}
+
+// Backs All Applicants' View modal. A 400 here means "not completed yet", so
+// callers keep showing the list row instead of an error screen.
+export function useApplicationByGuid(applicationGuid: string | null | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: [...FILING_KEY, 'by-guid', applicationGuid],
+    queryFn: () => getApplicationByGuid(applicationGuid as string),
+    enabled: enabled && !!applicationGuid,
   })
 }
 

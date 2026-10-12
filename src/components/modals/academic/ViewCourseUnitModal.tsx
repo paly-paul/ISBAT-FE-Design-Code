@@ -87,12 +87,12 @@ export function ViewCourseUnitModal({ isOpen, onClose, courseUnitGuid, onEdit, c
   if (isLoading || !courseUnit) {
     return (
       <div className="modal-overlay open">
-        <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+        <div className="modal modal-lg modal-flex" onClick={e => e.stopPropagation()}>
           <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-eye"></i> View Course Unit</div>
             <button className="modal-close" onClick={handleClose} aria-label="Close"><i className="lni lni-close"></i></button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
             <span style={{ color: 'var(--g400)' }}>Loading course unit details…</span>
           </div>
         </div>
@@ -114,7 +114,9 @@ export function ViewCourseUnitModal({ isOpen, onClose, courseUnitGuid, onEdit, c
 
   return (
     <div className="modal-overlay open">
-      <div className="modal modal-lg modal-flex" style={{ height: 'auto', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+      {/* modal-flex's fixed 85vh (no height: auto override) so switching tabs doesn't resize the modal —
+          each panel is flex: 1 and scrolls its own content. */}
+      <div className="modal modal-lg modal-flex" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-eye"></i> View Course Unit &mdash; <span className="font-mono">{courseUnit.courseUnitCode}</span></div>
           <button className="modal-close" onClick={handleClose} aria-label="Close"><i className="lni lni-close"></i></button>

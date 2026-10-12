@@ -219,6 +219,16 @@ export function getApplicationByPaymentGuid(paymentGuid: string): Promise<Applic
   return apiGet<ApplicationDetailDto>(`/api/v1/admissions/application-filling/by-payment/${paymentGuid}`)
 }
 
+// GET /api/v1/admissions/application-filling/{applicationGuid} — the full
+// record behind All Applicants' View modal (get-application-by-guid.md).
+// Completed applications only: one still being filled in is a 400 "Application
+// not found or not completed.", so the modal falls back to the list row it
+// already has rather than treating that as a hard failure.
+export function getApplicationByGuid(applicationGuid: string): Promise<ApplicationDetailDto> {
+  if (MOCK_AUTH) return Promise.reject(new Error('Application not found or not completed.'))
+  return apiGet<ApplicationDetailDto>(`/api/v1/admissions/application-filling/${applicationGuid}`)
+}
+
 // Confirmed via Application-Filling/SaveGeneral.bru — countryGuid/
 // spCountryGuid ARE real fields ("countryGuid replaces old intCountry +
 // countryCode fields", "spCountryGuid replaces old spCountryCode field").
