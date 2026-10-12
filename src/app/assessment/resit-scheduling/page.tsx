@@ -201,7 +201,7 @@ function ExamRuleField({ value, onChange, disabled, lockNote, hint, highlightSec
       {lockNote ? <LockNote>{lockNote}</LockNote> : hint ? <div className="text-xs text-g500 mt-1">{hint}</div> : null}
       {/* Portalled for the same reason as the drawer (tab panel transform). */}
       {lookupOpen && createPortal(
-        <ExamRuleLookupModal isOpen onClose={() => setLookupOpen(false)} onSelect={onChange} highlightSectionA={highlightSectionA} />,
+        <ExamRuleLookupModal isOpen onClose={() => setLookupOpen(false)} onSelect={onChange} highlightSectionA={highlightSectionA} selectedGuid={value} />,
         document.body,
       )}
     </div>
