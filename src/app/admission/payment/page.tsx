@@ -18,7 +18,7 @@ import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 import { useBatches } from '@/hooks/academic/useBatches'
 import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
-import { useExchangeRateExists } from '@/hooks/finance/useExchangeRates'
+import { useExchangeRateExists, useExchangeRatesByDate } from '@/hooks/finance/useExchangeRates'
 import { TodayExchangeRateModal } from '@/components/modals/finance/TodayExchangeRateModal'
 import { RatesAlreadySetNote } from '@/components/finance/RatesAlreadySetNote'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
@@ -80,6 +80,10 @@ const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep
 function todayYmd() {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+function formatRate(n: number): string {
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function formatPaymentDate(yyyyMmDd: string): string {
@@ -267,6 +271,7 @@ function PaymentPageContent() {
     appRefNo?: string; paymentCode?: string; receiptNo?: number | null
     studentName?: string; programLabel?: string; campusLabel?: string; intakeLabel?: string
     amountLabel?: string; methodLabel?: string; dateLabel?: string
+    exRateLabel?: string; amountUshLabel?: string
     // Handed to Filing by "Proceed to Filing" (lib/filingHandoff.ts).
     filing?: NewPaymentHandoff
   }>({})
@@ -713,11 +718,18 @@ function PaymentPageContent() {
   }, [usdRateMissing])
 
   const selectedCurrency = currencies.find(c => c.currencyGuid === form.currencyGuid)
-  const exRate: number | null = !selectedCurrency ? null
-    : selectedCurrency.currencyGuid === baseCurrency?.currencyGuid ? 1
-    : selectedCurrency.currencyGuid === usdCurrency?.currencyGuid ? usdRate
-    : selectedCurrency.currencyGuid === kshCurrency?.currencyGuid ? kshRate
-    : null
+  // Read-only rate preview for the selected currency on the chosen Payment
+  // Date. The server does its own lookup on submit and returns the rate it
+  // applied (post-application-payment.md, 2026-10), so nothing here is sent.
+  // The base currency is 1 by definition and needs no lookup.
+  const isBaseCurrency = !!selectedCurrency && selectedCurrency.currencyGuid === baseCurrency?.currencyGuid
+  const needsRateLookup = !isWaived && !!selectedCurrency && !isBaseCurrency && !!form.paymentDate
+  const payDateRatesQuery = useExchangeRatesByDate(form.paymentDate, needsRateLookup)
+  const previewRate: number | null = isBaseCurrency ? 1
+    : payDateRatesQuery.data?.find(r => r.currencyGuid === selectedCurrency?.currencyGuid)?.exRate ?? null
+  // Empty list or 404 (the helper maps it to []) = no rate for that date.
+  const payDateRateMissing = needsRateLookup && payDateRatesQuery.isSuccess && previewRate == null
+  const payDateLabel = form.paymentDate ? formatDate(`${form.paymentDate}T00:00:00`) : ''
 
   useEffect(() => {
     if (form.receiptBookGuid && !matchingReceiptBooks.some(r => r.receiptBookGuid === form.receiptBookGuid)) {
@@ -787,12 +799,9 @@ function PaymentPageContent() {
       scrollToFirstError(e)
       return
     }
-    // Never save a payment against a guessed rate.
-    if (!isWaived && exRate == null) {
-      const missingHere = (selectedCurrency?.currencyGuid === usdCurrency?.currencyGuid && usdRateMissing)
-        || (selectedCurrency?.currencyGuid === kshCurrency?.currencyGuid && kshRateMissing)
-      if (selectedCurrency && missingHere) openRateModal(selectedCurrency.currencyGuid)
-      else showToast(`No ${selectedCurrency?.currencyCode ?? ''} exchange rate is available for today. Enter it in Finance → Exchange Rates first.`, 'error')
+    // Submit is disabled in this state too; this covers Enter/any other path.
+    if (payDateRateMissing) {
+      showToast('No exchange rate for this currency on this date. Pick another date, or ask Finance to add the rate.', 'error')
       return
     }
 
@@ -815,7 +824,6 @@ function PaymentPageContent() {
       payType: form.exemptionTypeGuid ? null : Number(form.payType || 1),
       amount: form.exemptionTypeGuid ? null : Number(form.feeAmount || 0),
       currencyGuid: form.exemptionTypeGuid ? null : form.currencyGuid || null,
-      exRate: form.exemptionTypeGuid ? null : exRate,
       bankGuid: selectedBankGuid,
       receiptBookGuid: form.exemptionTypeGuid ? null : form.receiptBookGuid || null,
       remarks: form.remarks.trim() || null,
@@ -836,6 +844,10 @@ function PaymentPageContent() {
             campusLabel: labelFor(campusOptions, form.campusGuid),
             intakeLabel: labelFor(intakeOptions, form.intakeGuid),
             amountLabel: isWaived ? 'Waived' : `${form.feeAmount} ${selectedCurrency?.currencyCode ?? ''}`,
+            // The server's applied rate and converted amount are the
+            // confirmed values — not the preview shown on the form.
+            exRateLabel: !isWaived && response?.exRate != null ? formatRate(response.exRate) : undefined,
+            amountUshLabel: !isWaived && response?.amountUsh != null ? `${formatRate(response.amountUsh)} ${baseCurrency?.currencyCode ?? 'UGX'}` : undefined,
             methodLabel: isWaived ? 'Waived' : labelFor(payTypeOptions, form.payType),
             dateLabel: formatDate(form.paymentDate || new Date()),
             filing: response?.paymentGuid && response.appRefNo ? {
@@ -1179,6 +1191,21 @@ function PaymentPageContent() {
                   <p className="amt-val-hint">
                     {isWaived ? 'Fee waived — exemption applied.' : 'Enter the application fee amount.'}
                   </p>
+                  {/* Preview only — the server applies its own lookup on save. */}
+                  {needsRateLookup && (
+                    payDateRatesQuery.isLoading ? (
+                      <p className="amt-val-hint">Checking the {selectedCurrency?.currencyCode} rate for {payDateLabel}…</p>
+                    ) : payDateRatesQuery.isError ? (
+                      <p className="amt-val-hint text-clr-red"><i className="lni lni-warning" /> Couldn&apos;t load the exchange rate. The server will still check it on save.</p>
+                    ) : payDateRateMissing ? (
+                      <p className="amt-val-hint text-clr-red"><i className="lni lni-warning" /> No exchange rate for this currency on this date.</p>
+                    ) : previewRate != null ? (
+                      <p className="amt-val-hint">
+                        Rate on {payDateLabel}: 1 {selectedCurrency?.currencyCode} = {formatRate(previewRate)} {baseCurrency?.currencyCode ?? 'UGX'}
+                        {Number(form.feeAmount) > 0 && <> · ≈ {formatRate(Number(form.feeAmount) * previewRate)} {baseCurrency?.currencyCode ?? 'UGX'}</>}
+                      </p>
+                    ) : null
+                  )}
                   {isWaived && <p className="amt-waived-lbl">✓ WAIVED</p>}
                 </div>
                 <span className="badge-amber text-xs px-2 py-1 rounded-md font-bold">{selectedCurrency?.currencyCode ?? '—'}</span>
@@ -1248,7 +1275,8 @@ function PaymentPageContent() {
                 <i className="lni lni-reload" /> Clear
               </button>
               {permissions.add && (
-                <button className={`btn btn-primary ml-auto${formReady ? ' btn-submit-ready' : ''}`} disabled={createPayment.isPending} onClick={handleSubmit}>
+                <button className={`btn btn-primary ml-auto${formReady ? ' btn-submit-ready' : ''}`} disabled={createPayment.isPending || payDateRateMissing} onClick={handleSubmit}
+                  title={payDateRateMissing ? 'No exchange rate for this currency on this date' : undefined}>
                   <i className="lni lni-credit-cards" /> {createPayment.isPending ? 'Saving…' : 'Save Payment & Generate Receipt →'}
                 </button>
               )}
@@ -1286,6 +1314,8 @@ function PaymentPageContent() {
                     ['Campus', savedReceipt.campusLabel ?? ''],
                     ['Intake', savedReceipt.intakeLabel ?? ''],
                     ['Amount', savedReceipt.amountLabel ?? ''],
+                    ...(savedReceipt.exRateLabel ? [['Exchange Rate', savedReceipt.exRateLabel]] : []),
+                    ...(savedReceipt.amountUshLabel ? [['Amount (UGX)', savedReceipt.amountUshLabel]] : []),
                     ['Method', savedReceipt.methodLabel ?? ''],
                   ].map(([label, value]) => (
                     <div key={label} className="flex justify-between py-1">

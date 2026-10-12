@@ -37,7 +37,7 @@ export interface ApplicationPaymentInput {
   countryGuid: string
   mobile: string
   email: string | null
-  // Per Create.bru docs: when this is set, amount/currencyGuid/exRate/payType/
+  // Per Create.bru docs: when this is set, amount/currencyGuid/payType/
   // receiptBookGuid are not required server-side — all four are nullable here
   // and omitted from the multipart body entirely when null, rather than sent
   // as empty/zero values.
@@ -47,7 +47,10 @@ export interface ApplicationPaymentInput {
   payType: number | null
   amount: number | null
   currencyGuid: string | null
-  exRate: number | null
+  // No exRate: the server looks up Finance's rate for currencyGuid on payDate
+  // itself (post-application-payment.md, 2026-10) and ignores any sent value.
+  // A missing rate is a 400 bad_request "Exchange rate not found for the
+  // selected currency and date."
   // Per Create.bru docs: required when payType > 1 (non-cash payments).
   bankGuid: string | null
   receiptBookGuid: string | null
@@ -137,7 +140,8 @@ export interface CreateApplicationPaymentResponse {
   // For an exemption payment (exemptionTypeGuid provided as a real guid):
   // payType/exRate/currencyGuid come back null, amount/amountUsh come back
   // 0, and receiptNo comes back null — no receipt/bank is resolved for
-  // exemptions.
+  // exemptions. Otherwise exRate is the rate the server actually applied and
+  // amountUsh = amount × exRate — show these as the confirmed values.
   amount?: number
   amountUsh?: number
   currencyGuid?: string | null
@@ -292,7 +296,6 @@ export function createApplicationPayment(input: ApplicationPaymentInput): Promis
   if (input.payType !== null && input.payType !== undefined) formData.append('payType', String(input.payType))
   if (input.amount !== null && input.amount !== undefined) formData.append('amount', String(input.amount))
   if (input.currencyGuid) formData.append('currencyGuid', input.currencyGuid)
-  if (input.exRate !== null && input.exRate !== undefined) formData.append('exRate', String(input.exRate))
   if (input.bankGuid) formData.append('bankGuid', input.bankGuid)
   if (input.receiptBookGuid) formData.append('receiptBookGuid', input.receiptBookGuid)
   if (input.remarks) formData.append('remarks', input.remarks)
