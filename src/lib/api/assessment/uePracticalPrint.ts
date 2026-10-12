@@ -5,6 +5,7 @@ export interface UePracticalPrintParams {
   semesterGuid: string
   courseUnitGuid: string
   intakeGuid: string
+  streamGuid?: string | null
   confirm?: boolean
 }
 
@@ -31,6 +32,7 @@ export function downloadUeQuestionPracticalPdf(paramsObj: UePracticalPrintParams
     courseUnitGuid: paramsObj.courseUnitGuid || '',
     intakeGuid: paramsObj.intakeGuid || ''
   })
+  if (paramsObj.streamGuid) params.append('streamGuid', paramsObj.streamGuid)
   return apiGetBlob(`/api/v1/assessment/ue-question-print/practical/pdf?${params.toString()}`)
 }
 
@@ -42,6 +44,7 @@ export function downloadUeQuestionPracticalWord(paramsObj: UePracticalPrintParam
     courseUnitGuid: paramsObj.courseUnitGuid || '',
     intakeGuid: paramsObj.intakeGuid || ''
   })
+  if (paramsObj.streamGuid) params.append('streamGuid', paramsObj.streamGuid)
   return apiGetBlob(`/api/v1/assessment/ue-question-print/practical/word?${params.toString()}`)
 }
 
@@ -53,6 +56,7 @@ export function deleteUeQuestionPractical(data: UePracticalPrintParams) {
     courseUnitGuid: data.courseUnitGuid || '',
     intakeGuid: data.intakeGuid || ''
   })
+  if (data.streamGuid) params.append('streamGuid', data.streamGuid)
   if (data.confirm !== undefined) params.append('confirm', String(data.confirm))
   // The confirm step answers `data: false` + a "You are about to delete…"
   // message (delete-practical.md) — plain apiDelete drops the message and

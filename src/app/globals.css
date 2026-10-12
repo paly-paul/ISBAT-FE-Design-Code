@@ -3608,42 +3608,91 @@ input[type="number"] {
   border: 1.5px solid var(--g200);
   overflow-x: auto;
   overflow-y: hidden;
-  box-shadow: var(--neu-sm)
+  box-shadow: var(--neu-sm);
+  scrollbar-width: thin;
+  scrollbar-color: var(--g400) transparent;
+}
+
+.tbl-wrap:hover {
+  scrollbar-color: var(--b600) var(--b50);
+}
+
+/* Slim by default (5px) */
+.tbl-wrap::-webkit-scrollbar {
+  height: 5px;
+  width: 5px;
+  transition: all 0.2s ease;
+}
+
+.tbl-wrap::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 9999px;
+  margin: 0 4px;
+}
+
+.tbl-wrap::-webkit-scrollbar-thumb {
+  background: var(--g400);
+  border-radius: 9999px;
+  transition: all 0.2s ease;
+}
+
+/* Expands (9px) and turns theme blue on hover */
+.tbl-wrap:hover::-webkit-scrollbar {
+  height: 9px;
+  width: 9px;
+}
+
+.tbl-wrap:hover::-webkit-scrollbar-track {
+  background: var(--b50);
+}
+
+.tbl-wrap:hover::-webkit-scrollbar-thumb {
+  background: var(--b500);
+}
+
+.tbl-wrap::-webkit-scrollbar-thumb:hover {
+  background: var(--b700) !important;
+}
+
+.tbl-wrap::-webkit-scrollbar-thumb:active {
+  background: var(--b900) !important;
 }
 
 .tbl-arrow {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 10;
-  width: 28px;
-  height: 28px;
+  z-index: 25;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, .92);
-  border: 1.5px solid var(--g300);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+  background: rgba(255, 255, 255, .96);
+  border: 1.5px solid var(--b500);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, .22);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--g700);
-  font-size: 13px;
-  transition: var(--tr);
+  color: var(--b700);
+  font-size: 14px;
+  font-weight: 700;
+  transition: all 0.2s ease;
 }
 
 .tbl-arrow:hover {
-  background: #fff;
-  border-color: var(--b400);
-  color: var(--b700);
-  box-shadow: 0 3px 12px rgba(72, 105, 197, .2)
+  background: var(--b600);
+  border-color: var(--b600);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(37, 99, 235, .35);
+  transform: translateY(-50%) scale(1.08);
 }
 
 .tbl-arrow-l {
-  left: 6px
+  left: 6px;
 }
 
 .tbl-arrow-r {
-  right: 6px
+  right: 6px;
 }
 
 table {
@@ -6067,18 +6116,52 @@ body:has(.modal-overlay.open) {
   color: var(--purple)
 }
 
+/* Global Scrollbars: slim by default, expands and glows project blue on hover */
 ::-webkit-scrollbar {
   width: 5px;
-  height: 5px
+  height: 5px;
+  transition: width 0.2s ease, height 0.2s ease;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent
+  background: transparent;
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--g300);
-  border-radius: 3px
+  border-radius: 9999px;
+  transition: background-color 0.2s ease;
+}
+
+*:hover::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*:hover::-webkit-scrollbar-track {
+  background: var(--b50);
+}
+
+*:hover::-webkit-scrollbar-thumb {
+  background: var(--b500);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--b700) !important;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--b900) !important;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--g300) transparent;
+}
+
+*:hover {
+  scrollbar-color: var(--b500) var(--b50);
 }
 
 @media(max-width:900px) {

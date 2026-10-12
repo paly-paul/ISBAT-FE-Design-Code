@@ -334,6 +334,7 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
         isOpen={lookupOpen} 
         onClose={() => setLookupOpen(false)} 
         onSelect={guid => setExamRuleGuid(guid)} 
+        selectedGuid={examRuleGuid}
       />
     </div>
   )

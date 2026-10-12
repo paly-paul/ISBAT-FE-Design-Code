@@ -80,10 +80,14 @@ export default function UniversityExamProjectBookletPrintPage() {
               value={selectedIntakeGuid}
               onChange={setSelectedIntakeGuid}
               disabled={intakesLoading}
-              options={(intakes ?? []).map(i => ({
-                value: i.intakeGuid,
-                label: `${i.description || i.intakeCode} ${i.currentIntake ? '(Current)' : ''}`,
-              }))}
+              options={(() => {
+                const current = (intakes ?? []).filter(i => i.currentIntake)
+                const list = current.length > 0 ? current : (intakes && intakes.length > 0 ? [intakes[0]] : [])
+                return list.map(i => ({
+                  value: i.intakeGuid,
+                  label: `${i.description || i.intakeCode} (Current)`,
+                }))
+              })()}
             />
           </div>
           <div className="fg mb-0">
