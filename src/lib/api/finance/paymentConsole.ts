@@ -769,19 +769,19 @@ const mockLedgerOthers: LedgerOthersDto[] = [
   { ledgerOthersGuid: 'ldo-mock-4', ledgerCode: 'CTM', ledgerName: 'Caution Money' },
   { ledgerOthersGuid: 'ldo-mock-5', ledgerCode: 'UNF', ledgerName: 'Uniform Fee' },
   { ledgerOthersGuid: 'ldo-mock-6', ledgerCode: 'OTH', ledgerName: 'Other Fee' },
-  { ledgerOthersGuid: 'ldo-mock-7', ledgerCode: 'RSF', ledgerName: 'Resit Fee' },
+  { ledgerOthersGuid: 'ldo-mock-7', ledgerCode: 'RSF', ledgerName: 'Resit Exam Fee' },
 ]
 
 // The ledger-others catalogue carries no "is resit" flag, so the resit
-// ledger is recognised by its code/name. Picking it on the Other Payment tab
-// auto-fills and locks the row's amount from get-resit-fee.md. Swap this
-// for a real identifier once the backend exposes one — it identifies the
-// ledger by the RESIT general setting (post-payment-other.md), which no
-// frontend-facing endpoint returns yet. Matches "Resit", "Re-sit", "Re sit"
-// and "Re_sit" in either field.
-const RESIT_PATTERN = /re[\s\-_]?sit/i
+// ledger is recognised by its name. Picking it on the Other Payment tab
+// auto-fills and locks the row's amount from get-resit-fee.md. Backend
+// confirmed the RESIT general setting (post-payment-other.md) points to
+// "Resit Exam Fee" — matched exactly, because a loose /re-?sit/ also hits
+// "RE-SIT UE & IA" and "Re-Sit Exam Fees - IA", and .find() would lock onto
+// whichever came first. Swap for a real flag once ledger-others exposes one.
+const RESIT_LEDGER_NAME = 'resit exam fee'
 export function isResitLedger(l: Pick<LedgerOthersDto, 'ledgerCode' | 'ledgerName'>): boolean {
-  return RESIT_PATTERN.test(l.ledgerName ?? '') || RESIT_PATTERN.test(l.ledgerCode ?? '')
+  return (l.ledgerName ?? '').trim().toLowerCase() === RESIT_LEDGER_NAME
 }
 
 export function getLedgerOthers(): Promise<LedgerOthersDto[]> {
