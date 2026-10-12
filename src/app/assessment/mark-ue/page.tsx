@@ -1,16 +1,27 @@
 'use client'
 import { ScrollTable } from '@/components/ScrollTable'
 import { TableSearch } from '@/components/TableSearch'
-import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { FilterTh } from '@/components/FilterTh'
 import { Toast } from '@/components/Toast'
 import { useState, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { useUeDetailedMarks, useSaveStudentUeMark, useVerifyUeMarks } from '@/hooks/assessment/useUeMarks'
+import { AuthError } from '@/lib/api/client'
+import { useUeDetailedMarks, useSaveUeMarks, useVerifyUeMarks } from '@/hooks/assessment/useUeMarks'
 import { useIaCreationInit, useIaCreationSemesters, useIaCreationStructure } from '@/hooks/assessment/useIaCreation'
+import { UE_LAYOUT_FIELDS, UeDetailedMarkRowDto, UeMarkField, UeMarkValues } from '@/lib/api/assessment/ueMarks'
+
+// Unsaved edits, keyed studentGuid → field → raw input text. A row is only
+// sent once every visible field of its layout is filled and within its max
+// (save-ue-detailed-mark.md requires all layout fields on each PUT).
+type Drafts = Record<string, Partial<Record<UeMarkField, string>>>
+
+const ALL_MARK_FIELDS: UeMarkField[] = [
+  'sectionAMark', 'sectionBMark', 'sectionCMark',
+  'recordMark', 'codingMark', 'outputMark', 'vivaMark',
+  'synopsisMark', 'reviewMark', 'methodologyMark', 'analysisMark',
+]
 
 export default function MarkEntryUePage() {
   const searchParams = useSearchParams()
@@ -19,13 +30,13 @@ export default function MarkEntryUePage() {
   const universityExamGuid = searchParams.get('guid') || ''
 
   const { data: gridData, isLoading, error } = useUeDetailedMarks(universityExamGuid)
-  const saveMarkMutation = useSaveStudentUeMark(universityExamGuid)
+  const saveMarksMutation = useSaveUeMarks(universityExamGuid)
   const verifyMutation = useVerifyUeMarks(universityExamGuid)
 
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const [openFilter, setOpenFilter] = useState<string | null>(null)
-  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [drafts, setDrafts] = useState<Drafts>({})
+  const [invalidCells, setInvalidCells] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string, type: string } | null>(null)
 
   // Dropdown Selections
@@ -54,67 +65,128 @@ export default function MarkEntryUePage() {
     setTimeout(() => setToast(null), 4000)
   }
 
-  const handleFilterSelect = (col: string, vals: string[]) => {
-    setFilters(prev => ({ ...prev, [col]: vals }))
-    setOpenFilter(null)
+  // Every field of the layout gets a column, even when its max is null —
+  // live data has Theory exams with only sectionAMax set yet real marks in
+  // sections B and C, so hiding (or zeroing) a null-max section would hide
+  // or wipe saved marks. A null max just means no ceiling is shown/checked.
+  const layout = gridData?.layout ?? 'Theory'
+  const columns = gridData ? UE_LAYOUT_FIELDS[layout] : []
+
+  const cellKey = (studentGuid: string, field: UeMarkField) => `${studentGuid}:${field}`
+
+  function cellValue(row: UeDetailedMarkRowDto, field: UeMarkField): string {
+    const draft = drafts[row.studentGuid]?.[field]
+    if (draft !== undefined) return draft
+    return row[field] === null ? '' : String(row[field])
+  }
+
+  function handleCellChange(studentGuid: string, field: UeMarkField, value: string) {
+    setDrafts(prev => ({ ...prev, [studentGuid]: { ...prev[studentGuid], [field]: value } }))
+    setInvalidCells(prev => {
+      if (!prev.has(cellKey(studentGuid, field))) return prev
+      const s = new Set(prev); s.delete(cellKey(studentGuid, field)); return s
+    })
+  }
+
+  const dirtyRows = useMemo(() => {
+    if (!gridData) return []
+    return gridData.rows.filter(r => !r.isAbsent && columns.some(c => {
+      const draft = drafts[r.studentGuid]?.[c.field]
+      return draft !== undefined && draft.trim() !== (r[c.field] === null ? '' : String(r[c.field]))
+    }))
+  }, [gridData, drafts, columns])
+
+  function handleSaveAll() {
+    if (!gridData) return
+    if (dirtyRows.length === 0) { showToast('No changes to save.', 'warn'); return }
+
+    const invalid = new Set<string>()
+    let firstProblem = ''
+    const entries = dirtyRows.map(row => {
+      const marks = Object.fromEntries(ALL_MARK_FIELDS.map(f => [f, null])) as UeMarkValues
+      columns.forEach(c => {
+        const raw = cellValue(row, c.field).trim()
+        const max = gridData.maxMarks[c.max] ?? null
+        const n = Number(raw)
+        if (raw === '' || isNaN(n) || n < 0 || (max !== null && n > max)) {
+          invalid.add(cellKey(row.studentGuid, c.field))
+          if (!firstProblem) {
+            firstProblem = raw === ''
+              ? `${row.studentName ?? row.studentRegNo}: ${c.label} is required.`
+              : max !== null
+                ? `${row.studentName ?? row.studentRegNo}: ${c.label} must be between 0 and ${max}.`
+                : `${row.studentName ?? row.studentRegNo}: ${c.label} must be a number of 0 or more.`
+          }
+        } else {
+          marks[c.field] = n
+        }
+      })
+      return { studentGuid: row.studentGuid, marks }
+    })
+
+    if (invalid.size > 0) {
+      setInvalidCells(invalid)
+      showToast(firstProblem, 'error')
+      return
+    }
+
+    saveMarksMutation.mutate(entries, {
+      onSuccess: results => {
+        const savedGuids = entries.filter((_, i) => results[i].status === 'fulfilled').map(e => e.studentGuid)
+        setDrafts(prev => {
+          const next = { ...prev }
+          savedGuids.forEach(g => { delete next[g] })
+          return next
+        })
+        const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+        if (failed.length === 0) {
+          showToast(`Marks saved for ${savedGuids.length} student${savedGuids.length === 1 ? '' : 's'}.`)
+        } else {
+          const reason = failed[0].reason instanceof Error ? failed[0].reason.message : 'Could not save marks.'
+          showToast(`${failed.length} of ${entries.length} not saved — ${reason}`, 'error')
+        }
+      },
+    })
   }
 
   const handleVerify = () => {
+    if (dirtyRows.length > 0) { showToast('Save your changes before verifying.', 'warn'); return }
     verifyMutation.mutate(undefined, {
       onSuccess: () => {
         showToast('University Exam Marks verified successfully!', 'success')
       },
-      onError: (err: any) => {
-        const status = err?.response?.status || err?.status;
-        const errCode = err?.response?.data?.code || err?.code;
-
-        if (status === 400 || errCode === 'no_marks_entered') {
+      onError: (err) => {
+        const errCode = err instanceof AuthError ? err.code : undefined
+        if (errCode === 'no_marks_entered') {
           showToast('Please enter marks before verifying.', 'error')
-        } else if (status === 409 || errCode === 'already_verified') {
+        } else if (errCode === 'already_verified') {
           showToast('This exam is already verified.', 'error')
-          // Since it's already verified, we could trigger a refetch of the grid to sync state
-        } else if (status === 404) {
+        } else if (errCode === 'not_found') {
           showToast('Exam not found.', 'error')
         } else {
-          showToast('Failed to verify exam marks.', 'error')
+          showToast(err instanceof Error && err.message ? err.message : 'Failed to verify exam marks.', 'error')
         }
       }
     })
   }
 
-  const handleMarkChange = (studentGuid: string, markValue: string) => {
-    if (gridData?.isVerified) return;
-
-    let mark: number | null = parseFloat(markValue)
-    if (isNaN(mark)) mark = null
-
-    // basic absent logic
-    const isAbsent = markValue.trim().toUpperCase() === 'AB'
-    if (isAbsent) mark = null
-
-    saveMarkMutation.mutate({ studentGuid, mark, isAbsent })
-  }
-
   const students = useMemo(() => {
-    let result = gridData?.students || []
+    const rows = gridData?.rows ?? []
+    if (!search) return rows
+    const s = search.toLowerCase()
+    return rows.filter(st =>
+      (st.studentName && st.studentName.toLowerCase().includes(s)) ||
+      (st.studentRegNo && st.studentRegNo.toLowerCase().includes(s))
+    )
+  }, [gridData?.rows, search])
 
-    if (search) {
-      const s = search.toLowerCase()
-      result = result.filter(st =>
-        (st.studentName && st.studentName.toLowerCase().includes(s)) ||
-        (st.studentRegNo && st.studentRegNo.toLowerCase().includes(s)) ||
-        (st.matchingCode && st.matchingCode.toLowerCase().includes(s))
-      )
-    }
+  const errorMessage = error instanceof AuthError && error.code === 'attendance_not_taken'
+    ? 'Attendance has not been taken for this exam yet. Take attendance before entering marks.'
+    : error instanceof AuthError && error.code === 'not_found'
+      ? 'Exam not found.'
+      : `Could not fetch data for University Exam ID: ${universityExamGuid}`
 
-    if (filters['result'] && filters['result'].length > 0) {
-      result = result.filter(st => filters['result'].includes(st.result))
-    }
-
-    return result
-  }, [gridData?.students, search, filters])
-
-
+  const colCount = 4 + columns.length
 
   return (
     <div className="page active">
@@ -132,20 +204,24 @@ export default function MarkEntryUePage() {
               </span>
             ) : null}
           </div>
-          <div className="pg-sub">Enter UE marks · Matching Code for anonymous marking · IA + UE pass gate enforced</div>
+          <div className="pg-sub">
+            {gridData
+              ? `${gridData.courseUnitName ?? 'Course unit'} · ${gridData.layout} layout`
+              : 'Enter UE marks per student · totals are computed on save'}
+          </div>
         </div>
         <div className="pg-actions flex items-center gap-3">
           <button
             className="btn btn-secondary whitespace-nowrap"
-            onClick={() => showToast('All UE marks saved locally')}
-            disabled={gridData?.isVerified}
+            onClick={handleSaveAll}
+            disabled={!gridData || gridData.isVerified || saveMarksMutation.isPending}
           >
-            Save All
+            {saveMarksMutation.isPending ? 'Saving…' : `Save All${dirtyRows.length ? ` (${dirtyRows.length})` : ''}`}
           </button>
           <button
             className="btn btn-primary whitespace-nowrap flex items-center gap-2"
             onClick={handleVerify}
-            disabled={gridData?.isVerified || verifyMutation.isPending || isLoading}
+            disabled={!gridData || gridData.isVerified || verifyMutation.isPending || isLoading}
           >
             {verifyMutation.isPending ? (
               <><i className="lni lni-spinner-solid animate-spin"></i> Verifying...</>
@@ -216,20 +292,22 @@ export default function MarkEntryUePage() {
           </div>
         </div>
         <div className="p-5 pt-0 flex gap-2">
-          <button 
-             className="btn btn-primary" 
+          <button
+             className="btn btn-primary"
              disabled={!selectedCourseUnitGuid}
-             onClick={() => router.push(`/assessment/mark-ue?guid=${selectedCourseUnitGuid}`)}
+             onClick={() => { setDrafts({}); setInvalidCells(new Set()); router.push(`/assessment/mark-ue?guid=${selectedCourseUnitGuid}`) }}
           >
              Show Mark Sheet
           </button>
-          <button 
+          <button
              className="btn btn-neu"
              onClick={() => {
                 setSelectedIntakeGuid('')
                 setSelectedProgramGuid('')
                 setSelectedSemesterGuid('')
                 setSelectedCourseUnitGuid('')
+                setDrafts({})
+                setInvalidCells(new Set())
                 router.push(`/assessment/mark-ue`)
              }}
           >
@@ -243,7 +321,7 @@ export default function MarkEntryUePage() {
           <div className="bg-[#eff6ff] border border-[#dbeafe] rounded-md p-4 flex gap-3 text-[13px] text-[#2563eb] items-start mb-4">
             <div className="mt-0.5"><i className="lni lni-information text-[16px]"></i></div>
             <div className="leading-relaxed text-[#1e40af]">
-              <strong>Matching Code:</strong> Each student has a 4-digit code (on hall ticket) + 4-digit script code for anonymous marking. Match codes before entering marks. <strong>Pass gate: min 50% in IA AND min 50% in UE separately.</strong>
+              Fill every column for a student, then <strong>Save All</strong>. The total is calculated on save. Absent students can&apos;t be marked. <strong>Verifying locks the marks and can&apos;t be undone.</strong>
             </div>
           </div>
         </div>
@@ -264,109 +342,68 @@ export default function MarkEntryUePage() {
           <table>
             <thead>
               <tr>
-                <th style={{ width: 48 }}></th>
-                <th>MATCHING<br />CODE</th>
                 <th>REG. NO.</th>
                 <th>STUDENT</th>
-                <th>IA TOTAL<br />(/30)</th>
-                <th>IA PASS</th>
-                <th>UE RAW<br />(/100)</th>
-                <th>UE<br />(/70)</th>
-                <th>UE PASS</th>
-                <FilterTh
-                  label="RESULT"
-                  opts={['PASS', 'FAIL (UE)']}
-                  isOpen={openFilter === 'result'}
-                  activeFilter={filters['result'] || []}
-                  onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'result' ? null : 'result') }}
-                  onSelect={(vals) => handleFilterSelect('result', vals)}
-                  onClear={() => handleFilterSelect('result', [])}
-                  onClose={() => setOpenFilter(null)}
-                />
+                {columns.map(c => {
+                  const max = gridData?.maxMarks[c.max]
+                  return <th key={c.field}>{c.label.toUpperCase()}{max != null && <><br />(/{max})</>}</th>
+                })}
+                <th>TOTAL</th>
+                <th>STATUS</th>
               </tr>
             </thead>
             <tbody>
               {!universityExamGuid ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-16 text-slate-400">
+                  <td colSpan={colCount} className="text-center py-16 text-slate-400">
                     <i className="lni lni-calendar text-3xl mb-3 block text-slate-300"></i>
-                    No exam selected. Please enter an Exam GUID above to load students.
+                    No exam selected. Pick a programme, semester and course unit above to load students.
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-16 text-rose-500">
+                  <td colSpan={colCount} className="text-center py-16 text-rose-500">
                     <i className="lni lni-warning text-3xl mb-3 block"></i>
-                    Could not fetch data for University Exam ID: {universityExamGuid}
+                    {errorMessage}
                   </td>
                 </tr>
               ) : isLoading ? (
-                <TableLoadingState colSpan={10} />
+                <TableLoadingState colSpan={colCount} />
               ) : students.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-8 text-slate-400">
+                  <td colSpan={colCount} className="text-center py-8 text-slate-400">
                     No students found.
                   </td>
                 </tr>
               ) : (
                 students.map((student) => (
                   <tr key={student.studentGuid}>
+                    <td className="font-mono text-slate-500 text-[12.5px]">{student.studentRegNo ?? '—'}</td>
+                    <td className="text-slate-800">{student.studentName ?? '—'}</td>
+                    {columns.map(c => {
+                      const invalid = invalidCells.has(cellKey(student.studentGuid, c.field))
+                      return (
+                        <td key={c.field}>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            aria-label={`${c.label} for ${student.studentName ?? student.studentRegNo}`}
+                            className={`w-[60px] px-2 py-1 border rounded text-center text-[13px] focus:outline-none focus:border-purple-500 disabled:bg-slate-100 disabled:text-slate-500 ${invalid ? 'border-red-500' : 'border-slate-200'}`}
+                            value={student.isAbsent ? 'ABS' : cellValue(student, c.field)}
+                            disabled={gridData?.isVerified || student.isAbsent}
+                            onChange={e => handleCellChange(student.studentGuid, c.field, e.target.value)}
+                          />
+                        </td>
+                      )
+                    })}
+                    <td className="text-purple-700 font-bold">{student.totalMark ?? '—'}</td>
                     <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm"><i className="lni lni-eye"></i> View</button>
-                      </ActionMenu>
-                    </td>
-                    <td className="font-mono text-slate-600 text-[13px]">{student.matchingCode || '—'}</td>
-                    <td className="font-mono text-slate-500 text-[12.5px]">{student.studentRegNo}</td>
-                    <td className="text-slate-800">{student.studentName}</td>
-                    <td className="font-medium text-slate-800 text-[13px]">{student.iaTotal ?? '—'}</td>
-                    <td>
-                      {student.iaPass ? (
-                        <div className="flex flex-col items-center justify-center bg-green-50 text-green-700 w-12 h-12 rounded-full border border-green-200">
-                          <span className="font-bold text-[10px]">✓</span>
-                          <span className="text-[10px] font-semibold">({student.iaPercentage ?? 0}%)</span>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center bg-red-50 text-red-600 w-12 h-12 rounded-full border border-red-200">
-                          <span className="font-bold text-[10px]">X</span>
-                          <span className="text-[10px] font-semibold">({student.iaPercentage ?? 0}%)</span>
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        className="w-[60px] px-2 py-1 border border-slate-200 rounded text-center text-[13px] focus:outline-none focus:border-purple-500 disabled:bg-slate-100 disabled:text-slate-500"
-                        defaultValue={student.isAbsent ? 'AB' : (student.ueRawMark ?? '')}
-                        disabled={gridData?.isVerified}
-                        onBlur={(e) => {
-                          if (e.target.value !== (student.isAbsent ? 'AB' : (student.ueRawMark?.toString() ?? ''))) {
-                            handleMarkChange(student.studentGuid, e.target.value)
-                          }
-                        }}
-                      />
-                    </td>
-                    <td className="text-purple-700 font-bold">{student.ueConvertedMark ?? '—'}</td>
-                    <td>
-                      {student.uePass ? (
-                        <div className="flex flex-col items-center justify-center bg-green-50 text-green-700 w-12 h-12 rounded-full border border-green-200">
-                          <span className="font-bold text-[10px]">✓</span>
-                          <span className="text-[10px] font-semibold">({student.uePercentage ?? 0}%)</span>
-                        </div>
-                      ) : student.ueRawMark !== null || student.isAbsent ? (
-                        <div className="flex flex-col items-center justify-center bg-red-50 text-red-600 w-12 h-12 rounded-full border border-red-200">
-                          <span className="font-bold text-[10px]">X</span>
-                          <span className="text-[10px] font-semibold">({student.uePercentage ?? 0}%)</span>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td>
-                      {student.result === 'PASS' ? (
-                        <span className="bg-green-100 text-green-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold">PASS</span>
-                      ) : student.result ? (
-                        <span className="badge badge-red">{student.result}</span>
+                      {student.isAbsent ? (
+                        <span className="badge badge-red">Absent</span>
+                      ) : dirtyRows.some(r => r.studentGuid === student.studentGuid) ? (
+                        <span className="badge badge-amber">Unsaved</span>
+                      ) : student.totalMark !== null ? (
+                        <span className="badge badge-green">Marked</span>
                       ) : (
                         <span className="text-slate-400">—</span>
                       )}
