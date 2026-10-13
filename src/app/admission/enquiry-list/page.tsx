@@ -17,6 +17,7 @@ import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { formatEnquiryPhone } from '@/lib/api/admission/enquiry'
 import { flattenUniquePages } from '@/lib/pagination'
 
 // Real server-side pagination — only DISPLAY_PAGE_SIZE rows are ever
@@ -56,6 +57,10 @@ export default function EnquiryListPage() {
   const [search, setSearch] = useState('')
   const [channel, setChannel] = useState('')
   const [intakeGuid, setIntakeGuid] = useState('')
+  // Server-side filter (enquiryStatusGuid on GET /enquiries) — unlike
+  // Channel/Intake, it narrows the whole dataset and totalCount, not just
+  // the current page. '' = All (param left out).
+  const [statusGuid, setStatusGuid] = useState('')
   const [page, setPage] = useState(1)
   const [intakeSearch, setIntakeSearch] = useState('')
   const [committedIntakeSearch, setCommittedIntakeSearch] = useState('')
@@ -72,12 +77,12 @@ export default function EnquiryListPage() {
   // so a 1-character keystroke doesn't fire a request against the full ~11k
   // row table.
   const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
-  const { data, isLoading: loading } = useEnquiries(page, DISPLAY_PAGE_SIZE, activeSearch)
+  const { data, isLoading: loading } = useEnquiries(page, DISPLAY_PAGE_SIZE, activeSearch, statusGuid)
   const updateEnquiry = useUpdateEnquiry()
   const rows = data?.items ?? []
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / DISPLAY_PAGE_SIZE))
-  const hasActiveFilters = !!search.trim() || !!channel || !!intakeGuid
+  const hasActiveFilters = !!search.trim() || !!channel || !!intakeGuid || !!statusGuid
 
   // Stats-row summary — GET /api/v1/admissions/enquiries/counts, a separate
   // endpoint from the paginated list above (its own totalCount only ever
@@ -112,6 +117,10 @@ export default function EnquiryListPage() {
     if (!enquiryStatusGuid) return undefined
     return enquiryStatuses.find(s => s.enquiryStatusGuid === enquiryStatusGuid)?.enquiryStatusName
   }
+  const statusOptions = [
+    { value: '', label: 'All Statuses' },
+    ...enquiryStatuses.map(s => ({ value: s.enquiryStatusGuid, label: s.enquiryStatusName })),
+  ]
 
   // `channel` stores the real enquirySourceGuid (not sourceName) so it can
   // double as the counts endpoint's `sourceGuid` filter above. Sourced from
@@ -139,7 +148,7 @@ export default function EnquiryListPage() {
   // Empty below MIN_SEARCH_CHARS, matching TableSearch's own minChars gate on
   // when the dropdown is even allowed to open.
   const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? filteredRows.slice(0, 8) : []
-  function clearFilters() { setSearch(''); setChannel(''); setIntakeGuid(''); setPage(1) }
+  function clearFilters() { setSearch(''); setChannel(''); setIntakeGuid(''); setStatusGuid(''); setPage(1) }
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -226,6 +235,7 @@ export default function EnquiryListPage() {
               isFetchingNextPage={intakeQuery.isFetchingNextPage}
               onLoadMore={() => intakeQuery.fetchNextPage()}
             />
+            <SearchSelect className="w-40" options={statusOptions} value={statusGuid} onChange={v => { setStatusGuid(v); setPage(1) }} />
           </div>
         </div>
         <ScrollTable>
@@ -251,7 +261,7 @@ export default function EnquiryListPage() {
                   </td>
                   <td className="font-mono text-sm">{r.enquiryCode}</td>
                   <td>{r.studentName}</td>
-                  <td className="text-sm text-g600">{r.mobile}</td>
+                  <td className="text-sm text-g600">{formatEnquiryPhone(r)}</td>
                   <td className="text-sm text-g600">
                     {r.email}
                     {r.email && r.emailVerified === true && <span className="eq-email-flag ok" title="Email verified" aria-label="Email verified"><i className="lni lni-checkmark-circle" /></span>}

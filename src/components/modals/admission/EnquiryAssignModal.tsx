@@ -4,7 +4,7 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
-import { EnquiryUpdateInput } from '@/lib/api/admission/enquiry'
+import { EnquiryUpdateInput, formatEnquiryPhone } from '@/lib/api/admission/enquiry'
 import { useEnquiry } from '@/hooks/admission/useEnquiries'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
@@ -206,7 +206,7 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
           {/* Read-only — the update endpoint doesn't accept these fields at all */}
           <div className="g2" style={{ marginBottom: 18 }}>
             <div className="fg m-0"><div className="lbl">Name</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.studentName}</div></div>
-            <div className="fg m-0"><div className="lbl">Phone</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.mobile}</div></div>
+            <div className="fg m-0"><div className="lbl">Phone</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{formatEnquiryPhone(enquiry)}</div></div>
             <div className="fg m-0"><div className="lbl">Email</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.email || '—'}</div></div>
             <div className="fg m-0"><div className="lbl">Enquiry Date</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.enquiryDate.slice(0, 10)}</div></div>
             <div className="fg m-0"><div className="lbl">Source</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.enquirySourceName || enquiry.sourceName || '—'}</div></div>

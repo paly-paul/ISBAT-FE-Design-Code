@@ -7,8 +7,8 @@ import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { FailurePopup } from '@/components/modals/shared/FailurePopup'
 import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
-import { useSearchCountriesInfinite } from '@/hooks/config/useCountries'
-import { dialCode } from '@/lib/api/academic/country'
+import { useCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
+import { findDefaultCountry, phoneCountryOptions } from '@/lib/api/academic/country'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
 import { useEnquirySources } from '@/hooks/admission/useEnquirySources'
@@ -66,18 +66,11 @@ export default function OnlineEnquiryPage() {
   // Sent as gender: 0 = Male, 1 = Female, 2 = Other (post-enquiry.md).
   // Optional, so blank goes out as null.
   const [gender, setGender] = useState('')
-  // Split the same way Payment's own Phone field does — a cosmetic
-  // country-code dropdown (real-data counterpart of Payment's own
-  // COUNTRY_CODES, sourced from the same countries master rather than a
-  // separate hardcoded list) plus a raw-digits box. phoneCode is NOT
-  // concatenated into `mobile` on save — confirmed via a real
-  // validation_error ("Mobile number must contain 7 to 15 digits.") when it
-  // was: the backend's mobile field is plain-digits-only (no '+', and
-  // apparently no embedded dial code either), matching Payment's own
-  // confirmed "raw digits, no country prefix" contract. The dropdown here
-  // is purely so the phone number reads naturally next to the box, same as
-  // Payment's own COUNTRY_CODES comment already says about its field.
-  const [phoneCode, setPhoneCode] = useState('+256')
+  // Phone = dial-code country picker + raw-digits box. The picker's value is
+  // a Country GUID, sent as mobileCountryGuid (required since 2026-10); the
+  // dial code is never joined into `mobile`, which stays digits only.
+  // Defaults to Uganda once the full country list loads (effect below).
+  const [mobileCountryGuid, setMobileCountryGuid] = useState('')
   const [phone, setPhone]         = useState('')
   const [email, setEmail]         = useState('')
   const [dob, setDob]             = useState('')
@@ -140,6 +133,14 @@ export default function OnlineEnquiryPage() {
   const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
   const programsByCampus = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
   const countries = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
+  // Full list (one cached request) — the default dial-code country and the
+  // selected one's label can't rely on the picker's 20-row search page.
+  const { data: allCountries = [] } = useCountries()
+  useEffect(() => {
+    if (mobileCountryGuid || !allCountries.length) return
+    const home = findDefaultCountry(allCountries)
+    if (home) setMobileCountryGuid(home.countryGuid)
+  }, [allCountries, mobileCountryGuid])
 
   // Same "programmes scoped to the selected campus" convention as the
   // Payment and Filing pages — a programme belongs to one campus, so the
@@ -162,19 +163,7 @@ export default function OnlineEnquiryPage() {
   const isbatSourceOptions = isbatSources.map(s => ({ value: s.isbatSourceGuid, label: s.sourceName }))
   const genderOptions  = genders.map(g => ({ value: String(g.value), label: g.name }))
   const countryOptions = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
-  // dialCode(), not countryPrefix — see the note on dialCode in
-  // lib/api/academic/country.ts for why (countryPrefix isn't a phone
-  // prefix at all despite the name). Deduped by dial code (a handful of
-  // countries can share one, e.g. +1) — first country to claim a code wins
-  // the label, same "first match wins" convention as enquiry-list's own
-  // channelOptions dedup.
-  const phoneCodeOptions = Array.from(
-    new Map(countries.map(c => [dialCode(c), `${dialCode(c)} · ${c.countryName}`])).entries(),
-  ).map(([value, label]) => ({ value, label }))
-  // Countries only load once a picker opens, so the default +256 had no
-  // matching option and the closed dropdown rendered blank. Keep the current
-  // code listed until the real option (with its country name) arrives.
-  if (phoneCode && !phoneCodeOptions.some(o => o.value === phoneCode)) phoneCodeOptions.unshift({ value: phoneCode, label: phoneCode })
+  const phoneCodeOptions = phoneCountryOptions(countries, allCountries, mobileCountryGuid)
 
   // Selecting a Country also points the phone code at that country's own
   // dial code — still just a UX default, freely overridable via the phone
@@ -182,8 +171,7 @@ export default function OnlineEnquiryPage() {
   function selectCountry(guid: string) {
     setCountryGuid(guid)
     clearError('countryGuid')
-    const match = countries.find(c => c.countryGuid === guid)
-    if (match) setPhoneCode(dialCode(match))
+    if (guid) setMobileCountryGuid(guid)
   }
 
   function setCampus(v: string) { setCampusGuid(v); setProgramGuid(''); clearError('campusGuid') }
@@ -207,6 +195,7 @@ export default function OnlineEnquiryPage() {
     else if (studentName().length > NAME_MAX) e.lastName = `First and last name together must be ${NAME_MAX} characters or fewer (now ${studentName().length})`
     if (!phone.trim())     e.phone     = 'Phone is required'
     else if (phone.length < PHONE_MIN) e.phone = `Phone must be ${PHONE_MIN} to ${PHONE_MAX} digits`
+    else if (!mobileCountryGuid) e.phone = 'Select the phone’s country code'
     if (!email.trim())     e.email     = 'Email is required'
     else if (!isValidEnquiryEmail(email)) e.email = 'Enter a valid email'
     else if (!isVerifiedFor(verifiedEmail, email)) e.email = 'Verify the email before saving'
@@ -225,7 +214,7 @@ export default function OnlineEnquiryPage() {
   }
 
   function resetForm() {
-    setFirstName(''); setLastName(''); setGender(''); setPhoneCode('+256'); setPhone(''); setEmail(''); setVerifiedEmail(null); setDob('')
+    setFirstName(''); setLastName(''); setGender(''); setMobileCountryGuid(findDefaultCountry(allCountries)?.countryGuid ?? ''); setPhone(''); setEmail(''); setVerifiedEmail(null); setDob('')
     setEnquiryDate(todayAtMidnight().slice(0, 10))
     setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setSourceGuid(''); setCountryGuid(''); setNotes('')
     setIsbatSourceGuid(''); setSourceName(''); setEnquiryTag('')
@@ -242,6 +231,7 @@ export default function OnlineEnquiryPage() {
         studentName: studentName(),
         enquiryDate: `${enquiryDate}T00:00:00`,
         mobile: phone.trim(),
+        mobileCountryGuid,
         email: email.trim(),
         emailVerificationToken: verifiedEmail?.token ?? '',
         countryGuid,
@@ -279,6 +269,7 @@ export default function OnlineEnquiryPage() {
           // Remaining documented create errors, matched by their message.
           const fieldFor =
             code === 'not_found' && /isbat/i.test(msg) ? 'isbatSourceGuid'
+            : code === 'not_found' && /^mobile country/i.test(msg) ? 'phone'
             :
             code === 'validation_error' && /mobile/i.test(msg) ? 'phone'
             : code === 'validation_error' && /age must be|dob|birth/i.test(msg) ? 'dob'
@@ -342,8 +333,8 @@ export default function OnlineEnquiryPage() {
             <div className="flex gap-2">
               <SearchSelect
                 options={phoneCodeOptions}
-                value={phoneCode}
-                onChange={setPhoneCode}
+                value={mobileCountryGuid}
+                onChange={v => { setMobileCountryGuid(v); clearError('phone') }}
                 onSearch={setCountrySearch}
                 onOpenChange={setPhoneCodePickerOpen}
                 isLoading={countryQuery.isLoading}
