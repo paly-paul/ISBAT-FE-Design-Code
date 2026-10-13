@@ -517,6 +517,27 @@ export default function QuestionBankUploadPage() {
             Manage course examination questions individually or in bulk via Excel (.xlsx) · Scoped to Academic Intake & Logged-in Faculty
           </div>
         </div>
+        <div className="pg-actions flex items-center justify-end gap-2 ml-auto shrink-0 self-end sm:self-center">
+          <button
+            type="button"
+            className="btn btn-neu flex items-center gap-1.5 shadow-sm text-xs"
+            onClick={handleDownloadTemplate}
+            disabled={downloadTemplateMut.isPending}
+            title="Download the official 9-column question import template"
+          >
+            {downloadTemplateMut.isPending ? (
+              <>
+                <span className="inline-block w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
+                <span>Generating Link...</span>
+              </>
+            ) : (
+              <>
+                <i className="lni lni-download text-slate-600"></i>
+                <span>Download Template (.xlsx)</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* ── Scope Parameters Card ───────────────────────────────────────────── */}
@@ -983,6 +1004,25 @@ export default function QuestionBankUploadPage() {
                 <i className="lni lni-download text-indigo-600"></i>
                 <span>Sample Excel (Pre-filled)</span>
               </a>
+              <button
+                type="button"
+                className="btn btn-neu btn-sm flex items-center gap-1.5"
+                onClick={handleDownloadTemplate}
+                disabled={downloadTemplateMut.isPending}
+                title="Download blank official 9-column template"
+              >
+                {downloadTemplateMut.isPending ? (
+                  <>
+                    <span className="inline-block w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
+                    <span>Generating Link...</span>
+                  </>
+                ) : (
+                  <>
+                    <i className="lni lni-download"></i>
+                    <span>Blank 9-Column Template</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
@@ -1012,7 +1052,7 @@ export default function QuestionBankUploadPage() {
                     Drop your Excel (.xlsx) file here or <span className="underline decoration-indigo-300">browse</span>
                   </div>
                   <div className="text-xs text-slate-500 mt-1">
-                    Must follow the official Excel format · Maximum 10MB
+                    Must follow the official 9-column format · Maximum 10MB
                   </div>
                 </div>
               ) : (
