@@ -517,6 +517,27 @@ export default function QuestionBankUploadPage() {
             Manage course examination questions individually or in bulk via Excel (.xlsx) · Scoped to Academic Intake & Logged-in Faculty
           </div>
         </div>
+        <div className="pg-actions flex items-center justify-end gap-2 ml-auto shrink-0 self-end sm:self-center">
+          <button
+            type="button"
+            className="btn btn-neu flex items-center gap-1.5 shadow-sm text-xs"
+            onClick={handleDownloadTemplate}
+            disabled={downloadTemplateMut.isPending}
+            title="Download the official 9-column question import template"
+          >
+            {downloadTemplateMut.isPending ? (
+              <>
+                <span className="inline-block w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
+                <span>Generating Link...</span>
+              </>
+            ) : (
+              <>
+                <i className="lni lni-download text-slate-600"></i>
+                <span>Download Template (.xlsx)</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* ── Scope Parameters Card ───────────────────────────────────────────── */}
@@ -626,8 +647,8 @@ export default function QuestionBankUploadPage() {
           <button
             type="button"
             className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${activeTab === 'repository'
-                ? 'bg-white text-indigo-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+              ? 'bg-white text-indigo-700 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
               }`}
             onClick={() => handleTabSwitch('repository')}
           >
@@ -637,8 +658,8 @@ export default function QuestionBankUploadPage() {
           <button
             type="button"
             className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${activeTab === 'import'
-                ? 'bg-white text-indigo-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+              ? 'bg-white text-indigo-700 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
               }`}
             onClick={() => handleTabSwitch('import')}
           >
@@ -745,8 +766,8 @@ export default function QuestionBankUploadPage() {
               <button
                 type="button"
                 className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${repoFilterType === 'ALL'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
                   }`}
                 onClick={() => setRepoFilterType('ALL')}
               >
@@ -755,8 +776,8 @@ export default function QuestionBankUploadPage() {
               <button
                 type="button"
                 className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${repoFilterType === 'MCQ'
-                    ? 'bg-white text-purple-700 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-purple-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
                   }`}
                 onClick={() => setRepoFilterType('MCQ')}
               >
@@ -765,8 +786,8 @@ export default function QuestionBankUploadPage() {
               <button
                 type="button"
                 className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${repoFilterType === 'DQ'
-                    ? 'bg-white text-blue-700 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-blue-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
                   }`}
                 onClick={() => setRepoFilterType('DQ')}
               >
@@ -974,7 +995,7 @@ export default function QuestionBankUploadPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <a
+              {/* <a
                 href="/Sample_Question_Bank_With_Data.xlsx"
                 download="Sample_Question_Bank.xlsx"
                 className="btn btn-neu btn-sm flex items-center gap-1.5 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 border-indigo-200"
@@ -982,7 +1003,26 @@ export default function QuestionBankUploadPage() {
               >
                 <i className="lni lni-download text-indigo-600"></i>
                 <span>Sample Excel (Pre-filled)</span>
-              </a>
+              </a> */}
+              <button
+                type="button"
+                className="btn btn-neu btn-sm flex items-center gap-1.5"
+                onClick={handleDownloadTemplate}
+                disabled={downloadTemplateMut.isPending}
+                title="Download blank official 9-column template"
+              >
+                {downloadTemplateMut.isPending ? (
+                  <>
+                    <span className="inline-block w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
+                    <span>Generating Link...</span>
+                  </>
+                ) : (
+                  <>
+                    <i className="lni lni-download"></i>
+                    <span>Blank 9-Column Template</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
@@ -1012,7 +1052,7 @@ export default function QuestionBankUploadPage() {
                     Drop your Excel (.xlsx) file here or <span className="underline decoration-indigo-300">browse</span>
                   </div>
                   <div className="text-xs text-slate-500 mt-1">
-                    Must follow the official Excel format · Maximum 10MB
+                    Must follow the official 9-column format · Maximum 10MB
                   </div>
                 </div>
               ) : (
@@ -1233,8 +1273,8 @@ export default function QuestionBankUploadPage() {
                 <button
                   type="button"
                   className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${previewFilterType === 'ALL'
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
                     }`}
                   onClick={() => setPreviewFilterType('ALL')}
                 >
@@ -1243,8 +1283,8 @@ export default function QuestionBankUploadPage() {
                 <button
                   type="button"
                   className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${previewFilterType === 'MCQ'
-                      ? 'bg-white text-purple-700 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white text-purple-700 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
                     }`}
                   onClick={() => setPreviewFilterType('MCQ')}
                 >
@@ -1253,8 +1293,8 @@ export default function QuestionBankUploadPage() {
                 <button
                   type="button"
                   className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${previewFilterType === 'DQ'
-                      ? 'bg-white text-blue-700 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
                     }`}
                   onClick={() => setPreviewFilterType('DQ')}
                 >
@@ -1352,10 +1392,10 @@ export default function QuestionBankUploadPage() {
                               {String(q.level) === '1'
                                 ? 'Sec A'
                                 : String(q.level) === '2'
-                                ? 'Sec B'
-                                : String(q.level) === '3'
-                                ? 'Sec C'
-                                : `L${q.level}`}
+                                  ? 'Sec B'
+                                  : String(q.level) === '3'
+                                    ? 'Sec C'
+                                    : `L${q.level}`}
                             </span>
                           ) : (
                             <span className="text-slate-300">—</span>
@@ -1442,10 +1482,10 @@ export default function QuestionBankUploadPage() {
                       {viewingQuestion.level === 1
                         ? 'Section A'
                         : viewingQuestion.level === 2
-                        ? 'Section B'
-                        : viewingQuestion.level === 3
-                        ? 'Section C'
-                        : `Section ${viewingQuestion.level}`}
+                          ? 'Section B'
+                          : viewingQuestion.level === 3
+                            ? 'Section C'
+                            : `Section ${viewingQuestion.level}`}
                     </span>
                   ) : (
                     <span className="text-xs text-slate-400 font-medium">Section: Not Required</span>
