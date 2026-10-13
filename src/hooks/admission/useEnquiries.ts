@@ -15,14 +15,15 @@ export function useEnquiryGenders() {
   })
 }
 
-// A create 404 means the chosen intake, enquiry source or ISBAT source was
-// removed after the form loaded (enquiry-create-page.md) — drop those cached
-// lists so the pickers refetch. Keys match useIntakes / useEnquirySourceMasters
-// / useEnquirySources.
+// A create 404 means the chosen intake, enquiry source, ISBAT source or
+// mobile country was removed after the form loaded (enquiry-create-page.md)
+// — drop those cached lists so the pickers refetch. Keys match useIntakes /
+// useEnquirySourceMasters / useEnquirySources / useCountries.
 export function useReloadEnquiryDropdowns() {
   const queryClient = useQueryClient()
   return () => {
     queryClient.invalidateQueries({ queryKey: ['intakes'] })
+    queryClient.invalidateQueries({ queryKey: ['countries'] })
     queryClient.invalidateQueries({ queryKey: ['enquiry-source-masters'] })
     queryClient.invalidateQueries({ queryKey: ['enquiry-sources'] })
   }
@@ -32,10 +33,10 @@ export function useReloadEnquiryDropdowns() {
 // master-data lists elsewhere in this app, this can't just fetch everything
 // in one big page. page/pageSize/search are part of the query key so each
 // combination is cached separately.
-export function useEnquiries(page: number, pageSize: number, search = '') {
+export function useEnquiries(page: number, pageSize: number, search = '', enquiryStatusGuid = '') {
   return useQuery({
-    queryKey: [...ENQUIRIES_KEY, page, pageSize, search],
-    queryFn: () => getEnquiries(page, pageSize, search),
+    queryKey: [...ENQUIRIES_KEY, page, pageSize, search, enquiryStatusGuid],
+    queryFn: () => getEnquiries(page, pageSize, search, enquiryStatusGuid),
     staleTime: Infinity,
     gcTime: Infinity,
   })
