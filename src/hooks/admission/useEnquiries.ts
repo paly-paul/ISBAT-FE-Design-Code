@@ -1,8 +1,32 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createEnquiry, Enquiry, EnquiryCounts, EnquiryCountsFilters, EnquiryInput, EnquiryUpdateInput, getEnquiries, getEnquiryById, getEnquiryCounts, updateEnquiry, requestEnquiryEmailOtp, verifyEnquiryEmailOtp } from '@/lib/api/admission/enquiry'
+import { createEnquiry, Enquiry, EnquiryCounts, EnquiryCountsFilters, EnquiryInput, EnquiryUpdateInput, GenderOption, getEnquiries, getEnquiryById, getEnquiryCounts, getEnquiryGenders, updateEnquiry, requestEnquiryEmailOtp, verifyEnquiryEmailOtp } from '@/lib/api/admission/enquiry'
 
 const ENQUIRIES_KEY = ['enquiries']
 const ENQUIRY_COUNTS_KEY = ['enquiry-counts']
+const ENQUIRY_GENDERS_KEY = ['enquiry-genders']
+
+// Fixed backend enum — fetched once per session.
+export function useEnquiryGenders() {
+  return useQuery({
+    queryKey: ENQUIRY_GENDERS_KEY,
+    queryFn: () => getEnquiryGenders(),
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
+
+// A create 404 means the chosen intake, enquiry source or ISBAT source was
+// removed after the form loaded (enquiry-create-page.md) — drop those cached
+// lists so the pickers refetch. Keys match useIntakes / useEnquirySourceMasters
+// / useEnquirySources.
+export function useReloadEnquiryDropdowns() {
+  const queryClient = useQueryClient()
+  return () => {
+    queryClient.invalidateQueries({ queryKey: ['intakes'] })
+    queryClient.invalidateQueries({ queryKey: ['enquiry-source-masters'] })
+    queryClient.invalidateQueries({ queryKey: ['enquiry-sources'] })
+  }
+}
 
 // Real (paginated) — 11k+ rows in the sample data, so unlike the small
 // master-data lists elsewhere in this app, this can't just fetch everything
@@ -79,4 +103,4 @@ export function useVerifyEnquiryEmailOtp() {
   })
 }
 
-export type { Enquiry, EnquiryCounts, EnquiryCountsFilters, EnquiryInput, EnquiryUpdateInput }
+export type { Enquiry, EnquiryCounts, EnquiryCountsFilters, EnquiryInput, EnquiryUpdateInput, GenderOption }

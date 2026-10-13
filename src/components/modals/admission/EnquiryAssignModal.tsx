@@ -22,8 +22,10 @@ interface EnquiryAssignModalProps extends ModalProps {
   }
 }
 
-// Update.bru's payload only carries advisorGuid/programGuid/campusGuid
-// (campusGuid required, the rest optional) — this is a staff assignment
+// put-enquiry.md: campusGuid required; enquiryStatusGuid, programGuid and
+// advisorGuid optional. advisorGuid reassigns the enquiry's own advisor (the
+// list's advisor filter and the follow-up worklists read it straight away);
+// it adds no follow-up history entry. This is a staff assignment
 // action, not a full edit of the enquiry's original details, which are
 // shown read-only above the editable fields. enquiryStatus is left out —
 // see the note on EnquiryUpdateInput in lib/api/admission/enquiry.ts.
@@ -108,9 +110,15 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
       {
         onSuccess: () => { setSaved(true); showToast('Enquiry updated successfully') },
         onError: (error: Error) => {
-          // Only campus has a field to point at; the rest go to the popup.
-          if (error instanceof AuthError && error.code === 'validation_error' && /campus/i.test(error.message)) {
-            const e = { campusGuid: error.message }
+          // Campus (validation_error) and advisor (validation_error or 404
+          // "Advisor not found.") have fields to point at; the rest go to the popup.
+          const code = error instanceof AuthError ? error.code : undefined
+          const field =
+            code === 'validation_error' && /campus/i.test(error.message) ? 'campusGuid'
+            : (code === 'validation_error' || code === 'not_found') && /advisor/i.test(error.message) ? 'advisorGuid'
+            : null
+          if (field) {
+            const e = { [field]: error.message }
             setErrors(prev => ({ ...prev, ...e }))
             scrollToFirstError(e)
             return
@@ -213,10 +221,11 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
           <div className="g2">
             <div className="fg">
               <div className="lbl">Advisor</div>
-              {/* Editable on request. put-enquiry.md says the advisor comes
-                  from the latest follow-up, so this may not stick; see
-                  EnquiryUpdateInput. */}
-              <SearchSelect placeholder="— unassigned —" options={advisorOptions} value={advisorGuid} onChange={setAdvisorGuid} />
+              {/* PUT can reassign the advisor but never clear it (null/omitted
+                  = keep), so once one is set the picker has no placeholder —
+                  and with it no ✕ — to clear back to. */}
+              <SearchSelect placeholder={enquiry.advisorGuid ? undefined : '— unassigned —'} options={advisorOptions} value={advisorGuid} onChange={v => { setAdvisorGuid(v); setErrors(prev => ({ ...prev, advisorGuid: '' })) }} />
+              {errors.advisorGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.advisorGuid}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Programme</div>

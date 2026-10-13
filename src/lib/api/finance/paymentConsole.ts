@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, AuthError } from '../client'
+import { apiGet, apiGetBlob, apiPost, apiPut, AuthError } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -629,6 +629,20 @@ export function getPaidLedgersByPayment(paymentGuid: string): Promise<PaidLedger
       if (err instanceof AuthError && err.code === 'not_found') return []
       throw err
     })
+}
+
+// get-payment-receipt-document.md (Payment Console step 8) — the printable
+// receipt for one TUITION payment as a single-page PDF, filename
+// Receipt_{receiptNo}.pdf via Content-Disposition. Read-only, so printing and
+// reprinting are both safe. 404s (shown as-is): "Payment not found." (unknown
+// guid, or a non-tuition category), "No paid ledgers found for this
+// payment.", "Application not found.". Printed rows net discount/rounding
+// into the tuition row, so they won't always match the allocation preview.
+export function getPaymentReceiptPdf(paymentGuid: string): Promise<{ blob: Blob; filename: string | null }> {
+  if (MOCK_AUTH) {
+    return Promise.resolve({ blob: new Blob(['%PDF-1.4 mock payment receipt'], { type: 'application/pdf' }), filename: `Receipt_${paymentGuid}.pdf` })
+  }
+  return apiGetBlob(`/api/v1/finance/payment-console/payments/${encodeURIComponent(paymentGuid)}/receipt`)
 }
 
 export function getPayableLedgers(params: PayableLedgersParams): Promise<PayableLedgersResult> {

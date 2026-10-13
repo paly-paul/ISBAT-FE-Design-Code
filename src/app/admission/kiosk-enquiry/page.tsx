@@ -11,7 +11,8 @@ import { useSearchCountriesInfinite } from '@/hooks/config/useCountries'
 import { dialCode } from '@/lib/api/academic/country'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
-import { useCreateEnquiry } from '@/hooks/admission/useEnquiries'
+import { useEnquirySources } from '@/hooks/admission/useEnquirySources'
+import { useCreateEnquiry, useEnquiryGenders, useReloadEnquiryDropdowns } from '@/hooks/admission/useEnquiries'
 import { EnquiryEmailField, EnquirySaveStatus, VerifiedEmail, isValidEnquiryEmail, isVerifiedFor } from '@/components/EnquiryEmailField'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
@@ -43,23 +44,22 @@ const MIN_AGE_YEARS = 10
 const DOB_RANGE_MESSAGE = `Student must be at least ${MIN_AGE_YEARS} years old.`
 // Backend cap on remarks.
 const REMARKS_MAX = 100
-const GENDER_OPTIONS = [
-  { value: '0', label: 'Male' },
-  { value: '1', label: 'Female' },
-  { value: '2', label: 'Other' },
-]
 
 export default function KioskEnquiryPage() {
   const router = useRouter()
   const permissions = usePagePermissions()
-  const [saved, setSaved] = useState(false)
+  // enquiryCode of the enquiry just created; non-null opens the success popup.
+  const [savedCode, setSavedCode] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   // Email must be OTP-verified BEFORE save (2026-10 enquiry handoff): the
   // token from EnquiryEmailField goes out as emailVerificationToken.
   const [verifiedEmail, setVerifiedEmail] = useState<VerifiedEmail | null>(null)
 
   const { data: enquirySources = [] } = useEnquirySourceMasters()
+  const { data: isbatSources = [] }   = useEnquirySources()
+  const { data: genders = [] }        = useEnquiryGenders()
   const createEnquiry = useCreateEnquiry()
+  const reloadDropdowns = useReloadEnquiryDropdowns()
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName]   = useState('')
@@ -91,6 +91,10 @@ export default function KioskEnquiryPage() {
   // EnquiryInput.countryGuid in lib/api/admission/enquiry.ts).
   const [countryGuid, setCountryGuid] = useState('')
   const [notes, setNotes]         = useState('')
+  // Optional — ISBAT Enquiry Source master guid, free-text source name, tag.
+  const [isbatSourceGuid, setIsbatSourceGuid] = useState('')
+  const [sourceName, setSourceName] = useState('')
+  const [enquiryTag, setEnquiryTag] = useState('')
   const [errors, setErrors]       = useState<Record<string, string>>({})
   const [intakeSearch, setIntakeSearch] = useState('')
   const [campusSearch, setCampusSearch] = useState('')
@@ -138,6 +142,8 @@ export default function KioskEnquiryPage() {
   const campusOptions  = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions = programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   const sourceOptions  = enquirySources.map(s => ({ value: s.enquirySourceGuid, label: s.enquirySourceName }))
+  const isbatSourceOptions = isbatSources.map(s => ({ value: s.isbatSourceGuid, label: s.sourceName }))
+  const genderOptions  = genders.map(g => ({ value: String(g.value), label: g.name }))
   const countryOptions = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
   // dialCode(), not countryPrefix — see the note on dialCode in
   // lib/api/academic/country.ts for why (countryPrefix isn't a phone
@@ -203,12 +209,12 @@ export default function KioskEnquiryPage() {
     setFirstName(''); setLastName(''); setGender(''); setPhoneCode('+256'); setPhone(''); setEmail(''); setVerifiedEmail(null); setDob('')
     setEnquiryDate(todayAtMidnight().slice(0, 10))
     setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setSourceGuid(''); setCountryGuid(''); setNotes('')
+    setIsbatSourceGuid(''); setSourceName(''); setEnquiryTag('')
     setErrors({})
   }
 
   function handleSave() {
     if (!validate()) return
-    const selectedSource = enquirySources.find(s => s.enquirySourceGuid === sourceGuid)
     createEnquiry.mutate(
       {
         intakeGuid,
@@ -224,14 +230,12 @@ export default function KioskEnquiryPage() {
         gender: gender === '' ? null : +gender,
         remarks: notes.trim() || null,
         programGuid: programGuid || null,
-        // No Isbat Enquiry Source picker on this form yet — see the note in
-        // lib/api/admission/enquiry.ts.
-        isbatSourceGuid: null,
-        sourceName: selectedSource?.enquirySourceName ?? null,
-        enquiryTag: null,
+        isbatSourceGuid: isbatSourceGuid || null,
+        sourceName: sourceName.trim() || null,
+        enquiryTag: enquiryTag.trim() || null,
       },
       {
-        onSuccess: () => setSaved(true),
+        onSuccess: enquiry => setSavedCode(enquiry?.enquiryCode ?? ''),
         onError: (error: Error) => {
           const code = error instanceof AuthError ? error.code : undefined
           const msg = error.message || ''
@@ -250,8 +254,13 @@ export default function KioskEnquiryPage() {
             scrollToFirstError(e)
             return
           }
+          // Intake / enquiry source / ISBAT source deleted since the form
+          // loaded — refresh those pickers so the stale choice can be redone.
+          if (code === 'not_found') reloadDropdowns()
           // Remaining documented create errors, matched by their message.
           const fieldFor =
+            code === 'not_found' && /isbat/i.test(msg) ? 'isbatSourceGuid'
+            :
             code === 'validation_error' && /mobile/i.test(msg) ? 'phone'
             : code === 'validation_error' && /age must be|dob|birth/i.test(msg) ? 'dob'
             : code === 'validation_error' && /remarks/i.test(msg) ? 'notes'
@@ -277,8 +286,9 @@ export default function KioskEnquiryPage() {
     )
   }
 
+  // Kiosk stays on the form, cleared for the next candidate.
   function handleSavedClose() {
-    setSaved(false)
+    setSavedCode(null)
     resetForm()
   }
 
@@ -306,7 +316,7 @@ export default function KioskEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Gender</label>
-            <SearchSelect placeholder="— select —" options={GENDER_OPTIONS} value={gender} onChange={setGender} />
+            <SearchSelect placeholder="— select —" options={genderOptions} value={gender} onChange={setGender} />
           </div>
           <div className="fg">
             <label className="lbl">Phone <span className="text-clr-red">*</span></label>
@@ -381,6 +391,19 @@ export default function KioskEnquiryPage() {
             <SearchSelect placeholder="— select —" options={intakeOptions} value={intakeGuid} onChange={val => { setIntakeGuid(val); clearError('intakeGuid') }} onSearch={setIntakeSearch} onOpenChange={setIntakePickerOpen} isLoading={intakeQuery.isLoading} hasNextPage={intakeQuery.hasNextPage} isFetchingNextPage={intakeQuery.isFetchingNextPage} onLoadMore={() => intakeQuery.fetchNextPage()} />
             {errors.intakeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
           </div>
+          <div className="fg">
+            <label className="lbl">ISBAT Source</label>
+            <SearchSelect placeholder="— select —" options={isbatSourceOptions} value={isbatSourceGuid} onChange={val => { setIsbatSourceGuid(val); clearError('isbatSourceGuid') }} />
+            {errors.isbatSourceGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.isbatSourceGuid}</p>}
+          </div>
+          <div className="fg">
+            <label className="lbl">Source Name</label>
+            <input className="ctrl" placeholder="e.g. referred by a friend" value={sourceName} onChange={e => setSourceName(e.target.value)} />
+          </div>
+          <div className="fg">
+            <label className="lbl">Tag</label>
+            <input className="ctrl" placeholder="e.g. Open Day 2026" value={enquiryTag} onChange={e => setEnquiryTag(e.target.value)} />
+          </div>
           {/* Preferred Study Mode had no counterpart on POST /api/v1/admissions/enquiries
               (Full-time/Weekend/Evening/ODL) — dropped rather than collecting data that
               goes nowhere, same as Online Enquiry's own note. */}
@@ -400,7 +423,7 @@ export default function KioskEnquiryPage() {
           <div className="flex gap-2">
             <button className="btn btn-ghost" onClick={() => router.push('/admission/enquiry-list')}>Cancel</button>
             {permissions.add && (
-              <button className="btn btn-primary" disabled={createEnquiry.isPending} onClick={handleSave}>
+              <button className="btn btn-primary" disabled={createEnquiry.isPending || !isVerifiedFor(verifiedEmail, email)} onClick={handleSave}>
                 {createEnquiry.isPending ? 'Saving…' : 'Save Enquiry'}
               </button>
             )}
@@ -408,12 +431,12 @@ export default function KioskEnquiryPage() {
         </div>
       </div>
 
-      {saved && (
+      {savedCode !== null && (
         <div className="modal-overlay open">
           <div className="modal" style={{ maxWidth: 400 }}>
             <SuccessPopup
               title="Enquiry Saved!"
-              subtitle="The enquiry has been recorded and the email verified."
+              subtitle={savedCode ? `Enquiry ${savedCode} has been recorded.` : 'The enquiry has been recorded.'}
               onClose={handleSavedClose}
             />
           </div>
