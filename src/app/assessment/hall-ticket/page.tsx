@@ -274,7 +274,8 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
   const [status, setStatus] = useState<HallTicketIssueStatus | ''>('NotIssued')
   const [summary, setSummary] = useState<BulkIssueResponseDto | null>(null)
   const [page, setPage] = useState(1)
-  useEffect(() => { if (isOpen) { setSummary(null); setPage(1) } }, [isOpen])
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  useEffect(() => { if (isOpen) { setSummary(null); setPage(1); setShowConfirmModal(false) } }, [isOpen])
 
   const { data: programs = [] } = useProgramDropdown(undefined, isOpen)
   const { data: semesters = [] } = useSemestersForProgram(programGuid || null, isOpen)
@@ -292,8 +293,12 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
     : `the whole of ${intakeLabel || 'this intake'}`
 
   function handleBulkIssue() {
-    if (scopeIncomplete) return
-    if (!window.confirm(`Issue Term ${term} hall tickets to every eligible student in ${scopeLabel}? Students who already have one are skipped. This may take a while.`)) return
+    if (scopeIncomplete || !intakeGuid) return
+    setShowConfirmModal(true)
+  }
+
+  function confirmBulkIssue() {
+    setShowConfirmModal(false)
     setSummary(null)
     bulk.mutate(scope, {
       onSuccess: res => { setSummary(res); setPage(1) },
@@ -384,6 +389,47 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
           </button>
         </div>
       </div>
+
+      {showConfirmModal && (
+        <div
+          className="perm-delete-overlay"
+          style={{ position: 'fixed', zIndex: 600 }}
+          onClick={() => setShowConfirmModal(false)}
+        >
+          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
+            <div
+              className="perm-delete-icon"
+              style={{
+                background: 'var(--b50)',
+                border: '1.5px solid var(--b200)',
+                color: 'var(--b700)',
+              }}
+            >
+              <i className="lni lni-ticket" />
+            </div>
+            <div className="perm-delete-title">Confirm Bulk Issuance</div>
+            <div className="perm-delete-sub">
+              Issue Term {term} hall tickets to every eligible student in {scopeLabel}? Students who already have one are skipped. This may take a while.
+            </div>
+            <div className="perm-delete-actions">
+              <button
+                type="button"
+                className="btn btn-neu"
+                onClick={() => setShowConfirmModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={confirmBulkIssue}
+              >
+                <i className="lni lni-ticket"></i> Issue Hall Tickets
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

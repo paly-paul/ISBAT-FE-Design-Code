@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
@@ -20,10 +20,19 @@ interface CbtScheduleModalProps {
 
 export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName }: CbtScheduleModalProps) {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
   const [saved, setSaved] = useState(false)
   const showToast = (msg: string, type: string = 'success') => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current)
+    }
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 3500)
+    const isErrorOrWarn = ['error', 'err', 'danger', 'warn', 'warning'].includes((type || '').toLowerCase().trim())
+    const duration = isErrorOrWarn ? 8000 : 4000
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null)
+      toastTimerRef.current = null
+    }, duration)
   }
 
   // Fetch current schedule
@@ -329,7 +338,7 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
           </div>
         </div>
       </div>
-      <Toast toast={toast} />
+      <Toast toast={toast} onClose={() => setToast(null)} />
       <ExamRuleLookupModal 
         isOpen={lookupOpen} 
         onClose={() => setLookupOpen(false)} 

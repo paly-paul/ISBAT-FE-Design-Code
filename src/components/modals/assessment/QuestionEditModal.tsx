@@ -202,16 +202,16 @@ export function QuestionEditModal({
               </select>
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <span className="font-semibold text-slate-700">Level</span>
+              <span className="font-semibold text-slate-700">Section</span>
               <select
                 className="border border-slate-300 rounded px-2.5 py-1 bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
                 value={formData.level || ''}
                 onChange={e => handleChange('level', e.target.value)}
               >
                 <option value="">--Select--</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
+                <option value="1">Section A</option>
+                <option value="2">Section B</option>
+                <option value="3">Section C</option>
               </select>
             </div>
             <div className="flex items-center gap-2 text-sm ml-auto">

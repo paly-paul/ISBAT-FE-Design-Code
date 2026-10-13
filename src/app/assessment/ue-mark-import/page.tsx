@@ -19,9 +19,18 @@ import { UeMarkImportPreviewItem } from '@/lib/api/assessment/ueMarkImport'
 
 export default function UeMarkImportPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
   const showToast = (msg: string, type = 'success') => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current)
+    }
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 4000)
+    const isErrorOrWarn = ['error', 'err', 'danger', 'warn', 'warning'].includes((type || '').toLowerCase().trim())
+    const duration = isErrorOrWarn ? 8000 : 4000
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null)
+      toastTimerRef.current = null
+    }, duration)
   }
 
   const [program, setProgram] = useState<ProgramPickOption | null>(null)
@@ -206,6 +215,28 @@ export default function UeMarkImportPage() {
     })
   }
 
+  const handleDownloadTemplate = () => {
+    if (!examInfo?.universityExamGuid) {
+      showToast('Please select Course Unit and UE Type to resolve exam first.', 'warn')
+      return
+    }
+
+    setValidationError(null)
+    downloadMut.mutate(examInfo.universityExamGuid, {
+      onSuccess: () => {
+        showToast('Template downloaded successfully.', 'success')
+      },
+      onError: (err: any) => {
+        const errorMsg = err?.message || 'Failed to download template.'
+        showToast(errorMsg, 'danger')
+        setValidationError(errorMsg)
+        setTimeout(() => {
+          errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 100)
+      }
+    })
+  }
+
   return (
     <div className="page active">
       <div className="pg-hdr flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
@@ -349,10 +380,11 @@ export default function UeMarkImportPage() {
           
           <button
             type="button"
-            className="btn btn-neu ml-auto text-blue-600"
-            onClick={() => examInfo && downloadMut.mutate(examInfo.universityExamGuid)}
+            className="btn btn-neu ml-auto text-blue-600 flex items-center gap-1.5"
+            onClick={handleDownloadTemplate}
             disabled={!examInfo || downloadMut.isPending}
           >
+            <i className={`lni ${downloadMut.isPending ? 'lni-spinner animate-spin' : 'lni-download'}`} />
             {downloadMut.isPending ? 'Downloading...' : 'Template Download'}
           </button>
         </div>
@@ -428,7 +460,7 @@ export default function UeMarkImportPage() {
           onClose={() => setSuccessModal(null)}
         />
       )}
-      {toast && <Toast toast={toast} />}
+      <Toast toast={toast} onClose={() => setToast(null)} />
     </div>
   )
 }

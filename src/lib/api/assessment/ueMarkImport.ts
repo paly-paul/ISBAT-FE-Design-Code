@@ -28,8 +28,10 @@ export interface UeMarkImportExam {
 }
 
 export interface UeMarkImportTemplateResponse {
-  url: string
-  expiresAtUtc: string
+  url?: string
+  expiresAtUtc?: string
+  blob?: Blob
+  filename?: string | null
 }
 
 export interface UeMarkImportPreviewItem {
@@ -115,10 +117,49 @@ export function getUeMarkImportExam(
   return apiGet<UeMarkImportExam>(`/api/v1/assessment/ue-mark-import/exam?${params.toString()}`)
 }
 
-export function getUeMarkImportTemplate(universityExamGuid: string): Promise<UeMarkImportTemplateResponse> {
-  if (MOCK_AUTH) return Promise.resolve({ url: 'https://example.com/mock-template.xlsx', expiresAtUtc: new Date(Date.now() + 3600000).toISOString() })
+export async function getUeMarkImportTemplate(universityExamGuid: string): Promise<UeMarkImportTemplateResponse> {
+  if (MOCK_AUTH) return { url: 'https://example.com/mock-template.xlsx', expiresAtUtc: new Date(Date.now() + 3600000).toISOString() }
   const params = new URLSearchParams({ universityExamGuid: universityExamGuid?.toUpperCase() || '' })
-  return apiGet<UeMarkImportTemplateResponse>(`/api/v1/assessment/ue-mark-import/template?${params.toString()}`)
+  const res = await fetch(`/api/v1/assessment/ue-mark-import/template?${params.toString()}`, {
+    method: 'GET',
+    headers: { 'ngrok-skip-browser-warning': 'true' },
+    credentials: 'include',
+  })
+
+  const contentType = res.headers.get('content-type') || ''
+
+  if (contentType.includes('application/json')) {
+    const json = await res.json().catch(() => null)
+    if (!res.ok || (json && json.success === false)) {
+      const errMsg = json?.message || (Array.isArray(json?.errors) ? json.errors[0] : null) || json?.title || `Error ${res.status}`
+      throw new Error(errMsg)
+    }
+    const downloadUrl = json?.data?.url || json?.url || (typeof json?.data === 'string' ? json.data : null)
+    if (downloadUrl) {
+      return { url: downloadUrl, expiresAtUtc: json?.data?.expiresAtUtc || json?.expiresAtUtc || '' }
+    }
+    if (json?.data && typeof json.data === 'object' && json.data.downloadUrl) {
+      return { url: json.data.downloadUrl, expiresAtUtc: json.data.expiresAtUtc || '' }
+    }
+  }
+
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => '')
+    let extractedMsg = errorText
+    try {
+      const parsed = JSON.parse(errorText)
+      extractedMsg = parsed?.message || (Array.isArray(parsed?.errors) ? parsed.errors[0] : null) || parsed?.title || errorText
+    } catch {
+      // plain text error
+    }
+    throw new Error(extractedMsg || `Failed to download template (HTTP ${res.status})`)
+  }
+
+  const disposition = res.headers.get('content-disposition') ?? ''
+  const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)"?/i)
+  const filename = match ? decodeURIComponent(match[1]) : 'UE_Mark_Import_Template.xlsx'
+  const blob = await res.blob()
+  return { blob, filename }
 }
 
 export function postUeMarkImportSheets(file: File): Promise<string[]> {
