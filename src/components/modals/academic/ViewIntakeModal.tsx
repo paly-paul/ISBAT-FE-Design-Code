@@ -166,12 +166,12 @@ export function ViewIntakeModal({ isOpen, onClose, showToast, intakeGuid, onEdit
   if (isLoading || !intake) {
     return (
       <div className="modal-overlay open" id="intake-view-modal">
-        <div className="modal modal-lg modal-flex" style={{ height: 'auto', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+        <div className="modal modal-lg modal-flex" onClick={e => e.stopPropagation()}>
           <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-eye"></i> View Intake</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
-          <div className="modal-scroll" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 160 }}>
+          <div className="modal-scroll" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span style={{ color: 'var(--g400)' }}>Loading intake details…</span>
           </div>
         </div>
@@ -181,9 +181,11 @@ export function ViewIntakeModal({ isOpen, onClose, showToast, intakeGuid, onEdit
 
   return (
     <div className="modal-overlay open" id="intake-view-modal">
-      <div className="modal modal-lg modal-flex" style={{ height: 'auto', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+      {/* modal-flex's fixed 85vh (no height: auto override) so switching tabs doesn't resize the modal —
+          .modal-scroll below fills it and scrolls each tab's content. */}
+      <div className="modal modal-lg modal-flex" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
-          <div className="modal-title"><i className="lni lni-eye"></i> View Intake — <span className="font-mono">{intake.intakeCode}</span></div>
+          <div className="modal-title"><i className="lni lni-eye"></i> View Intake —<span className="font-mono">{intake.intakeCode}</span></div>
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 

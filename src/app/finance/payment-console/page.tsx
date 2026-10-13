@@ -46,7 +46,8 @@ import {
   PaymentHistoryEntry,
 } from '@/hooks/finance/usePaymentConsole'
 import { usePaymentOthersList, useResitFee } from '@/hooks/finance/usePaymentOthers'
-import { isResitLedger, refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
+import { getPaymentReceiptPdf, isResitLedger, refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
+import { downloadBlob } from '@/lib/downloadBlob'
 import { formatDate, formatDateTime } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -238,7 +239,7 @@ function todayYmd() {
 }
 
 interface ReceiptData {
-  ref: string; code: string; name: string; refNo: string; prog: string; method: string
+  paymentGuid: string; ref: string; code: string; name: string; refNo: string; prog: string; method: string
   date: string; amount: string; balance: string; advanceMessage: string | null; reRegistrationWarning: string | null
 }
 
@@ -281,11 +282,43 @@ const SHOW_OTHER_PAID_FEE_DETAILS: boolean = false
 // different endpoints and can't share one paging cursor.
 const HISTORY_PAGE_SIZE = 10
 
+// Student search needs at least this many characters (empty = browse all) —
+// the backend errors on shorter terms.
+const MIN_SEARCH_CHARS = 3
+
 export default function PaymentConsolePage() {
   const permissions = usePagePermissions()
   const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  // Step 8 — server-rendered receipt PDF (tuition payments only). The tab is
+  // opened synchronously on click, before the fetch, because popup blockers
+  // drop a window.open that happens after an await; the PDF is loaded into
+  // it once it arrives. If the popup was blocked anyway, it downloads
+  // instead. On a 404 ("Payment not found." etc.) the blank tab is closed
+  // and the server's message shown.
+  const [printingGuid, setPrintingGuid] = useState<string | null>(null)
+  async function printReceipt(paymentGuid: string, fallbackName: string) {
+    if (printingGuid) return
+    const tab = window.open('', '_blank')
+    setPrintingGuid(paymentGuid)
+    try {
+      const { blob, filename } = await getPaymentReceiptPdf(paymentGuid)
+      const pdf = blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' })
+      if (tab && !tab.closed) {
+        // Not revoked — the tab needs the blob URL for as long as it's open.
+        tab.location.href = URL.createObjectURL(pdf)
+      } else {
+        downloadBlob(pdf, filename ?? `Receipt_${fallbackName}.pdf`)
+      }
+    } catch (err) {
+      tab?.close()
+      showToast(err instanceof Error && err.message ? err.message : 'Could not load the receipt.', 'error')
+    } finally {
+      setPrintingGuid(null)
+    }
+  }
 
   // Success confirmation for every payment category's submit (Tuition/
   // Other; NCHE/Guild before they were dropped from this page) — replaces
@@ -488,17 +521,17 @@ export default function PaymentConsolePage() {
   // as usePaymentHistory below: a failed search (a 401, or any other
   // downstream failure) must not render as the same "No matching
   // applications found" a genuinely empty result gets, or a real error goes
-  // unnoticed as "this student doesn't exist". The 2-char floor below is
-  // this page's own client-side guard, not a backend rule any more —
-  // PaymentConsoleStudentSearch.bru documents no validator on this endpoint
-  // (a single-char term is accepted), unlike the older Finance-proxy route
-  // this used to call. Kept anyway so a request isn't fired on every
-  // keystroke while the user is still mid-word. An
+  // unnoticed as "this student doesn't exist". MIN_SEARCH_CHARS (3) matches
+  // the backend: PaymentConsoleStudentSearch.bru documents no validator,
+  // but a 2-char term was confirmed to fail on the dev backend with a
+  // generic "An unexpected error occurred." while 3 chars work — so 1–2
+  // chars show a "keep typing" hint instead of firing a request. An
   // empty committedSearch is allowed too, but only once the box has focus
   // (searchFocused) — that's the "list everything" case for clicking into
   // an empty box, not something to fetch on mount before the user has
   // interacted with the field at all.
   const searchTermLen = committedSearch.trim().length
+  const searchTooShort = searchTermLen > 0 && searchTermLen < MIN_SEARCH_CHARS
   // Infinite-scroll variant (same mechanism as the student module's own
   // student-master search dropdown, useStudentSearchAdvancedInfinite) —
   // scrolling the results list near its bottom below fetches the next page
@@ -508,7 +541,7 @@ export default function PaymentConsolePage() {
     isFetching: isSearching, isError: isSearchError, error: searchError,
   } = useSearchStudentsInfinite(
     committedSearch, 20,
-    searchFocused && (searchTermLen === 0 || searchTermLen >= 2),
+    searchFocused && !searchTooShort,
   )
   const matches = searchPages?.pages.flatMap(p => p.items) ?? []
 
@@ -932,7 +965,7 @@ export default function PaymentConsolePage() {
   function handleSearchClick() {
     const term = search.trim()
     if (!term) { showToast('Please enter a student number or name.', 'warn'); return }
-    if (term.length < 2) { showToast('Search term must be at least 2 characters.', 'warn'); return }
+    if (term.length < MIN_SEARCH_CHARS) { showToast(`Search term must be at least ${MIN_SEARCH_CHARS} characters.`, 'warn'); return }
     setCommittedSearch(term)
   }
 
@@ -1196,6 +1229,7 @@ export default function PaymentConsolePage() {
         onSuccess: result => {
           const now = new Date()
           setReceipt({
+            paymentGuid: result.paymentGuid,
             ref: result.receipt,
             code: result.paymentCode,
             name: applicantName(profile),
@@ -1430,6 +1464,11 @@ export default function PaymentConsolePage() {
                     goes true for a load-more fetch, which must not blank out
                     an already-loaded list; isFetchingNextPage's own row
                     further down covers that case instead. */}
+                {searchTooShort ? (
+                  <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>
+                    Type at least {MIN_SEARCH_CHARS} characters to search.
+                  </div>
+                ) : <>
                 {isSearching && matches.length === 0 && <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>Searching…</div>}
                 {!isSearching && isSearchError && matches.length === 0 && (
                   <div className="text-clr-red px-3 py-2" style={{ fontSize: 12.5 }}>
@@ -1456,6 +1495,7 @@ export default function PaymentConsolePage() {
                     <i className="lni lni-reload"></i> Loading more…
                   </div>
                 )}
+                </>}
               </div>
             )}
           </div>
@@ -1649,6 +1689,12 @@ export default function PaymentConsolePage() {
                                         <i className="lni lni-pencil-alt"></i> Edit
                                       </button>
                                     {/* )} */}
+                                    {/* Receipt PDF exists for tuition only — other categories 404. */}
+                                    {h.category === 1 && (
+                                      <button className="btn btn-neu btn-sm" disabled={printingGuid === h.paymentGuid} onClick={() => printReceipt(h.paymentGuid, h.paymentCode)}>
+                                        <i className="lni lni-printer"></i> {printingGuid === h.paymentGuid ? 'Loading…' : 'Print / Reprint'}
+                                      </button>
+                                    )}
                                   </ActionMenu>
                                 </td>
                                 <td>{h.payDate.slice(0, 10)}</td>
@@ -2906,7 +2952,11 @@ export default function PaymentConsolePage() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3 flex-wrap no-print">
-                  <button className="btn btn-neu flex-1 justify-center" onClick={() => window.print()}><i className="lni lni-printer"></i> Print Receipt</button>
+                  {/* Opens the official server-rendered receipt PDF (step 8)
+                      instead of printing this on-screen summary card. */}
+                  <button className="btn btn-neu flex-1 justify-center" disabled={printingGuid === receipt.paymentGuid} onClick={() => printReceipt(receipt.paymentGuid, receipt.ref)}>
+                    <i className="lni lni-printer"></i> {printingGuid === receipt.paymentGuid ? 'Loading receipt…' : 'Print Receipt'}
+                  </button>
                   <button className="btn btn-primary flex-1 justify-center" onClick={handleClear}>← New Payment</button>
                 </div>
               </div>

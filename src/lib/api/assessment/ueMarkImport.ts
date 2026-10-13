@@ -24,6 +24,8 @@ export interface UeMarkImportExam {
     methodologyMax: number | null
     analysisMax: number | null
   }
+  // The exam rule's total maximum — the "Maximum Marks" header (2026-10-12).
+  examRuleTotalMark: number
   isVerified: boolean
 }
 
@@ -75,6 +77,7 @@ const mockExam: UeMarkImportExam = {
     recordMax: null, codingMax: null, outputMax: null, vivaMax: null,
     synopsisMax: null, reviewMax: null, methodologyMax: null, analysisMax: null
   },
+  examRuleTotalMark: 100,
   isVerified: false
 }
 

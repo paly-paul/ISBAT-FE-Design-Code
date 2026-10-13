@@ -11,7 +11,8 @@ import { useSearchCountriesInfinite } from '@/hooks/config/useCountries'
 import { dialCode } from '@/lib/api/academic/country'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
-import { useCreateEnquiry } from '@/hooks/admission/useEnquiries'
+import { useEnquirySources } from '@/hooks/admission/useEnquirySources'
+import { useCreateEnquiry, useEnquiryGenders, useReloadEnquiryDropdowns } from '@/hooks/admission/useEnquiries'
 import { EnquiryEmailField, EnquirySaveStatus, VerifiedEmail, isValidEnquiryEmail, isVerifiedFor } from '@/components/EnquiryEmailField'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
@@ -43,23 +44,22 @@ const MIN_AGE_YEARS = 10
 const DOB_RANGE_MESSAGE = `Student must be at least ${MIN_AGE_YEARS} years old.`
 // Backend cap on remarks.
 const REMARKS_MAX = 100
-const GENDER_OPTIONS = [
-  { value: '0', label: 'Male' },
-  { value: '1', label: 'Female' },
-  { value: '2', label: 'Other' },
-]
 
 export default function OnlineEnquiryPage() {
   const router = useRouter()
   const permissions = usePagePermissions()
-  const [saved, setSaved] = useState(false)
+  // enquiryCode of the enquiry just created; non-null opens the success popup.
+  const [savedCode, setSavedCode] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   // Email must be OTP-verified BEFORE save (2026-10 enquiry handoff): the
   // token from EnquiryEmailField goes out as emailVerificationToken.
   const [verifiedEmail, setVerifiedEmail] = useState<VerifiedEmail | null>(null)
 
   const { data: enquirySources = [] }      = useEnquirySourceMasters()
+  const { data: isbatSources = [] }        = useEnquirySources()
+  const { data: genders = [] }             = useEnquiryGenders()
   const createEnquiry = useCreateEnquiry()
+  const reloadDropdowns = useReloadEnquiryDropdowns()
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName]   = useState('')
@@ -95,6 +95,10 @@ export default function OnlineEnquiryPage() {
   // Filing's own Nationality field.
   const [countryGuid, setCountryGuid] = useState('')
   const [notes, setNotes]         = useState('')
+  // Optional — ISBAT Enquiry Source master guid, free-text source name, tag.
+  const [isbatSourceGuid, setIsbatSourceGuid] = useState('')
+  const [sourceName, setSourceName] = useState('')
+  const [enquiryTag, setEnquiryTag] = useState('')
   const [errors, setErrors]       = useState<Record<string, string>>({})
 
   const [intakeSearch, setIntakeSearch] = useState('')
@@ -155,6 +159,8 @@ export default function OnlineEnquiryPage() {
   const campusOptions  = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions = programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   const sourceOptions  = enquirySources.map(s => ({ value: s.enquirySourceGuid, label: s.enquirySourceName }))
+  const isbatSourceOptions = isbatSources.map(s => ({ value: s.isbatSourceGuid, label: s.sourceName }))
+  const genderOptions  = genders.map(g => ({ value: String(g.value), label: g.name }))
   const countryOptions = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
   // dialCode(), not countryPrefix — see the note on dialCode in
   // lib/api/academic/country.ts for why (countryPrefix isn't a phone
@@ -222,12 +228,12 @@ export default function OnlineEnquiryPage() {
     setFirstName(''); setLastName(''); setGender(''); setPhoneCode('+256'); setPhone(''); setEmail(''); setVerifiedEmail(null); setDob('')
     setEnquiryDate(todayAtMidnight().slice(0, 10))
     setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setSourceGuid(''); setCountryGuid(''); setNotes('')
+    setIsbatSourceGuid(''); setSourceName(''); setEnquiryTag('')
     setErrors({})
   }
 
   function handleSave() {
     if (!validate()) return
-    const selectedSource = enquirySources.find(s => s.enquirySourceGuid === sourceGuid)
     createEnquiry.mutate(
       {
         intakeGuid,
@@ -243,14 +249,12 @@ export default function OnlineEnquiryPage() {
         gender: gender === '' ? null : +gender,
         remarks: notes.trim() || null,
         programGuid: programGuid || null,
-        // No Isbat Enquiry Source picker on this form yet — see the note in
-        // lib/api/admission/enquiry.ts.
-        isbatSourceGuid: null,
-        sourceName: selectedSource?.enquirySourceName ?? null,
-        enquiryTag: null,
+        isbatSourceGuid: isbatSourceGuid || null,
+        sourceName: sourceName.trim() || null,
+        enquiryTag: enquiryTag.trim() || null,
       },
       {
-        onSuccess: () => setSaved(true),
+        onSuccess: enquiry => setSavedCode(enquiry?.enquiryCode ?? ''),
         onError: (error: Error) => {
           const code = error instanceof AuthError ? error.code : undefined
           const msg = error.message || ''
@@ -269,8 +273,13 @@ export default function OnlineEnquiryPage() {
             scrollToFirstError(e)
             return
           }
+          // Intake / enquiry source / ISBAT source deleted since the form
+          // loaded — refresh those pickers so the stale choice can be redone.
+          if (code === 'not_found') reloadDropdowns()
           // Remaining documented create errors, matched by their message.
           const fieldFor =
+            code === 'not_found' && /isbat/i.test(msg) ? 'isbatSourceGuid'
+            :
             code === 'validation_error' && /mobile/i.test(msg) ? 'phone'
             : code === 'validation_error' && /age must be|dob|birth/i.test(msg) ? 'dob'
             : code === 'validation_error' && /remarks/i.test(msg) ? 'notes'
@@ -297,8 +306,9 @@ export default function OnlineEnquiryPage() {
   }
 
   function handleSavedClose() {
-    setSaved(false)
+    setSavedCode(null)
     resetForm()
+    router.push('/admission/enquiry-list')
   }
 
   return (
@@ -325,7 +335,7 @@ export default function OnlineEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Gender</label>
-            <SearchSelect placeholder="— select —" options={GENDER_OPTIONS} value={gender} onChange={setGender} />
+            <SearchSelect placeholder="— select —" options={genderOptions} value={gender} onChange={setGender} />
           </div>
           <div className="fg">
             <label className="lbl">Phone <span className="text-clr-red">*</span></label>
@@ -411,6 +421,19 @@ export default function OnlineEnquiryPage() {
             <SearchSelect placeholder="— select —" options={countryOptions} value={countryGuid} onChange={selectCountry} onSearch={setCountrySearch} onOpenChange={setCountryPickerOpen} isLoading={countryQuery.isLoading} hasNextPage={countryQuery.hasNextPage} isFetchingNextPage={countryQuery.isFetchingNextPage} onLoadMore={() => countryQuery.fetchNextPage()} />
             {errors.countryGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.countryGuid}</p>}
           </div>
+          <div className="fg">
+            <label className="lbl">ISBAT Source</label>
+            <SearchSelect placeholder="— select —" options={isbatSourceOptions} value={isbatSourceGuid} onChange={val => { setIsbatSourceGuid(val); clearError('isbatSourceGuid') }} />
+            {errors.isbatSourceGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.isbatSourceGuid}</p>}
+          </div>
+          <div className="fg">
+            <label className="lbl">Source Name</label>
+            <input className="ctrl" placeholder="e.g. referred by a friend" value={sourceName} onChange={e => setSourceName(e.target.value)} />
+          </div>
+          <div className="fg">
+            <label className="lbl">Tag</label>
+            <input className="ctrl" placeholder="e.g. Open Day 2026" value={enquiryTag} onChange={e => setEnquiryTag(e.target.value)} />
+          </div>
           {/* Preferred Study Mode had no counterpart on POST /api/v1/admissions/enquiries
               (Full-time/Weekend/Evening/ODL) — dropped rather than collecting data that
               goes nowhere. Was: <SearchSelect placeholder="— select —" options={['Full-time', 'Weekend', 'Evening', 'ODL']} /> */}
@@ -432,7 +455,7 @@ export default function OnlineEnquiryPage() {
           <div className="flex gap-2">
             <button className="btn btn-ghost" onClick={() => router.push('/admission/enquiry-list')}>Cancel</button>
             {permissions.add && (
-              <button className="btn btn-primary" disabled={createEnquiry.isPending} onClick={handleSave}>
+              <button className="btn btn-primary" disabled={createEnquiry.isPending || !isVerifiedFor(verifiedEmail, email)} onClick={handleSave}>
                 {createEnquiry.isPending ? 'Saving…' : 'Save Enquiry'}
               </button>
             )}
@@ -440,12 +463,12 @@ export default function OnlineEnquiryPage() {
         </div>
       </div>
 
-      {saved && (
+      {savedCode !== null && (
         <div className="modal-overlay open">
           <div className="modal" style={{ maxWidth: 400 }}>
             <SuccessPopup
               title="Enquiry Saved!"
-              subtitle="The enquiry has been recorded and the email verified."
+              subtitle={savedCode ? `Enquiry ${savedCode} has been recorded.` : 'The enquiry has been recorded.'}
               onClose={handleSavedClose}
             />
           </div>

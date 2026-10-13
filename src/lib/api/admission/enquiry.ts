@@ -32,12 +32,12 @@ export interface EnquiryInput {
   remarks: string | null
   programGuid: string | null
   // Isbat Enquiry Source guid (enquirySource.ts's isbatSourceGuid) — a
-  // genuinely different master from enquirySourceGuid above. Confirmed as
-  // a guid field (not the previously-assumed unconfirmed int), but the
-  // create forms don't have an Isbat Enquiry Source picker, so this is
-  // still always sent null.
+  // genuinely different master from enquirySourceGuid above. Optional
+  // picker on the create forms; null when not chosen.
   isbatSourceGuid: string | null
-  // enquirySourceName from the (separate) Enquiry Source master.
+  // Free-text source typed on the form (e.g. who referred the candidate) —
+  // not the Enquiry Source master's name, which the server resolves itself
+  // and returns as enquirySourceName.
   sourceName: string | null
   enquiryTag: string | null
   // Required since the 2026-10 enquiry handoff: the verificationToken from
@@ -133,10 +133,12 @@ export interface EnquiryCounts {
   odelSourceCount: number
 }
 
-// UpdateEnquiryRequest (put-enquiry.md): status, programme and campus;
-// campusGuid is the one required field. advisorGuid is still sent (kept
-// editable on request), but put-enquiry.md says the advisor comes from the
-// latest follow-up, so the backend may ignore it.
+// UpdateEnquiryRequest (put-enquiry.md): campusGuid required, the rest
+// optional. advisorGuid is an employee guid that reassigns the advisor;
+// null or omitted keeps the current one — there's no way to clear it here.
+// 404 "Advisor not found." for an unknown guid (nothing saved). The PUT
+// response still has null advisorName/campusName/programName — refetch GET
+// /enquiries/{guid} for names (useUpdateEnquiry invalidates it).
 export interface EnquiryUpdateInput {
   advisorGuid?: string | null
   enquiryStatusGuid?: string | null
@@ -150,7 +152,10 @@ let mockEnquirySeq = 1
 // something to show after a mock create.
 const mockEnquiries: Enquiry[] = []
 
-export function createEnquiry(input: EnquiryInput): Promise<unknown> {
+// 201 returns the saved enquiry with the server-generated enquiryCode
+// (EQ{intakeCode}/{n}). campusName/programName/countryName come back null on
+// this response (enquiry-create-page.md) — use the form's own selections.
+export function createEnquiry(input: EnquiryInput): Promise<Enquiry> {
   if (MOCK_AUTH) {
     const verifiedFor = mockVerificationTokens.get(input.emailVerificationToken)
     if (!verifiedFor || verifiedFor.expiresAt < Date.now() || verifiedFor.email !== normalizeEmail(input.email ?? '')) {
@@ -179,7 +184,7 @@ export function createEnquiry(input: EnquiryInput): Promise<unknown> {
       enquiryTag: input.enquiryTag,
       isbatSourceGuid: input.isbatSourceGuid,
       sourceName: input.sourceName,
-      enquirySourceName: input.sourceName,
+      enquirySourceName: null,
       isbatSourceName: null,
       emailVerified: true,
       advisorGuid: null,
@@ -198,7 +203,25 @@ export function createEnquiry(input: EnquiryInput): Promise<unknown> {
     mockEnquiries.unshift(enquiry)
     return Promise.resolve(enquiry)
   }
-  return apiPost<unknown>('/api/v1/admissions/enquiries', input)
+  return apiPost<Enquiry>('/api/v1/admissions/enquiries', input)
+}
+
+// GET /admissions/enums/genders (get-enum-values.md) — `value` is what goes
+// out as EnquiryInput.gender (0 Male, 1 Female, 2 Other), `name` the label.
+export interface GenderOption {
+  value: number
+  name: string
+}
+
+const MOCK_GENDERS: GenderOption[] = [
+  { value: 0, name: 'Male' },
+  { value: 1, name: 'Female' },
+  { value: 2, name: 'Other' },
+]
+
+export function getEnquiryGenders(): Promise<GenderOption[]> {
+  if (MOCK_AUTH) return Promise.resolve(MOCK_GENDERS.map(g => ({ ...g })))
+  return apiGet<GenderOption[] | null>('/api/v1/admissions/enums/genders').then(data => data ?? [])
 }
 
 // ---- Email verification (post-enquiry-email-otp-request.md / -verify.md) ----

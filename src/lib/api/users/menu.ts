@@ -239,6 +239,7 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     // leaf('Mark Entry — CW', 'pencil-alt', '/assessment/mark-cw'),
     // leaf('Mark Entry — CBT', 'pencil-alt', '/assessment/mark-cbt'),
     leaf('Mark Entry — UE', 'pencil-alt', '/assessment/mark-ue'),
+    leaf('Mark Verify — UE', 'shield', '/assessment/mark-ue-verify'),
     leaf('Result & Moderation', 'bar-chart', '/assessment/moderation'),
     leaf('Exam Mark Import', 'upload', '/assessment/exam-mark-import'),
     leaf('Generate Result', 'cogs', '/assessment/generate-result'),
@@ -1575,7 +1576,8 @@ export function getMenu(): Promise<MenuResult> {
       const withQuestionBankPractical = ensureQuestionBankPractical(withExamCancel)
       const withExamMarkImport = ensureMarkResultsLeaf(withQuestionBankPractical, 'Exam Mark Import', 'upload', '/assessment/exam-mark-import')
       const withHecTranscript = ensureMarkResultsLeaf(withExamMarkImport, 'HEC Graduate Transcript', 'certificate', '/assessment/hec-graduate-transcript')
-      const finalMenu = stripUnintegratedPages(stripLectureMaster(withHecTranscript))
+      const withUeMarkVerify = ensureMarkResultsLeaf(withHecTranscript, 'Mark Verify — UE', 'shield', '/assessment/mark-ue-verify')
+      const finalMenu = stripUnintegratedPages(stripLectureMaster(withUeMarkVerify))
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: stripUnintegratedPages(stripLectureMaster(mockMenu)), isFallback: true }))
