@@ -11,7 +11,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { useIntake, useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
-import { useSearchCountriesInfinite } from '@/hooks/config/useCountries'
+import { useCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
@@ -23,7 +23,7 @@ import { TodayExchangeRateModal } from '@/components/modals/finance/TodayExchang
 import { RatesAlreadySetNote } from '@/components/finance/RatesAlreadySetNote'
 import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
 import { useProcBanks } from '@/hooks/finance/useProcBanks'
-import { Country, dialCode } from '@/lib/api/academic/country'
+import { Country, dialCode, findDefaultCountry } from '@/lib/api/academic/country'
 import { EMPTY_GUID } from '@/lib/api/academic/batch'
 import { useEnquiry, useEnquiries } from '@/hooks/admission/useEnquiries'
 import {
@@ -220,8 +220,9 @@ function findMatchingCountry(enquiry: any, countryList: Country[]): Country | un
   }
 
   // 5. Default country (Uganda) fallback
-  return countryList.find(c => c.defaultCountry === 1) || countryList[0]
+  return findDefaultCountry(countryList)
 }
+
 
 // Split out from the default export so useSearchParams() (below) can sit
 // behind a Suspense boundary, per Next.js App Router's requirement for any
@@ -389,10 +390,9 @@ function PaymentPageContent() {
   }, [countrySearch])
 
   // ── Real data ──────────────────────────────────────────────────────────
-  // enquiryGuid is CONFIRMED required on Create (the .bru docs mark it
-  // "optional" but a real 400 reproduced by removing only this field from
-  // an otherwise-working payload proves otherwise) — every payment must
-  // link to a real enquiry. Per Application_Payment_Change_Requests_Final_
+  // enquiryGuid is optional on Create — a payment can be taken without
+  // linking an enquiry (an earlier backend build 400'd without it; no
+  // longer the case). Per Application_Payment_Change_Requests_Final_
   // Updated.md #1/#2, the Enquiry dropdown is scoped to the selected Intake
   // and restricted to not-yet-converted enquiries (GET
   // .../unconverted-enquiries?intakeGuid=...&page=...&pageSize=...),
@@ -409,6 +409,11 @@ function PaymentPageContent() {
   const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
   const programsByCampus = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
   const countries = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
+  // `countries` above is only the picker's current search page (20 rows,
+  // fetched once a picker opens) — too partial to pick the default country
+  // or match an enquiry's country against. The full list (one request,
+  // cached) backs those lookups instead; the picker keeps its paged search.
+  const { data: allCountries = [] } = useCountries()
   const { data: semesters = [] } = useSemestersForProgram(form.programGuid, !!form.programGuid)
   const { data: batchTimes = [] } = useBatchTimes()
   // The payment-scoped Dropdowns/Batches.bru endpoint returns a real 200
@@ -511,8 +516,14 @@ function PaymentPageContent() {
       appliedEnquiryGuidRef.current = enquiryGuid
       const [firstName, ...rest] = (selectedEnquiry.studentName || '').trim().split(/\s+/)
 
-      const matchedCountry = findMatchingCountry(selectedEnquiry, countries)
-      const phoneDial = matchedCountry ? dialCode(matchedCountry) : undefined
+      const matchedCountry = findMatchingCountry(selectedEnquiry, allCountries)
+      // The enquiry's own phone country (mobileCountryGuid, 2026-10) wins for
+      // the dial code; older enquiries don't have one, so fall back to the
+      // student's country.
+      const mobileCountry = selectedEnquiry.mobileCountryGuid
+        ? allCountries.find(c => c.countryGuid === selectedEnquiry.mobileCountryGuid)
+        : undefined
+      const phoneDial = mobileCountry ? dialCode(mobileCountry) : matchedCountry ? dialCode(matchedCountry) : undefined
 
       setForm(prev => ({
         ...prev,
@@ -535,9 +546,9 @@ function PaymentPageContent() {
         phoneCode: phoneDial ?? prev.phoneCode,
         remarks: selectedEnquiry.remarks ?? prev.remarks,
       }))
-    } else if (countries.length > 0 && !form.countryGuid) {
+    } else if (allCountries.length > 0 && !form.countryGuid) {
       // In case countries finished loading after selectedEnquiry was processed
-      const matchedCountry = findMatchingCountry(selectedEnquiry, countries)
+      const matchedCountry = findMatchingCountry(selectedEnquiry, allCountries)
       if (matchedCountry) {
         setForm(prev => ({
           ...prev,
@@ -546,12 +557,12 @@ function PaymentPageContent() {
         }))
       }
     }
-  }, [selectedEnquiry, countries, form.countryGuid])
+  }, [selectedEnquiry, allCountries, form.countryGuid])
 
-  // Pre-select default country on page load once countries list is loaded
+  // Pre-select the home country (Uganda) on page load once the full list is in
   useEffect(() => {
-    if (countries.length > 0 && !form.countryGuid && !form.enquiryGuid) {
-      const defaultCountry = countries.find(c => c.defaultCountry === 1) || countries[0]
+    if (allCountries.length > 0 && !form.countryGuid && !form.enquiryGuid) {
+      const defaultCountry = findDefaultCountry(allCountries)
       if (defaultCountry) {
         setForm(prev => ({
           ...prev,
@@ -560,7 +571,7 @@ function PaymentPageContent() {
         }))
       }
     }
-  }, [countries, form.countryGuid, form.enquiryGuid])
+  }, [allCountries, form.countryGuid, form.enquiryGuid])
 
   // Pre-select default currency on page load once currencies list is loaded
   useEffect(() => {
@@ -626,16 +637,22 @@ function PaymentPageContent() {
   const countryOptions  = withSelected(
     countries.map(c => ({ value: c.countryGuid, label: c.countryName })),
     form.countryGuid,
-    enquiryMatches('countryGuid', form.countryGuid) ? selectedEnquiry!.countryName : null,
+    allCountries.find(c => c.countryGuid === form.countryGuid)?.countryName
+      ?? (enquiryMatches('countryGuid', form.countryGuid) ? selectedEnquiry!.countryName : null),
   )
+  // The default +256 may not be on the picker's current page — keep it listed.
   const phoneCodeOptions = countries.length
-    ? Array.from(
-        new Map(countries.map(c => [dialCode(c), `${dialCode(c)} · ${c.countryName}`])).entries(),
-      ).map(([value, label]) => ({ value, label }))
+    ? withSelected(
+        Array.from(
+          new Map(countries.map(c => [dialCode(c), `${dialCode(c)} · ${c.countryName}`])).entries(),
+        ).map(([value, label]) => ({ value, label })),
+        form.phoneCode,
+        form.phoneCode,
+      )
     : COUNTRY_CODES
 
   function handleCountryChange(guid: string) {
-    const match = countries.find(c => c.countryGuid === guid)
+    const match = countries.find(c => c.countryGuid === guid) ?? allCountries.find(c => c.countryGuid === guid)
     setForm(prev => ({
       ...prev,
       countryGuid: guid,
@@ -670,7 +687,7 @@ function PaymentPageContent() {
   // shared source) so a display-only change here can never alter what's
   // actually enforced on submit.
   const requiredFieldsFilled = [
-    !!form.enquiryGuid, !!form.firstName, !!form.lastName, !!form.phone,
+    !!form.firstName, !!form.lastName, !!form.phone,
     !!form.intakeGuid, !!form.countryGuid, !!form.campusGuid, !!form.programGuid,
     !!form.semesterGuid, !!form.batchTimeGuid, !!form.batchGuid, !!form.feeHdGuid,
     !!form.paymentDate,
@@ -761,7 +778,6 @@ function PaymentPageContent() {
     const e: FieldErrors = {}
     const req = (k: keyof FormData, label: string) => { if (!form[k]) e[k] = `${label} is required` }
     req('intakeGuid', 'Intake')
-    req('enquiryGuid', 'Enquiry')
     req('firstName', 'First Name')
     req('lastName', 'Last Name')
     req('phone', 'Phone')
@@ -806,7 +822,7 @@ function PaymentPageContent() {
     }
 
     const payload = {
-      enquiryGuid: form.enquiryGuid,
+      enquiryGuid: form.enquiryGuid || null,
       oDelIntApplication: 0,
       studentName,
       intakeGuid: form.intakeGuid,
@@ -1027,7 +1043,7 @@ function PaymentPageContent() {
                   onLoadMore={() => intakeQuery.fetchNextPage()}
                 />
               </Field>
-              <Field label="Enquiry" req error={errorFor('enquiryGuid')}>
+              <Field label="Enquiry" error={errorFor('enquiryGuid')}>
                 <SearchSelect
                   options={enquiryOptions}
                   value={form.enquiryGuid}

@@ -75,6 +75,32 @@ export function dialCode(country: Pick<Country, 'countryCode'>): string {
   return `+${country.countryCode.replace(/^0+(?=\d)/, '')}`
 }
 
+// The home country (Uganda). Never "first row" — the list's order isn't
+// meaningful. The defaultCountry flag alone isn't enough either: the live
+// master has it set on BOTH Equatorial Guinea and Uganda, with Equatorial
+// Guinea returned first. So Uganda wins whenever it's flagged (or nothing
+// is); otherwise the first flagged country. countryCode is the dialling
+// code ("256"), not an ISO code.
+export function findDefaultCountry(countryList: Country[]): Country | undefined {
+  const isUganda = (c: Country) => c.countryName?.trim().toLowerCase() === 'uganda' || c.countryCode?.replace(/^0+/, '') === '256'
+  const flagged = countryList.filter(c => Number(c.defaultCountry) === 1)
+  return flagged.find(isUganda) ?? flagged[0] ?? countryList.find(isUganda)
+}
+
+// Options for a phone dial-code picker whose value is the country's GUID
+// (sent as e.g. mobileCountryGuid), labelled "+256 · Uganda". Built from the
+// picker's current search page; the selected country is kept listed (from
+// the full list) so the closed picker never renders blank. The label uses
+// dialCode() rather than countryPrefix, which isn't a dial code ("UG", "IND").
+export function phoneCountryOptions(pageCountries: Country[], allCountries: Country[], selectedGuid: string): { value: string; label: string }[] {
+  const label = (c: Country) => `${dialCode(c)} · ${c.countryName}`
+  const options = pageCountries.map(c => ({ value: c.countryGuid, label: label(c) }))
+  const selected = selectedGuid && !options.some(o => o.value === selectedGuid)
+    ? allCountries.find(c => c.countryGuid === selectedGuid)
+    : undefined
+  return selected ? [{ value: selected.countryGuid, label: label(selected) }, ...options] : options
+}
+
 export interface CountryListResponse {
   items: Country[]
   totalCount: number

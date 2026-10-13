@@ -16,6 +16,10 @@ export interface EnquiryInput {
   studentName: string
   enquiryDate: string
   mobile: string
+  // Required (2026-10): Country GUID of the phone's dial code — separate from
+  // countryGuid (the student's country). mobile itself stays digits only.
+  // 400 "Mobile country is required." / 404 "Mobile country not found.".
+  mobileCountryGuid: string
   email: string | null
   // Confirmed via a real validation_error ("'Request Country Guid' must not
   // be empty.") — the create payload takes a guid here, not the plain
@@ -112,6 +116,23 @@ export interface Enquiry {
   // precondition of create (2026-10). Older enquiries may still be false,
   // and there's no longer any endpoint to verify an existing enquiry.
   emailVerified?: boolean | null
+  // Phone dial-code countries (2026-10) — all null on older enquiries, and
+  // names/prefixes null on the PUT response. Display as
+  // `${mobileCountryPrefix} ${mobile}` (formatEnquiryPhone).
+  mobileCountryGuid?: string | null
+  mobileCountryName?: string | null
+  mobileCountryPrefix?: string | null
+  spPhoneCountryGuid?: string | null
+  spPhoneCountryName?: string | null
+  spPhoneCountryPrefix?: string | null
+}
+
+// Full number for display — just the digits when there's no prefix (older
+// enquiries). Some master prefixes aren't real dial codes (e.g. "IND"); that's
+// a data fix on the backend's side.
+export function formatEnquiryPhone(e: Pick<Enquiry, 'mobile' | 'mobileCountryPrefix'>): string {
+  const prefix = e.mobileCountryPrefix?.trim()
+  return prefix ? `${prefix} ${e.mobile}` : e.mobile
 }
 
 interface EnquiryListResult {
@@ -170,6 +191,7 @@ export function createEnquiry(input: EnquiryInput): Promise<Enquiry> {
       studentName: input.studentName,
       enquiryDate: input.enquiryDate,
       mobile: input.mobile,
+      mobileCountryGuid: input.mobileCountryGuid,
       email: input.email ?? '',
       // Mock-only stand-in — the read-side DTO's countryCode is a plain
       // code string (confirmed on GET), but create now only takes
@@ -308,12 +330,18 @@ export function verifyEnquiryEmailOtp(email: string, challengeToken: string, otp
 // assumption an unrecognized param is just ignored server-side rather than
 // erroring, so this degrades to today's unfiltered-page behavior if the
 // backend doesn't actually support it.
-export function getEnquiries(page = 1, pageSize = 10, search = ''): Promise<EnquiryListResult> {
+// enquiryStatusGuid (2026-10, get-enquiries.md): server-side status filter,
+// ANDed with the rest; totalCount reflects it. Left out entirely for "All"
+// (never sent as ''). Enquiries with no status drop out when it's set; an
+// unknown guid just returns an empty list.
+export function getEnquiries(page = 1, pageSize = 10, search = '', enquiryStatusGuid = ''): Promise<EnquiryListResult> {
   if (MOCK_AUTH) {
-    return Promise.resolve({ items: mockEnquiries, totalCount: mockEnquiries.length, pageNumber: page, pageSize })
+    const items = enquiryStatusGuid ? mockEnquiries.filter(e => e.enquiryStatusGuid === enquiryStatusGuid) : mockEnquiries
+    return Promise.resolve({ items, totalCount: items.length, pageNumber: page, pageSize })
   }
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (search.trim()) params.set('search', search.trim())
+  if (enquiryStatusGuid) params.set('enquiryStatusGuid', enquiryStatusGuid)
   return apiGet<EnquiryListResult | null>(`/api/v1/admissions/enquiries?${params.toString()}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }

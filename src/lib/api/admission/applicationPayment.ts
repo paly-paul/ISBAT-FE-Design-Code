@@ -16,15 +16,14 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 // same endpoint Country Master and Application-Filling's SaveGeneral now
 // use.
 //
-// enquiryGuid is CONFIRMED required despite Create.bru's docs explicitly
-// marking it "(optional)" — reproduced a real 400 by removing only this
-// field from an otherwise-working payload. Every payment must link to a
-// real enquiry (see useEnquiries() on the payment page).
+// enquiryGuid is optional, as Create.bru documents — null when the payment
+// isn't linked to an enquiry, and then left out of the form data entirely.
+// (An earlier backend build 400'd without it; that's no longer the case.)
 //
 // oDelIntApplication has no documented semantics beyond the sample value in
 // Create.bru — always sent as 0 until clarified.
 export interface ApplicationPaymentInput {
-  enquiryGuid: string
+  enquiryGuid: string | null
   oDelIntApplication: number
   studentName: string
   intakeGuid: string
@@ -269,7 +268,7 @@ export function createApplicationPayment(input: ApplicationPaymentInput): Promis
   }
 
   const formData = new FormData()
-  formData.append('enquiryGuid', input.enquiryGuid)
+  if (input.enquiryGuid) formData.append('enquiryGuid', input.enquiryGuid)
   formData.append('oDelIntApplication', String(input.oDelIntApplication ?? 0))
   formData.append('studentName', input.studentName)
   formData.append('intakeGuid', input.intakeGuid)
