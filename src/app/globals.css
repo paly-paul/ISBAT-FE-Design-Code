@@ -7,6 +7,8 @@
 @layer base {
   html {
     font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 
   /* Global removal of native up/down scrolling arrows from all number inputs */
@@ -105,7 +107,16 @@ body {
   background: var(--bg);
   color: var(--g900);
   min-height: 100vh;
-  overflow-x: hidden
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+body::-webkit-scrollbar,
+html::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /* ═══════════════════════════════════════
@@ -635,10 +646,13 @@ body {
   gap: 2px;
   overflow: visible;
   scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .sb-rail::-webkit-scrollbar {
-  display: none
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .rail-divider {
@@ -813,17 +827,14 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   padding-bottom: 16px;
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .sb-panel::-webkit-scrollbar {
-  width: 3px
-}
-
-.sb-panel::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 2px
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .sb-panel.active {
@@ -3611,6 +3622,13 @@ input[type="number"] {
   box-shadow: var(--neu-sm);
   scrollbar-width: thin;
   scrollbar-color: var(--g400) transparent;
+  scroll-behavior: smooth;
+}
+
+.tbl-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .tbl-wrap:hover {
@@ -3667,6 +3685,7 @@ input[type="number"] {
   height: 32px;
   border-radius: 50%;
   background: rgba(255, 255, 255, .96);
+  backdrop-filter: blur(4px);
   border: 1.5px solid var(--b500);
   box-shadow: 0 4px 12px rgba(15, 23, 42, .22);
   cursor: pointer;
@@ -3677,6 +3696,13 @@ input[type="number"] {
   font-size: 14px;
   font-weight: 700;
   transition: all 0.2s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tbl-scroll-host:hover .tbl-arrow {
+  opacity: 0.95;
+  pointer-events: auto;
 }
 
 .tbl-arrow:hover {
@@ -3685,6 +3711,7 @@ input[type="number"] {
   color: #fff;
   box-shadow: 0 6px 18px rgba(37, 99, 235, .35);
   transform: translateY(-50%) scale(1.08);
+  opacity: 1;
 }
 
 .tbl-arrow-l {
@@ -3859,10 +3886,16 @@ tr.selected-row td:first-child {
    column, where the sticky-left behavior above has no purpose and just
    traps horizontal scroll under the label column. Pass className="no-
    sticky-col" to <ScrollTable>. */
-.no-sticky-col table th:first-child,
+.no-sticky-col table th:first-child {
+  position: sticky;
+  top: 0;
+  left: auto;
+  box-shadow: none;
+}
+
 .no-sticky-col table td:first-child {
   position: static;
-  box-shadow: none
+  box-shadow: none;
 }
 
 /* ── COLUMN FILTER ICON + DROPDOWN ── */

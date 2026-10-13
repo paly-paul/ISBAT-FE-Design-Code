@@ -40,6 +40,15 @@ export function useDownloadUeMarkImportTemplate() {
     onSuccess: (data) => {
       if (data?.url) {
         window.open(data.url, '_blank')
+      } else if (data?.blob) {
+        const objectUrl = window.URL.createObjectURL(data.blob)
+        const a = document.createElement('a')
+        a.href = objectUrl
+        a.download = data.filename || 'UE_Mark_Import_Template.xlsx'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(objectUrl)
       }
     }
   })

@@ -39,12 +39,14 @@ export interface ResitUeExamsResponse {
 
 export interface ResitUeStudent {
   studentNum: string
-  studentName: string | null
+  studentName?: string | null
+  matchingCode?: string | null
   imported: boolean
 }
 
 export interface ResitUeImportRow {
   slNo: string
+  matchingCode?: string | null
   studentNum: string
   marks: Record<string, number | null>
 }
@@ -58,7 +60,8 @@ export interface ResitUeImportResult {
 // ── Sheet → rows, and the row checks (post-resit-ue-mark-import.md#row-checks)
 
 export interface PreviewRow extends ResitUeImportRow {
-  studentName: string | null
+  studentName?: string | null
+  matchingCode?: string | null
   // Cell text as read from the sheet, keyed by Excel header.
   raw: Record<string, string>
   // Problems keyed by column (STUDENTNUM or a mark header).
@@ -98,8 +101,10 @@ export function parseSheet(sheet: SheetData, columns: ResitUeMarkColumn[]): Pars
     sheet.rows.slice(1).forEach(cells => {
       const cell = (h: string) => (idx.has(h) ? cells[idx.get(h)!] ?? '' : '').trim()
       if (!cell('SLNO')) return
+      const matchingCode = cell('MATCHINGCODE') || cell('MATCHING_CODE') || cell('MATCHING') || cell('CODE') || ''
       const row: PreviewRow = {
         slNo: cell('SLNO'),
+        matchingCode: matchingCode || null,
         studentNum: cell('STUDENTNUM'),
         studentName: cell('STUDENTNAME') || null,
         marks: {},
@@ -146,7 +151,12 @@ export function validateRows(rows: PreviewRow[], columns: ResitUeMarkColumn[], s
       if (!student) addError(r, 'STUDENTNUM', 'Has not applied for this resit exam.')
       else if (student.imported) addError(r, 'STUDENTNUM', 'Marks are already imported.')
     }
-    if (student) r.studentName = student.studentName
+    if (student) {
+      r.studentName = student.studentName
+      if (student.matchingCode && !r.matchingCode) {
+        r.matchingCode = student.matchingCode
+      }
+    }
     for (const col of columns) {
       if (r.errors[col.header]?.length) continue
       const v = r.marks[col.key]
@@ -203,6 +213,7 @@ function mockExam(guid: string | null, unitCode: string, unitName: string, part:
   const students = Array.from({ length: count }, (_, i) => ({
     studentNum: `01${seed}${240100 + i * 7}`,
     studentName: MOCK_NAMES[(i + seed) % MOCK_NAMES.length],
+    matchingCode: String(32440000 + (seed * 1000) + (i * 37)),
     imported: i < imported,
   }))
   return {
@@ -286,8 +297,8 @@ export async function downloadResitUeTemplate(resitScheduleGuid: string): Promis
     const m = findMock(resitScheduleGuid)
     const pending = m.students.filter(s => !s.imported)
     if (!pending.length) throw mockError('Marks of all students of this resit exam are already imported.', 'bad_request')
-    const header = ['SLNO', 'STUDENTNUM', 'STUDENTNAME', ...m.exam.columns.map(c => c.header)]
-    const rows = pending.map((s, i) => [i + 1, s.studentNum, s.studentName ?? '', ...m.exam.columns.map(() => null)])
+    const header = ['SLNO', 'MATCHINGCODE', 'STUDENTNUM', ...m.exam.columns.map(c => c.header)]
+    const rows = pending.map((s, i) => [i + 1, s.matchingCode ?? String(32440000 + i), s.studentNum, ...m.exam.columns.map(() => null)])
     const d = new Date()
     const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
     return { blob: writeWorkbook(`${m.exam.layout}_Template`, [header, ...rows]), filename: `${m.exam.unitCode}_${m.exam.layout}_Resit_UE_Template_${ymd}.xlsx` }

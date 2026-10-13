@@ -517,37 +517,6 @@ export default function QuestionBankUploadPage() {
             Manage course examination questions individually or in bulk via Excel (.xlsx) · Scoped to Academic Intake & Logged-in Faculty
           </div>
         </div>
-        <div className="pg-actions flex items-center justify-end gap-2 ml-auto shrink-0 self-end sm:self-center">
-          <button
-            type="button"
-            className="btn btn-neu flex items-center gap-1.5 shadow-sm text-xs"
-            onClick={handleDownloadTemplate}
-            disabled={downloadTemplateMut.isPending}
-            title="Download the official 9-column question import template"
-          >
-            {downloadTemplateMut.isPending ? (
-              <>
-                <span className="inline-block w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
-                <span>Generating Link...</span>
-              </>
-            ) : (
-              <>
-                <i className="lni lni-download text-slate-600"></i>
-                <span>Download Template (.xlsx)</span>
-              </>
-            )}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary flex items-center gap-1.5 shadow-sm text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
-            onClick={() => setIsAddingQuestion(true)}
-            disabled={!courseUnitGuid || !category || !intakeGuid}
-            title="Add a single new question to the selected course unit bank"
-          >
-            <i className="lni lni-plus"></i>
-            <span>Add Single Question</span>
-          </button>
-        </div>
       </div>
 
       {/* ── Scope Parameters Card ───────────────────────────────────────────── */}
@@ -677,17 +646,6 @@ export default function QuestionBankUploadPage() {
             <span>Bulk Excel Import (.xlsx)</span>
           </button>
         </div>
-
-        {activeTab === 'repository' && courseUnitGuid && (
-          <button
-            type="button"
-            className="btn btn-primary btn-sm flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
-            onClick={() => setIsAddingQuestion(true)}
-          >
-            <i className="lni lni-plus"></i>
-            <span>Add Single Question</span>
-          </button>
-        )}
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════════
@@ -717,6 +675,17 @@ export default function QuestionBankUploadPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                onClick={() => setIsAddingQuestion(true)}
+                disabled={!courseUnitGuid || !category || !intakeGuid}
+                title="Add a single new question to the selected course unit bank"
+              >
+                <i className="lni lni-plus"></i>
+                <span>Add Single Question</span>
+              </button>
+
               <button
                 type="button"
                 className="btn btn-neu btn-sm flex items-center gap-1.5"
@@ -820,9 +789,9 @@ export default function QuestionBankUploadPage() {
           </div>
 
           {/* Live Questions Table */}
-          <ScrollTable>
-            <table>
-              <thead>
+          <ScrollTable maxHeight="540px">
+            <table style={{ minWidth: 880, width: '100%' }}>
+              <thead className="sticky top-0 z-10 shadow-xs">
                 <tr>
                   <th style={{ width: 48, textAlign: 'center' }}>ACTION</th>
                   <th style={{ width: 45, textAlign: 'center' }}>#</th>
@@ -830,7 +799,7 @@ export default function QuestionBankUploadPage() {
                   <th style={{ minWidth: 280, maxWidth: 460 }}>QUESTION</th>
                   <th style={{ minWidth: 260 }}>OPTIONS</th>
                   <th style={{ minWidth: 160 }}>ANSWER</th>
-                  <th style={{ width: 80, textAlign: 'center' }}>LEVEL</th>
+                  <th style={{ width: 85, textAlign: 'center' }}>SECTION</th>
                 </tr>
               </thead>
               <tbody>
@@ -963,11 +932,14 @@ export default function QuestionBankUploadPage() {
                         </span>
                       </td>
 
-                      {/* Level */}
+                      {/* Section */}
                       <td style={{ textAlign: 'center' }}>
                         {q.level ? (
-                          <span className="badge badge-neu text-xs font-mono font-semibold" title={`Level ${q.level}`}>
-                            L{q.level}
+                          <span
+                            className="badge badge-neu text-xs font-mono font-semibold"
+                            title={`Section ${q.level === 1 ? 'A' : q.level === 2 ? 'B' : q.level === 3 ? 'C' : q.level}`}
+                          >
+                            {q.level === 1 ? 'Sec A' : q.level === 2 ? 'Sec B' : q.level === 3 ? 'Sec C' : `L${q.level}`}
                           </span>
                         ) : (
                           <span className="text-slate-300">—</span>
@@ -1011,16 +983,6 @@ export default function QuestionBankUploadPage() {
                 <i className="lni lni-download text-indigo-600"></i>
                 <span>Sample Excel (Pre-filled)</span>
               </a>
-              <button
-                type="button"
-                className="btn btn-neu btn-sm flex items-center gap-1.5"
-                onClick={handleDownloadTemplate}
-                disabled={downloadTemplateMut.isPending}
-                title="Download blank official 9-column template"
-              >
-                <i className="lni lni-download"></i>
-                <span>Blank 9-Column Template</span>
-              </button>
             </div>
           </div>
 
@@ -1050,7 +1012,7 @@ export default function QuestionBankUploadPage() {
                     Drop your Excel (.xlsx) file here or <span className="underline decoration-indigo-300">browse</span>
                   </div>
                   <div className="text-xs text-slate-500 mt-1">
-                    Must follow the official 9-column format · Maximum 10MB
+                    Must follow the official Excel format · Maximum 10MB
                   </div>
                 </div>
               ) : (
@@ -1315,16 +1277,16 @@ export default function QuestionBankUploadPage() {
             </div>
 
             {/* Preview Table */}
-            <ScrollTable>
-              <table>
-                <thead>
+            <ScrollTable className="no-sticky-col" maxHeight="540px">
+              <table style={{ width: '100%', minWidth: 820, tableLayout: 'auto' }}>
+                <thead className="sticky top-0 z-10 shadow-xs">
                   <tr>
-                    <th style={{ width: 60, textAlign: 'center' }}>SL NO</th>
-                    <th style={{ width: 85, textAlign: 'center' }}>TYPE</th>
-                    <th style={{ minWidth: 280, maxWidth: 460 }}>QUESTION</th>
-                    <th style={{ minWidth: 260 }}>OPTIONS</th>
-                    <th style={{ minWidth: 160 }}>ANSWER</th>
-                    <th style={{ width: 80, textAlign: 'center' }}>LEVEL</th>
+                    <th style={{ width: 55, textAlign: 'center' }}>SL NO</th>
+                    <th style={{ width: 75, textAlign: 'center' }}>TYPE</th>
+                    <th style={{ minWidth: 240, maxWidth: 420 }}>QUESTION</th>
+                    <th style={{ minWidth: 230, width: '28%' }}>OPTIONS</th>
+                    <th style={{ minWidth: 150, width: '20%' }}>ANSWER</th>
+                    <th style={{ width: 75, textAlign: 'center' }}>SECTION</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1337,11 +1299,11 @@ export default function QuestionBankUploadPage() {
                     </tr>
                   ) : (
                     filteredPreviewRows.map((q, idx) => (
-                      <tr key={idx}>
-                        <td style={{ textAlign: 'center', fontFamily: 'monospace', fontSize: 12, color: 'var(--g500)' }}>
+                      <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                        <td style={{ textAlign: 'center', fontFamily: 'monospace', fontSize: 12, color: 'var(--g500)', width: 55 }}>
                           {q.slNo}
                         </td>
-                        <td style={{ textAlign: 'center' }}>
+                        <td style={{ textAlign: 'center', width: 75 }}>
                           <span
                             className={`badge ${q.questionType === 'MCQ' ? 'badge-purple' : 'badge-blue'
                               }`}
@@ -1349,10 +1311,10 @@ export default function QuestionBankUploadPage() {
                             {q.questionType}
                           </span>
                         </td>
-                        <td style={{ whiteSpace: 'normal', minWidth: 280, maxWidth: 460, lineHeight: 1.6, color: 'var(--g800)' }}>
+                        <td style={{ whiteSpace: 'normal', minWidth: 240, maxWidth: 420, lineHeight: 1.55, color: 'var(--g800)' }}>
                           <RichTextDisplay content={q.question} />
                         </td>
-                        <td style={{ whiteSpace: 'normal', minWidth: 260 }}>
+                        <td style={{ whiteSpace: 'normal', minWidth: 230 }}>
                           {q.questionType === 'MCQ' ? (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px]">
                               <div className="bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-slate-700">
@@ -1376,15 +1338,24 @@ export default function QuestionBankUploadPage() {
                             <span className="text-slate-400 text-xs italic">Descriptive (No options)</span>
                           )}
                         </td>
-                        <td style={{ whiteSpace: 'normal', minWidth: 160 }}>
-                          <span className="inline-block bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11.5px] px-2.5 py-1 rounded font-medium">
+                        <td style={{ whiteSpace: 'normal', minWidth: 150 }}>
+                          <span className="inline-block bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11.5px] px-2.5 py-1 rounded font-medium max-w-full break-words">
                             <RichTextDisplay content={q.answer} />
                           </span>
                         </td>
-                        <td style={{ textAlign: 'center' }}>
+                        <td style={{ textAlign: 'center', width: 75 }}>
                           {q.level ? (
-                            <span className="badge badge-neu text-xs font-mono font-semibold">
-                              L{q.level}
+                            <span
+                              className="badge badge-neu text-xs font-mono font-semibold"
+                              title={`Section ${String(q.level) === '1' ? 'A' : String(q.level) === '2' ? 'B' : String(q.level) === '3' ? 'C' : q.level}`}
+                            >
+                              {String(q.level) === '1'
+                                ? 'Sec A'
+                                : String(q.level) === '2'
+                                ? 'Sec B'
+                                : String(q.level) === '3'
+                                ? 'Sec C'
+                                : `L${q.level}`}
                             </span>
                           ) : (
                             <span className="text-slate-300">—</span>
@@ -1468,10 +1439,16 @@ export default function QuestionBankUploadPage() {
 
                   {viewingQuestion.level ? (
                     <span className="badge badge-neu text-xs font-mono">
-                      Level {viewingQuestion.level} ({viewingQuestion.level === 1 ? 'Easy' : viewingQuestion.level === 2 ? 'Medium' : 'Difficult'})
+                      {viewingQuestion.level === 1
+                        ? 'Section A'
+                        : viewingQuestion.level === 2
+                        ? 'Section B'
+                        : viewingQuestion.level === 3
+                        ? 'Section C'
+                        : `Section ${viewingQuestion.level}`}
                     </span>
                   ) : (
-                    <span className="text-xs text-slate-400 font-medium">Level: Not Required</span>
+                    <span className="text-xs text-slate-400 font-medium">Section: Not Required</span>
                   )}
                 </div>
 

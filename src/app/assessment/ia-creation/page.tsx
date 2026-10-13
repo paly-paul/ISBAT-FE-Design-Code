@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -44,6 +44,7 @@ function formatDate(dateString: string | null) {
 
 export default function IaCreationPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // ── Selections ──────────────────────────────────
   const [selectedProgramGuid, setSelectedProgramGuid] = useState<string>('')
@@ -79,8 +80,16 @@ export default function IaCreationPage() {
 
 
   function showToast(msg: string, type = '') {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current)
+    }
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 3500)
+    const isErrorOrWarn = ['error', 'err', 'danger', 'warn', 'warning'].includes((type || '').toLowerCase().trim())
+    const duration = isErrorOrWarn ? 8000 : 4000
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null)
+      toastTimerRef.current = null
+    }, duration)
   }
 
   function handleProgramChange(guid: string) {
@@ -361,7 +370,7 @@ export default function IaCreationPage() {
         )}
       </div>
 
-      <Toast toast={toast} />
+      <Toast toast={toast} onClose={() => setToast(null)} />
 
       {viewingRow && (
         <IaStructureViewModal
