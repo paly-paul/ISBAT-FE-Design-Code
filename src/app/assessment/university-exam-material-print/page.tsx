@@ -1,9 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Toast } from '@/components/Toast'
-import { useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
+import { useCurrentAcademicIntake, useIntakes } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
   useDownloadUeBookletPdf, useDownloadUeQuestionTheoryWord, usePrintUeBooklet,
@@ -26,6 +26,7 @@ function unitType(value?: string | null): EffectiveType | 'Combined' {
 export default function UniversityExamMaterialPrintPage() {
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [selectedIntakeGuid, setSelectedIntakeGuid] = useState('')
   const [programGuid, setProgramGuid] = useState('')
   const [semesterGuid, setSemesterGuid] = useState('')
   const [courseUnitGuid, setCourseUnitGuid] = useState('')
@@ -37,7 +38,40 @@ export default function UniversityExamMaterialPrintPage() {
     window.setTimeout(() => setToast(null), 3500)
   }
 
-  const { data: currentIntake, isLoading: intakeLoading } = useCurrentAcademicIntake()
+  const { data: currentIntake, isLoading: currentIntakeLoading } = useCurrentAcademicIntake()
+  const { data: allIntakes, isLoading: allIntakesLoading } = useIntakes()
+  const intakeLoading = currentIntakeLoading || allIntakesLoading
+
+  const intakeOptions = useMemo(() => {
+    if (currentIntake) {
+      return [{
+        value: currentIntake.intakeGuid,
+        label: `${currentIntake.description || currentIntake.intakeCode} (Current)`,
+      }]
+    }
+    const currentFromAll = (allIntakes ?? []).filter(i => i.currentIntake)
+    if (currentFromAll.length > 0) {
+      return currentFromAll.map(i => ({
+        value: i.intakeGuid,
+        label: `${i.description || i.intakeCode} (Current)`,
+      }))
+    }
+    if ((allIntakes ?? []).length > 0) {
+      const fallback = allIntakes![0]
+      return [{
+        value: fallback.intakeGuid,
+        label: `${fallback.description || fallback.intakeCode} (Current)`,
+      }]
+    }
+    return []
+  }, [currentIntake, allIntakes])
+
+  useEffect(() => {
+    if (!selectedIntakeGuid && intakeOptions.length > 0) {
+      setSelectedIntakeGuid(intakeOptions[0].value)
+    }
+  }, [intakeOptions, selectedIntakeGuid])
+
   const { data: programs, isLoading: programsLoading } = useUeMaterialPrintPrograms()
   const { data: semesters, isLoading: semestersLoading } = useUeMaterialPrintSemesters(programGuid || null)
   const { data: courseUnits, isLoading: unitsLoading } = useUeQuestionPrintCourseUnits(
@@ -52,7 +86,7 @@ export default function UniversityExamMaterialPrintPage() {
     return unitType(selected?.unitTypeName)
   }, [courseUnitGuid, programUnits, semesterGuid])
   const effectiveType: EffectiveType = selectedUnitType === 'Combined' ? combinedType : selectedUnitType
-  const intakeGuid = currentIntake?.intakeGuid ?? ''
+  const intakeGuid = selectedIntakeGuid || currentIntake?.intakeGuid || ''
   const formComplete = Boolean(intakeGuid && programGuid && semesterGuid && courseUnitGuid)
   const canPrintBooklet = formComplete && effectiveType === 'Theory' && permissions.add
   const canPrintQuestionPaper = formComplete && effectiveType !== 'Project' && permissions.add
@@ -72,6 +106,9 @@ export default function UniversityExamMaterialPrintPage() {
     setSemesterGuid('')
     setCourseUnitGuid('')
     setCombinedType('Theory')
+    if (intakeOptions.length > 0) {
+      setSelectedIntakeGuid(intakeOptions[0].value)
+    }
   }
   const download = (blob: Blob, filename: string | null, fallback: string) => {
     const url = window.URL.createObjectURL(blob)
@@ -148,7 +185,17 @@ export default function UniversityExamMaterialPrintPage() {
       </div>
 
       <div className="card mb-5">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-5">
+          <div className="fg mb-0">
+            <label className="lbl">Academic Intake <span className="text-red-500">*</span></label>
+            <SearchSelect
+              placeholder="— Select Intake —"
+              value={selectedIntakeGuid}
+              onChange={setSelectedIntakeGuid}
+              disabled={intakeLoading}
+              options={intakeOptions}
+            />
+          </div>
           <div className="fg mb-0">
             <label className="lbl">Programme <span className="text-red-500">*</span></label>
             <SearchSelect placeholder="— Select Programme —" value={programGuid}

@@ -342,7 +342,7 @@ function CbtScheduleContent() {
               </button>
             </div>
             {ruleError && <div className="text-xs mt-1" style={{ color: 'var(--red)' }}><i className="lni lni-warning"></i> {ruleError}</div>}
-            <ExamRuleLookupModal isOpen={lookupOpen} onClose={() => setLookupOpen(false)} onSelect={guid => { setExamRuleGuid(guid); setRuleError(null) }} />
+            <ExamRuleLookupModal isOpen={lookupOpen} onClose={() => setLookupOpen(false)} onSelect={guid => { setExamRuleGuid(guid); setRuleError(null) }} selectedGuid={examRuleGuid} />
           </div>
         </div>
 

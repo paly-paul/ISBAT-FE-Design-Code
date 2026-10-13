@@ -313,6 +313,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
         isOpen={lookupOpen} 
         onClose={() => setLookupOpen(false)} 
         onSelect={guid => setExamRuleGuid(guid)} 
+        selectedGuid={examRuleGuid}
       />
     </div>
   )

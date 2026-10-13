@@ -301,6 +301,7 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
         isOpen={lookupOpen} 
         onClose={() => setLookupOpen(false)} 
         onSelect={guid => setExamRuleGuid(guid)} 
+        selectedGuid={examRuleGuid}
       />
     </div>
   )
