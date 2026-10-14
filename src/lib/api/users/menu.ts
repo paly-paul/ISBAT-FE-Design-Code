@@ -78,8 +78,21 @@ const FINANCE_PAYMENT_SECTIONS: MenuNode[] = [
     // discount-report-page.md, 2026-10-11 — no backend page registration
     // yet; mergeFinanceSections adds it to a real Reports & Statements too.
     leaf('Discount Report', 'tag', 'reports/discount'),
+    // transaction-report-page.md / outstanding-report-page.md, 2026-10-13 —
+    // same "added client-side until the backend registers them" treatment.
+    leaf('Transaction Report', 'list', 'reports/transaction'),
+    leaf('Outstanding Report', 'alarm-clock', 'reports/outstanding'),
     leaf('Student Statement', 'files', 'student-statements'),
   ]),
+]
+
+// The report pages above that the backend menu may not list yet, in display
+// order. Each is slotted after the previous one (the first after Financial
+// Reports) when missing from a real Reports & Statements section.
+const CLIENT_REPORT_LEAVES = [
+  { name: 'Discount Report', icon: 'tag', url: 'reports/discount' },
+  { name: 'Transaction Report', icon: 'list', url: 'reports/transaction' },
+  { name: 'Outstanding Report', icon: 'alarm-clock', url: 'reports/outstanding' },
 ]
 
 // Shared between mockMenu below and the real-menu merge in getMenu() (see
@@ -448,16 +461,25 @@ function mergeFinanceSections(menu: MenuNode[]): MenuNode[] {
 
   // Same leaf-level fixup for Reports & Statements: when the backend already
   // returns the section, the whole-section check below never adds the new
-  // Discount Report page to it. Slotted after Financial Reports.
+  // report pages to it. Each missing one is slotted after the one before it
+  // in CLIENT_REPORT_LEAVES (the first after Financial Reports).
   const reportsIdx = financeModule.children.findIndex(c => c.name === 'Reports & Statements')
   if (reportsIdx !== -1) {
     const reportsSection = financeModule.children[reportsIdx]
-    if (!reportsSection.children.some(l => l.url === 'reports/discount' || l.name === 'Discount Report')) {
-      const children = [...reportsSection.children]
-      const afterIdx = children.findIndex(l => l.name === 'Financial Reports')
-      const discountLeaf = leaf('Discount Report', 'tag', 'reports/discount')
-      if (afterIdx !== -1) children.splice(afterIdx + 1, 0, discountLeaf)
-      else children.push(discountLeaf)
+    const children = [...reportsSection.children]
+    let changed = false
+    let anchorName = 'Financial Reports'
+    for (const r of CLIENT_REPORT_LEAVES) {
+      if (!children.some(l => l.url === r.url || l.name === r.name)) {
+        const afterIdx = children.findIndex(l => l.name === anchorName)
+        const reportLeaf = leaf(r.name, r.icon, r.url)
+        if (afterIdx !== -1) children.splice(afterIdx + 1, 0, reportLeaf)
+        else children.push(reportLeaf)
+        changed = true
+      }
+      anchorName = children.find(l => l.url === r.url)?.name ?? r.name
+    }
+    if (changed) {
       const mergedFinanceChildren = [...financeModule.children]
       mergedFinanceChildren[reportsIdx] = { ...reportsSection, children }
       financeModule = { ...financeModule, children: mergedFinanceChildren }

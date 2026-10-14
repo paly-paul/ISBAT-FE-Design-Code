@@ -298,14 +298,29 @@ export default function UeMarkImportPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
           <div className="fg mb-0">
             <label className="lbl">Select File <span className="text-red-500">*</span></label>
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept=".xlsx"
-              onChange={handleFileInputChange}
-              className="ctrl"
-              disabled={!examInfo || examInfo.isVerified}
-            />
+            <div className="flex gap-2 items-center">
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".xlsx"
+                onChange={handleFileInputChange}
+                className="ctrl flex-1 min-w-0"
+                disabled={!examInfo || examInfo.isVerified}
+              />
+              {/* Same reset as Cancel: clears the file, sheet list and preview. */}
+              {file && (
+                <button
+                  type="button"
+                  className="btn btn-neu btn-sm"
+                  onClick={handleClearFile}
+                  disabled={previewMut.isPending || importMut.isPending}
+                  aria-label={`Remove ${file.name}`}
+                  title="Remove file"
+                >
+                  <i className="lni lni-close"></i> Remove
+                </button>
+              )}
+            </div>
           </div>
           <div className="fg mb-0">
             <label className="lbl">Select Sheet <span className="text-red-500">*</span></label>
@@ -380,8 +395,6 @@ export default function UeMarkImportPage() {
               <thead>
                 <tr>
                   <th>Sl No</th>
-                  <th>Reg No</th>
-                  <th>Student Name</th>
                   {/* Depending on layout, we might show different columns, for now dumping common ones */}
                   {previewRows.some(r => r.sectionAMark !== null) && <th>Section A</th>}
                   {previewRows.some(r => r.sectionBMark !== null) && <th>Section B</th>}
@@ -400,8 +413,6 @@ export default function UeMarkImportPage() {
                 {previewRows.map((row, i) => (
                   <tr key={i}>
                     <td>{row.slNo}</td>
-                    <td className="font-mono text-slate-500">{row.regNo}</td>
-                    <td className="font-medium text-slate-800">{row.studentName}</td>
                     {row.sectionAMark !== null && <td className="font-mono">{row.sectionAMark}</td>}
                     {row.sectionBMark !== null && <td className="font-mono">{row.sectionBMark}</td>}
                     {row.sectionCMark !== null && <td className="font-mono">{row.sectionCMark}</td>}

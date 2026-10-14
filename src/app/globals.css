@@ -12184,6 +12184,8 @@ body:has(.drawer-overlay) {
 .rpt-amt { font-weight: 600; color: var(--g900); }
 .rpt-cur { color: var(--g500); font-weight: 500; margin-left: 5px; font-size: var(--fs-sm); }
 .rpt-mono { font-family: var(--font-mono); font-size: 12.5px; }
+/* Outstanding Report: one line per currency inside a student's amount cells. */
+.rpt-line { white-space: nowrap; line-height: 1.55; }
 .rpt-foot-row td { text-align: center; color: var(--g500); font-size: 12.5px; }
 .rpt-foot-row:hover td { background: var(--white); }
 
@@ -12197,6 +12199,30 @@ body:has(.drawer-overlay) {
 .rpt-sum-total { font-weight: 700; font-size: 15px; color: var(--g900); }
 .rpt-sum-meta { font-size: var(--fs-sm); color: var(--g500); }
 .rpt-sum-note { margin-left: auto; font-size: var(--fs-xs); color: var(--g400); }
+
+/* Transaction / Outstanding reports: per-currency summary as a compact
+   table — labelled columns, right-aligned tabular figures that line up
+   across currencies. Plain table elements, so the global blue-header table
+   styles are reset here. */
+.rpt-sumtbl { margin-top: 12px; border: 1.5px solid var(--g200); border-radius: var(--rsm); background: var(--surface); overflow: hidden; }
+.rpt-sumtbl-hdr { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 9px 16px; border-bottom: 1px solid var(--g200); }
+.rpt-sumtbl-title { font-size: 12.5px; font-weight: 700; color: var(--g700); }
+.rpt-sumtbl-note { font-size: var(--fs-xs); color: var(--g400); }
+.rpt-sumtbl-scroll { overflow-x: auto; }
+.rpt-sumtbl table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.rpt-sumtbl th, .rpt-sumtbl td {
+  position: static; background: none; box-shadow: none; border: none;
+  padding: 8px 16px; text-align: right; white-space: nowrap; font-size: 13px;
+}
+.rpt-sumtbl thead tr { background: none; }
+.rpt-sumtbl tr:hover td, .rpt-sumtbl tr:hover td:first-child { background: none; }
+.rpt-sumtbl thead th { color: var(--g500); font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; padding-bottom: 4px; }
+.rpt-sumtbl th:first-child { text-align: left; width: 1%; }
+.rpt-sumtbl tbody th { color: var(--b700); font-weight: 700; font-size: 12.5px; letter-spacing: .03em; }
+.rpt-sumtbl tbody td { color: var(--g700); font-weight: 500; }
+.rpt-sumtbl tbody tr + tr > * { border-top: 1px solid var(--g100); }
+.rpt-sumtbl tbody td.key { color: var(--g900); font-weight: 700; font-size: 14px; }
+.rpt-sumtbl thead th.key { color: var(--g700); }
 
 .rpt-empty { text-align: center; padding: 56px 20px; color: var(--g500); }
 .rpt-empty i { font-size: 30px; color: var(--g300); display: block; margin-bottom: 10px; }

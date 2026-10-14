@@ -76,10 +76,38 @@ export interface ReportJob {
   fileSizeBytes: number | null
   rowCount: number | null
   errorMessage: string | null
-  // UTC WITHOUT a trailing Z — parse with parseUtcNoZ.
+  // UTC. GET /notifications/reports sends a trailing Z; older values may not
+  // have one — parseUtcNoZ handles both.
   requestedAt: string
   completedAt: string | null
   expiresAt: string | null
+}
+
+// GET /notifications/reports and every export's 202 send `status` as a plain
+// number plus `statusName` (get-reports.md), not the { value, name } object
+// ReportJob keeps. Normalised here so the Downloads list and the report pages
+// read one shape; an object, if a response still sends one, passes through.
+type RawReportJob = Partial<Omit<ReportJob, 'status'>> & {
+  reportJobGuid: string
+  status: number | { value: number; name: string }
+  statusName?: string
+}
+export function normalizeReportJob(raw: RawReportJob): ReportJob {
+  const status = typeof raw.status === 'number' ? { value: raw.status, name: raw.statusName ?? '' } : raw.status
+  return {
+    reportJobGuid: raw.reportJobGuid,
+    reportType: raw.reportType ?? '',
+    reportName: raw.reportName ?? '',
+    status,
+    isExpired: raw.isExpired ?? false,
+    fileName: raw.fileName ?? null,
+    fileSizeBytes: raw.fileSizeBytes ?? null,
+    rowCount: raw.rowCount ?? null,
+    errorMessage: raw.errorMessage ?? null,
+    requestedAt: raw.requestedAt ?? new Date().toISOString(),
+    completedAt: raw.completedAt ?? null,
+    expiresAt: raw.expiresAt ?? null,
+  }
 }
 
 export interface ReportDownloadLink {
@@ -231,25 +259,42 @@ export function exportDiscountReport(filters: DiscountReportFilters): Promise<{ 
     discountGuid: filters.discountGuid ?? null,
     search: filters.search ?? null,
   }
-  return apiPostWithMessage<ReportJob>('/api/v1/finance/reports/discount/export', body)
-    .then(({ data, message }) => ({ job: data, message }))
+  return apiPostWithMessage<RawReportJob>('/api/v1/finance/reports/discount/export', body)
+    .then(({ data, message }) => ({ job: normalizeReportJob(data), message }))
 }
 
-// GET /finance/reports/jobs — the signed-in user's own exports, newest first.
+// Mock-mode stand-in for any report's export 202, shared by the Transaction
+// and Outstanding report modules so the Downloads list shows them too.
+export function mockQueueReportJob(reportType: string, title: string): ReportJob {
+  const now = new Date()
+  const job: ReportJob = {
+    reportJobGuid: `mock-job-${now.getTime()}`, reportType,
+    reportName: `${title} - ${now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}, ${now.toTimeString().slice(0, 5)}`,
+    status: { value: 1, name: 'Queued' }, isExpired: false, fileName: null, fileSizeBytes: null, rowCount: null, errorMessage: null,
+    requestedAt: now.toISOString(), completedAt: null, expiresAt: null,
+  }
+  mockJobs = [job, ...mockJobs]
+  return job
+}
+
+// GET /notifications/reports (get-reports.md) — the signed-in user's own
+// exports from EVERY report page and service, newest first. Replaced
+// GET /finance/reports/jobs, which was removed on 2026-10-13.
 export function getReportJobs(pageNumber = 1, pageSize = 15): Promise<{ items: ReportJob[]; totalCount: number }> {
   if (MOCK_AUTH) return Promise.resolve({ items: mockJobs, totalCount: mockJobs.length })
-  return apiGet<{ items: ReportJob[]; totalCount: number } | null>(`/api/v1/finance/reports/jobs?pageNumber=${pageNumber}&pageSize=${pageSize}`)
-    .then(data => data ?? { items: [], totalCount: 0 })
+  return apiGet<{ items: RawReportJob[]; totalCount: number } | null>(`/api/v1/notifications/reports?pageNumber=${pageNumber}&pageSize=${pageSize}`)
+    .then(data => ({ items: (data?.items ?? []).map(normalizeReportJob), totalCount: data?.totalCount ?? 0 }))
 }
 
-// GET /finance/reports/jobs/{guid}/download — a fresh, ~10-minute link.
-// Fetch one per click; never store it.
+// GET /notifications/reports/{guid}/download (get-report-download.md) — a
+// fresh, ~10-minute link. Fetch one per click; never store it. Same response
+// as the removed /finance/reports/jobs/{guid}/download.
 export function getReportJobDownload(reportJobGuid: string): Promise<ReportDownloadLink> {
   if (MOCK_AUTH) {
     const job = mockJobs.find(j => j.reportJobGuid === reportJobGuid)
     return Promise.resolve({ url: '#', fileName: job?.fileName ?? 'report.xlsx', expiresAtUtc: new Date(Date.now() + 600_000).toISOString() })
   }
-  return apiGet<ReportDownloadLink>(`/api/v1/finance/reports/jobs/${reportJobGuid}/download`)
+  return apiGet<ReportDownloadLink>(`/api/v1/notifications/reports/${reportJobGuid}/download`)
 }
 
 // GET /finance/discounts/dropdown — deleted discounts aren't listed.
