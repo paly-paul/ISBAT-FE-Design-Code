@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
-import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
+import { openPdfInNewTab } from '@/lib/openPdf'
+import { getApplicationPaymentReceiptPdf, hasPrintableReceipt } from '@/lib/api/admission/applicationPayment'
 import { FailurePopup } from '@/components/modals/shared/FailurePopup'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
 import { useProgramMaster, useProgramMasterByGuid, useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
@@ -636,7 +637,11 @@ export default function FilingPage() {
       if (!email && orNull(applicationDetail.emailId)) setEmail(applicationDetail.emailId as string)
       if (!phone && orNull(applicationDetail.phone)) setPhone(applicationDetail.phone as string)
       if (!dob && applicationDetail.dob) setDob(applicationDetail.dob.slice(0, 10))
+      // by-payment can send only genderLabel ("Female"/"Male") with no
+      // numeric gender — fall back to the label so the field isn't left blank.
+      const genderFromLabel = GENDERS.find(g => g.toLowerCase() === (applicationDetail.genderLabel ?? '').trim().toLowerCase())
       if (!gender && applicationDetail.gender != null) setGender(applicationDetail.gender === 1 ? 'Male' : 'Female')
+      else if (!gender && genderFromLabel) setGender(genderFromLabel)
       if (!countryGuid && orNull(applicationDetail.countryGuid)) setCountryGuid(applicationDetail.countryGuid as string)
       if (!nationalId && orNull(applicationDetail.nationalId)) setNationalId(applicationDetail.nationalId as string)
       if (!passportNo && orNull(applicationDetail.passportNo)) setPassportNo(applicationDetail.passportNo as string)
@@ -647,7 +652,8 @@ export default function FilingPage() {
       // already tried to.
       if (!vStartDate && applicationDetail.vStartDate) setVStartDate(applicationDetail.vStartDate.slice(0, 10))
       if (!vEndDate && applicationDetail.vEndDate) setVEndDate(applicationDetail.vEndDate.slice(0, 10))
-      if (!isRefugee && applicationDetail.refugee === 1) {
+      // Same label-only case as gender: refugeeLabel "Yes" with no numeric refugee.
+      if (!isRefugee && (applicationDetail.refugee === 1 || applicationDetail.refugeeLabel?.trim().toLowerCase() === 'yes')) {
         setIsRefugee(true)
         setRefugeeId(orNull(applicationDetail.refugeeId) ?? '')
       }
@@ -1067,6 +1073,27 @@ export default function FilingPage() {
       // Payment action, for the equivalent final-submission step here.
       onError: (error: Error) => setFailure(error.message || 'Failed to submit application'),
     })
+  }
+
+  // After submitting: print the application payment receipt
+  // (get-application-payment-receipt.md). selectedApplication.applicationGuid
+  // is the payment's paymentGuid (see mapApplicationPaymentToSearchResult).
+  const canPrintReceipt = !!selectedApplication?.applicationGuid && selectedApplication.receiptNo !== undefined
+    && hasPrintableReceipt({ exemptionType: selectedApplication.exemptionType, receiptNo: selectedApplication.receiptNo })
+  const [printingReceipt, setPrintingReceipt] = useState(false)
+  const [receiptError, setReceiptError] = useState<string | null>(null)
+  async function printFilingReceipt() {
+    if (!selectedApplication || printingReceipt) return
+    setPrintingReceipt(true)
+    setReceiptError(null)
+    const paymentGuid = selectedApplication.applicationGuid
+    try {
+      await openPdfInNewTab(() => getApplicationPaymentReceiptPdf(paymentGuid), `Receipt_${selectedApplication.receiptNo ?? paymentGuid}.pdf`)
+    } catch (err) {
+      setReceiptError(err instanceof Error && err.message ? err.message : 'Could not load the receipt.')
+    } finally {
+      setPrintingReceipt(false)
+    }
   }
 
   // Left-side identity panel shared by all three stages (Personal Info,
@@ -1623,14 +1650,36 @@ export default function FilingPage() {
 
       <Toast toast={toast} />
 
+      {/* No auto-close (unlike SuccessPopup): the user needs time to print the
+          application payment receipt before moving on to Vetting. */}
       {submitted && (
         <div className="modal-overlay open">
-          <div className="modal" style={{ maxWidth: 400 }}>
-            <SuccessPopup
-              title="Application Submitted!"
-              subtitle={`${selectedApplication?.appRefNo ?? 'Application'} has been submitted for vetting.`}
-              onClose={() => router.push('/admission/vetting')}
-            />
+          <div className="modal" style={{ maxWidth: 420 }} role="dialog" aria-modal="true" aria-labelledby="filing-submitted-title">
+            <div style={{ textAlign: 'center', padding: '32px 28px 26px' }}>
+              <div className="pc-receipt-check" style={{ fontSize: 30, marginBottom: 10 }}><i className="lni lni-checkmark-circle"></i></div>
+              <div id="filing-submitted-title" className="font-bold text-g900" style={{ fontSize: 'var(--fs-lg)' }}>Application Submitted!</div>
+              <p className="text-g500 mt-1" style={{ fontSize: 13 }}>
+                {selectedApplication?.appRefNo ?? 'The application'} has been submitted for vetting.
+              </p>
+              {receiptError && (
+                <div className="warn-box mt-4" role="alert" style={{ textAlign: 'left' }}>
+                  <i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0 }} />
+                  <div style={{ fontSize: 12.5 }}>{receiptError}</div>
+                </div>
+              )}
+              <div className="flex gap-2 justify-center mt-5 flex-wrap">
+                {/* Normal payments with a receipt only — exemptions have none. */}
+                {canPrintReceipt && (
+                  <button className="btn btn-neu" disabled={printingReceipt} onClick={printFilingReceipt}>
+                    <i className={`lni ${printingReceipt ? 'lni-spinner-arrow spin' : receiptError ? 'lni-reload' : 'lni-printer'}`} />{' '}
+                    {printingReceipt ? 'Opening…' : receiptError ? 'Try again' : 'Print Receipt'}
+                  </button>
+                )}
+                <button className="btn btn-primary" onClick={() => router.push('/admission/vetting')}>
+                  Continue to Vetting <i className="lni lni-arrow-right" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

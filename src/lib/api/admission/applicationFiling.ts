@@ -65,6 +65,11 @@ export interface FilingApplicationSearchResult {
   provLetterSend: number | null
   accLetterSend: number | null
   createdDate: string
+  // From the application-payment record (Filing's search source): decides
+  // whether the payment's receipt can be printed after submitting — a normal
+  // payment with a receipt number. Undefined for other search sources.
+  receiptNo?: number | null
+  exemptionType?: unknown
 }
 
 export interface FilingApplicationSearchResponse {
@@ -508,6 +513,8 @@ function mapApplicationPaymentToSearchResult(r: ApplicationPaymentRecord): Filin
     provLetterSend: null,
     accLetterSend: null,
     createdDate: r.createdDate,
+    receiptNo: r.receiptNo ?? null,
+    exemptionType: r.exemptionType ?? null,
   }
 }
 
@@ -593,6 +600,10 @@ export interface NewPaymentHandoff {
   batchTimeGuid: string
   batchGuid: string
   feeHdGuid: string
+  // For the receipt print after submitting; null/undefined when exempt or
+  // no receipt was issued.
+  receiptNo?: number | null
+  isExemption?: boolean
 }
 
 // Same shape a dropdown pick produces (mapApplicationPaymentToSearchResult),
@@ -616,6 +627,9 @@ export function filingResultFromNewPayment(p: NewPaymentHandoff): FilingApplicat
       batchTimeGuid: p.batchTimeGuid,
       batchGuid: p.batchGuid,
       feeHdGuid: p.feeHdGuid,
+      receiptNo: p.receiptNo ?? null,
+      // Any non-null value marks an exemption; the exact type isn't needed.
+      exemptionType: p.isExemption ? 1 : null,
       createdDate: new Date().toISOString(),
     } as unknown as ApplicationPaymentRecord),
     intakeGuid: p.intakeGuid,
