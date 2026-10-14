@@ -9,7 +9,7 @@ import { ImportCrmModal } from '@/components/modals/admission/ImportCrmModal'
 import { ImportOdelModal } from '@/components/modals/admission/ImportOdelModal'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
-import { useIntake, useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
+import { useCurrentAcademicIntake, useCurrentAdmissionIntake, useIntake } from '@/hooks/academic/useIntakes'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
 import { useCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
@@ -243,15 +243,12 @@ function PaymentPageContent() {
   const [failure, setFailure] = useState<string | null>(null)
   const [form, setForm]         = useState<FormData>({ ...initialForm })
   const [enquirySearch, setEnquirySearch] = useState('')
-  const [intakeSearch, setIntakeSearch] = useState('')
   const [campusSearch, setCampusSearch] = useState('')
   const [programSearch, setProgramSearch] = useState('')
   const [countrySearch, setCountrySearch] = useState('')
-  const [committedIntakeSearch, setCommittedIntakeSearch] = useState('')
   const [committedCampusSearch, setCommittedCampusSearch] = useState('')
   const [committedProgramSearch, setCommittedProgramSearch] = useState('')
   const [committedCountrySearch, setCommittedCountrySearch] = useState('')
-  const [intakePickerOpen, setIntakePickerOpen] = useState(false)
   const [campusPickerOpen, setCampusPickerOpen] = useState(false)
   const [programPickerOpen, setProgramPickerOpen] = useState(false)
   const [countryPickerOpen, setCountryPickerOpen] = useState(false)
@@ -373,10 +370,6 @@ function PaymentPageContent() {
   function setBatchTime(v: string) { setForm(prev => ({ ...prev, batchTimeGuid: v, batchGuid: '' })) }
 
   useEffect(() => {
-    const timer = setTimeout(() => setCommittedIntakeSearch(intakeSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [intakeSearch])
-  useEffect(() => {
     const timer = setTimeout(() => setCommittedCampusSearch(campusSearch.trim()), 300)
     return () => clearTimeout(timer)
   }, [campusSearch])
@@ -401,11 +394,22 @@ function PaymentPageContent() {
   // server-paginated, scroll-to-load-more useUnconvertedEnquiriesInfinite
   // (see the Enquiry dropdown below) rather than a single capped
   // pageSize=1000 snapshot of the whole intake.
-  const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, intakePickerOpen)
+  // post-application-payment.md (fix/admission-bugs): a payment is accepted
+  // only for the intake flagged current or current-admission, so those two
+  // (usually the same row) are the only Intake options. An enquiry from an
+  // older intake still shows its intake (withSelected below) — the server
+  // then rejects the conversion with its "previous intake" message.
+  const currentIntakeQuery = useCurrentAcademicIntake()
+  const admissionIntakeQuery = useCurrentAdmissionIntake()
   const campusQuery = useSearchCampusesInfinite(committedCampusSearch, 20, campusPickerOpen)
   const programQuery = useSearchProgramMastersByCampusInfinite(form.campusGuid, committedProgramSearch, 20, programPickerOpen)
   const countryQuery = useSearchCountriesInfinite(committedCountrySearch, 20, countryPickerOpen || phoneCodePickerOpen)
-  const intakes = useMemo(() => flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid), [intakeQuery.data])
+  const intakes = useMemo(() => {
+    const list = [admissionIntakeQuery.data, currentIntakeQuery.data].filter((i): i is NonNullable<typeof i> => !!i)
+    return list.filter((i, idx) => list.findIndex(x => x.intakeGuid === i.intakeGuid) === idx)
+  }, [admissionIntakeQuery.data, currentIntakeQuery.data])
+  const intakesLoading = currentIntakeQuery.isLoading || admissionIntakeQuery.isLoading
+  const noOpenIntake = !intakesLoading && currentIntakeQuery.isSuccess && admissionIntakeQuery.isSuccess && intakes.length === 0
   const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
   const programsByCampus = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
   const countries = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
@@ -891,7 +895,29 @@ function PaymentPageContent() {
           setPayProofFile(null)
           appliedEnquiryGuidRef.current = null
         },
-        onError: (error: Error) => setFailure(error.message || 'Failed to save payment. Please try again.'),
+        onError: (error: Error) => {
+          const msg = error.message || ''
+          // Rule-based 400s (post-application-payment.md, fix/admission-bugs)
+          // go under the field they're about; anything else — duplicate
+          // applicant, missing exchange rate, unconfigured Registered status —
+          // stays in the failure popup. None of these are worth retrying.
+          const field: keyof FormData | null =
+            /current intake only|no active admission intake/i.test(msg) ? 'intakeGuid'
+            : /previous intake|already been converted/i.test(msg) ? 'enquiryGuid'
+            : /^currency not found/i.test(msg) ? 'currencyGuid'
+            : null
+          if (!field) { setFailure(msg || 'Failed to save payment. Please try again.'); return }
+          const text =
+            /previous intake/i.test(msg)
+              ? `${msg} Clear the enquiry and enter the payment manually, or create a new enquiry in the current intake.`
+            : /already been converted/i.test(msg)
+              ? `${msg} Pick another enquiry, or clear it and enter the payment manually.`
+            : msg
+          const e: FieldErrors = { [field]: text }
+          setFieldErrors(e)
+          setErrorSnapshot({ ...form })
+          scrollToFirstError(e)
+        },
       },
     )
   }
@@ -1033,14 +1059,9 @@ function PaymentPageContent() {
                 <SearchSelect
                   options={intakeOptions}
                   value={form.intakeGuid}
-                  placeholder="-- Select Intake --"
+                  placeholder={noOpenIntake ? 'No intake open for admission' : '-- Select Intake --'}
                   onChange={setIntake}
-                  onSearch={setIntakeSearch}
-                  onOpenChange={setIntakePickerOpen}
-                  isLoading={intakeQuery.isLoading}
-                  hasNextPage={intakeQuery.hasNextPage}
-                  isFetchingNextPage={intakeQuery.isFetchingNextPage}
-                  onLoadMore={() => intakeQuery.fetchNextPage()}
+                  isLoading={intakesLoading}
                 />
               </Field>
               <Field label="Enquiry" error={errorFor('enquiryGuid')}>
