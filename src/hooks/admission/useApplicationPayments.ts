@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ApplicationPaymentInput,
   createApplicationPayment,
@@ -63,9 +63,26 @@ export function useApplicationPaymentTypes(search = '') {
   })
 }
 
+// A successful payment converts its enquiry (status → Registered) in the same
+// transaction, and "already been converted" means our cached list is stale —
+// so after any attempt, refresh the unconverted-enquiry picker and the
+// enquiry list. Intake errors mean the current/admission intake flags
+// changed under us — refetch those (keys from useIntakes).
 export function useCreateApplicationPayment() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: ApplicationPaymentInput) => createApplicationPayment(input),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: [...APPLICATION_PAYMENTS_KEY, 'unconverted-enquiries-infinite'] })
+      queryClient.invalidateQueries({ queryKey: ['enquiries'] })
+      queryClient.invalidateQueries({ queryKey: ['enquiry-counts'] })
+    },
+    onError: (error: Error) => {
+      if (/current intake only|no active admission intake/i.test(error.message)) {
+        queryClient.invalidateQueries({ queryKey: ['intakes', 'current-academic'] })
+        queryClient.invalidateQueries({ queryKey: ['intakes', 'current-admission'] })
+      }
+    },
   })
 }
 
