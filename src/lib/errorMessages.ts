@@ -44,6 +44,12 @@ export function sanitizePhoneInput(value: string, allowPlus = true): string {
   return allowPlus ? value.replace(/[^0-9+\s-]/g, '') : value.replace(/[^0-9\s-]/g, '')
 }
 
+// Amount fields: drop leading zeros as they're typed ("05" → "5",
+// "007.5" → "7.5"), but keep a lone "0" and the zero in "0.5".
+export function stripLeadingZeros(value: string): string {
+  return value.replace(/^0+(?=\d)/, '')
+}
+
 // Person-name fields: letters (any script, so accented names work), spaces,
 // apostrophes, hyphens and dots — "O'Brien", "Mary-Jane", "Nakato Jr.".
 // Digits and other symbols are dropped as they're typed or pasted.

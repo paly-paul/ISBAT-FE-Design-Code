@@ -144,7 +144,10 @@ export default function Page() {
             <table>
               <thead>
                 <tr>
-                  <th>Student</th><th>Deposit Code</th><th>Deposit Date</th>
+                  {/* Left-aligned explicitly: globals.css centres the first
+                      column for the usual Actions column, which this table
+                      doesn't have. */}
+                  <th style={{ textAlign: 'left' }}>Student</th><th>Deposit Code</th><th>Deposit Date</th>
                   <th>Deposited</th><th>Cur.</th><th>Method</th>
                   {/* Base Value (baseCurrency/baseAmount) commented out, not
                       removed — a real live sample (10-row page) had
@@ -174,7 +177,7 @@ export default function Page() {
                   const status = depositStatus(r.balance, r.amount)
                   return (
                     <tr key={r.paymentAdvanceGuid}>
-                      <td>
+                      <td style={{ textAlign: 'left' }}>
                         <strong>{s.name}</strong>
                         <div className="font-mono text-blue" style={{ fontSize: 11 }}>{s.ref}</div>
                       </td>

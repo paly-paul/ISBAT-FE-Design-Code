@@ -101,6 +101,16 @@ export function phoneCountryOptions(pageCountries: Country[], allCountries: Coun
   return selected ? [{ value: selected.countryGuid, label: label(selected) }, ...options] : options
 }
 
+// Options for a plain country picker (value = GUID, label = name), with the
+// selected country kept listed the same way as phoneCountryOptions above.
+export function countryPickerOptions(pageCountries: Country[], allCountries: Country[], selectedGuid: string): { value: string; label: string }[] {
+  const options = pageCountries.map(c => ({ value: c.countryGuid, label: c.countryName }))
+  const selected = selectedGuid && !options.some(o => o.value === selectedGuid)
+    ? allCountries.find(c => c.countryGuid === selectedGuid)
+    : undefined
+  return selected ? [{ value: selected.countryGuid, label: selected.countryName }, ...options] : options
+}
+
 export interface CountryListResponse {
   items: Country[]
   totalCount: number

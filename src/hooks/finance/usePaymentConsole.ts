@@ -1,4 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AuthError } from '@/lib/api/client'
 import {
   createAdvanceDeposit,
   createPayment,
@@ -168,6 +169,15 @@ export function useCreatePayment() {
       queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-ledgers', input.applicationGuid] })
       queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'current-semester-payable', input.applicationGuid] })
       queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'payment-history', input.applicationGuid] })
+    },
+    // 400 concurrent_update — another cashier's payment settled the structure
+    // while this one was being entered. Per the flow doc: refetch the
+    // outstanding grid and re-preview, never retry the POST blind.
+    onError: (error, input) => {
+      if (!(error instanceof AuthError) || error.code !== 'concurrent_update') return
+      queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-ledgers', input.applicationGuid] })
+      queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'current-semester-payable', input.applicationGuid] })
+      queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'payable-ledgers'] })
     },
   })
 }

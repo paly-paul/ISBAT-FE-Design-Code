@@ -11,6 +11,7 @@ import { StudentDto, normalizeStudentDetail } from '@/lib/api/student/student'
 import { useStudent } from '@/hooks/student/useStudents'
 import { useBatchTransferDetail, useEligibleBatches, useBatchTransferHistory, useExecuteBatchTransfer } from '@/hooks/student/useBatchTransfer'
 import { formatDateTime } from '@/lib/date'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 // import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Ported from isbat_student_module.html's Batch Transfer page. Confirmed
@@ -26,6 +27,8 @@ import { formatDateTime } from '@/lib/date'
 // Override / Reason / Supporting Document below are still page-local only
 // (commented out per earlier request) — none of those three are part of
 // this endpoint's payload either.
+// post-batch-transfer.md: remarks MaxLength 500.
+const REMARKS_MAX = 500
 const REASONS = ['Dropout Rejoin', 'Deferment', 'Job / Relocation', 'Medical', 'Schedule Preference', 'Administrative Correction']
 
 // useSearchParams() requires a Suspense boundary above it (Next.js App
@@ -85,7 +88,7 @@ function BatchTransferContent() {
 
   function handleLoad(s: StudentDto) { setStudent(s); showToast(`${s.studentName} loaded`, 'ok') }
   function handleClear() {
-    setStudent(null); setDiscount(0); setReason(REASONS[0]); setRemarks('')
+    setStudent(null); setDiscount(0); setReason(REASONS[0]); setRemarks(''); setErrors({})
     // Drop ?studentGuid= so the effect above doesn't immediately reload the
     // same student right back in — same reasoning as Profile's own clear.
     if (studentGuidParam) router.replace('/student/batch-transfer')
@@ -94,13 +97,38 @@ function BatchTransferContent() {
   const targetBatchOpt = eligibleBatches.find(b => b.batchGuid === targetBatch)
   const canExecute = !!(student && targetBatch)
 
+  // post-batch-transfer.md › Validation: newBatchGuid required (Execute stays
+  // disabled without one), remarks max 500. Remarks is also required here —
+  // the form labels it "Mandatory Remarks", stricter than the API.
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  function openConfirm() {
+    const e: Record<string, string> = {}
+    if (!targetBatch) e.targetBatch = 'Please select a target batch.'
+    if (!remarks.trim()) e.remarks = 'Remarks are required.'
+    else if (remarks.trim().length > REMARKS_MAX) e.remarks = `Remarks must be ${REMARKS_MAX} characters or fewer.`
+    setErrors(e)
+    if (Object.keys(e).length) { scrollToFirstError(e); return }
+    setConfirmOpen(true)
+  }
+
   function executeTransfer() {
     if (!student || !targetBatch) return
     executeBatchTransfer.mutate(
       { studentGuid: student.studentGuid, input: { newBatchGuid: targetBatch, remarks: remarks.trim() || null } },
       {
         onSuccess: () => { showToast('Batch transfer executed', 'ok'); setConfirmOpen(false); setRemarks('') },
-        onError: (error: Error) => showToast(error.message || 'Could not execute transfer', 'err'),
+        onError: (error: Error) => {
+          // A remarks validation_error goes back under the field; anything
+          // else (batch inactive, already in that batch, …) stays a toast.
+          if (/remarks/i.test(error.message || '')) {
+            setConfirmOpen(false)
+            const e = { remarks: error.message }
+            setErrors(prev => ({ ...prev, ...e }))
+            scrollToFirstError(e)
+            return
+          }
+          showToast(error.message || 'Could not execute transfer', 'err')
+        },
       },
     )
   }
@@ -174,9 +202,10 @@ function BatchTransferContent() {
                       placeholder="— Select destination batch —"
                       options={eligibleBatches.map(b => ({ value: b.batchGuid, label: b.batchCode }))}
                       value={targetBatch}
-                      onChange={setTargetBatch}
+                      onChange={v => { setTargetBatch(v); setErrors(prev => ({ ...prev, targetBatch: '' })) }}
                       disabled={eligibleLoading || eligibleError || !student}
                     />
+                    {errors.targetBatch && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.targetBatch}</p>}
                     {eligibleError && (
                       <div className="danger-box mt-2">
                         <i className="lni lni-warning" style={{ color: 'var(--red)', fontSize: 14, flexShrink: 0 }}></i>
@@ -210,7 +239,13 @@ function BatchTransferContent() {
                   */}
                   {/* Remarks now actually reaches the API — PostBatchTransfer's
                       own `remarks` field, stored on the transfer audit record. */}
-                  <div className="fg"><label className="lbl">Mandatory Remarks <span className="req">*</span></label><textarea className="ctrl" rows={3} placeholder="Describe the reason. Required and will be logged permanently." value={remarks} onChange={e => setRemarks(e.target.value)} /></div>
+                  <div className="fg">
+                    <label className="lbl">Mandatory Remarks <span className="req">*</span></label>
+                    <textarea className="ctrl" rows={3} maxLength={REMARKS_MAX} placeholder="Describe the reason. Required and will be logged permanently." value={remarks}
+                      onChange={e => { setRemarks(e.target.value); setErrors(prev => ({ ...prev, remarks: '' })) }}
+                      style={errors.remarks ? { borderColor: 'var(--red)' } : undefined} />
+                    {errors.remarks && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.remarks}</p>}
+                  </div>
                   {/* Supporting Document — commented out per request.
                   <div className="fg">
                     <label className="lbl">Supporting Document</label>
@@ -222,7 +257,7 @@ function BatchTransferContent() {
                   */}
                   <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                     <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                    <button className="btn btn-primary" disabled={!canExecute || !permissions.edit} onClick={() => setConfirmOpen(true)}>
+                    <button className="btn btn-primary" disabled={!canExecute || !permissions.edit} onClick={openConfirm}>
                       <i className="lni lni-checkmark"></i> Execute Transfer
                     </button>
                   </div>

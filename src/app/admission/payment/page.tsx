@@ -33,7 +33,7 @@ import {
   useUnconvertedEnquiriesInfinite,
 } from '@/hooks/admission/useApplicationPayments'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
-import { sanitizePhoneInput } from '@/lib/errorMessages'
+import { sanitizePhoneInput, stripLeadingZeros } from '@/lib/errorMessages'
 import { formatDate, monthsAgoYmd, RECENT_DATE_MONTHS } from '@/lib/date'
 import { setFilingPrefill } from '@/lib/filingHandoff'
 import type { NewPaymentHandoff } from '@/lib/api/admission/applicationFiling'
@@ -1219,7 +1219,7 @@ function PaymentPageContent() {
                       value={form.feeAmount}
                       // Digits and one decimal point only; the API rejects
                       // anything that isn't a number above 0.
-                      onChange={e => set('feeAmount', e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1'))}
+                      onChange={e => set('feeAmount', stripLeadingZeros(e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')))}
                       disabled={isWaived}
                     />
                     <SearchSelect options={currencyOptions} value={form.currencyGuid} onChange={v => set('currencyGuid', v)}

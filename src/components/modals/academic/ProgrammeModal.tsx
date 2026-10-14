@@ -6,6 +6,7 @@ import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
+import { stripLeadingZeros } from '@/lib/errorMessages'
 import { StreamMultiSearchPicker } from '@/components/StreamMultiSearchPicker'
 import { useStreamsByGuids } from '@/hooks/config/useStreams'
 import { ProgramMasterInput } from '@/lib/api/academic/programMaster'
@@ -2319,7 +2320,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                                   </div>
                                   <SearchSelect placeholder="— Select Ledger —" options={ledgerOptions} value={f.ledger} onChange={val => updateItem(si, f.id, 'ledger', val)} />
                                   <input className="ctrl" value={idx + 1} readOnly disabled title="Auto-assigned from this item's position — drag the handle or use the Pri. arrows to reorder" />
-                                  <input className="ctrl" value={f.amount} onChange={e => updateItem(si, f.id, 'amount', e.target.value)} type="number" min={0} placeholder="0" />
+                                  <input className="ctrl" value={f.amount} onChange={e => updateItem(si, f.id, 'amount', stripLeadingZeros(e.target.value))} type="number" min={0} placeholder="0" />
                                   <SearchSelect placeholder="— Currency —" options={financeCurrencyOptions} value={f.currencyGuid} onChange={val => selectFeeItemCurrency(si, f.id, val)} />
                                   <button className="btn btn-danger btn-sm" style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => removeItem(si, f.id)}><i className="lni lni-trash-can"></i></button>
                                 </div>
