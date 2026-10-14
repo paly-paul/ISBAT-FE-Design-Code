@@ -18,6 +18,13 @@ const DOCUMENT_LABELS: Record<string, string> = {
   Photo: 'Passport Photo',
 }
 
+// Display value for an optional text field: "—" for null, blank, or the
+// literal string "null" some admission endpoints send.
+function orDash(value: string | null | undefined): string {
+  const v = value?.trim()
+  return v && v.toLowerCase() !== 'null' ? v : '—'
+}
+
 interface Props extends ModalProps {
   applicationGuid: string | null
   vetApplication: {
@@ -175,7 +182,7 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
                     type: detail.admissionType,
                     dob: detail.dob ?? undefined,
                     gender: detail.gender != null ? String(detail.gender) : undefined,
-                    nationality: detail.nationality ?? undefined,
+                    nationality: orDash(detail.nationality) !== '—' ? orDash(detail.nationality) : undefined,
                     nationalId: detail.nationalId ?? undefined,
                     phone: detail.phone ?? undefined,
                     email: detail.emailId ?? undefined,
@@ -197,15 +204,13 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
                 <div className="fg"><label className="lbl">First Name</label><input className="ctrl" readOnly value={detail.firstName || ''} /></div>
                 <div className="fg"><label className="lbl">Last Name</label><input className="ctrl" readOnly value={detail.lastName || '—'} /></div>
                 <div className="fg"><label className="lbl">Date of Birth</label><input className="ctrl" readOnly value={detail.dob ? detail.dob.slice(0, 10) : '—'} /></div>
-                {/* Confirmed via a real response: a raw int (e.g. 0), not the
-                    "Male"/"Female"/"Other" string the docs describe — no
-                    confirmed label mapping, so this displays the raw code
-                    rather than guessing one (just without the "(code)"
-                    suffix in the label itself, per request). */}
+                {/* Shown as sent: the label ("Male") in current responses, a
+                    raw code in older ones (no confirmed code mapping). */}
                 <div className="fg"><label className="lbl">Gender</label><input className="ctrl" readOnly value={detail.gender != null ? String(detail.gender) : '—'} /></div>
-                {/* Nationality is confirmed always null on the wire today — shown for
-                    completeness, not expected to have a value yet (see vetting.ts). */}
-                <div className="fg"><label className="lbl">Nationality</label><input className="ctrl" readOnly value={detail.nationality || '—'} /></div>
+                {/* Both looked up from the application's country (vetting.ts):
+                    Nationality is the demonym, Country the country name. */}
+                <div className="fg"><label className="lbl">Nationality</label><input className="ctrl" readOnly value={orDash(detail.nationality)} /></div>
+                <div className="fg"><label className="lbl">Country</label><input className="ctrl" readOnly value={orDash(detail.countryName)} /></div>
                 <div className="fg"><label className="lbl">National ID</label><input className="ctrl" readOnly value={detail.nationalId || '—'} /></div>
                 <div className="fg"><label className="lbl">Phone</label><input className="ctrl" readOnly value={detail.phone || '—'} /></div>
                 <div className="fg"><label className="lbl">Email</label><input className="ctrl" readOnly value={detail.emailId || '—'} /></div>

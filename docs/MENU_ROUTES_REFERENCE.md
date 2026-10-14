@@ -124,12 +124,14 @@ action. Real access control still has to be enforced by each API.
 | Enquiry | Enquiry List | `/admission/enquiry-list` | `get` `add` `edit` `assign` `verify` | `add` `edit` | `assign` = assign counsellor; `verify` = verify enquirer email |
 | Enquiry | Enquiry Followup Master | `/admission/enquiry-followup-master` | `get` `add` `edit` `assign` | `add` `edit` | `add` = log follow-up; `assign` = assign counsellor |
 | Enquiry | Enquiry Followup | `/admission/enquiry-followup` | `get` `edit` `assign` | `edit` | `assign` = assign counsellor |
+| Enquiry | Enquiry Report | `/admission/reports/enquiry` | `get` `export` | none | Preview + Excel export; exports land in the shared Downloads list |
 | Admission Flow | Dashboard | `/admission/dashboard` | `get` | none |  |
 | Admission Flow | Application Payment | `/admission/payment` | `get` `add` `import` `print` | `add` | `import` = from Enquiry / ODeL / CRM; `print` = receipt PDF after saving (normal payments only, not exemptions) |
 | Admission Flow | Application Filing | `/admission/filing` | `get` `add` `delete` `submit` | `add` `delete` | `submit` = submit application for vetting |
 | Admission Flow | Vetting Desk | `/admission/vetting` | `get` `approve` `reject` `hold` | none | `hold` = Wait (awaiting original documents) |
 | Admission Flow | Registrar's Desk | `/admission/registration` | `get` `register` `print` | none | `print` = onboarding print-out |
 | Records | All Applicants | `/admission/applicants` | `get` `export` | none |  |
+| Records | Application Status Report | `/admission/reports/application-status` | `get` `export` | none | Preview with count per stage + Excel export; exports land in the shared Downloads list |
 | Records | Receipts | *(none)* | — | — | no page yet |
 | Records | Reports | *(none)* | — | — | no page yet |
 
@@ -187,6 +189,13 @@ action. Real access control still has to be enforced by each API.
           "url": "/admission/enquiry-followup",
           "permissions": { "get": true, "edit": true, "assign": true },
           "children": []
+        },
+        {
+          "name": "Enquiry Report",
+          "icon": "lni lni-bar-chart",
+          "url": "/admission/reports/enquiry",
+          "permissions": { "get": true, "export": true },
+          "children": []
         }
       ]
     },
@@ -243,6 +252,13 @@ action. Real access control still has to be enforced by each API.
           "name": "All Applicants",
           "icon": "lni lni-users",
           "url": "/admission/applicants",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        },
+        {
+          "name": "Application Status Report",
+          "icon": "lni lni-bar-chart",
+          "url": "/admission/reports/application-status",
           "permissions": { "get": true, "export": true },
           "children": []
         },
@@ -1725,6 +1741,12 @@ Master" / "Lecture Master" node (`stripLectureMaster`).
   Discount Report.
 - Application Payment's `print` event now does something: it opens the application
   payment receipt PDF after saving. No change to its events.
+- Added **Admission › Enquiry › Enquiry Report** (`/admission/reports/enquiry`), with
+  `get` and `export`. Please register it in the menu API; until then the frontend adds
+  it to the end of the Enquiry section itself.
+- Added **Admission › Records › Application Status Report**
+  (`/admission/reports/application-status`), with `get` and `export`. Please register
+  it in the menu API; until then the frontend adds it to the end of the Records section.
 
 ## Changes in the 2026-10-09 version (since 2026-09-07)
 

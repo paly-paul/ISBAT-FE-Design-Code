@@ -66,14 +66,15 @@ export interface VettingApplicationDetail {
   firstName: string
   lastName: string
   dob: string | null
-  // Confirmed via a real authenticated response: comes back as a raw int
-  // (e.g. 0), NOT the "Male"/"Female"/"Other" string the docs describe —
-  // same "int-encoded enum, no confirmed label mapping" caution as
-  // enquiry.ts's enquiryStatus. Display raw, don't guess a mapping.
-  gender: number | null
-  // Always null today — ApplicationEntity.CountryGuid has no matching guid
-  // on the Academic side. Kept typed so a future backend fix "just works",
-  // but don't build UI that assumes this is ever populated right now.
+  // Seen both as a raw int (e.g. 0) and, in the 2026-10 country-fields
+  // handoff sample, as the "Male"/"Female" label. Displayed as-is.
+  gender: number | string | null
+  // Looked up from the application's countryGuid (2026-10). nationality is
+  // the demonym ("Ugandan"); countryName the country ("Uganda"). Use
+  // countryGuid as the key, never the name. All three null when the
+  // application has no country.
+  countryGuid?: string | null
+  countryName?: string | null
   nationality: string | null
   nationalId: string | null
   phone: string | null

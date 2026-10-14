@@ -36,7 +36,7 @@ import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput, stripLeadingZeros } from '@/lib/errorMessages'
 import { formatDate, monthsAgoYmd, RECENT_DATE_MONTHS } from '@/lib/date'
 import { setFilingPrefill } from '@/lib/filingHandoff'
-import { downloadBlob } from '@/lib/downloadBlob'
+import { openPdfInNewTab } from '@/lib/openPdf'
 import { AuthError } from '@/lib/api/client'
 import { getApplicationPaymentReceiptPdf, hasPrintableReceipt } from '@/lib/api/admission/applicationPayment'
 import type { NewPaymentHandoff } from '@/lib/api/admission/applicationFiling'
@@ -324,20 +324,11 @@ function PaymentPageContent() {
   const [receiptRetryError, setReceiptRetryError] = useState<string | null>(null)
   async function printReceipt(paymentGuid: string, receiptNo: string) {
     if (printingReceipt) return
-    const tab = window.open('', '_blank')
     setPrintingReceipt(true)
     setReceiptRetryError(null)
     try {
-      const { blob, filename } = await getApplicationPaymentReceiptPdf(paymentGuid)
-      const pdf = blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' })
-      if (tab && !tab.closed) {
-        // Not revoked — the tab needs the blob URL for as long as it's open.
-        tab.location.href = URL.createObjectURL(pdf)
-      } else {
-        downloadBlob(pdf, filename ?? `Receipt_${receiptNo || paymentGuid}.pdf`)
-      }
+      await openPdfInNewTab(() => getApplicationPaymentReceiptPdf(paymentGuid), `Receipt_${receiptNo || paymentGuid}.pdf`)
     } catch (err) {
-      tab?.close()
       const msg = err instanceof Error && err.message ? err.message : 'Could not load the receipt.'
       if (err instanceof AuthError && err.code === 'receipt_generation_failed') setReceiptRetryError(msg)
       else showToast(msg, 'error')
@@ -931,6 +922,8 @@ function PaymentPageContent() {
               batchTimeGuid: form.batchTimeGuid,
               batchGuid: form.batchGuid,
               feeHdGuid: form.feeHdGuid,
+              receiptNo: response.receiptNo ?? null,
+              isExemption: isWaived,
             } : undefined,
           })
           setReceiptRetryError(null)

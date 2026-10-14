@@ -300,6 +300,8 @@ const mockMenu: MenuNode[] = [
       leaf('Enquiry List', 'folder', '/admission/enquiry-list'),
       leaf('Enquiry Followup Master', 'calendar', '/admission/enquiry-followup-master'),
       leaf('Enquiry Followup', 'phone', '/admission/enquiry-followup'),
+      // enquiry-report-page.md, 2026-10-14 — see ensureEnquiryReport.
+      leaf('Enquiry Report', 'bar-chart', '/admission/reports/enquiry'),
     ]),
     section('Admission Flow', [
       leaf('Dashboard', 'dashboard', '/admission/dashboard'),
@@ -310,6 +312,8 @@ const mockMenu: MenuNode[] = [
     ]),
     section('Records', [
       leaf('All Applicants', 'users', '/admission/applicants'),
+      // application-status-report-page.md, 2026-10-14 — see ensureEnquiryReport.
+      leaf('Application Status Report', 'bar-chart', '/admission/reports/application-status'),
       leaf('Receipts', 'files', null),
       leaf('Reports', 'bar-chart', null),
     ]),
@@ -1016,6 +1020,32 @@ function ensureResitApplications(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
+// Enquiry Report (enquiry-report-page.md, 2026-10-14) has no backend menu
+// registration yet: appended to Admission's Enquiry section when missing.
+// Leaves the menu untouched if the role has no Admission module or no
+// Enquiry section.
+// Same for Application Status Report (application-status-report-page.md),
+// appended to Admission's Records section.
+function ensureAdmissionReportLeaf(menu: MenuNode[], sectionName: string, name: string, url: string): MenuNode[] {
+  const admIdx = menu.findIndex(n => n.name === 'Admission')
+  if (admIdx === -1) return menu
+  const admModule = menu[admIdx]
+  const secIdx = admModule.children.findIndex(c => c.name === sectionName)
+  if (secIdx === -1) return menu
+  const sec = admModule.children[secIdx]
+  if (sec.children.some(l => l.name === name || l.url === url)) return menu
+
+  const mergedAdm = { ...admModule, children: [...admModule.children] }
+  mergedAdm.children[secIdx] = { ...sec, children: [...sec.children, leaf(name, 'bar-chart', url)] }
+  const mergedMenu = [...menu]
+  mergedMenu[admIdx] = mergedAdm
+  return mergedMenu
+}
+function ensureEnquiryReport(menu: MenuNode[]): MenuNode[] {
+  const withEnquiry = ensureAdmissionReportLeaf(menu, 'Enquiry', 'Enquiry Report', '/admission/reports/enquiry')
+  return ensureAdmissionReportLeaf(withEnquiry, 'Records', 'Application Status Report', '/admission/reports/application-status')
+}
+
 function ensureUeMarkImport(menu: MenuNode[]): MenuNode[] {
   const assessIdx = menu.findIndex(n => n.name === 'Assessment')
   if (assessIdx === -1) return menu
@@ -1599,7 +1629,8 @@ export function getMenu(): Promise<MenuResult> {
       const withExamMarkImport = ensureMarkResultsLeaf(withQuestionBankPractical, 'Exam Mark Import', 'upload', '/assessment/exam-mark-import')
       const withHecTranscript = ensureMarkResultsLeaf(withExamMarkImport, 'HEC Graduate Transcript', 'certificate', '/assessment/hec-graduate-transcript')
       const withUeMarkVerify = ensureMarkResultsLeaf(withHecTranscript, 'Mark Verify — UE', 'shield', '/assessment/mark-ue-verify')
-      const finalMenu = stripUnintegratedPages(stripLectureMaster(withUeMarkVerify))
+      const withEnquiryReport = ensureEnquiryReport(withUeMarkVerify)
+      const finalMenu = stripUnintegratedPages(stripLectureMaster(withEnquiryReport))
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: stripUnintegratedPages(stripLectureMaster(mockMenu)), isFallback: true }))

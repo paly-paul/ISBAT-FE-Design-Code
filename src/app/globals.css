@@ -12176,7 +12176,9 @@ body:has(.drawer-overlay) {
 .rpt-results-hdr { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .rpt-count { font-size: 13.5px; color: var(--g600); font-variant-numeric: tabular-nums; }
 .rpt-count strong { color: var(--g900); font-weight: 700; }
-.tbl-wrap.rpt-scroll { overflow-y: auto; max-height: calc(100vh - 380px); min-height: 280px; }
+/* No min-height: a short result shouldn't sit in a mostly empty box; long
+   results still cap at max-height and scroll. */
+.tbl-wrap.rpt-scroll { overflow-y: auto; max-height: calc(100vh - 380px); }
 /* Above the sticky first-column cells (td:first-child is z-index 2), or the
    pinned Date cells scroll over the header's Date cell. */
 .tbl-wrap.rpt-scroll thead { position: sticky; top: 0; z-index: 4; }
@@ -12223,6 +12225,49 @@ body:has(.drawer-overlay) {
 .rpt-sumtbl tbody tr + tr > * { border-top: 1px solid var(--g100); }
 .rpt-sumtbl tbody td.key { color: var(--g900); font-weight: 700; font-size: 14px; }
 .rpt-sumtbl thead th.key { color: var(--g700); }
+
+/* Enquiry Report: count summary as stat tiles (label, big number, share of
+   the total) with a thin split bar for assigned vs not assigned. */
+.rpt-stats { margin-top: 12px; }
+.rpt-stats-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.rpt-stat {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px 14px; border: 1.5px solid var(--g200); border-radius: var(--rsm); background: var(--white);
+}
+.rpt-stat-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rpt-stat-lbl { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--g500); }
+.rpt-stat-lbl::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--g300); }
+.rpt-stat.is-blue .rpt-stat-lbl::before { background: var(--b500); }
+.rpt-stat.is-green .rpt-stat-lbl::before { background: var(--green); }
+.rpt-stat.is-amber .rpt-stat-lbl::before { background: var(--amber); }
+.rpt-stat-pct { font-size: 12px; font-weight: 600; color: var(--g500); font-variant-numeric: tabular-nums; }
+.rpt-stat-num { font-size: 22px; font-weight: 700; color: var(--g900); line-height: 1.15; font-variant-numeric: tabular-nums; }
+/* Share of the total; the Total card keeps an empty track so all three line up. */
+.rpt-stat-bar { height: 4px; border-radius: 999px; background: var(--g100); overflow: hidden; }
+.rpt-stat-bar > span { display: block; height: 100%; border-radius: 999px; }
+.rpt-stat.is-green .rpt-stat-bar > span { background: var(--green); }
+.rpt-stat.is-amber .rpt-stat-bar > span { background: var(--amber); }
+.rpt-stats-foot { margin-top: 8px; text-align: right; font-size: var(--fs-xs); color: var(--g400); }
+@media (max-width: 640px) { .rpt-stats-row { grid-template-columns: 1fr; } }
+
+/* Application Status Report: clickable count per stage, above the table. */
+.rpt-stage-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.rpt-stage-chip {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px;
+  border: 1.5px solid var(--g200); border-radius: 999px; background: var(--white);
+  font-size: 12.5px; color: var(--g700); cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.rpt-stage-chip:hover:not(:disabled) { border-color: var(--b300); color: var(--b700); }
+.rpt-stage-chip:focus-visible { outline: 2px solid var(--b400); outline-offset: 2px; }
+.rpt-stage-chip:disabled { cursor: progress; opacity: .7; }
+.rpt-stage-chip-name { font-weight: 500; }
+.rpt-stage-chip-count { font-weight: 700; color: var(--g900); font-variant-numeric: tabular-nums; }
+.rpt-stage-chip.zero { color: var(--g400); }
+.rpt-stage-chip.zero .rpt-stage-chip-count { color: var(--g400); font-weight: 600; }
+.rpt-stage-chip.active { border-color: var(--b500); background: var(--b50); color: var(--b800); }
+.rpt-stage-chip.active .rpt-stage-chip-count { color: var(--b800); }
+@media (prefers-reduced-motion: reduce) { .rpt-stage-chip { transition: none; } }
 
 .rpt-empty { text-align: center; padding: 56px 20px; color: var(--g500); }
 .rpt-empty i { font-size: 30px; color: var(--g300); display: block; margin-bottom: 10px; }
