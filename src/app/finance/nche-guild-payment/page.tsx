@@ -26,6 +26,10 @@ import {
   RegulatorySemesterStatus,
 } from '@/hooks/finance/useNcheGuildPayment'
 import { refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
+import { SearchSelect } from '@/components/SearchSelect'
+import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
+import { stripLeadingZeros } from '@/lib/errorMessages'
 
 // Merged NCHE + Guild Payment page — combines the two previously separate
 // nche-payment/guild-payment pages behind a single tab switcher, per
@@ -281,6 +285,23 @@ export default function NcheGuildPaymentPage() {
   const [pnrNumber, setPnrNumber] = useState('')
   const [remarks, setRemarks] = useState('')
   const [bankDeposit, setBankDeposit] = useState('')
+  // Required on create (post-payment-nche.md / post-payment-guild.md).
+  // Recorded only — the rate and balance checks assume the base currency —
+  // so it defaults to the default finance currency once the list loads.
+  const { data: currencies = [] } = useFinanceCurrencies()
+  const [currencyGuid, setCurrencyGuid] = useState('')
+  const defaultCurrencyGuid = getDefaultFinanceCurrencyGuid(currencies)
+  useEffect(() => {
+    if (!currencyGuid && defaultCurrencyGuid) setCurrencyGuid(defaultCurrencyGuid)
+  }, [currencyGuid, defaultCurrencyGuid])
+  // Inline field errors: amount, currencyGuid, payDate.
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  function clearError(field: string) {
+    setErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
+  }
+  function fieldErr(field: string) {
+    return errors[field] ? <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[field]}</p> : null
+  }
 
   const createPayment = useCreateRegulatoryPayment(category)
   const deletePayment = useDeleteRegulatoryPayment(category)
@@ -288,9 +309,11 @@ export default function NcheGuildPaymentPage() {
   function resetForm() {
     setAmount('')
     setPayDate(todayYmd())
+    setCurrencyGuid(defaultCurrencyGuid)
     setPnrNumber('')
     setRemarks('')
     setBankDeposit('')
+    setErrors({})
   }
 
   function switchCategory(next: PaymentCategory) {
@@ -349,18 +372,34 @@ export default function NcheGuildPaymentPage() {
     setSuccessInfo(null)
   }
 
+  // The create validator (post-payment-nche.md / post-payment-guild.md ›
+  // Validation), checked all at once and shown inline. "Multiple of the
+  // configured rate" and "not more than the outstanding balance" can't be
+  // checked here — semester-status carries no amounts — so those come back
+  // from the server and land under Amount (see onError below).
+  function validate(): Record<string, string> {
+    const e: Record<string, string> = {}
+    const amt = parseFloat(amount)
+    if (!amount.trim()) e.amount = 'Amount is required.'
+    else if (isNaN(amt) || amt <= 0) e.amount = 'Amount must be greater than 0.'
+    if (!currencyGuid) e.currencyGuid = 'Please select the currency received.'
+    if (!payDate) e.payDate = 'Payment date is required.'
+    return e
+  }
+
   function handleSave() {
     if (!profile || !selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
+    const errs = validate()
+    setErrors(errs)
+    if (Object.keys(errs).length) { scrollToFirstError(errs); return }
     const amt = parseFloat(amount)
-    if (!amount.trim() || isNaN(amt) || amt <= 0) { showToast('Amount must be greater than 0.', 'warn'); return }
-    if (!payDate) { showToast('Please select a payment date.', 'warn'); return }
 
     const categoryFields = category === 'nche'
       ? { pnrNumber: pnrNumber.trim() || null, remarks: remarks.trim() || null }
       : { bankDeposit: bankDeposit.trim() || null }
 
     createPayment.mutate(
-      { applicationGuid: selectedApplicationGuid, studentGuid, amount: amt, payDate, ...categoryFields },
+      { applicationGuid: selectedApplicationGuid, studentGuid, amount: amt, currencyGuid, payDate, ...categoryFields },
       {
         onSuccess: result => {
           setSuccessModal({
@@ -373,11 +412,22 @@ export default function NcheGuildPaymentPage() {
           resetForm()
         },
         onError: (error: Error) => {
-          // Same 400 "not a multiple of the configured rate"/"exceeds
-          // outstanding balance" business errors each doc describes —
-          // surfaced as-is rather than guessed at, since the rate isn't
-          // known here.
-          showToast(error.message || `Failed to save ${CATEGORY_LABEL[category]} payment. Please try again.`, 'error')
+          // The 400 "not a multiple of the configured rate" / "exceeds
+          // outstanding balance" business errors and the 404 for an unknown
+          // currency go under their field, in the server's own words; any
+          // other failure (application not found, etc.) stays a toast.
+          const msg = error.message || ''
+          const field = /currency/i.test(msg) ? 'currencyGuid'
+            : /multiple|exceed|outstanding|balance|amount/i.test(msg) ? 'amount'
+            : /pay ?date/i.test(msg) ? 'payDate'
+            : null
+          if (field) {
+            const e = { [field]: msg }
+            setErrors(prev => ({ ...prev, ...e }))
+            scrollToFirstError(e)
+            return
+          }
+          showToast(msg || `Failed to save ${CATEGORY_LABEL[category]} payment. Please try again.`, 'error')
         },
       },
     )
@@ -614,10 +664,33 @@ export default function NcheGuildPaymentPage() {
               </div>
             )}
 
+            {/* Loading / no schedule / fully paid — one full-width card each,
+                with no payment form, same as Payment Console's tuition tab:
+                with nothing to bill, any amount would only be rejected. */}
+            {isOutstandingLoading && (
+              <div className="card text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Checking outstanding balance…</div>
+            )}
+            {!isOutstandingLoading && !isOutstandingError && !semesterStatusList?.length && (
+              <div className="card text-center" style={{ padding: 24 }}>
+                <div className="text-g400" style={{ fontSize: 22 }}><i className="lni lni-calendar"></i></div>
+                <div className="font-bold text-g700" style={{ fontSize: 13.5 }}>No {CATEGORY_LABEL[category]} schedule</div>
+                <div className="text-g400 mt-1" style={{ fontSize: 12.5 }}>This application has no {CATEGORY_LABEL[category]} semester schedule — there is nothing to bill right now.</div>
+              </div>
+            )}
+            {!isOutstandingLoading && !isOutstandingError && allSemestersPaid && (
+              <div className="card text-center" style={{ padding: 24 }}>
+                <div className="pc-receipt-check" style={{ fontSize: 22 }}><i className="lni lni-checkmark-circle"></i></div>
+                <div className="font-bold text-g700" style={{ fontSize: 13.5 }}>Fully settled</div>
+                <div className="text-g400 mt-1" style={{ fontSize: 12.5 }}>Every semester&apos;s {CATEGORY_LABEL[category]} fee is paid — there is nothing to bill right now.</div>
+              </div>
+            )}
+
             {/* .pc-tuition-split — Outstanding Balance (left) / Payment
                 Detail (right), same two-card split as Payment Console's own
-                Semester Payment tab, in place of the single merged card
-                this used before. */}
+                Semester Payment tab. Only once there's something to bill (or
+                the status failed to load — the table shows that error and
+                the cashier can still record a payment). */}
+            {!isOutstandingLoading && (isOutstandingError || (!!semesterStatusList?.length && !allSemestersPaid)) && (
             <div className="pc-tuition-split">
               <div className="card flex flex-col gap-4 min-w-0">
                 <div className="card-hdr">
@@ -635,34 +708,54 @@ export default function NcheGuildPaymentPage() {
                 <div className="sec-divider" style={{ marginTop: 0 }}>
                   <i className="lni lni-wallet"></i> Payment Detail
                 </div>
+                {/* Currency + Amount paired, then Date + the category's
+                    reference field — same arrangement as Payment Console. */}
                 <div className="g2 mb-[14px]">
+                  <div className="fg">
+                    <div className="lbl">Currency Received <span className="req">*</span></div>
+                    <SearchSelect
+                      placeholder="— Select Currency —"
+                      options={currencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))}
+                      value={currencyGuid}
+                      onChange={v => { setCurrencyGuid(v); clearError('currencyGuid') }}
+                    />
+                    {fieldErr('currencyGuid')}
+                  </div>
                   <div className="fg">
                     <div className="lbl">Amount <span className="req">*</span></div>
                     <input type="number" min={0} step={0.01} className="amt-val-input" placeholder="0.00"
-                      style={{ fontSize: 18, fontWeight: 700 }}
-                      value={amount} onChange={e => setAmount(e.target.value)} />
-                    <div style={{ fontSize: 11, color: 'var(--g500)', marginTop: 4 }}>Must be a multiple of the configured {CATEGORY_LABEL[category]} rate — enforced server-side.</div>
-                  </div>
-                  <div className="fg">
-                    <div className="lbl">Payment Date <span className="req">*</span></div>
-                    <DatePicker value={payDate} onChange={setPayDate} />
+                      style={{ fontSize: 18, fontWeight: 700, ...(errors.amount ? { borderColor: 'var(--red)' } : {}) }}
+                      aria-invalid={!!errors.amount}
+                      // Number inputs still accept e/E/+/-; none is a valid amount (> 0).
+                      onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault() }}
+                      value={amount} onChange={e => { setAmount(stripLeadingZeros(e.target.value)); clearError('amount') }} />
+                    {errors.amount
+                      ? fieldErr('amount')
+                      : <div style={{ fontSize: 11, color: 'var(--g500)', marginTop: 4 }}>Must be a multiple of the configured {CATEGORY_LABEL[category]} rate, and not more than the outstanding balance.</div>}
                   </div>
                 </div>
-                {category === 'nche' ? (
-                  <>
-                    <div className="fg mb-[14px]">
+                <div className="g2 mb-[14px]">
+                  <div className="fg">
+                    <div className="lbl">Payment Date <span className="req">*</span></div>
+                    <DatePicker value={payDate} onChange={v => { setPayDate(v); clearError('payDate') }} hasError={!!errors.payDate} />
+                    {fieldErr('payDate')}
+                  </div>
+                  {category === 'nche' ? (
+                    <div className="fg">
                       <div className="lbl">PNR Number</div>
                       <input className="ctrl" type="text" placeholder="Optional reference number" value={pnrNumber} onChange={e => setPnrNumber(e.target.value)} />
                     </div>
-                    <div className="fg mb-4">
-                      <div className="lbl">Remarks</div>
-                      <textarea className="ctrl" rows={2} placeholder="Optional notes" value={remarks} onChange={e => setRemarks(e.target.value)} />
+                  ) : (
+                    <div className="fg">
+                      <div className="lbl">Bank Deposit</div>
+                      <input className="ctrl" type="text" placeholder="Optional bank deposit reference" value={bankDeposit} onChange={e => setBankDeposit(e.target.value)} />
                     </div>
-                  </>
-                ) : (
+                  )}
+                </div>
+                {category === 'nche' && (
                   <div className="fg mb-4">
-                    <div className="lbl">Bank Deposit</div>
-                    <input className="ctrl" type="text" placeholder="Optional bank deposit reference" value={bankDeposit} onChange={e => setBankDeposit(e.target.value)} />
+                    <div className="lbl">Remarks</div>
+                    <textarea className="ctrl" rows={2} placeholder="Optional notes" value={remarks} onChange={e => setRemarks(e.target.value)} />
                   </div>
                 )}
                 <div className="flex gap-[10px] justify-end items-center">
@@ -672,6 +765,7 @@ export default function NcheGuildPaymentPage() {
                 </div>
               </div>
             </div>
+            )}
           </>
         )}
       </div>

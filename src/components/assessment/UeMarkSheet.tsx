@@ -13,7 +13,7 @@ import {
 } from '@/hooks/assessment/useUeMarks'
 import { getUeMarkImportExam, UeMarkImportExam } from '@/lib/api/assessment/ueMarkImport'
 import {
-  ALL_UE_MARK_FIELDS, normalizeUeLayout, ueColumnsFor,
+  ALL_UE_MARK_FIELDS, ueColumnsFor,
   UeDetailedMarkRowDto, UeMarkField, UeMarkValues,
 } from '@/lib/api/assessment/ueMarks'
 
@@ -21,10 +21,9 @@ import {
 // university-exam-mark-verify-page.md. They differ only in:
 //   - the unit list: entry is lecturer-scoped (ue-detailed-marks/units),
 //     verify lists every unit (ue-attendance/units);
-//   - Edit: entry hides it for absent students AND for every row once the
-//     exam is verified (the save endpoint doesn't enforce that lock — the
-//     screen must); verify hides it for absent students only;
 //   - verify has the Verify button.
+// In both, Edit is hidden for absent students and for every row once the exam
+// is verified — the server locks it too (409 exam_verified on save).
 //
 // Marking is blind: rows show only the matching code, never a name or reg.
 // no., and studentGuid is never resolved — it's only the save key.
@@ -97,7 +96,8 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
       .catch(err => {
         if (seq !== lookupSeq.current) return
         if (err instanceof AuthError && err.code === 'not_found') {
-          showToast(EXAM_NOT_FOUND, 'error')
+          // The server's own message; the fixed text only when it sends none.
+          showToast(errMessage(err, EXAM_NOT_FOUND), 'error')
           setUnitGuid('')
         } else {
           showToast(errMessage(err, 'Could not find the exam for this course unit.'), 'error')
@@ -133,13 +133,11 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
   }
 
   // ── Row editing ──
-  const layout = sheet ? sheet.layout : normalizeUeLayout(exam?.layout)
   const columns = sheet ? ueColumnsFor(sheet.layout, sheet.maxMarks) : []
   const isVerified = sheet?.isVerified ?? exam?.isVerified ?? false
 
   function canEdit(row: UeDetailedMarkRowDto) {
-    if (!canSave || row.isAbsent) return false
-    return mode === 'verify' || !isVerified
+    return canSave && !row.isAbsent && !isVerified
   }
 
   function startEdit(row: UeDetailedMarkRowDto) {
@@ -178,9 +176,19 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
 
     saveMark.mutate({ studentGuid: editing.studentGuid, marks }, {
       onSuccess: () => { setEditing(null); showToast('Marks saved.', 'success') },
-      // validation_error carries the server's own message, e.g. "SectionAMark
-      // should not exceed 20." or "Student was not marked present for this exam."
-      onError: err => showToast(errMessage(err, 'Could not save the marks.'), 'error'),
+      onError: err => {
+        // Verified elsewhere while this sheet was open: close the edit and
+        // reload, so the grid comes back locked (Edit hidden).
+        if (err instanceof AuthError && err.code === 'exam_verified') {
+          setEditing(null); setInvalid(new Set())
+          showToast(errMessage(err, 'This exam has been verified; its marks can no longer be edited.'), 'error')
+          grid.refetch()
+          return
+        }
+        // validation_error carries the server's own message, e.g. "SectionAMark
+        // should not exceed 20." or "Student was not marked present for this exam."
+        showToast(errMessage(err, 'Could not save the marks.'), 'error')
+      },
     })
   }
 
@@ -206,7 +214,7 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
       : errMessage(gridError, 'Could not load the mark sheet.')
 
   const unitLabel = selectedUnit ? `${selectedUnit.courseUnitCode} — ${selectedUnit.courseUnitName}` : ''
-  const showEditColumn = canSave && (mode === 'verify' || !isVerified)
+  const showEditColumn = canSave && !isVerified
   const colCount = 3 + columns.length + (showEditColumn ? 1 : 0)
 
   if (!permissions.get) {
@@ -246,16 +254,6 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
       <div className="card mb-4">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-5">
           <div className="fg mb-0">
-            <label className="lbl">Intake <span className="req">*</span></label>
-            <SearchSelect
-              placeholder="— Select Intake —"
-              value={intakeGuid}
-              onChange={handleIntake}
-              disabled={initLoading}
-              options={(init?.intakes ?? []).map(i => ({ value: i.intakeGuid, label: `${i.description || `Intake ${i.intakeCode}`}${i.currentIntake ? ' (Current)' : ''}` }))}
-            />
-          </div>
-          <div className="fg mb-0">
             <label className="lbl">Programme <span className="req">*</span></label>
             <SearchSelect
               placeholder="— Select Programme —"
@@ -263,6 +261,16 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
               onChange={handleProgram}
               disabled={initLoading}
               options={(init?.programs ?? []).map(p => ({ value: p.programGuid, label: `${p.programCode} — ${p.programName}` }))}
+            />
+          </div>
+          <div className="fg mb-0">
+            <label className="lbl">Intake <span className="req">*</span></label>
+            <SearchSelect
+              placeholder="— Select Intake —"
+              value={intakeGuid}
+              onChange={handleIntake}
+              disabled={initLoading}
+              options={(init?.intakes ?? []).map(i => ({ value: i.intakeGuid, label: `${i.description || `Intake ${i.intakeCode}`}${i.currentIntake ? ' (Current)' : ''}` }))}
             />
           </div>
           <div className="fg mb-0">
@@ -287,14 +295,26 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
               options={units.map(u => ({ value: u.courseUnitGuid, label: `${u.courseUnitCode} — ${u.courseUnitName}` }))}
             />
           </div>
+          {/* Theory / Practical toggle — Combined units (unitType 3) only. */}
           {isCombined && (
             <div className="fg mb-0">
-              <label className="lbl">Report Type</label>
-              <SearchSelect
-                value={ueType}
-                onChange={handleUeType}
-                options={[{ value: '0', label: 'Theory' }, { value: '1', label: 'Practical' }]}
-              />
+              <label className="lbl" id="ue-report-type">Report Type</label>
+              <div className="pc-tabs" role="radiogroup" aria-labelledby="ue-report-type" style={{ marginBottom: 0, padding: 4 }}>
+                {[{ value: '0', label: 'Theory', icon: 'lni-book' }, { value: '1', label: 'Practical', icon: 'lni-code' }].map(o => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={ueType === o.value}
+                    className={`pc-tab-btn${ueType === o.value ? ' active' : ''}`}
+                    style={{ padding: '6px 14px' }}
+                    disabled={examLoading}
+                    onClick={() => { if (ueType !== o.value) handleUeType(o.value) }}
+                  >
+                    <i className={`lni ${o.icon}`}></i> {o.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -307,7 +327,6 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
             ) : exam && (
               <>
                 <span className="text-g500">Maximum Marks <strong className="text-g900" style={{ fontVariantNumeric: 'tabular-nums' }}>{exam.examRuleTotalMark}</strong></span>
-                <span className="text-g500">Layout <strong className="text-g900">{layout}</strong></span>
                 {isVerified
                   ? <span className="badge badge-green"><i className="lni lni-checkmark-circle"></i> Verified</span>
                   : <span className="badge badge-amber">Not Verified</span>}
@@ -337,7 +356,7 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
             {sheet && (
               <span className="text-sm text-g500">
                 {sheet.rows.length} student{sheet.rows.length !== 1 ? 's' : ''}
-                {mode === 'entry' && sheet.isVerified && ' · verified, marks are locked'}
+                {sheet.isVerified && ' · verified, marks are locked'}
               </span>
             )}
           </div>

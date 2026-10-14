@@ -49,6 +49,13 @@ export interface EnquiryInput {
   // have been issued for this same email (trimmed, case-insensitive) within
   // the last 30 minutes, or the create is rejected and nothing is saved.
   emailVerificationToken: string
+  // Optional sponsor details (post-enquiry.md, EnquirySponsorFields).
+  // spPhoneCountryGuid is required only when spPhone is given.
+  spName?: string | null
+  spPhone?: string | null
+  spPhoneCountryGuid?: string | null
+  spEmail?: string | null
+  spCountryGuid?: string | null
 }
 
 // Confirmed field-for-field against a real GET /api/v1/admissions/enquiries/:guid

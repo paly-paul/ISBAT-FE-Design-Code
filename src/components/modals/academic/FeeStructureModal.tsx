@@ -4,6 +4,7 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
+import { stripLeadingZeros } from '@/lib/errorMessages'
 import { useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
 import { useIntakesByGuids, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { IntakeSearchPicker } from '@/components/IntakeSearchPicker'
@@ -799,7 +800,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                               </div>
                               <SearchSelect placeholder="— Select Ledger —" options={ledgerOptions} value={f.ledgerGuid} onChange={val => updateItem(sem.semesterGuid, f.id, 'ledgerGuid', val)} />
                               <input className="ctrl" value={f.ledgerPriority} onChange={e => updateItem(sem.semesterGuid, f.id, 'ledgerPriority', e.target.value)} type="number" min={0} placeholder="e.g. 1" />
-                              <input className="ctrl" value={f.amount} onChange={e => updateItem(sem.semesterGuid, f.id, 'amount', e.target.value)} type="number" min={0} placeholder="0" />
+                              <input className="ctrl" value={f.amount} onChange={e => updateItem(sem.semesterGuid, f.id, 'amount', stripLeadingZeros(e.target.value))} type="number" min={0} placeholder="0" />
                               <SearchSelect placeholder="— Currency —" options={financeCurrencyOptions} value={f.currencyGuid} onChange={val => updateItem(sem.semesterGuid, f.id, 'currencyGuid', val)} />
                               <button className="btn btn-danger btn-sm" style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => removeItem(sem.semesterGuid, f.id)}><i className="lni lni-trash-can"></i></button>
                             </div>

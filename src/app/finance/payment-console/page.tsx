@@ -50,6 +50,8 @@ import { getPaymentReceiptPdf, isResitLedger, refugeeLabel, studCategoryLabel } 
 import { downloadBlob } from '@/lib/downloadBlob'
 import { formatDate, formatDateTime } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
+import { stripLeadingZeros } from '@/lib/errorMessages'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Real "what's owed" table for the Other Payment tab, sourced from GET
@@ -470,6 +472,15 @@ export default function PaymentConsolePage() {
   const [procBankGuid, setProcBankGuid] = useState('')
   const [bankRef, setBankRef] = useState('')
   const [remarks, setRemarks] = useState('')
+  // Inline field errors for the tuition Payment Detail form, keyed by field
+  // (amount, currencyGuid, payDate, payType, receiptBookGuid, procBankGuid).
+  const [payErrors, setPayErrors] = useState<Record<string, string>>({})
+  function clearPayError(field: string) {
+    setPayErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
+  }
+  function payErr(field: string) {
+    return payErrors[field] ? <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{payErrors[field]}</p> : null
+  }
 
   const [receipt, setReceipt] = useState<ReceiptData | null>(null)
 
@@ -979,6 +990,7 @@ export default function PaymentConsolePage() {
     setBankRef('')
     setRemarks('')
     setReceipt(null)
+    setPayErrors({})
   }
 
   function resetAdjustmentForm() {
@@ -1195,22 +1207,46 @@ export default function PaymentConsolePage() {
 
   const showBankFields = Number(payType) > 1
 
-  function handleSave(confirmOverride = false) {
-    if (!profile || !selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
+  // CreatePaymentCommandValidator (post-payment.md › Validation), checked all
+  // at once and shown inline under each field.
+  function validatePayment(): Record<string, string> {
+    const e: Record<string, string> = {}
     // 0 is a legal amount here — unlike every other create in this module,
     // per the flow doc: "tuition create-payment accepts amount: 0 — it
     // books a pure-discount settlement that moves no cash. Do not block it
     // client-side." Only reject a blank field or a genuinely negative
     // number; parseFloat('') || 0 would otherwise silently treat a blank
     // field as an intentional 0, so the emptiness check comes first.
-    if (!amount.trim()) { showToast('Please enter an amount.', 'warn'); return }
     const amt = parseFloat(amount)
-    if (isNaN(amt) || amt < 0) { showToast('Amount must be zero or greater.', 'warn'); return }
-    if (!selectedCurrency) { showToast('Please select a payment currency.', 'warn'); return }
-    if (!receiptBookGuid) { showToast('Please select a receipt book.', 'warn'); return }
-    if (!payDate) { showToast('Please select a payment date.', 'warn'); return }
+    if (!amount.trim()) e.amount = 'Amount is required.'
+    else if (isNaN(amt) || amt < 0) e.amount = 'Amount must be zero or greater.'
+    if (!selectedCurrency) e.currencyGuid = 'Please select the currency received.'
+    if (!payDate) e.payDate = 'Payment date is required.'
+    if (!PAY_TYPE_LABELS[Number(payType)]) e.payType = 'Invalid payment type.'
+    if (!receiptBookGuid) e.receiptBookGuid = 'Please select a receipt book.'
+    if (showBankFields && !procBankGuid) e.procBankGuid = 'Bank account is required for non-cash payments.'
+    return e
+  }
+
+  // Field a create-payment rejection belongs to, from its documented message
+  // (post-payment.md › Validation and Business rules). null = not a field
+  // problem (e.g. a missing exchange rate is a Finance-admin setup issue).
+  function payErrorField(code: string | undefined, msg: string): string | null {
+    if (code === 'amount_exceeds_program_outstanding') return 'amount'
+    if (/receipt book/i.test(msg)) return 'receiptBookGuid'
+    if (/^bank|bank account/i.test(msg)) return 'procBankGuid'
+    if (/^currency not found/i.test(msg)) return 'currencyGuid'
+    if (/payment type/i.test(msg)) return 'payType'
+    return null
+  }
+
+  function handleSave(confirmOverride = false) {
+    if (!profile || !selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
+    const errs = validatePayment()
+    setPayErrors(errs)
+    if (Object.keys(errs).length || !selectedCurrency) { scrollToFirstError(errs); return }
+    const amt = parseFloat(amount)
     const payTypeNum = Number(payType)
-    if (showBankFields && !procBankGuid) { showToast('Please select a bank.', 'warn'); return }
 
     createPayment.mutate(
       {
@@ -1267,6 +1303,19 @@ export default function PaymentConsolePage() {
             if (window.confirm(`${error.message}\n\nProceed with this payment anyway?`)) handleSave(true)
             return
           }
+          const code = error instanceof AuthError ? error.code : undefined
+          // A rejection about one field (receipt book exhausted / wrong
+          // category, bank, currency, amount over the programme's maximum)
+          // goes under that field, so the cashier can fix it and resubmit.
+          const field = payErrorField(code, error.message || '')
+          if (field) {
+            const e = { [field]: error.message }
+            setPayErrors(prev => ({ ...prev, ...e }))
+            scrollToFirstError(e)
+            return
+          }
+          // concurrent_update: useCreatePayment has already refetched the
+          // outstanding grid and the preview — the message tells the cashier.
           showToast(error.message || 'Failed to save payment. Please try again.', 'error')
         },
       },
@@ -1897,7 +1946,7 @@ export default function PaymentConsolePage() {
                               value={row.amount}
                               disabled={isResitRow}
                               title={isResitRow ? 'Resit fee is set automatically and cannot be edited' : undefined}
-                              onChange={e => updateOtherLedgerRow(row.id, 'amount', e.target.value)}
+                              onChange={e => updateOtherLedgerRow(row.id, 'amount', stripLeadingZeros(e.target.value))}
                             />
                             {otherLedgerRows.length > 1 && (
                               <button
@@ -2634,28 +2683,40 @@ export default function PaymentConsolePage() {
                                 placeholder="— Select Currency —"
                                 options={currencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))}
                                 value={currencyGuid}
-                                onChange={setCurrencyGuid}
+                                onChange={v => { setCurrencyGuid(v); clearPayError('currencyGuid') }}
                               />
+                              {payErr('currencyGuid')}
                             </div>
                             <div className="fg">
                               <div className="lbl">Amount Received <span className="req">*</span></div>
                               <input type="number" min={0} step={0.01} className="amt-val-input" placeholder="0.00"
-                                style={{ fontSize: 18, fontWeight: 700 }}
-                                value={amount} onChange={e => setAmount(e.target.value)} />
+                                style={{ fontSize: 18, fontWeight: 700, ...(payErrors.amount ? { borderColor: 'var(--red)' } : {}) }}
+                                aria-invalid={!!payErrors.amount}
+                                // Number inputs still accept e/E/+/-; none is a valid amount (≥ 0).
+                                onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault() }}
+                                value={amount} onChange={e => { setAmount(stripLeadingZeros(e.target.value)); clearPayError('amount') }} />
+                              {payErr('amount')}
                             </div>
                           </div>
                           <div className="g2 mb-[14px]">
                             <div className="fg">
                               <div className="lbl">Payment Date <span className="req">*</span></div>
-                              <DatePicker value={payDate} onChange={setPayDate} />
+                              <DatePicker value={payDate} onChange={v => { setPayDate(v); clearPayError('payDate') }} hasError={!!payErrors.payDate} />
+                              {payErr('payDate')}
                             </div>
                             <div className="fg">
                               <div className="lbl">Payment Method <span className="req">*</span></div>
                               <SearchSelect
                                 options={Object.entries(PAY_TYPE_LABELS).map(([value, label]) => ({ value, label }))}
                                 value={payType}
-                                onChange={val => { setPayType(val); setReceiptBookGuid('') }}
+                                onChange={val => {
+                                  // Receipt books are filtered by the method's category, and
+                                  // Cash has no bank — so both selections (and errors) reset.
+                                  setPayType(val); setReceiptBookGuid(''); setProcBankGuid('')
+                                  setPayErrors(prev => ({ ...prev, payType: '', receiptBookGuid: '', procBankGuid: '' }))
+                                }}
                               />
+                              {payErr('payType')}
                             </div>
                           </div>
                           <div className="fg mb-[14px]">
@@ -2664,8 +2725,9 @@ export default function PaymentConsolePage() {
                               placeholder="— Select Receipt Book —"
                               options={receiptBooks.map(r => ({ value: r.receiptBookGuid, label: r.bookCode }))}
                               value={receiptBookGuid}
-                              onChange={setReceiptBookGuid}
+                              onChange={v => { setReceiptBookGuid(v); clearPayError('receiptBookGuid') }}
                             />
+                            {payErr('receiptBookGuid')}
                           </div>
 
                           {showBankFields && (
@@ -2676,8 +2738,9 @@ export default function PaymentConsolePage() {
                                   placeholder="— Select Bank —"
                                   options={banks.map(b => ({ value: b.procBankGuid, label: b.bankName }))}
                                   value={procBankGuid}
-                                  onChange={setProcBankGuid}
+                                  onChange={v => { setProcBankGuid(v); clearPayError('procBankGuid') }}
                                 />
+                                {payErr('procBankGuid')}
                               </div>
                               <div className="fg">
                                 <div className="lbl">Bank Transaction Ref</div>
@@ -2725,7 +2788,7 @@ export default function PaymentConsolePage() {
                                 type="number"
                                 placeholder="0.00"
                                 value={adjAmount}
-                                onChange={e => setAdjAmount(e.target.value)}
+                                onChange={e => setAdjAmount(stripLeadingZeros(e.target.value))}
                                 disabled={!selectedDeposit}
                               />
                             </div>

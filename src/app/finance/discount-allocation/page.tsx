@@ -21,6 +21,7 @@ import {
 } from '@/hooks/student/useStudentDiscount'
 import { CALC_TYPE_VALUES, CALC_TYPE_LABELS } from '@/lib/api/finance/discount'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Sketch: a Payment-Console-style split — Student Master search on the
 // left, an "Apply Discount" form on the right with Edit/Cancel Discount
@@ -40,6 +41,9 @@ import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 // repeating them in the form was redundant.
 
 const MIN_SEARCH_CHARS = 3
+// remarks: max 500 chars on both assign and update (post-assign-student-
+// discount.md, put-student-discount.md).
+const REMARKS_MAX = 500
 
 function applicantName(a: { firstName: string | null; lastName: string | null }) {
   return `${a.firstName ?? ''}${a.lastName ? ` ${a.lastName}` : ''}`.trim() || '—'
@@ -212,6 +216,14 @@ function DiscountAllocationContent() {
   const [amtPer, setAmtPer] = useState('')
   const [corporate, setCorporate] = useState('')
   const [remarks, setRemarks] = useState('')
+  // Inline field errors for the assign/edit forms: discountGuid, amtPer, remarks.
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  function clearError(field: string) {
+    setErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
+  }
+  function fieldErr(field: string) {
+    return errors[field] ? <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[field]}</p> : null
+  }
 
   function resetForm() {
     setDiscountChoice('')
@@ -219,8 +231,44 @@ function DiscountAllocationContent() {
     setAmtPer('')
     setCorporate('')
     setRemarks('')
+    setErrors({})
     setEditing(false)
     setShowCancelConfirm(false)
+  }
+
+  // AssignStudentDiscountCommandValidator / UpdateStudentDiscountCommand-
+  // Validator (post-assign-student-discount.md, put-student-discount.md) —
+  // identical except that only assign takes a discountGuid. Amount/% are
+  // read-only (copied from the discount), so a failure there points at the
+  // discount's own configuration rather than anything typed here.
+  function validateTerms(requireDiscount: boolean): Record<string, string> {
+    const e: Record<string, string> = {}
+    if (requireDiscount && !discountChoice) e.discountGuid = 'Please select a discount.'
+    const amt = amtPer.trim() ? Number(amtPer) : null
+    if (amt != null && isNaN(amt)) e.amtPer = 'Amount/Percentage must be a number.'
+    else if (amt != null && amt <= 0) e.amtPer = 'Amount/Percentage must be greater than 0.'
+    else if (amt != null && calcType === 'Percentage' && amt > 100) e.amtPer = 'Percentage cannot be more than 100.'
+    if (remarks.trim().length > REMARKS_MAX) e.remarks = `Remarks must be ${REMARKS_MAX} characters or fewer.`
+    return e
+  }
+
+  // Field a 400 validation_error belongs to, by its message; null = toast.
+  function errorField(msg: string): string | null {
+    if (/percentage|amtper|amount/i.test(msg)) return 'amtPer'
+    if (/remarks/i.test(msg)) return 'remarks'
+    if (/discount ?guid|select a discount/i.test(msg)) return 'discountGuid'
+    return null
+  }
+
+  function showServerError(error: Error, fallback: string) {
+    const field = errorField(error.message || '')
+    if (field) {
+      const e = { [field]: error.message }
+      setErrors(prev => ({ ...prev, ...e }))
+      scrollToFirstError(e)
+      return
+    }
+    showToast(error.message || fallback, 'error')
   }
 
   // Seeds the form from the just-loaded assignment the moment it's editable
@@ -232,6 +280,7 @@ function DiscountAllocationContent() {
     setAmtPer(discountDetail.amtPer != null ? String(discountDetail.amtPer) : '')
     setCorporate(discountDetail.cop ?? '')
     setRemarks(discountDetail.remarks ?? '')
+    setErrors({})
     setEditing(true)
   }
 
@@ -258,15 +307,10 @@ function DiscountAllocationContent() {
     if (!permissions.add) { showToast('You do not have permission to assign discounts.', 'warn'); return }
     if (!profile || !selectedApplicationGuid) { showToast('Please select a student first.', 'warn'); return }
     if (!studentGuid) { showToast("This applicant hasn't been registered as a student yet — discounts can only be assigned to enrolled students.", 'warn'); return }
-    if (!discountChoice) { showToast('Please select a discount.', 'warn'); return }
+    const errs = validateTerms(true)
+    setErrors(errs)
+    if (Object.keys(errs).length) { scrollToFirstError(errs); return }
     const amt = amtPer.trim() ? Number(amtPer) : null
-    // Mirrors AssignStudentDiscountCommandValidator (post-assign-student-
-    // discount.md): amtPer must be > 0 when supplied, and ≤ 100 when
-    // calcType is Percentage — catching both client-side avoids a round
-    // trip for a 400 validation_error the server would reject anyway.
-    if (amt != null && isNaN(amt)) { showToast('Amount/Percentage must be a number.', 'warn'); return }
-    if (amt != null && amt <= 0) { showToast('Amount/Percentage must be greater than 0.', 'warn'); return }
-    if (amt != null && calcType === 'Percentage' && amt > 100) { showToast('Percentage cannot be more than 100.', 'warn'); return }
 
     assignDiscount.mutate(
       {
@@ -288,25 +332,23 @@ function DiscountAllocationContent() {
       },
       {
         onSuccess: () => showToast('Discount assigned.', 'success'),
-        onError: (error: Error) => showToast(error.message || 'Could not assign discount.', 'error'),
+        onError: (error: Error) => showServerError(error, 'Could not assign discount.'),
       },
     )
   }
 
   function handleSaveEdit() {
     if (!permissions.edit || !studentGuid) return
+    const errs = validateTerms(false)
+    setErrors(errs)
+    if (Object.keys(errs).length) { scrollToFirstError(errs); return }
     const amt = amtPer.trim() ? Number(amtPer) : null
-    // Same UpdateStudentDiscountCommandValidator rules as assign — see the
-    // comment in handleAssign above.
-    if (amt != null && isNaN(amt)) { showToast('Amount/Percentage must be a number.', 'warn'); return }
-    if (amt != null && amt <= 0) { showToast('Amount/Percentage must be greater than 0.', 'warn'); return }
-    if (amt != null && calcType === 'Percentage' && amt > 100) { showToast('Percentage cannot be more than 100.', 'warn'); return }
 
     updateDiscount.mutate(
       { studentGuid, payload: { calcType: CALC_TYPE_VALUES[calcType], amtPer: amt, cop: showCorporateForAssigned ? (corporate.trim() || null) : null, remarks: remarks.trim() || null } },
       {
         onSuccess: () => { showToast('Discount updated.', 'success'); setEditing(false) },
-        onError: (error: Error) => showToast(error.message || 'Could not update discount.', 'error'),
+        onError: (error: Error) => showServerError(error, 'Could not update discount.'),
       },
     )
   }
@@ -570,8 +612,11 @@ function DiscountAllocationContent() {
                         placeholder="— Select Discount —"
                         options={discountCatalogue.map(d => ({ value: d.discountGuid, label: `${d.discountCode} — ${d.discountName}` }))}
                         value={discountChoice}
-                        onChange={v => { setDiscountChoice(v); setCorporate('') }}
+                        // A new discount brings its own amount/% — any error on
+                        // the previous one's no longer applies.
+                        onChange={v => { setDiscountChoice(v); setCorporate(''); clearError('discountGuid'); clearError('amtPer') }}
                       />
+                      {fieldErr('discountGuid')}
                     </div>
                     <div className="g2 mb-[14px]">
                       <div className="fg">
@@ -580,7 +625,9 @@ function DiscountAllocationContent() {
                       </div>
                       <div className="fg">
                         <div className="lbl">{calcType === 'Percentage' ? 'Percentage (%)' : 'Amount'}</div>
-                        <input className="ctrl" readOnly value={discountChoice ? (amtPer || '—') : ''} placeholder="Select a discount first" />
+                        <input className="ctrl" readOnly value={discountChoice ? (amtPer || '—') : ''} placeholder="Select a discount first"
+                          style={errors.amtPer ? { borderColor: 'var(--red)' } : undefined} />
+                        {fieldErr('amtPer')}
                       </div>
                     </div>
                     {/* Only shown for discounts flagged cop === "1" — see
@@ -598,7 +645,9 @@ function DiscountAllocationContent() {
                     )}
                     <div className="fg mb-4">
                       <div className="lbl">Remarks</div>
-                      <textarea className="ctrl" rows={2} maxLength={500} placeholder="Optional notes" value={remarks} onChange={e => setRemarks(e.target.value)} />
+                      <textarea className="ctrl" rows={2} maxLength={REMARKS_MAX} placeholder="Optional notes" value={remarks} onChange={e => { setRemarks(e.target.value); clearError('remarks') }}
+                        style={errors.remarks ? { borderColor: 'var(--red)' } : undefined} />
+                      {fieldErr('remarks')}
                     </div>
 
                     <div className="flex gap-[10px] justify-end">
@@ -655,7 +704,8 @@ function DiscountAllocationContent() {
                       </div>
                       <div className="fg">
                         <div className="lbl">{calcType === 'Percentage' ? 'Percentage (%)' : 'Amount'}</div>
-                        <input className="ctrl" readOnly value={amtPer || '—'} />
+                        <input className="ctrl" readOnly value={amtPer || '—'} style={errors.amtPer ? { borderColor: 'var(--red)' } : undefined} />
+                        {fieldErr('amtPer')}
                       </div>
                     </div>
                     {showCorporateForAssigned && (
@@ -671,14 +721,16 @@ function DiscountAllocationContent() {
                     )}
                     <div className="fg mb-4">
                       <div className="lbl">Remarks</div>
-                      <textarea className="ctrl" rows={2} maxLength={500} value={remarks} onChange={e => setRemarks(e.target.value)} />
+                      <textarea className="ctrl" rows={2} maxLength={REMARKS_MAX} value={remarks} onChange={e => { setRemarks(e.target.value); clearError('remarks') }}
+                        style={errors.remarks ? { borderColor: 'var(--red)' } : undefined} />
+                      {fieldErr('remarks')}
                     </div>
                     <div className="info-box mb-4">
                       <i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i>
                       <div style={{ fontSize: 12 }}>The discount and its effective-from semester can&apos;t be changed here — cancel this assignment and assign again to change either.</div>
                     </div>
                     <div className="flex gap-[10px] justify-end">
-                      <button className="btn btn-neu" disabled={updateDiscount.isPending} onClick={() => setEditing(false)}>Discard</button>
+                      <button className="btn btn-neu" disabled={updateDiscount.isPending} onClick={() => { setEditing(false); setErrors({}) }}>Discard</button>
                       {permissions.edit && (
                         <button className="btn btn-primary" disabled={updateDiscount.isPending} onClick={handleSaveEdit}>
                           <i className="lni lni-checkmark"></i> {updateDiscount.isPending ? 'Saving…' : 'Save Changes'}

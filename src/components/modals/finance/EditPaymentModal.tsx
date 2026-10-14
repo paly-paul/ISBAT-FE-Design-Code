@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { stripLeadingZeros } from '@/lib/errorMessages'
 import { ModalProps } from '../types'
 import DatePicker from '@/components/DatePicker'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -159,7 +160,7 @@ export function EditPaymentModal({ isOpen, onClose, showToast, target, applicati
           <div className="g2 mb-[14px]">
             <div className="fg">
               <div className="lbl">Amount <span className="req">*</span></div>
-              <input className="ctrl" type="number" value={amount} onChange={e => setAmount(e.target.value)} />
+              <input className="ctrl" type="number" value={amount} onChange={e => setAmount(stripLeadingZeros(e.target.value))} />
             </div>
             <div className="fg">
               <div className="lbl">Payment Date <span className="req">*</span></div>

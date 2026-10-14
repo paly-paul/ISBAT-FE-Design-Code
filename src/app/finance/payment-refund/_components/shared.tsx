@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { stripLeadingZeros } from '@/lib/errorMessages'
 import { ScrollTable } from '@/components/ScrollTable'
 import DatePicker from '@/components/DatePicker'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -271,7 +272,7 @@ export function RefundLedgerPicker({ applicationGuid, studentGuid, showToast, on
                 type="number"
                 placeholder="0.00"
                 value={refundAmount}
-                onChange={e => setRefundAmount(e.target.value)}
+                onChange={e => setRefundAmount(stripLeadingZeros(e.target.value))}
                 disabled={!selectedLine}
               />
             </div>

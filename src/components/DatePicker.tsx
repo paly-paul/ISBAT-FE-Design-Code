@@ -69,15 +69,26 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
     return null
   }
 
+  // With no value, the calendar opens on today's month — unless today is
+  // outside the allowed range (e.g. a DOB with a minimum age), in which case
+  // it opens on the nearest allowed month instead of a fully greyed-out one.
+  function defaultViewDate(): Date {
+    const today = dateToYmd(new Date())
+    if (maxYmd && compareYmd(today, maxYmd) > 0) return ymdToDate(maxYmd) ?? new Date()
+    if (minYmd && compareYmd(today, minYmd) < 0) return ymdToDate(minYmd) ?? new Date()
+    return new Date()
+  }
+
   const [open, setOpen] = useState(false)
   const [display, setDisplay] = useState<string>(toDisplay(value))
-  const [viewDate, setViewDate] = useState<Date>(ymdToDate(value) ?? new Date())
+  const [viewDate, setViewDate] = useState<Date>(() => ymdToDate(value) ?? defaultViewDate())
   const ref = useRef<HTMLDivElement | null>(null)
   const [error, setError] = useState('')
   const [popoverPos, setPopoverPos] = useState<{ top?: number; bottom?: number; left: number }>({ top: 0, left: 0 })
 
   useEffect(() => setDisplay(toDisplay(value)), [value])
-  useEffect(() => setViewDate(ymdToDate(value) ?? new Date()), [value])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setViewDate(ymdToDate(value) ?? defaultViewDate()), [value])
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {

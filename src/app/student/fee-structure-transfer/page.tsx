@@ -175,7 +175,8 @@ function FeeStructureTransferContent() {
                 </div>
                 <div className="fg" style={{ gridColumn: '1 / -1' }}>
                   <label className="lbl">Remarks <span className="req">*</span></label>
-                  <textarea className="ctrl" rows={3} placeholder="Provide details for this transfer..." value={remarks} onChange={e => setRemarks(e.target.value)} />
+                  {/* post-fee-transfer.md: remarks max 500 characters. */}
+                  <textarea className="ctrl" rows={3} maxLength={500} placeholder="Provide details for this transfer..." value={remarks} onChange={e => setRemarks(e.target.value)} />
                 </div>
               </div>
               <div className="flex gap-2" style={{ justifyContent: 'flex-start', marginTop: 8 }}>

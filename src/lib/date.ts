@@ -41,6 +41,12 @@ export function yearsAgoYmd(years: number): string {
   return monthsAgoYmd(years * 12)
 }
 
+// yyyy-mm-dd → "14 October 2016", for messages that name a cutoff date.
+export function formatLongYmd(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
 // Window shared by Application Payment's payDate and Enquiry's enquiryDate:
 // within the last 3 months, never in the future.
 export const RECENT_DATE_MONTHS = 3

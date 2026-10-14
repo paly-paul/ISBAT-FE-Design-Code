@@ -40,13 +40,6 @@ const mockProgramLevels: ProgramLevel[] = [
   { programLevelGuid: '6', levelCode: 'PHD',  levelName: 'Doctor of Philosophy (PhD)', yearCount: 3, semCount: 6, minCreditLoad: 1,   appFee: 50000, lateFee: 10000, currencyGuid: 'ugx', currencyCode: 'UGX', currencyName: 'Uganda Shilling' },
 ]
 
-// Fetch programme levels, optionally filtered by search text.
-export function getProgramLevels(search = ''): Promise<ProgramLevel[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockProgramLevels)
-  const query = search ? `?search=${encodeURIComponent(search)}` : ''
-  return apiGet<ProgramLevel[] | null>(`/api/v1/academic/program-levels${query}`).then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
-}
-
 export interface ProgramLevelListResponse {
   items: ProgramLevel[]
   totalCount: number
@@ -54,22 +47,31 @@ export interface ProgramLevelListResponse {
   pageSize: number
 }
 
-// Paged view over the list endpoint for the table and the infinite-scroll
-// pickers. GET /program-levels is UNPAGED (it returns every level, filtered
-// only by ?search=), so paging happens here: each page slices the full
-// result, and totalCount is the real filtered total. Sending page/pageSize
-// to the backend did nothing, and made every "page" the whole list.
+// GET /program-levels is paged since 2026-10-09 (get-program-levels.md):
+// PagedResult with ?page (default 1) and ?pageSize (default 10, unbounded).
+// The table and the infinite-scroll pickers page on the server.
 export function getProgramLevelsPaged(page = 1, pageSize = 20, search = ''): Promise<ProgramLevelListResponse> {
   const q = search.trim()
-  const all = MOCK_AUTH
-    ? Promise.resolve(q
+  if (MOCK_AUTH) {
+    const rows = q
       ? mockProgramLevels.filter(level => `${level.levelCode} ${level.levelName}`.toLowerCase().includes(q.toLowerCase()))
-      : mockProgramLevels)
-    : getProgramLevels(q)
-  return all.then(rows => {
+      : mockProgramLevels
     const start = (page - 1) * pageSize
-    return { items: rows.slice(start, start + pageSize), totalCount: rows.length, pageNumber: page, pageSize }
-  })
+    return Promise.resolve({ items: rows.slice(start, start + pageSize), totalCount: rows.length, pageNumber: page, pageSize })
+  }
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (q) params.set('search', q)
+  return apiGet<ProgramLevelListResponse>(`/api/v1/academic/program-levels?${params}`)
+}
+
+// Every level in one request, for callers that resolve guids to names
+// (Programme Master, Repetition Tag). Without an explicit pageSize the
+// endpoint stops at its default 10. There are only a handful of levels.
+const ALL_LEVELS_PAGE_SIZE = 1000
+
+// Fetch programme levels, optionally filtered by search text.
+export function getProgramLevels(search = ''): Promise<ProgramLevel[]> {
+  return getProgramLevelsPaged(1, ALL_LEVELS_PAGE_SIZE, search).then(res => res?.items ?? [])
 }
 
 // Body for POST and PUT. semCount is not accepted (derived server-side).

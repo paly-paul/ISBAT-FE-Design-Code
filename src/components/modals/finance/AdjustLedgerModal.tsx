@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { stripLeadingZeros } from '@/lib/errorMessages'
 import { ModalProps } from '../types'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
@@ -74,7 +75,7 @@ export function AdjustLedgerModal({ isOpen, onClose, showToast, target }: Adjust
               <input
                 className="ctrl" type="number" placeholder="New amount"
                 value={newAmount}
-                onChange={e => { setNewAmount(e.target.value); if (errors.newAmount) setErrors(p => ({ ...p, newAmount: '' })) }}
+                onChange={e => { setNewAmount(stripLeadingZeros(e.target.value)); if (errors.newAmount) setErrors(p => ({ ...p, newAmount: '' })) }}
                 style={errors.newAmount ? { borderColor: 'var(--red)' } : undefined}
               />
               {errors.newAmount && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.newAmount}</p>}

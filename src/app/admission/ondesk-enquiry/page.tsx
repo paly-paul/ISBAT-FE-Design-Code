@@ -8,18 +8,19 @@ import { FailurePopup } from '@/components/modals/shared/FailurePopup'
 import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
 import { useCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
-import { findDefaultCountry, phoneCountryOptions } from '@/lib/api/academic/country'
+import { countryPickerOptions, findDefaultCountry, phoneCountryOptions } from '@/lib/api/academic/country'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
 import { useEnquirySources } from '@/hooks/admission/useEnquirySources'
 import { useCreateEnquiry, useEnquiryGenders, useReloadEnquiryDropdowns } from '@/hooks/admission/useEnquiries'
 import { EnquiryEmailField, EnquirySaveStatus, VerifiedEmail, isValidEnquiryEmail, isVerifiedFor } from '@/components/EnquiryEmailField'
+import { EnquirySponsorFields, EMPTY_SPONSOR, SponsorValues, sponsorErrorField, sponsorPayload, validateSponsor } from '@/components/EnquirySponsorFields'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
 import { sanitizeNameInput } from '@/lib/errorMessages'
 import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
-import { isWithinRecentWindow, monthsAgoYmd, RECENT_DATE_MONTHS, todayYmd, yearsAgoYmd } from '@/lib/date'
+import { formatLongYmd, isWithinRecentWindow, monthsAgoYmd, RECENT_DATE_MONTHS, todayYmd, yearsAgoYmd } from '@/lib/date'
 
 // Today's date at midnight, formatted the same way the confirmed payload
 // sample uses (no timezone offset) — matches enquiryDate/dob's "T00:00:00" shape.
@@ -41,7 +42,10 @@ const PHONE_MAX = 15
 const ENQUIRY_DATE_RANGE_MESSAGE = 'Enquiry date must be within the last 3 months and not in the future.'
 // POST /enquiries: dob must make the student at least 10 years old.
 const MIN_AGE_YEARS = 10
-const DOB_RANGE_MESSAGE = `Student must be at least ${MIN_AGE_YEARS} years old.`
+// Names the actual cutoff date — the calendar greys out every day after it.
+function dobRangeMessage() {
+  return `Date of birth must be on or before ${formatLongYmd(yearsAgoYmd(MIN_AGE_YEARS))} (student must be at least ${MIN_AGE_YEARS} years old).`
+}
 // Backend cap on remarks.
 const REMARKS_MAX = 100
 
@@ -89,6 +93,7 @@ export default function OnDeskEnquiryPage() {
   const [isbatSourceGuid, setIsbatSourceGuid] = useState('')
   const [sourceName, setSourceName] = useState('')
   const [enquiryTag, setEnquiryTag] = useState('')
+  const [sponsor, setSponsor] = useState<SponsorValues>(EMPTY_SPONSOR)
   const [errors, setErrors]       = useState<Record<string, string>>({})
   const [intakeSearch, setIntakeSearch] = useState('')
   const [campusSearch, setCampusSearch] = useState('')
@@ -125,6 +130,12 @@ export default function OnDeskEnquiryPage() {
     const home = findDefaultCountry(allCountries)
     if (home) setMobileCountryGuid(home.countryGuid)
   }, [allCountries, mobileCountryGuid])
+  // Country also defaults to Uganda, once, when the list loads — not on every
+  // clear, so the user can empty the picker to search for another country.
+  useEffect(() => {
+    const home = findDefaultCountry(allCountries)
+    if (home) setCountryGuid(prev => prev || home.countryGuid)
+  }, [allCountries])
 
   // Same "programmes scoped to the selected campus" convention as the
   // Payment and Filing pages — a programme belongs to one campus, so the
@@ -149,7 +160,7 @@ export default function OnDeskEnquiryPage() {
   const sourceGuid = directSource?.enquirySourceGuid ?? ''
   const isbatSourceOptions = isbatSources.map(s => ({ value: s.isbatSourceGuid, label: s.sourceName }))
   const genderOptions  = genders.map(g => ({ value: String(g.value), label: g.name }))
-  const countryOptions = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
+  const countryOptions = countryPickerOptions(countries, allCountries, countryGuid)
   const phoneCodeOptions = phoneCountryOptions(countries, allCountries, mobileCountryGuid)
 
   function setCampus(v: string) { setCampusGuid(v); setProgramGuid(''); clearError('campusGuid') }
@@ -187,7 +198,7 @@ export default function OnDeskEnquiryPage() {
     else if (!isValidEnquiryEmail(email)) e.email = 'Enter a valid email'
     else if (!isVerifiedFor(verifiedEmail, email)) e.email = 'Verify the email before saving'
     if (!dob)               e.dob       = 'Date of Birth is required'
-    else if (dob > yearsAgoYmd(MIN_AGE_YEARS)) e.dob = DOB_RANGE_MESSAGE
+    else if (dob > yearsAgoYmd(MIN_AGE_YEARS)) e.dob = dobRangeMessage()
     if (notes.trim().length > REMARKS_MAX) e.notes = `Notes must be ${REMARKS_MAX} characters or fewer`
     if (!enquiryDate)       e.enquiryDate = 'Enquiry date is required.'
     else if (!isWithinRecentWindow(enquiryDate)) e.enquiryDate = ENQUIRY_DATE_RANGE_MESSAGE
@@ -195,6 +206,7 @@ export default function OnDeskEnquiryPage() {
     if (!campusGuid)        e.campusGuid = 'Please select a Campus'
     if (!sourceGuid)        e.sourceGuid = 'No "Direct" enquiry source exists — add it in Config › Enquiry Source first'
     if (!countryGuid)       e.countryGuid = 'Please select a Country'
+    Object.assign(e, validateSponsor(sponsor))
     setErrors(e)
     scrollToFirstError(e)
     return Object.keys(e).length === 0
@@ -203,8 +215,9 @@ export default function OnDeskEnquiryPage() {
   function resetForm() {
     setFirstName(''); setLastName(''); setGender(''); setMobileCountryGuid(findDefaultCountry(allCountries)?.countryGuid ?? ''); setPhone(''); setEmail(''); setVerifiedEmail(null); setDob('')
     setEnquiryDate(todayAtMidnight().slice(0, 10))
-    setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setCountryGuid(''); setNotes('')
+    setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setCountryGuid(findDefaultCountry(allCountries)?.countryGuid ?? ''); setNotes('')
     setIsbatSourceGuid(''); setSourceName(''); setEnquiryTag('')
+    setSponsor(EMPTY_SPONSOR)
     setErrors({})
   }
 
@@ -229,6 +242,7 @@ export default function OnDeskEnquiryPage() {
         isbatSourceGuid: isbatSourceGuid || null,
         sourceName: sourceName.trim() || null,
         enquiryTag: enquiryTag.trim() || null,
+        ...sponsorPayload(sponsor),
       },
       {
         onSuccess: enquiry => setSavedCode(enquiry?.enquiryCode ?? ''),
@@ -255,7 +269,8 @@ export default function OnDeskEnquiryPage() {
           if (code === 'not_found') reloadDropdowns()
           // Remaining documented create errors, matched by their message.
           const fieldFor =
-            code === 'not_found' && /isbat/i.test(msg) ? 'isbatSourceGuid'
+            sponsorErrorField(msg) ??
+            (code === 'not_found' && /isbat/i.test(msg) ? 'isbatSourceGuid'
             : code === 'not_found' && /^mobile country/i.test(msg) ? 'phone'
             :
             code === 'validation_error' && /mobile/i.test(msg) ? 'phone'
@@ -264,7 +279,7 @@ export default function OnDeskEnquiryPage() {
             : code === 'validation_error' && /email/i.test(msg) ? 'email'
             : code === 'not_found' && /^intake/i.test(msg) ? 'intakeGuid'
             : code === 'not_found' && /^enquiry source/i.test(msg) ? 'sourceGuid'
-            : null
+            : null)
           if (fieldFor) {
             const e = { [fieldFor]: msg }
             setErrors(prev => ({ ...prev, ...e }))
@@ -337,7 +352,7 @@ export default function OnDeskEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Date of Birth <span className="text-clr-red">*</span></label>
-            <DatePicker value={dob} onChange={v => { setDob(v); clearError('dob') }} maxYmd={yearsAgoYmd(MIN_AGE_YEARS)} rangeMessage={DOB_RANGE_MESSAGE} hasError={!!errors.dob} />
+            <DatePicker value={dob} onChange={v => { setDob(v); clearError('dob') }} maxYmd={yearsAgoYmd(MIN_AGE_YEARS)} rangeMessage={dobRangeMessage()} hasError={!!errors.dob} />
             {errors.dob && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.dob}</p>}
           </div>
           <div className="fg">
@@ -357,10 +372,12 @@ export default function OnDeskEnquiryPage() {
             <SearchSelect placeholder="— select —" options={campusOptions} value={campusGuid} onChange={setCampus} onSearch={setCampusSearch} onOpenChange={setCampusPickerOpen} isLoading={campusQuery.isLoading} hasNextPage={campusQuery.hasNextPage} isFetchingNextPage={campusQuery.isFetchingNextPage} onLoadMore={() => campusQuery.fetchNextPage()} />
             {errors.campusGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campusGuid}</p>}
           </div>
+          {/* Enquiry Channel — hidden for now (not bound to state or sent to the API)
           <div className="fg">
             <label className="lbl">Enquiry Channel</label>
             <SearchSelect placeholder="— select —" options={['Walk-in', 'Phone', 'Online', 'Kiosk']} />
           </div>
+          */}
           <div className="fg">
             <label className="lbl">Enquiry Source <span className="text-clr-red">*</span></label>
             <input className="ctrl" readOnly value={directSource?.enquirySourceName ?? 'Direct'} title="On-Desk enquiries are always Direct" />
@@ -415,6 +432,7 @@ export default function OnDeskEnquiryPage() {
             {errors.notes && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.notes}</p>}
           </div>
         </div>
+        <EnquirySponsorFields value={sponsor} onChange={setSponsor} errors={errors} onClearError={clearError} />
         <div className="sec-divider" />
         <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
           {permissions.add && (
