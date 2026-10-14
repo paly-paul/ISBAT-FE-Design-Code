@@ -35,7 +35,7 @@ export function SingleQuestionModal({
   const isEdit = Boolean(question?.questionGuid)
 
   const [questionType, setQuestionType] = useState<number>(question?.questionType ?? 1)
-  const [level, setLevel] = useState<number>(question?.level ?? 2)
+  const [level, setLevel] = useState<number>(question?.level ?? 1)
   const [questionText, setQuestionText] = useState<string>(question?.questionText ?? '')
   const [option1Text, setOption1Text] = useState<string>(question?.option1Text ?? '')
   const [option2Text, setOption2Text] = useState<string>(question?.option2Text ?? '')
@@ -51,7 +51,7 @@ export function SingleQuestionModal({
   useEffect(() => {
     if (question) {
       setQuestionType(question.questionType ?? 1)
-      setLevel(question.level ?? 2)
+      setLevel(question.level ?? 1)
       setQuestionText(question.questionText ?? '')
       setOption1Text(question.option1Text ?? '')
       setOption2Text(question.option2Text ?? '')
@@ -70,7 +70,7 @@ export function SingleQuestionModal({
       }
     } else {
       setQuestionType(1)
-      setLevel(2)
+      setLevel(1)
       setQuestionText('')
       setOption1Text('')
       setOption2Text('')
@@ -234,7 +234,7 @@ export function SingleQuestionModal({
               </div>
             )}
 
-            {/* Question Type & Difficulty Level Controls */}
+            {/* Question Type & Section Controls */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="bg-white border border-slate-200 rounded-lg p-3">
                 <label className="text-xs font-bold text-slate-700 block mb-1.5">
@@ -271,7 +271,7 @@ export function SingleQuestionModal({
               {questionType === 1 ? (
                 <div className="bg-white border border-slate-200 rounded-lg p-3">
                   <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                    Difficulty Level <span className="text-red-500">*</span>
+                    Section <span className="text-red-500">*</span>
                   </label>
                   <div className="grid grid-cols-3 gap-1.5">
                     <button
@@ -283,35 +283,35 @@ export function SingleQuestionModal({
                       }`}
                       onClick={() => setLevel(1)}
                     >
-                      L1: Easy
+                      Section A
                     </button>
                     <button
                       type="button"
                       className={`py-1.5 px-2 rounded text-xs font-semibold border transition-all ${
                         level === 2
-                          ? 'bg-amber-50 border-amber-300 text-amber-800 shadow-xs'
+                          ? 'bg-blue-50 border-blue-300 text-blue-800 shadow-xs'
                           : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                       }`}
                       onClick={() => setLevel(2)}
                     >
-                      L2: Medium
+                      Section B
                     </button>
                     <button
                       type="button"
                       className={`py-1.5 px-2 rounded text-xs font-semibold border transition-all ${
                         level === 3
-                          ? 'bg-red-50 border-red-300 text-red-800 shadow-xs'
+                          ? 'bg-purple-50 border-purple-300 text-purple-800 shadow-xs'
                           : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                       }`}
                       onClick={() => setLevel(3)}
                     >
-                      L3: Hard
+                      Section C
                     </button>
                   </div>
                 </div>
               ) : (
                 <div className="bg-white border border-slate-200 rounded-lg p-3 flex flex-col justify-center text-xs text-slate-400">
-                  <span>Level is not applicable for Descriptive questions.</span>
+                  <span>Section is not applicable for Descriptive questions.</span>
                 </div>
               )}
             </div>

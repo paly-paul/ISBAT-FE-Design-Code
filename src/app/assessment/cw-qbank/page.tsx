@@ -39,17 +39,35 @@ export default function QuestionBankUploadPage() {
     setTimeout(() => setToast(null), 4000)
   }
 
-  // ── Active Mode / Tab ───────────────────────────────────────────────────────
+  // ── Active Left Tab ('repository' or 'import') ──────────────────────────────
   const [activeTab, setActiveTab] = useState<'repository' | 'import'>('repository')
+  const [isCategoryLoading, setIsCategoryLoading] = useState<boolean>(false)
 
-  // ── Scoping Filter State (Logged-in Faculty UUID Scoped) ─────────────────────
+  const handleTabChange = (newTab: 'repository' | 'import') => {
+    if (newTab === activeTab) return
+    setActiveTab(newTab)
+    setIsCategoryLoading(true)
+    setTimeout(() => {
+      setIsCategoryLoading(false)
+    }, 450)
+  }
+
+  // ── Global Scope State: Academic Intake & Faculty ───────────────────────────
   const [intakeGuid, setIntakeGuid] = useState<string>('')
   const [loggedInUserGuid, setLoggedInUserGuid] = useState<string>(() => getLoggedInUserGuid())
   const [loggedInUserName, setLoggedInUserName] = useState<string>('')
-  const [category, setCategory] = useState<string>('2') // Default to Course Work (2)
-  const [courseUnitGuid, setCourseUnitGuid] = useState<string>('')
 
-  // ── Excel File & Sheets State ───────────────────────────────────────────────
+  // ── Tab 1: Question Repository Scope (Single Question API) ──────────────────
+  // Categories: Class Test (1), Course Work (2), Class Activity (3)
+  const [repoCategory, setRepoCategory] = useState<string>('2')
+  const [repoCourseUnitGuid, setRepoCourseUnitGuid] = useState<string>('')
+  const [repoFilterType, setRepoFilterType] = useState<'ALL' | 'MCQ' | 'DQ'>('ALL')
+  const [repoSearch, setRepoSearch] = useState<string>('')
+
+  // ── Tab 2: Bulk Excel Import Scope (Question Bank API) ──────────────────────
+  // Categories: CBT (1), Course Work (2), University Exam (5)
+  const [importCategory, setImportCategory] = useState<string>('2')
+  const [importCourseUnitGuid, setImportCourseUnitGuid] = useState<string>('')
   const [file, setFile] = useState<File | null>(null)
   const [sheetNames, setSheetNames] = useState<string[]>([])
   const [selectedSheet, setSelectedSheet] = useState<string>('')
@@ -60,10 +78,6 @@ export default function QuestionBankUploadPage() {
   const [validationError, setValidationError] = useState<string | null>(null)
   const [previewFilterType, setPreviewFilterType] = useState<'ALL' | 'MCQ' | 'DQ'>('ALL')
   const [previewSearch, setPreviewSearch] = useState<string>('')
-
-  // ── Repository Table State ──────────────────────────────────────────────────
-  const [repoFilterType, setRepoFilterType] = useState<'ALL' | 'MCQ' | 'DQ'>('ALL')
-  const [repoSearch, setRepoSearch] = useState<string>('')
 
   // ── Modals State ────────────────────────────────────────────────────────────
   const [isAddingQuestion, setIsAddingQuestion] = useState<boolean>(false)
@@ -77,68 +91,41 @@ export default function QuestionBankUploadPage() {
   const previewSectionRef = useRef<HTMLDivElement>(null)
   const errorRef = useRef<HTMLDivElement>(null)
 
-  // ── Queries ─────────────────────────────────────────────────────────────────
+  // ── Global Queries ──────────────────────────────────────────────────────────
   const { data: intakes, isLoading: isLoadingIntakes } = useIntakes()
   const { data: currentIntake } = useCurrentAcademicIntake()
-  const { data: employeesData, isLoading: isLoadingEmployees } = useEmployees()
+  const { data: employeesData } = useEmployees()
+
+  // ── Tab 1 Queries: Question Repository (Single Question Endpoints) ──────────
   const { data: singleCategories, isLoading: isLoadingSingleCategories } = useSingleQuestionCategories()
-  const { data: bankCategories, isLoading: isLoadingBankCategories } = useQuestionBankCategories()
+  const repoUnitsQuery = useSingleQuestionCourseUnits(
+    intakeGuid,
+    loggedInUserGuid || undefined,
+    activeTab === 'repository' || Boolean(intakeGuid)
+  )
+  const repoCourseUnits = repoUnitsQuery.data
 
-  // Dynamic available categories per active tab (1, 2, 3 for Single Questions; 1, 2, 5 for Excel Import)
-  const availableCategories = useMemo(() => {
-    if (activeTab === 'import') {
-      return bankCategories && bankCategories.length > 0
-        ? bankCategories
-        : [
-          { value: 1, name: 'CBT' },
-          { value: 2, name: 'Course Work' },
-          { value: 5, name: 'University Exam' },
-        ]
-    }
-    return singleCategories && singleCategories.length > 0
-      ? singleCategories
-      : [
-        { value: 1, name: 'Class Test' },
-        { value: 2, name: 'Course Work' },
-        { value: 3, name: 'Class Activity' },
-      ]
-  }, [activeTab, bankCategories, singleCategories])
-
-  const isLoadingCategories = activeTab === 'import' ? isLoadingBankCategories : isLoadingSingleCategories
-
-  // Gracefully normalize category enum between tabs to prevent 400 validation error
-  const handleTabSwitch = (tab: 'repository' | 'import') => {
-    setActiveTab(tab)
-    if (tab === 'import' && category === '3') {
-      setCategory('2')
-    } else if (tab === 'repository' && category === '5') {
-      setCategory('2')
-    }
-  }
-
-  // Each tab uses its own course-unit endpoint. View & Edit: lecturerGuid is
-  // optional (question-view-and-edit-page.md), so it loads without one.
-  // Import: always scoped to the lecturer (question-bank-import-page.md).
-  const repoUnitsQuery = useSingleQuestionCourseUnits(intakeGuid, loggedInUserGuid || undefined, activeTab === 'repository')
-  const importUnitsQuery = useQuestionBankCourseUnits(intakeGuid, loggedInUserGuid, activeTab === 'import')
-  const unitsQuery = activeTab === 'import' ? importUnitsQuery : repoUnitsQuery
-  const courseUnits = unitsQuery.data
-  const isLoadingCourseUnits = unitsQuery.isLoading
-  const isFetchingCourseUnits = unitsQuery.isFetching
-  const needsLecturer = activeTab === 'import' && !loggedInUserGuid
-
-  // Live Questions Query
   const {
     data: liveQuestions,
     isLoading: isLoadingQuestions,
     isFetching: isFetchingQuestions,
     refetch: refetchQuestions,
   } = useQuestions(
-    courseUnitGuid,
-    Number(category),
+    repoCourseUnitGuid,
+    Number(repoCategory),
     intakeGuid,
-    Boolean(courseUnitGuid && category && intakeGuid)
+    Boolean(repoCourseUnitGuid && repoCategory && intakeGuid)
   )
+
+  // ── Tab 2 Queries: Bulk Excel Import (Question Bank Endpoints) ──────────────
+  const { data: bankCategories, isLoading: isLoadingBankCategories } = useQuestionBankCategories()
+  const importUnitsQuery = useQuestionBankCourseUnits(
+    intakeGuid,
+    loggedInUserGuid,
+    activeTab === 'import' || Boolean(intakeGuid)
+  )
+  const importCourseUnits = importUnitsQuery.data
+  const needsLecturer = activeTab === 'import' && !loggedInUserGuid
 
   // ── Mutations ───────────────────────────────────────────────────────────────
   const downloadTemplateMut = useDownloadQuestionBankTemplate()
@@ -176,39 +163,33 @@ export default function QuestionBankUploadPage() {
     }
   }, [currentIntake, intakes, intakeGuid])
 
-  // ── Auto-select first course unit if none selected ──────────────────────────
+  // ── Auto-select first repo course unit when units load ──────────────────────
   useEffect(() => {
-    if (courseUnits && courseUnits.length > 0) {
-      if (!courseUnitGuid || !courseUnits.some(u => u.courseUnitGuid === courseUnitGuid)) {
-        setCourseUnitGuid(courseUnits[0].courseUnitGuid)
+    if (repoCourseUnits && repoCourseUnits.length > 0) {
+      if (!repoCourseUnitGuid || !repoCourseUnits.some(u => u.courseUnitGuid === repoCourseUnitGuid)) {
+        setRepoCourseUnitGuid(repoCourseUnits[0].courseUnitGuid)
       }
-    } else if (courseUnits && courseUnits.length === 0) {
-      setCourseUnitGuid('')
+    } else if (repoCourseUnits && repoCourseUnits.length === 0) {
+      setRepoCourseUnitGuid('')
     }
-  }, [courseUnits, courseUnitGuid])
+  }, [repoCourseUnits, repoCourseUnitGuid])
+
+  // ── Auto-select first import course unit when units load ────────────────────
+  useEffect(() => {
+    if (importCourseUnits && importCourseUnits.length > 0) {
+      if (!importCourseUnitGuid || !importCourseUnits.some(u => u.courseUnitGuid === importCourseUnitGuid)) {
+        setImportCourseUnitGuid(importCourseUnits[0].courseUnitGuid)
+      }
+    } else if (importCourseUnits && importCourseUnits.length === 0) {
+      setImportCourseUnitGuid('')
+    }
+  }, [importCourseUnits, importCourseUnitGuid])
 
   // ── Reset dependent fields when intake changes ──────────────────────────────
   const handleIntakeChange = (val: string) => {
     setIntakeGuid(val)
-    setCourseUnitGuid('')
-    setPreviewRows(null)
-    setValidationError(null)
-  }
-
-  const handleCategoryChange = (val: string) => {
-    setCategory(val)
-    setPreviewRows(null)
-    setValidationError(null)
-  }
-
-  const handleCourseUnitChange = (val: string) => {
-    setCourseUnitGuid(val)
-    setPreviewRows(null)
-    setValidationError(null)
-  }
-
-  const handleSheetChange = (val: string) => {
-    setSelectedSheet(val)
+    setRepoCourseUnitGuid('')
+    setImportCourseUnitGuid('')
     setPreviewRows(null)
     setValidationError(null)
   }
@@ -282,12 +263,12 @@ export default function QuestionBankUploadPage() {
       showToast('Please select an Excel file to preview', 'warn')
       return
     }
-    if (!courseUnitGuid) {
-      showToast('Please select a Course Unit', 'warn')
+    if (!importCourseUnitGuid) {
+      showToast('Please select a Course Unit for bulk import', 'warn')
       return
     }
-    if (!category) {
-      showToast('Please select an Assessment Category', 'warn')
+    if (!importCategory) {
+      showToast('Please select an Assessment Category for bulk import', 'warn')
       return
     }
     if (!intakeGuid) {
@@ -301,8 +282,8 @@ export default function QuestionBankUploadPage() {
       {
         file,
         sheetName: selectedSheet || undefined,
-        courseUnitGuid,
-        category: Number(category),
+        courseUnitGuid: importCourseUnitGuid,
+        category: Number(importCategory),
         intakeGuid,
       },
       {
@@ -327,7 +308,7 @@ export default function QuestionBankUploadPage() {
 
   // ── Import / Save Submission ────────────────────────────────────────────────
   const handleImport = () => {
-    if (!file || !courseUnitGuid || !category || !intakeGuid) {
+    if (!file || !importCourseUnitGuid || !importCategory || !intakeGuid) {
       showToast('Missing required fields for import', 'warn')
       return
     }
@@ -337,8 +318,8 @@ export default function QuestionBankUploadPage() {
       {
         file,
         sheetName: selectedSheet || undefined,
-        courseUnitGuid,
-        category: Number(category),
+        courseUnitGuid: importCourseUnitGuid,
+        category: Number(importCategory),
         intakeGuid,
       },
       {
@@ -349,6 +330,13 @@ export default function QuestionBankUploadPage() {
             subtitle: `${count > 0 ? `${count} question(s)` : 'Questions'} committed to the Question Bank database.`,
           })
           handleClearFile()
+          // Automatically sync repository unit and refetch live questions
+          if (importCategory === '2') {
+            setRepoCategory('2')
+          }
+          if (importCourseUnitGuid) {
+            setRepoCourseUnitGuid(importCourseUnitGuid)
+          }
           refetchQuestions()
           setActiveTab('repository')
         },
@@ -378,12 +366,12 @@ export default function QuestionBankUploadPage() {
 
   // ── Delete Entire Bank Questions ────────────────────────────────────────────
   const handleConfirmDeleteBank = () => {
-    if (!courseUnitGuid || !category || !intakeGuid) return
+    if (!repoCourseUnitGuid || !repoCategory || !intakeGuid) return
 
     deleteBankMut.mutate(
       {
-        courseUnitGuid,
-        category: Number(category),
+        courseUnitGuid: repoCourseUnitGuid,
+        category: Number(repoCategory),
         intakeGuid,
       },
       {
@@ -415,15 +403,37 @@ export default function QuestionBankUploadPage() {
     })
   }
 
-  // ── Derived Lookups ─────────────────────────────────────────────────────────
-  const selectedCourseUnit = useMemo(() => {
-    return courseUnits?.find(u => u.courseUnitGuid === courseUnitGuid)
-  }, [courseUnits, courseUnitGuid])
+  // ── Derived Lookups: Tab 1 (Repository) ─────────────────────────────────────
+  const selectedRepoUnit = useMemo(() => {
+    return repoCourseUnits?.find(u => u.courseUnitGuid === repoCourseUnitGuid)
+  }, [repoCourseUnits, repoCourseUnitGuid])
 
-  const selectedCategoryObj = useMemo(() => {
-    return availableCategories?.find(c => String(c.value) === String(category))
-  }, [availableCategories, category])
+  const selectedRepoCategoryObj = useMemo(() => {
+    const defaultList = [
+      { value: 1, name: 'Class Test' },
+      { value: 2, name: 'Course Work' },
+      { value: 3, name: 'Class Activity' },
+    ]
+    const list = singleCategories && singleCategories.length > 0 ? singleCategories : defaultList
+    return list.find(c => String(c.value) === String(repoCategory)) || list[1]
+  }, [singleCategories, repoCategory])
 
+  // ── Derived Lookups: Tab 2 (Import) ─────────────────────────────────────────
+  const selectedImportUnit = useMemo(() => {
+    return importCourseUnits?.find(u => u.courseUnitGuid === importCourseUnitGuid)
+  }, [importCourseUnits, importCourseUnitGuid])
+
+  const selectedImportCategoryObj = useMemo(() => {
+    const defaultList = [
+      { value: 1, name: 'CBT' },
+      { value: 2, name: 'Course Work' },
+      { value: 5, name: 'University Exam' },
+    ]
+    const list = bankCategories && bankCategories.length > 0 ? bankCategories : defaultList
+    return list.find(c => String(c.value) === String(importCategory)) || list[1]
+  }, [bankCategories, importCategory])
+
+  // ── Global Lookups ──────────────────────────────────────────────────────────
   const selectedIntake = useMemo(() => {
     return intakes?.find(i => i.intakeGuid === intakeGuid)
   }, [intakes, intakeGuid])
@@ -497,30 +507,25 @@ export default function QuestionBankUploadPage() {
   )
 
   const isFormValidForPreview = Boolean(
-    file && courseUnitGuid && category && intakeGuid && !sheetsMut.isPending,
-  )
-
-  const isFormValidForDelete = Boolean(
-    courseUnitGuid && category && intakeGuid,
+    file && importCourseUnitGuid && importCategory && intakeGuid && !sheetsMut.isPending,
   )
 
   return (
     <div className="page active">
       {/* ── Page Header ─────────────────────────────────────────────────────── */}
-      <div className="pg-hdr flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+      <div className="pg-hdr flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <div className="flex-1 min-w-0">
           <div className="pg-title flex items-center gap-2 flex-wrap">
             <span>Question Bank & Repository</span>
-            {/* <span className="badge badge-purple text-xs">Live Database</span> */}
           </div>
           <div className="pg-sub text-xs text-slate-500">
-            Manage course examination questions individually or in bulk via Excel (.xlsx) · Scoped to Academic Intake & Logged-in Faculty
+            Manage course examination questions individually or in bulk via Excel (.xlsx)
           </div>
         </div>
-        <div className="pg-actions flex items-center justify-end gap-2 ml-auto shrink-0 self-end sm:self-center">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            className="btn btn-neu flex items-center gap-1.5 shadow-sm text-xs"
+            className="btn btn-neu btn-sm flex items-center gap-1.5 shadow-sm text-xs"
             onClick={handleDownloadTemplate}
             disabled={downloadTemplateMut.isPending}
             title="Download the official 9-column question import template"
@@ -537,534 +542,600 @@ export default function QuestionBankUploadPage() {
               </>
             )}
           </button>
-          <button
-            type="button"
-            className="btn btn-primary flex items-center gap-1.5 shadow-sm text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
-            onClick={() => setIsAddingQuestion(true)}
-            disabled={!courseUnitGuid || !category || !intakeGuid}
-            title="Add a single new question to the selected course unit bank"
-          >
-            <i className="lni lni-plus"></i>
-            <span>Add Single Question</span>
-          </button>
         </div>
       </div>
 
-      {/* ── Scope Parameters Card ───────────────────────────────────────────── */}
-      <div className="card mb-5 p-5">
-        <div className="flex flex-wrap items-center justify-between pb-3 mb-4 border-b border-slate-100 gap-2">
-          <div className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
-              <i className="lni lni-funnel"></i>
-            </span>
-            <div className="card-title mb-0">Question Bank Scope Parameters</div>
-          </div>
-          <div className="text-xs text-slate-500 flex items-center flex-wrap gap-2">
-            {currentIntake && (
-              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
-                <i className="lni lni-checkmark-circle text-xs"></i>
-                Active Academic Intake: {currentIntake.intakeCode}
-              </span>
-            )}
-            {(loggedInEmployee || loggedInUserName || loggedInUserGuid) && (
-              <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
-                <i className="lni lni-user text-xs"></i>
-                Faculty: <strong>{loggedInEmployee?.empName || loggedInUserName || 'Current User'}</strong>
-              </span>
-            )}
+      {/* ── Top Row: Left Tabs + Right Unified Filter Card ───── */}
+      <div className="flex flex-col lg:flex-row items-stretch gap-4 mb-4">
+        
+        {/* Left: Workflow Module Navigation Tabs Card */}
+        <div className="card p-3.5 w-full lg:w-72 xl:w-80 shrink-0 flex flex-col justify-between">
+          <div>
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1 mb-2 flex items-center justify-between">
+              <span>Select Module</span>
+              <span className="badge badge-neu text-[10px] font-semibold">2 Modes</span>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {/* Tab 1: Question Repository */}
+              <button
+                type="button"
+                onClick={() => handleTabChange('repository')}
+                className={`w-full text-left p-2.5 rounded-lg border transition-all flex items-start gap-2.5 cursor-pointer ${
+                  activeTab === 'repository'
+                    ? 'bg-indigo-50/90 border-indigo-300 text-indigo-950 shadow-xs'
+                    : 'bg-white border-transparent hover:bg-slate-50 text-slate-700'
+                }`}
+              >
+                <div
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm ${
+                    activeTab === 'repository'
+                      ? 'bg-indigo-600 text-white shadow-xs font-bold'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  <i className="lni lni-library"></i>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-bold text-slate-900 truncate">Question Repository</span>
+                    <span
+                      className={`badge ${
+                        activeTab === 'repository' ? 'badge-indigo font-bold' : 'badge-neu'
+                      } text-[10px] px-1.5 py-0.2`}
+                    >
+                      {liveQuestions?.length ?? 0}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                    Class Test, Course Work, Activity
+                  </div>
+                </div>
+              </button>
+
+              {/* Tab 2: Bulk Excel Import */}
+              <button
+                type="button"
+                onClick={() => handleTabChange('import')}
+                className={`w-full text-left p-2.5 rounded-lg border transition-all flex items-start gap-2.5 cursor-pointer ${
+                  activeTab === 'import'
+                    ? 'bg-indigo-50/90 border-indigo-300 text-indigo-950 shadow-xs'
+                    : 'bg-white border-transparent hover:bg-slate-50 text-slate-700'
+                }`}
+              >
+                <div
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm ${
+                    activeTab === 'import'
+                      ? 'bg-indigo-600 text-white shadow-xs font-bold'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  <i className="lni lni-cloud-upload"></i>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-bold text-slate-900 truncate">Bulk Excel Import</span>
+                    <span className="badge badge-green text-[10px] font-bold px-1.5 py-0.2">
+                      .xlsx
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                    CBT, Course Work, Univ Exam
+                  </div>
+                </div>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* 3 Form Filter Inputs Grid: Intake, Assessment Category, Course Unit */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* 1. Academic Intake */}
-          <div className="fg mb-0">
-            <label className="lbl">
-              Academic Intake <span className="text-red-500">*</span>
-            </label>
-            <SearchSelect
-              options={
-                intakes?.map(i => ({
-                  value: i.intakeGuid,
-                  label: `${i.intakeCode} — ${i.description}`,
-                })) || []
-              }
-              value={intakeGuid}
-              onChange={handleIntakeChange}
-              placeholder={isLoadingIntakes ? 'Loading intakes...' : 'Select intake'}
-              disabled={isLoadingIntakes}
-            />
-          </div>
+        {/* Right: Unified Filter & Academic Scope Card */}
+        <div className="card p-4 flex-1 min-w-0 flex flex-col justify-between">
+          <div className="flex flex-wrap items-center justify-between pb-3 mb-3 border-b border-slate-100 gap-2">
+            <div className="font-semibold text-sm text-slate-800 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold">
+                <i className="lni lni-funnel"></i>
+              </span>
+              <span>
+                {activeTab === 'repository'
+                  ? 'Question Repository Scope & Filters'
+                  : 'Bulk Import Scope & Target'}
+              </span>
+              <span
+                className={`badge ${
+                  activeTab === 'repository' ? 'badge-indigo' : 'badge-green'
+                } text-[11px] font-semibold`}
+              >
+                {activeTab === 'repository' ? 'Single Questions Mode' : 'Bulk Excel Mode'}
+              </span>
+            </div>
 
-          {/* 2. Assessment Category */}
-          <div className="fg mb-0">
-            <label className="lbl">
-              Assessment Category <span className="text-red-500">*</span>
-            </label>
-            <SearchSelect
-              options={
-                availableCategories?.map(c => ({
-                  value: String(c.value),
-                  label: c.name,
-                })) || []
-              }
-              value={category}
-              onChange={handleCategoryChange}
-              placeholder={isLoadingCategories ? 'Loading categories...' : 'Select category'}
-              disabled={isLoadingCategories}
-            />
-          </div>
-
-          {/* 3. Course Unit */}
-          <div className="fg mb-0">
-            <label className="lbl">
-              Course Unit <span className="text-red-500">*</span>
-              {isFetchingCourseUnits && (
-                <span className="text-xs text-indigo-500 font-normal ml-2">Updating...</span>
+            <div className="flex items-center gap-2 text-xs">
+              {(loggedInEmployee || loggedInUserName || loggedInUserGuid) && (
+                <span className="flex items-center gap-1.5 bg-slate-50 text-slate-600 px-2.5 py-1 rounded-md border border-slate-200">
+                  <i className="lni lni-user text-indigo-600 text-xs"></i>
+                  <span>
+                    Faculty: <strong className="text-slate-800">{loggedInEmployee?.empName || loggedInUserName || 'Current User'}</strong>
+                  </span>
+                </span>
               )}
-            </label>
-            <SearchSelect
-              options={
-                courseUnits?.map(u => ({
-                  value: u.courseUnitGuid,
-                  label: u.courseUnitCode
-                    ? `${u.courseUnitCode} — ${u.courseUnitName || 'Untitled Unit'}`
-                    : (u.courseUnitName || 'Untitled Unit'),
-                })) || []
-              }
-              value={courseUnitGuid}
-              onChange={handleCourseUnitChange}
-              placeholder={
-                !intakeGuid
-                  ? 'Pick Academic Intake first'
-                  : needsLecturer
-                    ? 'Your staff record could not be identified — sign in again'
-                    : isLoadingCourseUnits
-                      ? 'Loading course units...'
-                      : courseUnits && courseUnits.length === 0
-                        ? 'No course units found for this intake'
-                        : 'Select course unit'
-              }
-              disabled={!intakeGuid || needsLecturer || isLoadingCourseUnits}
-            />
+              {currentIntake && (
+                <span className="badge badge-green text-[10px] font-semibold">Active Session</span>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* ── Mode Switcher Tabs ──────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
-          <button
-            type="button"
-            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${activeTab === 'repository'
-                ? 'bg-white text-indigo-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-              }`}
-            onClick={() => handleTabSwitch('repository')}
-          >
-            <i className="lni lni-library text-sm"></i>
-            <span>Question Repository ({liveQuestions?.length ?? 0})</span>
-          </button>
-          <button
-            type="button"
-            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${activeTab === 'import'
-                ? 'bg-white text-indigo-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-              }`}
-            onClick={() => handleTabSwitch('import')}
-          >
-            <i className="lni lni-cloud-upload text-sm"></i>
-            <span>Bulk Excel Import (.xlsx)</span>
-          </button>
-        </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Col 1: Academic Intake */}
+            <div className="fg mb-0">
+              <label className="lbl">
+                Academic Intake <span className="text-red-500">*</span>
+              </label>
+              <SearchSelect
+                options={
+                  intakes?.map(i => ({
+                    value: i.intakeGuid,
+                    label: `${i.intakeCode} — ${i.description}`,
+                  })) || []
+                }
+                value={intakeGuid}
+                onChange={handleIntakeChange}
+                placeholder={isLoadingIntakes ? 'Loading intakes...' : 'Select intake'}
+                disabled={isLoadingIntakes}
+              />
+              <div className="text-[11px] text-slate-400 mt-1 truncate">
+                {selectedIntake ? `Active: ${selectedIntake.intakeCode}` : 'Choose an intake period'}
+              </div>
+            </div>
 
-        {activeTab === 'repository' && courseUnitGuid && (
-          <button
-            type="button"
-            className="btn btn-primary btn-sm flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
-            onClick={() => setIsAddingQuestion(true)}
-          >
-            <i className="lni lni-plus"></i>
-            <span>Add Single Question</span>
-          </button>
-        )}
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════════════
-          TAB 1: LIVE QUESTION REPOSITORY
-         ═══════════════════════════════════════════════════════════════════════ */}
-      {activeTab === 'repository' && (
-        <div className="card mb-5 p-5">
-          {/* Header Bar */}
-          <div className="flex flex-wrap items-center justify-between pb-3 mb-4 border-b border-slate-100 gap-3">
-            <div>
-              <div className="card-title mb-1 flex items-center gap-2">
-                <span>Active Questions Repository</span>
-                {selectedCourseUnit && (
-                  <span className="font-mono text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded">
-                    {selectedCourseUnit.courseUnitCode}
+            {/* Col 2: Assessment Category (Shows loading spinner on tab change) */}
+            <div className="fg mb-0">
+              <label className="lbl flex items-center justify-between">
+                <span>
+                  Assessment Category <span className="text-red-500">*</span>
+                </span>
+                {isCategoryLoading && (
+                  <span className="flex items-center gap-1 text-[11px] text-indigo-600 font-semibold animate-pulse">
+                    <span className="inline-block w-2.5 h-2.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></span>
+                    <span>Loading...</span>
                   </span>
                 )}
-                <span className="badge badge-purple text-xs">
-                  {selectedCategoryObj?.name || 'Category'}
-                </span>
-              </div>
-              <div className="text-xs text-slate-500">
-                Course: <strong className="text-slate-800">{selectedCourseUnit?.courseUnitName || 'Select a course unit'}</strong>
-                {' • '}
-                Intake: <strong className="text-slate-800">{selectedIntake?.intakeCode || 'Active Intake'}</strong>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="btn btn-neu btn-sm flex items-center gap-1.5"
-                onClick={() => refetchQuestions()}
-                disabled={isFetchingQuestions}
-                title="Refresh questions from database"
-              >
-                <i className={`lni lni-reload ${isFetchingQuestions ? 'animate-spin' : ''}`}></i>
-                <span>Refresh</span>
-              </button>
-
-              {courseUnitGuid && (liveQuestions && liveQuestions.length > 0) && (
-                <button
-                  type="button"
-                  className="btn btn-danger btn-sm flex items-center gap-1.5"
-                  onClick={() => setShowDeleteBankModal(true)}
-                  title="Soft-delete all questions in this bank"
-                >
-                  <i className="lni lni-trash-can"></i>
-                  <span>Delete All Questions</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* KPI Summary Chips */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-            <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-3">
-              <div className="text-xs text-slate-500 font-medium">Total Questions</div>
-              <div className="text-xl font-bold text-slate-900 mt-0.5">
-                {isLoadingQuestions ? '...' : (liveQuestions?.length ?? 0)}
-              </div>
-            </div>
-            <div className="bg-purple-50/60 border border-purple-200/60 rounded-lg p-3">
-              <div className="text-xs text-purple-700 font-medium">MCQ Questions</div>
-              <div className="text-xl font-bold text-purple-900 mt-0.5">
-                {isLoadingQuestions ? '...' : liveMcqCount}
-              </div>
-            </div>
-            <div className="bg-blue-50/60 border border-blue-200/60 rounded-lg p-3">
-              <div className="text-xs text-blue-700 font-medium">Descriptive (DQ)</div>
-              <div className="text-xl font-bold text-blue-900 mt-0.5">
-                {isLoadingQuestions ? '...' : liveDqCount}
-              </div>
-            </div>
-            <div className="bg-emerald-50/60 border border-emerald-200/60 rounded-lg p-3">
-              <div className="text-xs text-emerald-700 font-medium">Database Status</div>
-              <div className="text-sm font-bold text-emerald-800 mt-1 flex items-center gap-1">
-                <i className="lni lni-checkmark-circle text-emerald-600"></i> Active & Live
-              </div>
-            </div>
-          </div>
-
-          {/* Filters & Search */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-              <button
-                type="button"
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${repoFilterType === 'ALL'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                onClick={() => setRepoFilterType('ALL')}
-              >
-                All ({liveQuestions?.length ?? 0})
-              </button>
-              <button
-                type="button"
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${repoFilterType === 'MCQ'
-                    ? 'bg-white text-purple-700 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                onClick={() => setRepoFilterType('MCQ')}
-              >
-                MCQ ({liveMcqCount})
-              </button>
-              <button
-                type="button"
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${repoFilterType === 'DQ'
-                    ? 'bg-white text-blue-700 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                onClick={() => setRepoFilterType('DQ')}
-              >
-                DQ ({liveDqCount})
-              </button>
-            </div>
-
-            <TableSearch
-              className="w-full sm:w-72"
-              placeholder="Search question text or answer..."
-              value={repoSearch}
-              onChange={setRepoSearch}
-              results={filteredLiveQuestions.slice(0, 5).map(q => ({
-                id: q.questionGuid,
-                primary: q.questionText || 'Untitled Question',
-                secondary: `${q.questionType === 1 ? 'MCQ' : 'DQ'} • Ans: ${q.answerText}`,
-              }))}
-              onSelect={r => setRepoSearch(r.primary)}
-            />
-          </div>
-
-          {/* Live Questions Table */}
-          <ScrollTable>
-            <table>
-              <thead>
-                <tr>
-                  <th style={{ width: 48, textAlign: 'center' }}>ACTION</th>
-                  <th style={{ width: 45, textAlign: 'center' }}>#</th>
-                  <th style={{ width: 85, textAlign: 'center' }}>TYPE</th>
-                  <th style={{ minWidth: 280, maxWidth: 460 }}>QUESTION</th>
-                  <th style={{ minWidth: 260 }}>OPTIONS</th>
-                  <th style={{ minWidth: 160 }}>ANSWER</th>
-                  <th style={{ width: 80, textAlign: 'center' }}>LEVEL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoadingQuestions ? (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--g500)' }}>
-                      <span className="inline-block w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mb-2"></span>
-                      <div className="text-xs font-medium">Fetching live questions from repository...</div>
-                    </td>
-                  </tr>
-                ) : !courseUnitGuid ? (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--g500)' }}>
-                      <i className="lni lni-book text-3xl block mb-2 opacity-40"></i>
-                      <div className="text-sm font-semibold text-slate-700">Please select a Course Unit above</div>
-                      <div className="text-xs text-slate-400 mt-1">Choose an academic intake and planned course unit to inspect active questions.</div>
-                    </td>
-                  </tr>
-                ) : filteredLiveQuestions.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--g400)' }}>
-                      <i className="lni lni-inbox text-3xl block mb-2 opacity-40"></i>
-                      <div className="text-sm font-semibold text-slate-700">No questions found in this Question Bank</div>
-                      <div className="text-xs text-slate-400 mt-1">
-                        There are currently no active questions for {selectedCourseUnit?.courseUnitCode} under {selectedCategoryObj?.name || 'this category'}.
-                      </div>
-                      <div className="mt-4 flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
-                          onClick={() => setIsAddingQuestion(true)}
-                        >
-                          <i className="lni lni-plus"></i>
-                          <span>Add First Question</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-neu btn-sm flex items-center gap-1.5"
-                          onClick={() => setActiveTab('import')}
-                        >
-                          <i className="lni lni-upload"></i>
-                          <span>Upload Excel (.xlsx)</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredLiveQuestions.map((q, idx) => (
-                    <tr key={q.questionGuid || idx}>
-                      {/* ActionMenu in First Column */}
-                      <td style={{ width: 48, textAlign: 'center' }}>
-                        <ActionMenu tooltip="Question Actions">
-                          <button
-                            type="button"
-                            className="btn btn-neu btn-sm flex items-center gap-1.5"
-                            onClick={() => setViewingQuestion(q)}
-                          >
-                            <i className="lni lni-eye text-indigo-600"></i>
-                            <span>View Details</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-neu btn-sm flex items-center gap-1.5"
-                            onClick={() => setEditingQuestion(q)}
-                          >
-                            <i className="lni lni-pencil-alt text-amber-600"></i>
-                            <span>Edit Question</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-neu btn-sm flex items-center gap-1.5 text-red-600"
-                            onClick={() => setQuestionToDelete(q)}
-                          >
-                            <i className="lni lni-trash-can"></i>
-                            <span>Delete Question</span>
-                          </button>
-                        </ActionMenu>
-                      </td>
-
-                      {/* SL No */}
-                      <td style={{ textAlign: 'center', fontFamily: 'monospace', fontSize: 12, color: 'var(--g500)' }}>
-                        {idx + 1}
-                      </td>
-
-                      {/* Type Badge */}
-                      <td style={{ textAlign: 'center' }}>
-                        <span
-                          className={`badge ${q.questionType === 1 ? 'badge-purple' : 'badge-blue'
-                            }`}
-                        >
-                          {q.questionType === 1 ? 'MCQ' : 'DQ'}
-                        </span>
-                      </td>
-
-                      {/* Question Text */}
-                      <td style={{ whiteSpace: 'normal', minWidth: 280, maxWidth: 460, lineHeight: 1.6, color: 'var(--g800)' }}>
-                        {q.questionText}
-                      </td>
-
-                      {/* Options */}
-                      <td style={{ whiteSpace: 'normal', minWidth: 260 }}>
-                        {q.questionType === 1 ? (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px]">
-                            <div className={`border rounded px-2 py-0.5 ${q.answerText === q.option1Text ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-medium' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
-                              <strong className="text-slate-400 mr-1">A:</strong>
-                              {q.option1Text || '—'}
-                            </div>
-                            <div className={`border rounded px-2 py-0.5 ${q.answerText === q.option2Text ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-medium' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
-                              <strong className="text-slate-400 mr-1">B:</strong>
-                              {q.option2Text || '—'}
-                            </div>
-                            <div className={`border rounded px-2 py-0.5 ${q.answerText === q.option3Text ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-medium' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
-                              <strong className="text-slate-400 mr-1">C:</strong>
-                              {q.option3Text || '—'}
-                            </div>
-                            <div className={`border rounded px-2 py-0.5 ${q.answerText === q.option4Text ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-medium' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
-                              <strong className="text-slate-400 mr-1">D:</strong>
-                              {q.option4Text || '—'}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 text-xs italic">Descriptive (No options)</span>
-                        )}
-                      </td>
-
-                      {/* Answer */}
-                      <td style={{ whiteSpace: 'normal', minWidth: 160 }}>
-                        <span className="inline-block bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11.5px] px-2.5 py-1 rounded font-medium">
-                          {q.answerText}
-                        </span>
-                      </td>
-
-                      {/* Level */}
-                      <td style={{ textAlign: 'center' }}>
-                        {q.level ? (
-                          <span className="badge badge-neu text-xs font-mono font-semibold" title={`Level ${q.level}`}>
-                            L{q.level}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </ScrollTable>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════════════
-          TAB 2: BULK EXCEL IMPORT (.XLSX)
-         ═══════════════════════════════════════════════════════════════════════ */}
-      {activeTab === 'import' && (
-        <div className="card mb-5 p-5">
-          <div className="flex flex-wrap items-center justify-between pb-3 mb-4 border-b border-slate-100 gap-2">
-            <div className="flex items-center gap-2">
-              <span className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
-                <i className="lni lni-cloud-upload"></i>
-              </span>
-              <div>
-                <div className="card-title mb-0">Upload Questions via Excel (.xlsx)</div>
-                <div className="text-xs text-slate-500">
-                  Target: <strong className="text-slate-800">{selectedCourseUnit?.courseUnitCode || 'Select Course Unit'}</strong>
-                  {' • '}
-                  Category: <strong className="text-slate-800">{selectedCategoryObj?.name || 'Course Work'}</strong>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <a
-                href="/Sample_Question_Bank_With_Data.xlsx"
-                download="Sample_Question_Bank.xlsx"
-                className="btn btn-neu btn-sm flex items-center gap-1.5 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 border-indigo-200"
-                title="Download ready-to-test Excel workbook with 5 sample questions"
-              >
-                <i className="lni lni-download text-indigo-600"></i>
-                <span>Sample Excel (Pre-filled)</span>
-              </a>
-              <button
-                type="button"
-                className="btn btn-neu btn-sm flex items-center gap-1.5"
-                onClick={handleDownloadTemplate}
-                disabled={downloadTemplateMut.isPending}
-                title="Download blank official 9-column template"
-              >
-                <i className="lni lni-download"></i>
-                <span>Blank 9-Column Template</span>
-              </button>
-            </div>
-          </div>
-
-          {/* File Upload Dropzone & Sheet Selector */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start mb-4">
-            <div className="lg:col-span-2">
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept=".xlsx"
-                onChange={handleFileInputChange}
-                className="hidden"
-                id="qb-file-input"
+              </label>
+              <SearchSelect
+                options={
+                  activeTab === 'repository'
+                    ? (singleCategories && singleCategories.length > 0
+                        ? singleCategories.map(c => ({
+                            value: String(c.value),
+                            label: c.name,
+                          }))
+                        : [
+                            { value: '1', label: 'Class Test' },
+                            { value: '2', label: 'Course Work' },
+                            { value: '3', label: 'Class Activity' },
+                          ])
+                    : (bankCategories && bankCategories.length > 0
+                        ? bankCategories.map(c => ({
+                            value: String(c.value),
+                            label: c.name,
+                          }))
+                        : [
+                            { value: '1', label: 'CBT' },
+                            { value: '2', label: 'Course Work' },
+                            { value: '5', label: 'University Exam' },
+                          ])
+                }
+                value={activeTab === 'repository' ? repoCategory : importCategory}
+                onChange={val => {
+                  if (activeTab === 'repository') {
+                    setRepoCategory(val)
+                  } else {
+                    setImportCategory(val)
+                    setPreviewRows(null)
+                    setValidationError(null)
+                  }
+                }}
+                placeholder={
+                  isCategoryLoading
+                    ? `Loading ${activeTab === 'repository' ? 'Repository' : 'Bulk'} categories...`
+                    : (activeTab === 'repository' ? isLoadingSingleCategories : isLoadingBankCategories)
+                      ? 'Loading categories...'
+                      : 'Select category'
+                }
+                disabled={
+                  isCategoryLoading ||
+                  (activeTab === 'repository' ? isLoadingSingleCategories : isLoadingBankCategories)
+                }
+                isLoading={
+                  isCategoryLoading ||
+                  (activeTab === 'repository' ? isLoadingSingleCategories : isLoadingBankCategories)
+                }
               />
+              <div className="text-[11px] text-slate-400 mt-1 truncate">
+                {activeTab === 'repository'
+                  ? 'Options: Class Test, Course Work, Class Activity'
+                  : 'Options: CBT, Course Work, University Exam'}
+              </div>
+            </div>
 
-              {!file ? (
-                <div
-                  onDrop={handleDrop}
-                  onDragOver={handleDragOver}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-slate-300 hover:border-indigo-500 bg-slate-50 hover:bg-indigo-50/20 rounded-xl p-6 text-center cursor-pointer transition-all duration-200 group flex flex-col items-center justify-center min-h-[120px]"
-                >
-                  <div className="w-10 h-10 rounded-full bg-slate-100 group-hover:bg-indigo-100 text-slate-500 group-hover:text-indigo-600 flex items-center justify-center text-xl mb-1.5 transition-colors">
-                    <i className="lni lni-cloud-upload"></i>
+            {/* Col 3: Course Unit */}
+            <div className="fg mb-0">
+              <label className="lbl flex items-center justify-between">
+                <span>
+                  Course Unit <span className="text-red-500">*</span>
+                </span>
+                {((activeTab === 'repository' ? repoUnitsQuery.isFetching : importUnitsQuery.isFetching) || isCategoryLoading) && (
+                  <span className="text-[11px] text-indigo-500 font-normal">Updating...</span>
+                )}
+              </label>
+              <SearchSelect
+                options={
+                  (activeTab === 'repository' ? repoCourseUnits : importCourseUnits)?.map(u => ({
+                    value: u.courseUnitGuid,
+                    label: u.courseUnitCode
+                      ? `${u.courseUnitCode} — ${u.courseUnitName || 'Untitled Unit'}`
+                      : (u.courseUnitName || 'Untitled Unit'),
+                  })) || []
+                }
+                value={activeTab === 'repository' ? repoCourseUnitGuid : importCourseUnitGuid}
+                onChange={val => {
+                  if (activeTab === 'repository') {
+                    setRepoCourseUnitGuid(val)
+                  } else {
+                    setImportCourseUnitGuid(val)
+                    setPreviewRows(null)
+                    setValidationError(null)
+                  }
+                }}
+                placeholder={
+                  !intakeGuid
+                    ? 'Pick Academic Intake first'
+                    : isCategoryLoading || (activeTab === 'repository' ? repoUnitsQuery.isLoading : (needsLecturer || importUnitsQuery.isLoading))
+                      ? 'Loading course units...'
+                      : (activeTab === 'repository' ? repoCourseUnits : importCourseUnits)?.length === 0
+                        ? 'No course units found for this intake'
+                        : 'Select course unit'
+                }
+                disabled={
+                  !intakeGuid ||
+                  isCategoryLoading ||
+                  (activeTab === 'repository' ? repoUnitsQuery.isLoading : (needsLecturer || importUnitsQuery.isLoading))
+                }
+                isLoading={
+                  isCategoryLoading ||
+                  (activeTab === 'repository' ? repoUnitsQuery.isLoading : importUnitsQuery.isLoading)
+                }
+              />
+              <div className="text-[11px] text-slate-400 mt-1 truncate">
+                {(activeTab === 'repository' ? repoCourseUnits : importCourseUnits)?.length ?? 0} course unit(s) available
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ── Active Tab Workspace: Expanded to 100% Full Width ───── */}
+      <div className="w-full">
+
+        {/* ───────────────────────────────────────────────────────────────────
+            SECTION 1: QUESTION REPOSITORY CONTENT (FULL WIDTH)
+           ─────────────────────────────────────────────────────────────────── */}
+        {activeTab === 'repository' && (
+          <div className="space-y-4 w-full">
+
+              {/* Questions List Card */}
+              <div className="card p-4">
+                {/* Header Bar */}
+                <div className="flex flex-wrap items-center justify-between pb-3 mb-3 border-b border-slate-100 gap-3">
+                  <div>
+                    <div className="font-semibold text-base text-slate-800 mb-1 flex items-center gap-2 flex-wrap">
+                      <span className="w-6 h-6 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold">
+                        <i className="lni lni-list"></i>
+                      </span>
+                      <span>Active Questions List</span>
+                      {selectedRepoUnit && (
+                        <span className="font-mono text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded">
+                          {selectedRepoUnit.courseUnitCode}
+                        </span>
+                      )}
+                      <span className="badge badge-purple text-xs">
+                        {selectedRepoCategoryObj?.name || 'Category'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Course: <strong className="text-slate-800">{selectedRepoUnit?.courseUnitName || 'Select a course unit'}</strong>
+                      {' • '}
+                      Intake: <strong className="text-slate-800">{selectedIntake?.intakeCode || 'Active Intake'}</strong>
+                    </div>
                   </div>
-                  <div className="text-sm font-semibold text-slate-800 group-hover:text-indigo-600">
-                    Drop your Excel (.xlsx) file here or <span className="underline decoration-indigo-300">browse</span>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    Must follow the official 9-column format · Maximum 10MB
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm flex items-center gap-1.5"
+                      onClick={() => setIsAddingQuestion(true)}
+                      disabled={!repoCourseUnitGuid || !repoCategory || !intakeGuid}
+                      title="Add a single new question to the selected course unit bank"
+                    >
+                      <i className="lni lni-plus"></i>
+                      <span>Add Single Question</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-neu btn-sm flex items-center gap-1.5"
+                      onClick={() => refetchQuestions()}
+                      disabled={isFetchingQuestions}
+                      title="Refresh questions from database"
+                    >
+                      <i className={`lni lni-reload ${isFetchingQuestions ? 'animate-spin' : ''}`}></i>
+                      <span>Refresh</span>
+                    </button>
+
+                    {repoCourseUnitGuid && (liveQuestions && liveQuestions.length > 0) && (
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm flex items-center gap-1.5"
+                        onClick={() => setShowDeleteBankModal(true)}
+                        title="Soft-delete all questions in this bank"
+                      >
+                        <i className="lni lni-trash-can"></i>
+                        <span>Delete All</span>
+                      </button>
+                    )}
                   </div>
                 </div>
-              ) : (
-                <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
-                      <i className="lni lni-empty-file"></i>
-                    </div>
+
+                {/* Filter Toolbar with Counts & Search */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200/70">
+                    <button
+                      type="button"
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${repoFilterType === 'ALL'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      onClick={() => setRepoFilterType('ALL')}
+                    >
+                      <span>All Questions</span>
+                      <span className="badge badge-neu text-[11px] font-bold px-1.5 py-0.2">
+                        {liveQuestions?.length ?? 0}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${repoFilterType === 'MCQ'
+                        ? 'bg-white text-purple-700 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      onClick={() => setRepoFilterType('MCQ')}
+                    >
+                      <span>Multiple Choice</span>
+                      <span className="badge badge-purple text-[11px] font-bold px-1.5 py-0.2">
+                        {liveMcqCount}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${repoFilterType === 'DQ'
+                        ? 'bg-white text-blue-700 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      onClick={() => setRepoFilterType('DQ')}
+                    >
+                      <span>Descriptive</span>
+                      <span className="badge badge-blue text-[11px] font-bold px-1.5 py-0.2">
+                        {liveDqCount}
+                      </span>
+                    </button>
+                  </div>
+
+                  <TableSearch
+                    className="w-full sm:w-72"
+                    placeholder="Search question text or answer..."
+                    value={repoSearch}
+                    onChange={setRepoSearch}
+                    results={filteredLiveQuestions.slice(0, 5).map(q => ({
+                      id: q.questionGuid,
+                      primary: q.questionText || 'Untitled Question',
+                      secondary: `${q.questionType === 1 ? 'MCQ' : 'DQ'} • Ans: ${q.answerText}`,
+                    }))}
+                    onSelect={r => setRepoSearch(r.primary)}
+                  />
+                </div>
+
+                {/* Live Questions Table */}
+                <ScrollTable maxHeight="540px">
+                  <table style={{ minWidth: 880, width: '100%' }}>
+                    <thead className="sticky top-0 z-10 shadow-xs">
+                      <tr>
+                        <th style={{ width: 48, textAlign: 'center' }}>ACTION</th>
+                        <th style={{ width: 45, textAlign: 'center' }}>#</th>
+                        <th style={{ width: 85, textAlign: 'center' }}>TYPE</th>
+                        <th style={{ minWidth: 280, maxWidth: 460 }}>QUESTION</th>
+                        <th style={{ minWidth: 260 }}>OPTIONS</th>
+                        <th style={{ minWidth: 160 }}>ANSWER</th>
+                        <th style={{ width: 85, textAlign: 'center' }}>SECTION</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isLoadingQuestions ? (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--g500)' }}>
+                            <span className="inline-block w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mb-2"></span>
+                            <div className="text-xs font-medium">Fetching live questions from repository...</div>
+                          </td>
+                        </tr>
+                      ) : !repoCourseUnitGuid ? (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--g500)' }}>
+                            <i className="lni lni-book text-3xl block mb-2 opacity-40"></i>
+                            <div className="text-sm font-semibold text-slate-700">Please select a Course Unit above</div>
+                            <div className="text-xs text-slate-400 mt-1">Choose a planned course unit to inspect active questions.</div>
+                          </td>
+                        </tr>
+                      ) : filteredLiveQuestions.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--g400)' }}>
+                            <i className="lni lni-inbox text-3xl block mb-2 opacity-40"></i>
+                            <div className="text-sm font-semibold text-slate-700">No questions found in this Question Bank</div>
+                            <div className="text-xs text-slate-400 mt-1">
+                              There are currently no active questions for {selectedRepoUnit?.courseUnitCode} under {selectedRepoCategoryObj?.name || 'this category'}.
+                            </div>
+                            <div className="mt-4 flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                className="btn btn-primary btn-sm flex items-center gap-1.5"
+                                onClick={() => setIsAddingQuestion(true)}
+                              >
+                                <i className="lni lni-plus"></i>
+                                <span>Add First Question</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-neu btn-sm flex items-center gap-1.5"
+                                onClick={() => handleTabChange('import')}
+                              >
+                                <i className="lni lni-upload"></i>
+                                <span>Upload Excel (.xlsx)</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredLiveQuestions.map((q, idx) => (
+                          <tr key={q.questionGuid || idx} className="hover:bg-slate-50/80 transition-colors">
+                            {/* ActionMenu in First Column */}
+                            <td style={{ width: 48, textAlign: 'center' }}>
+                              <ActionMenu tooltip="Question Actions">
+                                <button
+                                  type="button"
+                                  className="btn btn-neu btn-sm flex items-center gap-1.5"
+                                  onClick={() => setViewingQuestion(q)}
+                                >
+                                  <i className="lni lni-eye text-indigo-600"></i>
+                                  <span>View Details</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-neu btn-sm flex items-center gap-1.5"
+                                  onClick={() => setEditingQuestion(q)}
+                                >
+                                  <i className="lni lni-pencil-alt text-amber-600"></i>
+                                  <span>Edit Question</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-neu btn-sm flex items-center gap-1.5 text-red-600"
+                                  onClick={() => setQuestionToDelete(q)}
+                                >
+                                  <i className="lni lni-trash-can"></i>
+                                  <span>Delete Question</span>
+                                </button>
+                              </ActionMenu>
+                            </td>
+
+                            {/* SL No */}
+                            <td style={{ textAlign: 'center', fontFamily: 'monospace', fontSize: 12, color: 'var(--g500)' }}>
+                              {idx + 1}
+                            </td>
+
+                            {/* Type Badge */}
+                            <td style={{ textAlign: 'center' }}>
+                              <span
+                                className={`badge ${q.questionType === 1 ? 'badge-purple' : 'badge-blue'
+                                  }`}
+                              >
+                                {q.questionType === 1 ? 'MCQ' : 'DQ'}
+                              </span>
+                            </td>
+
+                            {/* Question Text */}
+                            <td style={{ whiteSpace: 'normal', minWidth: 280, maxWidth: 460, lineHeight: 1.6, color: 'var(--g800)' }}>
+                              <RichTextDisplay content={q.questionText} />
+                            </td>
+
+                            {/* Options */}
+                            <td style={{ whiteSpace: 'normal', minWidth: 260 }}>
+                              {q.questionType === 1 ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px]">
+                                  <div className={`border rounded px-2 py-0.5 ${q.answerText === q.option1Text ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-medium' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                                    <strong className="text-slate-400 mr-1">A:</strong>
+                                    {q.option1Text || '—'}
+                                  </div>
+                                  <div className={`border rounded px-2 py-0.5 ${q.answerText === q.option2Text ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-medium' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                                    <strong className="text-slate-400 mr-1">B:</strong>
+                                    {q.option2Text || '—'}
+                                  </div>
+                                  <div className={`border rounded px-2 py-0.5 ${q.answerText === q.option3Text ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-medium' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                                    <strong className="text-slate-400 mr-1">C:</strong>
+                                    {q.option3Text || '—'}
+                                  </div>
+                                  <div className={`border rounded px-2 py-0.5 ${q.answerText === q.option4Text ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-medium' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                                    <strong className="text-slate-400 mr-1">D:</strong>
+                                    {q.option4Text || '—'}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 text-xs italic">Descriptive (No options)</span>
+                              )}
+                            </td>
+
+                            {/* Answer */}
+                            <td style={{ whiteSpace: 'normal', minWidth: 160 }}>
+                              {q.questionType === 1 ? (
+                                <span className="inline-block bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11.5px] px-2.5 py-1 rounded font-medium font-mono font-bold">
+                                  {q.answerText}
+                                </span>
+                              ) : (
+                                <span className="inline-block bg-slate-50 border border-slate-200 text-slate-700 text-xs px-2.5 py-1 rounded font-medium max-w-[220px] truncate" title={q.answerText ?? undefined}>
+                                  {q.answerText}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Section */}
+                            <td style={{ textAlign: 'center' }}>
+                              {q.level ? (
+                                <span
+                                  className="badge badge-neu text-xs font-mono font-semibold"
+                                  title={`Section ${q.level === 1 ? 'A' : q.level === 2 ? 'B' : q.level === 3 ? 'C' : q.level}`}
+                                >
+                                  {q.level === 1 ? 'Sec A' : q.level === 2 ? 'Sec B' : q.level === 3 ? 'Sec C' : `L${q.level}`}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </ScrollTable>
+              </div>
+            </div>
+          )}
+
+          {/* ───────────────────────────────────────────────────────────────────
+              RIGHT PANEL 2: BULK EXCEL IMPORT CONTENT
+             ─────────────────────────────────────────────────────────────────── */}
+          {activeTab === 'import' && (
+            <div className="space-y-4">
+
+              {/* Upload Card */}
+              <div className="card p-5">
+                <div className="flex flex-wrap items-center justify-between pb-3 mb-4 border-b border-slate-100 gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                      <i className="lni lni-cloud-upload"></i>
+                    </span>
                     <div>
-                      <div className="text-sm font-semibold text-slate-900 line-clamp-1">{file.name}</div>
-                      <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                        <span>{(file.size / 1024).toFixed(1)} KB</span>
-                        <span>•</span>
-                        <span className="text-emerald-600 font-medium">Ready for preview</span>
+                      <div className="card-title mb-0">Upload Questions via Excel (.xlsx)</div>
+                      <div className="text-xs text-slate-500">
+                        Target: <strong className="text-slate-800 font-mono">{selectedImportUnit?.courseUnitCode || 'Select Course Unit'}</strong>
+                        {' • '}
+                        Category: <strong className="text-slate-800">{selectedImportCategoryObj?.name || 'Course Work'}</strong>
                       </div>
                     </div>
                   </div>
@@ -1072,345 +1143,428 @@ export default function QuestionBankUploadPage() {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      className="btn btn-neu btn-sm"
-                      onClick={() => fileInputRef.current?.click()}
-                      title="Choose a different file"
+                      className="btn btn-neu btn-sm flex items-center gap-1.5"
+                      onClick={handleDownloadTemplate}
+                      disabled={downloadTemplateMut.isPending}
+                      title="Download blank official 9-column template"
                     >
-                      Replace
+                      {downloadTemplateMut.isPending ? (
+                        <>
+                          <span className="inline-block w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
+                          <span>Generating Link...</span>
+                        </>
+                      ) : (
+                        <>
+                          <i className="lni lni-download"></i>
+                          <span>Blank 9-Column Template</span>
+                        </>
+                      )}
                     </button>
+                  </div>
+                </div>
+
+                {/* Template Format Note */}
+                <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-3 text-xs text-slate-600 mb-4 flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <strong className="text-slate-800">Required 9 Columns:</strong> 1. Sl No · 2. Question · 3. Type (MCQ/DQ) · 4. Option 1 · 5. Option 2 · 6. Option 3 · 7. Option 4 · 8. Answer · 9. Section (1/2/3)
+                  </div>
+                  <span className="text-[11px] font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-500">
+                    .xlsx format only
+                  </span>
+                </div>
+
+                {/* File Upload Dropzone & Sheet Selector */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start mb-4">
+                  <div className="lg:col-span-2">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept=".xlsx"
+                      onChange={handleFileInputChange}
+                      className="hidden"
+                      id="qb-file-input"
+                    />
+
+                    {!file ? (
+                      <div
+                        onDrop={handleDrop}
+                        onDragOver={handleDragOver}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="border-2 border-dashed border-slate-300 hover:border-indigo-500 bg-slate-50 hover:bg-indigo-50/20 rounded-xl p-6 text-center cursor-pointer transition-all duration-200 group flex flex-col items-center justify-center min-h-[120px]"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-slate-100 group-hover:bg-indigo-100 text-slate-500 group-hover:text-indigo-600 flex items-center justify-center text-xl mb-1.5 transition-colors">
+                          <i className="lni lni-cloud-upload"></i>
+                        </div>
+                        <div className="text-sm font-semibold text-slate-800 group-hover:text-indigo-600">
+                          Drop your Excel (.xlsx) file here or <span className="underline decoration-indigo-300">browse</span>
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1">
+                          Must follow the official 9-column format · Maximum 10MB
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
+                            <i className="lni lni-empty-file"></i>
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900 line-clamp-1">{file.name}</div>
+                            <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                              <span>{(file.size / 1024).toFixed(1)} KB</span>
+                              <span>•</span>
+                              <span className="text-emerald-600 font-medium">Ready for preview</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="btn btn-neu btn-sm"
+                            onClick={() => fileInputRef.current?.click()}
+                            title="Choose a different file"
+                          >
+                            Replace
+                          </button>
+                          <button
+                            type="button"
+                            className="w-8 h-8 rounded-lg border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 flex items-center justify-center transition-colors"
+                            onClick={handleClearFile}
+                            title="Remove file"
+                          >
+                            <i className="lni lni-close text-xs"></i>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Sheet Selector */}
+                  <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 flex flex-col gap-3">
+                    <div className="fg mb-0">
+                      <label className="lbl flex items-center justify-between">
+                        <span>Select Worksheet</span>
+                        {sheetsMut.isPending && (
+                          <span className="text-[11px] text-indigo-500 flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                            Scanning...
+                          </span>
+                        )}
+                      </label>
+                      <SearchSelect
+                        options={sheetNames.map(s => ({ value: s, label: s }))}
+                        value={selectedSheet}
+                        onChange={val => {
+                          setSelectedSheet(val)
+                          setPreviewRows(null)
+                          setValidationError(null)
+                        }}
+                        placeholder={
+                          !file
+                            ? 'Upload file to load sheets'
+                            : sheetsMut.isPending
+                              ? 'Reading workbook sheets...'
+                              : sheetNames.length === 0
+                                ? 'No sheets detected'
+                                : 'Select worksheet'
+                        }
+                        disabled={!file || sheetsMut.isPending || sheetNames.length === 0}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      className="w-8 h-8 rounded-lg border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 flex items-center justify-center transition-colors"
-                      onClick={handleClearFile}
-                      title="Remove file"
+                      className="btn btn-primary flex items-center gap-1.5"
+                      onClick={handlePreview}
+                      disabled={!isFormValidForPreview || previewMut.isPending}
                     >
-                      <i className="lni lni-close text-xs"></i>
+                      {previewMut.isPending ? (
+                        <>
+                          <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                          <span>Validating & Parsing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <i className="lni lni-eye"></i>
+                          <span>Preview & Validate Questions</span>
+                        </>
+                      )}
                     </button>
+
+                    {file && (
+                      <button
+                        type="button"
+                        className="btn btn-neu flex items-center gap-1"
+                        onClick={handleClearFile}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Validation Error Banner */}
+              {validationError && (
+                <div ref={errorRef} style={{ scrollMarginTop: '20px' }} className="bg-red-50 border border-red-200 text-red-900 rounded-xl p-4 shadow-sm flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center text-lg shrink-0 mt-0.5">
+                    <i className="lni lni-warning"></i>
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-bold text-red-950 mb-1">Excel Sheet Validation Failed</div>
+                    <div className="text-xs text-red-800 leading-relaxed font-mono bg-red-100/50 p-2.5 rounded border border-red-200/60 mb-2">
+                      {validationError}
+                    </div>
+                    {validationError.toLowerCase().includes('no valid data') ? (
+                      <div className="text-[12px] text-red-800 leading-relaxed bg-white/80 p-2.5 rounded border border-red-200 mt-1">
+                        <strong>Why this happened:</strong> The uploaded file contains only column headers (Row 1) and no question rows below it. Downloaded templates from the system are blank templates for faculty to fill in questions.
+                      </div>
+                    ) : (
+                      <div className="text-[11.5px] text-red-700">
+                        Please fix the highlighted row(s) or sheet structure in your Excel file and preview again. No questions have been imported.
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="text-red-400 hover:text-red-700 transition-colors"
+                    onClick={() => setValidationError(null)}
+                  >
+                    <i className="lni lni-close text-xs"></i>
+                  </button>
+                </div>
+              )}
+
+              {/* Excel Preview Grid Section */}
+              {previewRows && (
+                <div ref={previewSectionRef} style={{ scrollMarginTop: '20px' }} className="card">
+                  <div className="card-hdr flex flex-wrap items-center justify-between gap-3 p-5 pb-3">
+                    <div>
+                      <div className="card-title flex items-center gap-2 mb-1">
+                        <span className="ctitle-icon">
+                          <i className="lni lni-eye"></i>
+                        </span>
+                        <span>Question Bank Preview</span>
+                        <span className="badge badge-green ml-2">Validated & Ready</span>
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Course Unit: <strong className="text-slate-800 font-mono">{selectedImportUnit?.courseUnitCode || 'Selected Unit'}</strong>
+                        {' • '}
+                        Category: <strong className="text-slate-800">{selectedImportCategoryObj?.name || 'Category'}</strong>
+                        {' • '}
+                        Worksheet: <strong className="text-slate-800">{selectedSheet || 'Default'}</strong>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        className="btn btn-primary bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white flex items-center gap-2 px-5 py-2 shadow-sm font-semibold"
+                        onClick={handleImport}
+                        disabled={importMut.isPending}
+                      >
+                        {importMut.isPending ? (
+                          <>
+                            <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            <span>Saving Questions...</span>
+                          </>
+                        ) : (
+                          <>
+                            <i className="lni lni-upload text-base"></i>
+                            <span>Commit & Import Questions ({previewRows.length})</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-5 pt-0">
+                    {/* KPI Summary Chips */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                      <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-3">
+                        <div className="text-xs text-slate-500 font-medium">Total Questions</div>
+                        <div className="text-xl font-bold text-slate-900 mt-0.5">{previewRows.length}</div>
+                      </div>
+                      <div className="bg-purple-50/60 border border-purple-200/60 rounded-lg p-3">
+                        <div className="text-xs text-purple-700 font-medium">MCQ (Multiple Choice)</div>
+                        <div className="text-xl font-bold text-purple-900 mt-0.5">{previewMcqCount}</div>
+                      </div>
+                      <div className="bg-blue-50/60 border border-blue-200/60 rounded-lg p-3">
+                        <div className="text-xs text-blue-700 font-medium">DQ (Descriptive)</div>
+                        <div className="text-xl font-bold text-blue-900 mt-0.5">{previewDqCount}</div>
+                      </div>
+                      <div className="bg-emerald-50/60 border border-emerald-200/60 rounded-lg p-3">
+                        <div className="text-xs text-emerald-700 font-medium">Validation Status</div>
+                        <div className="text-sm font-bold text-emerald-800 mt-1 flex items-center gap-1">
+                          <i className="lni lni-checkmark-circle text-emerald-600"></i> All Rules Passed
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Filter Tabs & Standard TableSearch */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                      <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+                        <button
+                          type="button"
+                          className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${previewFilterType === 'ALL'
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          onClick={() => setPreviewFilterType('ALL')}
+                        >
+                          All ({previewRows.length})
+                        </button>
+                        <button
+                          type="button"
+                          className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${previewFilterType === 'MCQ'
+                            ? 'bg-white text-purple-700 shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          onClick={() => setPreviewFilterType('MCQ')}
+                        >
+                          MCQ ({previewMcqCount})
+                        </button>
+                        <button
+                          type="button"
+                          className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${previewFilterType === 'DQ'
+                            ? 'bg-white text-blue-700 shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          onClick={() => setPreviewFilterType('DQ')}
+                        >
+                          DQ ({previewDqCount})
+                        </button>
+                      </div>
+
+                      <TableSearch
+                        className="w-full sm:w-72"
+                        placeholder="Search in questions or answers..."
+                        value={previewSearch}
+                        onChange={setPreviewSearch}
+                        results={filteredPreviewRows.slice(0, 5).map(q => ({
+                          id: q.slNo,
+                          primary: q.question,
+                          secondary: `${q.questionType} • Ans: ${q.answer}`,
+                        }))}
+                        onSelect={r => setPreviewSearch(r.primary)}
+                      />
+                    </div>
+
+                    {/* Preview Table */}
+                    <ScrollTable className="no-sticky-col" maxHeight="540px">
+                      <table style={{ width: '100%', minWidth: 820, tableLayout: 'auto' }}>
+                        <thead className="sticky top-0 z-10 shadow-xs">
+                          <tr>
+                            <th style={{ width: 55, textAlign: 'center' }}>SL NO</th>
+                            <th style={{ width: 75, textAlign: 'center' }}>TYPE</th>
+                            <th style={{ minWidth: 240, maxWidth: 420 }}>QUESTION</th>
+                            <th style={{ minWidth: 230, width: '28%' }}>OPTIONS</th>
+                            <th style={{ minWidth: 150, width: '20%' }}>ANSWER</th>
+                            <th style={{ width: 75, textAlign: 'center' }}>SECTION</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredPreviewRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--g400)' }}>
+                                <i className="lni lni-search text-2xl block mb-2 opacity-50"></i>
+                                No questions match the current filter or search criteria.
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredPreviewRows.map((q, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                                <td style={{ textAlign: 'center', fontFamily: 'monospace', fontSize: 12, color: 'var(--g500)', width: 55 }}>
+                                  {q.slNo}
+                                </td>
+                                <td style={{ textAlign: 'center', width: 75 }}>
+                                  <span
+                                    className={`badge ${q.questionType === 'MCQ' ? 'badge-purple' : 'badge-blue'
+                                      }`}
+                                  >
+                                    {q.questionType}
+                                  </span>
+                                </td>
+                                <td style={{ whiteSpace: 'normal', minWidth: 240, maxWidth: 420, lineHeight: 1.55, color: 'var(--g800)' }}>
+                                  <RichTextDisplay content={q.question} />
+                                </td>
+                                <td style={{ whiteSpace: 'normal', minWidth: 230 }}>
+                                  {q.questionType === 'MCQ' ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px]">
+                                      <div className="bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-slate-700">
+                                        <strong className="text-slate-400 mr-1">A:</strong>
+                                        {q.option1}
+                                      </div>
+                                      <div className="bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-slate-700">
+                                        <strong className="text-slate-400 mr-1">B:</strong>
+                                        {q.option2}
+                                      </div>
+                                      <div className="bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-slate-700">
+                                        <strong className="text-slate-400 mr-1">C:</strong>
+                                        {q.option3}
+                                      </div>
+                                      <div className="bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-slate-700">
+                                        <strong className="text-slate-400 mr-1">D:</strong>
+                                        {q.option4}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-400 text-xs italic">Descriptive (No options)</span>
+                                  )}
+                                </td>
+                                <td style={{ whiteSpace: 'normal', minWidth: 150 }}>
+                                  <span className="inline-block bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11.5px] px-2.5 py-1 rounded font-medium max-w-full break-words">
+                                    <RichTextDisplay content={q.answer} />
+                                  </span>
+                                </td>
+                                <td style={{ textAlign: 'center', width: 75 }}>
+                                  {q.level ? (
+                                    <span
+                                      className="badge badge-neu text-xs font-mono font-semibold"
+                                      title={`Section ${String(q.level) === '1' ? 'A' : String(q.level) === '2' ? 'B' : String(q.level) === '3' ? 'C' : q.level}`}
+                                    >
+                                      {String(q.level) === '1'
+                                        ? 'Sec A'
+                                        : String(q.level) === '2'
+                                          ? 'Sec B'
+                                          : String(q.level) === '3'
+                                            ? 'Sec C'
+                                            : `L${q.level}`}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-300">—</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </ScrollTable>
                   </div>
                 </div>
               )}
             </div>
-
-            {/* Sheet Selector */}
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 flex flex-col gap-3">
-              <div className="fg mb-0">
-                <label className="lbl flex items-center justify-between">
-                  <span>Select Worksheet</span>
-                  {sheetsMut.isPending && (
-                    <span className="text-[11px] text-indigo-500 flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                      Scanning...
-                    </span>
-                  )}
-                </label>
-                <SearchSelect
-                  options={sheetNames.map(s => ({ value: s, label: s }))}
-                  value={selectedSheet}
-                  onChange={handleSheetChange}
-                  placeholder={
-                    !file
-                      ? 'Upload file to load sheets'
-                      : sheetsMut.isPending
-                        ? 'Reading workbook sheets...'
-                        : sheetNames.length === 0
-                          ? 'No sheets detected'
-                          : 'Select worksheet'
-                  }
-                  disabled={!file || sheetsMut.isPending || sheetNames.length === 0}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Action Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="btn btn-primary flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
-                onClick={handlePreview}
-                disabled={!isFormValidForPreview || previewMut.isPending}
-              >
-                {previewMut.isPending ? (
-                  <>
-                    <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                    <span>Validating & Parsing...</span>
-                  </>
-                ) : (
-                  <>
-                    <i className="lni lni-eye"></i>
-                    <span>Preview & Validate Questions</span>
-                  </>
-                )}
-              </button>
-
-              {file && (
-                <button
-                  type="button"
-                  className="btn btn-neu flex items-center gap-1"
-                  onClick={handleClearFile}
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-          </div>
+          )}
         </div>
-      )}
-
-      {/* ── Validation Error Banner ─────────────────────────────────────────── */}
-      {validationError && (
-        <div ref={errorRef} style={{ scrollMarginTop: '20px' }} className="bg-red-50 border border-red-200 text-red-900 rounded-xl p-4 mb-5 shadow-sm flex items-start gap-3">
-          <div className="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center text-lg shrink-0 mt-0.5">
-            <i className="lni lni-warning"></i>
-          </div>
-          <div className="flex-1">
-            <div className="text-sm font-bold text-red-950 mb-1">Excel Sheet Validation Failed</div>
-            <div className="text-xs text-red-800 leading-relaxed font-mono bg-red-100/50 p-2.5 rounded border border-red-200/60 mb-2">
-              {validationError}
-            </div>
-            {validationError.toLowerCase().includes('no valid data') ? (
-              <div className="text-[12px] text-red-800 leading-relaxed bg-white/80 p-2.5 rounded border border-red-200 mt-1">
-                <strong>Why this happened:</strong> The uploaded file contains only column headers (Row 1) and no question rows below it. Downloaded templates from the system are blank templates for faculty to fill in questions.
-                <div className="mt-2 flex items-center gap-2">
-                  <a
-                    href="/Sample_Question_Bank_With_Data.xlsx"
-                    download="Sample_Question_Bank.xlsx"
-                    className="btn btn-primary btn-sm inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs"
-                  >
-                    <i className="lni lni-download"></i>
-                    <span>Download Pre-filled Sample Workbook (5 Questions)</span>
-                  </a>
-                </div>
-              </div>
-            ) : (
-              <div className="text-[11.5px] text-red-700">
-                Please fix the highlighted row(s) or sheet structure in your Excel file and preview again. No questions have been imported.
-              </div>
-            )}
-          </div>
-          <button
-            type="button"
-            className="text-red-400 hover:text-red-700 transition-colors"
-            onClick={() => setValidationError(null)}
-          >
-            <i className="lni lni-close text-xs"></i>
-          </button>
-        </div>
-      )}
-
-      {/* ── Excel Preview Grid Section ──────────────────────────────────────── */}
-      {previewRows && (
-        <div ref={previewSectionRef} style={{ scrollMarginTop: '20px' }} className="card mb-5">
-          <div className="card-hdr flex flex-wrap items-center justify-between gap-3 p-5 pb-3">
-            <div>
-              <div className="card-title flex items-center gap-2 mb-1">
-                <span className="ctitle-icon">
-                  <i className="lni lni-eye"></i>
-                </span>
-                <span>Question Bank Preview</span>
-                <span className="badge badge-green ml-2">Validated & Ready</span>
-              </div>
-              <div className="text-xs text-slate-500">
-                Course Unit: <strong className="text-slate-800 font-mono">{selectedCourseUnit?.courseUnitCode || 'Selected Unit'}</strong>
-                {' • '}
-                Category: <strong className="text-slate-800">{selectedCategoryObj?.name || 'Category'}</strong>
-                {' • '}
-                Worksheet: <strong className="text-slate-800">{selectedSheet || 'Default'}</strong>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                className="btn btn-primary bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white flex items-center gap-2 px-5 py-2 shadow-sm font-semibold"
-                onClick={handleImport}
-                disabled={importMut.isPending}
-              >
-                {importMut.isPending ? (
-                  <>
-                    <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                    <span>Saving Questions...</span>
-                  </>
-                ) : (
-                  <>
-                    <i className="lni lni-upload text-base"></i>
-                    <span>Commit & Import Questions ({previewRows.length})</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          <div className="p-5 pt-0">
-            {/* KPI Summary Chips */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-              <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-3">
-                <div className="text-xs text-slate-500 font-medium">Total Questions</div>
-                <div className="text-xl font-bold text-slate-900 mt-0.5">{previewRows.length}</div>
-              </div>
-              <div className="bg-purple-50/60 border border-purple-200/60 rounded-lg p-3">
-                <div className="text-xs text-purple-700 font-medium">MCQ (Multiple Choice)</div>
-                <div className="text-xl font-bold text-purple-900 mt-0.5">{previewMcqCount}</div>
-              </div>
-              <div className="bg-blue-50/60 border border-blue-200/60 rounded-lg p-3">
-                <div className="text-xs text-blue-700 font-medium">DQ (Descriptive)</div>
-                <div className="text-xl font-bold text-blue-900 mt-0.5">{previewDqCount}</div>
-              </div>
-              <div className="bg-emerald-50/60 border border-emerald-200/60 rounded-lg p-3">
-                <div className="text-xs text-emerald-700 font-medium">Validation Status</div>
-                <div className="text-sm font-bold text-emerald-800 mt-1 flex items-center gap-1">
-                  <i className="lni lni-checkmark-circle text-emerald-600"></i> All Rules Passed
-                </div>
-              </div>
-            </div>
-
-            {/* Filter Tabs & Standard TableSearch */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-                <button
-                  type="button"
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${previewFilterType === 'ALL'
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  onClick={() => setPreviewFilterType('ALL')}
-                >
-                  All ({previewRows.length})
-                </button>
-                <button
-                  type="button"
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${previewFilterType === 'MCQ'
-                      ? 'bg-white text-purple-700 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  onClick={() => setPreviewFilterType('MCQ')}
-                >
-                  MCQ ({previewMcqCount})
-                </button>
-                <button
-                  type="button"
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${previewFilterType === 'DQ'
-                      ? 'bg-white text-blue-700 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  onClick={() => setPreviewFilterType('DQ')}
-                >
-                  DQ ({previewDqCount})
-                </button>
-              </div>
-
-              <TableSearch
-                className="w-full sm:w-72"
-                placeholder="Search in questions or answers..."
-                value={previewSearch}
-                onChange={setPreviewSearch}
-                results={filteredPreviewRows.slice(0, 5).map(q => ({
-                  id: q.slNo,
-                  primary: q.question,
-                  secondary: `${q.questionType} • Ans: ${q.answer}`,
-                }))}
-                onSelect={r => setPreviewSearch(r.primary)}
-              />
-            </div>
-
-            {/* Preview Table */}
-            <ScrollTable>
-              <table>
-                <thead>
-                  <tr>
-                    <th style={{ width: 60, textAlign: 'center' }}>SL NO</th>
-                    <th style={{ width: 85, textAlign: 'center' }}>TYPE</th>
-                    <th style={{ minWidth: 280, maxWidth: 460 }}>QUESTION</th>
-                    <th style={{ minWidth: 260 }}>OPTIONS</th>
-                    <th style={{ minWidth: 160 }}>ANSWER</th>
-                    <th style={{ width: 80, textAlign: 'center' }}>LEVEL</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredPreviewRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--g400)' }}>
-                        <i className="lni lni-search text-2xl block mb-2 opacity-50"></i>
-                        No questions match the current filter or search criteria.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredPreviewRows.map((q, idx) => (
-                      <tr key={idx}>
-                        <td style={{ textAlign: 'center', fontFamily: 'monospace', fontSize: 12, color: 'var(--g500)' }}>
-                          {q.slNo}
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span
-                            className={`badge ${q.questionType === 'MCQ' ? 'badge-purple' : 'badge-blue'
-                              }`}
-                          >
-                            {q.questionType}
-                          </span>
-                        </td>
-                        <td style={{ whiteSpace: 'normal', minWidth: 280, maxWidth: 460, lineHeight: 1.6, color: 'var(--g800)' }}>
-                          <RichTextDisplay content={q.question} />
-                        </td>
-                        <td style={{ whiteSpace: 'normal', minWidth: 260 }}>
-                          {q.questionType === 'MCQ' ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px]">
-                              <div className="bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-slate-700">
-                                <strong className="text-slate-400 mr-1">A:</strong>
-                                {q.option1}
-                              </div>
-                              <div className="bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-slate-700">
-                                <strong className="text-slate-400 mr-1">B:</strong>
-                                {q.option2}
-                              </div>
-                              <div className="bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-slate-700">
-                                <strong className="text-slate-400 mr-1">C:</strong>
-                                {q.option3}
-                              </div>
-                              <div className="bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-slate-700">
-                                <strong className="text-slate-400 mr-1">D:</strong>
-                                {q.option4}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-slate-400 text-xs italic">Descriptive (No options)</span>
-                          )}
-                        </td>
-                        <td style={{ whiteSpace: 'normal', minWidth: 160 }}>
-                          <span className="inline-block bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11.5px] px-2.5 py-1 rounded font-medium">
-                            <RichTextDisplay content={q.answer} />
-                          </span>
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          {q.level ? (
-                            <span className="badge badge-neu text-xs font-mono font-semibold">
-                              L{q.level}
-                            </span>
-                          ) : (
-                            <span className="text-slate-300">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </ScrollTable>
-          </div>
-        </div>
-      )}
 
       {/* ── Single Question Add Modal ───────────────────────────────────────── */}
       {isAddingQuestion && (
         <SingleQuestionModal
           isOpen={isAddingQuestion}
           onClose={() => setIsAddingQuestion(false)}
-          courseUnitGuid={courseUnitGuid}
-          category={Number(category)}
+          courseUnitGuid={repoCourseUnitGuid}
+          category={Number(repoCategory)}
           intakeGuid={intakeGuid}
-          courseUnitCode={selectedCourseUnit?.courseUnitCode || ''}
-          courseUnitName={selectedCourseUnit?.courseUnitName || ''}
-          categoryName={selectedCategoryObj?.name || ''}
+          courseUnitCode={selectedRepoUnit?.courseUnitCode || ''}
+          courseUnitName={selectedRepoUnit?.courseUnitName || ''}
+          categoryName={selectedRepoCategoryObj?.name || ''}
           onSuccess={() => refetchQuestions()}
           showToast={showToast}
         />
@@ -1421,13 +1575,13 @@ export default function QuestionBankUploadPage() {
         <SingleQuestionModal
           isOpen={Boolean(editingQuestion)}
           onClose={() => setEditingQuestion(null)}
-          courseUnitGuid={courseUnitGuid}
-          category={Number(category)}
+          courseUnitGuid={repoCourseUnitGuid}
+          category={Number(repoCategory)}
           intakeGuid={intakeGuid}
           question={editingQuestion}
-          courseUnitCode={selectedCourseUnit?.courseUnitCode || ''}
-          courseUnitName={selectedCourseUnit?.courseUnitName || ''}
-          categoryName={selectedCategoryObj?.name || ''}
+          courseUnitCode={selectedRepoUnit?.courseUnitCode || ''}
+          courseUnitName={selectedRepoUnit?.courseUnitName || ''}
+          categoryName={selectedRepoCategoryObj?.name || ''}
           onSuccess={() => refetchQuestions()}
           showToast={showToast}
         />
@@ -1468,15 +1622,21 @@ export default function QuestionBankUploadPage() {
 
                   {viewingQuestion.level ? (
                     <span className="badge badge-neu text-xs font-mono">
-                      Level {viewingQuestion.level} ({viewingQuestion.level === 1 ? 'Easy' : viewingQuestion.level === 2 ? 'Medium' : 'Difficult'})
+                      {viewingQuestion.level === 1
+                        ? 'Section A'
+                        : viewingQuestion.level === 2
+                          ? 'Section B'
+                          : viewingQuestion.level === 3
+                            ? 'Section C'
+                            : `Section ${viewingQuestion.level}`}
                     </span>
                   ) : (
-                    <span className="text-xs text-slate-400 font-medium">Level: Not Required</span>
+                    <span className="text-xs text-slate-400 font-medium">Section: Not Required</span>
                   )}
                 </div>
 
                 <div className="text-xs text-slate-500 font-mono font-medium">
-                  {selectedCourseUnit?.courseUnitCode} • {selectedCategoryObj?.name}
+                  {selectedRepoUnit?.courseUnitCode} • {selectedRepoCategoryObj?.name}
                 </div>
               </div>
 
@@ -1638,12 +1798,12 @@ export default function QuestionBankUploadPage() {
                 <div className="flex justify-between">
                   <span className="text-slate-500">Course Unit:</span>
                   <strong className="text-slate-800 font-mono">
-                    {selectedCourseUnit ? `${selectedCourseUnit.courseUnitCode} — ${selectedCourseUnit.courseUnitName}` : courseUnitGuid}
+                    {selectedRepoUnit ? `${selectedRepoUnit.courseUnitCode} — ${selectedRepoUnit.courseUnitName}` : repoCourseUnitGuid}
                   </strong>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Assessment Category:</span>
-                  <strong className="text-slate-800">{selectedCategoryObj?.name || category}</strong>
+                  <strong className="text-slate-800">{selectedRepoCategoryObj?.name || repoCategory}</strong>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Academic Intake:</span>

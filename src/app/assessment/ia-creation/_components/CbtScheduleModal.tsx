@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
@@ -18,12 +18,29 @@ interface CbtScheduleModalProps {
   unitName: string
 }
 
+function getTodayYmd(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName }: CbtScheduleModalProps) {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
   const [saved, setSaved] = useState(false)
   const showToast = (msg: string, type: string = 'success') => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current)
+    }
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 3500)
+    const isErrorOrWarn = ['error', 'err', 'danger', 'warn', 'warning'].includes((type || '').toLowerCase().trim())
+    const duration = isErrorOrWarn ? 8000 : 4000
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null)
+      toastTimerRef.current = null
+    }, duration)
   }
 
   // Fetch current schedule
@@ -35,12 +52,42 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
   const [startTime, setStartTime] = useState('')
   const [endDate, setEndDate] = useState('')
   const [endTime, setEndTime] = useState('')
-  const [duration, setDuration] = useState<number | ''>('')
+  const [duration, setDuration] = useState<number | ''>(90)
   const [maxMark, setMaxMark] = useState<number | ''>('')
   const [testType, setTestType] = useState<number>(0)
   const [publishStatus, setPublishStatus] = useState<number>(0)
   const [examRuleGuid, setExamRuleGuid] = useState<string>('')
   const [lookupOpen, setLookupOpen] = useState(false)
+
+  function handleStartDateChange(d: string) {
+    const today = getTodayYmd()
+    if (d && d < today) {
+      showToast('Before date is not possible', 'error')
+      return
+    }
+    setStartDate(d)
+    if (d && endDate && endDate < d) {
+      showToast('Before date is not possible', 'error')
+      setEndDate('')
+    }
+  }
+
+  function handleEndDateChange(d: string) {
+    const today = getTodayYmd()
+    const minAllowed = startDate || today
+    if (d && d < minAllowed) {
+      showToast('Before date is not possible', 'error')
+      return
+    }
+    setEndDate(d)
+  }
+
+  function handleEndTimeChange(t: string) {
+    setEndTime(t)
+    if (startDate && endDate && startDate === endDate && startTime && t && t <= startTime) {
+      showToast('End Time must be after Start Time', 'error')
+    }
+  }
 
   // Fetch Exam Rules for the dropdown
   const { data: rulesData, isLoading: rulesLoading } = useExamRules(1, 100, '', isOpen)
@@ -70,7 +117,12 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
         setEndDate('')
         setEndTime('')
       }
-      setDuration(schedule.durationMinutes ?? '')
+      const isAlreadyScheduled = Boolean(schedule.scheduledStartDateTime && schedule.scheduledEndDateTime)
+      if (isAlreadyScheduled && schedule.durationMinutes) {
+        setDuration(schedule.durationMinutes)
+      } else {
+        setDuration(90)
+      }
       setMaxMark(schedule.maxMark ?? '')
       setTestType(schedule.testType ?? 0)
       setPublishStatus(schedule.publishStatus ?? 0)
@@ -85,26 +137,13 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
         setStartTime('')
         setEndDate('')
         setEndTime('')
-        setDuration('')
+        setDuration(90)
         setMaxMark('')
         setTestType(0)
         setPublishStatus(0)
         setExamRuleGuid('')
     }
   }, [schedule, isOpen])
-
-  // Auto-calculate duration based on start and end date/time
-  useEffect(() => {
-    if (startDate && startTime && endDate && endTime) {
-      const startDt = new Date(`${startDate}T${startTime}`)
-      const endDt = new Date(`${endDate}T${endTime}`)
-      if (!isNaN(startDt.getTime()) && !isNaN(endDt.getTime()) && endDt > startDt) {
-        const diffMs = endDt.getTime() - startDt.getTime()
-        const diffMins = Math.floor(diffMs / 60000)
-        setDuration(diffMins)
-      }
-    }
-  }, [startDate, startTime, endDate, endTime])
 
   async function handleSave() {
     if (!testGuid) return
@@ -199,7 +238,13 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
                 <label className="lbl">Start Date & Time <span className="text-red-500">*</span></label>
                 <div className="flex gap-2 mt-1">
                   <div className="flex-1">
-                    <DatePicker value={startDate} onChange={setStartDate} />
+                    <DatePicker 
+                      value={startDate} 
+                      onChange={handleStartDateChange} 
+                      minYmd={getTodayYmd()} 
+                      rangeMessage="Before date is not possible"
+                      onError={msg => showToast(msg, 'error')}
+                    />
                   </div>
                   <div className="w-[140px]">
                     <TimePicker value={startTime} onChange={setStartTime} />
@@ -210,10 +255,16 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
                 <label className="lbl">End Date & Time <span className="text-red-500">*</span></label>
                 <div className="flex gap-2 mt-1">
                   <div className="flex-1">
-                    <DatePicker value={endDate} onChange={setEndDate} />
+                    <DatePicker 
+                      value={endDate} 
+                      onChange={handleEndDateChange} 
+                      minYmd={startDate || getTodayYmd()} 
+                      rangeMessage="Before date is not possible"
+                      onError={msg => showToast(msg, 'error')}
+                    />
                   </div>
                   <div className="w-[140px]">
-                    <TimePicker value={endTime} onChange={setEndTime} />
+                    <TimePicker value={endTime} onChange={handleEndTimeChange} />
                   </div>
                 </div>
               </div>
@@ -329,7 +380,7 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
           </div>
         </div>
       </div>
-      <Toast toast={toast} />
+      <Toast toast={toast} onClose={() => setToast(null)} />
       <ExamRuleLookupModal 
         isOpen={lookupOpen} 
         onClose={() => setLookupOpen(false)} 

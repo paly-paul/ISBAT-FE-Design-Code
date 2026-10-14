@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
@@ -18,12 +18,29 @@ interface UeScheduleModalProps {
   unitName: string
 }
 
+function getTodayYmd(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName }: UeScheduleModalProps) {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
   const [saved, setSaved] = useState(false)
   const showToast = (msg: string, type: string = 'success') => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current)
+    }
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 3500)
+    const isErrorOrWarn = ['error', 'err', 'danger', 'warn', 'warning'].includes((type || '').toLowerCase().trim())
+    const duration = isErrorOrWarn ? 8000 : 4000
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null)
+      toastTimerRef.current = null
+    }, duration)
   }
 
   // Fetch current schedule
@@ -31,7 +48,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
   const updateMut = useUpdateIaUeSchedule(examGuid || '')
 
   // Form State
-  const [examDate, setExamDate] = useState('')
+  const [examDate, setExamDate] = useState<string>(getTodayYmd)
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [maxMark, setMaxMark] = useState<number | ''>('')
@@ -40,6 +57,15 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
   const [publishStatus, setPublishStatus] = useState<number>(0)
   const [examRuleGuid, setExamRuleGuid] = useState<string>('')
   const [lookupOpen, setLookupOpen] = useState(false)
+
+  function handleExamDateChange(d: string) {
+    const today = getTodayYmd()
+    if (d && d < today) {
+      showToast('Before date is not possible', 'error')
+      return
+    }
+    setExamDate(d)
+  }
 
   // Fetch Exam Rules for the dropdown
   const { data: rulesData, isLoading: rulesLoading } = useExamRules(1, 100, '', isOpen)
@@ -52,11 +78,19 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
   // Populate form when data loads
   useEffect(() => {
     if (schedule && isOpen) {
-      if (schedule.examDate) {
-        // examDate arrives as YYYY-MM-DD from the backend (or YYYY-MM-DDT00:00:00)
+      // If the schedule was already saved with valid start and end times, preserve the saved date.
+      // Otherwise (newly scheduling or backend default placeholder in July), default to current date (ASM-018).
+      const isAlreadyScheduled = Boolean(
+        schedule.startTime &&
+        schedule.endTime &&
+        schedule.startTime !== '00:00:00' &&
+        schedule.startTime !== '00:00'
+      )
+
+      if (isAlreadyScheduled && schedule.examDate) {
         setExamDate(schedule.examDate.split('T')[0])
       } else {
-        setExamDate('')
+        setExamDate(getTodayYmd())
       }
       
       setStartTime(schedule.startTime ? schedule.startTime.slice(0, 5) : '')
@@ -73,7 +107,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
       }
     } else if (!isOpen) {
       // reset form when closed
-      setExamDate('')
+      setExamDate(getTodayYmd())
       setStartTime('')
       setEndTime('')
       setMaxMark('')
@@ -173,7 +207,13 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
               <div>
                 <label className="lbl">Exam Date <span className="text-red-500">*</span></label>
                 <div className="mt-1">
-                  <DatePicker value={examDate} onChange={setExamDate} />
+                  <DatePicker 
+                    value={examDate} 
+                    onChange={handleExamDateChange} 
+                    minYmd={getTodayYmd()} 
+                    rangeMessage="Before date is not possible"
+                    onError={msg => showToast(msg, 'error')}
+                  />
                 </div>
               </div>
 
@@ -308,7 +348,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
           </div>
         </div>
       </div>
-      <Toast toast={toast} />
+      <Toast toast={toast} onClose={() => setToast(null)} />
       <ExamRuleLookupModal 
         isOpen={lookupOpen} 
         onClose={() => setLookupOpen(false)} 

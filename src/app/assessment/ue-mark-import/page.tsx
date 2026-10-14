@@ -19,9 +19,18 @@ import { UeMarkImportPreviewItem } from '@/lib/api/assessment/ueMarkImport'
 
 export default function UeMarkImportPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
   const showToast = (msg: string, type = 'success') => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current)
+    }
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 4000)
+    const isErrorOrWarn = ['error', 'err', 'danger', 'warn', 'warning'].includes((type || '').toLowerCase().trim())
+    const duration = isErrorOrWarn ? 8000 : 4000
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null)
+      toastTimerRef.current = null
+    }, duration)
   }
 
   const [program, setProgram] = useState<ProgramPickOption | null>(null)
@@ -33,7 +42,7 @@ export default function UeMarkImportPage() {
   const [file, setFile] = useState<File | null>(null)
   const [sheetNames, setSheetNames] = useState<string[]>([])
   const [selectedSheet, setSelectedSheet] = useState('')
-  
+
   const [previewRows, setPreviewRows] = useState<UeMarkImportPreviewItem[] | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [successModal, setSuccessModal] = useState<{ title: string; subtitle: string } | null>(null)
@@ -156,7 +165,7 @@ export default function UeMarkImportPage() {
       showToast('Please select a file and ensure exam info is loaded.', 'warn')
       return
     }
-    
+
     setValidationError(null)
     previewMut.mutate({
       file,
@@ -206,6 +215,28 @@ export default function UeMarkImportPage() {
     })
   }
 
+  const handleDownloadTemplate = () => {
+    if (!examInfo?.universityExamGuid) {
+      showToast('Please select Course Unit and UE Type to resolve exam first.', 'warn')
+      return
+    }
+
+    setValidationError(null)
+    downloadMut.mutate(examInfo.universityExamGuid, {
+      onSuccess: () => {
+        showToast('Template downloaded successfully.', 'success')
+      },
+      onError: (err: any) => {
+        const errorMsg = err?.message || 'Failed to download template.'
+        showToast(errorMsg, 'danger')
+        setValidationError(errorMsg)
+        setTimeout(() => {
+          errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 100)
+      }
+    })
+  }
+
   return (
     <div className="page active">
       <div className="pg-hdr flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
@@ -230,7 +261,7 @@ export default function UeMarkImportPage() {
               placeholder={isLoadingIntakes ? 'Loading...' : 'Select Intake'}
             />
           </div>
-          
+
           <div className="fg mb-0">
             <label className="lbl">Programme <span className="text-red-500">*</span></label>
             <ProgramSearchPicker
@@ -333,7 +364,7 @@ export default function UeMarkImportPage() {
             />
           </div>
         </div>
-        
+
         <div className="mt-5 flex gap-2">
           <button
             type="button"
@@ -343,7 +374,7 @@ export default function UeMarkImportPage() {
           >
             {previewMut.isPending ? 'Previewing...' : 'Preview'}
           </button>
-          
+
           <button
             type="button"
             className="btn btn-success"
@@ -352,7 +383,7 @@ export default function UeMarkImportPage() {
           >
             {importMut.isPending ? 'Saving...' : 'Save & Import'}
           </button>
-          
+
           <button
             type="button"
             className="btn btn-neu"
@@ -361,13 +392,14 @@ export default function UeMarkImportPage() {
           >
             Cancel
           </button>
-          
+
           <button
             type="button"
-            className="btn btn-neu ml-auto text-blue-600"
-            onClick={() => examInfo && downloadMut.mutate(examInfo.universityExamGuid)}
+            className="btn btn-neu ml-auto text-blue-600 flex items-center gap-1.5"
+            onClick={handleDownloadTemplate}
             disabled={!examInfo || downloadMut.isPending}
           >
+            <i className={`lni ${downloadMut.isPending ? 'lni-spinner animate-spin' : 'lni-download'}`} />
             {downloadMut.isPending ? 'Downloading...' : 'Template Download'}
           </button>
         </div>
@@ -387,7 +419,7 @@ export default function UeMarkImportPage() {
         <div ref={previewSectionRef} className="card p-0 overflow-hidden mb-5">
           <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
             <div className="font-bold text-slate-800">
-              Preview Marks ({previewRows.length} students)
+              Preview Marks ({previewRows.length} records)
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -395,6 +427,7 @@ export default function UeMarkImportPage() {
               <thead>
                 <tr>
                   <th>Sl No</th>
+                  <th>Matching Code</th>
                   {/* Depending on layout, we might show different columns, for now dumping common ones */}
                   {previewRows.some(r => r.sectionAMark !== null) && <th>Section A</th>}
                   {previewRows.some(r => r.sectionBMark !== null) && <th>Section B</th>}
@@ -413,6 +446,7 @@ export default function UeMarkImportPage() {
                 {previewRows.map((row, i) => (
                   <tr key={i}>
                     <td>{row.slNo}</td>
+                    <td className="font-mono font-medium text-slate-800">{row.matchingCode || '—'}</td>
                     {row.sectionAMark !== null && <td className="font-mono">{row.sectionAMark}</td>}
                     {row.sectionBMark !== null && <td className="font-mono">{row.sectionBMark}</td>}
                     {row.sectionCMark !== null && <td className="font-mono">{row.sectionCMark}</td>}
@@ -439,7 +473,7 @@ export default function UeMarkImportPage() {
           onClose={() => setSuccessModal(null)}
         />
       )}
-      {toast && <Toast toast={toast} />}
+      <Toast toast={toast} onClose={() => setToast(null)} />
     </div>
   )
 }

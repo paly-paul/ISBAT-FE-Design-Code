@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { Toast } from '@/components/Toast'
@@ -211,7 +211,7 @@ export default function ResitUeMarkImportPage() {
       </div>
 
       {drawerExam && (
-        <ImportDrawer
+        <ImportModal
           key={drawerExam.resitScheduleGuid ?? ''}
           exam={drawerExam}
           showToast={showToast}
@@ -224,18 +224,18 @@ export default function ResitUeMarkImportPage() {
   )
 }
 
-// ── Import drawer ──────────────────────────────────────────────────────────
+// ── Import modal ───────────────────────────────────────────────────────────
 
 type Step = 1 | 2 | 3
 
-interface DrawerProps {
+interface ModalProps {
   exam: ResitUeExam
   showToast: (msg: string, type?: string) => void
   onClose: () => void
   onOpenExam: (exam: ResitUeExam) => void
 }
 
-function ImportDrawer({ exam, showToast, onClose, onOpenExam }: DrawerProps) {
+function ImportModal({ exam, showToast, onClose, onOpenExam }: ModalProps) {
   const guid = exam.resitScheduleGuid as string
   const columns = exam.columns
   const studentsQuery = useResitUeStudents(guid)
@@ -430,8 +430,8 @@ function ImportDrawer({ exam, showToast, onClose, onOpenExam }: DrawerProps) {
   function downloadProblemList() {
     if (!rows) return
     const q = (s: string) => `"${s.replace(/"/g, '""')}"`
-    const lines = ['slNo,studentNum,column,message']
-    for (const r of problemRows) for (const [col, msgs] of Object.entries(r.errors)) for (const m of msgs) lines.push([r.slNo, r.studentNum, col, m].map(q).join(','))
+    const lines = ['slNo,matchingCode,studentNum,column,message']
+    for (const r of problemRows) for (const [col, msgs] of Object.entries(r.errors)) for (const m of msgs) lines.push([r.slNo, r.matchingCode ?? '', r.studentNum, col, m].map(q).join(','))
     saveBlob(new Blob([lines.join('\r\n')], { type: 'text/csv' }), `${exam.unitCode}_${exam.layout}_Resit_UE_Problems.csv`)
   }
 
@@ -461,48 +461,57 @@ function ImportDrawer({ exam, showToast, onClose, onOpenExam }: DrawerProps) {
   const STEPS: { n: Step; label: string }[] = [{ n: 1, label: 'Template' }, { n: 2, label: 'Upload' }, { n: 3, label: 'Review & save' }]
 
   return createPortal(
-    <div className="drawer-overlay">
-      <div className="drawer" style={{ width: 960 }} role="dialog" aria-modal="true" aria-label={`Import marks ${exam.unitCode}`} onClick={e => e.stopPropagation()}>
-        <div className="drawer-hdr">
-          <div className="flex items-start gap-3">
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-[15px]">Import marks · {exam.unitCode} {exam.layout}</div>
-              <div className="text-xs mt-1" style={{ opacity: 0.9 }}>
-                {exam.unitName} · Exam {fmtDate(exam.examDate)} · Max mark {fmtMark(exam.maxMark)}
-              </div>
-              <div className="text-xs mt-0.5" style={{ opacity: 0.9 }}>{total} students · {imported} imported · {pending} pending</div>
-            </div>
-            <button onClick={requestClose} disabled={saving} aria-label="Close" style={{ background: 'transparent', border: 'none', color: 'var(--white)', cursor: 'pointer', padding: 2 }}>
-              <i className="lni lni-close" style={{ fontSize: 18 }}></i>
-            </button>
+    <div className="modal-overlay open" onClick={requestClose}>
+      <div
+        className="modal modal-xl modal-flex"
+        style={{ width: 'min(960px, 95vw)', height: 'auto', maxHeight: '90vh', borderRadius: 12 }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Import marks ${exam.unitCode}`}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="modal-hdr modal-hdr-blue">
+          <div className="modal-title flex items-center gap-2">
+            <i className="lni lni-upload" style={{ fontSize: 18 }}></i>
+            <span>Import marks · {exam.unitCode} {exam.layout}</span>
           </div>
-          {!result && (
-            <div className="flex items-center gap-2 mt-4 flex-wrap">
-              {STEPS.map((s, i) => {
-                const done = s.n < step
-                const reachable = s.n <= maxStep && !saving
-                return (
-                  <div key={s.n} className="flex items-center gap-2">
-                    {i > 0 && <span style={{ width: 28, height: 1, background: 'rgba(255,255,255,.5)' }} />}
-                    <button
-                      onClick={() => reachable && s.n !== step && goStep(s.n)}
-                      disabled={!reachable}
-                      className="flex items-center gap-1.5 text-xs font-semibold"
-                      style={{ background: 'transparent', border: 'none', color: 'var(--white)', opacity: s.n === step ? 1 : 0.7, cursor: reachable ? 'pointer' : 'default' }}
-                    >
-                      <span className="inline-flex items-center justify-center rounded-full" style={{ width: 20, height: 20, background: s.n === step ? 'var(--white)' : 'rgba(255,255,255,.25)', color: s.n === step ? 'var(--b700)' : 'var(--white)', fontSize: 11 }}>
-                        {done ? '✓' : s.n}
-                      </span>
-                      {s.label}
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          <button
+            className="modal-close"
+            onClick={requestClose}
+            disabled={saving}
+            aria-label="Close"
+          >
+            <i className="lni lni-close"></i>
+          </button>
         </div>
 
-        <div className="drawer-body">
+        {!result && (
+          <div className="prog-steps">
+            {STEPS.map((s, i) => {
+              const active = s.n === step
+              const done = s.n < step
+              const reachable = s.n <= maxStep && !saving
+              return (
+                <Fragment key={s.n}>
+                  {i > 0 && <div className="prog-step-line" />}
+                  <div
+                    className={`prog-step${active ? ' active' : ''}${done ? ' done' : ''}`}
+                    onClick={() => reachable && !active && goStep(s.n)}
+                    style={{
+                      cursor: reachable ? 'pointer' : 'default',
+                      opacity: !reachable && !active ? 0.6 : 1,
+                    }}
+                  >
+                    <span className="prog-step-num">{done ? '✓' : s.n}</span>
+                    <span>{s.label}</span>
+                  </div>
+                </Fragment>
+              )
+            })}
+          </div>
+        )}
+
+        <div className="modal-scroll">
           {result ? (
             <div className="text-center py-10">
               <div className="text-5xl mb-3" style={{ color: 'var(--green)' }}><i className="lni lni-checkmark-circle"></i></div>
@@ -534,7 +543,7 @@ function ImportDrawer({ exam, showToast, onClose, onOpenExam }: DrawerProps) {
                 <i className="lni lni-information mt-0.5" style={{ color: 'var(--b700)' }}></i>
                 <ul className="list-disc pl-4 space-y-1 text-g700">
                   <li>Enter a mark in every column for every student; up to 2 decimals.</li>
-                  <li>Do not change <span className="font-mono">SLNO</span> or <span className="font-mono">STUDENTNUM</span>. <span className="font-mono">STUDENTNAME</span> is for reference only.</li>
+                  <li>Do not change <span className="font-mono">SLNO</span>, <span className="font-mono">MATCHINGCODE</span>, or <span className="font-mono">STUDENTNUM</span>.</li>
                   <li>The template holds only the <strong>{pending}</strong> student{pending === 1 ? '' : 's'} still without marks.</li>
                 </ul>
               </div>
@@ -605,7 +614,8 @@ function ImportDrawer({ exam, showToast, onClose, onOpenExam }: DrawerProps) {
                   <thead>
                     <tr>
                       <th style={{ textAlign: 'left', width: 56 }}>SL</th>
-                      <th>Student</th>
+                      <th style={{ textAlign: 'left', minWidth: 140 }}>Matching Code</th>
+                      <th style={{ textAlign: 'left', minWidth: 160 }}>Reg No.</th>
                       {columns.map(c => <th key={c.key} style={{ textAlign: 'right' }}>{c.label}<div className="font-normal text-g400">({fmtMark(c.maxMark)})</div></th>)}
                       <th style={{ textAlign: 'right' }}>Total<div className="font-normal text-g400">({fmtMark(exam.maxMark)})</div></th>
                     </tr>
@@ -619,11 +629,14 @@ function ImportDrawer({ exam, showToast, onClose, onOpenExam }: DrawerProps) {
                       return (
                         <tr key={`${r.slNo}-${r.studentNum}`} style={bad ? { background: 'var(--red-bg)', boxShadow: 'inset 3px 0 0 var(--red)' } : undefined} title={all || undefined}>
                           <td className="font-mono" style={{ textAlign: 'left' }}>{r.slNo}</td>
-                          <td style={{ minWidth: 200 }}>
-                            {unknown
-                              ? <div className="font-semibold" style={{ color: 'var(--red)' }}>⚠ Unknown student</div>
-                              : <div className="font-semibold text-g900">{r.studentName ?? '—'}</div>}
-                            <div className="text-xs text-g500 font-mono">{r.studentNum || '—'}</div>
+                          <td className="font-mono font-semibold text-g900" style={{ textAlign: 'left' }}>
+                            {r.matchingCode || '—'}
+                          </td>
+                          <td style={{ minWidth: 160 }}>
+                            {unknown && (
+                              <div className="font-semibold text-xs" style={{ color: 'var(--red)' }}>⚠ Unknown student</div>
+                            )}
+                            <div className="font-mono text-xs font-semibold text-g900">{r.studentNum || '—'}</div>
                             <CellErrors msgs={r.errors.STUDENTNUM} />
                           </td>
                           {columns.map(c => {
@@ -659,7 +672,7 @@ function ImportDrawer({ exam, showToast, onClose, onOpenExam }: DrawerProps) {
         </div>
 
         {!result && step === 1 && (
-          <div className="drawer-ftr">
+          <div className="modal-footer">
             <button className="btn btn-neu" onClick={() => goStep(2)}>I already have the file →</button>
             <button className="btn btn-primary" onClick={handleDownload} disabled={download.isPending || pending === 0}>
               <i className="lni lni-download"></i> {download.isPending ? 'Preparing…' : `Download template (${pending} student${pending === 1 ? '' : 's'})`}
@@ -668,7 +681,7 @@ function ImportDrawer({ exam, showToast, onClose, onOpenExam }: DrawerProps) {
         )}
 
         {!result && step === 2 && (
-          <div className="drawer-ftr">
+          <div className="modal-footer">
             <button className="btn btn-neu" onClick={() => goStep(1)} disabled={checking}>← Template</button>
             {file && sheetNames.length > 1 && (
               <button className="btn btn-primary" onClick={() => file && void checkSheet(file, sheet)} disabled={checking || !students || !sheet}>
@@ -679,7 +692,7 @@ function ImportDrawer({ exam, showToast, onClose, onOpenExam }: DrawerProps) {
         )}
 
         {!result && step === 3 && rows && (
-          <div className="drawer-ftr" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="modal-footer" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
             {problemRows.length > 0 ? (
               <>
                 <span className="text-sm" style={{ color: 'var(--red)' }}><i className="lni lni-warning"></i> Fix {problems} problem{problems === 1 ? '' : 's'} in the file and upload it again.</span>

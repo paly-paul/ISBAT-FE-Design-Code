@@ -8,13 +8,14 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { ProjectProposalFormModal } from '@/components/modals/assessment/ProjectProposalFormModal'
 import { ProjectProposalViewModal } from '@/components/modals/assessment/ProjectProposalViewModal'
+import { ProjectProposalUploadModal } from '@/components/modals/assessment/ProjectProposalUploadModal'
 import { TableSearch } from '@/components/TableSearch'
 import { Pagination } from '@/components/Pagination'
 import { 
   useProjectProposals, 
   useDeleteProjectProposal 
 } from '@/hooks/assessment/useProjectProposals'
-import { getProjectProposalSynopsis } from '@/lib/api/assessment/projectProposals'
+import { getProjectProposalSynopsis, ProjectProposalRow } from '@/lib/api/assessment/projectProposals'
 
 export default function ProjectProposalsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -22,6 +23,10 @@ export default function ProjectProposalsPage() {
   
   const [isViewOpen, setIsViewOpen] = useState(false)
   const [viewingGuid, setViewingGuid] = useState<string | null>(null)
+
+  const [isUploadOpen, setIsUploadOpen] = useState(false)
+  const [uploadingGuid, setUploadingGuid] = useState<string | null>(null)
+  const [uploadingRow, setUploadingRow] = useState<ProjectProposalRow | null>(null)
 
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false)
   const [deletingGuid, setDeletingGuid] = useState<string | null>(null)
@@ -56,6 +61,17 @@ export default function ProjectProposalsPage() {
   const handleAdd = () => {
     setEditingGuid(null)
     setIsFormOpen(true)
+  }
+
+  const handleOpenUpload = (row?: ProjectProposalRow | null) => {
+    if (row) {
+      setUploadingGuid(row.proposalGuid)
+      setUploadingRow(row)
+    } else {
+      setUploadingGuid(null)
+      setUploadingRow(null)
+    }
+    setIsUploadOpen(true)
   }
 
   const handleEdit = (guid: string) => {
@@ -112,7 +128,10 @@ export default function ProjectProposalsPage() {
           <h1 className="pg-title">Project Proposals</h1>
           <p className="pg-sub">Manage and track student project proposals for the current intake.</p>
         </div>
-        <div>
+        <div className="flex items-center gap-2">
+          <button className="btn btn-neu" onClick={() => handleOpenUpload(null)}>
+            <i className="lni lni-cloud-upload"></i> Upload Document
+          </button>
           <button className="btn btn-primary" onClick={handleAdd}>
             <i className="lni lni-plus"></i> Add New Proposal
           </button>
@@ -132,7 +151,7 @@ export default function ProjectProposalsPage() {
               onChange={setSearchInput}
               onEnter={() => { setSearch(searchInput); setPage(1) }}
             />
-            {search && <button className="btn btn-white" onClick={() => { setSearchInput(''); setSearch(''); setPage(1) }}>Clear</button>}
+            {search && <button className="btn btn-neu" onClick={() => { setSearchInput(''); setSearch(''); setPage(1) }}>Clear</button>}
           </div>
         </div>
         <ScrollTable>
@@ -161,6 +180,9 @@ export default function ProjectProposalsPage() {
                       <ActionMenu>
                         <button className="btn btn-neu btn-sm" onClick={() => handleView(row.proposalGuid)}>
                           <i className="lni lni-eye"></i> View Details
+                        </button>
+                        <button className="btn btn-neu btn-sm" onClick={() => handleOpenUpload(row)}>
+                          <i className="lni lni-cloud-upload"></i> Upload Document
                         </button>
                         <button className="btn btn-neu btn-sm" onClick={() => handleDownloadSynopsis(row.proposalGuid, row.studentName || 'Student')}>
                           <i className="lni lni-download"></i> Download Synopsis
@@ -223,6 +245,18 @@ export default function ProjectProposalsPage() {
         proposalGuid={viewingGuid}
         row={proposals?.find(p => p.proposalGuid === viewingGuid) || null}
         onToast={showToast}
+      />
+
+      <ProjectProposalUploadModal
+        isOpen={isUploadOpen}
+        onClose={() => {
+          setIsUploadOpen(false)
+          setUploadingGuid(null)
+          setUploadingRow(null)
+        }}
+        proposalGuid={uploadingGuid}
+        initialRow={uploadingRow}
+        onSuccess={() => showToast('Document uploaded successfully')}
       />
 
       {isConfirmDeleteOpen && deletingGuid && (
