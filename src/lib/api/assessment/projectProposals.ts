@@ -73,3 +73,19 @@ export function updateProjectProposal(guid: string, req: FormData) {
 export function deleteProjectProposal(guid: string) {
   return apiDelete<boolean>(`/api/v1/assessment/project-proposals/${guid}`)
 }
+
+export async function uploadProjectProposalDocument(guid: string, file: File) {
+  const existing = await getProjectProposal(guid)
+  const formData = new FormData()
+  formData.append('unitGuid', existing.unitGuid || '')
+  formData.append('studentGuid', existing.studentGuid || '')
+  formData.append('projectName', existing.projectName || '')
+  formData.append('objective', existing.objective || '')
+  formData.append('isGroup', String(existing.isGroup || false))
+  formData.append('studentCount', String(existing.studentCount || ''))
+  formData.append('members', existing.members || '')
+  formData.append('proposalDate', existing.proposalDate ? existing.proposalDate.split('T')[0] : new Date().toISOString().split('T')[0])
+  formData.append('removeSynopsis', 'false')
+  formData.append('synopsis', file)
+  return updateProjectProposal(guid, formData)
+}

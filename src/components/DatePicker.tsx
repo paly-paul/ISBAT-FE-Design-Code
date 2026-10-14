@@ -15,6 +15,7 @@ interface Props {
   // convention used by plain <input>s elsewhere — lets call sites keep that
   // same visual behavior after swapping from a native date input to this.
   hasError?: boolean
+  onError?: (msg: string) => void
 }
 
 function pad(n: number) { return String(n).padStart(2, '0') }
@@ -61,11 +62,11 @@ function compareYmd(left?: string, right?: string) {
   return leftD - rightD
 }
 
-export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy', maxYmd, minYmd, rangeMessage, hasError }: Props) {
+export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy', maxYmd, minYmd, rangeMessage, hasError, onError }: Props) {
   // null when ymd is allowed, otherwise the message to show.
   function outOfRange(ymd: string): string | null {
     if (maxYmd && compareYmd(ymd, maxYmd) > 0) return rangeMessage ?? 'Date cannot be in the future'
-    if (minYmd && compareYmd(ymd, minYmd) < 0) return rangeMessage ?? 'Date is too far in the past'
+    if (minYmd && compareYmd(ymd, minYmd) < 0) return rangeMessage ?? 'Before date is not possible'
     return null
   }
 
@@ -89,6 +90,20 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
   useEffect(() => setDisplay(toDisplay(value)), [value])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => setViewDate(ymdToDate(value) ?? defaultViewDate()), [value])
+
+  // Clear or set error when props change
+  useEffect(() => {
+    if (value) {
+      const err = outOfRange(value)
+      if (err) {
+        setError(err)
+      } else {
+        setError('')
+      }
+    } else {
+      setError('')
+    }
+  }, [value, minYmd, maxYmd, rangeMessage])
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -142,6 +157,7 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
     const rangeError = outOfRange(ymd)
     if (rangeError) {
       setError(rangeError)
+      onError?.(rangeError)
       return
     }
     setError('')
@@ -174,11 +190,13 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
       const rangeError = outOfRange(ymd)
       if (rangeError) {
         setError(rangeError)
+        onError?.(rangeError)
         return
       }
       setError('')
       if (value !== ymd) onChange(ymd)
     } else if (!text) {
+      setError('')
       if (value !== '') onChange('')
     }
   }
@@ -223,7 +241,7 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
           inputMode="numeric"
           maxLength={10}
           onFocus={() => setOpen(false)}
-          style={{ minWidth: 120, width: '100%', paddingRight: 30, borderColor: hasError ? 'var(--red)' : undefined }}
+          style={{ minWidth: 120, width: '100%', paddingRight: 30, borderColor: (hasError || !!error) ? 'var(--red, #ef4444)' : undefined }}
         />
           <button
           type="button"
@@ -298,10 +316,17 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
                   <button
                     key={i}
                     type="button"
-                    className={`pk-cell${selected ? ' pk-sel' : ''}${isToday ? ' pk-today' : ''}`}
+                    className={`pk-cell${selected ? ' pk-sel' : ''}${isToday ? ' pk-today' : ''}${disabled ? ' pk-disabled' : ''}`}
                     onMouseDown={e => e.preventDefault()}
-                    onClick={() => { if (!disabled) pick(cell as number) }}
-                    disabled={disabled}
+                    onClick={() => {
+                      if (disabled) {
+                        const err = outOfRange(cellYmd) ?? 'Before date is not possible'
+                        setError(err)
+                        onError?.(err)
+                      } else {
+                        pick(cell as number)
+                      }
+                    }}
                     aria-disabled={disabled}
                   >
                     {cell}
@@ -309,6 +334,11 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
                 )
               })}
             </div>
+            {error && (
+              <div style={{ color: 'var(--red, #ef4444)', fontSize: 11.5, marginTop: 6, textAlign: 'center', fontWeight: 500, lineHeight: 1.3 }}>
+                {error}
+              </div>
+            )}
           </div>
         </div>,
         document.body

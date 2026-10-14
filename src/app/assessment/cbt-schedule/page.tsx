@@ -11,6 +11,14 @@ import { useExamRules } from '@/hooks/assessment/useExamRules'
 import Link from 'next/link'
 import { ExamRuleLookupModal } from '@/app/assessment/ia-creation/_components/ExamRuleLookupModal'
 
+function getTodayYmd(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 function CbtScheduleContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -39,11 +47,41 @@ function CbtScheduleContent() {
   const [startTime, setStartTime] = useState('')
   const [endDate, setEndDate] = useState('')
   const [endTime, setEndTime] = useState('')
-  const [duration, setDuration] = useState<number | ''>('')
+  const [duration, setDuration] = useState<number | ''>(90)
   const [maxMark, setMaxMark] = useState<number | ''>('')
   const [testType, setTestType] = useState<number>(0)
   const [publishStatus, setPublishStatus] = useState<number>(0)
   const [examRuleGuid, setExamRuleGuid] = useState<string>('')
+
+  function handleStartDateChange(d: string) {
+    const today = getTodayYmd()
+    if (d && d < today) {
+      showToast('Before date is not possible', 'error')
+      return
+    }
+    setStartDate(d)
+    if (d && endDate && endDate < d) {
+      showToast('Before date is not possible', 'error')
+      setEndDate('')
+    }
+  }
+
+  function handleEndDateChange(d: string) {
+    const today = getTodayYmd()
+    const minAllowed = startDate || today
+    if (d && d < minAllowed) {
+      showToast('Before date is not possible', 'error')
+      return
+    }
+    setEndDate(d)
+  }
+
+  function handleEndTimeChange(t: string) {
+    setEndTime(t)
+    if (startDate && endDate && startDate === endDate && startTime && t && t <= startTime) {
+      showToast('End Time must be after Start Time', 'error')
+    }
+  }
 
   // Fetch Exam Rules for the dropdown
   const { data: rulesData, isLoading: rulesLoading } = useExamRules(1, 100, '')
@@ -73,7 +111,12 @@ function CbtScheduleContent() {
         setEndDate('')
         setEndTime('')
       }
-      setDuration(schedule.durationMinutes ?? '')
+      const isAlreadyScheduled = Boolean(schedule.scheduledStartDateTime && schedule.scheduledEndDateTime)
+      if (isAlreadyScheduled && schedule.durationMinutes) {
+        setDuration(schedule.durationMinutes)
+      } else {
+        setDuration(90)
+      }
       setMaxMark(schedule.maxMark ?? '')
       setTestType(schedule.testType ?? 0)
       setPublishStatus(schedule.publishStatus ?? 0)
@@ -230,7 +273,13 @@ function CbtScheduleContent() {
               <label className="lbl">Start Date & Time <span className="text-red-500">*</span></label>
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <DatePicker value={startDate} onChange={setStartDate} />
+                  <DatePicker 
+                    value={startDate} 
+                    onChange={handleStartDateChange} 
+                    minYmd={getTodayYmd()} 
+                    rangeMessage="Before date is not possible"
+                    onError={msg => showToast(msg, 'error')}
+                  />
                 </div>
                 <div className="w-[140px]">
                   <TimePicker value={startTime} onChange={setStartTime} />
@@ -241,10 +290,16 @@ function CbtScheduleContent() {
               <label className="lbl">End Date & Time <span className="text-red-500">*</span></label>
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <DatePicker value={endDate} onChange={setEndDate} />
+                  <DatePicker 
+                    value={endDate} 
+                    onChange={handleEndDateChange} 
+                    minYmd={startDate || getTodayYmd()} 
+                    rangeMessage="Before date is not possible"
+                    onError={msg => showToast(msg, 'error')}
+                  />
                 </div>
                 <div className="w-[140px]">
-                  <TimePicker value={endTime} onChange={setEndTime} />
+                  <TimePicker value={endTime} onChange={handleEndTimeChange} />
                 </div>
               </div>
             </div>

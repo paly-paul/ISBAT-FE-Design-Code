@@ -31,7 +31,11 @@ export function HeaderDownloads() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  const jobsQuery = useQuery({ queryKey: REPORT_JOBS_KEY, queryFn: () => getReportJobs(1, 15) })
+  const jobsQuery = useQuery({
+    queryKey: REPORT_JOBS_KEY,
+    queryFn: () => getReportJobs(1, 15),
+    retry: false
+  })
   const jobs = jobsQuery.data?.items ?? []
   const unseen = useSyncExternalStore(subscribeUnseen, getUnseen, getUnseen)
   const [open, setOpen] = useState(false)

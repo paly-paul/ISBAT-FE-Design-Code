@@ -58,6 +58,15 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
   const [examRuleGuid, setExamRuleGuid] = useState<string>('')
   const [lookupOpen, setLookupOpen] = useState(false)
 
+  function handleExamDateChange(d: string) {
+    const today = getTodayYmd()
+    if (d && d < today) {
+      showToast('Before date is not possible', 'error')
+      return
+    }
+    setExamDate(d)
+  }
+
   // Fetch Exam Rules for the dropdown
   const { data: rulesData, isLoading: rulesLoading } = useExamRules(1, 100, '', isOpen)
   const activeRules = rulesData?.items?.filter(r => r.status !== 3) || []
@@ -198,7 +207,13 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
               <div>
                 <label className="lbl">Exam Date <span className="text-red-500">*</span></label>
                 <div className="mt-1">
-                  <DatePicker value={examDate} onChange={setExamDate} />
+                  <DatePicker 
+                    value={examDate} 
+                    onChange={handleExamDateChange} 
+                    minYmd={getTodayYmd()} 
+                    rangeMessage="Before date is not possible"
+                    onError={msg => showToast(msg, 'error')}
+                  />
                 </div>
               </div>
 

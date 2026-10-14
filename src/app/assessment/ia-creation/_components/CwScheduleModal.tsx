@@ -16,6 +16,14 @@ interface CwScheduleModalProps {
   courseworkGuid: string | null
 }
 
+function getTodayYmd(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleModalProps) {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -47,6 +55,36 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
   const [publishStatus, setPublishStatus] = useState<number>(0)
   const [examRuleGuid, setExamRuleGuid] = useState<string>('')
   const [lookupOpen, setLookupOpen] = useState(false)
+
+  function handleStartDateChange(d: string) {
+    const today = getTodayYmd()
+    if (d && d < today) {
+      showToast('Before date is not possible', 'error')
+      return
+    }
+    setStartDate(d)
+    if (d && endDate && endDate < d) {
+      showToast('Before date is not possible', 'error')
+      setEndDate('')
+    }
+  }
+
+  function handleEndDateChange(d: string) {
+    const today = getTodayYmd()
+    const minAllowed = startDate || today
+    if (d && d < minAllowed) {
+      showToast('Before date is not possible', 'error')
+      return
+    }
+    setEndDate(d)
+  }
+
+  function handleEndTimeChange(t: string) {
+    setEndTime(t)
+    if (startDate && endDate && startDate === endDate && startTime && t && t <= startTime) {
+      showToast('End Time must be after Start Time', 'error')
+    }
+  }
 
   // Fetch Exam Rules for the dropdown
   const { data: rulesData, isLoading: rulesLoading } = useExamRules(1, 100, '', isOpen)
@@ -185,7 +223,13 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
                 <label className="lbl">Start Date & Time <span className="text-red-500">*</span></label>
                 <div className="flex gap-2 mt-1">
                   <div className="flex-1">
-                    <DatePicker value={startDate} onChange={setStartDate} />
+                    <DatePicker 
+                      value={startDate} 
+                      onChange={handleStartDateChange} 
+                      minYmd={getTodayYmd()} 
+                      rangeMessage="Before date is not possible"
+                      onError={msg => showToast(msg, 'error')}
+                    />
                   </div>
                   <div className="w-[140px]">
                     <TimePicker value={startTime} onChange={setStartTime} />
@@ -196,10 +240,16 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
                 <label className="lbl">End Date & Time <span className="text-red-500">*</span></label>
                 <div className="flex gap-2 mt-1">
                   <div className="flex-1">
-                    <DatePicker value={endDate} onChange={setEndDate} />
+                    <DatePicker 
+                      value={endDate} 
+                      onChange={handleEndDateChange} 
+                      minYmd={startDate || getTodayYmd()} 
+                      rangeMessage="Before date is not possible"
+                      onError={msg => showToast(msg, 'error')}
+                    />
                   </div>
                   <div className="w-[140px]">
-                    <TimePicker value={endTime} onChange={setEndTime} />
+                    <TimePicker value={endTime} onChange={handleEndTimeChange} />
                   </div>
                 </div>
               </div>

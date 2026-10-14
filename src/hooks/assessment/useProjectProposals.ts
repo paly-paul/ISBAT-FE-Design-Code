@@ -7,7 +7,8 @@ import {
   getProjectProposalSynopsis,
   createProjectProposal,
   updateProjectProposal,
-  deleteProjectProposal
+  deleteProjectProposal,
+  uploadProjectProposalDocument
 } from '@/lib/api/assessment/projectProposals'
 
 export function useProjectProposals() {
@@ -70,3 +71,15 @@ export function useDeleteProjectProposal() {
     }
   })
 }
+
+export function useUploadProjectProposalDocument() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ guid, file }: { guid: string, file: File }) => uploadProjectProposalDocument(guid, file),
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['assessment', 'project-proposals'] })
+      queryClient.invalidateQueries({ queryKey: ['assessment', 'project-proposals', variables.guid] })
+    }
+  })
+}
+

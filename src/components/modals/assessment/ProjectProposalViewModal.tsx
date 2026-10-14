@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getProjectProposal, getProjectProposalSynopsis, ProjectProposalRow } from '@/lib/api/assessment/projectProposals'
+import { useUploadProjectProposalDocument } from '@/hooks/assessment/useProjectProposals'
 
 interface ProjectProposalViewModalProps {
   isOpen: boolean
@@ -11,13 +12,15 @@ interface ProjectProposalViewModalProps {
 }
 
 export function ProjectProposalViewModal({ isOpen, onClose, proposalGuid, row, onToast }: ProjectProposalViewModalProps) {
-  const [isUploading, setIsUploading] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   const { data: proposal, isLoading } = useQuery({
-    queryKey: ['project-proposal', proposalGuid],
+    queryKey: ['assessment', 'project-proposals', proposalGuid],
     queryFn: () => getProjectProposal(proposalGuid!),
     enabled: !!proposalGuid && isOpen
   })
+
+  const uploadMut = useUploadProjectProposalDocument()
 
   if (!isOpen) return null
 
@@ -36,12 +39,24 @@ export function ProjectProposalViewModal({ isOpen, onClose, proposalGuid, row, o
     }
   }
 
-  const handleFakeUpload = () => {
-    setIsUploading(true)
-    setTimeout(() => {
-      setIsUploading(false)
-      onToast('File uploaded successfully!', 'success')
-    }, 1500)
+  const handleUpload = () => {
+    if (!proposalGuid || !selectedFile) {
+      onToast('Please select a document file to upload.', 'warn')
+      return
+    }
+
+    uploadMut.mutate(
+      { guid: proposalGuid, file: selectedFile },
+      {
+        onSuccess: () => {
+          setSelectedFile(null)
+          onToast('Document uploaded successfully!', 'success')
+        },
+        onError: (err: any) => {
+          onToast(err?.message || 'Failed to upload document.', 'error')
+        }
+      }
+    )
   }
 
   return (
@@ -136,15 +151,38 @@ export function ProjectProposalViewModal({ isOpen, onClose, proposalGuid, row, o
                     </div>
                   </div>
 
-                  {/* Upload Additional File (UI Demonstration as requested by user) */}
+                  {/* Upload Additional File */}
                   <div className="p-4 bg-slate-50 flex items-center gap-4">
                     <div className="flex-1">
                       <label className="block text-xs font-medium text-slate-700 mb-1">Upload Additional Document</label>
-                      <input type="file" className="form-control text-sm" />
+                      <input
+                        type="file"
+                        className="form-control text-sm"
+                        accept=".doc,.docx,.pdf,.ppt,.pptx"
+                        onChange={e => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            setSelectedFile(e.target.files[0])
+                          } else {
+                            setSelectedFile(null)
+                          }
+                        }}
+                      />
                     </div>
                     <div className="pt-5">
-                      <button onClick={handleFakeUpload} className="btn btn-primary btn-sm" disabled={isUploading}>
-                        {isUploading ? <><i className="lni lni-spinner animate-spin"></i> Uploading...</> : <><i className="lni lni-upload"></i> Upload</>}
+                      <button
+                        onClick={handleUpload}
+                        className="btn btn-primary btn-sm"
+                        disabled={uploadMut.isPending || !selectedFile}
+                      >
+                        {uploadMut.isPending ? (
+                          <>
+                            <i className="lni lni-spinner-solid animate-spin mr-1"></i> Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <i className="lni lni-cloud-upload mr-1"></i> Upload
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
