@@ -43,7 +43,7 @@ export function HeaderDownloads() {
   useEffect(() => onReportStatus((s: ReportStatusEvent) => {
     updateReportJob(queryClient, s.reportJobGuid, prev => ({
       reportJobGuid: s.reportJobGuid,
-      reportType: prev?.reportType ?? 'DISCOUNT',
+      reportType: prev?.reportType ?? '',
       reportName: s.reportName,
       status: { value: s.status, name: s.statusName },
       isExpired: false,

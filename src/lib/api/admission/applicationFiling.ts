@@ -552,6 +552,20 @@ export function searchApplicationsForFiling(searchTerm: string, pageNumber = 1, 
   ).then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }
 
+// GET /admissions/application-filling/vetted-registered-search
+// (get-vetted-registered-search.md) — applications already vetted or
+// registered. Backs the Transaction Report's one-student picker, which keeps
+// the chosen applicationGuid. searchTerm must be ≥ 2 chars when non-blank;
+// pageSize ≤ 100. Items are application summaries, the same shape as
+// payment-search's.
+export function searchVettedRegisteredApplications(searchTerm: string, pageNumber = 1, pageSize = 20): Promise<FilingApplicationSearchResponse> {
+  if (MOCK_AUTH) return searchApplicationsForFiling(searchTerm, pageNumber, pageSize)
+  const params = new URLSearchParams({ pageNumber: String(pageNumber), pageSize: String(pageSize) })
+  if (searchTerm.trim()) params.set('searchTerm', searchTerm.trim())
+  return apiGet<FilingApplicationSearchResponse | null>(`/api/v1/admissions/application-filling/vetted-registered-search?${params.toString()}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
+}
+
 // What Payment hands to Filing after "Proceed to Filing": the just-created
 // payment, straight from the POST response plus the form values it came
 // from. No lookup on the Filing side: a just-paid applicant exists only as a
