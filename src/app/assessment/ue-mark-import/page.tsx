@@ -42,7 +42,7 @@ export default function UeMarkImportPage() {
   const [file, setFile] = useState<File | null>(null)
   const [sheetNames, setSheetNames] = useState<string[]>([])
   const [selectedSheet, setSelectedSheet] = useState('')
-  
+
   const [previewRows, setPreviewRows] = useState<UeMarkImportPreviewItem[] | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [successModal, setSuccessModal] = useState<{ title: string; subtitle: string } | null>(null)
@@ -165,7 +165,7 @@ export default function UeMarkImportPage() {
       showToast('Please select a file and ensure exam info is loaded.', 'warn')
       return
     }
-    
+
     setValidationError(null)
     previewMut.mutate({
       file,
@@ -261,7 +261,7 @@ export default function UeMarkImportPage() {
               placeholder={isLoadingIntakes ? 'Loading...' : 'Select Intake'}
             />
           </div>
-          
+
           <div className="fg mb-0">
             <label className="lbl">Programme <span className="text-red-500">*</span></label>
             <ProgramSearchPicker
@@ -364,7 +364,7 @@ export default function UeMarkImportPage() {
             />
           </div>
         </div>
-        
+
         <div className="mt-5 flex gap-2">
           <button
             type="button"
@@ -374,7 +374,7 @@ export default function UeMarkImportPage() {
           >
             {previewMut.isPending ? 'Previewing...' : 'Preview'}
           </button>
-          
+
           <button
             type="button"
             className="btn btn-success"
@@ -383,7 +383,7 @@ export default function UeMarkImportPage() {
           >
             {importMut.isPending ? 'Saving...' : 'Save & Import'}
           </button>
-          
+
           <button
             type="button"
             className="btn btn-neu"
@@ -392,7 +392,7 @@ export default function UeMarkImportPage() {
           >
             Cancel
           </button>
-          
+
           <button
             type="button"
             className="btn btn-neu ml-auto text-blue-600 flex items-center gap-1.5"
@@ -419,7 +419,7 @@ export default function UeMarkImportPage() {
         <div ref={previewSectionRef} className="card p-0 overflow-hidden mb-5">
           <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
             <div className="font-bold text-slate-800">
-              Preview Marks ({previewRows.length} students)
+              Preview Marks ({previewRows.length} records)
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -427,6 +427,7 @@ export default function UeMarkImportPage() {
               <thead>
                 <tr>
                   <th>Sl No</th>
+                  <th>Matching Code</th>
                   {/* Depending on layout, we might show different columns, for now dumping common ones */}
                   {previewRows.some(r => r.sectionAMark !== null) && <th>Section A</th>}
                   {previewRows.some(r => r.sectionBMark !== null) && <th>Section B</th>}
@@ -445,6 +446,7 @@ export default function UeMarkImportPage() {
                 {previewRows.map((row, i) => (
                   <tr key={i}>
                     <td>{row.slNo}</td>
+                    <td className="font-mono font-medium text-slate-800">{row.matchingCode || '—'}</td>
                     {row.sectionAMark !== null && <td className="font-mono">{row.sectionAMark}</td>}
                     {row.sectionBMark !== null && <td className="font-mono">{row.sectionBMark}</td>}
                     {row.sectionCMark !== null && <td className="font-mono">{row.sectionCMark}</td>}

@@ -3177,14 +3177,16 @@ input[type="number"] {
   color: var(--purple);
 }
 
-.btn-neu {
+.btn-neu,
+.btn-white {
   background: var(--white);
   border: 1.5px solid var(--g200);
   color: var(--g700);
   box-shadow: var(--neu-sm);
 }
 
-.btn-neu:hover {
+.btn-neu:hover,
+.btn-white:hover {
   border-color: var(--b300);
   color: var(--b700);
 }
@@ -10559,7 +10561,7 @@ body {
   padding: 0
 }
 
-.pk-cell:hover:not(:disabled):not(.pk-sel) {
+.pk-cell:hover:not(:disabled):not(.pk-disabled):not(.pk-sel) {
   background: var(--b50);
   color: var(--b500)
 }
@@ -10575,7 +10577,8 @@ body {
   font-weight: 600
 }
 
-.pk-cell:disabled {
+.pk-cell:disabled,
+.pk-cell.pk-disabled {
   color: var(--g300, #cbd5e1);
   cursor: not-allowed
 }
