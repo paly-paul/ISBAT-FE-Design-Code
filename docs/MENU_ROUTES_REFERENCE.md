@@ -3,7 +3,7 @@
 Reference for the permission-driven sidebar menu API, `GET /api/v1/users/me/menu`.
 Each node has the shape `{ name, icon, url, permissions, children }`.
 
-**Last updated: 2026-10-09.** The tree below is generated from the live frontend menu
+**Last updated: 2026-10-14.** The tree below is generated from the live frontend menu
 (`mockMenu` in `src/lib/api/users/menu.ts`), so it lists every page that is in the
 sidebar today. The events on each page come from reading the buttons and actions in
 that page's code.
@@ -125,7 +125,7 @@ action. Real access control still has to be enforced by each API.
 | Enquiry | Enquiry Followup Master | `/admission/enquiry-followup-master` | `get` `add` `edit` `assign` | `add` `edit` | `add` = log follow-up; `assign` = assign counsellor |
 | Enquiry | Enquiry Followup | `/admission/enquiry-followup` | `get` `edit` `assign` | `edit` | `assign` = assign counsellor |
 | Admission Flow | Dashboard | `/admission/dashboard` | `get` | none |  |
-| Admission Flow | Application Payment | `/admission/payment` | `get` `add` `import` `print` | `add` | `import` = from Enquiry / ODeL / CRM |
+| Admission Flow | Application Payment | `/admission/payment` | `get` `add` `import` `print` | `add` | `import` = from Enquiry / ODeL / CRM; `print` = receipt PDF after saving (normal payments only, not exemptions) |
 | Admission Flow | Application Filing | `/admission/filing` | `get` `add` `delete` `submit` | `add` `delete` | `submit` = submit application for vetting |
 | Admission Flow | Vetting Desk | `/admission/vetting` | `get` `approve` `reject` `hold` | none | `hold` = Wait (awaiting original documents) |
 | Admission Flow | Registrar's Desk | `/admission/registration` | `get` `register` `print` | none | `print` = onboarding print-out |
@@ -518,6 +518,8 @@ action. Real access control still has to be enforced by each API.
 | Payment Collection | Advanced Payments | `/finance/advanced-payments` | `get` `add` | `create` | `add` = new deposit |
 | Reports & Statements | Financial Reports | `/finance/financial-reports` | `get` `export` | none |  |
 | Reports & Statements | Discount Report | `/finance/reports/discount` | `get` `export` | none | Preview + Excel export; each user sees only their own exports. Downloads icon lives in the app header |
+| Reports & Statements | Transaction Report | `/finance/reports/transaction` | `get` `export` | none | Same preview + Excel export flow as Discount Report; exports land in the shared Downloads list |
+| Reports & Statements | Outstanding Report | `/finance/reports/outstanding` | `get` `export` | none | Same preview + Excel export flow as Discount Report; exports land in the shared Downloads list |
 | Reports & Statements | Student Statement | `/finance/student-statements` | `get` `print` | none |  |
 | Finance Core | Cooperates | `/finance/cooperates` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Finance Core | Discounts | `/finance/discounts` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
@@ -633,6 +635,20 @@ action. Real access control still has to be enforced by each API.
           "name": "Discount Report",
           "icon": "lni lni-tag",
           "url": "/finance/reports/discount",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        },
+        {
+          "name": "Transaction Report",
+          "icon": "lni lni-list",
+          "url": "/finance/reports/transaction",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        },
+        {
+          "name": "Outstanding Report",
+          "icon": "lni lni-alarm-clock",
+          "url": "/finance/reports/outstanding",
           "permissions": { "get": true, "export": true },
           "children": []
         },
@@ -1700,7 +1716,17 @@ Master" / "Lecture Master" node (`stripLectureMaster`).
 | Assessment | Pending QP Upload | `/assessment/rpt-pending-qp` |
 | Assessment | Faculty Summary | `/assessment/rpt-faculty` |
 
-## Changes since the previous version (2026-09-07)
+## Changes since the previous version (2026-10-09)
+
+- Added **Finance › Reports & Statements › Transaction Report**
+  (`/finance/reports/transaction`) and **Outstanding Report**
+  (`/finance/reports/outstanding`), both with `get` and `export`. Please register them
+  in the menu API; until then the frontend adds them to the sidebar itself, after
+  Discount Report.
+- Application Payment's `print` event now does something: it opens the application
+  payment receipt PDF after saving. No change to its events.
+
+## Changes in the 2026-10-09 version (since 2026-09-07)
 
 - Module names now match the frontend rails: **Admission, Academic, Finance, Student,
   Employee, Assessment, Config, Activity Log**. The old "Academics", "Admissions" and

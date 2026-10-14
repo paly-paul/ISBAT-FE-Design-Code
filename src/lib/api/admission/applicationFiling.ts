@@ -127,6 +127,11 @@ export interface ApplicationListItem {
   programGuid: string | null
   semesterGuid: string | null
   feeHdGuid: string | null
+  // Resolved fee head code/description. Only GET /by-payment/{paymentGuid}
+  // fills these; GET /application-filling/{applicationGuid} returns them
+  // null. Also null when feeHdGuid is null or the fee head can't be found.
+  feeCode?: string | null
+  feeName?: string | null
   batchTimeGuid: string | null
   batchGuid: string | null
   refugee: number | null

@@ -1,4 +1,4 @@
-import { apiGet, apiPostForm } from '../client'
+import { apiGet, apiGetBlob, apiPostForm } from '../client'
 import { Enquiry } from './enquiry'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
@@ -261,6 +261,25 @@ export function getApplicationPaymentTypes(search?: string): Promise<PaymentType
 // (2026-10: that endpoint now also takes ?search= on book code, but
 // `category` is still required and its values are still unknown, so it
 // stays unwired.)
+
+// GET /admissions/application-payments/{paymentGuid}/receipt
+// (get-application-payment-receipt.md) — a PDF, not the JSON envelope; errors
+// still come back as the envelope (apiGetBlob turns them into AuthError).
+// Only for a normal payment with a receipt: an exemption payment, or one with
+// no receipt number, returns 400. Generated on demand, so reprints always work;
+// `receipt_generation_failed` (Finance unreachable) is safe to retry.
+export function getApplicationPaymentReceiptPdf(paymentGuid: string): Promise<{ blob: Blob; filename: string | null }> {
+  if (MOCK_AUTH) {
+    return Promise.resolve({ blob: new Blob(['%PDF-1.4 mock application payment receipt'], { type: 'application/pdf' }), filename: `Receipt_${paymentGuid}.pdf` })
+  }
+  return apiGetBlob(`/api/v1/admissions/application-payments/${encodeURIComponent(paymentGuid)}/receipt`)
+}
+
+// Whether a payment has a printable receipt: a normal payment (no exemption)
+// with a receipt number that isn't 0.
+export function hasPrintableReceipt(p: { exemptionType?: unknown; exemptionTypeGuid?: string | null; receiptNo?: number | null }): boolean {
+  return p.exemptionType == null && !p.exemptionTypeGuid && p.receiptNo != null && p.receiptNo !== 0
+}
 
 export function createApplicationPayment(input: ApplicationPaymentInput): Promise<CreateApplicationPaymentResponse> {
   if (MOCK_AUTH) {
