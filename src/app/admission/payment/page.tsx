@@ -36,6 +36,9 @@ import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput, stripLeadingZeros } from '@/lib/errorMessages'
 import { formatDate, monthsAgoYmd, RECENT_DATE_MONTHS } from '@/lib/date'
 import { setFilingPrefill } from '@/lib/filingHandoff'
+import { downloadBlob } from '@/lib/downloadBlob'
+import { AuthError } from '@/lib/api/client'
+import { getApplicationPaymentReceiptPdf, hasPrintableReceipt } from '@/lib/api/admission/applicationPayment'
 import type { NewPaymentHandoff } from '@/lib/api/admission/applicationFiling'
 import { flattenUniquePages } from '@/lib/pagination'
 import { FIELD_ERROR_CLASS, scrollToFirstError } from '@/lib/scrollToFirstError'
@@ -267,6 +270,11 @@ function PaymentPageContent() {
   // have blanked the just-generated receipt along with it.
   const [savedReceipt, setSavedReceipt] = useState<{
     appRefNo?: string; paymentCode?: string; receiptNo?: number | null
+    // For Print Receipt; printable only for a normal payment with a receipt.
+    paymentGuid?: string; printable?: boolean
+    // The server emails the applicant in the background when an email was
+    // entered (post-application-payment.md › Confirmation email).
+    email?: string
     studentName?: string; programLabel?: string; campusLabel?: string; intakeLabel?: string
     amountLabel?: string; methodLabel?: string; dateLabel?: string
     exRateLabel?: string; amountUshLabel?: string
@@ -304,6 +312,39 @@ function PaymentPageContent() {
   }
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  // Step 9 — server-rendered receipt PDF, same flow as Payment Console's
+  // printReceipt: the tab opens synchronously on click (popup blockers drop a
+  // window.open after an await) and the PDF loads into it; if the popup was
+  // blocked, it downloads instead. On an error the blank tab closes and the
+  // server's message shows.
+  const [printingReceipt, setPrintingReceipt] = useState(false)
+  // receipt_generation_failed (Finance unreachable) is temporary: shown under
+  // the button with Try again, instead of a toast that disappears.
+  const [receiptRetryError, setReceiptRetryError] = useState<string | null>(null)
+  async function printReceipt(paymentGuid: string, receiptNo: string) {
+    if (printingReceipt) return
+    const tab = window.open('', '_blank')
+    setPrintingReceipt(true)
+    setReceiptRetryError(null)
+    try {
+      const { blob, filename } = await getApplicationPaymentReceiptPdf(paymentGuid)
+      const pdf = blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' })
+      if (tab && !tab.closed) {
+        // Not revoked — the tab needs the blob URL for as long as it's open.
+        tab.location.href = URL.createObjectURL(pdf)
+      } else {
+        downloadBlob(pdf, filename ?? `Receipt_${receiptNo || paymentGuid}.pdf`)
+      }
+    } catch (err) {
+      tab?.close()
+      const msg = err instanceof Error && err.message ? err.message : 'Could not load the receipt.'
+      if (err instanceof AuthError && err.code === 'receipt_generation_failed') setReceiptRetryError(msg)
+      else showToast(msg, 'error')
+    } finally {
+      setPrintingReceipt(false)
+    }
+  }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
 
@@ -859,6 +900,9 @@ function PaymentPageContent() {
           // (clearing it would have blanked the receipt too).
           setSavedReceipt({
             appRefNo: response?.appRefNo, paymentCode: response?.paymentCode, receiptNo: response?.receiptNo,
+            paymentGuid: response?.paymentGuid,
+            printable: !!response?.paymentGuid && !isWaived && hasPrintableReceipt({ receiptNo: response?.receiptNo }),
+            email: form.email.trim() || undefined,
             studentName: `${form.firstName} ${form.lastName}`.trim(),
             programLabel: labelFor(programOptions, form.programGuid),
             campusLabel: labelFor(campusOptions, form.campusGuid),
@@ -889,6 +933,7 @@ function PaymentPageContent() {
               feeHdGuid: form.feeHdGuid,
             } : undefined,
           })
+          setReceiptRetryError(null)
           setShowReceipt(true)
           setShowSuccessPopup(true)
           setForm({ ...initialForm, currencyGuid: getDefaultFinanceCurrencyGuid(currencies) })
@@ -923,7 +968,7 @@ function PaymentPageContent() {
   }
 
   function handleClear() {
-    setForm({ ...initialForm, currencyGuid: getDefaultFinanceCurrencyGuid(currencies) }); setFieldErrors({}); setShowReceipt(false); setPayProofFile(null); setSavedReceipt({})
+    setForm({ ...initialForm, currencyGuid: getDefaultFinanceCurrencyGuid(currencies) }); setFieldErrors({}); setShowReceipt(false); setPayProofFile(null); setSavedReceipt({}); setReceiptRetryError(null)
     setEnquirySearch('')
     appliedEnquiryGuidRef.current = null
   }
@@ -1355,9 +1400,11 @@ function PaymentPageContent() {
                     ...(savedReceipt.amountUshLabel ? [['Amount (UGX)', savedReceipt.amountUshLabel]] : []),
                     ['Method', savedReceipt.methodLabel ?? ''],
                   ].map(([label, value]) => (
-                    <div key={label} className="flex justify-between py-1">
-                      <span className="text-g500">{label}</span>
-                      <span className={label === 'Amount' ? 'font-bold text-b600' : 'font-medium text-g700'}>{value || '—'}</span>
+                    <div key={label} className="flex justify-between gap-4 py-1">
+                      <span className="text-g500 shrink-0">{label}</span>
+                      {/* Right-aligned so a long value (e.g. programme name) wraps
+                          cleanly instead of butting up against its label. */}
+                      <span className={`text-right ${label === 'Amount' ? 'font-bold text-b600' : 'font-medium text-g700'}`}>{value || '—'}</span>
                     </div>
                   ))}
                 </div>
@@ -1366,7 +1413,12 @@ function PaymentPageContent() {
                 </div>
               </div>
               <div className="flex items-center gap-3 mt-4 flex-wrap">
-                <button className="btn btn-neu btn-sm"><i className="lni lni-printer" /> Print Receipt</button>
+                {/* Hidden for exemption payments — they have no receipt (400). */}
+                {savedReceipt.printable && savedReceipt.paymentGuid && (
+                  <button className="btn btn-neu btn-sm" disabled={printingReceipt} onClick={() => printReceipt(savedReceipt.paymentGuid!, String(savedReceipt.receiptNo ?? ''))}>
+                    <i className={`lni ${printingReceipt ? 'lni-spinner-arrow spin' : 'lni-printer'}`} /> {printingReceipt ? 'Opening…' : 'Print Receipt'}
+                  </button>
+                )}
                 <button
                   className="btn btn-primary btn-sm ml-auto"
                   onClick={() => {
@@ -1379,6 +1431,20 @@ function PaymentPageContent() {
                   Proceed to Filing <i className="lni lni-arrow-right" />
                 </button>
               </div>
+              {receiptRetryError && savedReceipt.paymentGuid && (
+                <div className="warn-box mt-3" role="alert">
+                  <i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0 }} />
+                  <div className="flex-1" style={{ fontSize: 12.5 }}>{receiptRetryError} The receipt service may be temporarily unavailable.</div>
+                  <button className="btn btn-neu btn-sm" disabled={printingReceipt} onClick={() => printReceipt(savedReceipt.paymentGuid!, String(savedReceipt.receiptNo ?? ''))}>
+                    <i className="lni lni-reload" /> Try again
+                  </button>
+                </div>
+              )}
+              {savedReceipt.email && (
+                <p className="text-g500 mt-3" style={{ fontSize: 'var(--fs-xs)' }}>
+                  <i className="lni lni-envelope" /> A confirmation is being sent to <strong>{savedReceipt.email}</strong>. It can take up to about two minutes.
+                </p>
+              )}
             </div>
           ) : (
             <div className="card">
@@ -1444,7 +1510,7 @@ function PaymentPageContent() {
           <div className="modal" style={{ maxWidth: 400 }}>
             <SuccessPopup
               title="Payment Saved!"
-              subtitle={`${savedReceipt.appRefNo ?? 'The application fee payment'} has been recorded and a receipt generated below.`}
+              subtitle={`${savedReceipt.appRefNo ?? 'The application fee payment'} has been recorded and a receipt generated below.${savedReceipt.email ? ` A confirmation is being sent to ${savedReceipt.email} — it can take up to about two minutes.` : ''}`}
               onClose={() => setShowSuccessPopup(false)}
             />
           </div>

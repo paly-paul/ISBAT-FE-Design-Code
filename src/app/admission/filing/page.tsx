@@ -532,7 +532,6 @@ export default function FilingPage() {
     ...batches.map(b => ({ value: b.batchGuid, label: b.batchCode })),
     ...(selectedBatchFallback ? [{ value: selectedBatchFallback.batchGuid, label: selectedBatchFallback.batchCode }] : []),
   ]
-  const feeOptions       = fees.map(f => ({ value: f.feeHdGuid, label: `${f.feeDesc} (${f.feeCode})` }))
   const countryOptions   = useMemo(() => {
     const map = new Map<string, string>()
     for (const c of countries) map.set(c.countryGuid, c.countryName)
@@ -601,6 +600,23 @@ export default function FilingPage() {
     // as a quiet no-op by the enrichment effect below, not a real failure.
     !!selectedApplication,
   )
+
+  // The locked Fee Structure's label: by-payment now returns feeName/feeCode
+  // for the application's own fee head, so it's added here whenever the
+  // general fee-structure list (one page, filtered client-side) doesn't
+  // carry it — otherwise the field rendered blank. Both fields are nullable.
+  const feeOptions = useMemo(() => {
+    const options = fees.map(f => ({ value: f.feeHdGuid, label: `${f.feeDesc} (${f.feeCode})` }))
+    const detailFeeGuid = applicationDetail?.feeHdGuid
+    const detailFeeLabel = applicationDetail?.feeName
+      ? (applicationDetail.feeCode && applicationDetail.feeCode !== applicationDetail.feeName ? `${applicationDetail.feeName} (${applicationDetail.feeCode})` : applicationDetail.feeName)
+      : applicationDetail?.feeCode
+    if (detailFeeGuid && detailFeeLabel && !options.some(o => o.value === detailFeeGuid)) {
+      options.unshift({ value: detailFeeGuid, label: detailFeeLabel })
+    }
+    return options
+  }, [fees, applicationDetail?.feeHdGuid, applicationDetail?.feeName, applicationDetail?.feeCode])
+
   const [enrichedForGuid, setEnrichedForGuid] = useState<string | null>(null)
   useEffect(() => {
     if (!selectedApplication || !applicationDetailFetched) return
