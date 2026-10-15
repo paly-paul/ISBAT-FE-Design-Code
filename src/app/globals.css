@@ -2669,6 +2669,11 @@ input[type="number"] {
   border-radius: 50%;
 }
 
+#page-student-statement .pc-hero::before,
+#page-student-statement .pc-hero::after {
+  display: none !important;
+}
+
 .pc-hero-top {
   display: flex;
   align-items: center;
