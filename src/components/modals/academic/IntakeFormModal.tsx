@@ -140,12 +140,14 @@ function semesterSpanWeeks(entry: CalendarEntryForm | undefined): number | null 
   return ms > 0 ? Math.ceil(ms / MS_PER_WEEK) : null
 }
 
-// The longest any semester may run, in weeks. durationInWeeks is sent as
-// this + 2 (see handleSave), and the backend caps every entry's
-// semesterEndDate at semesterStartDate + (durationInWeeks - 2) weeks — so
-// it's the 1st semester's span, and every later semester must fit inside it.
+// The longest semester's span, in weeks. durationInWeeks is sent as this + 2
+// (see handleSave), and the backend caps every entry's semesterEndDate at
+// semesterStartDate + (durationInWeeks - 2) weeks — so taking the longest
+// span (not just the 1st semester's, as before 2026-10-15) lets semesters
+// differ in length without any of them tripping that cap.
 function maxSemesterWeeks(entries: CalendarEntryForm[]): number {
-  return semesterSpanWeeks(entries[0]) ?? (DEFAULT_SEMESTER_WEEKS - 2)
+  const spans = entries.map(semesterSpanWeeks).filter((w): w is number => w !== null)
+  return spans.length ? Math.max(...spans) : DEFAULT_SEMESTER_WEEKS - 2
 }
 
 // Per-entry error keys are namespaced by the entry's local id so two
@@ -328,20 +330,17 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
   // user types/picks — a field only appears here when both sides of its
   // pair are actually filled in) and validate()'s on-submit step-2 pass, so
   // the two can never drift into different messages for the same rule.
-  function computeOrderErrors(entry: CalendarEntryForm, idx: number, maxWeeks: number): Partial<Record<CalendarField, string>> {
+  function computeOrderErrors(entry: CalendarEntryForm, idx: number): Partial<Record<CalendarField, string>> {
     const out: Partial<Record<CalendarField, string>> = {}
 
     const startDate = parseDate(entry.semStart)
     const endDate   = parseDate(entry.term2End)
     if (startDate && endDate && endDate < startDate) {
       out.term2End = `Semester ${idx + 1} end date must be on or after its start date`
-    } else if (idx > 0 && startDate && endDate && endDate.getTime() > startDate.getTime() + maxWeeks * MS_PER_WEEK) {
-      // Backend cap: semesterEndDate <= semesterStartDate + (durationInWeeks - 2)
-      // weeks. durationInWeeks comes from the 1st semester's own span (see
-      // maxSemesterWeeks()), so semester 1 always fits, but later ones don't
-      // automatically.
-      out.term2End = `Semester ${idx + 1} can't run longer than the 1st semester (${maxWeeks} weeks)`
     }
+    // No "can't run longer than the 1st semester" check any more (removed
+    // per request, 2026-10-15) — durationInWeeks now follows the longest
+    // semester (maxSemesterWeeks()), so every semester fits the backend cap.
 
     const admissionStart   = parseDate(entry.admissionStartDate)
     const admissionLateFee = parseDate(entry.admissionLateFeeDate)
@@ -435,14 +434,11 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
     // live-recompute the date-order rules for EVERY entry — same rules
     // validate() applies on submit, just re-run on every change so a pair
     // error shows up (or clears) the moment the offending date is picked.
-    // Every entry, not just this one, because semester 1's span sets the
-    // max length for all the others (see maxSemesterWeeks()).
     setErrors(p => {
       const next = { ...p }
       delete next[errKey(id, field)]
-      const maxWeeks = maxSemesterWeeks(nextEntries)
       nextEntries.forEach((en, i) => {
-        const orderErrors = computeOrderErrors(en, i, maxWeeks)
+        const orderErrors = computeOrderErrors(en, i)
         ORDER_CHECKED_FIELDS.forEach(f => {
           const orderKey = errKey(en.id, f)
           if (orderErrors[f]) next[orderKey] = orderErrors[f]!
@@ -486,7 +482,6 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
     }
 
     if (stepNumber === 2) {
-      const maxWeeks = maxSemesterWeeks(calendarEntries)
       calendarEntries.forEach((entry, idx) => {
         if (!entry.semStart)      e[errKey(entry.id, 'semStart')]      = `Semester ${idx + 1} start date is required`
         if (!entry.term1EndDate)  e[errKey(entry.id, 'term1EndDate')]  = `Semester ${idx + 1} term 1 end date is required`
@@ -497,7 +492,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
         // the user types/picks — re-run here too as the on-submit backstop
         // (e.g. a pair left in a bad state from before this page had live
         // validation, or restored from Edit's initial load).
-        const orderErrors = computeOrderErrors(entry, idx, maxWeeks)
+        const orderErrors = computeOrderErrors(entry, idx)
         ;(Object.keys(orderErrors) as CalendarField[]).forEach(f => {
           const msg = orderErrors[f]
           if (msg) e[errKey(entry.id, f)] = msg
