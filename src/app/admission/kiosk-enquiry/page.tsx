@@ -308,9 +308,7 @@ export default function KioskEnquiryPage() {
         <div>
           <h1 className="text-xl font-semibold text-g900">Self-Service Kiosk Enquiry</h1>
           <p className="text-sm text-g500 mt-0.5">Captured at the campus self-service kiosk — candidate-entered</p>
-        </div>
-        <button className="btn btn-ghost" onClick={() => router.push('/admission/enquiry-list')}><i className="lni lni-arrow-left" /> Enquiry List</button>
-      </div>
+        </div>      </div>
 
       <div className="card w-full">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

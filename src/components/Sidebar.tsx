@@ -1,7 +1,6 @@
 'use client'
 import { Dispatch, SetStateAction, useMemo } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useMenu } from '@/hooks/users/useMenu'
 import { MenuNode } from '@/lib/api/users/menu'
 
@@ -138,7 +137,6 @@ function visibleChildren(children: MenuNode[], railId: RailId): MenuNode[] {
 }
 
 export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {
-  const router = useRouter()
   const { data, isLoading, isError, refetch } = useMenu()
   const menu = data?.menu
   const isFallback = data?.isFallback ?? false
@@ -204,13 +202,15 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
     )
   }
 
+  // Switching modules only swaps which menu the panel shows — it doesn't
+  // navigate, so the page you're on stays put until you pick an item from
+  // the new module's panel.
   function clickRail(rail: RailId) {
     if (activeRail === rail) {
       setPanelOpen(p => !p)
     } else {
       setActiveRail(rail)
       setPanelOpen(true)
-      router.push(`/${rail}`)
     }
   }
 

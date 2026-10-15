@@ -1,6 +1,5 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { PaymentSuccessModal } from '@/components/modals/finance/PaymentSuccessModal'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -62,7 +61,6 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 
 export default function PaymentRefundPage() {
   const permissions = usePagePermissions()
-  const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -117,9 +115,7 @@ export default function PaymentRefundPage() {
                   }} />
                 </span>
               </label>
-            )}
-            <button className="btn btn-neu" onClick={() => router.push('/finance/dashboard')}><i className="lni lni-arrow-left"></i> Back</button>
-          </div>
+            )}          </div>
         </div>
 
         {SHOW_MOCK_TOGGLE && useMock && (

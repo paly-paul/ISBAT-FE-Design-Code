@@ -9165,11 +9165,6 @@ body {
   transform: translateY(-1px);
 }
 
-#page-filing .qual-card.saved {
-  border-color: var(--green-bd);
-  background: var(--green-bg);
-}
-
 #page-filing .qual-num {
   width: 24px;
   height: 24px;

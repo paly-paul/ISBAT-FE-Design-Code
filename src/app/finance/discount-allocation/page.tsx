@@ -426,9 +426,7 @@ function DiscountAllocationContent() {
           <div>
             <div className="pg-title">Discount Allocation</div>
             <div className="pg-sub">Search student → review current discount → assign, edit, or cancel an allocation</div>
-          </div>
-          <button className="btn btn-neu" onClick={() => router.push('/finance/dashboard')}><i className="lni lni-arrow-left"></i> Back</button>
-        </div>
+          </div>        </div>
 
         {/* Student Search — same bar/dropdown as Payment Console. */}
         <div className="card">

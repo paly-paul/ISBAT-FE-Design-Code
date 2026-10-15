@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
@@ -31,7 +30,6 @@ import {
 const PAGE_SIZE = 15
 
 export default function BulkExamSchedulerPage() {
-  const router = useRouter()
   const queryClient = useQueryClient()
 
   // ── Toast State ─────────────────────────────────────────────────────────────
@@ -382,13 +380,6 @@ export default function BulkExamSchedulerPage() {
               Schedule examinations in bulk or manage session-wise examination schedules
             </div>
           </div>
-          <button
-            type="button"
-            className="btn btn-neu"
-            onClick={() => router.push('/assessment/dashboard')}
-          >
-            <i className="lni lni-arrow-left"></i> Back
-          </button>
         </div>
 
         {/* ── Legacy Top Filters Bar (Matching Screenshot) ────────────────── */}

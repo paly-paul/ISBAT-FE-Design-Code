@@ -310,9 +310,7 @@ export default function OnDeskEnquiryPage() {
         <div>
           <h1 className="text-xl font-semibold text-g900">On-Desk Enquiry Form</h1>
           <p className="text-sm text-g500 mt-0.5">Information Desk — captured by staff during walk-in / phone conversation</p>
-        </div>
-        <button className="btn btn-ghost" onClick={() => router.push('/admission/enquiry-list')}><i className="lni lni-arrow-left" /> Enquiry List</button>
-      </div>
+        </div>      </div>
 
       <div className="card w-full">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
