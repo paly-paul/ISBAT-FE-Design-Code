@@ -167,6 +167,11 @@ function CbtScheduleContent() {
     } catch (err: any) {
       // AuthError: `code` from the envelope, `message` = errors[0].
       const msg: string = err?.message || ''
+      const lower = msg.toLowerCase()
+      if (lower.includes('question') || lower.includes('paper') || lower.includes('qp')) {
+        showToast('Please upload the question paper before scheduling the exam.', 'error')
+        return
+      }
       const aboutRule = /rule/i.test(msg)
       if (err?.code === 'not_found' && aboutRule) {
         // The picked rule no longer exists: clear it and ask for a re-pick.
@@ -264,6 +269,14 @@ function CbtScheduleContent() {
           <div className="text-sm text-g500 font-medium mb-1">Class Test for Subject:</div>
           <div className="text-lg font-semibold text-g900">
             {unitCode} — {unitName}
+          </div>
+        </div>
+
+        {/* ASM-045: Notice to upload question paper before scheduling */}
+        <div className="mb-6 p-3.5 bg-amber-50/90 border border-amber-200 rounded-lg flex items-start gap-3 text-xs text-amber-900 shadow-xs">
+          <i className="lni lni-warning text-amber-600 text-base flex-shrink-0 mt-0.5"></i>
+          <div className="leading-relaxed">
+            <span className="font-semibold text-amber-950">Notice:</span> Please ensure the question paper is uploaded before scheduling the exam.
           </div>
         </div>
 

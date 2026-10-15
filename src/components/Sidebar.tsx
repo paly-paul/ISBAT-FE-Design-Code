@@ -170,6 +170,10 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
       )
     }
     const id = idFromUrl(item.url)
+    const displayName =
+      item.name === 'IA Creation' || id === 'ia-creation'
+        ? 'Assessment Scheduler'
+        : item.name
     const href = resolveHref(item.url, railId)
     const badge = BADGES[id]
     return (
@@ -181,7 +185,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
       // the item the user actually points at needs warming.
       <Link key={href} href={href} prefetch={false} className={`sb-item${currentPage === id ? ' active' : ''}`}>
         <span className="sb-icon"><i className={iconClass}></i></span>
-        {item.name}
+        {displayName}
         {badge && <span className={`sb-badge${badge.variant ? ' ' + badge.variant : ''}`}>{badge.text}</span>}
       </Link>
     )
