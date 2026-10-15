@@ -7,11 +7,10 @@ import { MultiSelect } from '@/components/MultiSelect'
 import DatePicker from '@/components/DatePicker'
 import { CreateEmployeeInput } from '@/lib/api/employee/employee'
 import { useEmployee, useCreateEmployee, useUpdateEmployee } from '@/hooks/employee/useEmployees'
-import { useSearchDepartmentsInfinite } from '@/hooks/config/useDepartments'
-import { useSearchDesignationsInfinite } from '@/hooks/config/useDesignations'
+import { useDepartmentsDropdown } from '@/hooks/config/useDepartments'
+import { useDesignationsDropdown } from '@/hooks/config/useDesignations'
 import { useCountries } from '@/hooks/config/useCountries'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
-import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Add and Edit share this form — differ in prefill and which mutation runs.
@@ -59,23 +58,12 @@ interface EmployeeFormModalProps extends ModalProps {
 export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGuid }: EmployeeFormModalProps) {
   const isEdit = mode === 'edit'
   const [saved, setSaved] = useState(false)
-  const [department, setDepartment] = useState('')
-  const [designation, setDesignation] = useState('')
-  // The actual guids to submit (2026-09-15) — deptGuid/designationGuid are
-  // now the confirmed CreateEmployeeInput fields, but the Department/
-  // Designation MASTER lists (useDepartments/useDesignations below) only
-  // expose int ids, never a guid. The only place a real deptGuid/
-  // designationGuid is ever available is an employee record already
-  // carrying one (Employee.deptGuid/designationGuid, from GET
-  // /employees/{guid}) — round-tripped here on Edit as long as the
-  // Department/Designation selection isn't changed away from what that
-  // record already had. There is no guid source at all for a freshly
-  // picked department/designation (Add Employee, or picking a *different*
-  // one on Edit) — those cases leave this null and validate() blocks
-  // submit rather than sending a value the backend's own "must resolve to
-  // an existing department" check would just reject anyway.
-  const [deptGuidValue, setDeptGuidValue] = useState<string | null>(null)
-  const [designationGuidValue, setDesignationGuidValue] = useState<string | null>(null)
+  // Bound straight to the guids POST/PUT /employees take, from the
+  // department/designation dropdown endpoints (get-departments-dropdown.md /
+  // get-designations-dropdown.md, 2026-10-15) — the master list endpoints
+  // only ever exposed int ids, which is what blocked Add/Edit before.
+  const [deptGuid, setDeptGuid] = useState('')
+  const [designationGuid, setDesignationGuid] = useState('')
 
   // These fields match the employee create/update payload.
   const [category, setCategory] = useState(CATEGORIES[0].label)
@@ -108,20 +96,12 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
   const createEmployee = useCreateEmployee()
   const updateEmployee = useUpdateEmployee()
 
-  // Server-paginated, load-more-on-scroll pickers (2026-09-15, per request)
-  // — same convention as Intake/Campus/Country's own useSearchXInfinite
-  // hooks, in place of useDepartments()/useDesignations()' single eager
-  // 1000-row fetch. Enabled on both Add and Edit (2026-09-15, per request —
-  // was Edit-only). Designation is no longer scoped to the selected
-  // department — per request, since get-designations.md has no
-  // department-filter param to keep that scoping correct once designations
-  // load progressively.
-  const [deptPickerOpen, setDeptPickerOpen] = useState(false)
-  const [designationPickerOpen, setDesignationPickerOpen] = useState(false)
-  const deptQuery = useSearchDepartmentsInfinite(isOpen && deptPickerOpen)
-  const designationQuery = useSearchDesignationsInfinite(isOpen && designationPickerOpen)
-  const departments = useMemo(() => flattenUniquePages(deptQuery.data?.pages ?? [], d => String(d.intDept)), [deptQuery.data])
-  const designations = useMemo(() => flattenUniquePages(designationQuery.data?.pages ?? [], d => String(d.intDesignation)), [designationQuery.data])
+  // Department → Designation cascade. Both endpoints return their full list
+  // in one call (no pagination), so SearchSelect's own client-side filter
+  // covers search. Designations are fetched per picked department via the
+  // dropdown's deptGuid filter, and not at all until one is picked.
+  const { data: departments = [], isLoading: departmentsLoading } = useDepartmentsDropdown(isOpen)
+  const { data: designations = [], isLoading: designationsLoading } = useDesignationsDropdown(deptGuid, isOpen)
 
   const { data: countries = [] } = useCountries()
   // The campus doc explicitly calls for GET /academic/campus/dropdown, not
@@ -131,19 +111,23 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
   const countryOptions = useMemo(() => countries.map(c => ({ value: c.countryGuid, label: c.countryName })), [countries])
   const defaultCountryGuid = countries.find(c => c.defaultCountry === 1)?.countryGuid ?? ''
 
-  // The employee's own current department/designation name might not be
-  // among whatever pages have loaded so far — injected as a fallback option
-  // so the picker still shows/keeps the right value instead of going blank,
-  // same "selected value not yet in the loaded pages" fallback other
-  // infinite pickers in this app use.
+  // On Edit, the employee's saved department/designation is kept as an
+  // option even if the list doesn't have it (e.g. since deleted), so the
+  // picker shows the current value instead of going blank.
   const departmentOptions = useMemo(() => {
-    const names = departments.map(d => d.deptName)
-    return department && !names.includes(department) ? [department, ...names] : names
-  }, [departments, department])
+    const opts = departments.map(d => ({ value: d.deptGuid, label: d.deptName }))
+    if (deptGuid && deptGuid === employee?.deptGuid && !opts.some(o => o.value === deptGuid)) {
+      opts.unshift({ value: deptGuid, label: employee.departmentName ?? 'Current department' })
+    }
+    return opts
+  }, [departments, deptGuid, employee])
   const designationOptions = useMemo(() => {
-    const names = designations.map(d => d.designationName)
-    return designation && !names.includes(designation) ? [designation, ...names] : names
-  }, [designations, designation])
+    const opts = designations.map(d => ({ value: d.designationGuid, label: d.designationName }))
+    if (designationGuid && designationGuid === employee?.designationGuid && !opts.some(o => o.value === designationGuid)) {
+      opts.unshift({ value: designationGuid, label: employee.designationName ?? 'Current designation' })
+    }
+    return opts
+  }, [designations, designationGuid, employee])
 
   // Reuse the API validation messages so the form shows issues immediately.
   function validate(): Record<string, string> {
@@ -162,15 +146,8 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
     if (!emailId.trim()) e.emailId = 'Email ID cannot be left blank!'
     else if (!EMAIL_RE.test(emailId.trim())) e.emailId = 'Invalid Email ID!'
     if (!maritalStatus.trim()) e.maritalStatus = 'Select Marital Status before proceeding!'
-    // Checked against the picked NAME, not selectedDept/selectedDesignation
-    // — those only resolve against whatever pages the infinite pickers
-    // happen to have loaded so far, which is necessarily incomplete, unlike
-    // the name itself (always known once picked) and deptGuidValue (only
-    // ever known when unchanged from the record's own real guid).
-    if (!department.trim()) e.department = 'Select Department before proceeding!'
-    else if (!deptGuidValue) e.department = "This department's ID isn't available yet — only the department already on an existing employee record can be kept as-is; picking a different one isn't supported until the Department master provides an ID."
-    if (!designation.trim()) e.designation = 'Select Designation before proceeding!'
-    else if (!designationGuidValue) e.designation = "This designation's ID isn't available yet — only the designation already on an existing employee record can be kept as-is; picking a different one isn't supported until the Designation master provides an ID."
+    if (!deptGuid) e.department = 'Select Department before proceeding!'
+    if (!designationGuid) e.designation = 'Select Designation before proceeding!'
     return e
   }
 
@@ -195,17 +172,11 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
       setEmailId(employee.emailId)
       setReligion(employee.intReligion ? RELIGIONS[employee.intReligion - 1] ?? '' : '')
       setMaritalStatus(MARITAL_STATUSES[employee.maritalStatus - 1] ?? '')
-      // Server-resolved names straight off the employee record — the guid
-      // actually submitted comes from the same place, see the note on
-      // deptGuidValue/designationGuidValue above.
-      setDepartment(employee.departmentName ?? '')
-      setDeptGuidValue(employee.deptGuid ?? null)
-      setDesignation(employee.designationName ?? '')
-      setDesignationGuidValue(employee.designationGuid ?? null)
+      setDeptGuid(employee.deptGuid ?? '')
+      setDesignationGuid(employee.designationGuid ?? '')
       setCampusGuids(employee.campusGuids ?? [])
     } else if (!isEdit) {
-      setDepartment(''); setDesignation('')
-      setDeptGuidValue(null); setDesignationGuidValue(null)
+      setDeptGuid(''); setDesignationGuid('')
       setCategory(CATEGORIES[0].label)
       setTitle(''); setFirstName(''); setSurname(''); setOtherName('')
       setSex(''); setBirthDate(''); setPlaceOfBirth(''); setCountryGuid('')
@@ -219,19 +190,11 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
 
   function handleClose() { setSaved(false); setErrors({}); onClose() }
 
-  function handleDepartmentChange(dept: string) {
-    setDepartment(dept)
-    // Only the department already on the record being edited has a known
-    // guid — switching to any other one (or picking one at all on Add)
-    // leaves it unresolved; see the note on deptGuidValue above. Designation
-    // is no longer department-scoped (see the note on departments/
-    // designations above), so it's left untouched here.
-    setDeptGuidValue(isEdit && dept === employee?.departmentName ? (employee?.deptGuid ?? null) : null)
-  }
-
-  function handleDesignationChange(desig: string) {
-    setDesignation(desig)
-    setDesignationGuidValue(isEdit && desig === employee?.designationName ? (employee?.designationGuid ?? null) : null)
+  // Designations are scoped to the department, so a different department
+  // clears the picked designation.
+  function handleDepartmentChange(guid: string) {
+    if (guid !== deptGuid) setDesignationGuid('')
+    setDeptGuid(guid)
   }
 
   function handleSubmit() {
@@ -248,8 +211,8 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
       title,
       surname,
       firstName,
-      designationGuid: designationGuidValue!,
-      deptGuid: deptGuidValue!,
+      designationGuid,
+      deptGuid,
       otherName: otherName.trim() || null,
       sex: sexToNumber(sex),
       birthDate,
@@ -377,39 +340,26 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
               <SearchSelect placeholder="Select…" options={MARITAL_STATUSES} value={maritalStatus} onChange={v => { setMaritalStatus(v); clearError('maritalStatus') }} />
               {errors.maritalStatus && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.maritalStatus}</p>}
             </div>
-            {/* Enabled on Add too now (2026-09-15, per request) — still only
-                actually resolves to a submittable guid when it matches
-                what's already on the record being edited (see the note on
-                deptGuidValue/designationGuidValue above); validate() is what
-                catches an unresolvable pick at submit time, not this
-                control being disabled up front. */}
             <div className="fg">
               <div className="lbl">Department <span className="req">*</span></div>
               <SearchSelect
                 placeholder="Select department…"
                 options={departmentOptions}
-                value={department}
-                onChange={v => { handleDepartmentChange(v); clearError('department') }}
-                onOpenChange={setDeptPickerOpen}
-                isLoading={deptQuery.isLoading}
-                hasNextPage={deptQuery.hasNextPage}
-                isFetchingNextPage={deptQuery.isFetchingNextPage}
-                onLoadMore={() => deptQuery.fetchNextPage()}
+                value={deptGuid}
+                onChange={v => { handleDepartmentChange(v); clearError('department'); clearError('designation') }}
+                isLoading={departmentsLoading}
               />
               {errors.department && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.department}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Designation <span className="req">*</span></div>
               <SearchSelect
-                placeholder="Select designation…"
+                placeholder={deptGuid ? 'Select designation…' : 'Select a department first'}
                 options={designationOptions}
-                value={designation}
-                onChange={v => { handleDesignationChange(v); clearError('designation') }}
-                onOpenChange={setDesignationPickerOpen}
-                isLoading={designationQuery.isLoading}
-                hasNextPage={designationQuery.hasNextPage}
-                isFetchingNextPage={designationQuery.isFetchingNextPage}
-                onLoadMore={() => designationQuery.fetchNextPage()}
+                value={designationGuid}
+                onChange={v => { setDesignationGuid(v); clearError('designation') }}
+                disabled={!deptGuid}
+                isLoading={designationsLoading}
               />
               {errors.designation && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.designation}</p>}
             </div>

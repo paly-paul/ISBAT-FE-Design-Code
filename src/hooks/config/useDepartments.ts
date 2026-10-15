@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createDepartment, deleteDepartment, Department, DepartmentInput, getDepartments, getDepartmentsPaged, updateDepartment } from '@/lib/api/academic/department'
+import { createDepartment, deleteDepartment, Department, DepartmentDropdownItem, DepartmentInput, getDepartments, getDepartmentsDropdown, getDepartmentsPaged, updateDepartment } from '@/lib/api/academic/department'
 import { getNextPageParam } from '@/lib/pagination'
 
 const DEPARTMENTS_KEY = ['departments']
@@ -38,6 +38,16 @@ export function useSearchDepartmentsInfinite(enabled: boolean) {
   })
 }
 
+// Full guid-carrying list for pickers (get-departments-dropdown.md) — no
+// pagination, so SearchSelect's own client-side filter covers search.
+export function useDepartmentsDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...DEPARTMENTS_KEY, 'dropdown'],
+    queryFn: () => getDepartmentsDropdown(),
+    enabled,
+  })
+}
+
 export function useCreateDepartment() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -62,4 +72,4 @@ export function useDeleteDepartment() {
   })
 }
 
-export type { Department, DepartmentInput }
+export type { Department, DepartmentDropdownItem, DepartmentInput }

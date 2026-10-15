@@ -86,6 +86,33 @@ export function getDepartmentsPaged(page = 1, pageSize = 20): Promise<Department
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
+// Picker shape from GET /api/v1/users/departments/dropdown
+// (get-departments-dropdown.md, 2026-10-15) — the only department source
+// that carries deptGuid, which POST/PUT /employees needs.
+export interface DepartmentDropdownItem {
+  deptGuid: string
+  deptName: string
+  shortCode: string | null
+}
+
+// Mock guids, index-aligned with mockDepartments — designation.ts's mock
+// dropdown maps intDept to these so the cascade works in mock mode too.
+const mockDepartmentGuids = [
+  '67ec501a-1ed8-4fa5-b84e-c79cef3a1076',
+  '3b1e2f4a-0c6d-4a8e-9b2f-1d5c7e9a0b11',
+  '5c2d3e4f-1a7b-4c9d-8e0f-2a6b8c0d1e22',
+  '7d3e4f5a-2b8c-4dae-9f1a-3b7c9d1e2f33',
+  '9e4f5a6b-3c9d-4ebf-8a2b-4c8d0e2f3a44',
+  'af5a6b7c-4dae-4fca-9b3c-5d9e1f3a4b55',
+]
+
+export function getDepartmentsDropdown(): Promise<DepartmentDropdownItem[]> {
+  if (MOCK_AUTH) {
+    return Promise.resolve(mockDepartments.map((d, i) => ({ deptGuid: mockDepartmentGuids[i] ?? String(d.intDept), deptName: d.deptName, shortCode: d.shortCode })))
+  }
+  return apiGet<DepartmentDropdownItem[] | null>('/api/v1/users/departments/dropdown').then(data => data ?? [])
+}
+
 export function createDepartment(input: DepartmentInput): Promise<Department> {
   if (MOCK_AUTH) {
     const department: Department = { intDept: mockDeptSeq++, ...input }

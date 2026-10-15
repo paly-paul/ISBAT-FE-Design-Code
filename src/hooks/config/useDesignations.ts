@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createDesignation, deleteDesignation, Designation, DesignationInput, getDesignations, getDesignationsPaged, updateDesignation } from '@/lib/api/academic/designation'
+import { createDesignation, deleteDesignation, Designation, DesignationInput, getDesignations, getDesignationsDropdown, getDesignationsPaged, updateDesignation } from '@/lib/api/academic/designation'
 import { getNextPageParam } from '@/lib/pagination'
 
 const DESIGNATIONS_KEY = ['designations']
@@ -37,6 +37,17 @@ export function useSearchDesignationsInfinite(enabled: boolean) {
     enabled,
     staleTime: Infinity,
     gcTime: Infinity,
+  })
+}
+
+// Guid-carrying picker list scoped to one department
+// (get-designations-dropdown.md's deptGuid filter) — only fetched once a
+// department is picked, for the Department → Designation cascade.
+export function useDesignationsDropdown(deptGuid: string, enabled = true) {
+  return useQuery({
+    queryKey: [...DESIGNATIONS_KEY, 'dropdown', deptGuid],
+    queryFn: () => getDesignationsDropdown(deptGuid),
+    enabled: enabled && !!deptGuid,
   })
 }
 
