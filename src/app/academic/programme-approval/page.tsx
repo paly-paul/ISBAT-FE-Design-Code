@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useProgramApprovals, useUpdateProgramApproval } from '@/hooks/academic/useProgramApproval'
+import { useProgramLevelsDropdown } from '@/hooks/academic/useProgramLevels'
 import { useDeleteProgramMasterComplete } from '@/hooks/academic/useProgramMaster'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatDate } from '@/lib/date'
@@ -51,7 +52,11 @@ export default function Page() {
   }, [search])
 
   const [page, setPage] = useState(1)
-  const { data: approvalsData, isLoading, isFetching } = useProgramApprovals(page, PAGE_SIZE, debouncedSearch)
+  // levelFilter is a programLevelGuid, filtered server-side (programLevelGuid
+  // param, 2026-10-15) so it spans every page, not just the one on screen.
+  const { data: approvalsData, isLoading, isFetching } = useProgramApprovals(page, PAGE_SIZE, debouncedSearch, true, levelFilter)
+  const { data: programLevels = [], isLoading: programLevelsLoading } = useProgramLevelsDropdown()
+  const levelDropdownOpts = programLevels.map(l => ({ value: l.guid, label: l.name }))
   const programs = approvalsData?.items || []
   const searchTrimmed = search.trim()
   const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isFetching)
@@ -110,7 +115,6 @@ export default function Page() {
 
   const groupFilterOpts = Array.from(new Set(rows.map(r => r.group)))
   const levelFilterOpts = Array.from(new Set(rows.map(r => r.level)))
-  const levelDropdownOpts = Array.from(new Set(rows.map(r => r.level.split(' ·')[0])))
 
   // Empty below MIN_SEARCH_CHARS, matching TableSearch's own minChars gate on
   // when the dropdown is even allowed to open.
@@ -119,7 +123,6 @@ export default function Page() {
     : []
 
   const filteredRows = rows.filter(r => {
-    if (levelFilter && !r.level.startsWith(levelFilter)) return false
     // Re-filter client-side on top of whatever the server sent back — rows
     // is already search-scoped via debouncedSearch, but this keeps results
     // correct even if the backend doesn't actually honor ?search=.
@@ -187,6 +190,7 @@ export default function Page() {
                 className="w-auto text-[var(--fs-sm)]"
                 placeholder="All Levels"
                 options={levelDropdownOpts}
+                isLoading={programLevelsLoading}
                 value={levelFilter}
                 onChange={setLevelFilter}
               />

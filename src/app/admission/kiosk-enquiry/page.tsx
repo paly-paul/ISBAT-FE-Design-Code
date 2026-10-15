@@ -17,7 +17,7 @@ import { EnquiryEmailField, EnquirySaveStatus, VerifiedEmail, isValidEnquiryEmai
 import { EnquirySponsorFields, EMPTY_SPONSOR, SponsorValues, sponsorErrorField, sponsorPayload, validateSponsor } from '@/components/EnquirySponsorFields'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
-import { sanitizeNameInput } from '@/lib/errorMessages'
+import { ENQUIRY_NAME_MESSAGE, isValidEnquiryName, sanitizeNameInput } from '@/lib/errorMessages'
 import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import { formatLongYmd, isWithinRecentWindow, monthsAgoYmd, RECENT_DATE_MONTHS, todayYmd, yearsAgoYmd } from '@/lib/date'
@@ -177,18 +177,18 @@ export default function KioskEnquiryPage() {
     setErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
   }
 
-  // Joined the way it's sent. Curly apostrophes (O’Neil) become straight
-  // ones — the backend allows apostrophes, not typographic quotes.
+  // Joined the way it's sent — NFC, so accented letters go as single code
+  // points (see isValidEnquiryName for the letters-and-spaces rule).
   function studentName() {
-    return `${firstName.trim()} ${lastName.trim()}`.trim().replace(/[’‘]/g, "'")
+    return `${firstName.trim()} ${lastName.trim()}`.trim().normalize('NFC')
   }
 
   function validate() {
     const e: Record<string, string> = {}
     if (!firstName.trim()) e.firstName = 'First Name is required'
-    else if (!/^\p{L}/u.test(firstName.trim())) e.firstName = 'First Name must start with a letter'
+    else if (!isValidEnquiryName(firstName.trim())) e.firstName = ENQUIRY_NAME_MESSAGE
     if (!lastName.trim())  e.lastName  = 'Last Name is required'
-    else if (!/^\p{L}/u.test(lastName.trim()))  e.lastName  = 'Last Name must start with a letter'
+    else if (!isValidEnquiryName(lastName.trim()))  e.lastName  = ENQUIRY_NAME_MESSAGE
     else if (studentName().length > NAME_MAX) e.lastName = `First and last name together must be ${NAME_MAX} characters or fewer (now ${studentName().length})`
     if (!phone.trim())     e.phone     = 'Phone is required'
     else if (phone.length < PHONE_MIN) e.phone = `Phone must be ${PHONE_MIN} to ${PHONE_MAX} digits`
@@ -202,6 +202,7 @@ export default function KioskEnquiryPage() {
     if (!enquiryDate)       e.enquiryDate = 'Enquiry date is required.'
     else if (!isWithinRecentWindow(enquiryDate)) e.enquiryDate = ENQUIRY_DATE_RANGE_MESSAGE
     if (!intakeGuid)        e.intakeGuid = 'Please select an Intake'
+    if (!programGuid)       e.programGuid = 'Programme is required.'
     if (!campusGuid)        e.campusGuid = 'Please select a Campus'
     if (!sourceGuid)        e.sourceGuid = 'Please select an Enquiry Source'
     if (!countryGuid)       e.countryGuid = 'Please select a Country'
@@ -237,7 +238,7 @@ export default function KioskEnquiryPage() {
         dob: `${dob}T00:00:00`,
         gender: gender === '' ? null : +gender,
         remarks: notes.trim() || null,
-        programGuid: programGuid || null,
+        programGuid,
         isbatSourceGuid: isbatSourceGuid || null,
         sourceName: sourceName.trim() || null,
         enquiryTag: null,
@@ -276,6 +277,7 @@ export default function KioskEnquiryPage() {
             : code === 'validation_error' && /age must be|dob|birth/i.test(msg) ? 'dob'
             : code === 'validation_error' && /remarks/i.test(msg) ? 'notes'
             : code === 'validation_error' && /email/i.test(msg) ? 'email'
+            : /^programme (is required|not found)/i.test(msg) ? 'programGuid'
             : code === 'not_found' && /^intake/i.test(msg) ? 'intakeGuid'
             : code === 'not_found' && /^enquiry source/i.test(msg) ? 'sourceGuid'
             : null)
@@ -380,12 +382,12 @@ export default function KioskEnquiryPage() {
             {errors.countryGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.countryGuid}</p>}
           </div>
           <div className="fg">
-            <label className="lbl">Programme Interest</label>
+            <label className="lbl">Programme Interest <span className="text-clr-red">*</span></label>
             <SearchSelect
               placeholder={campusGuid ? '— select —' : 'Select a campus first'}
               options={programOptions}
               value={programGuid}
-              onChange={setProgramGuid}
+              onChange={v => { setProgramGuid(v); clearError('programGuid') }}
               disabled={!campusGuid}
               onSearch={setProgramSearch}
               onOpenChange={setProgramPickerOpen}
@@ -394,6 +396,7 @@ export default function KioskEnquiryPage() {
               isFetchingNextPage={programQuery.isFetchingNextPage}
               onLoadMore={() => programQuery.fetchNextPage()}
             />
+            {errors.programGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programGuid}</p>}
           </div>
           <div className="fg">
             <label className="lbl">Preferred Intake <span className="text-clr-red">*</span></label>

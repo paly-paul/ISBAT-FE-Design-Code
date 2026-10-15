@@ -193,7 +193,7 @@ export default function Page() {
             <div className="pg-sub">Employee skill profiles · Proficiency levels · Dean approval status</div>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button className="btn btn-neu btn-sm" onClick={() => nav('allocation')}>→ Proceed to Allocation</button>
+            <button className="btn btn-neu btn-sm" onClick={() => nav('course-allocation')}>→ Proceed to Allocation</button>
             {permissions.add && <button className="btn btn-primary" onClick={() => openModal('add-skill-modal')}><i className="lni lni-plus"></i> Add Skill</button>}
           </div>
         </div>

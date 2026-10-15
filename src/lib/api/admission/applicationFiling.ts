@@ -166,6 +166,15 @@ export interface ApplicationListItem {
   intakeName?: string | null
   campusName?: string | null
   countryName?: string | null
+  // Sponsor fallback (2026-10-15): with no sponsor details of its own, an
+  // application created from an enquiry returns the enquiry's spName/
+  // spEmail/spCountryGuid/spPhone, per field (the application's own values
+  // win). spPhoneCountryGuid is the sponsor phone's dial-code country — null
+  // when spPhone is the application's own. The two names are only filled on
+  // /{guid}, /{int}/detail and /by-payment; finance + list send null.
+  spPhoneCountryGuid?: string | null
+  spCountryName?: string | null
+  spPhoneCountryName?: string | null
   genderLabel?: string | null
   refugeeLabel?: string | null
   docVerifiedLabel?: string | null

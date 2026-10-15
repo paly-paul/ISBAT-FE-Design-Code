@@ -93,6 +93,9 @@ export function ProgrammeLevelFormModal({ isOpen, onClose, showToast, mode, prog
     else if (levelCode.trim().length > 10) e.levelCode = 'Level Code must be 10 characters or fewer'
     if (!levelName.trim()) e.levelName = 'Level Name is required'
     else if (levelName.trim().length > 50) e.levelName = 'Level Name must be 50 characters or fewer'
+    // Backend rule (2026-10-15, POST/PUT): at least one letter — "123" fails,
+    // "Level 1" is fine. Same message the API returns.
+    else if (!/\p{L}/u.test(levelName)) e.levelName = 'Level name must contain at least one letter.'
     if (!yearCount) e.yearCount = 'Year Count is required'
     else if (!Number.isInteger(+yearCount) || +yearCount <= 0) e.yearCount = 'Year Count must be a whole number greater than 0'
     if (!minCreditLoad) e.minCreditLoad = 'Minimum Credit Load is required'
@@ -114,6 +117,11 @@ export function ProgrammeLevelFormModal({ isOpen, onClose, showToast, mode, prog
     if (code === 'duplicate_level_code') {
       setErrors(prev => ({ ...prev, levelCode: error.message || 'A programme level with this code already exists.' }))
       scrollToFirstError({ levelCode: 'x' })
+      return
+    }
+    if (code === 'validation_error' && /level name/i.test(error.message)) {
+      setErrors(prev => ({ ...prev, levelName: error.message }))
+      scrollToFirstError({ levelName: 'x' })
       return
     }
     // 404 on save is either the level itself (edit) or the currency failing

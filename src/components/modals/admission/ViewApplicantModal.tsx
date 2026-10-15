@@ -100,7 +100,7 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
   const programName = applicant.programName || programs.find(p => p.programGuid === applicant.programGuid)?.programName || '—'
   const campusName = applicant.campusName || applicant.campusGuid || '—'
   const countryName = applicant.countryName || applicant.countryGuid || '—'
-  const spCountryName = applicant.spCountryGuid || '—'
+  const spCountryName = applicant.spCountryName || applicant.spCountryGuid || '—'
 
   const profileUrl = applicantProfileHref({
     ref: applicant.appRefNo,
