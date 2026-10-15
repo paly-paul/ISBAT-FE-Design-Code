@@ -93,7 +93,8 @@ export default function KioskEnquiryPage() {
   // Optional — ISBAT Enquiry Source master guid, free-text source name, tag.
   const [isbatSourceGuid, setIsbatSourceGuid] = useState('')
   const [sourceName, setSourceName] = useState('')
-  const [enquiryTag, setEnquiryTag] = useState('')
+  // Tag field hidden (2026-10-15) — enquiryTag is always sent as null.
+  // const [enquiryTag, setEnquiryTag] = useState('')
   const [sponsor, setSponsor] = useState<SponsorValues>(EMPTY_SPONSOR)
   const [errors, setErrors]       = useState<Record<string, string>>({})
   const [intakeSearch, setIntakeSearch] = useState('')
@@ -214,7 +215,7 @@ export default function KioskEnquiryPage() {
     setFirstName(''); setLastName(''); setGender(''); setMobileCountryGuid(findDefaultCountry(allCountries)?.countryGuid ?? ''); setPhone(''); setEmail(''); setVerifiedEmail(null); setDob('')
     setEnquiryDate(todayAtMidnight().slice(0, 10))
     setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setSourceGuid(''); setCountryGuid(findDefaultCountry(allCountries)?.countryGuid ?? ''); setNotes('')
-    setIsbatSourceGuid(''); setSourceName(''); setEnquiryTag('')
+    setIsbatSourceGuid(''); setSourceName('')
     setSponsor(EMPTY_SPONSOR)
     setErrors({})
   }
@@ -239,7 +240,7 @@ export default function KioskEnquiryPage() {
         programGuid: programGuid || null,
         isbatSourceGuid: isbatSourceGuid || null,
         sourceName: sourceName.trim() || null,
-        enquiryTag: enquiryTag.trim() || null,
+        enquiryTag: null,
         ...sponsorPayload(sponsor),
       },
       {
@@ -408,10 +409,11 @@ export default function KioskEnquiryPage() {
             <label className="lbl">Source Name</label>
             <input className="ctrl" placeholder="e.g. referred by a friend" value={sourceName} onChange={e => setSourceName(e.target.value)} />
           </div>
+          {/* Tag hidden per request (2026-10-15) — enquiryTag is always sent as null.
           <div className="fg">
             <label className="lbl">Tag</label>
             <input className="ctrl" placeholder="e.g. Open Day 2026" value={enquiryTag} onChange={e => setEnquiryTag(e.target.value)} />
-          </div>
+          </div> */}
           {/* Preferred Study Mode had no counterpart on POST /api/v1/admissions/enquiries
               (Full-time/Weekend/Evening/ODL) — dropped rather than collecting data that
               goes nowhere, same as Online Enquiry's own note. */}
