@@ -105,9 +105,7 @@ export default function EnquiryFollowupMasterPage() {
           <h1 className="text-xl font-semibold text-g900">Enquiry Followup Master</h1>
           <p className="text-sm text-g500 mt-0.5">Follow-up status &amp; next contact date across all enquiries</p>
         </div>
-        <div className="flex gap-2">
-          <button className="btn btn-ghost" onClick={() => router.push('/admission/enquiry-list')}><i className="lni lni-arrow-left" /> Back</button>
-          {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-followup-log-modal')}><i className="lni lni-plus" /> Add Follow-up</button>}
+        <div className="flex gap-2">          {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-followup-log-modal')}><i className="lni lni-plus" /> Add Follow-up</button>}
         </div>
       </div>
 

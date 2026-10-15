@@ -1,6 +1,5 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
@@ -290,7 +289,6 @@ const MIN_SEARCH_CHARS = 3
 
 export default function PaymentConsolePage() {
   const permissions = usePagePermissions()
-  const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -1399,9 +1397,7 @@ export default function PaymentConsolePage() {
                 page opens straight to Student Search. */}
             <button className={`btn btn-sm ${showExchangeRates ? 'btn-primary' : 'btn-neu'}`} onClick={() => setShowExchangeRates(v => !v)}>
               <i className="lni lni-money-protection"></i> Exchange Rates
-            </button>
-            <button className="btn btn-neu" onClick={() => router.push('/finance/dashboard')}><i className="lni lni-arrow-left"></i> Back</button>
-          </div>
+            </button>          </div>
         </div>
 
         {showExchangeRates && (

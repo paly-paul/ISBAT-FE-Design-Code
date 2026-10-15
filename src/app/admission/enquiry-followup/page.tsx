@@ -74,9 +74,7 @@ export default function EnquiryFollowupPage() {
           <h1 className="text-xl font-semibold text-g900">Enquiry Followup</h1>
           <p className="text-sm text-g500 mt-0.5">Track &amp; log follow-ups allocated to staff</p>
         </div>
-        <div className="flex gap-2">
-          <button className="btn btn-ghost" onClick={() => router.push('/admission/enquiry-followup-master')}><i className="lni lni-arrow-left" /> Back to Allocation</button>
-        </div>
+        <div className="flex gap-2">        </div>
       </div>
 
       {/* Only this tile is wired to real data — the old Overdue/Due

@@ -3,7 +3,7 @@
 Reference for the permission-driven sidebar menu API, `GET /api/v1/users/me/menu`.
 Each node has the shape `{ name, icon, url, permissions, children }`.
 
-**Last updated: 2026-10-14.** The tree below is generated from the live frontend menu
+**Last updated: 2026-10-15.** The tree below is generated from the live frontend menu
 (`mockMenu` in `src/lib/api/users/menu.ts`), so it lists every page that is in the
 sidebar today. The events on each page come from reading the buttons and actions in
 that page's code.
@@ -1020,8 +1020,6 @@ action. Real access control still has to be enforced by each API.
 | Assessment Structure | Fee Clearance Master | `/assessment/assessment-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Assessment Structure | Exam Rules Master | `/assessment/exam-rules` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Assessment Structure | Question FAQs | `/assessment/question-faqs` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Assessment Structure | Weight Configuration | `/assessment/weight-config` | `get` `export` | none |  |
-| Assessment Structure | Assessment Schedule | `/assessment/schedule` | `get` `add` `edit` `delete` | none |  |
 | Assessment Structure | Bulk Exam Scheduler | `/assessment/bulk-exam-scheduler` | `get` `add` | none |  |
 | Assessment Structure | IA Creation | `/assessment/ia-creation` | `get` `add` `edit` | none | `add` = create structure; `edit` = edit CW/CT/UE schedule |
 | Assessment Structure | IA Evaluation | `/assessment/ia-evaluation` | `get` `edit` `submit` | none | `edit` = save marks; `submit` = finalize |
@@ -1060,7 +1058,6 @@ action. Real access control still has to be enforced by each API.
 | Resit & Disputes | Resit UE Mark Import | `/assessment/resit-ue-mark-import` | `get` `import` `download` | none |  |
 | Resit & Disputes | Resit Mark Update | `/assessment/resit-mark-update` | `get` `publish` | none | `publish` = push marks |
 | Resit & Disputes | Exam Grievances | `/assessment/exam-grievances` | `get` `edit` | none | `edit` = respond (save & email) |
-| Student Services | Service Tickets | `/assessment/service-tickets` | `get` `edit` | none | `edit` = respond (save & notify) |
 
 ```json
 {
@@ -1108,20 +1105,6 @@ action. Real access control still has to be enforced by each API.
           "name": "Question FAQs",
           "icon": "lni lni-comments",
           "url": "/assessment/question-faqs",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Weight Configuration",
-          "icon": "lni lni-cog",
-          "url": "/assessment/weight-config",
-          "permissions": { "get": true, "export": true },
-          "children": []
-        },
-        {
-          "name": "Assessment Schedule",
-          "icon": "lni lni-calendar",
-          "url": "/assessment/schedule",
           "permissions": { "get": true, "add": true, "edit": true, "delete": true },
           "children": []
         },
@@ -1432,21 +1415,6 @@ action. Real access control still has to be enforced by each API.
           "children": []
         }
       ]
-    },
-    {
-      "name": "Student Services",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
-        {
-          "name": "Service Tickets",
-          "icon": "lni lni-ticket",
-          "url": "/assessment/service-tickets",
-          "permissions": { "get": true, "edit": true },
-          "children": []
-        }
-      ]
     }
   ]
 }
@@ -1709,14 +1677,18 @@ action. Real access control still has to be enforced by each API.
 ## Pages hidden from the sidebar
 
 These pages still exist in the code but are deliberately left out of the menu. Don't
-add them to the menu response. If they are sent, the frontend removes the four
-Resit & Disputes ones itself (`stripUnintegratedPages`) and removes any "Lecturer
-Master" / "Lecture Master" node (`stripLectureMaster`).
+add them to the menu response. If they are sent, the frontend removes Weight
+Configuration, Assessment Schedule, Service Tickets and the four Resit & Disputes
+ones itself (`stripUnintegratedPages`, which also drops a section left empty), and
+removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
 
 | Module | Page | URL |
 |---|---|---|
 | Student | Learning Mode Report | `/student/learning-mode-report` |
 | Student | Student Services | `/student/services` |
+| Assessment | Weight Configuration | `/assessment/weight-config` |
+| Assessment | Assessment Schedule | `/assessment/schedule` |
+| Assessment | Service Tickets | `/assessment/service-tickets` |
 | Assessment | CW Overview | `/assessment/cw-overview` |
 | Assessment | CW Submissions | `/assessment/cw-submissions` |
 | Assessment | CBT Overview | `/assessment/cbt-overview` |
@@ -1734,6 +1706,12 @@ Master" / "Lecture Master" node (`stripLectureMaster`).
 
 ## Changes since the previous version (2026-10-09)
 
+- Hid **Assessment › Assessment Structure › Weight Configuration**
+  (`/assessment/weight-config`) and **Assessment Schedule** (`/assessment/schedule`),
+  and **Assessment › Student Services › Service Tickets**
+  (`/assessment/service-tickets`), from the sidebar (2026-10-15). The pages still exist.
+  Please remove them from the menu response; until then the frontend strips them
+  itself, and drops the now-empty Student Services section.
 - Added **Finance › Reports & Statements › Transaction Report**
   (`/finance/reports/transaction`) and **Outstanding Report**
   (`/finance/reports/outstanding`), both with `get` and `export`. Please register them

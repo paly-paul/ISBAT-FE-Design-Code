@@ -1,6 +1,5 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
@@ -161,7 +160,6 @@ function RegulatoryOutstandingTable({ items, isLoading, isError, category }: { i
 
 export default function NcheGuildPaymentPage() {
   const permissions = usePagePermissions()
-  const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   const [successModal, setSuccessModal] = useState<{ title: string; rows: [string, string][] } | null>(null)
@@ -449,9 +447,7 @@ export default function NcheGuildPaymentPage() {
             <div className="pg-sub">Search student → view outstanding balance → record payment</div>
           </div>
           <div className="flex gap-2">
-            {selectedApplicationGuid && <button className="btn btn-neu" onClick={handleClear}><i className="lni lni-reload"></i> New Search</button>}
-            <button className="btn btn-neu" onClick={() => router.push('/finance/dashboard')}><i className="lni lni-arrow-left"></i> Back</button>
-          </div>
+            {selectedApplicationGuid && <button className="btn btn-neu" onClick={handleClear}><i className="lni lni-reload"></i> New Search</button>}          </div>
         </div>
 
         <div className="card">

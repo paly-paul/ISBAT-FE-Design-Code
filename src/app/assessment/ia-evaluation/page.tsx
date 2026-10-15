@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Toast } from '@/components/Toast'
+import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { EmptyState } from '@/components/EmptyState'
 import { useIntakes } from '@/hooks/academic/useIntakes'
@@ -222,6 +223,8 @@ export default function IaEvaluationPage() {
   const [finalizeComment, setFinalizeComment] = useState<string>('')
   const [isScorecardOpen, setIsScorecardOpen] = useState<boolean>(false)
   const [isQuestionExpanded, setIsQuestionExpanded] = useState<boolean>(false)
+  // Student's attached answer file, previewed inline (DocumentPreviewModal).
+  const [previewFile, setPreviewFile] = useState<{ url: string; name: string } | null>(null)
 
   // Sync mark input whenever current question changes
   useEffect(() => {
@@ -1465,16 +1468,27 @@ export default function IaEvaluationPage() {
                       Student&apos;s Answer
                     </label>
                     {currentQuestion.answerFileUrl && (
-                      <a
-                        href={currentQuestion.answerFileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 px-2.5 py-1 rounded-md text-xs font-semibold hover:bg-blue-100 transition-colors"
-                      >
-                        <i className="lni lni-paperclip"></i>
-                        <span>{currentQuestion.answerFileName || 'View Attached Answer'}</span>
-                        <i className="lni lni-download ml-1 text-slate-400"></i>
-                      </a>
+                      <div className="flex items-center bg-blue-50 border border-blue-200 text-blue-700 rounded-md text-xs font-semibold overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewFile({ url: currentQuestion.answerFileUrl!, name: currentQuestion.answerFileName || 'Attached Answer' })}
+                          className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-blue-100 transition-colors"
+                          title="View file"
+                        >
+                          <i className="lni lni-eye"></i>
+                          <span>{currentQuestion.answerFileName || 'View Attached Answer'}</span>
+                        </button>
+                        <a
+                          href={currentQuestion.answerFileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center px-2 py-1 border-l border-blue-200 text-slate-500 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                          title="Download file"
+                          aria-label="Download file"
+                        >
+                          <i className="lni lni-download"></i>
+                        </a>
+                      </div>
                     )}
                   </div>
 
@@ -1602,6 +1616,13 @@ export default function IaEvaluationPage() {
           )}
         </div>
       )}
+
+      <DocumentPreviewModal
+        isOpen={!!previewFile}
+        onClose={() => setPreviewFile(null)}
+        url={previewFile?.url ?? null}
+        title={previewFile?.name}
+      />
 
       {/* ── Toast Alert ─────────────────────────────────────────────────────── */}
       <Toast toast={toast} />

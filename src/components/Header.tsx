@@ -9,6 +9,7 @@ import { notificationHref, notificationVisual, NotificationItem } from '@/lib/ap
 import { endNotificationsSession } from '@/lib/notificationsHub'
 import { timeAgo } from '@/lib/date'
 import { HeaderDownloads } from '@/components/HeaderDownloads'
+import { useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 
 interface HeaderProps {
   panelOpen: boolean
@@ -33,6 +34,11 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
   const [signingOut, setSigningOut] = useState(false)
   const queryClient = useQueryClient()
   const router = useRouter()
+
+  // Whichever intake is flagged current in Intake Master — left out of the
+  // header until it loads (or if none is flagged) rather than showing a
+  // hardcoded one.
+  const { data: currentIntake } = useCurrentAcademicIntake()
 
   const { data: unreadCount = 0 } = useUnreadCount()
   const markRead = useMarkNotificationRead()
@@ -96,11 +102,11 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
       <div className="hdr-body">
         <div className="hdr-title-wrap">
           <div className="hdr-title">ISBAT University ERP</div>
-          <div className="hdr-sub">Enterprise Resource Planning · Spring 2026</div>
+          <div className="hdr-sub">Enterprise Resource Planning{currentIntake ? ` · ${currentIntake.description}` : ''}</div>
         </div>
         <div className="hdr-right">
           <div className="hdr-module-pill acad"><i className="lni lni-graduation"></i> Academic</div>
-          <div className="hdr-intake">Spring 2026 (20261)</div>
+          {currentIntake && <div className="hdr-intake">{currentIntake.description} ({currentIntake.intakeCode})</div>}
           <HeaderDownloads />
           <div
             className="hdr-bell-wrap"

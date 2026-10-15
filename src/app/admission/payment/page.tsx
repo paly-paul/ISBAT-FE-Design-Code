@@ -1027,11 +1027,7 @@ function PaymentPageContent() {
             <div className="pg-title">Stage 1 · Application Payment</div>
             <div className="pg-sub">Collect application fee · Supports Cash &amp; Bank Transfer · Generates official receipt</div>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button className="btn btn-neu btn-sm" onClick={() => leaveTo('/admission/dashboard')}>
-              <i className="lni lni-arrow-left" /> Back
-            </button>
-            {/* Hidden for now — the Enquiry dropdown above already pulls in an enquiry.
+          <div className="flex items-center gap-2 flex-wrap">            {/* Hidden for now — the Enquiry dropdown above already pulls in an enquiry.
             <button className="btn btn-neu btn-sm" onClick={() => openModal('import-source')}>
               <i className="lni lni-download" /> Import from Enquiry
             </button>

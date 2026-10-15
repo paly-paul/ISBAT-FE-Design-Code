@@ -228,9 +228,7 @@ export default function SessionMovementPage() {
           <div>
             <div className="pg-title">Session Movement</div>
             <div className="pg-sub">Move eligible students to the next semester, one session at a time or in bulk for the whole intake</div>
-          </div>
-          <button className="btn btn-neu" onClick={() => router.push('/academic/acad-dashboard')}><i className="lni lni-arrow-left"></i> Back</button>
-        </div>
+          </div>        </div>
 
         <div className="card mb-[18px]">
           <div className="card-hdr">
