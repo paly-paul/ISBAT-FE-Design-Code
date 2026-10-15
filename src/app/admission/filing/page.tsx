@@ -602,6 +602,24 @@ export default function FilingPage() {
     !!selectedApplication,
   )
 
+  // Sponsor details can now come pre-filled from the enquiry (sponsor
+  // fallback, 2026-10-15). by-payment sends spCountryName alongside the
+  // guid, so seed it as an option — the paged country picker may not have
+  // loaded that country yet, which would leave the field looking blank.
+  const spCountryOptions = useMemo(() => {
+    const name = applicationDetail?.spCountryName
+    if (!spCountryGuid || spCountryGuid !== applicationDetail?.spCountryGuid || !name) return countryOptions
+    if (countryOptions.some(o => o.value === spCountryGuid)) return countryOptions
+    return [{ value: spCountryGuid, label: name }, ...countryOptions]
+  }, [countryOptions, spCountryGuid, applicationDetail?.spCountryGuid, applicationDetail?.spCountryName])
+
+  // The sponsor phone's dial-code country, when spPhone came from the
+  // enquiry (null when it's the application's own). The save request has no
+  // dial-code field, so it's shown as a hint rather than stored.
+  const spPhoneCountryHint = applicationDetail?.spPhoneCountryName && spPhone && spPhone === applicationDetail.spPhone
+    ? applicationDetail.spPhoneCountryName
+    : null
+
   // The locked Fee Structure's label: by-payment now returns feeName/feeCode
   // for the application's own fee head, so it's added here whenever the
   // general fee-structure list (one page, filtered client-side) doesn't
@@ -1461,13 +1479,16 @@ export default function FilingPage() {
                     <div className="sec-divider mt-5">Sponsorship Details</div>
                     <div className="g3 mt-3">
                       <Field label="Sponsor Name"><Input placeholder="Sponsor name" value={spName} onChange={setSpName} /></Field>
-                      <Field label="Sponsor Phone"><Input type="tel" placeholder="+256 7XX XXX XXX" value={spPhone} onChange={v => setSpPhone(sanitizePhoneInput(v))} /></Field>
+                      <Field label="Sponsor Phone">
+                        <Input type="tel" placeholder="+256 7XX XXX XXX" value={spPhone} onChange={v => setSpPhone(sanitizePhoneInput(v))} />
+                        {spPhoneCountryHint && <p className="text-xs text-g500 mt-1">From the enquiry · dial code country: {spPhoneCountryHint}</p>}
+                      </Field>
                       <Field label="Sponsor Email"><Input type="email" placeholder="sponsor@email.com" value={spEmail} onChange={setSpEmail} /></Field>
                     </div>
                     <div className="g3 mt-3">
                       <Field label="Sponsor Country">
                         <SearchSelect
-                          options={countryOptions}
+                          options={spCountryOptions}
                           value={spCountryGuid}
                           placeholder="-- Select Country --"
                           onChange={setSpCountryGuid}

@@ -57,6 +57,19 @@ export function sanitizeNameInput(value: string): string {
   return value.replace(/[^\p{L}\p{M}\s'’.-]/gu, '')
 }
 
+// Enquiry student names (POST /admissions/enquiries, 2026-10-15) are
+// stricter: letters (accented included) and spaces only — apostrophes,
+// hyphens, dots and digits are rejected, so "O'Brien"/"Mary-Anne" fail.
+// Typing still goes through sanitizeNameInput (which lets ' - . through),
+// so this check is what tells the user why on save, using the backend's
+// own message. Callers send the NFC form, so a decomposed accent
+// (e + U+0301) reaches the backend as one letter, not a combining mark.
+export const ENQUIRY_NAME_MESSAGE = 'Student name must contain only letters and spaces.'
+
+export function isValidEnquiryName(value: string): boolean {
+  return /^[\p{L} ]+$/u.test(value.normalize('NFC'))
+}
+
 export function validatePassword(pw: string): string | null {
   if (!pw) return 'Password is required.'
   // if (pw.length < 8) return 'Password must be at least 8 characters.'
