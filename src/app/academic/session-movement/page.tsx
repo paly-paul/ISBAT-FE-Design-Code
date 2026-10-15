@@ -9,7 +9,8 @@ import { ConfirmMovementModal, MovementTarget } from '@/components/modals/academ
 import { BulkSessionMovementModal } from '@/components/modals/academic/BulkSessionMovementModal'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
-import { useCurrentAcademicIntake, useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
+import { AdmissionIntakeReminderModal } from '@/components/modals/academic/AdmissionIntakeReminderModal'
+import { useCurrentAcademicIntake, useCurrentAdmissionIntake, useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
 import { flattenUniquePages } from '@/lib/pagination'
 import {
@@ -54,8 +55,17 @@ const RESULT_LABELS: Record<Exclude<MovementResult, 'MovementAllowed'>, string> 
 
 const PAGE_SIZE = 10
 
+// The API can send a blank programName/programCode (and some names carry a
+// leading tab), so trim and drop the empty half rather than render "()".
+function programmeLabel(row: SessionListItemDto) {
+  const name = row.programName?.trim() ?? ''
+  const code = row.programCode?.trim() ?? ''
+  if (name && code) return `${name} (${code})`
+  return name || code || '—'
+}
+
 function toTarget(row: SessionListItemDto): MovementTarget {
-  return { intake: row.intakeText, programme: `${row.programName} (${row.programCode})`, semester: row.semesterCode }
+  return { intake: row.intakeText, programme: programmeLabel(row), semester: row.semesterCode }
 }
 
 export default function SessionMovementPage() {
@@ -86,6 +96,10 @@ export default function SessionMovementPage() {
   const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, intakePickerOpen || !intakeGuid)
   const campusQuery = useSearchCampusesInfinite(committedCampusSearch, 20, campusPickerOpen)
   const { data: currentIntake } = useCurrentAcademicIntake()
+  const { data: currentAdmissionIntake } = useCurrentAdmissionIntake()
+  // Reminder shown once on entering the page: advance the admission intake
+  // before moving sessions.
+  const [reminderOpen, setReminderOpen] = useState(true)
   const intakes = useMemo(() => {
     const items = flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid)
     if (currentIntake && !items.some(i => i.intakeGuid === currentIntake.intakeGuid)) items.unshift(currentIntake)
@@ -271,7 +285,7 @@ export default function SessionMovementPage() {
             <>
               <ScrollTable>
                 <table>
-                  <thead><tr><th>Admission Intake</th><th>Programme</th><th>Semester</th><th>Session Movement</th></tr></thead>
+                  <thead><tr><th style={{ textAlign: 'left' }}>Admission Intake</th><th>Programme</th><th>Semester</th><th>Session Movement</th></tr></thead>
                   <tbody>
                     {isLoading
                       ? <TableLoadingState colSpan={999} title="Loading sessions…" subtitle="Fetching the latest sessions, just a moment." />
@@ -285,8 +299,11 @@ export default function SessionMovementPage() {
                       const isChecking = checkingGuid === r.sessionGuid
                       return (
                         <tr key={r.sessionGuid}>
-                          <td className="font-bold">{r.intakeText}</td>
-                          <td>{r.programName} <span className="text-g400">({r.programCode})</span></td>
+                          <td className="font-bold" style={{ textAlign: 'left' }}>{r.intakeText}</td>
+                          <td>
+                            {r.programName?.trim() || (r.programCode?.trim() ? null : <span className="text-g400">—</span>)}
+                            {r.programCode?.trim() && <> <span className="text-g400">({r.programCode.trim()})</span></>}
+                          </td>
                           <td className="font-bold">{r.semesterCode}</td>
                           <td>
                             {r.sessionMoved || blocked === 'AlreadyMoved' ? (
@@ -340,6 +357,15 @@ export default function SessionMovementPage() {
         isRunning={isBulkRunning}
         result={(bulkStatus as BulkMovementStatusDto) ?? null}
         onConfirm={executeBulkMove}
+      />
+      <AdmissionIntakeReminderModal
+        isOpen={reminderOpen}
+        onClose={() => setReminderOpen(false)}
+        showToast={showToast}
+        nav={id => router.push('/academic/' + id)}
+        academicIntake={currentIntake}
+        admissionIntake={currentAdmissionIntake}
+        sameIntake={!!currentIntake && !!currentAdmissionIntake && currentIntake.intakeGuid === currentAdmissionIntake.intakeGuid}
       />
       <Toast toast={toast} />
     </>

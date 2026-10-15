@@ -211,8 +211,8 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Fee Clearance Master', 'list', '/assessment/assessment-master'),
     leaf('Exam Rules Master', 'files', '/assessment/exam-rules'),
     leaf('Question FAQs', 'comments', '/assessment/question-faqs'),
-    leaf('Weight Configuration', 'cog', '/assessment/weight-config'),
-    leaf('Assessment Schedule', 'calendar', '/assessment/schedule'),
+    // leaf('Weight Configuration', 'cog', '/assessment/weight-config'),
+    // leaf('Assessment Schedule', 'calendar', '/assessment/schedule'),
     leaf('Bulk Exam Scheduler', 'calendar', '/assessment/bulk-exam-scheduler'),
     leaf('IA Creation', 'graduation', '/assessment/ia-creation'),
     leaf('IA Evaluation', 'checkmark-circle', '/assessment/ia-evaluation'),
@@ -277,9 +277,12 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     // leaf('CW Recheck Hub', 'search-alt', '/assessment/recheck'),
     leaf('Exam Grievances', 'files', '/assessment/exam-grievances'),
   ]),
-  section('Student Services', [
-    leaf('Service Tickets', 'ticket', '/assessment/service-tickets'),
-  ]),
+  // Student Services hidden from the sidebar per request, 2026-10-15 — page
+  // still exists on disk. Commented out whole (its only leaf) for the same
+  // reason as Reports below.
+  // section('Student Services', [
+  //   leaf('Service Tickets', 'ticket', '/assessment/service-tickets'),
+  // ]),
   // Reports section hidden from the sidebar per request, 2026-10-05 — both
   // pages still exist on disk. Commented out whole since Sidebar.tsx renders
   // a childless section as a disabled "Soon" item.
@@ -1537,23 +1540,33 @@ function stripUnintegratedPages(menu: MenuNode[]): MenuNode[] {
     '/assessment/resit-seating',
     '/assessment/reeval',
     '/assessment/recheck',
+    // Hidden from the sidebar per request, 2026-10-15 — pages still exist.
+    '/assessment/weight-config',
+    '/assessment/schedule',
+    '/assessment/service-tickets',
   ]
+  // The real /me/menu may send bare slugs ("weight-config"), so match on
+  // the last path segment too.
+  const hiddenSlugs = hiddenUrls.map(u => u.slice(u.lastIndexOf('/') + 1))
+  const isHidden = (url: string | null) => !!url && (hiddenUrls.includes(url) || hiddenSlugs.includes(url))
+
   const assessIdx = menu.findIndex(n => n.name === 'Assessment')
   if (assessIdx === -1) return menu
 
   const assessModule = menu[assessIdx]
-  const resitIdx = assessModule.children.findIndex(c => c.name === 'Resit & Disputes')
-  if (resitIdx === -1) return menu
+  let changed = false
+  const sections = assessModule.children.flatMap(s => {
+    const kept = s.children.filter(l => !isHidden(l.url))
+    if (kept.length === s.children.length) return [s]
+    changed = true
+    // Sidebar.tsx renders a childless section as a disabled "Soon" item, so
+    // drop a section this emptied.
+    return kept.length ? [{ ...s, children: kept }] : []
+  })
 
-  const resitSection = assessModule.children[resitIdx]
-  const filteredChildren = resitSection.children.filter(l => !l.url || !hiddenUrls.includes(l.url))
+  if (!changed) return menu
 
-  if (filteredChildren.length === resitSection.children.length) return menu
-
-  const mergedSection = { ...resitSection, children: filteredChildren }
-  const mergedAssess = { ...assessModule, children: [...assessModule.children] }
-  mergedAssess.children[resitIdx] = mergedSection
-
+  const mergedAssess = { ...assessModule, children: sections }
   const mergedMenu = [...menu]
   mergedMenu[assessIdx] = mergedAssess
   return mergedMenu
@@ -1621,8 +1634,9 @@ export function getMenu(): Promise<MenuResult> {
       const withGraduateTranscript = ensureGraduateTranscript(withTranscriptPrint)
       const withTranscriptCollection = ensureTranscriptCollection(withGraduateTranscript)
       const withGownCollection = ensureGownCollection(withTranscriptCollection)
-      const withServiceTickets = ensureServiceTickets(withGownCollection)
-      const withExamGrievances = ensureExamGrievances(withServiceTickets)
+      // Service Tickets hidden from the sidebar per request, 2026-10-15.
+      // const withServiceTickets = ensureServiceTickets(withGownCollection)
+      const withExamGrievances = ensureExamGrievances(withGownCollection)
       const withGenerateResult = ensureGenerateResult(withExamGrievances)
       const withExamCancel = ensureExamCancel(withGenerateResult)
       const withQuestionBankPractical = ensureQuestionBankPractical(withExamCancel)
