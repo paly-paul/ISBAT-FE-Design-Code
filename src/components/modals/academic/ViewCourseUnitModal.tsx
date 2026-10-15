@@ -4,6 +4,7 @@ import { ModalProps } from '../types'
 import { FailurePopup } from '../shared/FailurePopup'
 import { AuthError } from '@/lib/api/client'
 import { useCourseUnit } from '@/hooks/academic/useCourseUnits'
+import { getCourseUnitById } from '@/lib/api/academic/courseUnit'
 import { openDocumentForViewing } from '@/lib/documentViewer'
 
 interface ViewCourseUnitModalProps extends ModalProps {
@@ -50,8 +51,26 @@ function approvalBadge(approved: number | null | undefined) {
   return <span className="badge badge-grey">Not set</span>
 }
 
-export function ViewCourseUnitModal({ isOpen, onClose, courseUnitGuid, onEdit, canEdit }: ViewCourseUnitModalProps) {
+export function ViewCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid, onEdit, canEdit }: ViewCourseUnitModalProps) {
   const { data: courseUnit, isLoading, isError, error } = useCourseUnit(courseUnitGuid, isOpen)
+  const [syllabusLoading, setSyllabusLoading] = useState(false)
+
+  // The syllabus is a pre-signed S3 URL that expires within minutes, so the
+  // one on the cached record can't be trusted — fetch the unit fresh at
+  // click time, same as Course Units' own handleSyllabus.
+  async function viewSyllabus() {
+    if (!courseUnitGuid) return
+    setSyllabusLoading(true)
+    try {
+      const fresh = await getCourseUnitById(courseUnitGuid)
+      if (!fresh.syllabus) { showToast('Syllabus is no longer attached to this unit', 'error'); return }
+      await openDocumentForViewing(fresh.syllabus)
+    } catch {
+      showToast('Failed to load the syllabus document. Please try again.', 'error')
+    } finally {
+      setSyllabusLoading(false)
+    }
+  }
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [activeChapterIdx, setActiveChapterIdx] = useState(0)
 
@@ -289,8 +308,8 @@ export function ViewCourseUnitModal({ isOpen, onClose, courseUnitGuid, onEdit, c
                 <p style={{ fontSize: 13, color: 'var(--g600)', margin: '0 auto 16px', maxWidth: 420 }}>
                   The syllabus for {courseUnit.courseUnitCode} is stored securely and opens in your browser.
                 </p>
-                <button className="btn btn-primary" onClick={() => openDocumentForViewing(courseUnit.syllabus!)}>
-                  <i className="lni lni-eye"></i> View Syllabus
+                <button className="btn btn-primary" onClick={viewSyllabus} disabled={syllabusLoading}>
+                  <i className="lni lni-eye"></i> {syllabusLoading ? 'Opening…' : 'View Syllabus'}
                 </button>
               </div>
             )}

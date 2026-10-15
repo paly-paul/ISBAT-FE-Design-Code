@@ -39,6 +39,16 @@ const OFFICE_CONTENT_TYPES = [
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ]
 
+// Server builds (dev, Vercel) route remote documents through the
+// same-origin /doc-proxy route (app/doc-proxy/route.server.ts), since the
+// documents bucket has no CORS policy. The static S3 build has no server,
+// so it fetches S3 directly — that bucket must allow GET from the frontend
+// origin. blob: URLs (mock mode) are already local.
+function documentFetchUrl(url: string): string {
+  const viaProxy = process.env.NEXT_PUBLIC_DOC_PROXY === 'true' && !url.startsWith('blob:')
+  return viaProxy ? `/doc-proxy?url=${encodeURIComponent(url)}` : url
+}
+
 // Opens the document for in-browser viewing where possible. Always opens
 // something (never throws for an unsupported type) — worst case is the same
 // as Download.
@@ -46,7 +56,7 @@ export async function openDocumentForViewing(url: string): Promise<void> {
   const contentType = extractContentType(url)
 
   if (contentType === 'application/pdf' || contentType.startsWith('image/')) {
-    const res = await fetch(url)
+    const res = await fetch(documentFetchUrl(url))
     if (!res.ok) throw new Error('Failed to load document')
     const blob = await res.blob()
     const blobUrl = URL.createObjectURL(blob)
@@ -142,14 +152,7 @@ export async function resolveDocumentPreview(url: string): Promise<DocumentPrevi
       : { kind: 'unsupported', src: null, revoke: noop }
   }
 
-  // Server builds (dev, Vercel) route remote documents through the
-  // same-origin /doc-proxy route (app/doc-proxy/route.server.ts), since the
-  // documents bucket has no CORS policy. The static S3 build has no server,
-  // so it fetches S3 directly — that bucket must allow GET from the frontend
-  // origin. blob: URLs (mock mode) are already local.
-  const viaProxy = process.env.NEXT_PUBLIC_DOC_PROXY === 'true' && !url.startsWith('blob:')
-  const fetchUrl = viaProxy ? `/doc-proxy?url=${encodeURIComponent(url)}` : url
-  const res = await fetch(fetchUrl)
+  const res = await fetch(documentFetchUrl(url))
   if (!res.ok) throw new Error('Failed to load document')
   const raw = await res.blob()
   const type = [hinted, raw.type].find(isUsefulType) || (await sniffType(raw))

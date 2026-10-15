@@ -248,6 +248,9 @@ export default function Page() {
         <div className="card">
           <div className="card-hdr">
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-book"></i></span> Course Unit Master</div>
+            {/* Programme / Semester / Type filters and Export hidden per request
+                (2026-10-15). The programme-filter logic above stays in place —
+                programFilter just stays empty, so no filtering is applied.
             <div className="flex gap-2">
               <SearchSelect
                 className="w-auto text-[var(--fs-sm)]"
@@ -277,7 +280,7 @@ export default function Page() {
                 options={['Theory', 'Practical', 'Combined', 'Project']}
               />
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
-            </div>
+            </div> */}
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
             <table>
