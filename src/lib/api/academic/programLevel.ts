@@ -74,6 +74,22 @@ export function getProgramLevels(search = ''): Promise<ProgramLevel[]> {
   return getProgramLevelsPaged(1, ALL_LEVELS_PAGE_SIZE, search).then(res => res?.items ?? [])
 }
 
+// GET /program-levels/dropdown (get-program-levels-dropdown.md) — lightweight
+// picker list, ordered by the level's own sequence (IntLevel). `guid` is the
+// programLevelGuid.
+export interface ProgramLevelDropdownItem {
+  guid: string
+  id: number
+  name: string
+}
+
+export function getProgramLevelsDropdown(): Promise<ProgramLevelDropdownItem[]> {
+  if (MOCK_AUTH) {
+    return Promise.resolve(mockProgramLevels.map((l, i) => ({ guid: l.programLevelGuid, id: i + 1, name: l.levelName })))
+  }
+  return apiGet<ProgramLevelDropdownItem[] | null>('/api/v1/academic/program-levels/dropdown').then(data => data ?? [])
+}
+
 // Body for POST and PUT. semCount is not accepted (derived server-side).
 // currencyGuid is required on both, even though PUT's DTO marks it nullable,
 // because the validator still rejects it when it's missing.

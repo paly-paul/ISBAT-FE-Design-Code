@@ -15,9 +15,9 @@ import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { useCreateProgramMaster, useDeleteProgramMasterComplete, useProgramMastersPaged, useUpdateProgramMasterComplete } from '@/hooks/academic/useProgramMaster'
+import { useCreateProgramMaster, useDeleteProgramMasterComplete, useProgramMasters, useProgramMasterSearch, useUpdateProgramMasterComplete } from '@/hooks/academic/useProgramMaster'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
-import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
+import { useProgramLevelsDropdown } from '@/hooks/academic/useProgramLevels'
 import { formatDate } from '@/lib/date'
 
 const PAGE_SIZE = 10
@@ -89,13 +89,13 @@ export default function Page() {
   //   { progCode: 'PHD-CS-2023', progName: 'Doctor of Philosophy — CS 2023',       group: '—',   level: 'PhD · 3yr / 6sem',       faculty: 'FCT → Main Campus', accredDate: 'Jun 2023', expires: 'Jun 2028',         expiresBadge: 'badge-green', expiresIcon: '',                        noIA: 'Yes', specializations: '—',                    admissionStatus: 'Active',   admissionBadge: 'badge-green', rowClass: '', variant: 'edit' },
   // ]
 
-  // Real server-side pagination (2026-09-10) — only PAGE_SIZE rows are ever
-  // requested for the page on screen (see useProgramMastersPaged), not the
-  // whole table in one 1000-row shot. Trade-off: the Group/Programme Level
-  // column filters, plus the Level/Status filter dropdowns further down,
-  // can now only narrow the rows already on the current page, not the full
-  // dataset — same "server search/paging, client filters stay page-scoped"
-  // trade-off enquiry-list's own filters made.
+  // Full list, filtered/sorted/paged in the browser (2026-10-15, per
+  // request). Server paging (2026-09-10) left the Level/Status dropdowns,
+  // the column filters and the newest-first sort working on just the 10
+  // rows of the current page — GET /program-master has no level/status/sort
+  // params — so they never found matches on other pages. Programme counts
+  // are small, so one fetch (getProgramMasters' pageSize=1000 cap) covers it.
+  // Search still goes to the server (?search=) via useProgramMasterSearch.
   const [page, setPage] = useState(1)
   // programGroups backs the table's own Group column (the list endpoint only
   // echoes back a guid, no name) — gated on the Add/Edit modal being open
@@ -111,11 +111,10 @@ export default function Page() {
   // full-list fetch rather than a batched-by-guid lookup.
   const searchTrimmed = search.trim()
   const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
-  const { data, isLoading, isFetching } = useProgramMastersPaged(page, PAGE_SIZE, activeSearch)
-  const programs = data?.items ?? []
-  const totalCount = data?.totalCount ?? 0
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && isFetching
+  const allQuery = useProgramMasters(!activeSearch)
+  const searchQuery = useProgramMasterSearch(activeSearch)
+  const { data: programs = [], isLoading } = activeSearch ? searchQuery : allQuery
+  const searchPending = !!activeSearch && searchQuery.isFetching
 
   const rows = programs.map(p => {
     const specializationNames = (p.streams ?? []).map(stream => stream.streamName).filter(Boolean)
@@ -137,17 +136,20 @@ export default function Page() {
       admissionStatus: p.pgmStatus ? 'Active' : 'Inactive',
     }
   }).sort((a, b) => {
+    // Newest accreditation first; undated rows last; ties by code so the
+    // order is stable across refetches.
     const aTime = a.dateAccRaw ? new Date(a.dateAccRaw).getTime() : 0
     const bTime = b.dateAccRaw ? new Date(b.dateAccRaw).getTime() : 0
-    return bTime - aTime
+    return bTime - aTime || a.progCode.localeCompare(b.progCode)
   })
 
   const groupFilterOpts = Array.from(new Set(rows.map(r => r.group)))
   const levelFilterOpts = Array.from(new Set(rows.map(r => r.level)))
-  // Options come from the Programme Level master, not from the rows on this
-  // page (which only offered levels that happened to be on screen).
-  const { data: programLevels = [] } = useProgramLevels()
-  const levelDropdownOpts = programLevels.map(l => ({ value: l.programLevelGuid, label: l.levelName }))
+  // Options from GET /program-levels/dropdown (get-program-levels-dropdown.md,
+  // in the levels' own order), not from the rows — `guid` is the same
+  // programLevelGuid each programme row carries, which levelFilter matches on.
+  const { data: programLevels = [], isLoading: programLevelsLoading } = useProgramLevelsDropdown()
+  const levelDropdownOpts = programLevels.map(l => ({ value: l.guid, label: l.name }))
 
   // Live preview shown in the search dropdown as the user types — matches
   // the same code/name test as the table's own search filter below, just
@@ -160,19 +162,23 @@ export default function Page() {
     : []
 
   const filteredRows = rows.filter(r => {
-    // levelFilter is a programLevelGuid. GET /program-master has no level
-    // param, so this still only narrows the current page.
+    // levelFilter is a programLevelGuid.
     if (levelFilter && r.programLevelGuid !== levelFilter) return false
     if (statusFilter && r.admissionStatus !== statusFilter) return false
     // Re-filter client-side on top of whatever the server sent back — rows
-    // is already search-scoped (see useProgramMastersPaged above), but this
+    // is already search-scoped (see useProgramMasterSearch above), but this
     // keeps results correct even if the backend doesn't actually honor
     // ?search=.
     if (searchTrimmed.length >= MIN_SEARCH_CHARS && !`${r.progCode} ${r.progName}`.toLowerCase().includes(searchTrimmed.toLowerCase())) return false
     return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
   })
 
-  const pageItems = filteredRows
+  const totalCount = filteredRows.length
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  // Clamp rather than reset, so deleting the last row on the last page
+  // lands on the new last page instead of an empty one.
+  const currentPage = Math.min(page, totalPages)
+  const pageItems = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   function fth(label: string, col: string, opts: string[]) {
     return (
@@ -182,8 +188,8 @@ export default function Page() {
         isOpen={openFilter === col}
         activeFilter={filters[col] ?? []}
         onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
+        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null); setPage(1) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null); setPage(1) }}
         onClose={() => setOpenFilter(null)}
       />
     )
@@ -223,6 +229,7 @@ export default function Page() {
                 className="w-auto text-[var(--fs-sm)]"
                 placeholder="All Levels"
                 options={levelDropdownOpts}
+                isLoading={programLevelsLoading}
                 value={levelFilter}
                 onChange={v => { setLevelFilter(v); setPage(1) }}
               />
@@ -321,7 +328,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
-          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="programmes" onPageChange={setPage} />
+          <Pagination page={currentPage} totalPages={totalPages} totalCount={totalCount} itemLabel="programmes" onPageChange={setPage} />
         </div>
       </div>
       <ProgrammeModal

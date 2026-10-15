@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, useQueries, keepPreviousData } from '@tanstack/react-query'
-import { createProgramLevel, deleteProgramLevel, getProgramLevelById, getProgramLevels, getProgramLevelsPaged, ProgramLevel, ProgramLevelInput, updateProgramLevel } from '@/lib/api/academic/programLevel'
+import { createProgramLevel, deleteProgramLevel, getProgramLevelById, getProgramLevels, getProgramLevelsDropdown, getProgramLevelsPaged, ProgramLevel, ProgramLevelInput, updateProgramLevel } from '@/lib/api/academic/programLevel'
 import { getNextPageParam } from '@/lib/pagination'
 
 const PROGRAM_LEVELS_KEY = ['programLevels']
@@ -79,6 +79,16 @@ export function useProgramLevelsByGuids(guids: string[]) {
   const byGuid = new Map<string, ProgramLevel>()
   results.forEach((r, i) => { if (r.data) byGuid.set(unique[i], r.data) })
   return byGuid
+}
+
+// Picker list (get-program-levels-dropdown.md) — guid/name only, in the
+// levels' own sequence. Backs filter dropdowns like Programme Master's.
+export function useProgramLevelsDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...PROGRAM_LEVELS_KEY, 'dropdown'],
+    queryFn: () => getProgramLevelsDropdown(),
+    enabled,
+  })
 }
 
 export function useCreateProgramLevel() {
