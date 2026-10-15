@@ -214,7 +214,7 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     // leaf('Weight Configuration', 'cog', '/assessment/weight-config'),
     // leaf('Assessment Schedule', 'calendar', '/assessment/schedule'),
     leaf('Bulk Exam Scheduler', 'calendar', '/assessment/bulk-exam-scheduler'),
-    leaf('IA Creation', 'graduation', '/assessment/ia-creation'),
+    leaf('Assessment Scheduler', 'graduation', '/assessment/ia-creation'),
     leaf('IA Evaluation', 'checkmark-circle', '/assessment/ia-evaluation'),
   ]),
   section('Coursework (CW)', [
@@ -870,7 +870,7 @@ function ensureAssessmentMaster(menu: MenuNode[]): MenuNode[] {
   const hasAssMaster = structSection.children.some(l => l.name === 'Fee Clearance Master')
   const hasExamRules = structSection.children.some(l => l.name === 'Exam Rules Master')
   const hasFaqs = structSection.children.some(l => l.name === 'Question FAQs')
-  const hasIaCreation = structSection.children.some(l => l.name === 'IA Creation')
+  const hasIaCreation = structSection.children.some(l => l.name === 'Assessment Scheduler' || l.name === 'IA Creation' || l.url === '/assessment/ia-creation')
   const hasIaEvaluation = structSection.children.some(l => l.name === 'IA Evaluation')
 
   if (hasAssMaster && hasExamRules && hasFaqs && hasIaCreation && hasIaEvaluation) return menu
@@ -889,19 +889,19 @@ function ensureAssessmentMaster(menu: MenuNode[]): MenuNode[] {
   if (!hasExamRules) children.unshift(leaf('Exam Rules Master', 'files', '/assessment/exam-rules'))
   if (!hasAssMaster) children.unshift(leaf('Fee Clearance Master', 'list', '/assessment/assessment-master'))
 
-  // IA Creation — inject after Assessment Schedule if present, otherwise at end
+  // Assessment Scheduler (formerly IA Creation) — inject after Assessment Schedule if present, otherwise at end
   if (!hasIaCreation) {
     const scheduleIdx = children.findIndex(l => l.name === 'Assessment Schedule')
     if (scheduleIdx !== -1) {
-      children.splice(scheduleIdx + 1, 0, leaf('IA Creation', 'graduation', '/assessment/ia-creation'))
+      children.splice(scheduleIdx + 1, 0, leaf('Assessment Scheduler', 'graduation', '/assessment/ia-creation'))
     } else {
-      children.push(leaf('IA Creation', 'graduation', '/assessment/ia-creation'))
+      children.push(leaf('Assessment Scheduler', 'graduation', '/assessment/ia-creation'))
     }
   }
 
-  // IA Evaluation — inject after IA Creation if present, otherwise at end
+  // IA Evaluation — inject after Assessment Scheduler / IA Creation if present, otherwise at end
   if (!hasIaEvaluation) {
-    const iaCreationIdx = children.findIndex(l => l.name === 'IA Creation')
+    const iaCreationIdx = children.findIndex(l => l.name === 'Assessment Scheduler' || l.name === 'IA Creation')
     if (iaCreationIdx !== -1) {
       children.splice(iaCreationIdx + 1, 0, leaf('IA Evaluation', 'checkmark-circle', '/assessment/ia-evaluation'))
     } else {
@@ -1600,8 +1600,30 @@ export function flattenMenuPages(menu: MenuNode[]): AppPage[] {
   return pages
 }
 
+function renameIaCreation(menu: MenuNode[]): MenuNode[] {
+  return menu.map(mod => {
+    if (mod.name !== 'Assessment') return mod
+    return {
+      ...mod,
+      children: mod.children.map(sec => ({
+        ...sec,
+        children: sec.children.map(leafNode => {
+          if (
+            leafNode.name === 'IA Creation' ||
+            leafNode.url === '/assessment/ia-creation' ||
+            leafNode.url === 'ia-creation'
+          ) {
+            return { ...leafNode, name: 'Assessment Scheduler' }
+          }
+          return leafNode
+        }),
+      })),
+    }
+  })
+}
+
 export function getMenu(): Promise<MenuResult> {
-  if (MOCK_MENU) return Promise.resolve({ menu: stripUnintegratedPages(stripLectureMaster(mockMenu)), isFallback: false })
+  if (MOCK_MENU) return Promise.resolve({ menu: stripUnintegratedPages(stripLectureMaster(renameIaCreation(mockMenu))), isFallback: false })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
     .then(data => {
       const menu = data ?? []
@@ -1644,8 +1666,8 @@ export function getMenu(): Promise<MenuResult> {
       const withHecTranscript = ensureMarkResultsLeaf(withExamMarkImport, 'HEC Graduate Transcript', 'certificate', '/assessment/hec-graduate-transcript')
       const withUeMarkVerify = ensureMarkResultsLeaf(withHecTranscript, 'Mark Verify — UE', 'shield', '/assessment/mark-ue-verify')
       const withEnquiryReport = ensureEnquiryReport(withUeMarkVerify)
-      const finalMenu = stripUnintegratedPages(stripLectureMaster(withEnquiryReport))
+      const finalMenu = stripUnintegratedPages(stripLectureMaster(renameIaCreation(withEnquiryReport)))
       return { menu: finalMenu, isFallback: false }
     })
-    .catch(() => ({ menu: stripUnintegratedPages(stripLectureMaster(mockMenu)), isFallback: true }))
+    .catch(() => ({ menu: stripUnintegratedPages(stripLectureMaster(renameIaCreation(mockMenu))), isFallback: true }))
 }

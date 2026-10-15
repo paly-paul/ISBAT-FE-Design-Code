@@ -152,7 +152,10 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
       showToast('University Exam Scheduled successfully')
       setSaved(true)
     } catch (err: any) {
-      if (err.code === 'not_found' || err.message?.includes('404')) {
+      const errMsg = (err?.message || '').toLowerCase()
+      if (errMsg.includes('question') || errMsg.includes('paper') || errMsg.includes('qp')) {
+        showToast('Please upload the question paper before scheduling the exam.', 'error')
+      } else if (err.code === 'not_found' || err.message?.includes('404')) {
         showToast('This University Exam or Exam Rule does not exist.', 'error')
       } else if (err.code === 'bad_request' || err.code === 'validation_error') {
         showToast(err.message || 'Validation failed. Check your inputs.', 'error')
@@ -200,6 +203,14 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
                 <div className="text-lg font-semibold text-slate-900">
                     {unitCode} — {unitName}
                 </div>
+            </div>
+
+            {/* ASM-045: Notice to upload question paper before scheduling */}
+            <div className="mb-6 p-3.5 bg-amber-50/90 border border-amber-200 rounded-lg flex items-start gap-3 text-xs text-amber-900 shadow-xs">
+              <i className="lni lni-warning text-amber-600 text-base flex-shrink-0 mt-0.5"></i>
+              <div className="leading-relaxed">
+                <span className="font-semibold text-amber-950">Notice:</span> Please ensure the question paper is uploaded before scheduling the exam.
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
