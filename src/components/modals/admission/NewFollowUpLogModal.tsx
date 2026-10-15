@@ -1,13 +1,12 @@
 'use client'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { EnquiryFollowUpInput } from '@/lib/api/admission/enquiryFollowUp'
-import { useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
-import { flattenUniquePages } from '@/lib/pagination'
+import { useEmployees } from '@/hooks/employee/useEmployees'
 import { useFollowUpStatuses } from '@/hooks/config/useFollowUpStatuses'
 import { useFollowUpModes } from '@/hooks/admission/useFollowUpModes'
 import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
@@ -15,12 +14,23 @@ import { useInterestLevels } from '@/hooks/admission/useInterestLevels'
 import { useEnquiryFollowUpsInfinite } from '@/hooks/admission/useEnquiryFollowUps'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import { AuthError } from '@/lib/api/client'
+import { getSessionIdentity, getLoggedInUserGuid } from '@/lib/session'
+
+export interface InitialFollowUpData {
+  enquiryGuid?: string
+  enquiryCode?: string
+  studentName?: string
+  enquiryStatusName?: string | null
+  followUpStatusName?: string | null
+  nextFollowDate?: string | null
+}
 
 interface NewFollowUpLogModalProps extends ModalProps {
   createFollowUp: {
     mutate: (input: EnquiryFollowUpInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
     isPending: boolean
   }
+  initialData?: InitialFollowUpData | null
 }
 
 const ENQUIRY_PICKER_PAGE_SIZE = 20
@@ -31,7 +41,19 @@ const ENQUIRY_PICKER_PAGE_SIZE = 20
 // own CSS classes (.ss-trigger, .ss-opts, etc.) for a matching look without
 // duplicating its styles. The search box here only filters what's already
 // loaded, client-side.
-function EnquiryPicker({ value, onChange, enabled, hasError }: { value: string; onChange: (v: string) => void; enabled: boolean; hasError?: boolean }) {
+function EnquiryPicker({
+  value,
+  onChange,
+  enabled,
+  hasError,
+  initialLabel,
+}: {
+  value: string
+  onChange: (v: string) => void
+  enabled: boolean
+  hasError?: boolean
+  initialLabel?: string
+}) {
   const [open, setOpen] = useState(false)
   const [filterText, setFilterText] = useState('')
   const boxRef = useRef<HTMLDivElement>(null)
@@ -55,9 +77,6 @@ function EnquiryPicker({ value, onChange, enabled, hasError }: { value: string; 
     .map((item, absIndex) => ({ item, absIndex }))
     .filter(({ item }) => !term || `${item.enquiryCode} ${item.studentName}`.toLowerCase().includes(term))
 
-  // Same scrollTop > 0 guard the other infinite-scroll dropdowns in this app
-  // use — a plain distance-to-bottom check alone fires spuriously on a short
-  // list right after a new page loads, even with no user interaction.
   function handleScroll(e: React.UIEvent<HTMLDivElement>) {
     if (!hasNextPage || isFetchingNextPage) return
     const el = e.currentTarget
@@ -70,6 +89,12 @@ function EnquiryPicker({ value, onChange, enabled, hasError }: { value: string; 
     setFilterText('')
   }
 
+  const label = selected
+    ? `${selected.enquiryCode} — ${selected.studentName}`
+    : (value && initialLabel ? initialLabel : '— select an enquiry —')
+
+  const isPlaceholder = !selected && !(value && initialLabel)
+
   return (
     <div style={{ position: 'relative' }} ref={boxRef}>
       <button
@@ -78,8 +103,8 @@ function EnquiryPicker({ value, onChange, enabled, hasError }: { value: string; 
         onClick={() => setOpen(o => !o)}
         style={hasError ? { borderColor: 'var(--red)' } : undefined}
       >
-        <span className={`ss-label${!selected ? ' ss-placeholder' : ''}`}>
-          {selected ? `${selected.enquiryCode} — ${selected.studentName}` : '— select an enquiry —'}
+        <span className={`ss-label${isPlaceholder ? ' ss-placeholder' : ''}`}>
+          {label}
         </span>
         <i className="lni lni-chevron-down ss-chevron" style={{ transform: open ? 'rotate(180deg)' : undefined }} />
       </button>
@@ -107,7 +132,7 @@ function EnquiryPicker({ value, onChange, enabled, hasError }: { value: string; 
               </div>
             ) : (
               <>
-                {filtered.map(({ item, absIndex }) => (
+                {filtered.map(({ item }) => (
                   <div
                     key={item.enquiryGuid}
                     className={`col-filter-opt${value === item.enquiryGuid ? ' fil-active' : ''}`}
@@ -135,26 +160,13 @@ function todayUtcYmd() {
 
 const REMARKS_MAX = 300
 
-export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp }: NewFollowUpLogModalProps) {
+export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp, initialData }: NewFollowUpLogModalProps) {
   const { data: followUpStatuses = [] } = useFollowUpStatuses(isOpen)
   const { data: followUpModes = [] }   = useFollowUpModes(isOpen)
   const { data: enquiryStatuses = [] } = useEnquiryStatuses(isOpen)
   const { data: interestLevels = [] }  = useInterestLevels(isOpen)
+  const { data: employees = [] }      = useEmployees(isOpen)
 
-  const [employeeSearch, setEmployeeSearch] = useState('')
-  const [committedEmployeeSearch, setCommittedEmployeeSearch] = useState('')
-  const [employeePickerOpen, setEmployeePickerOpen] = useState(false)
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedEmployeeSearch(employeeSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [employeeSearch])
-  const employeeQuery = useSearchEmployeesInfinite(committedEmployeeSearch, 20, isOpen && employeePickerOpen)
-  const employees = useMemo(
-    () => flattenUniquePages(employeeQuery.data?.pages ?? [], e => e.employeeGuid),
-    [employeeQuery.data],
-  )
-
-  const advisorOptions      = employees.map(e => ({ value: e.employeeGuid, label: e.empName }))
   const followUpStatusOptions = followUpStatuses.map(s => ({ value: s.followUpStatusGuid, label: s.followUpStatusName }))
   const followUpModeOptions   = followUpModes.map(m => ({ value: m.followUpModeGuid, label: m.followUpModeName }))
   const enquiryStatusOptions  = enquiryStatuses.map(s => ({ value: s.enquiryStatusGuid, label: s.enquiryStatusName }))
@@ -164,6 +176,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
   const [failure, setFailure] = useState<string | null>(null)
   const [enquiryGuid, setEnquiryGuid]               = useState('')
   const [advisorGuid, setAdvisorGuid]               = useState('')
+  const [advisorName, setAdvisorName]               = useState('')
   const [followUpStatusGuid, setFollowUpStatusGuid] = useState('')
   const [followUpModeGuid, setFollowUpModeGuid]     = useState('')
   const [enquiryStatusGuid, setEnquiryStatusGuid]   = useState('')
@@ -172,15 +185,86 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
   const [remarks, setRemarks]                       = useState('')
   const [errors, setErrors]                         = useState<Record<string, string>>({})
 
-  if (!isOpen) return null
-
   // Follow-up date isn't a choice — the API only accepts today.
   const today = todayUtcYmd()
   const todayLabel = new Date(`${today}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 
+  // Resolve advisor identity & UUID from session and employee list
+  useEffect(() => {
+    if (!isOpen) return
+    const identity = getSessionIdentity()
+    const name = identity?.displayName?.trim() || ''
+
+    let guid =
+      getLoggedInUserGuid() ||
+      identity?.employeeGuid ||
+      identity?.userGuid ||
+      identity?.uuid ||
+      identity?.userId ||
+      ''
+
+    if (employees.length > 0) {
+      if (name) {
+        const matched = employees.find(e =>
+          e.empName?.trim().toLowerCase() === name.toLowerCase() ||
+          e.empName?.trim().toLowerCase().includes(name.toLowerCase()) ||
+          name.toLowerCase().includes(e.empName?.trim().toLowerCase())
+        )
+        if (matched) {
+          if (!guid) guid = matched.employeeGuid
+          setAdvisorName(matched.empName)
+        } else {
+          setAdvisorName(name)
+        }
+      } else if (!guid) {
+        guid = employees[0].employeeGuid
+        setAdvisorName(employees[0].empName)
+      }
+    } else if (name) {
+      setAdvisorName(name)
+    }
+
+    if (guid) {
+      setAdvisorGuid(guid)
+    }
+  }, [isOpen, employees])
+
+  // Handle initial data prefilling when opened from a row
+  useEffect(() => {
+    if (!isOpen) return
+    if (initialData?.enquiryGuid) {
+      setEnquiryGuid(initialData.enquiryGuid)
+    }
+    if (initialData?.nextFollowDate) {
+      const ymd = initialData.nextFollowDate.slice(0, 10)
+      if (ymd >= today) {
+        setNextFollowDate(ymd)
+      }
+    }
+  }, [isOpen, initialData, today])
+
+  // Resolve matching enquiry status and follow-up status from initial data
+  useEffect(() => {
+    if (!isOpen || !initialData) return
+    if (initialData.enquiryStatusName && enquiryStatuses.length > 0) {
+      const matched = enquiryStatuses.find(s =>
+        s.enquiryStatusName.trim().toLowerCase() === initialData.enquiryStatusName?.trim().toLowerCase()
+      )
+      if (matched) setEnquiryStatusGuid(matched.enquiryStatusGuid)
+    }
+    if (initialData.followUpStatusName && followUpStatuses.length > 0) {
+      const matched = followUpStatuses.find(s =>
+        s.followUpStatusName.trim().toLowerCase() === initialData.followUpStatusName?.trim().toLowerCase()
+      )
+      if (matched) setFollowUpStatusGuid(matched.followUpStatusGuid)
+    }
+  }, [isOpen, initialData, enquiryStatuses, followUpStatuses])
+
+  if (!isOpen) return null
+
   function handleClose() {
     setSaved(false); setFailure(null)
-    setEnquiryGuid(''); setAdvisorGuid('')
+    setEnquiryGuid('')
     setFollowUpStatusGuid(''); setFollowUpModeGuid(''); setEnquiryStatusGuid(''); setInterestLevelGuid('')
     setNextFollowDate(''); setRemarks(''); setErrors({})
     onClose()
@@ -197,7 +281,10 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
     if (!enquiryGuid || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(enquiryGuid)) {
       e.enquiryIdx = 'Please select a valid Enquiry'
     }
-    if (!advisorGuid)        e.advisorGuid = 'Please select an Advisor'
+    const finalAdvisorGuid = advisorGuid || (employees.length > 0 ? employees[0].employeeGuid : '')
+    if (!finalAdvisorGuid) {
+      e.advisorGuid = 'Advisor identity could not be resolved from your account'
+    }
     if (!followUpStatusGuid) e.followUpStatusGuid = 'Please select a Follow-up Status'
     if (!followUpModeGuid)   e.followUpModeGuid = 'Please select a Follow-up Mode'
     if (!enquiryStatusGuid)  e.enquiryStatusGuid = 'Please select an Enquiry Status'
@@ -211,10 +298,11 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
 
   function handleSubmit() {
     if (!validate()) return
+    const finalAdvisorGuid = advisorGuid || (employees.length > 0 ? employees[0].employeeGuid : '')
     createFollowUp.mutate(
       {
         enquiryGuid,
-        advisorGuid,
+        advisorGuid: finalAdvisorGuid,
         followUpDate: `${today}T00:00:00`,
         followUpStatusGuid,
         followUpModeGuid,
@@ -285,23 +373,28 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
         <div className="g2">
           <div className="fg" style={{ gridColumn: 'span 2' }}>
             <div className="lbl">Enquiry <span className="req">*</span></div>
-            <EnquiryPicker value={enquiryGuid} onChange={v => { setEnquiryGuid(v); clearError('enquiryIdx') }} enabled={isOpen} hasError={!!errors.enquiryIdx} />
+            <EnquiryPicker
+              value={enquiryGuid}
+              onChange={v => { setEnquiryGuid(v); clearError('enquiryIdx') }}
+              enabled={isOpen}
+              hasError={!!errors.enquiryIdx}
+              initialLabel={initialData?.enquiryCode && initialData?.studentName ? `${initialData.enquiryCode} — ${initialData.studentName}` : undefined}
+            />
             {errors.enquiryIdx && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryIdx}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Advisor <span className="req">*</span></div>
-            <SearchSelect
-              placeholder="— select —"
-              options={advisorOptions}
-              value={advisorGuid}
-              onChange={v => { setAdvisorGuid(v); clearError('advisorGuid') }}
-              onSearch={setEmployeeSearch}
-              onOpenChange={setEmployeePickerOpen}
-              isLoading={employeeQuery.isLoading}
-              hasNextPage={employeeQuery.hasNextPage}
-              isFetchingNextPage={employeeQuery.isFetchingNextPage}
-              onLoadMore={() => employeeQuery.fetchNextPage()}
-            />
+            <div className="inp-wrap">
+              <i className="lni lni-user inp-icon"></i>
+              <input
+                className="ctrl"
+                value={advisorName || getSessionIdentity()?.displayName || '—'}
+                readOnly
+                tabIndex={-1}
+                style={{ cursor: 'default', fontWeight: 600, background: '#f8fafc' }}
+                title="Advisor is automatically set to your logged-in account"
+              />
+            </div>
             {errors.advisorGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.advisorGuid}</p>}
           </div>
           <div className="fg">
@@ -309,7 +402,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
             {/* Locked to today — same read-only lock style as the current-intake fields. */}
             <div className="inp-wrap">
               <i className="lni lni-lock-alt inp-icon"></i>
-              <input className="ctrl" value={todayLabel} readOnly tabIndex={-1} style={{ cursor: 'default', fontWeight: 600 }} title="A follow-up is always logged for today" />
+              <input className="ctrl" value={todayLabel} readOnly tabIndex={-1} style={{ cursor: 'default', fontWeight: 600, background: '#f8fafc' }} title="A follow-up is always logged for today" />
             </div>
           </div>
           <div className="fg">

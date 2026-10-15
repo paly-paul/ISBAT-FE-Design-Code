@@ -8,7 +8,8 @@ import { TableSearch } from '@/components/TableSearch'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignModal'
-import { useEnquiryFollowUpsByAdvisor } from '@/hooks/admission/useEnquiryFollowUps'
+import { NewFollowUpLogModal, InitialFollowUpData } from '@/components/modals/admission/NewFollowUpLogModal'
+import { useEnquiryFollowUpsByAdvisor, useCreateEnquiryFollowUp } from '@/hooks/admission/useEnquiryFollowUps'
 import { useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
 import { usePagination } from '@/hooks/usePagination'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -34,11 +35,13 @@ export default function EnquiryFollowupPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [viewingGuid, setViewingGuid] = useState<string | null>(null)
+  const [selectedFollowUp, setSelectedFollowUp] = useState<InitialFollowUpData | null>(null)
   const [search, setSearch] = useState('')
 
   const { data, isLoading } = useEnquiryFollowUpsByAdvisor(1, FETCH_ALL_PAGE_SIZE)
   const allRows = data?.items ?? []
   const updateEnquiry = useUpdateEnquiry()
+  const createFollowUp = useCreateEnquiryFollowUp()
 
   function resolveProgramName(row: { programName: string | null; programCode: string | null }) {
     return row.programName ?? row.programCode ?? '—'
@@ -67,6 +70,18 @@ export default function EnquiryFollowupPage() {
     setSearch('')
   }
 
+  function handleCreateFollowUp(r: typeof allRows[number]) {
+    setSelectedFollowUp({
+      enquiryGuid: r.enquiryGuid,
+      enquiryCode: r.enquiryCode,
+      studentName: r.studentName,
+      enquiryStatusName: r.enquiryStatusName,
+      followUpStatusName: r.followUpStatusName,
+      nextFollowDate: r.nextFollowDate,
+    })
+    openModal('new-followup-log-modal')
+  }
+
   return (
     <div id="page-enquiry-followup">
       <div className="pg-hdr">
@@ -74,7 +89,6 @@ export default function EnquiryFollowupPage() {
           <h1 className="text-xl font-semibold text-g900">Enquiry Followup</h1>
           <p className="text-sm text-g500 mt-0.5">Track &amp; log follow-ups allocated to staff</p>
         </div>
-        <div className="flex gap-2">        </div>
       </div>
 
       {/* Only this tile is wired to real data — the old Overdue/Due
@@ -116,6 +130,9 @@ export default function EnquiryFollowupPage() {
                   <td>
                     <ActionMenu>
                       <button className="btn btn-neu btn-sm" onClick={() => router.push(`/admission/payment?enquiryGuid=${r.enquiryGuid}`)}><i className="lni lni-arrow-right" /> Convert</button>
+                      <button className="btn btn-neu btn-sm" onClick={() => handleCreateFollowUp(r)}>
+                        <i className="lni lni-phone" /> Create Follow-up Status
+                      </button>
                       {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.enquiryGuid)}><i className="lni lni-eye" /> View</button>}
                     </ActionMenu>
                   </td>
@@ -153,6 +170,16 @@ export default function EnquiryFollowupPage() {
         showToast={showToast}
         enquiryGuid={viewingGuid}
         updateEnquiry={updateEnquiry}
+      />
+      <NewFollowUpLogModal
+        isOpen={openModals.has('new-followup-log-modal')}
+        onClose={() => {
+          closeModal('new-followup-log-modal')
+          setSelectedFollowUp(null)
+        }}
+        showToast={showToast}
+        createFollowUp={createFollowUp}
+        initialData={selectedFollowUp}
       />
       <Toast toast={toast} />
     </div>
