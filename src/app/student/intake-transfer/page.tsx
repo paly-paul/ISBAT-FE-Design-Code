@@ -4,6 +4,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
+import { TableSearch } from '@/components/TableSearch'
+import { TableLoadingState } from '@/components/TableLoadingState'
 import { EmptyState } from '@/components/EmptyState'
 import { Pagination } from '@/components/Pagination'
 import { StudentLookup } from '@/components/student/StudentLookup'
@@ -100,18 +102,30 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
   // isn't actually a dropout, this resolves to the existing
   // "Couldn't Load Candidate" state below rather than a silent no-op.
   const [selectedGuid, setSelectedGuid] = useState<string | null>(() => searchParams.get('studentGuid'))
-  const { data: dropouts = [], isLoading: listLoading, isError: listError } = useDropoutStudents(true)
-  const { data: candidate, isLoading: candidateLoading, isError: candidateError } = useRejoinCandidate(selectedGuid, !!selectedGuid)
-
+  const [searchInput, setSearchInput] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
   const [page, setPage] = useState(1)
   const itemsPerPage = 10
-  const totalCount = dropouts.length
-  const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage))
-  const paginatedDropouts = dropouts.slice((page - 1) * itemsPerPage, page * itemsPerPage)
 
+  // Debounce typing, and start each new search from page 1.
   useEffect(() => {
-    setPage(1)
-  }, [dropouts.length])
+    const timer = setTimeout(() => { setSearchTerm(searchInput.trim()); setPage(1) }, 400)
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  // isPlaceholderData: the rows on screen are the previous page/search's,
+  // kept by keepPreviousData while the new one loads.
+  const { data: dropoutPage, isLoading: listLoading, isPlaceholderData: listRefetching, isError: listError } = useDropoutStudents({ searchTerm, page, pageSize: itemsPerPage }, true)
+  const { data: candidate, isLoading: candidateLoading, isError: candidateError } = useRejoinCandidate(selectedGuid, !!selectedGuid)
+
+  const paginatedDropouts = dropoutPage?.items ?? []
+  const totalCount = dropoutPage?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage))
+  // Dropdown matches come from the same server search as the table. Until the
+  // debounce settles and the request lands, the rows on screen belong to the
+  // previous term, so the dropdown shows "Searching…" instead.
+  const searchPending = searchInput.trim() !== searchTerm || listRefetching
+  const searchMatches = searchPending ? [] : paginatedDropouts.slice(0, 8)
   const rejoin = useRejoinStudent()
 
   const [targetSemester, setTargetSemester] = useState('')
@@ -177,19 +191,40 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
   if (!selectedGuid) {
     return (
       <div className="card">
-        <div className="card-hdr"><div className="card-title"><i className="lni lni-reload"></i> Dropout Students</div></div>
+        <div className="card-hdr flex justify-between items-center">
+          <div className="card-title"><i className="lni lni-reload"></i> Dropout Students</div>
+          <TableSearch
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="Search by name, reg no. or student no."
+            className="w-80"
+            results={searchMatches.map(d => ({ id: d.studentGuid, primary: d.studentName, secondary: [d.studentRegNo, d.programName].filter(Boolean).join(' · ') }))}
+            loading={searchPending}
+            minChars={2}
+            emptyLabel="No matching dropout students"
+            onSelect={r => handlePick(r.id)}
+          />
+        </div>
         {listError ? (
           <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load the dropout list. Please try again.</div>
         ) : (
           <>
+            <div className={`tbl-refetch-wrap${listRefetching ? ' is-refetching' : ''}`} aria-busy={listRefetching}>
+            {listRefetching && (
+              <div className="tbl-refetch-pill" role="status">
+                <i className="lni lni-reload" /> {searchTerm ? 'Searching…' : `Loading page ${page}…`}
+              </div>
+            )}
             <ScrollTable>
               <table>
                 <thead><tr><th style={{ textAlign: 'left' }}>Student</th><th>Reg No.</th><th>Programme</th><th>Semester</th><th>Batch</th><th>Eligibility</th><th></th></tr></thead>
                 <tbody>
                   {listLoading ? (
-                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: 16, fontSize: 12.5, color: 'var(--g400)' }}>Loading dropout students…</td></tr>
+                    <TableLoadingState colSpan={7} title={searchTerm ? 'Searching dropout students…' : 'Loading dropout students…'} />
                   ) : paginatedDropouts.length === 0 ? (
-                    <EmptyState colSpan={7} title="No dropout students" subtitle="There are no students currently marked as dropped out." />
+                    searchTerm
+                      ? <EmptyState colSpan={7} title="No matching students" subtitle={`No dropout students match "${searchTerm}". Reg no. and student no. must match exactly.`} />
+                      : <EmptyState colSpan={7} title="No dropout students" subtitle="There are no students currently marked as dropped out." />
                   ) : paginatedDropouts.map(d => (
                     <tr key={d.studentGuid}>
                       <td className="font-bold" style={{ textAlign: 'left' }}>{d.studentName}</td>
@@ -208,7 +243,8 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
                 </tbody>
               </table>
             </ScrollTable>
-            {dropouts.length > 0 && (
+            </div>
+            {totalCount > 0 && (
               <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="dropout students" onPageChange={setPage} />
             )}
           </>

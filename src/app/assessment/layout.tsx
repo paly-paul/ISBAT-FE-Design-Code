@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Header } from '@/components/Header'
 import { Sidebar, RailId } from '@/components/Sidebar'
+import { RouteGuard } from '@/components/RouteGuard'
 import { refreshSession } from '@/lib/auth'
 import { getSessionIdentity, setSessionIdentity } from '@/lib/session'
 
@@ -122,7 +123,7 @@ export default function AssessmentLayout({ children }: { children: React.ReactNo
           setActiveRail={setActiveRail}
         />
         <main className={`main${panelOpen ? ' panel-open' : ''}`}>
-          {children}
+          <RouteGuard>{children}</RouteGuard>
         </main>
       </div>
     </>

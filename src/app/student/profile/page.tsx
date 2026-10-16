@@ -157,9 +157,11 @@ function StudentProfileContent() {
   // rejoin candidate endpoint rejects anyone else ("Student is not a
   // dropout."). The student detail response carries no reg status, so this
   // checks membership in the dropout list (GET /students/dropout-rejoin),
-  // the same list Dropout Rejoin itself shows.
-  const { data: dropouts = [] } = useDropoutStudents(!!student)
-  const isDropout = !!student && dropouts.some(d => d.studentGuid === student.studentGuid)
+  // the same list Dropout Rejoin itself shows — searched by reg no. (an
+  // exact match server-side) so it isn't limited to the list's first page.
+  const regNo = student?.studentRegNo ?? ''
+  const { data: dropoutMatch } = useDropoutStudents({ searchTerm: regNo, page: 1, pageSize: 25 }, !!regNo)
+  const isDropout = !!student && !!dropoutMatch?.items.some(d => d.studentGuid === student.studentGuid)
   // Supporting-document preview popup. Images render as <img>; anything
   // else (PDF, etc.) goes in an iframe and relies on the browser's viewer.
   const [docPreviewOpen, setDocPreviewOpen] = useState(false)
