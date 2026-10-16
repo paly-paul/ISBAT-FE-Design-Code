@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
@@ -288,6 +289,7 @@ const HISTORY_PAGE_SIZE = 10
 const MIN_SEARCH_CHARS = 3
 
 export default function PaymentConsolePage() {
+  const router = useRouter()
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
@@ -582,6 +584,19 @@ export default function PaymentConsolePage() {
   // there even when the search hit had none, so it isn't just a one-time
   // override).
   const studentGuid = profile?.studentGuid ?? selectedStudentGuidHint ?? null
+
+  // After a payment: straight to this student's statement to see the updated
+  // payment details. Only offered once there's a studentGuid — an applicant
+  // who isn't a registered student yet has no statement.
+  function openStudentStatement() {
+    if (!studentGuid) return
+    setSuccessModal(null)
+    // from + applicationGuid let the statement offer "Back to Payment Console"
+    // that reopens this same student (see the URL preload effect below).
+    const q = new URLSearchParams({ studentGuid, from: 'payment-console' })
+    if (selectedApplicationGuid) q.set('applicationGuid', selectedApplicationGuid)
+    router.push(`/finance/student-statements?${q.toString()}`)
+  }
 
   // Re-added per request — hide the Other Payment tab's Advance Payment
   // checkbox entirely when this application has zero advance deposits on
@@ -1180,8 +1195,19 @@ export default function PaymentConsolePage() {
     setOtherPayments([])
     resetOtherForm()
     setSuccessModal(null)
-    showToast(`Loaded: ${name}`, 'success')
+    if (name) showToast(`Loaded: ${name}`, 'success')
   }
+
+  // Opened as /finance/payment-console?applicationGuid=…&studentGuid=…&name=…
+  // (Student Statement's "Back to Payment Console"): reopen that student.
+  // Read from window.location after mount — useSearchParams would need a
+  // Suspense boundary in the static build. Runs once, on mount only.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const applicationGuid = params.get('applicationGuid')
+    if (applicationGuid) selectStudent(applicationGuid, params.get('name') ?? '', params.get('studentGuid'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Smooth-scrolls the student card into view once it actually renders —
   // can't scroll straight from selectStudent() itself, since that card is
@@ -3016,6 +3042,11 @@ export default function PaymentConsolePage() {
                   <button className="btn btn-neu flex-1 justify-center" disabled={printingGuid === receipt.paymentGuid} onClick={() => printReceipt(receipt.paymentGuid, receipt.ref)}>
                     <i className="lni lni-printer"></i> {printingGuid === receipt.paymentGuid ? 'Loading receipt…' : 'Print Receipt'}
                   </button>
+                  {studentGuid && (
+                    <button className="btn btn-neu flex-1 justify-center" onClick={openStudentStatement}>
+                      <i className="lni lni-files"></i> Student Statement
+                    </button>
+                  )}
                   <button className="btn btn-primary flex-1 justify-center" onClick={handleClear}>← New Payment</button>
                 </div>
               </div>
@@ -3032,6 +3063,7 @@ export default function PaymentConsolePage() {
           title={successModal.title}
           rows={successModal.rows}
           notices={successModal.notices}
+          secondaryAction={studentGuid ? { label: 'View Student Statement', icon: 'lni-files', onClick: openStudentStatement } : undefined}
         />
       )}
       <ViewPaymentModal isOpen={!!viewEntry} onClose={() => setViewEntry(null)} showToast={showToast} entry={viewEntry} />

@@ -1,5 +1,6 @@
 'use client'
-import { useState, useMemo, Fragment } from 'react'
+import { useState, useMemo, useEffect, Fragment } from 'react'
+import Link from 'next/link'
 import { ScrollTable } from '@/components/ScrollTable'
 import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -148,6 +149,34 @@ export default function StudentStatementPage() {
   // Clearance percentage
   const totalBilled = (feeSummary?.totalAmountToPay ?? (totalPaid + currentOutstanding)) || 1
   const paidPercent = Math.min(100, Math.max(0, Math.round((totalPaid / totalBilled) * 100)))
+
+  // Opened as /finance/student-statements?studentGuid=… (e.g. Payment
+  // Console's "View Student Statement" after a payment): load that student
+  // straight away. Read from window.location after mount rather than
+  // useSearchParams, which would need a Suspense boundary in the static build.
+  // from=payment-console (+ that page's applicationGuid) adds a Back button
+  // that reopens the console on the same student.
+  const [backToConsole, setBackToConsole] = useState<{ applicationGuid: string; studentGuid: string } | null>(null)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const guid = params.get('studentGuid')
+    if (guid) setSelectedGuid(guid)
+    const applicationGuid = params.get('applicationGuid')
+    if (guid && applicationGuid && params.get('from') === 'payment-console') setBackToConsole({ applicationGuid, studentGuid: guid })
+  }, [])
+
+  function backToPaymentConsoleHref() {
+    if (!backToConsole) return '/finance/payment-console'
+    const q = new URLSearchParams({ applicationGuid: backToConsole.applicationGuid, studentGuid: backToConsole.studentGuid })
+    if (header?.studentName) q.set('name', header.studentName)
+    return `/finance/payment-console?${q.toString()}`
+  }
+
+  // A student opened from the URL has no search hit to take a name from, so
+  // fill the search box from the statement once it loads.
+  useEffect(() => {
+    if (selectedGuid && !term && header?.studentName) setTerm(header.studentName)
+  }, [selectedGuid, term, header?.studentName])
 
   function handleSelect(guid: string) {
     setSelectedGuid(guid)
@@ -384,6 +413,11 @@ export default function StudentStatementPage() {
         {/* ── Page Header matching standard ISBAT ERP convention ──────── */}
         <div className="pg-hdr">
           <div>
+            {backToConsole && (
+              <Link href={backToPaymentConsoleHref()} prefetch={false} className="btn btn-neu btn-sm mb-2" style={{ display: 'inline-flex' }}>
+                <i className="lni lni-arrow-left" /> Back to Payment Console
+              </Link>
+            )}
             <div className="pg-title">Student Statement</div>
             <div className="pg-sub">Official student financial ledger, payment history, and fee breakdown</div>
           </div>
