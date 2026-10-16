@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, apiPut } from '../client'
+import { apiDelete, apiGet, apiPost, apiPut, apiPutForm } from '../client'
 import { QuestionBankCategory, QuestionBankCourseUnit, getQuestionBankCourseUnits } from './questionBank'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
@@ -13,6 +13,8 @@ export interface QuestionDto {
   answerText: string | null
   questionType: number | null
   level: number | null
+  imageFileName?: string | null
+  imageUrl?: string | null
 }
 
 export interface CreateQuestionRequest {
@@ -119,6 +121,8 @@ export async function getQuestions(courseUnitGuid: string, category: number, int
       answerText: q.answerText ?? q.answer ?? '',
       questionType: typeof q.questionType === 'number' ? q.questionType : (q.questionType === 'MCQ' ? 1 : 2),
       level: q.level ?? null,
+      imageFileName: q.imageFileName ?? null,
+      imageUrl: q.imageUrl ?? null,
     }))
   } catch (err) {
     console.warn('ℹ️ [Questions] Could not fetch questions from backend:', err)
@@ -130,7 +134,20 @@ export async function getQuestions(courseUnitGuid: string, category: number, int
  * Fetch a single question by its GUID.
  */
 export async function getQuestionByGuid(guid: string): Promise<QuestionDto> {
-  return await apiGet<QuestionDto>(`/api/v1/assessment/questions/${guid}`)
+  const data = await apiGet<any>(`/api/v1/assessment/questions/${guid}`)
+  return {
+    questionGuid: data?.questionGuid || guid,
+    questionText: data?.questionText ?? '',
+    option1Text: data?.option1Text ?? null,
+    option2Text: data?.option2Text ?? null,
+    option3Text: data?.option3Text ?? null,
+    option4Text: data?.option4Text ?? null,
+    answerText: data?.answerText ?? '',
+    questionType: typeof data?.questionType === 'number' ? data.questionType : (data?.questionType === 'MCQ' ? 1 : 2),
+    level: data?.level ?? null,
+    imageFileName: data?.imageFileName ?? null,
+    imageUrl: data?.imageUrl ?? null,
+  }
 }
 
 /**
@@ -152,4 +169,39 @@ export async function updateQuestion(guid: string, payload: UpdateQuestionReques
  */
 export async function deleteQuestion(guid: string): Promise<boolean> {
   return await apiDelete<boolean>(`/api/v1/assessment/questions/${guid}`)
+}
+
+/**
+ * Upload or replace the image of a question.
+ * PUT /api/v1/assessment/questions/{questionGuid}/image
+ * Accepts multipart/form-data with field name 'file' (.png, .jpg, .jpeg, max 5MB).
+ */
+export async function uploadQuestionImage(questionGuid: string, file: File): Promise<boolean> {
+  if (MOCK_AUTH) {
+    const q = mockQuestions.find(m => m.questionGuid === questionGuid)
+    if (q) {
+      q.imageFileName = file.name
+      q.imageUrl = URL.createObjectURL(file)
+    }
+    return true
+  }
+  const formData = new FormData()
+  formData.append('file', file)
+  return await apiPutForm<boolean>(`/api/v1/assessment/questions/${questionGuid}/image`, formData)
+}
+
+/**
+ * Remove the image of a question.
+ * DELETE /api/v1/assessment/questions/{questionGuid}/image
+ */
+export async function deleteQuestionImage(questionGuid: string): Promise<boolean> {
+  if (MOCK_AUTH) {
+    const q = mockQuestions.find(m => m.questionGuid === questionGuid)
+    if (q) {
+      q.imageFileName = null
+      q.imageUrl = null
+    }
+    return true
+  }
+  return await apiDelete<boolean>(`/api/v1/assessment/questions/${questionGuid}/image`)
 }

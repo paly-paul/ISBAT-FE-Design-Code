@@ -7,6 +7,7 @@ import { Pagination } from '@/components/Pagination'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { EmptyState } from '@/components/EmptyState'
 import { Toast } from '@/components/Toast'
+import { TableSearch, type TableSearchResult } from '@/components/TableSearch'
 import {
   useApplyModeration,
   useDeleteResults,
@@ -53,9 +54,19 @@ interface Draft {
   iaValue: string
   ueOperator: '' | ResultOperator
   ueValue: string
+  studentName: string
 }
 
-const EMPTY_DRAFT: Omit<Draft, 'intakeGuid'> = { programGuid: '', semesterGuid: '', courseUnitGuid: '', iaOperator: '', iaValue: '', ueOperator: '', ueValue: '' }
+const EMPTY_DRAFT: Omit<Draft, 'intakeGuid'> = {
+  programGuid: '',
+  semesterGuid: '',
+  courseUnitGuid: '',
+  iaOperator: '',
+  iaValue: '',
+  ueOperator: '',
+  ueValue: '',
+  studentName: '',
+}
 
 type ConfirmState = { title: string; body: React.ReactNode; confirmLabel: string; danger?: boolean; onConfirm: () => void } | null
 
@@ -87,6 +98,7 @@ function toFilters(d: Draft): { filters: ResultFilters } | { error: string } {
   if ('error' in ia) return { error: ia.error! }
   const ue = total(d.ueOperator, d.ueValue, 'UE Total')
   if ('error' in ue) return { error: ue.error! }
+  const s = d.studentName.trim() || undefined
   return {
     filters: {
       intakeGuid: d.intakeGuid,
@@ -95,6 +107,8 @@ function toFilters(d: Draft): { filters: ResultFilters } | { error: string } {
       courseUnitGuid: d.courseUnitGuid || undefined,
       iaOperator: ia.op, iaValue: ia.value,
       ueOperator: ue.op, ueValue: ue.value,
+      studentName: s,
+      search: s,
     },
   }
 }
@@ -135,30 +149,131 @@ export default function GenerateResultPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
+  // ── Table Search (Results Table Filter) ──────────────────────────────────
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const trimmed = searchInput.trim()
+      if (trimmed !== search) {
+        setSearch(trimmed)
+        setPage(1)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchInput, search])
+
   const draftResult = toFilters(draft)
   const draftFilters = 'filters' in draftResult ? draftResult.filters : null
-  const filtersChanged = !!applied && JSON.stringify(draftFilters) !== JSON.stringify(applied)
+  const filtersChanged = !!applied && (
+    draft.programGuid !== (applied.programGuid || '') ||
+    draft.semesterGuid !== (applied.semesterGuid || '') ||
+    draft.courseUnitGuid !== (applied.courseUnitGuid || '') ||
+    draft.iaOperator !== (applied.iaOperator || '') ||
+    draft.iaValue !== (applied.iaValue !== undefined ? String(applied.iaValue) : '') ||
+    draft.ueOperator !== (applied.ueOperator || '') ||
+    draft.ueValue !== (applied.ueValue !== undefined ? String(applied.ueValue) : '')
+  )
 
   function changeIntake(v: string) {
     set('intakeGuid', v)
     setApplied(null) // grid belongs to one intake
+    setSearchInput('')
+    setSearch('')
   }
 
   function showResult() {
     const r = toFilters(draft)
     if ('error' in r) { showToast(r.error, 'error'); return }
     setApplied(r.filters)
+    const term = draft.studentName.trim()
+    setSearchInput(term)
+    setSearch(term)
     setPage(1)
   }
 
   function resetFilters() {
     setDraft(d => ({ ...d, ...EMPTY_DRAFT }))
+    setSearchInput('')
+    setSearch('')
+    setPage(1)
   }
 
-  const resultsQuery = useGeneratedResults(applied, page, pageSize)
-  const rows = resultsQuery.data?.items ?? []
-  const totalCount = resultsQuery.data?.totalCount ?? 0
+  function handleTableSearchChange(val: string) {
+    setSearchInput(val)
+    setDraft(d => ({ ...d, studentName: val }))
+  }
+
+  function clearSearch() {
+    setSearchInput('')
+    setSearch('')
+    setDraft(d => ({ ...d, studentName: '' }))
+    setPage(1)
+  }
+
+  const effectiveFilters = useMemo<ResultFilters | null>(() => {
+    if (!applied) return null
+    const term = search.trim()
+    return {
+      ...applied,
+      ...(term ? { search: term, studentName: term } : { search: undefined, studentName: undefined }),
+    }
+  }, [applied, search])
+
+  // When filtering by student name, request a larger page size (200) from server so that
+  // if the backend returns unfiltered rows, client-side filtering can inspect the full batch
+  const isSearchActive = !!search.trim()
+  const fetchPageSize = isSearchActive ? Math.max(pageSize, 200) : pageSize
+  const fetchPage = isSearchActive ? 1 : page
+  const resultsQuery = useGeneratedResults(effectiveFilters, fetchPage, fetchPageSize)
+  const rawRows = resultsQuery.data?.items ?? []
+
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return rawRows
+    return rawRows.filter(r =>
+      (r.studentName && r.studentName.toLowerCase().includes(q)) ||
+      (r.studentNum && r.studentNum.toLowerCase().includes(q)) ||
+      (r.programCode && r.programCode.toLowerCase().includes(q)) ||
+      (r.unitCode && r.unitCode.toLowerCase().includes(q)) ||
+      (r.unitName && r.unitName.toLowerCase().includes(q))
+    )
+  }, [rawRows, search])
+
+  const totalCount = isSearchActive ? filteredRows.length : (resultsQuery.data?.totalCount ?? 0)
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+
+  // Sliced page rows when client-filtering, or rawRows when server-paginated
+  const rows = useMemo(() => {
+    if (!isSearchActive) return rawRows
+    const start = (page - 1) * pageSize
+    return filteredRows.slice(start, start + pageSize)
+  }, [isSearchActive, rawRows, filteredRows, page, pageSize])
+
+  const searchResults: TableSearchResult[] = useMemo(() => {
+    const q = searchInput.trim().toLowerCase()
+    if (!q || !rawRows.length) return []
+    const seen = new Set<string>()
+    const items: TableSearchResult[] = []
+    for (const r of rawRows) {
+      const primary = r.studentName || r.studentNum || ''
+      if (!primary || seen.has(primary)) continue
+      const match =
+        (r.studentName && r.studentName.toLowerCase().includes(q)) ||
+        (r.studentNum && r.studentNum.toLowerCase().includes(q))
+      if (match) {
+        seen.add(primary)
+        items.push({
+          id: r.examResultGuid,
+          primary,
+          secondary: [r.studentNum, r.programCode, r.unitCode].filter(Boolean).join(' · '),
+        })
+        if (items.length >= 8) break
+      }
+    }
+    return items
+  }, [rawRows, searchInput])
 
   // ── Actions ──────────────────────────────────────────────────────────────
   const generateMut = useGenerateResults()
@@ -180,8 +295,18 @@ export default function GenerateResultPage() {
       onConfirm: () => generateMut.mutate(draft.intakeGuid, {
         onSuccess: res => {
           setGenerated(res)
-          // Show the new results straight away.
-          if (!applied) { setApplied({ intakeGuid: draft.intakeGuid }); setPage(1) }
+          // Show the new results straight away and ensure applied state is updated
+          const term = draft.studentName?.trim() || ''
+          setApplied({
+            intakeGuid: draft.intakeGuid,
+            ...(draft.programGuid ? { programGuid: draft.programGuid } : {}),
+            ...(draft.semesterGuid ? { semesterGuid: draft.semesterGuid } : {}),
+            ...(draft.courseUnitGuid ? { courseUnitGuid: draft.courseUnitGuid } : {}),
+            ...(term ? { studentName: term, search: term } : {}),
+          })
+          setSearchInput(term)
+          setSearch(term)
+          setPage(1)
         },
         onError: err => showToast(errMsg(err, 'Could not generate the results.'), 'error'),
       }),
@@ -224,7 +349,7 @@ export default function GenerateResultPage() {
   const [modValue, setModValue] = useState('')
 
   function doModerate() {
-    if (!applied) return
+    if (!effectiveFilters) return
     if (modValue.trim() === '' || !Number.isInteger(Number(modValue))) { showToast('Please enter Moderation value before proceeding!!', 'error'); return }
     const value = Number(modValue)
     const part = modField === 1 ? 'IA' : 'UE'
@@ -232,7 +357,7 @@ export default function GenerateResultPage() {
       title: `Add ${value} to the ${part} total?`,
       body: <>Moderation is applied to the <strong>{totalCount.toLocaleString()} row{totalCount === 1 ? '' : 's'}</strong> the current filters show. A total is never raised above 50% of its maximum; rows already at that limit are skipped.</>,
       confirmLabel: 'Apply moderation',
-      onConfirm: () => moderateMut.mutate({ filters: applied, field: modField, value }, {
+      onConfirm: () => moderateMut.mutate({ filters: effectiveFilters, field: modField, value }, {
         onSuccess: res => {
           setModValue('')
           showToast(res.rowsModerated > 0
@@ -246,8 +371,8 @@ export default function GenerateResultPage() {
 
   // ── Export ───────────────────────────────────────────────────────────────
   function doExport() {
-    if (!applied) return
-    exportMut.mutate(applied, {
+    if (!effectiveFilters) return
+    exportMut.mutate(effectiveFilters, {
       onSuccess: res => {
         const a = document.createElement('a')
         a.href = res.url
@@ -318,7 +443,7 @@ export default function GenerateResultPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4 items-end mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1.2fr_auto] gap-4 items-end mt-4">
             {(['ia', 'ue'] as const).map(k => (
               <div className="fg mb-0" key={k}>
                 <label className="lbl">{k === 'ia' ? 'IA Total' : 'UE Total'}</label>
@@ -343,6 +468,16 @@ export default function GenerateResultPage() {
                 </div>
               </div>
             ))}
+            <div className="fg mb-0">
+              <label className="lbl">Student Name / Number</label>
+              <input
+                className="ctrl"
+                placeholder="Search by student name or number…"
+                value={draft.studentName}
+                onChange={e => set('studentName', e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') showResult() }}
+              />
+            </div>
             <div className="flex gap-2">
               <button className="btn btn-neu" onClick={resetFilters}><i className="lni lni-reload"></i> Reset</button>
               <button className="btn btn-primary" onClick={showResult} disabled={!draft.intakeGuid}><i className="lni lni-search-alt"></i> Show Result</button>
@@ -417,6 +552,31 @@ export default function GenerateResultPage() {
             </div>
             <div className="flex gap-2 items-center flex-wrap">
               {filtersChanged && <span className="text-xs" style={{ color: 'var(--amber)' }}>Filters changed — click Show Result</span>}
+              <div className="flex items-center gap-1.5">
+                <TableSearch
+                  className="w-56 sm:w-64"
+                  placeholder="Filter by student name…"
+                  value={searchInput}
+                  onChange={handleTableSearchChange}
+                  disabled={!applied}
+                  onEnter={() => { setSearch(searchInput.trim()); setPage(1) }}
+                  results={searchResults.length > 0 ? searchResults : undefined}
+                  onSelect={r => {
+                    handleTableSearchChange(r.primary)
+                    setSearch(r.primary)
+                    setPage(1)
+                  }}
+                />
+                {search && (
+                  <button
+                    className="btn btn-neu btn-sm"
+                    title="Clear search"
+                    onClick={clearSearch}
+                  >
+                    <i className="lni lni-close"></i>
+                  </button>
+                )}
+              </div>
               <button className="btn btn-neu btn-sm" onClick={doExport} disabled={!applied || totalCount === 0 || exportMut.isPending}>
                 <i className="lni lni-download"></i> {exportMut.isPending ? 'Exporting…' : 'Export to Excel'}
               </button>
@@ -463,10 +623,22 @@ export default function GenerateResultPage() {
                   ) : rows.length === 0 ? (
                     <EmptyState
                       colSpan={14}
-                      title="No results"
-                      subtitle={applied.programGuid || applied.semesterGuid || applied.courseUnitGuid || applied.iaOperator || applied.ueOperator
-                        ? 'No results match the selected filters.'
-                        : `No results have been generated for ${intakeLabel} yet. Use Generate Result.`}
+                      title={isSearchActive ? 'No matching students found' : 'No results'}
+                      subtitle={
+                        isSearchActive
+                          ? `No results match the student name or number "${search}". Try adjusting the filter or clearing it.`
+                          : applied.programGuid || applied.semesterGuid || applied.courseUnitGuid || applied.iaOperator || applied.ueOperator
+                          ? 'No results match the selected filters.'
+                          : `No results have been generated for ${intakeLabel} yet. Use Generate Result.`
+                      }
+                      hasFilters={isSearchActive || !!applied.programGuid || !!applied.semesterGuid || !!applied.courseUnitGuid || !!applied.iaOperator || !!applied.ueOperator}
+                      onClearFilters={
+                        isSearchActive
+                          ? clearSearch
+                          : applied.programGuid || applied.semesterGuid || applied.courseUnitGuid || applied.iaOperator || applied.ueOperator
+                          ? () => { resetFilters(); showResult() }
+                          : undefined
+                      }
                     />
                   ) : (
                     rows.map((r, i) => (

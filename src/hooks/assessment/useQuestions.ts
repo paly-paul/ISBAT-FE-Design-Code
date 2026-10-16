@@ -9,7 +9,9 @@ import {
   CreateQuestionRequest,
   UpdateQuestionRequest,
   getSingleQuestionCategories,
-  getSingleQuestionCourseUnits
+  getSingleQuestionCourseUnits,
+  uploadQuestionImage,
+  deleteQuestionImage
 } from '@/lib/api/assessment/questions'
 
 export function useSingleQuestionCategories() {
@@ -78,6 +80,29 @@ export function useDeleteQuestion() {
     onSuccess: () => {
       // Same as above, invalidate list. 
       queryClient.invalidateQueries({ queryKey: ['questions'] })
+    },
+  })
+}
+
+export function useUploadQuestionImage() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ questionGuid, file }: { questionGuid: string; file: File }) =>
+      uploadQuestionImage(questionGuid, file),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['questions'] })
+      queryClient.invalidateQueries({ queryKey: ['question', variables.questionGuid] })
+    },
+  })
+}
+
+export function useDeleteQuestionImage() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (questionGuid: string) => deleteQuestionImage(questionGuid),
+    onSuccess: (_, questionGuid) => {
+      queryClient.invalidateQueries({ queryKey: ['questions'] })
+      queryClient.invalidateQueries({ queryKey: ['question', questionGuid] })
     },
   })
 }
