@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { notFound } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { SearchSelect } from '@/components/SearchSelect'
 import { TableLoadingState } from '@/components/TableLoadingState'
@@ -217,13 +218,8 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
   const showEditColumn = canSave && !isVerified
   const colCount = 3 + columns.length + (showEditColumn ? 1 : 0)
 
-  if (!permissions.get) {
-    return (
-      <div className="page active">
-        <div className="card p-8 text-center text-g500">You don&apos;t have access to this page.</div>
-      </div>
-    )
-  }
+  // No view permission: show the app-wide 404 rather than revealing the page exists.
+  if (!permissions.get) notFound()
 
   return (
     <div className="page active">

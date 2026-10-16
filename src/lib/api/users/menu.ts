@@ -1600,6 +1600,57 @@ export function flattenMenuPages(menu: MenuNode[]): AppPage[] {
   return pages
 }
 
+// Every page the app knows as a menu item, i.e. the full menu before RBAC
+// filtering (same tree getMenu() falls back to). Built once, on first use.
+let catalogCache: { modules: Set<string>; pages: Set<string> } | null = null
+function menuCatalog() {
+  if (!catalogCache) {
+    const pages = flattenMenuPages(stripUnintegratedPages(stripLectureMaster(renameIaCreation(mockMenu))))
+    catalogCache = {
+      modules: new Set(pages.map(p => p.url.split('/')[1])),
+      pages: new Set(pages.map(p => p.url)),
+    }
+  }
+  return catalogCache
+}
+
+// Whether the user's own (RBAC-filtered) menu lets them open `pathname`.
+// Denied: anything under a module missing from their menu, and any known
+// menu page that their menu leaves out or marks `get: false`. Routes that
+// aren't menu items (profile, detail pages like /student/profile, dashboards
+// not in the catalog) are allowed — the backend still authorizes each call.
+export function isRouteAllowed(menu: MenuNode[], pathname: string): boolean {
+  const path = pathname.replace(/\/+$/, '') || '/'
+  const catalog = menuCatalog()
+  const moduleSeg = path.split('/')[1]
+  if (!catalog.modules.has(moduleSeg)) return true
+
+  const pages = flattenMenuPages(menu)
+  if (!pages.some(p => p.url.split('/')[1] === moduleSeg)) return false
+  if (!catalog.pages.has(path)) return true
+
+  const permissions = findLeafPermissions(menu, path)
+  return permissions !== undefined && permissions?.get !== false
+}
+
+// undefined: the page isn't in the menu; null: it is, with no permission data.
+function findLeafPermissions(menu: MenuNode[], path: string): MenuPermissions | null | undefined {
+  for (const m of menu) {
+    const base = '/' + m.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+    const walk = (nodes: MenuNode[]): MenuPermissions | null | undefined => {
+      for (const n of nodes) {
+        if (n.url && (n.url.startsWith('/') ? n.url : `${base}/${n.url}`) === path) return n.permissions
+        const found = n.children.length ? walk(n.children) : undefined
+        if (found !== undefined) return found
+      }
+      return undefined
+    }
+    const found = walk(m.children)
+    if (found !== undefined) return found
+  }
+  return undefined
+}
+
 function renameIaCreation(menu: MenuNode[]): MenuNode[] {
   return menu.map(mod => {
     if (mod.name !== 'Assessment') return mod

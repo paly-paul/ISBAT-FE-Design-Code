@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  DropoutStudentsParams,
   getDropoutStudents,
   getRejoinCandidate,
   getRejoinBatches,
@@ -11,10 +12,13 @@ const DROPOUT_LIST_KEY = ['dropout-students']
 const REJOIN_CANDIDATE_KEY = ['rejoin-candidate']
 const REJOIN_BATCHES_KEY = ['rejoin-batches']
 
-export function useDropoutStudents(enabled: boolean) {
+// Keeps the previous page on screen while the next page/search loads, so
+// the table doesn't blank out on every keystroke or page change.
+export function useDropoutStudents(params: DropoutStudentsParams, enabled: boolean) {
   return useQuery({
-    queryKey: DROPOUT_LIST_KEY,
-    queryFn: getDropoutStudents,
+    queryKey: [...DROPOUT_LIST_KEY, params],
+    queryFn: () => getDropoutStudents(params),
+    placeholderData: keepPreviousData,
     enabled,
     staleTime: 5 * 60 * 1000,
     gcTime: Infinity,
