@@ -42,10 +42,11 @@ function statusBadge(statusName: string | undefined) {
   return <span className="badge badge-blue">{statusName}</span>
 }
 
-// Channel shows the enquiry's own sourceName (e.g. "Direct"), per the backend
-// team (2026-10-09) — not enquirySourceName or isbatSourceName.
+// Channel shows enquirySourceName (the Enquiry Source master, e.g.
+// "Instagram"). The list response no longer carries sourceName at all
+// (confirmed live 2026-10-16), so it's only a fallback now.
 function sourceBadge(r: Enquiry) {
-  return <span className="badge badge-grey">{r.sourceName || '—'}</span>
+  return <span className="badge badge-grey">{r.enquirySourceName || r.sourceName || '—'}</span>
 }
 
 export default function EnquiryListPage() {

@@ -5,7 +5,7 @@ import { FailurePopup } from '../shared/FailurePopup'
 import { AuthError } from '@/lib/api/client'
 import { useCourseUnit } from '@/hooks/academic/useCourseUnits'
 import { getCourseUnitById } from '@/lib/api/academic/courseUnit'
-import { openDocumentForViewing } from '@/lib/documentViewer'
+import { DocumentPreviewModal } from '../shared/DocumentPreviewModal'
 
 interface ViewCourseUnitModalProps extends ModalProps {
   courseUnitGuid: string | null
@@ -54,6 +54,8 @@ function approvalBadge(approved: number | null | undefined) {
 export function ViewCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid, onEdit, canEdit }: ViewCourseUnitModalProps) {
   const { data: courseUnit, isLoading, isError, error } = useCourseUnit(courseUnitGuid, isOpen)
   const [syllabusLoading, setSyllabusLoading] = useState(false)
+  // Shown in an in-page preview (PDF/image inline, with Download), not a new tab.
+  const [syllabusPreview, setSyllabusPreview] = useState<string | null>(null)
 
   // The syllabus is a pre-signed S3 URL that expires within minutes, so the
   // one on the cached record can't be trusted — fetch the unit fresh at
@@ -64,7 +66,7 @@ export function ViewCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
     try {
       const fresh = await getCourseUnitById(courseUnitGuid)
       if (!fresh.syllabus) { showToast('Syllabus is no longer attached to this unit', 'error'); return }
-      await openDocumentForViewing(fresh.syllabus)
+      setSyllabusPreview(fresh.syllabus)
     } catch {
       showToast('Failed to load the syllabus document. Please try again.', 'error')
     } finally {
@@ -329,6 +331,12 @@ export function ViewCourseUnitModal({ isOpen, onClose, showToast, courseUnitGuid
           <button className="btn btn-primary" onClick={handleClose}>Close</button>
         </div>
       </div>
+      <DocumentPreviewModal
+        isOpen={!!syllabusPreview}
+        onClose={() => setSyllabusPreview(null)}
+        url={syllabusPreview}
+        title={`Syllabus — ${courseUnit?.courseUnitCode ?? ''}`}
+      />
     </div>
   )
 }

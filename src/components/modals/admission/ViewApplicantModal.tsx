@@ -27,6 +27,19 @@ function genderLabel(g: number | null): string {
   return g != null ? String(g) : '—'
 }
 
+// Application Filling's SaveGeneral sends empty optional fields as the
+// literal string "null" (see saveGeneral), and the backend stores that as
+// text in string columns. Treat it as empty so it shows as "—" and doesn't
+// make an empty section (e.g. a reference) look filled in.
+function withoutNullText(a: ApplicationListItem): ApplicationListItem {
+  const out: Record<string, unknown> = { ...a }
+  for (const k of Object.keys(out)) {
+    const v = out[k]
+    if (typeof v === 'string' && v.trim().toLowerCase() === 'null') out[k] = null
+  }
+  return out as unknown as ApplicationListItem
+}
+
 // Layout, tabs, fields and footer mirror ViewProgrammeModal /
 // ViewCourseUnitModal so the View modals read as one family.
 function Field({ label, value, wide }: { label: string; value: React.ReactNode; wide?: boolean }) {
@@ -93,7 +106,7 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
 
   // The full record wins field by field; anything it leaves out keeps the
   // list row's value.
-  const applicant: ApplicationListItem = detail ? { ...listRow, ...detail } : listRow
+  const applicant = withoutNullText(detail ? { ...listRow, ...detail } : listRow)
 
   // Prefer the server's own name/label fields over raw guids and codes.
   const fullName = `${applicant.firstName ?? ''}${applicant.lastName ? ` ${applicant.lastName}` : ''}`.trim() || '—'

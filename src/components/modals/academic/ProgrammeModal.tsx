@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { getCourseUnitById } from '@/lib/api/academic/courseUnit'
+import { DocumentPreviewModal } from '../shared/DocumentPreviewModal'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
@@ -499,6 +501,23 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // either.
   const expandedUnit = (semUnits[activeAcc] ?? []).find(u => u.id === expandedUnitId)
   const { data: expandedUnitDetail, isLoading: expandedUnitLoading } = useCourseUnit(expandedUnit?.guid ?? null, !!expandedUnit)
+  // Syllabus opens in the in-page preview (ACD-027), not a plain link. The
+  // cached URL is a presigned link that expires in 5 minutes, so fetch the
+  // unit fresh at click time, same as Course Units' own handleSyllabus.
+  const [syllabusOpening, setSyllabusOpening] = useState(false)
+  const [syllabusPreview, setSyllabusPreview] = useState<{ url: string; title: string } | null>(null)
+  async function viewSyllabus(courseUnitGuid: string) {
+    setSyllabusOpening(true)
+    try {
+      const fresh = await getCourseUnitById(courseUnitGuid)
+      if (!fresh.syllabus) { showToast('Syllabus is no longer attached to this unit', 'error'); return }
+      setSyllabusPreview({ url: fresh.syllabus, title: `Syllabus — ${fresh.courseUnitCode}` })
+    } catch {
+      showToast('Failed to load the syllabus document. Please try again.', 'error')
+    } finally {
+      setSyllabusOpening(false)
+    }
+  }
 
   // Unit Type / Unit Category dropdowns in Course Unit Allocation — real
   // masters from src/app/config/unit-type & unit-category. ProgramUnitInput.
@@ -2608,7 +2627,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     <div>
                       <div className="lbl" style={{ fontSize: 11 }}>Syllabus</div>
                       {expandedUnitDetail.syllabus
-                        ? <a href={expandedUnitDetail.syllabus} target="_blank" rel="noopener noreferrer" className="btn btn-neu btn-sm" style={{ display: 'inline-flex', fontSize: 11.5 }}><i className="lni lni-download"></i> View Syllabus</a>
+                        ? <button type="button" className="btn btn-neu btn-sm" style={{ display: 'inline-flex', fontSize: 11.5 }} disabled={syllabusOpening} onClick={() => viewSyllabus(expandedUnitDetail.courseUnitGuid)}><i className="lni lni-eye"></i> {syllabusOpening ? 'Opening…' : 'View Syllabus'}</button>
                         : <span className="text-g400 italic" style={{ fontSize: 12 }}>No syllabus uploaded</span>
                       }
                     </div>
@@ -2654,6 +2673,14 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           </div>
         </div>
       )}
+
+      {/* Last, so it stacks above the Syllabus/Outline popup that opens it. */}
+      <DocumentPreviewModal
+        isOpen={!!syllabusPreview}
+        onClose={() => setSyllabusPreview(null)}
+        url={syllabusPreview?.url ?? null}
+        title={syllabusPreview?.title}
+      />
     </div>
   )
 }

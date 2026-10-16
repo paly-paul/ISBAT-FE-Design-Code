@@ -17,7 +17,8 @@ import { useCourseUnits, useAllCourseUnits, useCreateCourseUnit, useUpdateCourse
 import { useProgramCourseUnits } from '@/hooks/academic/useProgramCourseUnits'
 import { useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
 import { getCourseUnitById } from '@/lib/api/academic/courseUnit'
-import { openDocumentForViewing, downloadDocument } from '@/lib/documentViewer'
+import { downloadDocument } from '@/lib/documentViewer'
+import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { flattenUniquePages } from '@/lib/pagination'
 
@@ -64,6 +65,9 @@ export default function Page() {
   }
 
   const [syllabusLoadingGuid, setSyllabusLoadingGuid] = useState<string | null>(null)
+  // View opens the syllabus in an in-page preview (PDF/image inline, with a
+  // Download button) rather than a bare new tab.
+  const [syllabusPreview, setSyllabusPreview] = useState<{ url: string; title: string } | null>(null)
 
   // `syllabus` is a presigned S3 URL good for only 5 minutes (X-Amz-Expires=300
   // on a real response) — the table row's own copy comes from useCourseUnits,
@@ -77,8 +81,8 @@ export default function Page() {
     try {
       const fresh = await getCourseUnitById(guid)
       if (!fresh.syllabus) { showToast('Syllabus is no longer attached to this unit', 'error'); return }
-      if (mode === 'view') await openDocumentForViewing(fresh.syllabus)
-      else downloadDocument(fresh.syllabus)
+      if (mode === 'view') setSyllabusPreview({ url: fresh.syllabus, title: `Syllabus — ${fresh.courseUnitCode}` })
+      else await downloadDocument(fresh.syllabus)
     } catch {
       showToast('Failed to load the syllabus document. Please try again.', 'error')
     } finally {
@@ -306,13 +310,17 @@ export default function Page() {
                 {!loading && pageItems.map((r) => (
                   <tr key={r.courseUnitGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
-                        <ActionMenu>
-                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.courseUnitGuid)}><i className="lni lni-eye"></i> View</button>
-                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.courseUnitGuid)}><i className="lni lni-pencil"></i> Edit</button>}
-                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
-                        </ActionMenu>
-                      )}
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.courseUnitGuid)}><i className="lni lni-eye"></i> View</button>
+                        {r.syllabus && (
+                          <>
+                            <button className="btn btn-neu btn-sm" disabled={syllabusLoadingGuid === r.courseUnitGuid} onClick={() => handleSyllabus(r.courseUnitGuid, 'view')}><i className="lni lni-files"></i> View Syllabus</button>
+                            <button className="btn btn-neu btn-sm" disabled={syllabusLoadingGuid === r.courseUnitGuid} onClick={() => handleSyllabus(r.courseUnitGuid, 'download')}><i className="lni lni-download"></i> Download Syllabus</button>
+                          </>
+                        )}
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.courseUnitGuid)}><i className="lni lni-pencil"></i> Edit</button>}
+                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
+                      </ActionMenu>
                     </td>
                     <td className="font-mono text-b700" style={{ fontSize: 'var(--fs-xs)' }}>{r.courseUnitCode}</td>
                     <td><strong>{r.courseUnitName}</strong></td>
@@ -322,32 +330,12 @@ export default function Page() {
                     <td>{r.cw}</td>
                     <td>{r.ca}</td>
                     <td>
-                      {r.syllabus
-                        ? (
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleSyllabus(r.courseUnitGuid, 'view')}
-                              disabled={syllabusLoadingGuid === r.courseUnitGuid}
-                              className="badge badge-green"
-                              style={{ border: 'none', cursor: 'pointer' }}
-                              title="View uploaded syllabus document"
-                            >
-                              <i className="lni lni-eye"></i> {syllabusLoadingGuid === r.courseUnitGuid ? 'Loading…' : 'Attached'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleSyllabus(r.courseUnitGuid, 'download')}
-                              disabled={syllabusLoadingGuid === r.courseUnitGuid}
-                              className="btn btn-neu"
-                              style={{ width: 26, height: 26, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                              title="Download syllabus document"
-                            >
-                              <i className="lni lni-download" style={{ fontSize: 12 }}></i>
-                            </button>
-                          </div>
-                        )
-                        : <span className="badge badge-red"><i className="lni lni-warning"></i> Missing</span>}
+                      {/* Status only — View / Download Syllabus live in the row's action menu. */}
+                      {syllabusLoadingGuid === r.courseUnitGuid
+                        ? <span className="badge badge-blue"><i className="lni lni-reload spin"></i> Loading…</span>
+                        : r.syllabus
+                          ? <span className="badge badge-green"><i className="lni lni-checkmark"></i> Attached</span>
+                          : <span className="badge badge-red"><i className="lni lni-warning"></i> Missing</span>}
                     </td>
                   </tr>
                 ))}
@@ -384,6 +372,12 @@ export default function Page() {
         courseUnitGuid={viewingCourseUnitGuid}
       />
       <ElectiveSelectModal isOpen={openModals.has('elective-select-modal')} onClose={() => closeModal('elective-select-modal')} showToast={showToast} />
+      <DocumentPreviewModal
+        isOpen={!!syllabusPreview}
+        onClose={() => setSyllabusPreview(null)}
+        url={syllabusPreview?.url ?? null}
+        title={syllabusPreview?.title}
+      />
       <Toast toast={toast} />
 
       {deleteTarget && (

@@ -219,8 +219,10 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
     if (!isEdit && intakeGuid && intake && (!intake.month || !intake.financialYear)) {
       e.intakeGuid = 'This intake has no month or financial year set. Update it in Intake Master first.'
     }
-    // PUT enforces end > start; create doesn't, but a batch that ends before
-    // it starts is never intended, so both modes check it.
+    // Same rules as POST and PUT (ACD-006/007, post-batch.md / put-batch.md):
+    // both dates required, end strictly after start (equal is rejected).
+    if (!startDate) e.startDate = 'Please select a Start Date'
+    if (!endDate)   e.endDate = 'Please select an End Date'
     if (startDate && endDate && endDate <= startDate) e.endDate = 'End date must be after the start date'
     if (isEnded && (!endDate || endDate <= todayUtcYmd())) {
       e.endDate = 'This batch has ended. Extend the end date to a date after today to save.'
@@ -258,22 +260,28 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
       showToast(isEdit ? 'Batch updated successfully' : 'Batch created successfully', 'success')
     }
     const onError = (error: Error) => {
-      const msg = error.message || ''
-      // Field-level problems go back onto the form instead of a dead-end popup.
-      const fieldHit = NOT_FOUND_FIELDS.find(([re]) => re.test(msg))
-      const fieldErrors: Record<string, string> | null = fieldHit
-        ? { [fieldHit[1]]: fieldHit[2] }
-        : /end ?date must be after/i.test(msg)
-          ? { endDate: 'End date must be after the start date' }
-          : null
-      if (fieldErrors) {
+      // A 400 validation_error carries every problem in errors[]; message is
+      // only the first. Field-level ones go back onto the form under their
+      // field instead of a dead-end popup; anything left over is shown as-is.
+      const messages = error instanceof AuthError && error.errors?.length ? error.errors : [error.message || '']
+      const fieldErrors: Record<string, string> = {}
+      const unmatched: string[] = []
+      for (const msg of messages) {
+        const fieldHit = NOT_FOUND_FIELDS.find(([re]) => re.test(msg))
+        if (fieldHit) fieldErrors[fieldHit[1]] = fieldHit[2]
+        else if (/start ?date is required/i.test(msg)) fieldErrors.startDate = 'Please select a Start Date'
+        else if (/end ?date is required/i.test(msg)) fieldErrors.endDate = 'Please select an End Date'
+        else if (/end ?date must be after/i.test(msg)) fieldErrors.endDate = 'End date must be after the start date'
+        else if (msg) unmatched.push(msg)
+      }
+      if (Object.keys(fieldErrors).length) {
         setErrors(prev => ({ ...prev, ...fieldErrors }))
         scrollToFirstError(fieldErrors)
-        return
       }
-      const message = /batch already exists/i.test(msg)
+      if (unmatched.length === 0 && Object.keys(fieldErrors).length) return
+      const message = unmatched.some(m => /batch already exists/i.test(m))
         ? 'A batch already exists for this programme, intake and batch time combination.'
-        : msg || `Failed to ${isEdit ? 'update' : 'create'} batch. Please try again.`
+        : unmatched.join(' ') || `Failed to ${isEdit ? 'update' : 'create'} batch. Please try again.`
       setFailure(message)
       showToast(message, 'danger')
     }
@@ -467,14 +475,15 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
             />
           </div>
           <div className="fg">
-            <div className="lbl">Start Date</div>
+            <div className="lbl">Start Date <span className="req">*</span></div>
             {isEnded
               // DatePicker has no disabled mode — show the locked value read-only.
               ? <input className="ctrl" readOnly value={displayYmd(startDate)} style={{ background: 'var(--surface)', color: 'var(--g700)', cursor: 'default' }} aria-label="Start date (locked)" />
-              : <DatePicker value={startDate} onChange={v => { setStartDate(v); clearError('endDate') }} />}
+              : <DatePicker value={startDate} onChange={v => { setStartDate(v); clearError('startDate'); clearError('endDate') }} hasError={!!errors.startDate} />}
+            {errors.startDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.startDate}</p>}
           </div>
           <div className="fg">
-            <div className="lbl">End Date {isEnded && <span className="req">*</span>}</div>
+            <div className="lbl">End Date <span className="req">*</span></div>
             <DatePicker value={endDate} onChange={v => { setEndDate(v); clearError('endDate') }} hasError={!!errors.endDate} />
             {errors.endDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.endDate}</p>}
           </div>
