@@ -6,7 +6,8 @@ import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { CourseUnit, CourseUnitInput, getCourseUnitById } from '@/lib/api/academic/courseUnit'
 import { UpsertCourseUnitOutlineInput } from '@/lib/api/academic/courseUnitOutlines'
-import { openDocumentForViewing, downloadDocument } from '@/lib/documentViewer'
+import { downloadDocument } from '@/lib/documentViewer'
+import { DocumentPreviewModal } from '../shared/DocumentPreviewModal'
 import { useCourseUnit, useUpsertCourseUnitOutlines } from '@/hooks/academic/useCourseUnits'
 import { useSearchRepetitionTagsInfinite } from '@/hooks/academic/useRepetitionTags'
 import { AuthError } from '@/lib/api/client'
@@ -77,6 +78,8 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
   const [repetitionTagPickerOpen, setRepetitionTagPickerOpen] = useState(false)
   const [syllabusFile, setSyllabusFile] = useState<File | null>(null)
   const [syllabusLinkLoading, setSyllabusLinkLoading] = useState(false)
+  // View shows the syllabus in an in-page preview, not a bare new tab.
+  const [syllabusPreview, setSyllabusPreview] = useState<string | null>(null)
   const [errors, setErrors]               = useState<Record<string, string>>({})
   const [chapterErrors, setChapterErrors] = useState<string[]>([])
   // Keyed by "chapterIdx-topicIdx" — the backend's taughtBy field (labeled
@@ -372,8 +375,8 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
     try {
       const fresh = await getCourseUnitById(courseUnitGuid)
       if (!fresh.syllabus) { showToast('Syllabus is no longer attached to this unit', 'error'); return }
-      if (mode === 'view') await openDocumentForViewing(fresh.syllabus)
-      else downloadDocument(fresh.syllabus)
+      if (mode === 'view') setSyllabusPreview(fresh.syllabus)
+      else await downloadDocument(fresh.syllabus)
     } catch {
       showToast('Failed to load the syllabus document. Please try again.', 'error')
     } finally {
@@ -1178,6 +1181,12 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
           )}
         </div>
       </div>
+      <DocumentPreviewModal
+        isOpen={!!syllabusPreview}
+        onClose={() => setSyllabusPreview(null)}
+        url={syllabusPreview}
+        title={`Syllabus — ${courseUnit?.courseUnitCode ?? ''}`}
+      />
     </div>
   )
 }

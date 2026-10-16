@@ -382,6 +382,58 @@ export function getApplications(page = 1, pageSize = 10, search = ''): Promise<A
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
+// Backs /admission/applicants since ADM-027 (get-applicants.md, 2026-10-16).
+// Unlike getApplications above (Submitted only), this returns every
+// application whatever its status, so vetted and registered applicants stay
+// in the list. Newest first. status is null while an application is still
+// being filled in; studentGuid is null until the applicant is registered.
+export type ApplicantStatus = 'Waiting' | 'Submitted' | 'Vetted' | 'Rejected' | 'Registered'
+
+export interface ApplicantListItem {
+  applicationGuid: string
+  studentGuid: string | null
+  appRefNo: string
+  name: string | null
+  phone: string | null
+  email: string | null
+  programName: string | null
+  intakeCode: string | null
+  status: ApplicantStatus | null
+  applicationDate: string
+}
+
+export interface ApplicantListResponse {
+  items: ApplicantListItem[]
+  totalCount: number
+  pageNumber: number
+  pageSize: number
+}
+
+// pageSize is capped at 100 server-side (400 above that). search matches
+// ref no / phone / email (exact), name (contains), and student reg no or
+// student number.
+export function getApplicants(page = 1, pageSize = 10, search = ''): Promise<ApplicantListResponse> {
+  if (MOCK_AUTH) {
+    const items: ApplicantListItem[] = mockApplications.map(a => ({
+      applicationGuid: a.applicationGuid,
+      studentGuid: null,
+      appRefNo: a.appRefNo,
+      name: `${a.firstName ?? ''} ${a.lastName ?? ''}`.trim() || null,
+      phone: a.phone,
+      email: a.emailId,
+      programName: a.programName ?? null,
+      intakeCode: a.intakeCode,
+      status: 'Submitted',
+      applicationDate: a.createdDate ?? new Date().toISOString(),
+    }))
+    return Promise.resolve({ items, totalCount: items.length, pageNumber: page, pageSize })
+  }
+  const params = new URLSearchParams({ page: String(page), pageSize: String(Math.min(pageSize, 100)) })
+  if (search.trim()) params.set('search', search.trim())
+  return apiGet<ApplicantListResponse | null>(`/api/v1/admissions/application-filling/applicants?${params.toString()}`)
+    .then(data => ({ items: data?.items ?? [], totalCount: data?.totalCount ?? 0, pageNumber: data?.pageNumber ?? page, pageSize: data?.pageSize ?? pageSize }))
+}
+
 // Confirmed via a real GET /api/v1/admissions/application-payments response
 // (no query params, bare page/pageSize) — a genuinely different, richer
 // record than FilingApplicationSearchResult in most of the guid fields that

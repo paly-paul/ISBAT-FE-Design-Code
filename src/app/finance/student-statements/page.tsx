@@ -188,6 +188,50 @@ export default function StudentStatementPage() {
     setAutoPrint(print)
   }
 
+  // One payment row, shared by the grouped and flat views. The grouped view
+  // drops the Semester cell — the group header above already names it.
+  // Empty values render as a plain muted dash, not an empty pill/badge.
+  function renderPaymentRow(p: (typeof paymentHistory)[0], idx: number, key: string, showSemester: boolean) {
+    const dash = <span className="text-g300">—</span>
+    return (
+      <tr key={key}>
+        <td>
+          <ActionMenu>
+            <button type="button" className="btn btn-neu btn-sm" onClick={() => openReceipt(p, false)}>
+              <i className="lni lni-eye" /> View Receipt
+            </button>
+            <button type="button" className="btn btn-neu btn-sm" onClick={() => openReceipt(p, true)}>
+              <i className="lni lni-printer" /> Print Receipt
+            </button>
+            {p.receipt && (
+              <button type="button" className="btn btn-neu btn-sm" onClick={() => copyToClipboard(p.receipt!, 'Receipt Number')}>
+                <i className="lni lni-clipboard" /> Copy Receipt #
+              </button>
+            )}
+            {p.paymentCode && (
+              <button type="button" className="btn btn-neu btn-sm" onClick={() => copyToClipboard(p.paymentCode!, 'Payment Code')}>
+                <i className="lni lni-clipboard" /> Copy Code
+              </button>
+            )}
+          </ActionMenu>
+        </td>
+        <td className="text-center text-g400">{p.slNo || idx + 1}</td>
+        <td className="font-mono text-blue font-semibold">{p.paymentCode || dash}</td>
+        <td className="whitespace-nowrap text-g700">
+          {p.payDate
+            ? new Date(p.payDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+            : dash}
+        </td>
+        {showSemester && <td className="text-g800 font-medium">{p.semesterName || header?.semesterName || dash}</td>}
+        <td>{p.payType ? <span className="pill pill-blue">{p.payType}</span> : dash}</td>
+        <td className="font-mono text-g700">{p.receipt || dash}</td>
+        <td className="num font-mono font-bold text-green">{formatMoney(p.amount)}</td>
+        <td className="text-g500">{p.currencyName || dash}</td>
+        <td>{renderCategoryBadge(p.category)}</td>
+      </tr>
+    )
+  }
+
   function closeReceipt() {
     setReceiptEntry(null)
     setAutoPrint(false)
@@ -841,7 +885,7 @@ export default function StudentStatementPage() {
                 </div>
 
                 {/* Standard ERP Table inside ScrollTable */}
-                <ScrollTable className="no-sticky-col">
+                <ScrollTable className="no-sticky-col stmt-tbl">
                   {/* Tab 1: Payment History */}
                   {tableTab === 'payments' && (
                     <table>
@@ -851,7 +895,7 @@ export default function StudentStatementPage() {
                           <th style={{ width: 44, textAlign: 'center' }}>#</th>
                           <th>Payment Code</th>
                           <th>Date</th>
-                          <th>Semester</th>
+                          {!groupBySemester && <th>Semester</th>}
                           <th>Pay Type</th>
                           <th>Receipt #</th>
                           <th className="num">Amount</th>
@@ -879,13 +923,13 @@ export default function StudentStatementPage() {
                           groupedPayments.map((group, groupIdx) => (
                             <Fragment key={group.semester || groupIdx}>
                               {/* Semester Group Header Row */}
-                              <tr style={{ background: 'var(--b50)', borderTop: '1px solid var(--b200)', borderBottom: '1px solid var(--b200)' }}>
-                                <td colSpan={10} style={{ padding: '9px 14px', background: 'transparent' }}>
+                              <tr className="stmt-group-hdr">
+                                <td colSpan={9}>
                                   <div className="flex items-center gap-2.5">
                                     <span className="text-b700 font-bold">
                                       <i className="lni lni-graduation" />
                                     </span>
-                                    <span className="font-bold text-g900" style={{ fontSize: 13 }}>
+                                    <span className="stmt-group-name">
                                       {group.semester}
                                     </span>
                                     <span className="badge badge-blue">
@@ -896,85 +940,20 @@ export default function StudentStatementPage() {
                               </tr>
 
                               {/* Rows in this Semester */}
-                              {group.items.map((p, idx) => (
-                                <tr key={p.paymentGuid || `${groupIdx}-${idx}`}>
-                                  <td>
-                                    <ActionMenu>
-                                      <button
-                                        type="button"
-                                        className="btn btn-neu btn-sm"
-                                        onClick={() => openReceipt(p, false)}
-                                      >
-                                        <i className="lni lni-eye" /> View Receipt
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="btn btn-neu btn-sm"
-                                        onClick={() => openReceipt(p, true)}
-                                      >
-                                        <i className="lni lni-printer" /> Print Receipt
-                                      </button>
-                                      {p.receipt && (
-                                        <button
-                                          type="button"
-                                          className="btn btn-neu btn-sm"
-                                          onClick={() => copyToClipboard(p.receipt!, 'Receipt Number')}
-                                        >
-                                          <i className="lni lni-clipboard" /> Copy Receipt #
-                                        </button>
-                                      )}
-                                      {p.paymentCode && (
-                                        <button
-                                          type="button"
-                                          className="btn btn-neu btn-sm"
-                                          onClick={() => copyToClipboard(p.paymentCode!, 'Payment Code')}
-                                        >
-                                          <i className="lni lni-clipboard" /> Copy Code
-                                        </button>
-                                      )}
-                                    </ActionMenu>
-                                  </td>
-                                  <td className="text-center text-g500">{p.slNo || idx + 1}</td>
-                                  <td className="font-mono text-blue font-semibold">{p.paymentCode || '—'}</td>
-                                  <td className="whitespace-nowrap text-g700">
-                                    {p.payDate
-                                      ? new Date(p.payDate).toLocaleDateString('en-GB', {
-                                          day: '2-digit',
-                                          month: 'short',
-                                          year: 'numeric',
-                                        })
-                                      : '—'}
-                                  </td>
-                                  <td className="text-g800 font-medium">
-                                    {p.semesterName || header?.semesterName || '—'}
-                                  </td>
-                                  <td>
-                                    <span className="pill pill-blue">{p.payType || '—'}</span>
-                                  </td>
-                                  <td className="font-mono text-g900 font-semibold">{p.receipt || '—'}</td>
-                                  <td className="num font-mono font-bold text-green">
-                                    {formatMoney(p.amount)}
-                                  </td>
-                                  <td>
-                                    <span className="badge badge-grey">{p.currencyName || '—'}</span>
-                                  </td>
-                                  <td>{renderCategoryBadge(p.category)}</td>
-                                </tr>
-                              ))}
+                              {group.items.map((p, idx) => renderPaymentRow(p, idx, p.paymentGuid || `${groupIdx}-${idx}`, false))}
 
                               {/* Section Subtotal Row */}
-                              <tr style={{ background: 'var(--surface)', borderTop: '1px solid var(--g200)', borderBottom: '1.5px solid var(--g200)' }}>
-                                <td colSpan={10} style={{ padding: '8px 14px', background: 'transparent' }}>
+                              <tr className="stmt-group-total">
+                                <td colSpan={9}>
                                   <div className="flex items-center justify-between gap-4 flex-wrap">
                                     <div className="flex items-center gap-2">
-                                      <span className="badge badge-grey font-bold">SEMESTER TOTAL</span>
-                                      <span className="text-g600 text-xs font-semibold">for {group.semester}:</span>
+                                      <span className="stmt-group-total-label">Semester Total</span>
                                     </div>
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                       {group.currencyTotals.map(ct => (
-                                        <div key={ct.currency} className="flex items-center gap-1.5 text-xs">
-                                          <span className="text-g500 font-semibold">{ct.currency}:</span>
-                                          <span className="font-mono font-bold text-g900">
+                                        <div key={ct.currency} className="stmt-total-chip">
+                                          <span>{ct.currency}</span>
+                                          <span className="font-mono">
                                             {formatMoney(ct.total)}
                                           </span>
                                         </div>
@@ -986,71 +965,7 @@ export default function StudentStatementPage() {
                             </Fragment>
                           ))
                         ) : (
-                          filteredPayments.map((p, idx) => (
-                            <tr key={p.paymentGuid || idx}>
-                              <td>
-                                <ActionMenu>
-                                  <button
-                                    type="button"
-                                    className="btn btn-neu btn-sm"
-                                    onClick={() => openReceipt(p, false)}
-                                  >
-                                    <i className="lni lni-eye" /> View Receipt
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="btn btn-neu btn-sm"
-                                    onClick={() => openReceipt(p, true)}
-                                  >
-                                    <i className="lni lni-printer" /> Print Receipt
-                                  </button>
-                                  {p.receipt && (
-                                    <button
-                                      type="button"
-                                      className="btn btn-neu btn-sm"
-                                      onClick={() => copyToClipboard(p.receipt!, 'Receipt Number')}
-                                    >
-                                      <i className="lni lni-clipboard" /> Copy Receipt #
-                                    </button>
-                                  )}
-                                  {p.paymentCode && (
-                                    <button
-                                      type="button"
-                                      className="btn btn-neu btn-sm"
-                                      onClick={() => copyToClipboard(p.paymentCode!, 'Payment Code')}
-                                    >
-                                      <i className="lni lni-clipboard" /> Copy Code
-                                    </button>
-                                  )}
-                                </ActionMenu>
-                              </td>
-                              <td className="text-center text-g500">{p.slNo || idx + 1}</td>
-                              <td className="font-mono text-blue font-semibold">{p.paymentCode || '—'}</td>
-                              <td className="whitespace-nowrap text-g700">
-                                {p.payDate
-                                  ? new Date(p.payDate).toLocaleDateString('en-GB', {
-                                      day: '2-digit',
-                                      month: 'short',
-                                      year: 'numeric',
-                                    })
-                                  : '—'}
-                              </td>
-                              <td className="text-g800 font-medium">
-                                {p.semesterName || header?.semesterName || '—'}
-                              </td>
-                              <td>
-                                <span className="pill pill-blue">{p.payType || '—'}</span>
-                              </td>
-                              <td className="font-mono text-g900 font-semibold">{p.receipt || '—'}</td>
-                              <td className="num font-mono font-bold text-green">
-                                {formatMoney(p.amount)}
-                              </td>
-                              <td>
-                                <span className="badge badge-grey">{p.currencyName || '—'}</span>
-                              </td>
-                              <td>{renderCategoryBadge(p.category)}</td>
-                            </tr>
-                          ))
+                          filteredPayments.map((p, idx) => renderPaymentRow(p, idx, p.paymentGuid || String(idx), true))
                         )}
                       </tbody>
                     </table>
@@ -1089,13 +1004,13 @@ export default function StudentStatementPage() {
                           groupedOutstanding.map((group, groupIdx) => (
                             <Fragment key={group.semester || groupIdx}>
                               {/* Semester Group Header Row */}
-                              <tr style={{ background: 'var(--b50)', borderTop: '1px solid var(--b200)', borderBottom: '1px solid var(--b200)' }}>
-                                <td colSpan={6} style={{ padding: '9px 14px', background: 'transparent' }}>
+                              <tr className="stmt-group-hdr">
+                                <td colSpan={6}>
                                   <div className="flex items-center gap-2.5">
                                     <span className="text-b700 font-bold">
                                       <i className="lni lni-wallet" />
                                     </span>
-                                    <span className="font-bold text-g900" style={{ fontSize: 13 }}>
+                                    <span className="stmt-group-name">
                                       {group.semester}
                                     </span>
                                     <span className="badge badge-amber">
@@ -1122,14 +1037,13 @@ export default function StudentStatementPage() {
                               ))}
 
                               {/* Section Subtotal Row */}
-                              <tr style={{ background: 'var(--surface)', borderTop: '1px solid var(--g200)', borderBottom: '1.5px solid var(--g200)' }}>
-                                <td colSpan={6} style={{ padding: '8px 14px', background: 'transparent' }}>
+                              <tr className="stmt-group-total">
+                                <td colSpan={6}>
                                   <div className="flex items-center justify-between gap-4 flex-wrap">
                                     <div className="flex items-center gap-2">
-                                      <span className="badge badge-grey font-bold">SEMESTER OUTSTANDING</span>
-                                      <span className="text-g600 text-xs font-semibold">for {group.semester}:</span>
+                                      <span className="stmt-group-total-label">Semester Outstanding</span>
                                     </div>
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                       {group.currencyTotals.map(ct => (
                                         <div key={ct.currency} className="flex items-center gap-1.5 text-xs">
                                           <span className="text-g500 font-semibold">{ct.currency}:</span>
@@ -1193,13 +1107,13 @@ export default function StudentStatementPage() {
                           groupedFuture.map((group, groupIdx) => (
                             <Fragment key={group.semester || groupIdx}>
                               {/* Semester Group Header Row */}
-                              <tr style={{ background: 'var(--b50)', borderTop: '1px solid var(--b200)', borderBottom: '1px solid var(--b200)' }}>
-                                <td colSpan={5} style={{ padding: '9px 14px', background: 'transparent' }}>
+                              <tr className="stmt-group-hdr">
+                                <td colSpan={5}>
                                   <div className="flex items-center gap-2.5">
                                     <span className="text-b700 font-bold">
                                       <i className="lni lni-alarm-clock" />
                                     </span>
-                                    <span className="font-bold text-g900" style={{ fontSize: 13 }}>
+                                    <span className="stmt-group-name">
                                       {group.semester}
                                     </span>
                                     <span className="badge badge-blue">
@@ -1225,18 +1139,17 @@ export default function StudentStatementPage() {
                               ))}
 
                               {/* Section Subtotal Row */}
-                              <tr style={{ background: 'var(--surface)', borderTop: '1px solid var(--g200)', borderBottom: '1.5px solid var(--g200)' }}>
-                                <td colSpan={5} style={{ padding: '8px 14px', background: 'transparent' }}>
+                              <tr className="stmt-group-total">
+                                <td colSpan={5}>
                                   <div className="flex items-center justify-between gap-4 flex-wrap">
                                     <div className="flex items-center gap-2">
-                                      <span className="badge badge-grey font-bold">SEMESTER SCHEDULED</span>
-                                      <span className="text-g600 text-xs font-semibold">for {group.semester}:</span>
+                                      <span className="stmt-group-total-label">Semester Scheduled</span>
                                     </div>
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                       {group.currencyTotals.map(ct => (
-                                        <div key={ct.currency} className="flex items-center gap-1.5 text-xs">
-                                          <span className="text-g500 font-semibold">{ct.currency}:</span>
-                                          <span className="font-mono font-bold text-g900">
+                                        <div key={ct.currency} className="stmt-total-chip">
+                                          <span>{ct.currency}</span>
+                                          <span className="font-mono">
                                             {formatMoney(ct.total)}
                                           </span>
                                         </div>

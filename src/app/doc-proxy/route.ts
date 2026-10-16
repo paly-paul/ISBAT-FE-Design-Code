@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 
-// Server builds only (route.server.ts — see pageExtensions in
-// next.config.mjs): dev and Vercel. The static S3 build fetches documents
+// Server builds only (dev and Vercel): the static export leaves `.ts` out of
+// pageExtensions, so it skips this file — see next.config.mjs. The static S3 build fetches documents
 // directly instead. Same idea as the /api rewrite — the S3 bucket
 // behind our presigned document URLs has no CORS policy, so the browser can't
 // fetch() them for the in-page preview (lib/documentViewer.ts). This fetches

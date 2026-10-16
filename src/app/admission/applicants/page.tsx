@@ -8,8 +8,7 @@ import { TableSearch } from '@/components/TableSearch'
 import { Pagination } from '@/components/Pagination'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
-import { useApplications, useExportApplicationsCsv, ApplicationListItem } from '@/hooks/admission/useApplicationFiling'
-import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
+import { useApplicants, useExportApplicationsCsv, ApplicantListItem, ApplicantStatus, ApplicationListItem } from '@/hooks/admission/useApplicationFiling'
 import { ViewApplicantModal } from '@/components/modals/admission/ViewApplicantModal'
 import { downloadBlob } from '@/lib/downloadBlob'
 import { AuthError } from '@/lib/api/client'
@@ -20,30 +19,37 @@ const PAGE_SIZE = 10
 // master pages' search boxes.
 const MIN_SEARCH_CHARS = 2
 
-function applicantName(a: ApplicationListItem) {
-  return `${a.firstName ?? ''}${a.lastName ? ` ${a.lastName}` : ''}`.trim() || '—'
+// get-applicants.md statuses. null = application still being filled in,
+// shown blank per the ADM-027 handoff.
+const STATUS_BADGE: Record<ApplicantStatus, string> = {
+  Waiting: 'badge-amber',
+  Submitted: 'badge-blue',
+  Vetted: 'badge-cyan',
+  Rejected: 'badge-red',
+  Registered: 'badge-green',
 }
 
-function renderApplicantStatus(a: ApplicationListItem) {
-  const label = a.actionLabel || a.saveStatusLabel || (a.saveStatus != null ? `Status ${a.saveStatus}` : null)
-  if (!label) return <span className="badge badge-grey">—</span>
-
-  const lower = label.toLowerCase()
-  if (lower.includes('submit') || lower.includes('approve') || lower.includes('complete') || lower.includes('register')) {
-    return <span className="badge badge-green">{label}</span>
-  }
-  if (lower.includes('reject') || lower.includes('cancel')) {
-    return <span className="badge badge-red">{label}</span>
-  }
-  if (lower.includes('pending') || lower.includes('review') || lower.includes('hold') || lower.includes('photo')) {
-    return <span className="badge badge-amber">{label}</span>
-  }
-  return <span className="badge badge-blue">{label}</span>
+function renderApplicantStatus(a: ApplicantListItem) {
+  if (!a.status) return null
+  return <span className={`badge ${STATUS_BADGE[a.status] ?? 'badge-grey'}`}>{a.status}</span>
 }
 
-function formatApplicantDate(a: ApplicationListItem) {
-  const d = a.createdDate || a.approveDateReg || a.verifiedDate || a.modifiedDate
-  return d ? d.slice(0, 10) : '—'
+// The View modal takes the older ApplicationListItem shape. It loads the full
+// record by applicationGuid itself; these fields are only its fallback for an
+// application still being filled in (which has no full record yet).
+function toModalRow(a: ApplicantListItem): ApplicationListItem {
+  return {
+    applicationGuid: a.applicationGuid,
+    appRefNo: a.appRefNo,
+    firstName: a.name,
+    lastName: null,
+    phone: a.phone,
+    emailId: a.email,
+    programName: a.programName,
+    intakeCode: a.intakeCode,
+    createdDate: a.applicationDate,
+    actionLabel: a.status,
+  } as ApplicationListItem
 }
 
 export default function ApplicantsPage() {
@@ -56,36 +62,26 @@ export default function ApplicantsPage() {
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  function openViewModal(applicant: ApplicationListItem) {
-    setSelectedApplicant(applicant)
+  function openViewModal(applicant: ApplicantListItem) {
+    setSelectedApplicant(toModalRow(applicant))
     setIsViewModalOpen(true)
   }
 
   const searchTrimmed = search.trim()
-  // Server-side search (see getApplications) — only actually queried once
-  // the term clears MIN_SEARCH_CHARS, same gate TableSearch's own dropdown
-  // uses. Real per-page fetches now too (was a single FETCH_ALL_PAGE_SIZE =
-  // 1000 fetch, paginated/searched entirely client-side — silently dropped
-  // anything past row 1000 once the real table grew past that), same fix as
-  // enquiry-list's page.
+  // Server-side search and paging (get-applicants.md, ADM-027) — every
+  // application whatever its status, so vetted and registered applicants
+  // stay listed. Only queried once the term clears MIN_SEARCH_CHARS, the same
+  // gate TableSearch's dropdown uses.
   const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
-  const { data, isLoading } = useApplications(page, PAGE_SIZE, activeSearch)
+  const { data, isLoading, isPlaceholderData: isRefetching } = useApplicants(page, PAGE_SIZE, activeSearch)
   const pageItems = data?.items ?? []
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
-  // programName has no counterpart on this DTO at all — resolve it
-  // client-side using the fast program dropdown endpoint.
-  const { data: programs = [] } = useProgramDropdown()
-  function resolveProgramName(programGuid: string | null) {
-    if (!programGuid) return '—'
-    return programs.find(p => p.programGuid === programGuid)?.programName ?? '—'
-  }
-
   // Search itself now happens server-side — pageItems already only contains
   // matches for activeSearch, so the dropdown just reuses them directly
   // (capped to 8) instead of re-filtering a full unpaginated list.
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? pageItems.slice(0, 8) : []
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS && !isRefetching ? pageItems.slice(0, 8) : []
 
   // No filter UI on this page yet (see FETCH_ALL_PAGE_SIZE's own note) — the
   // export always pulls the full, unfiltered dataset, same "everything the
@@ -114,10 +110,11 @@ export default function ApplicantsPage() {
         <div className="flex items-center gap-3">
           <TableSearch
             className="w-56"
-            placeholder="Search applicants…"
+            placeholder="Ref no., name, phone, email or reg no."
             value={search}
             onChange={v => { setSearch(v); setPage(1) }}
-            results={searchMatches.map(a => ({ id: a.applicationGuid, primary: a.appRefNo, secondary: applicantName(a) }))}
+            results={searchMatches.map(a => ({ id: a.applicationGuid, primary: a.appRefNo, secondary: a.name ?? undefined }))}
+            loading={isRefetching}
             minChars={MIN_SEARCH_CHARS}
             onSelect={item => {
               const found = pageItems.find(a => a.applicationGuid === item.id)
@@ -160,17 +157,23 @@ export default function ApplicantsPage() {
                       <button className="btn btn-neu btn-sm" onClick={() => openViewModal(a)}>
                         <i className="lni lni-eye" /> View
                       </button>
+                      {/* studentGuid is only set once the applicant is registered. */}
+                      {a.studentGuid && (
+                        <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/profile?studentGuid=' + a.studentGuid)}>
+                          <i className="lni lni-user" /> Student Profile
+                        </button>
+                      )}
                     </ActionMenu>
                   </td>
                   <td className="py-2.5 text-g400">{(page - 1) * PAGE_SIZE + i + 1}</td>
                   <td className="py-2.5 font-mono text-xs text-b600">{a.appRefNo}</td>
-                  <td className="py-2.5 text-g800 font-medium">{applicantName(a)}</td>
+                  <td className="py-2.5 text-g800 font-medium">{a.name || '—'}</td>
                   <td className="py-2.5 text-g600">{a.phone || '—'}</td>
-                  <td className="py-2.5 text-g600">{a.emailId || '—'}</td>
-                  <td className="py-2.5">{a.programName || resolveProgramName(a.programGuid)}</td>
-                  <td className="py-2.5 text-g600">{a.intakeName || a.intakeCode || '—'}</td>
+                  <td className="py-2.5 text-g600">{a.email || '—'}</td>
+                  <td className="py-2.5">{a.programName || '—'}</td>
+                  <td className="py-2.5 text-g600">{a.intakeCode || '—'}</td>
                   <td className="py-2.5">{renderApplicantStatus(a)}</td>
-                  <td className="py-2.5 text-g500 text-xs">{formatApplicantDate(a)}</td>
+                  <td className="py-2.5 text-g500 text-xs">{a.applicationDate ? a.applicationDate.slice(0, 10) : '—'}</td>
                 </tr>
               ))}
             </tbody>

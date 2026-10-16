@@ -1,7 +1,8 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteQualification,
   exportApplicationsCsv,
+  getApplicants,
   getApplicationByGuid,
   getApplicationByPaymentGuid,
   getApplications,
@@ -26,6 +27,16 @@ export function useApplications(page: number, pageSize: number, search = '') {
   return useQuery({
     queryKey: [...FILING_KEY, 'list', page, pageSize, search],
     queryFn: () => getApplications(page, pageSize, search),
+  })
+}
+
+// Backs /admission/applicants since ADM-027 — every application, any status
+// (get-applicants.md). Keeps the current page on screen while the next loads.
+export function useApplicants(page: number, pageSize: number, search = '') {
+  return useQuery({
+    queryKey: [...FILING_KEY, 'applicants', page, pageSize, search],
+    queryFn: () => getApplicants(page, pageSize, search),
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -139,6 +150,8 @@ export function useExportApplicationsCsv() {
 }
 
 export type {
+  ApplicantListItem,
+  ApplicantStatus,
   ApplicationDetailDto,
   ApplicationListItem,
   CountryDropdownDto,

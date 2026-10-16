@@ -1,3 +1,6 @@
+import { apiGetBlob } from './api/client'
+import { downloadBlob } from './downloadBlob'
+
 // Presigned S3 URLs from this backend always carry
 // response-content-disposition=attachment baked into the signed query
 // string (confirmed via a real sample) — that's part of what the signature
@@ -49,10 +52,45 @@ function documentFetchUrl(url: string): string {
   return viaProxy ? `/doc-proxy?url=${encodeURIComponent(url)}` : url
 }
 
+// ---- Backend-hosted files ---------------------------------------------------
+// Some documents are served by the backend itself (e.g. a course unit
+// syllabus at /api/v1/local-files/…, ACD-027) rather than as a presigned S3
+// URL. Those answer 401 without the login cookie, so a plain link, <iframe>,
+// window.open or cookie-less fetch can't open them. The URL may name the
+// backend's own host (not reachable with our cookie), so only its /api/…
+// path is kept and fetched through the app's own origin with credentials
+// (apiGetBlob, which also refreshes an expired session once).
+function backendPath(url: string): string | null {
+  if (url.startsWith('/api/')) return url
+  try {
+    const u = new URL(url)
+    return u.pathname.startsWith('/api/') ? u.pathname + u.search : null
+  } catch {
+    return null
+  }
+}
+
+async function fetchBackendDocument(path: string): Promise<{ blob: Blob; type: string; filename: string }> {
+  const { blob, filename } = await apiGetBlob(path)
+  const name = filename ?? decodeURIComponent(path.split('?')[0].split('/').pop() || 'document')
+  const type = [blob.type, typeFromExtension(new URL(path, 'http://x').href)].find(isUsefulType) || (await sniffType(blob))
+  return { blob: type && type !== blob.type ? new Blob([blob], { type }) : blob, type, filename: name }
+}
+
 // Opens the document for in-browser viewing where possible. Always opens
 // something (never throws for an unsupported type) — worst case is the same
 // as Download.
 export async function openDocumentForViewing(url: string): Promise<void> {
+  const path = backendPath(url)
+  if (path) {
+    const doc = await fetchBackendDocument(path)
+    // Only PDFs and images render in a tab; anything else (Word etc.) can't
+    // go through Office Online either, since that fetches without our cookie.
+    if (doc.type === 'application/pdf' || doc.type.startsWith('image/')) window.open(URL.createObjectURL(doc.blob), '_blank', 'noopener')
+    else downloadBlob(doc.blob, doc.filename)
+    return
+  }
+
   const contentType = extractContentType(url)
 
   if (contentType === 'application/pdf' || contentType.startsWith('image/')) {
@@ -140,7 +178,8 @@ function isUsefulType(t: string) {
   return !!t && t !== 'application/octet-stream' && t !== 'binary/octet-stream'
 }
 
-// Throws only if the document can't be fetched at all (expired presign, CORS).
+// Throws only if the document can't be fetched at all (expired presign, CORS,
+// or a backend-hosted file the session can't read).
 export async function resolveDocumentPreview(url: string): Promise<DocumentPreview> {
   const noop = () => {}
   const hinted = [extractContentType(url), typeFromExtension(url)].find(isUsefulType) ?? ''
@@ -152,9 +191,15 @@ export async function resolveDocumentPreview(url: string): Promise<DocumentPrevi
       : { kind: 'unsupported', src: null, revoke: noop }
   }
 
-  const res = await fetch(documentFetchUrl(url))
-  if (!res.ok) throw new Error('Failed to load document')
-  const raw = await res.blob()
+  const path = backendPath(url)
+  let raw: Blob
+  if (path) {
+    raw = (await apiGetBlob(path)).blob
+  } else {
+    const res = await fetch(documentFetchUrl(url))
+    if (!res.ok) throw new Error('Failed to load document')
+    raw = await res.blob()
+  }
   const type = [hinted, raw.type].find(isUsefulType) || (await sniffType(raw))
 
   if (type === 'application/pdf' || type.startsWith('image/')) {
@@ -168,6 +213,14 @@ export async function resolveDocumentPreview(url: string): Promise<DocumentPrevi
   return { kind: 'unsupported', src: null, revoke: noop }
 }
 
-export function downloadDocument(url: string): void {
+// Backend-hosted files are fetched with the login cookie and saved from a
+// blob; presigned S3 URLs already force a download when opened.
+export async function downloadDocument(url: string): Promise<void> {
+  const path = backendPath(url)
+  if (path) {
+    const doc = await fetchBackendDocument(path)
+    downloadBlob(doc.blob, doc.filename)
+    return
+  }
   window.open(url, '_blank', 'noopener')
 }

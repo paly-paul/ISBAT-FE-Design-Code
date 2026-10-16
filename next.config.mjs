@@ -18,18 +18,27 @@ const API_GATEWAY_URL = configuredGatewayUrl.replace(/\/+$/, '').replace(/\/api$
 //    Next.js server build. It proxies /api/* and /hubs/* to the gateway so
 //    the browser stays same-origin (sidestepping the backend's missing CORS
 //    policy; /hubs is the SignalR notifications hub, same-origin so the
-//    httpOnly session cookie is sent), and serves the `*.server.ts` routes —
-//    currently src/app/doc-proxy, the S3 document preview proxy.
+//    httpOnly session cookie is sent), and serves the server-only route
+//    handlers — currently src/app/doc-proxy/route.ts, the S3 document preview
+//    proxy.
+//
+// Server-only route handlers are plain `route.ts` files; the static export
+// leaves `.ts` out of pageExtensions so it never sees them. (They used to be
+// `route.server.ts` with 'server.ts' as an extra page extension, but Next 16's
+// dev server read that file as a page, not a route, and answered every
+// request with "ComponentMod.handler is not a function".) App pages and
+// layouts are all .tsx, so nothing else is affected.
 const isServerBuild = (phase) => phase === PHASE_DEVELOPMENT_SERVER || process.env.VERCEL === '1'
 
 const staticExportConfig = {
   output: 'export',
   trailingSlash: true,
   images: { unoptimized: true },
+  pageExtensions: ['tsx', 'jsx', 'js'],
 }
 
 const serverConfig = {
-  pageExtensions: ['server.ts', 'tsx', 'ts', 'jsx', 'js'],
+  pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
   // Read by src/lib/documentViewer.ts — only server builds have /doc-proxy.
   env: { NEXT_PUBLIC_DOC_PROXY: 'true' },
   // Skipped when API_GATEWAY_URL isn't set — interpolating an unset env var

@@ -3539,6 +3539,67 @@ input[type="number"] {
   }
 }
 
+/* Student Statement tables: tighter rows, plus the semester group header
+   (highlighted, with breathing room above each group) and a light,
+   thin-ruled semester total row underneath. */
+.stmt-tbl td {
+  padding-top: 8px;
+  padding-bottom: 8px
+}
+
+.stmt-tbl tr.stmt-group-hdr td {
+  padding: 18px 14px 10px;
+  background: var(--white);
+  border-bottom: 2px solid var(--b500)
+}
+
+.stmt-tbl tbody tr.stmt-group-hdr:first-child td {
+  padding-top: 12px
+}
+
+.stmt-tbl tr.stmt-group-hdr i {
+  color: var(--b500);
+  font-size: 15px
+}
+
+.stmt-group-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--b800)
+}
+
+.stmt-tbl tr.stmt-group-total td {
+  padding: 9px 14px;
+  background: var(--surface);
+  border-top: 1px solid var(--g200);
+  border-bottom: 1px solid var(--g200)
+}
+
+.stmt-group-total-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--g500)
+}
+
+.stmt-total-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--white);
+  border: 1px solid var(--g200);
+  font-size: 12px;
+  color: var(--g500)
+}
+
+.stmt-total-chip .font-mono {
+  font-weight: 700;
+  color: var(--g900)
+}
+
 /* Refetch over rows already on screen (next page, new search): dim the
    rows and float a pill on top, so the table keeps its size. */
 .tbl-refetch-wrap {
