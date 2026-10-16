@@ -8,7 +8,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { SingleQuestionModal } from '@/components/modals/assessment/SingleQuestionModal'
-import { RichTextDisplay } from '@/components/RichTextEditor'
+import { RichTextDisplay, stripHtmlTags } from '@/components/RichTextEditor'
 import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { EmployeeListItem } from '@/lib/api/employee/employee'
@@ -877,7 +877,7 @@ export default function QuestionBankUploadPage() {
                         type="button"
                         className="btn btn-danger btn-sm flex items-center gap-1.5"
                         onClick={() => setShowDeleteBankModal(true)}
-                        title="Soft-delete all questions in this bank"
+                        title="Delete all questions in this question bank"
                       >
                         <i className="lni lni-trash-can"></i>
                         <span>Delete All</span>
@@ -937,8 +937,8 @@ export default function QuestionBankUploadPage() {
                     onChange={setRepoSearch}
                     results={filteredLiveQuestions.slice(0, 5).map(q => ({
                       id: q.questionGuid,
-                      primary: q.questionText || 'Untitled Question',
-                      secondary: `${q.questionType === 1 ? 'MCQ' : 'DQ'} • Ans: ${q.answerText}`,
+                      primary: stripHtmlTags(q.questionText) || 'Untitled Question',
+                      secondary: `${q.questionType === 1 ? 'MCQ' : 'DQ'} • Ans: ${stripHtmlTags(q.answerText)}`,
                     }))}
                     onSelect={r => setRepoSearch(r.primary)}
                   />
@@ -1053,6 +1053,26 @@ export default function QuestionBankUploadPage() {
                             {/* Question Text */}
                             <td style={{ whiteSpace: 'normal', minWidth: 280, maxWidth: 460, lineHeight: 1.6, color: 'var(--g800)' }}>
                               <RichTextDisplay content={q.questionText} />
+                              {q.imageUrl && (
+                                <div className="mt-2 flex items-center gap-2">
+                                  <a
+                                    href={q.imageUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded text-[11px] font-medium transition-colors"
+                                    title="View attached diagram / image"
+                                    onClick={e => e.stopPropagation()}
+                                  >
+                                    <i className="lni lni-image text-xs"></i>
+                                    <span>Image Attached</span>
+                                    {q.imageFileName && (
+                                      <span className="text-slate-400 font-mono text-[10px]">
+                                        ({q.imageFileName})
+                                      </span>
+                                    )}
+                                  </a>
+                                </div>
+                              )}
                             </td>
 
                             {/* Options */}
@@ -1085,11 +1105,11 @@ export default function QuestionBankUploadPage() {
                             <td style={{ whiteSpace: 'normal', minWidth: 160 }}>
                               {q.questionType === 1 ? (
                                 <span className="inline-block bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11.5px] px-2.5 py-1 rounded font-medium font-mono font-bold">
-                                  {q.answerText}
+                                  {stripHtmlTags(q.answerText)}
                                 </span>
                               ) : (
-                                <span className="inline-block bg-slate-50 border border-slate-200 text-slate-700 text-xs px-2.5 py-1 rounded font-medium max-w-[220px] truncate" title={q.answerText ?? undefined}>
-                                  {q.answerText}
+                                <span className="inline-block bg-slate-50 border border-slate-200 text-slate-700 text-xs px-2.5 py-1 rounded font-medium max-w-[220px] truncate" title={stripHtmlTags(q.answerText)}>
+                                  <RichTextDisplay content={q.answerText} />
                                 </span>
                               )}
                             </td>
@@ -1650,6 +1670,42 @@ export default function QuestionBankUploadPage() {
                 </div>
               </div>
 
+              {/* Question Image (If attached) */}
+              {viewingQuestion.imageUrl && (
+                <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <i className="lni lni-image text-indigo-600 text-xs"></i>
+                      <span>Attached Diagram / Image</span>
+                    </div>
+                    <a
+                      href={viewingQuestion.imageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:underline"
+                    >
+                      <span>Open full size</span>
+                      <i className="lni lni-arrow-right text-[10px]"></i>
+                    </a>
+                  </div>
+
+                  <div className="rounded-lg border border-slate-200 overflow-hidden bg-slate-50 flex items-center justify-center p-2.5">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={viewingQuestion.imageUrl}
+                      alt={viewingQuestion.imageFileName || 'Question diagram'}
+                      className="max-h-64 max-w-full rounded object-contain shadow-2xs"
+                    />
+                  </div>
+
+                  {viewingQuestion.imageFileName && (
+                    <div className="mt-2 text-[11px] text-slate-500 font-mono text-center">
+                      {viewingQuestion.imageFileName}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Options Section (If MCQ) */}
               {viewingQuestion.questionType === 1 ? (
                 <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
@@ -1726,12 +1782,14 @@ export default function QuestionBankUploadPage() {
 
             <div className="modal-body p-5 flex flex-col gap-4 bg-slate-50">
               <div className="bg-red-50 border border-red-200 text-red-900 rounded-lg p-3 text-xs leading-relaxed">
-                <strong>Warning:</strong> You are about to soft-delete this question from the Question Bank repository.
+                <strong>Warning:</strong> Are you sure you want to delete this question from the Question Bank? This action cannot be undone.
               </div>
 
               <div className="bg-white border border-slate-200 rounded-lg p-3 text-xs text-slate-700">
                 <div className="font-semibold text-slate-500 mb-1">Question Text:</div>
-                <div className="font-medium line-clamp-3 text-slate-900">{questionToDelete.questionText}</div>
+                <div className="font-medium line-clamp-3 text-slate-900">
+                  <RichTextDisplay content={questionToDelete.questionText} />
+                </div>
               </div>
             </div>
 
@@ -1791,7 +1849,7 @@ export default function QuestionBankUploadPage() {
 
             <div className="modal-body p-5 flex flex-col gap-4 bg-slate-50">
               <div className="bg-red-50 border border-red-200 text-red-900 rounded-lg p-3 text-xs leading-relaxed">
-                <strong>Warning:</strong> You are about to soft-delete all questions for this course unit in the selected category and intake.
+                <strong>Warning:</strong> Are you sure you want to delete all questions for this course unit in the selected category and intake? This action cannot be undone.
               </div>
 
               <div className="border border-slate-200 rounded-lg p-3.5 bg-white space-y-2 text-xs">

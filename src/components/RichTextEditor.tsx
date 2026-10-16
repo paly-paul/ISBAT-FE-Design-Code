@@ -40,6 +40,29 @@ export function isHtmlEmpty(html: string | null | undefined): boolean {
 }
 
 /**
+ * Strips all HTML tags and decodes entities into clean plain text.
+ */
+export function stripHtmlTags(str: string | null | undefined): string {
+  if (!str) return ''
+  return str
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#160;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+/**
  * Converts legacy plain-text newlines to HTML breaks if no HTML tags are present
  */
 function formatInitialHtml(val: string): string {

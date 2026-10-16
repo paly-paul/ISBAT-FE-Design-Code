@@ -1,9 +1,14 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { QuestionDto } from '@/lib/api/assessment/questions'
-import { useCreateQuestion, useUpdateQuestion } from '@/hooks/assessment/useQuestions'
-import { RichTextEditor, isHtmlEmpty } from '@/components/RichTextEditor'
+import {
+  useCreateQuestion,
+  useUpdateQuestion,
+  useUploadQuestionImage,
+  useDeleteQuestionImage,
+} from '@/hooks/assessment/useQuestions'
+import { RichTextEditor, isHtmlEmpty, stripHtmlTags } from '@/components/RichTextEditor'
 
 interface SingleQuestionModalProps {
   isOpen: boolean
@@ -36,38 +41,59 @@ export function SingleQuestionModal({
 
   const [questionType, setQuestionType] = useState<number>(question?.questionType ?? 1)
   const [level, setLevel] = useState<number>(question?.level ?? 1)
-  const [questionText, setQuestionText] = useState<string>(question?.questionText ?? '')
-  const [option1Text, setOption1Text] = useState<string>(question?.option1Text ?? '')
-  const [option2Text, setOption2Text] = useState<string>(question?.option2Text ?? '')
-  const [option3Text, setOption3Text] = useState<string>(question?.option3Text ?? '')
-  const [option4Text, setOption4Text] = useState<string>(question?.option4Text ?? '')
+  const [questionText, setQuestionText] = useState<string>(stripHtmlTags(question?.questionText) ?? '')
+  const [option1Text, setOption1Text] = useState<string>(stripHtmlTags(question?.option1Text) ?? '')
+  const [option2Text, setOption2Text] = useState<string>(stripHtmlTags(question?.option2Text) ?? '')
+  const [option3Text, setOption3Text] = useState<string>(stripHtmlTags(question?.option3Text) ?? '')
+  const [option4Text, setOption4Text] = useState<string>(stripHtmlTags(question?.option4Text) ?? '')
   const [selectedCorrectOptionIndex, setSelectedCorrectOptionIndex] = useState<number>(0)
-  const [descriptiveAnswer, setDescriptiveAnswer] = useState<string>(question?.answerText ?? '')
+  const [descriptiveAnswer, setDescriptiveAnswer] = useState<string>(stripHtmlTags(question?.answerText) ?? '')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  // Image upload state
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(question?.imageUrl ?? null)
+  const [existingImageFileName, setExistingImageFileName] = useState<string | null>(question?.imageFileName ?? null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(question?.imageUrl ?? null)
+  const [isImageMarkedForDeletion, setIsImageMarkedForDeletion] = useState<boolean>(false)
+  const [imageError, setImageError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const createMut = useCreateQuestion()
   const updateMut = useUpdateQuestion()
+  const uploadImageMut = useUploadQuestionImage()
+  const deleteImageMut = useDeleteQuestionImage()
 
   useEffect(() => {
     if (question) {
       setQuestionType(question.questionType ?? 1)
       setLevel(question.level ?? 1)
-      setQuestionText(question.questionText ?? '')
-      setOption1Text(question.option1Text ?? '')
-      setOption2Text(question.option2Text ?? '')
-      setOption3Text(question.option3Text ?? '')
-      setOption4Text(question.option4Text ?? '')
+      setQuestionText(stripHtmlTags(question.questionText))
+      setOption1Text(stripHtmlTags(question.option1Text))
+      setOption2Text(stripHtmlTags(question.option2Text))
+      setOption3Text(stripHtmlTags(question.option3Text))
+      setOption4Text(stripHtmlTags(question.option4Text))
 
-      const ans = (question.answerText ?? '').trim()
+      const ans = stripHtmlTags(question.answerText)
       if (ans && question.questionType === 1) {
-        if (ans === question.option1Text?.trim()) setSelectedCorrectOptionIndex(0)
-        else if (ans === question.option2Text?.trim()) setSelectedCorrectOptionIndex(1)
-        else if (ans === question.option3Text?.trim()) setSelectedCorrectOptionIndex(2)
-        else if (ans === question.option4Text?.trim()) setSelectedCorrectOptionIndex(3)
+        const o1 = stripHtmlTags(question.option1Text)
+        const o2 = stripHtmlTags(question.option2Text)
+        const o3 = stripHtmlTags(question.option3Text)
+        const o4 = stripHtmlTags(question.option4Text)
+        if (ans === o1) setSelectedCorrectOptionIndex(0)
+        else if (ans === o2) setSelectedCorrectOptionIndex(1)
+        else if (ans === o3) setSelectedCorrectOptionIndex(2)
+        else if (ans === o4) setSelectedCorrectOptionIndex(3)
         else setSelectedCorrectOptionIndex(0)
       } else {
-        setDescriptiveAnswer(question.answerText ?? '')
+        setDescriptiveAnswer(ans)
       }
+
+      setExistingImageUrl(question.imageUrl ?? null)
+      setExistingImageFileName(question.imageFileName ?? null)
+      setPreviewUrl(question.imageUrl ?? null)
+      setSelectedFile(null)
+      setIsImageMarkedForDeletion(false)
     } else {
       setQuestionType(1)
       setLevel(1)
@@ -78,17 +104,83 @@ export function SingleQuestionModal({
       setOption4Text('')
       setSelectedCorrectOptionIndex(0)
       setDescriptiveAnswer('')
+
+      setExistingImageUrl(null)
+      setExistingImageFileName(null)
+      setPreviewUrl(null)
+      setSelectedFile(null)
+      setIsImageMarkedForDeletion(false)
     }
+    setImageError(null)
     setErrorMsg(null)
   }, [question, isOpen])
 
+  // Revoke object URLs on unmount/change
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl)
+      }
+    }
+  }, [previewUrl])
+
   if (!isOpen) return null
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const validateAndSetFile = (file: File) => {
+    setImageError(null)
+
+    // Allowed extensions: .png, .jpg, .jpeg
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase()
+    const validExts = ['.png', '.jpg', '.jpeg']
+    const validMimes = ['image/png', 'image/jpeg', 'image/jpg']
+    if (!validExts.includes(ext) || (!validMimes.includes(file.type) && file.type !== '')) {
+      setImageError('Only .png, .jpg and .jpeg images are allowed.')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    // Max size: 5 MB (5,242,880 bytes)
+    if (file.size > 5242880) {
+      setImageError('File size must not exceed 5 MB (5,242,880 bytes).')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrl)
+    }
+
+    setSelectedFile(file)
+    setPreviewUrl(URL.createObjectURL(file))
+    setIsImageMarkedForDeletion(false)
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      validateAndSetFile(file)
+    }
+  }
+
+  const handleRemoveImage = () => {
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrl)
+    }
+    setSelectedFile(null)
+    setPreviewUrl(null)
+    setIsImageMarkedForDeletion(true)
+    setImageError(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMsg(null)
 
-    if (isHtmlEmpty(questionText)) {
+    const cleanQuestionText = stripHtmlTags(questionText)
+    if (!cleanQuestionText) {
       setErrorMsg('Question text cannot be left blank!')
       return
     }
@@ -97,10 +189,10 @@ export function SingleQuestionModal({
 
     if (questionType === 1) {
       // MCQ validations
-      const o1 = option1Text.trim()
-      const o2 = option2Text.trim()
-      const o3 = option3Text.trim()
-      const o4 = option4Text.trim()
+      const o1 = stripHtmlTags(option1Text)
+      const o2 = stripHtmlTags(option2Text)
+      const o3 = stripHtmlTags(option3Text)
+      const o4 = stripHtmlTags(option4Text)
 
       if (!o1 || !o2 || !o3 || !o4) {
         setErrorMsg('All four options (Option 1, 2, 3, 4) cannot be left blank!')
@@ -122,74 +214,85 @@ export function SingleQuestionModal({
       }
     } else {
       // Descriptive validation
-      if (isHtmlEmpty(descriptiveAnswer)) {
+      const cleanAnswer = stripHtmlTags(descriptiveAnswer)
+      if (!cleanAnswer) {
         setErrorMsg('Answer / Evaluation criteria cannot be left blank!')
         return
       }
-      resolvedAnswer = descriptiveAnswer.trim()
+      resolvedAnswer = cleanAnswer
     }
 
     if (isEdit && question?.questionGuid) {
-      updateMut.mutate(
-        {
+      try {
+        await updateMut.mutateAsync({
           guid: question.questionGuid,
           payload: {
             questionType,
             level: questionType === 1 ? level : null,
-            questionText: questionText.trim(),
-            option1Text: questionType === 1 ? option1Text.trim() : null,
-            option2Text: questionType === 1 ? option2Text.trim() : null,
-            option3Text: questionType === 1 ? option3Text.trim() : null,
-            option4Text: questionType === 1 ? option4Text.trim() : null,
+            questionText: cleanQuestionText,
+            option1Text: questionType === 1 ? stripHtmlTags(option1Text) : null,
+            option2Text: questionType === 1 ? stripHtmlTags(option2Text) : null,
+            option3Text: questionType === 1 ? stripHtmlTags(option3Text) : null,
+            option4Text: questionType === 1 ? stripHtmlTags(option4Text) : null,
             answerText: resolvedAnswer,
           },
-        },
-        {
-          onSuccess: () => {
-            showToast('Question updated successfully!', 'success')
-            onSuccess()
-            onClose()
-          },
-          onError: (err: any) => {
-            setErrorMsg(err.message || 'Failed to update question')
-          },
+        })
+
+        // Handle image upload or deletion
+        if (selectedFile) {
+          await uploadImageMut.mutateAsync({
+            questionGuid: question.questionGuid,
+            file: selectedFile,
+          })
+        } else if (isImageMarkedForDeletion && existingImageUrl) {
+          await deleteImageMut.mutateAsync(question.questionGuid)
         }
-      )
+
+        showToast('Question updated successfully!', 'success')
+        onSuccess()
+        onClose()
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Failed to update question')
+      }
     } else {
       if (!courseUnitGuid || !category || !intakeGuid) {
         setErrorMsg('Course Unit, Assessment Category, and Academic Intake are required.')
         return
       }
 
-      createMut.mutate(
-        {
+      try {
+        const created = await createMut.mutateAsync({
           courseUnitGuid,
           category,
           intakeGuid,
           questionType,
           level: questionType === 1 ? level : null,
-          questionText: questionText.trim(),
-          option1Text: questionType === 1 ? option1Text.trim() : null,
-          option2Text: questionType === 1 ? option2Text.trim() : null,
-          option3Text: questionType === 1 ? option3Text.trim() : null,
-          option4Text: questionType === 1 ? option4Text.trim() : null,
+          questionText: cleanQuestionText,
+          option1Text: questionType === 1 ? stripHtmlTags(option1Text) : null,
+          option2Text: questionType === 1 ? stripHtmlTags(option2Text) : null,
+          option3Text: questionType === 1 ? stripHtmlTags(option3Text) : null,
+          option4Text: questionType === 1 ? stripHtmlTags(option4Text) : null,
           answerText: resolvedAnswer,
-        },
-        {
-          onSuccess: () => {
-            showToast('Question created and added to bank!', 'success')
-            onSuccess()
-            onClose()
-          },
-          onError: (err: any) => {
-            setErrorMsg(err.message || 'Failed to create question')
-          },
+        })
+
+        const createdGuid = created?.questionGuid || (created as any)?.guid
+        if (selectedFile && createdGuid) {
+          await uploadImageMut.mutateAsync({
+            questionGuid: createdGuid,
+            file: selectedFile,
+          })
         }
-      )
+
+        showToast('Question created and added to bank!', 'success')
+        onSuccess()
+        onClose()
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Failed to create question')
+      }
     }
   }
 
-  const isPending = createMut.isPending || updateMut.isPending
+  const isPending = createMut.isPending || updateMut.isPending || uploadImageMut.isPending || deleteImageMut.isPending
 
   return (
     <div className="modal-overlay open" style={{ zIndex: 650 }}>
@@ -316,11 +419,148 @@ export function SingleQuestionModal({
               )}
             </div>
 
-            {/* Question Text */}
+            {/* Question Text with side Upload Image button */}
             <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm">
-              <label className="text-xs font-bold text-slate-800 block mb-1.5">
-                Question Text <span className="text-red-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                    <span>Question Text</span>
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[11px] font-normal text-slate-400">
+                    (Attach optional diagram / image)
+                  </span>
+                </div>
+
+                {/* Right side: Blue Upload Image Button / Actions */}
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+                    className="hidden"
+                    onChange={handleFileChange}
+                    disabled={isPending}
+                  />
+
+                  {previewUrl && !isImageMarkedForDeletion ? (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        className="btn btn-neu btn-sm text-xs py-1 px-2.5 flex items-center gap-1 text-slate-700 hover:text-slate-900"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isPending}
+                        title="Choose a different image to replace current diagram (.png, .jpg, .jpeg, max 5MB)"
+                      >
+                        <i className="lni lni-reload text-[11px]"></i>
+                        <span>Change Image</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-neu btn-sm text-xs py-1 px-2.5 text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-1"
+                        onClick={handleRemoveImage}
+                        disabled={isPending}
+                        title="Remove attached diagram from question"
+                      >
+                        <i className="lni lni-trash-can text-[11px]"></i>
+                        <span>Remove</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm flex items-center gap-1.5 text-xs py-1 px-3 shadow-xs"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isPending}
+                      title="Upload diagram or figure for this question (PNG, JPG, JPEG up to 5 MB)"
+                    >
+                      <i className="lni lni-image text-sm"></i>
+                      <span>+ Add Question Image</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Slim Attached Diagram Preview Strip (if attached) */}
+              {previewUrl && !isImageMarkedForDeletion && (
+                <div className="mb-2 p-2 bg-blue-50/70 border border-blue-200/80 rounded-lg flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={previewUrl}
+                      alt="Question diagram"
+                      className="h-9 w-12 rounded border border-blue-200 object-contain bg-white shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => window.open(previewUrl, '_blank')}
+                      title="Click to view full size in new tab"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-slate-900 truncate flex items-center gap-1.5">
+                        <span className="truncate" title={selectedFile ? selectedFile.name : (existingImageFileName || 'diagram.png')}>
+                          {selectedFile ? selectedFile.name : (existingImageFileName || 'diagram.png')}
+                        </span>
+                        {selectedFile ? (
+                          <span className="badge badge-purple text-[10px] py-0.2 shrink-0">
+                            New Upload ({(selectedFile.size / 1048576).toFixed(2)} MB)
+                          </span>
+                        ) : (
+                          <span className="badge badge-blue text-[10px] py-0.2 shrink-0">
+                            Attached Diagram
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2">
+                        <span>Image attached to this question</span>
+                        <span>•</span>
+                        <a
+                          href={previewUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 hover:underline font-medium inline-flex items-center gap-1"
+                        >
+                          <span>View Full Size</span>
+                          <i className="lni lni-arrow-right text-[10px]"></i>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Image Error Alert if any */}
+              {imageError && (
+                <div className="mb-2 bg-red-50 border border-red-200 text-red-700 px-3 py-1.5 rounded-lg text-xs flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <i className="lni lni-warning text-red-500 shrink-0"></i>
+                    <span>{imageError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setImageError(null)}
+                    className="text-red-400 hover:text-red-600"
+                  >
+                    <i className="lni lni-close text-xs"></i>
+                  </button>
+                </div>
+              )}
+
+              {/* Deletion Notice */}
+              {isImageMarkedForDeletion && existingImageUrl && (
+                <div className="mb-2 bg-amber-50 border border-amber-200 text-amber-800 px-2.5 py-1 rounded text-xs flex items-center justify-between">
+                  <span>Image marked for deletion. Will be removed when you update this question.</span>
+                  <button
+                    type="button"
+                    className="text-amber-900 underline font-semibold hover:text-amber-950 ml-2"
+                    onClick={() => {
+                      setIsImageMarkedForDeletion(false)
+                      setPreviewUrl(existingImageUrl)
+                    }}
+                  >
+                    Undo
+                  </button>
+                </div>
+              )}
+
+              {/* Rich Text Editor */}
               <RichTextEditor
                 value={questionText}
                 onChange={setQuestionText}
@@ -497,7 +737,7 @@ export function SingleQuestionModal({
             </button>
             <button
               type="submit"
-              className="btn btn-primary flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
+              className="btn btn-primary flex items-center gap-1.5"
               disabled={isPending}
             >
               {isPending ? (

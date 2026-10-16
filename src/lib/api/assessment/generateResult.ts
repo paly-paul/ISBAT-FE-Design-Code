@@ -44,7 +44,6 @@ export interface GenerateResultInit {
 
 export type ResultOperator = '=' | '<>' | '<' | '<=' | '>' | '>='
 
-// Shared by the list, moderation and export.
 export interface ResultFilters {
   intakeGuid: string
   programGuid?: string
@@ -54,6 +53,8 @@ export interface ResultFilters {
   iaValue?: number
   ueOperator?: ResultOperator
   ueValue?: number
+  studentName?: string
+  search?: string
 }
 
 export interface ExamResultRow {
@@ -122,6 +123,11 @@ function filterQuery(f: ResultFilters, extra?: Record<string, string>) {
   if (f.courseUnitGuid) qs.set('courseUnitGuid', f.courseUnitGuid)
   if (f.iaOperator && f.iaValue !== undefined) { qs.set('iaOperator', f.iaOperator); qs.set('iaValue', String(f.iaValue)) }
   if (f.ueOperator && f.ueValue !== undefined) { qs.set('ueOperator', f.ueOperator); qs.set('ueValue', String(f.ueValue)) }
+  const term = (f.studentName || f.search)?.trim()
+  if (term) {
+    qs.set('search', term)
+    qs.set('studentName', term)
+  }
   return qs
 }
 
@@ -244,12 +250,23 @@ function compare(total: number | null, op: ResultOperator, value: number) {
 }
 
 function mockFilter(f: ResultFilters): MockRow[] {
+  const q = (f.studentName || f.search)?.trim().toLowerCase()
   return getMockIntake(f.intakeGuid).rows
     .filter(r => !f.programGuid || r.programGuid === f.programGuid)
     .filter(r => !f.semesterGuid || r.semesterGuid === f.semesterGuid)
     .filter(r => !f.courseUnitGuid || r.courseUnitGuid === f.courseUnitGuid)
     .filter(r => !f.iaOperator || f.iaValue === undefined || compare(r.iaTotal, f.iaOperator, f.iaValue))
     .filter(r => !f.ueOperator || f.ueValue === undefined || compare(r.ueTotal, f.ueOperator, f.ueValue))
+    .filter(r => {
+      if (!q) return true
+      return (
+        (r.studentName?.toLowerCase().includes(q) ?? false) ||
+        (r.studentNum?.toLowerCase().includes(q) ?? false) ||
+        (r.programCode?.toLowerCase().includes(q) ?? false) ||
+        (r.unitCode?.toLowerCase().includes(q) ?? false) ||
+        (r.unitName?.toLowerCase().includes(q) ?? false)
+      )
+    })
     // programme code, semester code, student name, unit code
     .sort((a, b) =>
       (a.programCode ?? '').localeCompare(b.programCode ?? '') ||
