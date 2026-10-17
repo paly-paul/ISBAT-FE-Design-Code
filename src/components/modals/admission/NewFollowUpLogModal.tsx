@@ -11,7 +11,6 @@ import { useFollowUpStatuses } from '@/hooks/config/useFollowUpStatuses'
 import { useFollowUpModes } from '@/hooks/admission/useFollowUpModes'
 import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
 import { useInterestLevels } from '@/hooks/admission/useInterestLevels'
-import { useEnquiryFollowUpsInfinite } from '@/hooks/admission/useEnquiryFollowUps'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import { AuthError } from '@/lib/api/client'
 import { getSessionIdentity, getLoggedInUserGuid } from '@/lib/session'
@@ -33,123 +32,7 @@ interface NewFollowUpLogModalProps extends ModalProps {
   initialData?: InitialFollowUpData | null
 }
 
-const ENQUIRY_PICKER_PAGE_SIZE = 20
 
-// Enquiry picker — scroll-to-load-more (via useEnquiryFollowUpsInfinite)
-// instead of a SearchSelect over a capped 1000-row snapshot. The picker
-// stores and submits the selected enquiry's real GUID. Reuses SearchSelect's
-// own CSS classes (.ss-trigger, .ss-opts, etc.) for a matching look without
-// duplicating its styles. The search box here only filters what's already
-// loaded, client-side.
-function EnquiryPicker({
-  value,
-  onChange,
-  enabled,
-  hasError,
-  initialLabel,
-}: {
-  value: string
-  onChange: (v: string) => void
-  enabled: boolean
-  hasError?: boolean
-  initialLabel?: string
-}) {
-  const [open, setOpen] = useState(false)
-  const [filterText, setFilterText] = useState('')
-  const boxRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function handle(e: MouseEvent) {
-      if (!boxRef.current?.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handle)
-    return () => document.removeEventListener('mousedown', handle)
-  }, [open])
-
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching } = useEnquiryFollowUpsInfinite(ENQUIRY_PICKER_PAGE_SIZE, enabled)
-
-  const allItems = data?.pages.flatMap(p => p.items) ?? []
-  const selected = value ? allItems.find(item => item.enquiryGuid === value) : undefined
-
-  const term = filterText.trim().toLowerCase()
-  const filtered = allItems
-    .map((item, absIndex) => ({ item, absIndex }))
-    .filter(({ item }) => !term || `${item.enquiryCode} ${item.studentName}`.toLowerCase().includes(term))
-
-  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
-    if (!hasNextPage || isFetchingNextPage) return
-    const el = e.currentTarget
-    if (el.scrollTop > 0 && el.scrollHeight - el.scrollTop - el.clientHeight < 48) fetchNextPage()
-  }
-
-  function pick(enquiryGuid: string) {
-    onChange(enquiryGuid)
-    setOpen(false)
-    setFilterText('')
-  }
-
-  const label = selected
-    ? `${selected.enquiryCode} — ${selected.studentName}`
-    : (value && initialLabel ? initialLabel : '— select an enquiry —')
-
-  const isPlaceholder = !selected && !(value && initialLabel)
-
-  return (
-    <div style={{ position: 'relative' }} ref={boxRef}>
-      <button
-        type="button"
-        className="ctrl ss-trigger"
-        onClick={() => setOpen(o => !o)}
-        style={hasError ? { borderColor: 'var(--red)' } : undefined}
-      >
-        <span className={`ss-label${isPlaceholder ? ' ss-placeholder' : ''}`}>
-          {label}
-        </span>
-        <i className="lni lni-chevron-down ss-chevron" style={{ transform: open ? 'rotate(180deg)' : undefined }} />
-      </button>
-      {open && (
-        <div
-          className="ss-drop mt-1"
-          style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30 }}
-        >
-          <div className="ss-search">
-            <input
-              className="ctrl"
-              style={{ fontSize: 12, height: 28, padding: '4px 8px' }}
-              placeholder="Search loaded enquiries…"
-              value={filterText}
-              onChange={e => setFilterText(e.target.value)}
-              onClick={e => e.stopPropagation()}
-            />
-          </div>
-          <div className="ss-opts" style={{ maxHeight: 200 }} onScroll={handleScroll}>
-            {isFetching && allItems.length === 0 ? (
-              <div className="ss-no-match">Loading…</div>
-            ) : filtered.length === 0 ? (
-              <div className="ss-no-match">
-                {term ? 'No matches among loaded enquiries — keep scrolling to load more.' : 'No enquiries found.'}
-              </div>
-            ) : (
-              <>
-                {filtered.map(({ item }) => (
-                  <div
-                    key={item.enquiryGuid}
-                    className={`col-filter-opt${value === item.enquiryGuid ? ' fil-active' : ''}`}
-                    onClick={() => pick(item.enquiryGuid)}
-                  >
-                    {item.enquiryCode} — {item.studentName}
-                  </div>
-                ))}
-                {isFetchingNextPage && <div className="ss-no-match">Loading more…</div>}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
 
 // The API checks follow-up dates against today's *UTC* date
 // (post-enquiry-followup.md) — not the local one, which in Uganda (UTC+3) is
@@ -283,7 +166,8 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
     }
     const finalAdvisorGuid = advisorGuid || (employees.length > 0 ? employees[0].employeeGuid : '')
     if (!finalAdvisorGuid) {
-      e.advisorGuid = 'Advisor identity could not be resolved from your account'
+      setFailure('Advisor identity could not be resolved from your account.')
+      return false
     }
     if (!followUpStatusGuid) e.followUpStatusGuid = 'Please select a Follow-up Status'
     if (!followUpModeGuid)   e.followUpModeGuid = 'Please select a Follow-up Mode'
@@ -373,29 +257,27 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
         <div className="g2">
           <div className="fg" style={{ gridColumn: 'span 2' }}>
             <div className="lbl">Enquiry <span className="req">*</span></div>
-            <EnquiryPicker
-              value={enquiryGuid}
-              onChange={v => { setEnquiryGuid(v); clearError('enquiryIdx') }}
-              enabled={isOpen}
-              hasError={!!errors.enquiryIdx}
-              initialLabel={initialData?.enquiryCode && initialData?.studentName ? `${initialData.enquiryCode} — ${initialData.studentName}` : undefined}
+            <input
+              type="text"
+              name="enquiryIdx"
+              data-field="enquiryIdx"
+              className="ctrl"
+              value={
+                initialData?.enquiryCode && initialData?.studentName
+                  ? `${initialData.enquiryCode} — ${initialData.studentName}`
+                  : (initialData?.enquiryCode || initialData?.studentName || enquiryGuid || '—')
+              }
+              readOnly
+              tabIndex={-1}
+              style={{
+                cursor: 'default',
+                fontWeight: 600,
+                background: '#f8fafc',
+                ...(errors.enquiryIdx ? { borderColor: 'var(--red)' } : {}),
+              }}
+              title="Enquiry cannot be changed"
             />
             {errors.enquiryIdx && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.enquiryIdx}</p>}
-          </div>
-          <div className="fg">
-            <div className="lbl">Advisor <span className="req">*</span></div>
-            <div className="inp-wrap">
-              <i className="lni lni-user inp-icon"></i>
-              <input
-                className="ctrl"
-                value={advisorName || getSessionIdentity()?.displayName || '—'}
-                readOnly
-                tabIndex={-1}
-                style={{ cursor: 'default', fontWeight: 600, background: '#f8fafc' }}
-                title="Advisor is automatically set to your logged-in account"
-              />
-            </div>
-            {errors.advisorGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.advisorGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Follow-up Date</div>
@@ -404,6 +286,19 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
               <i className="lni lni-lock-alt inp-icon"></i>
               <input className="ctrl" value={todayLabel} readOnly tabIndex={-1} style={{ cursor: 'default', fontWeight: 600, background: '#f8fafc' }} title="A follow-up is always logged for today" />
             </div>
+          </div>
+          <div className="fg">
+            <div className="lbl">Next Follow-up Date</div>
+            {/* Can't be before this follow-up's own date (always today — see
+                followUpDate in handleSave). Same day is allowed. */}
+            <DatePicker
+              value={nextFollowDate}
+              onChange={v => { setNextFollowDate(v); setErrors(p => ({ ...p, nextFollowDate: '' })) }}
+              minYmd={today}
+              rangeMessage={`Next follow-up date can’t be before the follow-up date (${todayLabel})`}
+              hasError={!!errors.nextFollowDate}
+            />
+            {errors.nextFollowDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.nextFollowDate}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Follow-up Status <span className="req">*</span></div>
@@ -424,19 +319,6 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
             <div className="lbl">Interest Level</div>
             <SearchSelect placeholder="— optional —" options={interestLevelOptions} value={interestLevelGuid} onChange={v => { setInterestLevelGuid(v); clearError('interestLevelGuid') }} />
             {errors.interestLevelGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.interestLevelGuid}</p>}
-          </div>
-          <div className="fg">
-            <div className="lbl">Next Follow-up Date</div>
-            {/* Can't be before this follow-up's own date (always today — see
-                followUpDate in handleSave). Same day is allowed. */}
-            <DatePicker
-              value={nextFollowDate}
-              onChange={v => { setNextFollowDate(v); setErrors(p => ({ ...p, nextFollowDate: '' })) }}
-              minYmd={today}
-              rangeMessage={`Next follow-up date can’t be before the follow-up date (${todayLabel})`}
-              hasError={!!errors.nextFollowDate}
-            />
-            {errors.nextFollowDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.nextFollowDate}</p>}
           </div>
           <div className="fg" style={{ gridColumn: 'span 2' }}>
             <div className="lbl">Remarks <span className="req">*</span> <span className="text-g400" style={{ fontWeight: 400 }}>({remarks.trim().length}/{REMARKS_MAX})</span></div>
