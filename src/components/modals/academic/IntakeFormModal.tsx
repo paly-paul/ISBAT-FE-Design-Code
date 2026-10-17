@@ -123,9 +123,36 @@ type CalendarField = keyof Omit<CalendarEntryForm, 'id'>
 // them (across every entry) on each change so a pair error clears as soon as
 // EITHER side is fixed, not just the side that originally got flagged.
 const ORDER_CHECKED_FIELDS: CalendarField[] = [
-  'term2End', 'admissionLateFeeDate', 'admissionEndDate',
+  'semStart', 'term1EndDate', 'term2StartDate', 'term2End',
+  'admissionStartDate', 'admissionLateFeeDate', 'admissionEndDate',
   'reentryLateFeeDate', 'reentryEndDate', 'resitEndDate', 'finalExamEndDate',
 ]
+
+// Aca-001: semester/term dates can't fall before the intake's earliest date
+// (no upper limit — an intake may run into the next year). Fall (intakes 2):
+// 1 Jan of the financial year. Spring (intakes 1): 1 Oct of the year before.
+function intakeEarliestDate(financialYear: string, intakeSeq: string): Date | null {
+  const fy = Number(financialYear)
+  if (!(fy > 0)) return null
+  if (intakeSeq === '2') return new Date(Date.UTC(fy, 0, 1))
+  if (intakeSeq === '1') return new Date(Date.UTC(fy - 1, 9, 1))
+  return null
+}
+
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+// Same format as the backend's message, e.g. "01-Jan-2027".
+function formatDdMonYyyy(d: Date) {
+  return `${String(d.getUTCDate()).padStart(2, '0')}-${MONTH_ABBR[d.getUTCMonth()]}-${d.getUTCFullYear()}`
+}
+
+// The given date moved back `months` calendar months (day clamped to the
+// shorter month, e.g. 31 Aug − 6 months → 28/29 Feb).
+function minusMonthsUtc(d: Date, months: number) {
+  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - months, 1))
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate()
+  target.setUTCDate(Math.min(d.getUTCDate(), lastDay))
+  return target
+}
 
 const MS_PER_WEEK = 1000 * 60 * 60 * 24 * 7
 
@@ -338,6 +365,21 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
     if (startDate && endDate && endDate < startDate) {
       out.term2End = `Semester ${idx + 1} end date must be on or after its start date`
     }
+
+    // Aca-001 earliest date. semStart is sent as both semesterStartDate and
+    // term1StartDate, term2End as both semesterEndDate and term2EndDate.
+    const earliest = intakeEarliestDate(financialYear, intakeSeq)
+    if (earliest) {
+      const earliestLabel = formatDdMonYyyy(earliest)
+      const termFields: [CalendarField, string][] = [
+        ['semStart', 'start date'], ['term1EndDate', 'term 1 end date'],
+        ['term2StartDate', 'term 2 start date'], ['term2End', 'end date'],
+      ]
+      termFields.forEach(([field, label]) => {
+        const d = parseDate(entry[field])
+        if (d && d < earliest && !out[field]) out[field] = `Semester ${idx + 1} ${label} can't be before ${earliestLabel}`
+      })
+    }
     // No "can't run longer than the 1st semester" check any more (removed
     // per request, 2026-10-15) — durationInWeeks now follows the longest
     // semester (maxSemesterWeeks()), so every semester fits the backend cap.
@@ -345,6 +387,12 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
     const admissionStart   = parseDate(entry.admissionStartDate)
     const admissionLateFee = parseDate(entry.admissionLateFeeDate)
     const admissionEnd     = parseDate(entry.admissionEndDate)
+    // Aca-001: admission can open at most 6 months before the semester. Users
+    // fill the admission date first, so this is re-checked whenever the start
+    // date changes too (updateEntry re-runs every rule on each change).
+    if (admissionStart && startDate && admissionStart < minusMonthsUtc(startDate, 6)) {
+      out.admissionStartDate = `Semester ${idx + 1} admission start date can't be more than 6 months before the semester start date`
+    }
     if (admissionStart && admissionLateFee && admissionLateFee < admissionStart) {
       out.admissionLateFeeDate = 'Admission late fee date must be on or after the admission start date'
     }
@@ -856,7 +904,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
 
                     <div style={CATEGORY_CARD_STYLE}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '3.5rem', rowGap: '1rem' }}>
-                        <div className="fg"><div className="lbl">Admission Start Date</div><DatePicker value={active.admissionStartDate} onChange={v => updateEntry(active.id, 'admissionStartDate', v)} /></div>
+                        <div className="fg"><div className="lbl">Admission Start Date</div><DatePicker value={active.admissionStartDate} onChange={v => updateEntry(active.id, 'admissionStartDate', v)} hasError={!!errors[errKey(active.id, 'admissionStartDate')]} />{errors[errKey(active.id, 'admissionStartDate')] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'admissionStartDate')]}</p>}</div>
                         <div className="fg"><div className="lbl">Admission End Date</div><DatePicker value={active.admissionEndDate} onChange={v => updateEntry(active.id, 'admissionEndDate', v)} hasError={!!errors[errKey(active.id, 'admissionEndDate')]} />{errors[errKey(active.id, 'admissionEndDate')] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'admissionEndDate')]}</p>}</div>
                         <div className="fg"><div className="lbl">Admission Late Fee Date</div><DatePicker value={active.admissionLateFeeDate} onChange={v => updateEntry(active.id, 'admissionLateFeeDate', v)} hasError={!!errors[errKey(active.id, 'admissionLateFeeDate')]} />{errors[errKey(active.id, 'admissionLateFeeDate')] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[errKey(active.id, 'admissionLateFeeDate')]}</p>}</div>
                         <div className="fg"><div className="lbl">Re-entry Start Date</div><DatePicker value={active.reentryStartDate} onChange={v => updateEntry(active.id, 'reentryStartDate', v)} /></div>

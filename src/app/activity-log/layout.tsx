@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { loginUrlForCurrentPage } from '@/lib/postLoginRedirect'
 import { Header } from '@/components/Header'
 import { Sidebar, RailId } from '@/components/Sidebar'
 import { RouteGuard } from '@/components/RouteGuard'
@@ -46,7 +47,7 @@ export default function ActivityLogLayout({ children }: { children: React.ReactN
         setDisplayName(result.displayName ?? null)
         setAuthChecked(true)
       } catch {
-        if (!cancelled) router.replace('/login/staff')
+        if (!cancelled) router.replace(loginUrlForCurrentPage())
       }
     }
 

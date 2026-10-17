@@ -1,4 +1,6 @@
-const NEXT_PUBLIC_API_BASE = (process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? '').trim()
+import { loginUrlForCurrentPage } from '../loginNext'
+
+const NEXT_PUBLIC_API_BASE =(process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? '').trim()
 const SERVER_API_GATEWAY_URL = (process.env.API_GATEWAY_URL ?? '').trim()
 const API_BASE = SERVER_API_GATEWAY_URL || NEXT_PUBLIC_API_BASE
 const USE_API_PROXY = Boolean(API_BASE)
@@ -78,7 +80,8 @@ function redirectToLogin(triggeredBy: string, cause: unknown) {
     // config/assessment, and the staff-facing student-records pages under
     // /student) is staff-only, so /login/staff is always the right target
     // here, not a guess between portals.
-    window.location.href = '/login/staff'
+    // ?next= brings the user back to this page once they've signed in again.
+    window.location.href = loginUrlForCurrentPage()
   }
 }
 

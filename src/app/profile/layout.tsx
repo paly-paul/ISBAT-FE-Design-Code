@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginUrlForCurrentPage } from '@/lib/postLoginRedirect'
 import { Header } from '@/components/Header'
 import { Sidebar, RailId } from '@/components/Sidebar'
 import { refreshSession } from '@/lib/auth'
@@ -51,7 +52,7 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
         setDisplayName(result.displayName ?? null)
         setAuthChecked(true)
       } catch {
-        if (!cancelled) router.replace('/login/staff')
+        if (!cancelled) router.replace(loginUrlForCurrentPage())
       }
     }
 

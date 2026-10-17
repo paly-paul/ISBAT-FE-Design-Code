@@ -8,7 +8,7 @@ import DatePicker from '@/components/DatePicker'
 import { BatchCreateInput, BatchUpdateInput, EMPTY_GUID } from '@/lib/api/academic/batch'
 import { useBatch } from '@/hooks/academic/useBatches'
 import { useProgramMasterByGuid, useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
-import { useIntake, useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
+import { useCurrentAcademicIntake, useIntake } from '@/hooks/academic/useIntakes'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useSearchStreamsInfinite, useStream } from '@/hooks/config/useStreams'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
@@ -44,6 +44,8 @@ function displayYmd(ymd: string) {
 // Server "not found" messages (all HTTP 400) → the field the user should fix.
 const NOT_FOUND_FIELDS: [RegExp, string, string][] = [
   [/intake not found/i,     'intakeGuid',    'This intake no longer exists, or has no month / financial year set. Pick another intake.'],
+  // The current intake changed while the form was open.
+  [/only be created for the current intake/i, 'intakeGuid', 'Batches can only be created for the current intake. Close and reopen this form to load it.'],
   [/program not found/i,    'programGuid',   'This programme no longer exists. Pick another programme.'],
   [/semester not found/i,   'semesterGuid',  'This semester no longer exists. Pick another semester.'],
   [/stream not found/i,     'streamGuid',    'This specialization no longer exists. Pick another one.'],
@@ -70,9 +72,6 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   const [programSearch, setProgramSearch] = useState('')
   const [committedProgramSearch, setCommittedProgramSearch] = useState('')
   const [programPickerOpen, setProgramPickerOpen] = useState(false)
-  const [intakeSearch, setIntakeSearch] = useState('')
-  const [committedIntakeSearch, setCommittedIntakeSearch] = useState('')
-  const [intakePickerOpen, setIntakePickerOpen] = useState(false)
   const [streamSearch, setStreamSearch] = useState('')
   const [committedStreamSearch, setCommittedStreamSearch] = useState('')
   const [streamPickerOpen, setStreamPickerOpen] = useState(false)
@@ -87,7 +86,11 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   const selectedHead = useEmployee(pHeadGuid || null)
 
   const programQuery = useSearchProgramMastersInfinite(committedProgramSearch, 20, isOpen && programPickerOpen)
-  const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, isOpen && intakePickerOpen)
+  // Create only allows the current intake (POST /batches rejects any other
+  // with "Batches can only be created for the current intake"), so the
+  // dropdown offers just that one — via the intakes list's currentIntake
+  // filter. Edit keeps the batch's own (locked) intake, whatever it is.
+  const currentIntake = useCurrentAcademicIntake(isOpen && !isEdit)
   const streamQuery = useSearchStreamsInfinite(committedStreamSearch, 20, isOpen && streamPickerOpen)
   const employeeQuery = useSearchEmployeesInfinite(committedEmployeeSearch, 20, isOpen && employeePickerOpen)
 
@@ -101,13 +104,14 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   }, [programGuid, programQuery.data, selectedProgram.data])
 
   const intakeOptions = useMemo(() => {
-    const arr = flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid)
-      .map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
-    if (intakeGuid && !arr.some(option => option.value === intakeGuid) && selectedIntake.data) {
-      arr.unshift({ value: intakeGuid, label: `${selectedIntake.data.intakeCode} — ${selectedIntake.data.description}` })
-    }
-    return arr
-  }, [intakeGuid, intakeQuery.data, selectedIntake.data])
+    const intake = isEdit ? selectedIntake.data : currentIntake.data
+    return intake ? [{ value: intake.intakeGuid, label: `${intake.intakeCode} — ${intake.description}` }] : []
+  }, [isEdit, selectedIntake.data, currentIntake.data])
+
+  // Only one valid choice on create, so pick it as soon as it loads.
+  useEffect(() => {
+    if (isOpen && !isEdit && !intakeGuid && currentIntake.data) setIntakeGuid(currentIntake.data.intakeGuid)
+  }, [isOpen, isEdit, intakeGuid, currentIntake.data])
 
   const streamOptions = useMemo(() => {
     const arr = flattenUniquePages(streamQuery.data?.pages ?? [], s => s.streamGuid)
@@ -145,11 +149,6 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
     const timer = setTimeout(() => setCommittedProgramSearch(programSearch.trim()), 300)
     return () => clearTimeout(timer)
   }, [programSearch])
-
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedIntakeSearch(intakeSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [intakeSearch])
 
   useEffect(() => {
     const timer = setTimeout(() => setCommittedStreamSearch(streamSearch.trim()), 300)
@@ -208,7 +207,11 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   function validate() {
     const e: Record<string, string> = {}
     if (!programGuid)    e.programGuid = 'Please select a Programme'
-    if (!intakeGuid)     e.intakeGuid = 'Please select an Intake'
+    if (!intakeGuid)     e.intakeGuid = isEdit || currentIntake.data
+      ? 'Please select an Intake'
+      : currentIntake.isError
+        ? 'The current intake couldn’t be loaded. Reload the page and try again.'
+        : 'No intake is set as the current intake. Set one in Intake Master first.'
     if (!semesterGuid)   e.semesterGuid = 'Please select a Semester'
     if (!streamGuid)     e.streamGuid = 'Please select a Specialization'
     if (!batchTimeGuid)  e.batchTimeGuid = 'Please select a Batch Time'
@@ -383,19 +386,18 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
           <div className="fg">
             <div className="lbl">Intake <span className="req">*</span></div>
             <SearchSelect
-              placeholder="— Select intake —"
+              placeholder={isEdit || currentIntake.isLoading || currentIntake.data
+                ? '— Select intake —'
+                : currentIntake.isError ? 'Couldn’t load the current intake' : 'No current intake set'}
               options={intakeOptions}
               value={intakeGuid}
               disabled={isEdit}
-              onSearch={setIntakeSearch}
-              onOpenChange={setIntakePickerOpen}
-              isLoading={intakeQuery.isLoading}
-              hasNextPage={intakeQuery.hasNextPage}
-              isFetchingNextPage={intakeQuery.isFetchingNextPage}
-              onLoadMore={() => intakeQuery.fetchNextPage()}
+              isLoading={!isEdit && currentIntake.isLoading}
               onChange={isEdit ? undefined : (val => { setIntakeGuid(val); if (errors.intakeGuid) setErrors(p => ({ ...p, intakeGuid: '' })) })}
             />
-            {errors.intakeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
+            {errors.intakeGuid
+              ? <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>
+              : !isEdit && <p className="text-xs text-g500 mt-1">New batches can only be created for the current intake.</p>}
           </div>
           <div className="fg">
             <div className="lbl">Programme <span className="req">*</span></div>
