@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
+import { resolvePostLoginTarget } from '@/lib/postLoginRedirect'
 import PanelA from '@/components/PanelA'
 import Icon from '@/components/Icon'
 import OtpInput from '@/components/OtpInput'
@@ -15,6 +17,7 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 export default function OtpPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [digits, setDigits] = useState(['', '', '', '', '', ''])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -51,7 +54,12 @@ export default function OtpPage() {
       const result = await otpVerify(flowState.challengeId, code)
       setSessionIdentity({ displayName: result.displayName })
       clearFlowState()
-      setSuccessState({ role: result.role, redirect: result.redirect })
+      // Staff only — same "requested link, else first menu page" rule as
+      // the login form (lib/postLoginRedirect.ts).
+      const redirect = result.role === 'student'
+        ? result.redirect
+        : await resolvePostLoginTarget(queryClient, result.redirect || '/academic')
+      setSuccessState({ role: result.role, redirect })
     } catch (err) {
       if (err instanceof AuthError) {
         setError(authErrorMessage(err.code))

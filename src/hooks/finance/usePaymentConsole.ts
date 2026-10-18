@@ -24,6 +24,7 @@ import {
   UpdatePaymentOtherInput,
 } from '@/lib/api/finance/paymentConsole'
 import { PAYMENT_OTHERS_KEY } from './usePaymentOthers'
+import { invalidateRegistrarDesk } from '@/hooks/admission/useRegistrarDesk'
 
 const PAYMENT_CONSOLE_KEY = ['payment-console']
 
@@ -169,6 +170,8 @@ export function useCreatePayment() {
       queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-ledgers', input.applicationGuid] })
       queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'current-semester-payable', input.applicationGuid] })
       queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'payment-history', input.applicationGuid] })
+      // A registration-fee payment flips the applicant to "paid" at the desk.
+      invalidateRegistrarDesk(queryClient)
     },
     // 400 concurrent_update — another cashier's payment settled the structure
     // while this one was being entered. Per the flow doc: refetch the
@@ -208,6 +211,7 @@ export function useCreatePaymentOther() {
       // Other payment needs that refetched too, or it only shows up via the
       // local otherPayments append rather than reflecting the real list.
       queryClient.invalidateQueries({ queryKey: PAYMENT_OTHERS_KEY })
+      invalidateRegistrarDesk(queryClient)
     },
   })
 }
@@ -235,6 +239,8 @@ export function useUpdatePayment() {
         // this too, since it re-runs the allocation engine.
         queryClient.invalidateQueries({ queryKey: [...PAYMENT_CONSOLE_KEY, 'current-semester-payable', applicationGuid] })
       }
+      // An edited amount can move an applicant between paid and unpaid.
+      invalidateRegistrarDesk(queryClient)
     },
   })
 }

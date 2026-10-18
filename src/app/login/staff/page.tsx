@@ -1,7 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
+import { rememberNextFromUrl, resolvePostLoginTarget } from '@/lib/postLoginRedirect'
 import PanelA from '@/components/PanelA'
 import Icon from '@/components/Icon'
 import { staffLogin, AuthError, MOCK_CREDENTIALS } from '@/lib/auth'
@@ -24,6 +26,11 @@ export default function StaffLoginPage() {
   const [successState, setSuccessState] = useState<{ displayName?: string; redirect: string } | null>(null)
 
   const disabled = loading || !staffId.trim() || !password
+
+  // A ?next= link (the page the user was trying to open) is where login
+  // lands afterwards — see lib/postLoginRedirect.ts.
+  const queryClient = useQueryClient()
+  useEffect(() => { rememberNextFromUrl() }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -51,7 +58,8 @@ export default function StaffLoginPage() {
           employeeGuid: result.employeeGuid,
           userGuid: result.userGuid,
         })
-        setSuccessState({ displayName: result.displayName, redirect: result.redirect })
+        const redirect = await resolvePostLoginTarget(queryClient, result.redirect)
+        setSuccessState({ displayName: result.displayName, redirect })
       }
     } catch (err) {
       setPasswordError(err instanceof AuthError ? authErrorMessage(err.code) : authErrorMessage('unknown'))

@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
+import { loginUrlForCurrentPage } from '@/lib/postLoginRedirect'
 import { Query, QueryClient, QueryClientProvider, QueryKey, useQueryClient } from '@tanstack/react-query'
 import { AuthError, refreshSession } from '@/lib/auth'
 import { getSessionIdentity, setSessionIdentity, clearSessionIdentity } from '@/lib/session'
@@ -55,7 +56,7 @@ function SessionKeepAlive() {
         .catch(err => {
           if (err instanceof AuthError) {
             clearSessionIdentity()
-            router.replace('/login/staff')
+            router.replace(loginUrlForCurrentPage())
           }
         })
     }, SESSION_REFRESH_INTERVAL_MS)

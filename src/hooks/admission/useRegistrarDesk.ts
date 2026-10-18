@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   RegisterStudentInput,
   RegistrarDeskQueueFilters,
@@ -13,6 +13,16 @@ const REGISTRAR_QUEUE_KEY = ['registrar-desk-queue']
 const REGISTRAR_COUNTS_KEY = ['registrar-desk-counts']
 const REGISTRAR_DETAIL_KEY = ['registrar-desk-detail']
 const REGISTRATION_TYPES_KEY = ['registration-types']
+
+// The desk's Reg. Fee column and paid/unpaid counts change when Finance
+// records a payment, but these queries are cached until invalidated
+// (staleTime: Infinity) — so payment mutations (Payment Console) call this.
+// Without it the desk kept showing "not paid" until a full page refresh.
+export function invalidateRegistrarDesk(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: REGISTRAR_QUEUE_KEY })
+  queryClient.invalidateQueries({ queryKey: REGISTRAR_COUNTS_KEY })
+  queryClient.invalidateQueries({ queryKey: REGISTRAR_DETAIL_KEY })
+}
 
 export function useRegistrarDeskApplications(page: number, pageSize: number, filters?: RegistrarDeskQueueFilters) {
   return useQuery({
