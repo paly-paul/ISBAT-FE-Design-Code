@@ -44,22 +44,39 @@ export function useStudentsFilter(page: number, pageSize: number, filters: Stude
 // The page falls back to plain useStudentsFilter above whenever there's
 // only a single combination (no filter, or one value per dimension).
 
-export function getStudentsFilterCombinations(colFilters: { programGuid: string[]; semCode: string[]; batchGuid: string[]; intakeGuid: string[]; academicIntake: string[]; regStatus: string[] }, searchTerm?: string): StudentColumnFilters[] {
-  const programs = colFilters.programGuid.length ? colFilters.programGuid : [undefined]
-  const semCodes = colFilters.semCode.length ? colFilters.semCode : [undefined]
+// /students/filter has no semCode param (get-students-filter.md only takes
+// semesterGuid), so a picked semCode is turned into the real semesterGuids
+// from GET /academic/semesters/filter/by-semcode/{semCode} — one per
+// programme that has that semester. With Programme also picked, only those
+// programmes' semesters are kept (a semesterGuid already implies its
+// programme, so programGuid is sent alongside it only then). A semCode whose
+// rows haven't loaded yet, or that matches none of the picked programmes,
+// yields no combination at all — the page treats that as "no results".
+export function getStudentsFilterCombinations(
+  colFilters: { programGuid: string[]; semCode: string[]; batchGuid: string[]; intakeGuid: string[]; academicIntake: string[]; regStatus: string[] },
+  semesterRowsByCode: Map<string, { semesterGuid: string; programGuid: string }[]>,
+  searchTerm?: string,
+): StudentColumnFilters[] {
+  let progSems: { programGuid?: string; semesterGuid?: string }[]
+  if (colFilters.semCode.length) {
+    const pickedPrograms = new Set(colFilters.programGuid)
+    progSems = colFilters.semCode.flatMap(code => (semesterRowsByCode.get(code) ?? [])
+      .filter(row => !pickedPrograms.size || pickedPrograms.has(row.programGuid))
+      .map(row => ({ programGuid: pickedPrograms.size ? row.programGuid : undefined, semesterGuid: row.semesterGuid })))
+  } else {
+    progSems = (colFilters.programGuid.length ? colFilters.programGuid : [undefined]).map(programGuid => ({ programGuid }))
+  }
   const batches = colFilters.batchGuid.length ? colFilters.batchGuid : [undefined]
   const joinedIntakes = colFilters.intakeGuid.length ? colFilters.intakeGuid : [undefined]
   const intakes = colFilters.academicIntake.length ? colFilters.academicIntake : [undefined]
   const statuses = colFilters.regStatus.length ? colFilters.regStatus : [undefined]
   const combos: StudentColumnFilters[] = []
-  for (const programGuid of programs) {
-    for (const semCode of semCodes) {
-      for (const batchGuid of batches) {
-        for (const intakeGuid of joinedIntakes) {
-          for (const academicIntake of intakes) {
-            for (const regStatus of statuses) {
-              combos.push({ programGuid, semCode, batchGuid, intakeGuid, academicIntake, regStatus, searchTerm })
-            }
+  for (const { programGuid, semesterGuid } of progSems) {
+    for (const batchGuid of batches) {
+      for (const intakeGuid of joinedIntakes) {
+        for (const academicIntake of intakes) {
+          for (const regStatus of statuses) {
+            combos.push({ programGuid, semesterGuid, batchGuid, intakeGuid, academicIntake, regStatus, searchTerm })
           }
         }
       }

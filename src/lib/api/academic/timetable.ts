@@ -29,16 +29,21 @@ export interface TimetableCourseUnit {
   courseUnitName: string | null
 }
 
-export function getTimetableCourseUnits(intakeGuid: string, term: number): Promise<TimetableCourseUnit[]> {
+// Only the units planned for this lecturer in the intake and term
+// (get-timetable-course-units.md) — lecturerGuid is required.
+export function getTimetableCourseUnits(intakeGuid: string, term: number, lecturerGuid: string): Promise<TimetableCourseUnit[]> {
   if (MOCK_AUTH) return Promise.resolve([])
-  const qs = new URLSearchParams({ intakeGuid, term: String(term) })
+  const qs = new URLSearchParams({ intakeGuid, term: String(term), lecturerGuid })
   return apiGet<TimetableCourseUnit[] | null>(`/api/v1/academic/timetables/course-units?${qs.toString()}`).then(data => data ?? [])
 }
 
-// Confirmed via timetables/get-timetable-eligible-batches.md. `term` is
-// bound but unused server-side (the doc explicitly says so) — still sent
-// since the endpoint requires it in the query string regardless.
+// get-timetable-eligible-batches.md. A tagged course unit returns one row per
+// sibling unit and batch, so each row carries its own courseUnitGuid/Code —
+// the (courseUnitGuid, batchGuid, semesterGuid) triple is what's saved. For
+// the next intake, semesterGuid is the batch's next semester; send unchanged.
 export interface EligibleBatch {
+  courseUnitGuid: string
+  courseUnitCode: string | null
   batchGuid: string
   batchCode: string
   semesterGuid: string
@@ -46,18 +51,14 @@ export interface EligibleBatch {
   studentCount: number
 }
 
-export function getTimetableEligibleBatches(intakeGuid: string, term: number, courseUnitGuid: string): Promise<EligibleBatch[]> {
+export function getTimetableEligibleBatches(intakeGuid: string, term: number, lecturerGuid: string, batchTimeGuid: string, courseUnitGuid: string): Promise<EligibleBatch[]> {
   if (MOCK_AUTH) return Promise.resolve([])
-  const qs = new URLSearchParams({ intakeGuid, term: String(term), courseUnitGuid })
+  const qs = new URLSearchParams({ intakeGuid, term: String(term), lecturerGuid, batchTimeGuid, courseUnitGuid })
   return apiGet<EligibleBatch[] | null>(`/api/v1/academic/timetables/eligible-batches?${qs.toString()}`).then(data => data ?? [])
 }
 
-// Confirmed via timetables/get-timetable-lecturers.md — NOT a list of
-// lecturers available to assign, only those already timetabled for this
-// intake/term (derived from existing timetable rows). Backs the "filter by
-// lecturer" picker on the grid; a NEW lecturer assignment in Add/Edit Slot
-// sources from the general employee list (useEmployees) instead, same as
-// Course Allocation's own Lecturer picker.
+// get-timetable-lecturers.md — the lecturers planned to teach in the intake
+// and term (from program planning), whether or not they're timetabled yet.
 export interface TimetableLecturer {
   employeeGuid: string
   empName: string | null
@@ -134,6 +135,7 @@ export function getTimetableByGuid(guid: string): Promise<TimetableDetail> {
 // Confirmed via timetables/post-timetable.md and put-timetable.md — identical
 // shape for create and update (PUT is a full replacement, including
 // `batches`, which is rewritten wholesale: omitting a batch removes it).
+// No load: the server sets it to the highest maxCredit of the units.
 export interface TimetableInput {
   batchTimeGuid: string
   lecturerGuid: string
@@ -142,9 +144,129 @@ export interface TimetableInput {
   roomGuid: string
   intakeGuid: string
   term: number
-  load: number
   url: string | null
   batches: TimetableBatchLink[]
+}
+
+// ── View endpoints (by-lecturer / by-batch / by-room / by-slot) ──
+// Shared entry shape, per get-timetable-by-lecturer.md "Entry fields". Times
+// are HH:mm. Entries come ordered by weekday then start time.
+export interface TimetableEntryBatch {
+  courseUnitGuid: string
+  courseUnitCode: string | null
+  courseUnitName: string | null
+  batchGuid: string
+  batchCode: string
+  semesterGuid: string
+  semesterName: string | null
+  studentCount: number
+}
+
+export interface TimetableEntry {
+  timetableGuid: string
+  batchTimeGuid: string
+  batchTimeName: string
+  timeSlotGuid: string
+  timeSlotCode: string
+  startTime: string
+  endTime: string
+  weekDayGuid: string
+  dayCode: string
+  dayName: string
+  dayOrder: number
+  roomGuid: string
+  roomCode: string
+  roomLocation: string | null
+  roomCapacity: number | null
+  lecturerGuid: string
+  lecturerName: string | null
+  load: number
+  url: string | null
+  headCount: number
+  batches: TimetableEntryBatch[]
+}
+
+export interface LecturerTimetable {
+  lecturerGuid: string
+  lecturerName: string | null
+  totalLoad: number
+  entries: TimetableEntry[]
+}
+
+export interface BatchTimetable {
+  batchGuid: string
+  batchCode: string
+  studentCount: number
+  entries: TimetableEntry[]
+}
+
+export interface RoomTimetable {
+  roomGuid: string
+  roomCode: string
+  roomLocation: string | null
+  roomCapacity: number | null
+  entries: TimetableEntry[]
+}
+
+export interface TimeSlotAudit {
+  totalRooms: number
+  roomsInUse: number
+  nearCapacityRooms: number
+  overCapacityRooms: number
+  availableRooms: number
+  entries: TimetableEntry[]
+}
+
+function viewQuery(params: Record<string, string | number>) {
+  return new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString()
+}
+
+export function getTimetableByLecturer(lecturerGuid: string, intakeGuid: string, term: number): Promise<LecturerTimetable> {
+  if (MOCK_AUTH) return Promise.resolve({ lecturerGuid, lecturerName: null, totalLoad: 0, entries: [] })
+  return apiGet<LecturerTimetable>(`/api/v1/academic/timetables/by-lecturer?${viewQuery({ lecturerGuid, intakeGuid, term })}`)
+}
+
+export function getTimetableByBatch(batchGuid: string, intakeGuid: string, term: number): Promise<BatchTimetable> {
+  if (MOCK_AUTH) return Promise.resolve({ batchGuid, batchCode: '', studentCount: 0, entries: [] })
+  return apiGet<BatchTimetable>(`/api/v1/academic/timetables/by-batch?${viewQuery({ batchGuid, intakeGuid, term })}`)
+}
+
+export function getTimetableByRoom(roomGuid: string, intakeGuid: string, term: number): Promise<RoomTimetable> {
+  if (MOCK_AUTH) return Promise.resolve({ roomGuid, roomCode: '', roomLocation: null, roomCapacity: null, entries: [] })
+  return apiGet<RoomTimetable>(`/api/v1/academic/timetables/by-room?${viewQuery({ roomGuid, intakeGuid, term })}`)
+}
+
+export function getTimetableBySlot(batchTimeGuid: string, weekDayGuid: string, timeSlotGuid: string, intakeGuid: string, term: number): Promise<TimeSlotAudit> {
+  if (MOCK_AUTH) return Promise.resolve({ totalRooms: 0, roomsInUse: 0, nearCapacityRooms: 0, overCapacityRooms: 0, availableRooms: 0, entries: [] })
+  return apiGet<TimeSlotAudit>(`/api/v1/academic/timetables/by-slot?${viewQuery({ batchTimeGuid, weekDayGuid, timeSlotGuid, intakeGuid, term })}`)
+}
+
+// get-lecturer-load.md — advisory total for the term; no ceiling exists.
+export function getLecturerLoad(lecturerGuid: string, intakeGuid: string, term: number): Promise<{ lecturerGuid: string; totalLoad: number }> {
+  if (MOCK_AUTH) return Promise.resolve({ lecturerGuid, totalLoad: 0 })
+  return apiGet<{ lecturerGuid: string; totalLoad: number }>(`/api/v1/academic/timetables/lecturer-load?${viewQuery({ lecturerGuid, intakeGuid, term })}`)
+}
+
+// ── Rooms (dropdown and slot availability) ──
+export interface RoomOption {
+  roomGuid: string
+  roomCode: string
+  location: string | null
+  capacity: number | null
+}
+
+export function getRoomDropdown(): Promise<RoomOption[]> {
+  if (MOCK_AUTH) return Promise.resolve([])
+  return apiGet<RoomOption[] | null>('/api/v1/academic/rooms/dropdown').then(data => data ?? [])
+}
+
+// get-available-rooms.md — rooms free at this batch time, slot and weekday in
+// the same intake and term. Advisory: the save re-checks room clashes.
+export function getAvailableRooms(p: { batchTimeGuid: string; timeSlotGuid: string; weekDayGuid: string; intakeGuid: string; term: number; excludeTimetableGuid?: string | null }): Promise<RoomOption[]> {
+  if (MOCK_AUTH) return Promise.resolve([])
+  const params: Record<string, string | number> = { batchTimeGuid: p.batchTimeGuid, timeSlotGuid: p.timeSlotGuid, weekDayGuid: p.weekDayGuid, intakeGuid: p.intakeGuid, term: p.term }
+  if (p.excludeTimetableGuid) params.excludeTimetableGuid = p.excludeTimetableGuid
+  return apiGet<RoomOption[] | null>(`/api/v1/academic/rooms/available?${viewQuery(params)}`).then(data => data ?? [])
 }
 
 // Returns the bare new timetableGuid per the doc — not the full entry.

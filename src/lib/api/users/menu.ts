@@ -317,6 +317,8 @@ const mockMenu: MenuNode[] = [
       leaf('All Applicants', 'users', '/admission/applicants'),
       // application-status-report-page.md, 2026-10-14 — see ensureEnquiryReport.
       leaf('Application Status Report', 'bar-chart', '/admission/reports/application-status'),
+      // get-paid-students.md, 2026-10-19 — see ensureEnquiryReport.
+      leaf('Paid Students', 'wallet', '/admission/paid-students'),
       leaf('Receipts', 'files', null),
       leaf('Reports', 'bar-chart', null),
     ]),
@@ -348,9 +350,7 @@ const mockMenu: MenuNode[] = [
       leaf('Programme Approval', 'check-box', '/academic/programme-approval'),
       leaf('Fee Structure', 'dollar', '/academic/fee-structure'),
     ]),
-    section('Timetable', [
-      leaf('Timetable', 'calendar', '/academic/timetable'),
-    ]),
+    section('Timetable', TIMETABLE_LEAVES()),
     section('ODL Applications', [
       leaf('ODL Applications', 'world', '/academic/odl-applications'),
       leaf('Payment Reconciliation', 'credit-cards', '/academic/odl-reconciliation'),
@@ -826,6 +826,38 @@ function ensureProgrammeApproval(menu: MenuNode[]): MenuNode[] {
 // Runs after that merge, so it patches whichever "Employee" module ended up
 // in the menu — real or hardcoded — and is a no-op the moment the backend
 // starts returning the leaf itself.
+// The four Timetable screens (timetable-page.md / isbat_tt_v2.html).
+// /academic/timetable is the Schedule screen; the three views are siblings.
+function TIMETABLE_LEAVES(): MenuNode[] {
+  return [
+    leaf('Schedule Timetable', 'calendar', '/academic/timetable'),
+    leaf('Lecturer View', 'user', '/academic/timetable-lecturer'),
+    leaf('Batch View', 'users', '/academic/timetable-batch'),
+    leaf('Time Slot Audit', 'alarm-clock', '/academic/timetable-slot-audit'),
+  ]
+}
+
+// TEMPORARY: the backend menu has only the one "Timetable" leaf. Renames it
+// to the design's "Schedule Timetable" and adds the three view screens next
+// to it; a leaf the backend already returns (matched by url) is kept as is.
+function ensureTimetableViews(menu: MenuNode[]): MenuNode[] {
+  const acadIdx = menu.findIndex(n => n.name === 'Academic')
+  if (acadIdx === -1) return menu
+  const acad = menu[acadIdx]
+  const isTtUrl = (url: string | null, slug: string) => url === slug || url === `/academic/${slug}`
+  const secIdx = acad.children.findIndex(c => c.name === 'Timetable' || c.children.some(l => isTtUrl(l.url, 'timetable')))
+  if (secIdx === -1) return menu
+  const sec = acad.children[secIdx]
+  const existing = sec.children.map(l => (isTtUrl(l.url, 'timetable') && l.name === 'Timetable' ? { ...l, name: 'Schedule Timetable' } : l))
+  const missing = TIMETABLE_LEAVES().filter(t => !existing.some(l => isTtUrl(l.url, t.url!.replace('/academic/', ''))))
+  if (!missing.length && existing.every((l, i) => l === sec.children[i])) return menu
+  const mergedAcad = { ...acad, children: [...acad.children] }
+  mergedAcad.children[secIdx] = { ...sec, children: [...existing, ...missing] }
+  const mergedMenu = [...menu]
+  mergedMenu[acadIdx] = mergedAcad
+  return mergedMenu
+}
+
 function ensureEmployeeApprovals(menu: MenuNode[]): MenuNode[] {
   const empIdx = menu.findIndex(n => n.name === 'Employee')
   if (empIdx === -1) return menu
@@ -1046,7 +1078,8 @@ function ensureAdmissionReportLeaf(menu: MenuNode[], sectionName: string, name: 
 }
 function ensureEnquiryReport(menu: MenuNode[]): MenuNode[] {
   const withEnquiry = ensureAdmissionReportLeaf(menu, 'Enquiry', 'Enquiry Report', '/admission/reports/enquiry')
-  return ensureAdmissionReportLeaf(withEnquiry, 'Records', 'Application Status Report', '/admission/reports/application-status')
+  const withStatus = ensureAdmissionReportLeaf(withEnquiry, 'Records', 'Application Status Report', '/admission/reports/application-status')
+  return ensureAdmissionReportLeaf(withStatus, 'Records', 'Paid Students', '/admission/paid-students')
 }
 
 function ensureUeMarkImport(menu: MenuNode[]): MenuNode[] {
@@ -1717,7 +1750,8 @@ export function getMenu(): Promise<MenuResult> {
       const withHecTranscript = ensureMarkResultsLeaf(withExamMarkImport, 'HEC Graduate Transcript', 'certificate', '/assessment/hec-graduate-transcript')
       const withUeMarkVerify = ensureMarkResultsLeaf(withHecTranscript, 'Mark Verify — UE', 'shield', '/assessment/mark-ue-verify')
       const withEnquiryReport = ensureEnquiryReport(withUeMarkVerify)
-      const finalMenu = stripUnintegratedPages(stripLectureMaster(renameIaCreation(withEnquiryReport)))
+      const withTimetable = ensureTimetableViews(withEnquiryReport)
+      const finalMenu = stripUnintegratedPages(stripLectureMaster(renameIaCreation(withTimetable)))
       return { menu: finalMenu, isFallback: false }
     })
     .catch(() => ({ menu: stripUnintegratedPages(stripLectureMaster(renameIaCreation(mockMenu))), isFallback: true }))

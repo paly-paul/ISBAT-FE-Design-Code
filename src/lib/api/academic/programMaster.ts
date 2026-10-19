@@ -39,9 +39,9 @@ export interface FeeStructureInput {
   lef: number | null
   cef: number | null
   ace: number | null
-  lec: number | null
-  cec: number | null
-  acec: number | null
+  lec: string | null
+  cec: string | null
+  acec: string | null
   calcType: number
   amtPer: number | null
   // Confirmed per program_master_frontend_fixes.md: the create payload was
@@ -390,12 +390,14 @@ export interface ProgramMasterListResponse {
 // snapshot. That plain function above stays as-is for its other callers
 // (programme-master's own table, ProgrammeModal, etc.), which don't need
 // scroll-to-load-more. Backs useSearchProgramMastersInfinite below.
-export function getProgramMastersPage(page = 1, pageSize = 20, search = ''): Promise<ProgramMasterListResponse> {
+// programLevelGuid narrows to one level server-side (get-programs.md) and
+// combines with search and paging; totalCount reflects the filtered set.
+export function getProgramMastersPage(page = 1, pageSize = 20, search = '', programLevelGuid = ''): Promise<ProgramMasterListResponse> {
   const q = search.trim()
   if (MOCK_AUTH) {
-    const filtered = q
-      ? mockProgramMasters.filter(p => `${p.programCode} ${p.programName}`.toLowerCase().includes(q.toLowerCase()))
-      : mockProgramMasters
+    const filtered = mockProgramMasters
+      .filter(p => !q || `${p.programCode} ${p.programName}`.toLowerCase().includes(q.toLowerCase()))
+      .filter(p => !programLevelGuid || p.programLevelGuid === programLevelGuid)
     const start = (page - 1) * pageSize
     return Promise.resolve({ items: filtered.slice(start, start + pageSize), totalCount: filtered.length, pageNumber: page, pageSize })
   }
@@ -403,6 +405,7 @@ export function getProgramMastersPage(page = 1, pageSize = 20, search = ''): Pro
   // keep them synchronized so infinite scrolling cannot receive page 1 again.
   const params = new URLSearchParams({ page: String(page), pageNumber: String(page), pageSize: String(pageSize) })
   if (q) params.set('search', q)
+  if (programLevelGuid) params.set('programLevelGuid', programLevelGuid)
   return apiGet<any>(`/api/v1/academic/program-master?${params.toString()}`).then(data => {
     const items: ProgramMaster[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
     return {
@@ -534,10 +537,10 @@ export interface FeeStructureDetail {
   amtPer: number | null
   lef: number | null
   cef: number | null
-  lec: number | null
-  cec: number | null
+  lec: string | null
+  cec: string | null
   ace: number | null
-  acec: number | null
+  acec: string | null
   feeLines: FeeLineDetail[]
 }
 
@@ -555,6 +558,9 @@ export interface ProgramMasterFullDetails {
   yearCount: number
   semCount: number
   facultyGuid: string
+  // Faculty name — get-program-full-details.md calls it schoolName (faculty
+  // and school are the same thing, mapped via IntSchool).
+  schoolName?: string | null
   dateAcc: string | null
   accLetter: string | null
   appFee: number
@@ -620,9 +626,9 @@ export interface FeeStructureUpdateInput {
   lef: number | null
   cef: number | null
   ace: number | null
-  lec: number | null
-  cec: number | null
-  acec: number | null
+  lec: string | null
+  cec: string | null
+  acec: string | null
   calcType: number
   amtPer: number | null
   intakeGuid: string | null

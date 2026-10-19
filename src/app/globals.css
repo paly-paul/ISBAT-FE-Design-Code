@@ -3600,6 +3600,118 @@ input[type="number"] {
   color: var(--g900)
 }
 
+/* The USD total — the figure the row is about, so it leads visually. */
+.stmt-total-chip.is-primary {
+  align-items: center;
+  background: var(--b50);
+  border-color: var(--b200);
+  color: var(--b700);
+  font-weight: 600
+}
+
+.stmt-total-chip.is-primary .font-mono {
+  color: var(--b800)
+}
+
+/* Original-currency amounts behind the USD total (All currencies switch). */
+.stmt-total-breakdown {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--g500)
+}
+
+.stmt-total-breakdown .font-mono {
+  font-weight: 600;
+  color: var(--g800)
+}
+
+.stmt-total-breakdown-lbl {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--g400)
+}
+
+/* Labelled on/off switch (role="switch"), e.g. Student Statement's
+   "All currencies". */
+.stmt-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+  background: none;
+  border: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--g600);
+  cursor: pointer
+}
+
+.stmt-switch-track {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--g300);
+  transition: background .15s
+}
+
+.stmt-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: var(--neu-sm);
+  transition: left .15s
+}
+
+.stmt-switch[aria-checked="true"] {
+  color: var(--b700)
+}
+
+.stmt-switch[aria-checked="true"] .stmt-switch-track {
+  background: var(--b500)
+}
+
+.stmt-switch[aria-checked="true"] .stmt-switch-thumb {
+  left: 16px
+}
+
+/* Two-sided switch: the label for the current side is the highlighted one. */
+.stmt-switch-off,
+.stmt-switch-on {
+  color: var(--g400);
+  transition: color .15s
+}
+
+.stmt-switch[aria-checked="false"] .stmt-switch-off,
+.stmt-switch[aria-checked="true"] .stmt-switch-on {
+  color: var(--b700)
+}
+
+.stmt-switch:focus-visible {
+  outline: none
+}
+
+.stmt-switch:focus-visible .stmt-switch-track {
+  box-shadow: 0 0 0 3px var(--b200)
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stmt-switch-track,
+  .stmt-switch-thumb {
+    transition: none
+  }
+}
+
 /* Refetch over rows already on screen (next page, new search): dim the
    rows and float a pill on top, so the table keeps its size. */
 .tbl-refetch-wrap {
@@ -5520,6 +5632,45 @@ body:has(.modal-overlay.open) {
   min-height: 0;
   display: flex;
   overflow: hidden;
+  position: relative;
+}
+
+/* Covers the Fee Structure form while a Copy Fee Code source's fees load,
+   so nothing is edited and then overwritten when the copy lands. */
+.fsm-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--white) 72%, transparent);
+  backdrop-filter: blur(1.5px);
+}
+
+.fsm-loading-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-radius: var(--rsm);
+  background: var(--white);
+  border: 1px solid var(--b100);
+  box-shadow: var(--neu-out);
+  font-size: 13px;
+  color: var(--g700);
+}
+
+.fsm-loading-card i {
+  font-size: 20px;
+  color: var(--b500);
+}
+
+.fsm-loading-card small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--g500);
 }
 
 .fsm-sidebar {
@@ -5937,6 +6088,828 @@ body:has(.modal-overlay.open) {
   height: 8px;
   border-radius: 50%;
   background: var(--red)
+}
+
+/* ═══════════════════════════════════════
+   TIMETABLE SCREENS (isbat_tt_v2.html) — Schedule Timetable, Lecturer View,
+   Batch View, Time Slot Audit. The shift switcher and view toggle reuse
+   .tgl-group / .tgl-btn.
+   ═══════════════════════════════════════ */
+
+/* Filter bar used by the three view screens */
+.tt-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  background: var(--white);
+  border: 1.5px solid var(--g200);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 18px;
+  box-shadow: var(--neu-sm)
+}
+
+.tt-filter-bar .fg {
+  margin-bottom: 0;
+  min-width: 160px
+}
+
+.tt-filter-bar .tt-filter-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px
+}
+
+/* Conflict strip above the scheduler */
+.tt-conflict-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--red-bg);
+  border: 1.5px solid var(--red-bd);
+  border-radius: var(--rsm);
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  font-size: var(--fs-sm);
+  color: #991b1b
+}
+
+.tt-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  flex-shrink: 0;
+  animation: tt-pulse 1.4s ease-in-out infinite
+}
+
+.tt-pulse-dot.ok {
+  background: var(--green)
+}
+
+@keyframes tt-pulse {
+  0%, 100% { opacity: 1 }
+  50% { opacity: .35 }
+}
+
+/* Scheduler: context panel + calendar */
+.tt-scheduler {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  border: 1.5px solid var(--g200);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--neu-sm);
+  min-height: 560px;
+  margin-bottom: 20px;
+  background: var(--white)
+}
+
+.tt-ctx-col {
+  border-right: 1.5px solid var(--g200);
+  display: flex;
+  flex-direction: column;
+  min-width: 0
+}
+
+.tt-ctx-hdr {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--g200);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px
+}
+
+.tt-ctx-title {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--g500)
+}
+
+.tt-ctx-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--green)
+}
+
+.tt-ctx-status.muted {
+  color: var(--g400)
+}
+
+.tt-ctx-body {
+  padding: 14px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px
+}
+
+.tt-ctx-body .fg {
+  margin-bottom: 0
+}
+
+.tt-ctx-group {
+  background: var(--g100);
+  border: 1px solid var(--g200);
+  border-radius: var(--rsm);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px
+}
+
+.tt-ctx-row-lbl {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px
+}
+
+.tt-ctx-row-lbl .lbl {
+  margin-bottom: 0
+}
+
+.tt-rule-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 8px 10px;
+  background: var(--b50);
+  border: 1px solid var(--b200);
+  border-radius: var(--rsm);
+  font-size: var(--fs-xs);
+  color: var(--b800);
+  line-height: 1.45
+}
+
+.tt-rule-note i {
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 1px
+}
+
+.tt-cal-col {
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  min-width: 0
+}
+
+.tt-cal-hdr {
+  padding: 12px 16px;
+  background: var(--white);
+  border-bottom: 1.5px solid var(--g200);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap
+}
+
+.tt-cal-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: var(--fs-base);
+  font-weight: 700;
+  color: var(--g900)
+}
+
+.tt-cal-body {
+  flex: 1;
+  padding: 14px;
+  overflow: auto
+}
+
+.tt-cal-placeholder {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--g400);
+  font-size: var(--fs-base)
+}
+
+.tt-cal-placeholder i {
+  font-size: 30px;
+  color: var(--b300)
+}
+
+/* Workload badge */
+.tt-load-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  border: 1.5px solid var(--b200);
+  background: var(--b50);
+  color: var(--b800);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap
+}
+
+/* Target batches checklist */
+.tt-batch-list {
+  border: 1.5px solid var(--g200);
+  border-radius: var(--rsm);
+  overflow-y: auto;
+  max-height: 168px;
+  background: var(--white)
+}
+
+.tt-batch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--g100);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition: background var(--tr)
+}
+
+.tt-batch-row:last-child {
+  border-bottom: none
+}
+
+.tt-batch-row:hover {
+  background: var(--b50)
+}
+
+.tt-batch-row input {
+  accent-color: var(--b600);
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0
+}
+
+.tt-batch-row .tt-batch-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column
+}
+
+.tt-batch-row .tt-batch-code {
+  font-weight: 700;
+  color: var(--g900)
+}
+
+.tt-batch-row .tt-batch-sub {
+  font-size: var(--fs-2xs);
+  color: var(--g500)
+}
+
+.tt-batch-row .tt-batch-pax {
+  font-size: var(--fs-xs);
+  color: var(--g400);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap
+}
+
+.tt-list-empty {
+  padding: 14px 10px;
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--g400)
+}
+
+/* Placeholder for a design element with no backing API yet */
+.tt-unavailable {
+  border: 1.5px dashed var(--g300);
+  border-radius: var(--rsm);
+  padding: 10px;
+  background: var(--g100);
+  color: var(--g500);
+  font-size: var(--fs-xs)
+}
+
+.tt-unavailable-title {
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--g500);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between
+}
+
+/* Weekday × time-slot matrix */
+.tt-matrix-wrap {
+  border: 1.5px solid var(--g200);
+  border-radius: var(--rsm);
+  overflow-x: auto;
+  background: var(--white)
+}
+
+.tt-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 620px
+}
+
+.tt-matrix thead th {
+  padding: 9px 6px;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, var(--b800), var(--b600));
+  color: #fff;
+  text-align: center;
+  border-right: 1px solid rgba(255, 255, 255, .15);
+  line-height: 1.35
+}
+
+.tt-matrix th .tt-th-time {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: .85;
+  font-variant-numeric: tabular-nums
+}
+
+.tt-matrix thead th.tt-day-hdr {
+  background: var(--g100);
+  color: var(--g700);
+  border-right: 1.5px solid var(--g200);
+  width: 96px;
+  text-align: left;
+  padding: 9px 10px
+}
+
+.tt-matrix td {
+  padding: 3px;
+  border-right: 1px solid var(--g200);
+  border-bottom: 1px solid var(--g100);
+  vertical-align: top;
+  min-width: 124px
+}
+
+.tt-matrix td:last-child {
+  border-right: none
+}
+
+.tt-matrix tr:hover td {
+  background: inherit
+}
+
+.tt-matrix .tt-day-cell {
+  text-transform: none;
+  letter-spacing: 0;
+  border-bottom: 1px solid var(--g100);
+  background: var(--g100);
+  padding: 8px 10px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--g700);
+  border-right: 1.5px solid var(--g200);
+  white-space: nowrap;
+  vertical-align: middle;
+  min-width: 0
+}
+
+.tt-matrix .tt-day-cell.weekend {
+  background: var(--amber-bg);
+  color: #92400e
+}
+
+.tt-day-cell .tt-day-note {
+  display: block;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--green);
+  margin-top: 1px
+}
+
+.tt-day-cell .tt-day-note.off {
+  color: var(--g400)
+}
+
+.tt-matrix td.tt-off {
+  background: var(--g100);
+  text-align: center;
+  vertical-align: middle;
+  color: var(--g400);
+  font-size: var(--fs-xs);
+  padding: 18px 8px
+}
+
+.tt-matrix td.tt-blank {
+  text-align: center;
+  vertical-align: middle;
+  color: var(--g300);
+  font-size: var(--fs-xs)
+}
+
+.tt-slot-add {
+  width: 100%;
+  min-height: 72px;
+  border-radius: 7px;
+  border: 1.5px dashed var(--g300);
+  background: transparent;
+  color: var(--g400);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: border-color var(--tr), background var(--tr), color var(--tr)
+}
+
+.tt-slot-add:hover,
+.tt-slot-add:focus-visible {
+  border-color: var(--b400);
+  background: var(--b50);
+  color: var(--b700);
+  outline: none
+}
+
+.tt-slot-add:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+  background: transparent;
+  border-color: var(--g200);
+  color: var(--g300)
+}
+
+/* Timetable card. The coloured left rule is the design's own signature. */
+.tt-card-wrap {
+  position: relative
+}
+
+.tt-card-wrap + .tt-card-wrap {
+  margin-top: 3px
+}
+
+.tt-card {
+  border-radius: 7px;
+  padding: 7px 9px;
+  border-left: 3px solid var(--b600);
+  background: var(--b50);
+  font-size: var(--fs-xs);
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: box-shadow var(--tr)
+}
+
+.tt-card:hover {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, .12)
+}
+
+.tt-card.c2 { background: var(--green-bg); border-color: var(--green) }
+.tt-card.c3 { background: var(--amber-bg); border-color: var(--amber) }
+.tt-card.c4 { background: var(--purple-bg); border-color: var(--purple) }
+.tt-card.c5 { background: var(--cyan-bg); border-color: var(--cyan) }
+
+.tt-card.over {
+  border-color: var(--red);
+  box-shadow: 0 0 0 1.5px var(--red-bd)
+}
+
+.tt-card-code {
+  font-weight: 800;
+  font-size: 11.5px;
+  color: var(--g900);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap
+}
+
+.tt-card-name {
+  color: var(--g700);
+  font-size: var(--fs-2xs);
+  margin-top: 1px;
+  line-height: 1.3
+}
+
+.tt-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 5px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(15, 23, 42, .07);
+  font-size: var(--fs-2xs);
+  color: var(--g500);
+  font-weight: 600
+}
+
+.tt-card-meta > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap
+}
+
+.tt-card-room {
+  background: rgba(15, 23, 42, .07);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0
+}
+
+.tt-mini-tag {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--red-bg);
+  color: #991b1b;
+  border: 1px solid var(--red-bd)
+}
+
+.tt-card-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity var(--tr);
+  z-index: 2
+}
+
+.tt-card-wrap:hover .tt-card-actions,
+.tt-card-wrap:focus-within .tt-card-actions {
+  opacity: 1
+}
+
+.tt-card-act {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  background: rgba(255, 255, 255, .92);
+  color: var(--b700);
+  transition: background var(--tr), color var(--tr)
+}
+
+.tt-card-act:hover,
+.tt-card-act:focus-visible {
+  background: var(--b700);
+  color: #fff;
+  outline: none
+}
+
+.tt-card-act.del {
+  color: var(--red)
+}
+
+.tt-card-act.del:hover,
+.tt-card-act.del:focus-visible {
+  background: var(--red);
+  color: #fff
+}
+
+.tt-card-del {
+  border-radius: 7px;
+  padding: 8px 10px;
+  background: var(--red-bg);
+  border: 1.5px solid var(--red-bd);
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--red)
+}
+
+.tt-card-del .tt-del-btns {
+  display: flex;
+  gap: 6px
+}
+
+.btn-xs {
+  padding: 4px 9px;
+  font-size: var(--fs-xs);
+  gap: 4px
+}
+
+/* Slot modal */
+.tt-ctx-summary {
+  background: var(--g100);
+  border: 1px solid var(--g200);
+  border-radius: var(--rsm);
+  padding: 12px 14px;
+  margin-bottom: 16px
+}
+
+.tt-ctx-summary-title {
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--g500);
+  margin-bottom: 8px
+}
+
+.tt-ctx-kv {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 8px;
+  font-size: var(--fs-sm);
+  padding: 2px 0
+}
+
+.tt-ctx-kv span:first-child {
+  color: var(--g400);
+  font-weight: 600
+}
+
+.tt-ctx-kv span:last-child {
+  color: var(--g900);
+  font-weight: 700;
+  overflow-wrap: anywhere
+}
+
+.tt-cap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--rsm);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  border: 1.5px solid var(--g200);
+  background: var(--g100);
+  color: var(--g500);
+  min-height: 38px;
+  font-variant-numeric: tabular-nums
+}
+
+.tt-cap.ok { background: var(--green-bg); border-color: var(--green-bd); color: #065f46 }
+.tt-cap.near { background: var(--amber-bg); border-color: var(--amber-bd); color: #92400e }
+.tt-cap.over { background: var(--red-bg); border-color: var(--red-bd); color: #991b1b }
+
+.tt-clash {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--red-bg);
+  border: 1.5px solid var(--red-bd);
+  border-radius: var(--rsm);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: var(--fs-sm);
+  color: #991b1b
+}
+
+.tt-clash strong {
+  display: block;
+  color: var(--red);
+  margin-bottom: 2px
+}
+
+.tt-repeat {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--g200)
+}
+
+.tt-repeat-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px
+}
+
+.tt-chip {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  border: 1.5px solid var(--g200);
+  background: var(--white);
+  color: var(--g500);
+  font-family: var(--font)
+}
+
+.tt-chip.selected {
+  background: var(--b50);
+  border-color: var(--b300);
+  color: var(--b800)
+}
+
+.tt-chip:disabled {
+  opacity: .55;
+  cursor: not-allowed
+}
+
+/* Utilisation bar (Time Slot Audit) */
+.tt-util {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px
+}
+
+.tt-util-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 4px;
+  background: var(--g100);
+  overflow: hidden
+}
+
+.tt-util-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--green)
+}
+
+.tt-util-fill.near { background: var(--amber) }
+.tt-util-fill.over { background: var(--red) }
+
+.tt-util-txt {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap
+}
+
+.tt-matrix-card-hdr {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--g200);
+  background: var(--g100);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap
+}
+
+@media (max-width: 1100px) {
+  .tt-scheduler {
+    grid-template-columns: 1fr
+  }
+
+  .tt-ctx-col {
+    border-right: none;
+    border-bottom: 1.5px solid var(--g200)
+  }
+}
+
+@media print {
+  .tt-no-print {
+    display: none !important
+  }
+
+  .tt-scheduler {
+    grid-template-columns: 1fr;
+    box-shadow: none
+  }
+
+  .tt-ctx-col {
+    display: none
+  }
+
+  .tt-card-actions,
+  .tt-slot-add {
+    display: none
+  }
 }
 
 /* ═══════════════════════════════════════

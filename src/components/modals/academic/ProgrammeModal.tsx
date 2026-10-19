@@ -20,6 +20,8 @@ import { useCourseUnit, useCourseUnitsByGuids } from '@/hooks/academic/useCourse
 import { CourseUnitSearchPicker, CourseUnitPickOption } from '@/components/CourseUnitSearchPicker'
 import { useIntakesByGuids, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { IntakeSearchPicker } from '@/components/IntakeSearchPicker'
+import { FacultySearchPicker } from '@/components/FacultySearchPicker'
+import { useFacultiesByGuids } from '@/hooks/config/useFaculties'
 import { useUnitTypes } from '@/hooks/config/useUnitTypes'
 import { useUnitCategories } from '@/hooks/config/useUnitCategories'
 import { useLedgers } from '@/hooks/finance/useLedgers'
@@ -43,6 +45,8 @@ import {
 } from '@/hooks/academic/useProgramFeeStructure'
 import { AuthError } from '@/lib/api/client'
 import { flattenUniquePages } from '@/lib/pagination'
+import { useSearchProgramFeeStructuresInfinite, useProgramFeeLines } from '@/hooks/academic/useProgramFeeStructure'
+import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Toggle between UGX and USD.
@@ -277,7 +281,17 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // SearchSelect below; previously had no value/onChange at all, so picking
   // an option did nothing. Reset whenever the active structure changes so a
   // stale source selection never lingers on a different structure.
+  // Value is "local:<id>" for a structure open in this modal, or
+  // "saved:<feeHdGuid>" for an existing fee structure from any programme
+  // (same Copy Fee Code reach as the Fee Structure page's own modal).
   const [copySourceId, setCopySourceId] = useState('')
+  // Index of the semester awaiting delete confirmation (Step 2), or null.
+  const [semToRemove, setSemToRemove] = useState<number | null>(null)
+  const [copySearch, setCopySearch] = useState('')
+  const [committedCopySearch, setCommittedCopySearch] = useState('')
+  const [copyPickerOpen, setCopyPickerOpen] = useState(false)
+  // Guards the saved-source copy effect against re-applying the same pick.
+  const appliedCopyRef = useRef<string | null>(null)
   // Guards the fullDetails prefill effect below against running more than
   // once per open-session for a given programme. Neither
   // useProgramMasterFullDetails nor useProgramCourseUnits overrides the
@@ -331,6 +345,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const [committedCurrencySearch, setCommittedCurrencySearch] = useState('')
   const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false)
   const [facultyGuid, setFacultyGuid] = useState('')
+  const [facultyLabel, setFacultyLabel] = useState('')
   const [appFee, setAppFee] = useState('')
   const [lateFee, setLateFee] = useState('')
   // Confirmed per program_master_frontend_fixes.md: Create wants a real
@@ -436,25 +451,24 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const selectedProgramLevel = programLevels.find(p => p.programLevelGuid === programLevelGuid)
   const programGroupOptions = programGroups.map(g => ({ value: g.programGroupGuid, label: `${g.groupCode} — ${g.groupName}` }))
 
-  // facultyGuid itself is still submitted on save (carried through from
-  // fullDetails in Edit mode — see the prefill effect below), but this modal
-  // has no actual Faculty picker in its UI (Step 1 never renders one), so
-  // there's nothing here to feed a facultyOptions dropdown — useFaculties()'s
-  // full list used to be fetched unconditionally (later gated to isOpen) for
-  // no reason at all. Dropped entirely per "no need to fallback" — see the
-  // same call this session already removed from Payment Console.
+  // Faculty picker (Step 1) — optional, per post-program-master.md
+  // (facultyGuid: guid?). The label comes from the pick itself, or in Edit
+  // from full-details' schoolName; when that's missing the faculty is looked
+  // up by guid so the picker never shows a bare placeholder for a real value.
+  const facultyLookup = useFacultiesByGuids(facultyGuid && !facultyLabel ? [facultyGuid] : [])
+  const facultyDisplay = facultyLabel || facultyLookup.get(facultyGuid)?.facultyName || null
 
   const currencies = useMemo(
     () => flattenUniquePages(currencyQuery.data?.pages ?? [], c => String(c.intCurrency)),
     [currencyQuery.data],
   )
   // Lec/Cec/Acec (Lateral Entry/Credit Exemption/Aptech Credit Exemption Fee
-  // Currency) still take Currency.intCurrency (a number) — those are NOT
-  // confirmed to have switched to guids the way the top-level programme
-  // Currency and FeeLines[].CurrencyGuid did (see the FeeStructureUpdateInput
-  // comment in lib/api/academic/programMaster.ts), so this is only used for
-  // those three fields now, not the top-level Step 1 Currency picker below.
-  const currencyIntOptions = currencies.map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` }))
+  // Currency) carry the currency's GUID. GET /finance/currencies no longer
+  // returns intCurrency, so keying by it collapsed every currency into one
+  // (only UGX showed). Used only for those three fields.
+  const currencyGuidOptions = flattenUniquePages(currencyQuery.data?.pages ?? [], c => c.currencyGuid ?? '')
+    .filter(c => c.currencyGuid)
+    .map(c => ({ value: c.currencyGuid as string, label: `${c.currencyCode} — ${c.currencyName}` }))
 
   // Update wants a real currencyGuid, confirmed via the "three currency guid
   // spaces" gotcha elsewhere in this app — useFinanceCurrencies() carries the
@@ -471,6 +485,106 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     financeCurrencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` })),
     item => ({ guid: item.currencyGuid, name: item.currencyName }),
   )
+
+  // ── Copy Fee Code from an existing (saved) fee structure, any programme ──
+  // Same reach as the Fee Structure page's modal. Fee lines are keyed by the
+  // source programme's semesterGuids, so each is re-homed onto this
+  // programme's semester slot with the same name ("Year One - Semester
+  // One"), falling back to the same position; lines with no slot here are
+  // skipped and the toast says so.
+  useEffect(() => {
+    const t = setTimeout(() => setCommittedCopySearch(copySearch.trim()), 300)
+    return () => clearTimeout(t)
+  }, [copySearch])
+  const savedFeeQuery = useSearchProgramFeeStructuresInfinite(committedCopySearch, 20, isOpen && step === 3 && copyPickerOpen)
+  const savedFeeStructures = useMemo(() => flattenUniquePages(savedFeeQuery.data?.pages ?? [], f => f.feeHdGuid), [savedFeeQuery.data])
+  const savedCopyGuid = copySourceId.startsWith('saved:') ? copySourceId.slice(6) : ''
+  const savedCopySource = savedFeeStructures.find(f => f.feeHdGuid === savedCopyGuid)
+  const { data: savedCopyLines, isLoading: savedCopyLinesLoading } = useProgramFeeLines(savedCopyGuid || null, !!savedCopyGuid)
+  const { data: savedCopySemesters, isLoading: savedCopySemestersLoading } = useSemestersForProgram(savedCopySource?.programGuid ?? null, !!savedCopySource)
+  const isCopyLoading = !!savedCopyGuid && (savedCopyLinesLoading || savedCopySemestersLoading)
+
+  useEffect(() => {
+    // Cleared (structure switched) — forget the last pick so re-picking it applies again.
+    if (!savedCopyGuid) { appliedCopyRef.current = null; return }
+    if (!savedCopySource || !savedCopyLines || !savedCopySemesters) return
+    if (appliedCopyRef.current === savedCopyGuid) return
+    appliedCopyRef.current = savedCopyGuid
+
+    const norm = (s: string) => s.trim().toLowerCase()
+    const targetByName = new Map(semLabels.map((label, i) => [norm(label), i]))
+    const semFees: SemFees = semLabels.map(() => [])
+    let dropped = 0
+    ;[...savedCopyLines].sort((a, b) => a.ledgerNum - b.ledgerNum).forEach(l => {
+      const srcIdx = savedCopySemesters.findIndex(s => s.semesterGuid === l.semesterGuid)
+      const byName = srcIdx >= 0 ? targetByName.get(norm(savedCopySemesters[srcIdx].semName)) : undefined
+      const si = byName ?? (srcIdx >= 0 && srcIdx < semLabels.length ? srcIdx : -1)
+      if (si < 0) { dropped++; return }
+      semFees[si].push({
+        id: nextId++, amount: String(l.amount), currency: '', currencyGuid: l.currencyGuid,
+        currencyName: l.currencyName ?? undefined, ledger: l.ledgerGuid, ledgerName: l.ledgerName ?? undefined,
+      })
+    })
+
+    const src = savedCopySource
+    setFeeStructures(prev => prev.map((s, i) => i !== activeFeeIdx ? s : {
+      ...s,
+      localOrForeign: String(!!src.localOrForeign),
+      discountType: String(src.calcType ?? 1),
+      discountAmount: src.amtPer != null ? String(src.amtPer) : '',
+      lateralEntryFee: src.lef != null ? String(src.lef) : '',
+      lateralEntryFeeCurrency: src.lec ?? '',
+      creditExemptionFee: src.cef != null ? String(src.cef) : '',
+      creditExemptionFeeCurrency: src.cec ?? '',
+      aptechCreditExemptionFee: src.ace != null ? String(src.ace) : '',
+      aptechCreditExemptionFeeCurrency: src.acec ?? '',
+      semFees,
+    }))
+    const code = src.feeCode.trim()
+    showToast(
+      dropped > 0
+        ? `Copied fees from ${code} — ${dropped} fee ${dropped === 1 ? 'line was' : 'lines were'} skipped (no matching semester in this programme)`
+        : `Copied fees from ${code}`,
+      dropped > 0 ? 'warning' : 'info',
+    )
+  }, [savedCopyGuid, savedCopySource, savedCopyLines, savedCopySemesters, semLabels, activeFeeIdx, showToast])
+
+  // New structures start with the shared Lateral Entry/Credit Exemption/
+  // Aptech currency on their Base Currency once the currency list has
+  // loaded (Create only — in Edit an empty value is the saved state and
+  // shouldn't be filled in silently). See updateBaseCurrency.
+  useEffect(() => {
+    if (!isOpen || mode === 'edit' || financeCurrencies.length === 0) return
+    setFeeStructures(prev => {
+      let changed = false
+      const next = prev.map(s => {
+        if (s.lateralEntryFeeCurrency || s.creditExemptionFeeCurrency || s.aptechCreditExemptionFeeCurrency) return s
+        const { guid } = defaultFeeItemCurrency(s.localOrForeign)
+        if (!guid) return s
+        changed = true
+        return { ...s, lateralEntryFeeCurrency: guid, creditExemptionFeeCurrency: guid, aptechCreditExemptionFeeCurrency: guid }
+      })
+      return changed ? next : prev
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, mode, financeCurrencies, feeStructures.length])
+
+  // Structures open in this modal first, then saved ones from any programme.
+  // A saved structure already open here (Edit) is only listed once, as its
+  // live local copy.
+  const openFeeHdGuids = new Set(feeStructures.map(s => s.feeHdGuid).filter(Boolean))
+  const copySourceOptions = [
+    ...feeStructures.map((s, i) => ({
+      value: `local:${s.id}`,
+      label: (s.feeCode || 'New Fee Structure') + (i === activeFeeIdx ? ' (Current)' : ' (this programme)'),
+    })),
+    ...savedFeeStructures
+      .filter(f => !openFeeHdGuids.has(f.feeHdGuid))
+      .map(f => ({
+        value: `saved:${f.feeHdGuid}`,
+        label: f.feeDesc?.trim() ? `${f.feeCode.trim()} — ${f.feeDesc.trim()}` : f.feeCode.trim(),
+      })),
+  ]
 
   // Specialization(s) is now StreamMultiSearchPicker's own infinite-scroll
   // search (2026-09-10) instead of a MultiSelect fed by useStreams(isOpen)'s
@@ -670,7 +784,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setProgramGroupLabel(fullDetails.programGroupName ?? '')
     setProgramLevelGuid(fullDetails.programLevelGuid)
     setProgramLevelLabel(fullDetails.programLevelName ?? '')
-    setFacultyGuid(fullDetails.facultyGuid)
+    setFacultyGuid(fullDetails.facultyGuid ?? '')
+    setFacultyLabel(fullDetails.schoolName ?? '')
     // Confirmed live (2026-09-07) that full-details DOES return a real
     // currencyGuid — overrides whatever the initialCurrencyGuid-driven
     // effect above set from the (often-null) list row the moment this
@@ -851,7 +966,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // prefill effect, once its setState calls have landed; taking it inside the
   // effect would read the old, blank values.
   const step1Snapshot = JSON.stringify([
-    programCode.trim(), programName.trim(), pgmStatus, noIa, programGroupGuid, programLevelGuid,
+    programCode.trim(), programName.trim(), pgmStatus, noIa, programGroupGuid, programLevelGuid, facultyGuid,
     currencyGuid, unitCount, appFee, lateFee, [...streamGuids].sort(), intakeGuid, !!accLetterFile,
   ])
   const step2Snapshot = JSON.stringify(semUnits.map(us => us.map(u => [u.guid, u.streamGuid, u.unitType, u.unitCat])))
@@ -1172,9 +1287,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             lef: s.lateralEntryFee ? +s.lateralEntryFee : null,
             cef: s.creditExemptionFee ? +s.creditExemptionFee : null,
             ace: s.aptechCreditExemptionFee ? +s.aptechCreditExemptionFee : null,
-            lec: s.lateralEntryFeeCurrency ? +s.lateralEntryFeeCurrency : null,
-            cec: s.creditExemptionFeeCurrency ? +s.creditExemptionFeeCurrency : null,
-            acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
+            lec: s.lateralEntryFeeCurrency || null,
+            cec: s.creditExemptionFeeCurrency || null,
+            acec: s.aptechCreditExemptionFeeCurrency || null,
             intakeGuid: s.intakeGuid || null,
             feeLines,
           }
@@ -1189,9 +1304,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             lef: s.lateralEntryFee ? +s.lateralEntryFee : null,
             cef: s.creditExemptionFee ? +s.creditExemptionFee : null,
             ace: s.aptechCreditExemptionFee ? +s.aptechCreditExemptionFee : null,
-            lec: s.lateralEntryFeeCurrency ? +s.lateralEntryFeeCurrency : null,
-            cec: s.creditExemptionFeeCurrency ? +s.creditExemptionFeeCurrency : null,
-            acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
+            lec: s.lateralEntryFeeCurrency || null,
+            cec: s.creditExemptionFeeCurrency || null,
+            acec: s.aptechCreditExemptionFeeCurrency || null,
             calcType: +s.discountType || 1,
             amtPer: s.discountAmount ? +s.discountAmount : null,
             intakeGuid: s.intakeGuid || null,
@@ -1340,7 +1455,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setSemLabels(['Semester 1'])
     setSemGuids([])
     setProgramCode(''); setProgramName(''); setProgramGroupGuid(''); setProgramLevelGuid('')
-    setFacultyGuid(''); setAppFee(''); setLateFee(''); setCurrencyGuid(''); setUnitCount('')
+    setFacultyGuid(''); setFacultyLabel(''); setAppFee(''); setLateFee(''); setCurrencyGuid(''); setUnitCount('')
     setDateAcc(''); setStreamGuids([])
     setIntakeGuid(''); setPgmStatus(true); setNoIa(false); setAccLetterFile(null); setStep1Errors({})
     setCreatedProgramGuid(null); setCreatedSemesters([]); setUnitsSubmitted(false)
@@ -1383,9 +1498,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         lef: s.lateralEntryFee ? +s.lateralEntryFee : null,
         cef: s.creditExemptionFee ? +s.creditExemptionFee : null,
         ace: s.aptechCreditExemptionFee ? +s.aptechCreditExemptionFee : null,
-        lec: s.lateralEntryFeeCurrency ? +s.lateralEntryFeeCurrency : null,
-        cec: s.creditExemptionFeeCurrency ? +s.creditExemptionFeeCurrency : null,
-        acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
+        lec: s.lateralEntryFeeCurrency || null,
+        cec: s.creditExemptionFeeCurrency || null,
+        acec: s.aptechCreditExemptionFeeCurrency || null,
         calcType: +s.discountType || 1,
         amtPer: s.discountAmount ? +s.discountAmount : null,
         intakeGuid: s.intakeGuid || null,
@@ -1466,9 +1581,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       lef: s.lateralEntryFee ? +s.lateralEntryFee : null,
       cef: s.creditExemptionFee ? +s.creditExemptionFee : null,
       ace: s.aptechCreditExemptionFee ? +s.aptechCreditExemptionFee : null,
-      lec: s.lateralEntryFeeCurrency ? +s.lateralEntryFeeCurrency : null,
-      cec: s.creditExemptionFeeCurrency ? +s.creditExemptionFeeCurrency : null,
-      acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
+      lec: s.lateralEntryFeeCurrency || null,
+      cec: s.creditExemptionFeeCurrency || null,
+      acec: s.aptechCreditExemptionFeeCurrency || null,
       calcType: +s.discountType || 1,
       amtPer: s.discountAmount ? +s.discountAmount : null,
       intakeGuid: s.intakeGuid || null,
@@ -1541,9 +1656,13 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // — Fee Code/Description are deliberately left untouched so the copy
   // never collides with the source's own code. Fee lines are deep-cloned
   // with fresh local ids so editing the copy never mutates the source.
+  // A "saved:" pick (an existing structure from any programme) is applied
+  // by the effect further up once its fee lines have loaded.
   function copyFeeStructure(sourceId: string) {
     setCopySourceId(sourceId)
-    const source = feeStructures.find(s => String(s.id) === sourceId)
+    appliedCopyRef.current = null
+    if (!sourceId.startsWith('local:')) return
+    const source = feeStructures.find(s => `local:${s.id}` === sourceId)
     if (!source) return
     setFeeStructures(prev => prev.map((s, i) => i !== activeFeeIdx ? s : {
       ...s,
@@ -1563,6 +1682,31 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
   function updateFeeStructureMeta(field: Exclude<keyof FeeStructure, 'id' | 'semFees'>, val: string) {
     setFeeStructures(prev => prev.map((s, i) => i === activeFeeIdx ? { ...s, [field]: val } : s))
+  }
+
+  // Base Currency (Local → UGX, Foreign → USD, same mapping as
+  // defaultFeeItemCurrency) drives the other currency fields' defaults: the
+  // shared Lateral Entry/Credit Exemption/Aptech currency and every fee
+  // line's currency. Changing it moves each field that's still empty or still
+  // on the old base over to the new one; anything picked by hand stays put.
+  function updateBaseCurrency(localOrForeign: string) {
+    setFeeStructures(prev => prev.map((s, i) => {
+      if (i !== activeFeeIdx) return s
+      const oldBase = defaultFeeItemCurrency(s.localOrForeign)
+      const newBase = defaultFeeItemCurrency(localOrForeign)
+      const follow = (g: string) => (!g || g === oldBase.guid) && newBase.guid ? newBase.guid : g
+      return {
+        ...s,
+        localOrForeign,
+        lateralEntryFeeCurrency: follow(s.lateralEntryFeeCurrency),
+        creditExemptionFeeCurrency: follow(s.creditExemptionFeeCurrency),
+        aptechCreditExemptionFeeCurrency: follow(s.aptechCreditExemptionFeeCurrency),
+        semFees: s.semFees.map(items => items.map(f => {
+          const guid = follow(f.currencyGuid)
+          return guid === f.currencyGuid ? f : { ...f, currencyGuid: guid, currency: newBase.legacy || f.currency, currencyName: undefined }
+        })),
+      }
+    }))
   }
 
   // Lateral Entry/Credit Exemption/Aptech Credit Exemption Fee each kept
@@ -1688,8 +1832,21 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setFeeStructures(prev => prev.map(s => ({ ...s, semFees: [...s.semFees, []] })))
     setActiveAcc(semUnits.length)
   }
+  // Only the last semester can be removed. Semesters are saved by position
+  // (semCode = index + 1), so removing one from the start or middle left the
+  // rest mislabelled (e.g. "Semester 2" saved as the first semester). Every
+  // semester keeps its delete icon; clicking one that isn't last explains
+  // why instead, and the last one asks for confirmation first.
+  function requestRemoveSemester(index: number) {
+    const last = semUnits.length - 1
+    if (index !== last) {
+      showToast(`Remove ${semLabels[last] ?? `Semester ${last + 1}`} first — semesters can only be removed from the end.`, 'warning')
+      return
+    }
+    setSemToRemove(index)
+  }
   function removeSemester(index: number) {
-    if (semUnits.length <= 1) return
+    if (semUnits.length <= 1 || index !== semUnits.length - 1) return
     setSemUnits(prev => prev.filter((_, i) => i !== index))
     setSemLabels(prev => prev.filter((_, i) => i !== index))
     setSemGuids(prev => prev.filter((_, i) => i !== index))
@@ -1703,7 +1860,18 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // the full {value, code, name, credits} row it matched, not just a guid)
   // — there's no preloaded courseUnitOptions array to look it back up in any
   // more, see CourseUnitSearchPicker's own comment for why.
+  // Semesters fill in order: course units can't be added to a semester while
+  // an earlier one has none (e.g. Semester 1 deleted/emptied, then units
+  // added to Semester 2). Returns the first such earlier semester, or -1.
+  function firstEmptySemesterBefore(si: number): number {
+    return semUnits.slice(0, si).findIndex(units => units.length === 0)
+  }
   function addUnit(si: number, opt: CourseUnitPickOption) {
+    const gap = firstEmptySemesterBefore(si)
+    if (gap >= 0) {
+      showToast(`Add course units to ${semLabels[gap] ?? `Semester ${gap + 1}`} first — semesters must be filled in order.`, 'error')
+      return
+    }
     setSemUnits(prev => prev.map((units, i) =>
       i === si ? [...units, { id: nextCUId++, guid: opt.value, code: opt.code, name: opt.name, credits: opt.credits, unitType: '', unitCat: '', streamGuid: '' }] : units
     ))
@@ -1972,6 +2140,16 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                 </div>
 
                 <div className="fg">
+                  <div className="lbl">Faculty</div>
+                  <FacultySearchPicker
+                    placeholder="— Select faculty —"
+                    selectedLabel={facultyDisplay}
+                    onSelect={f => { setFacultyGuid(f.facultyGuid); setFacultyLabel(f.facultyName) }}
+                    onClear={() => { setFacultyGuid(''); setFacultyLabel('') }}
+                  />
+                </div>
+
+                <div className="fg">
                   <div className="lbl">Status <span className="req">*</span></div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 14, height: 38 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
@@ -1997,7 +2175,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   </div>
                 </div>
 
-                <div className="fg span2">
+                <div className="fg">
                   <div className="lbl">Internal Assessment</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, userSelect: 'none' }}>
@@ -2081,7 +2259,21 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
           {/* ── Step 3: Semester-wise Fee Structure ────────────── */}
           {step === 3 && (
-            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', position: 'relative' }} aria-busy={isCopyLoading || undefined}>
+              {/* Same overlay as the Fee Structure modal: covers the form while
+                  a saved Copy Fee Code source's fees load, so nothing is
+                  edited and then overwritten when the copy lands. */}
+              {isCopyLoading && (
+                <div className="fsm-loading-overlay" role="status">
+                  <div className="fsm-loading-card">
+                    <i className="lni lni-spinner-arrow spin" aria-hidden="true" />
+                    <div>
+                      <strong>Fetching fees from {savedCopySource?.feeCode.trim() ?? 'the selected fee code'}…</strong>
+                      <small>Matching them to this programme’s semesters</small>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Left fee structure list */}
               <div style={{ width: 210, flexShrink: 0, background: 'var(--surface)', border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', overflow: 'hidden', position: 'sticky', top: 0, display: 'flex', flexDirection: 'column', maxHeight: 480 }}>
@@ -2159,15 +2351,18 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                       placeholder="— Select source structure —"
                       value={copySourceId}
                       onChange={copyFeeStructure}
-                      options={feeStructures.map((s, i) => ({
-                        value: String(s.id),
-                        label: (s.feeCode || 'New Fee Structure') + (i === activeFeeIdx ? ' (Current)' : ''),
-                      }))}
+                      options={copySourceOptions}
+                      onSearch={setCopySearch}
+                      onOpenChange={setCopyPickerOpen}
+                      isLoading={savedFeeQuery.isLoading}
+                      hasNextPage={savedFeeQuery.hasNextPage}
+                      isFetchingNextPage={savedFeeQuery.isFetchingNextPage}
+                      onLoadMore={() => savedFeeQuery.fetchNextPage()}
                     />
                   </div>
                   <div className="fg m-0">
                     <div className="lbl">Base Currency</div>
-                    <SearchSelect options={LOCAL_OR_FOREIGN_OPTS} value={activeFeeStruct.localOrForeign} onChange={val => updateFeeStructureMeta('localOrForeign', val)} />
+                    <SearchSelect options={LOCAL_OR_FOREIGN_OPTS} value={activeFeeStruct.localOrForeign} onChange={updateBaseCurrency} />
                   </div>
                   {/* Read-only in Edit (existing intake, unchangeable) and in Create once
                       auto-filled from the Current Academic Intake (Fee_Structure_Change_
@@ -2250,7 +2445,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                       <div className="lbl">Currency <span className="text-g400 font-normal normal-case">(Lateral Entry / Credit Exemption / Aptech Credit Exemption)</span></div>
                       <SearchSelect
                         placeholder="Currency"
-                        options={currencyIntOptions}
+                        options={currencyGuidOptions}
                         value={activeFeeStruct.lateralEntryFeeCurrency}
                         onChange={updateSharedFeeCurrency}
                         onSearch={setCurrencySearch}
@@ -2421,9 +2616,10 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                         {semUnits.length > 1 && (
                           <button
                             type="button"
-                            onClick={e => { e.stopPropagation(); removeSemester(i) }}
+                            onClick={e => { e.stopPropagation(); requestRemoveSemester(i) }}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: activeAcc === i ? 'rgba(255,255,255,.65)' : 'var(--g300)', display: 'flex', alignItems: 'center', borderRadius: 'var(--rxs)', flexShrink: 0 }}
-                            title="Remove semester"
+                            title={i === semUnits.length - 1 ? 'Remove semester' : 'Only the last semester can be removed'}
+                            aria-label={`Remove ${semLabels[i] ?? `Semester ${i + 1}`}`}
                           ><i className="lni lni-trash-can" style={{ fontSize: 12 }}></i></button>
                         )}
                       </div>
@@ -2505,11 +2701,28 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     })}
                   </div>
                 )}
-                <CourseUnitSearchPicker
-                  placeholder="Search course units to add…"
-                  excludeCodes={assignedCodes}
-                  onSelect={opt => addUnit(si, opt)}
-                />
+                {(() => {
+                  const gap = firstEmptySemesterBefore(si)
+                  const gapLabel = semLabels[gap] ?? `Semester ${gap + 1}`
+                  return (
+                    <>
+                      {gap >= 0 && (
+                        <div className="warn-box mb-2" role="alert">
+                          <i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0 }} />
+                          <div style={{ fontSize: 12.5 }}>
+                            <strong>{gapLabel}</strong> has no course units. Add units to it first — semesters must be filled in order.
+                          </div>
+                        </div>
+                      )}
+                      <CourseUnitSearchPicker
+                        placeholder={gap >= 0 ? `Add units to ${gapLabel} first` : 'Search course units to add…'}
+                        excludeCodes={assignedCodes}
+                        onSelect={opt => addUnit(si, opt)}
+                        disabled={gap >= 0}
+                      />
+                    </>
+                  )
+                })()}
               </div>
             </div>
             </>
@@ -2669,6 +2882,40 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   </div>
                 )
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove-semester confirmation — only reached for the last semester
+          (requestRemoveSemester shows a message for any other). */}
+      {semToRemove !== null && (
+        <div className="modal-overlay open" role="alertdialog" aria-modal="true" aria-labelledby="remove-sem-title">
+          <div className="modal" style={{ maxWidth: 420 }}>
+            <div className="modal-hdr">
+              <div id="remove-sem-title" className="modal-title"><i className="lni lni-trash-can" style={{ color: 'var(--red)' }}></i> Remove {semLabels[semToRemove] ?? `Semester ${semToRemove + 1}`}?</div>
+              <button type="button" className="modal-close" onClick={() => setSemToRemove(null)} aria-label="Close"><i className="lni lni-close"></i></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 13, color: 'var(--g700)', margin: 0 }}>
+                {(() => {
+                  const units = semUnits[semToRemove]?.length ?? 0
+                  const fees = feeStructures.reduce((n, s) => n + (s.semFees[semToRemove]?.length ?? 0), 0)
+                  const parts = [
+                    units > 0 && `${units} course unit${units === 1 ? '' : 's'}`,
+                    fees > 0 && `${fees} fee line${fees === 1 ? '' : 's'}`,
+                  ].filter(Boolean)
+                  return parts.length
+                    ? `This also removes its ${parts.join(' and ')}. This can't be undone.`
+                    : 'This semester has no course units or fees.'
+                })()}
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-neu" onClick={() => setSemToRemove(null)}>Cancel</button>
+              <button type="button" className="btn btn-danger" onClick={() => { removeSemester(semToRemove); setSemToRemove(null) }}>
+                <i className="lni lni-trash-can"></i> Remove
+              </button>
             </div>
           </div>
         </div>

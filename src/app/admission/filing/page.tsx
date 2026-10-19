@@ -4,8 +4,6 @@ import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
-import { openPdfInNewTab } from '@/lib/openPdf'
-import { getApplicationPaymentReceiptPdf, hasPrintableReceipt } from '@/lib/api/admission/applicationPayment'
 import { FailurePopup } from '@/components/modals/shared/FailurePopup'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
 import { useProgramMaster, useProgramMasterByGuid, useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
@@ -13,6 +11,7 @@ import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
 import { useBatch, useBatches } from '@/hooks/academic/useBatches'
 import { useCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
+import { findDefaultCountry } from '@/lib/api/academic/country'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput, sanitizeNameInput } from '@/lib/errorMessages'
@@ -55,8 +54,13 @@ const TABS: { id: Tab; label: string; icon: string; desc: string }[] = [
 const COUNTRIES_OF_ISSUE = ['Ugandan', 'Kenyan', 'Tanzanian', 'Rwandan', 'Burundian', 'South Sudanese', 'Congolese', 'Other']
 const RELIGIONS      = ['Christian', 'Muslim', 'Hindu', 'Buddhist', 'Other']
 const MARITAL        = ['Single', 'Married', 'Divorced', 'Widowed']
-// The API's gender field is a byte with only two values (0 = Female, 1 = Male) — no third option to encode.
-const GENDERS        = ['Male', 'Female']
+// The backend's gender codes: 0 = Male, 1 = Female, 2 = Other — the same
+// enum the enquiry forms use (GET /admissions/enums/genders). This list was
+// once 0 = Female / 1 = Male, which saved every applicant with the opposite
+// gender and made Vetting show it swapped.
+const GENDERS        = ['Male', 'Female', 'Other']
+const genderFromCode = (g: number | null | undefined) => (g != null && GENDERS[g]) || ''
+const genderToCode = (label: string) => { const i = GENDERS.indexOf(label); return i === -1 ? null : i }
 const SPONSOR_TYPES  = ['Self', 'Parent/Guardian', 'Government', 'Organization', 'Other']
 const COUNTRY_CODES  = [
   { value: '+256', label: '+256 · Uganda' },
@@ -365,7 +369,7 @@ export default function FilingPage() {
     }
     setFirstName(fName)
     setLastName(lName)
-    setGender(a.gender === 1 ? 'Male' : a.gender === 0 ? 'Female' : '')
+    setGender(genderFromCode(a.gender))
     setDob(a.dob ? a.dob.slice(0, 10) : '')
     setCountryGuid(a.countryGuid ?? '')
     setNationalId(a.nationalId ?? '')
@@ -543,15 +547,10 @@ export default function FilingPage() {
   }, [countries, countrySearchResults])
 
   // Passport/Visa/Refugee sections only apply to non-home-country nationals.
-  // Compares against the ONE home country (defaultCountry == 1) instead of
-  // reading the picked country's own flag as truthy: a flag that comes back
-  // as "0" (string) is truthy, which made every nationality look like home
-  // and kept these sections locked. Number() accepts 1 or "1"; Uganda by
-  // code/name is the fallback if no country is flagged.
-  const homeCountryGuid = (
-    countries.find(c => Number(c.defaultCountry) === 1)
-    ?? countries.find(c => c.countryCode?.toUpperCase() === 'UGA' || c.countryName?.trim().toLowerCase() === 'uganda')
-  )?.countryGuid
+  // findDefaultCountry, not "first flagged": the live master flags BOTH
+  // Equatorial Guinea and Uganda as default (EG first), which made Uganda
+  // look foreign and Equatorial Guinea look like home.
+  const homeCountryGuid = findDefaultCountry(countries)?.countryGuid
   const isForeign = countryGuid !== '' && !!homeCountryGuid && countryGuid !== homeCountryGuid
 
   // Per the requirements doc (req. 8): entering any Passport or Visa detail
@@ -564,6 +563,11 @@ export default function FilingPage() {
     if (!hasPassportOrVisa) return
     setIsRefugee(false); setRefugeeId(''); setRefugeeFile(null)
   }, [hasPassportOrVisa])
+
+  // Passport and visa are mandatory for non-Ugandan applicants — except
+  // refugees, who record Refugee Details instead (the two are mutually
+  // exclusive above, so requiring both would make a refugee unsaveable).
+  const passportVisaRequired = isForeign && !isRefugee
 
   // ── Sponsor (Family tab fields that actually map to the API) ────────────
   const [spName, setSpName] = useState('')
@@ -658,7 +662,7 @@ export default function FilingPage() {
       // by-payment can send only genderLabel ("Female"/"Male") with no
       // numeric gender — fall back to the label so the field isn't left blank.
       const genderFromLabel = GENDERS.find(g => g.toLowerCase() === (applicationDetail.genderLabel ?? '').trim().toLowerCase())
-      if (!gender && applicationDetail.gender != null) setGender(applicationDetail.gender === 1 ? 'Male' : 'Female')
+      if (!gender && applicationDetail.gender != null) setGender(genderFromCode(applicationDetail.gender))
       else if (!gender && genderFromLabel) setGender(genderFromLabel)
       if (!countryGuid && orNull(applicationDetail.countryGuid)) setCountryGuid(applicationDetail.countryGuid as string)
       if (!nationalId && orNull(applicationDetail.nationalId)) setNationalId(applicationDetail.nationalId as string)
@@ -743,6 +747,14 @@ export default function FilingPage() {
     // The pickers already block an out-of-order pair, but dates prefilled
     // from an earlier record can still arrive that way.
     if (vStartDate && vEndDate && vStartDate > vEndDate) e.vEndDate = 'Visa expiry can’t be before the visa start date'
+    // A copy already saved on the application counts — re-uploading isn't required.
+    if (passportVisaRequired) {
+      if (!passportNo.trim()) e.passportNo = 'Passport Number is required'
+      if (!passportFile && !selectedApplication?.passUserFileName) e.passportFile = 'Passport Copy is required'
+      if (!vStartDate) e.vStartDate = 'Visa Start Date is required'
+      if (!vEndDate) e.vEndDate ??= 'Visa Expiry is required'
+      if (!visaFile && !selectedApplication?.visaUserFileName) e.visaFile = 'Visa Copy is required'
+    }
     // API: refugeeId required when refugee = 1.
     if (isRefugee && !refugeeId.trim()) e.refugeeId = 'Refugee ID is required when refugee status is selected.'
     setGeneralErrors(e)
@@ -761,7 +773,7 @@ export default function FilingPage() {
         dob: dob || null,
         firstName: firstName.trim() || null,
         lastName: lastName.trim() || null,
-        gender: gender === 'Male' ? 1 : gender === 'Female' ? 0 : null,
+        gender: genderToCode(gender),
         countryGuid: countryGuid || null,
         phone: phone.trim() || null,
         nationalId: nationalId.trim() || null,
@@ -1093,27 +1105,6 @@ export default function FilingPage() {
     })
   }
 
-  // After submitting: print the application payment receipt
-  // (get-application-payment-receipt.md). selectedApplication.applicationGuid
-  // is the payment's paymentGuid (see mapApplicationPaymentToSearchResult).
-  const canPrintReceipt = !!selectedApplication?.applicationGuid && selectedApplication.receiptNo !== undefined
-    && hasPrintableReceipt({ exemptionType: selectedApplication.exemptionType, receiptNo: selectedApplication.receiptNo })
-  const [printingReceipt, setPrintingReceipt] = useState(false)
-  const [receiptError, setReceiptError] = useState<string | null>(null)
-  async function printFilingReceipt() {
-    if (!selectedApplication || printingReceipt) return
-    setPrintingReceipt(true)
-    setReceiptError(null)
-    const paymentGuid = selectedApplication.applicationGuid
-    try {
-      await openPdfInNewTab(() => getApplicationPaymentReceiptPdf(paymentGuid), `Receipt_${selectedApplication.receiptNo ?? paymentGuid}.pdf`)
-    } catch (err) {
-      setReceiptError(err instanceof Error && err.message ? err.message : 'Could not load the receipt.')
-    } finally {
-      setPrintingReceipt(false)
-    }
-  }
-
   // Left-side identity panel shared by all three stages (Personal Info,
   // Qualifications, Documents) — a single definition rather than
   // duplicating the same avatar/name/facts/progress markup three times.
@@ -1421,16 +1412,23 @@ export default function FilingPage() {
                             separate 3-col Visa row — uneven, and the odd
                             column count out of step with the rest of the
                             form's own g3 rows). */}
+                        {passportVisaRequired && (
+                          <p className="text-g400 mt-2" style={{ fontSize: 'var(--fs-xs)' }}>Required for non-Ugandan applicants. Refugees: leave these empty and fill in Refugee Details below instead.</p>
+                        )}
                         <div className="g3 mt-3">
-                          <Field label="Passport Number"><Input placeholder="AB1234567" value={passportNo} onChange={setPassportNo} /></Field>
-                          <Field label="Passport Copy"><FileZone file={passportFile} onChange={setPassportFile} /></Field>
+                          <Field label="Passport Number" req={passportVisaRequired} error={generalErrors.passportNo}>
+                            <Input placeholder="AB1234567" value={passportNo} onChange={v => { setPassportNo(v); setGeneralErrors(p => ({ ...p, passportNo: '' })) }} hasError={!!generalErrors.passportNo} />
+                          </Field>
+                          <Field label="Passport Copy" req={passportVisaRequired} error={generalErrors.passportFile}>
+                            <FileZone file={passportFile} onChange={f => { setPassportFile(f); setGeneralErrors(p => ({ ...p, passportFile: '' })) }} hasError={!!generalErrors.passportFile} />
+                          </Field>
                           {/* <Field label="Passport Expiry"><Input type="date" /></Field><Field label="Country of Issue"><Select options={COUNTRIES_OF_ISSUE} /></Field>
                           <Field label="Visa Number"><Input placeholder="VIS-XXXX" /></Field>
                           <Field label="Visa Type"><Select options={['Student', 'Work', 'Tourist', 'Diplomatic']} /></Field> */}
                           {/* Start can't be after expiry and expiry can't be before
                               start (same day is fine) — each picker is bounded by
                               the other's value. */}
-                          <Field label="Visa Start Date" error={generalErrors.vStartDate}>
+                          <Field label="Visa Start Date" req={passportVisaRequired} error={generalErrors.vStartDate}>
                             <Input
                               type="date"
                               value={vStartDate}
@@ -1440,7 +1438,7 @@ export default function FilingPage() {
                               hasError={!!generalErrors.vStartDate}
                             />
                           </Field>
-                          <Field label="Visa Expiry" error={generalErrors.vEndDate}>
+                          <Field label="Visa Expiry" req={passportVisaRequired} error={generalErrors.vEndDate}>
                             <Input
                               type="date"
                               value={vEndDate}
@@ -1450,7 +1448,9 @@ export default function FilingPage() {
                               hasError={!!generalErrors.vEndDate}
                             />
                           </Field>
-                          <Field label="Visa Copy"><FileZone file={visaFile} onChange={setVisaFile} /></Field>
+                          <Field label="Visa Copy" req={passportVisaRequired} error={generalErrors.visaFile}>
+                            <FileZone file={visaFile} onChange={f => { setVisaFile(f); setGeneralErrors(p => ({ ...p, visaFile: '' })) }} hasError={!!generalErrors.visaFile} />
+                          </Field>
                         </div>
                       </>
                     )}
@@ -1671,8 +1671,9 @@ export default function FilingPage() {
 
       <Toast toast={toast} />
 
-      {/* No auto-close (unlike SuccessPopup): the user needs time to print the
-          application payment receipt before moving on to Vetting. */}
+      {/* No auto-close (unlike SuccessPopup): the user moves on to Vetting
+          when ready. The application payment receipt isn't offered here — it's
+          already printed on the Application Payment page. */}
       {submitted && (
         <div className="modal-overlay open">
           <div className="modal" style={{ maxWidth: 420 }} role="dialog" aria-modal="true" aria-labelledby="filing-submitted-title">
@@ -1682,20 +1683,7 @@ export default function FilingPage() {
               <p className="text-g500 mt-1" style={{ fontSize: 13 }}>
                 {selectedApplication?.appRefNo ?? 'The application'} has been submitted for vetting.
               </p>
-              {receiptError && (
-                <div className="warn-box mt-4" role="alert" style={{ textAlign: 'left' }}>
-                  <i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0 }} />
-                  <div style={{ fontSize: 12.5 }}>{receiptError}</div>
-                </div>
-              )}
               <div className="flex gap-2 justify-center mt-5 flex-wrap">
-                {/* Normal payments with a receipt only — exemptions have none. */}
-                {canPrintReceipt && (
-                  <button className="btn btn-neu" disabled={printingReceipt} onClick={printFilingReceipt}>
-                    <i className={`lni ${printingReceipt ? 'lni-spinner-arrow spin' : receiptError ? 'lni-reload' : 'lni-printer'}`} />{' '}
-                    {printingReceipt ? 'Opening…' : receiptError ? 'Try again' : 'Print Receipt'}
-                  </button>
-                )}
                 <button className="btn btn-primary" onClick={() => router.push('/admission/vetting')}>
                   Continue to Vetting <i className="lni lni-arrow-right" />
                 </button>

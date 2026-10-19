@@ -14,9 +14,9 @@ export interface ProgramFeeStructureHeaderInput {
   lef: number | null
   cef: number | null
   ace: number | null
-  lec: number | null
-  cec: number | null
-  acec: number | null
+  lec: string | null
+  cec: string | null
+  acec: string | null
   calcType: number
   amtPer: number | null
   intakeGuid: string | null

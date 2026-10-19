@@ -115,7 +115,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   // lines themselves (see programFeeStructure.ts's ProgramFeeStructureHeader
   // note). Only enabled once something's actually been picked.
   const [copySourceId, setCopySourceId] = useState('')
-  const { data: copySourceLines } = useProgramFeeLines(copySourceId || null, !!copySourceId)
+  const { data: copySourceLines, isLoading: copyLinesLoading } = useProgramFeeLines(copySourceId || null, !!copySourceId)
   // Per Fee_Structure_Change_Requests.md #4 — Create no longer offers an
   // Intake dropdown at all, it's forced to whatever intake is currently
   // flagged current (the same "Current Academic Intake" hero-card filter
@@ -123,12 +123,13 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   const { data: currentAcademicIntake } = useCurrentAcademicIntake(isOpen)
 
   const programOptions = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
-  // Currency.intCurrency (a number) is what the header payload's Lec/Cec/Acec
-  // fields need — unconfirmed for save-complete specifically (the sample
-  // payload showed them all null), kept as-is to match the one confirmed
-  // header contract (ProgramFeeStructureHeaderInput) rather than guessed.
-  const currencyIntOptions = useMemo(
-    () => flattenUniquePages(currencyQuery.data?.pages ?? [], c => String(c.intCurrency)).map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` })),
+  // Lec/Cec/Acec carry the currency's GUID. GET /finance/currencies no longer
+  // returns intCurrency, so keying these options by it collapsed every
+  // currency into one (only UGX showed) and saved nothing usable.
+  const currencyGuidOptions = useMemo(
+    () => flattenUniquePages(currencyQuery.data?.pages ?? [], c => c.currencyGuid ?? '')
+      .filter(c => c.currencyGuid)
+      .map(c => ({ value: c.currencyGuid as string, label: `${c.currencyCode} — ${c.currencyName}` })),
     [currencyQuery.data],
   )
 
@@ -240,15 +241,44 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   // this effect happens to re-run for an unrelated reason.
   const appliedCopyRef = useRef<string | null>(null)
 
+  const active = structures[activeIdx]
+
+  // Copy Fee Code lists every fee structure, from any programme. A fee
+  // line's semesterGuid only exists within its own programme, so a
+  // cross-programme copy re-homes each line onto this programme's semester
+  // with the same name ("Year One - Semester One"), falling back to the same
+  // position in the list. Lines with no counterpart (the source has more
+  // semesters) are dropped and the toast says so.
+  const copySource = allFeeStructures.find(item => item.feeHdGuid === copySourceId)
+  const isCrossProgrammeCopy = !!copySource && copySource.programGuid !== active.programme
+  const { data: semesters = [], isSuccess: semestersLoaded, isLoading: semestersLoading } = useSemestersForProgram(active.programme, !!active.programme)
+  const { data: sourceSemesters = [], isSuccess: sourceSemestersLoaded, isLoading: sourceSemestersLoading } = useSemestersForProgram(copySource?.programGuid ?? null, isCrossProgrammeCopy)
+  // True from picking a Copy Fee Code until its fees are filled in below.
+  const isCopyLoading = !!copySourceId && (copyLinesLoading || (isCrossProgrammeCopy && sourceSemestersLoading))
+
   useEffect(() => {
     if (!copySourceId || !copySourceLines) return
     if (appliedCopyRef.current === copySourceId) return
-    appliedCopyRef.current = copySourceId
-    const source = allFeeStructures.find(item => item.feeHdGuid === copySourceId)
+    const source = copySource
     if (!source) return
+    if (isCrossProgrammeCopy && (!semestersLoaded || !sourceSemestersLoaded)) return
+    appliedCopyRef.current = copySourceId
+
+    const norm = (s: string) => s.trim().toLowerCase()
+    const targetByName = new Map(semesters.map(s => [norm(s.semName), s.semesterGuid]))
+    const mapSemester = (sourceSemGuid: string): string | undefined => {
+      if (!isCrossProgrammeCopy) return sourceSemGuid
+      const idx = sourceSemesters.findIndex(s => s.semesterGuid === sourceSemGuid)
+      if (idx === -1) return undefined
+      return targetByName.get(norm(sourceSemesters[idx].semName)) ?? semesters[idx]?.semesterGuid
+    }
+
     const semFees: SemFeesMap = {}
+    let dropped = 0
     copySourceLines.forEach(l => {
-      const list = semFees[l.semesterGuid] ?? (semFees[l.semesterGuid] = [])
+      const semGuid = mapSemester(l.semesterGuid)
+      if (!semGuid) { dropped++; return }
+      const list = semFees[semGuid] ?? (semFees[semGuid] = [])
       list.push({ id: nextId++, amount: String(l.amount), currencyGuid: l.currencyGuid, ledgerGuid: l.ledgerGuid, ledgerName: l.ledgerName, ledgerPriority: String(l.ledgerNum) })
     })
     setStructures(prev => prev.map((s, i) => i !== activeIdx ? s : {
@@ -264,33 +294,34 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
       aceCurrency: source.acec != null ? String(source.acec) : '',
       semFees,
     }))
-    showToast(`Copied fees from ${source.feeCode.trim()}`)
-  }, [copySourceId, copySourceLines, allFeeStructures, activeIdx, showToast])
+    showToast(
+      dropped > 0
+        ? `Copied fees from ${source.feeCode.trim()} — ${dropped} fee ${dropped === 1 ? 'line was' : 'lines were'} skipped (no matching semester in this programme)`
+        : `Copied fees from ${source.feeCode.trim()}`,
+      dropped > 0 ? 'warning' : undefined,
+    )
+  }, [copySourceId, copySourceLines, copySource, isCrossProgrammeCopy, semesters, semestersLoaded, sourceSemesters, sourceSemestersLoaded, activeIdx, showToast])
 
-  const active = structures[activeIdx]
+  // Every existing fee structure, from any programme (cross-programme
+  // copies are re-mapped by semester above). The record being edited is
+  // labeled "(Current)" for reference. Other programmes' codes show their
+  // programme name so the source is clear.
+  const programNameByGuid = new Map(programs.map(p => [p.programGuid, p.programName]))
+  const copySourceOptions = allFeeStructures.map(item => {
+    const isCurrent = mode === 'edit' && editData?.feeHdGuid === item.feeHdGuid
+    const code = item.feeCode.trim()
+    const otherProgramme = item.programGuid !== active.programme ? programNameByGuid.get(item.programGuid) : undefined
+    const label = isCurrent ? `${code} (Current)` : otherProgramme ? `${code} — ${otherProgramme}` : code
+    return { value: item.feeHdGuid, label }
+  })
 
-  // Real Copy Fee Code source list now — every existing fee structure for
-  // this SAME programme (a fee line's semesterGuid only means anything
-  // within its own programme's semester space, so a cross-programme copy
-  // would silently attach fee lines to semesters that don't belong here).
-  // The record currently being edited is included and selectable like any
-  // other — still labeled "(Current)" for reference, just no longer
-  // click-disabled.
-  const copySourceOptions = allFeeStructures
-    .filter(item => item.programGuid === active.programme)
-    .map(item => {
-      const isCurrent = mode === 'edit' && editData?.feeHdGuid === item.feeHdGuid
-      return { value: item.feeHdGuid, label: isCurrent ? `${item.feeCode.trim()} (Current)` : item.feeCode.trim() }
-    })
-
-  // Real semesters for the currently selected programme — drives the
-  // per-semester accordion below instead of a fixed Sem 1-6 range. These
-  // must stay above the `if (!isOpen) return null` below — every hook in
-  // this component has to run on every render regardless of isOpen, or
-  // React loses track of hook order between a closed and open render.
-  const { data: semesters = [] } = useSemestersForProgram(active.programme, !!active.programme)
+  // Real semesters for the currently selected programme (`semesters`, above)
+  // drive the per-semester accordion below instead of a fixed Sem 1-6 range.
+  // Every hook here must stay above the `if (!isOpen) return null` below.
   const { data: financeCurrencies = [] } = useFinanceCurrencies(isOpen)
   const financeCurrencyOptions = financeCurrencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))
+  // Base Currency keeps holding a currency code (its existing value shape).
+  const baseCurrencyOptions = financeCurrencies.map(c => ({ value: c.currencyCode, label: `${c.currencyCode} (${c.currencyName})` }))
   const { data: ledgers = [] } = useLedgers(isOpen)
   // Base options from the Ledger master list, PLUS a synthesized option for
   // any ledgerGuid already sitting on a loaded fee item (from GET fee-lines
@@ -310,6 +341,26 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
     })))
     return [...base, ...extra]
   })()
+
+  // New structures start with the shared fee currency on their Base
+  // Currency once the currency list has loaded (Create only — in Edit an
+  // empty value is the saved state and shouldn't be filled in silently).
+  // Kept inline (not via baseCurrencyGuid below) since hooks must sit above
+  // the early return.
+  useEffect(() => {
+    if (!isOpen || mode === 'edit' || financeCurrencies.length === 0) return
+    setStructures(prev => {
+      let changed = false
+      const next = prev.map(s => {
+        if (s.lefCurrency || s.cefCurrency || s.aceCurrency) return s
+        const guid = financeCurrencies.find(c => c.currencyCode === s.currency)?.currencyGuid
+        if (!guid) return s
+        changed = true
+        return { ...s, lefCurrency: guid, cefCurrency: guid, aceCurrency: guid }
+      })
+      return changed ? next : prev
+    })
+  }, [isOpen, mode, financeCurrencies, structures.length])
 
   if (!isOpen) return null
 
@@ -331,8 +382,9 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
             <div className="modal-title"><i className="lni lni-dollar"></i> Edit Fee Structure</div>
             <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 240 }}>
-            <span style={{ color: 'var(--g400)' }}>Loading fee structure details…</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 240 }} role="status">
+            <i className="lni lni-spinner-arrow spin text-b500" aria-hidden="true" />
+            <span style={{ color: 'var(--g500)' }}>Loading fee structure details…</span>
           </div>
         </div>
       </div>
@@ -388,6 +440,27 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
     setStructures(prev => prev.map((s, i) => i === activeIdx ? { ...s, [field]: val } : s))
   }
 
+  // Base Currency drives the other currency fields' defaults: the shared
+  // Lateral Entry/Credit Exemption/Aptech currency and every fee line's
+  // currency. Changing it moves each field that's still empty or still on
+  // the old base over to the new one; anything picked by hand stays put.
+  // Base Currency holds a currency code from the finance master.
+  function baseCurrencyGuid(code: string): string {
+    return financeCurrencies.find(c => c.currencyCode === code)?.currencyGuid ?? ''
+  }
+
+  function updateBaseCurrency(code: string) {
+    setStructures(prev => prev.map((s, i) => {
+      if (i !== activeIdx) return s
+      const oldGuid = baseCurrencyGuid(s.currency)
+      const newGuid = baseCurrencyGuid(code)
+      const follow = (g: string) => (!g || g === oldGuid) && newGuid ? newGuid : g
+      const semFees: SemFeesMap = {}
+      for (const [sem, items] of Object.entries(s.semFees)) semFees[sem] = items.map(f => ({ ...f, currencyGuid: follow(f.currencyGuid) }))
+      return { ...s, currency: code, lefCurrency: follow(s.lefCurrency), cefCurrency: follow(s.cefCurrency), aceCurrency: follow(s.aceCurrency), semFees }
+    }))
+  }
+
   function updateLocalOrForeign(val: string) {
     setStructures(prev => prev.map((s, i) => i === activeIdx ? { ...s, localOrForeign: val === 'true' } : s))
   }
@@ -409,7 +482,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   function addItem(semesterGuid: string) {
     setStructures(prev => prev.map((s, i) =>
       i === activeIdx
-        ? { ...s, semFees: { ...s.semFees, [semesterGuid]: [...(s.semFees[semesterGuid] ?? []), blankItem(nextId++)] } }
+        ? { ...s, semFees: { ...s.semFees, [semesterGuid]: [...(s.semFees[semesterGuid] ?? []), { ...blankItem(nextId++), currencyGuid: baseCurrencyGuid(s.currency) }] } }
         : s
     ))
   }
@@ -484,9 +557,9 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
             lef: s.lef ? +s.lef : null,
             cef: s.cef ? +s.cef : null,
             ace: s.ace ? +s.ace : null,
-            lec: s.lefCurrency ? +s.lefCurrency : null,
-            cec: s.cefCurrency ? +s.cefCurrency : null,
-            acec: s.aceCurrency ? +s.aceCurrency : null,
+            lec: s.lefCurrency || null,
+            cec: s.cefCurrency || null,
+            acec: s.aceCurrency || null,
             calcType: s.discountType === 'Percentage' ? 2 : 1,
             amtPer: s.amtPer ? +s.amtPer : null,
             intakeGuid: s.intake || null,
@@ -504,9 +577,9 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
             lef: s.lef ? +s.lef : null,
             cef: s.cef ? +s.cef : null,
             ace: s.ace ? +s.ace : null,
-            lec: s.lefCurrency ? +s.lefCurrency : null,
-            cec: s.cefCurrency ? +s.cefCurrency : null,
-            acec: s.aceCurrency ? +s.aceCurrency : null,
+            lec: s.lefCurrency || null,
+            cec: s.cefCurrency || null,
+            acec: s.aceCurrency || null,
             calcType: s.discountType === 'Percentage' ? 2 : 1,
             amtPer: s.amtPer ? +s.amtPer : null,
             intakeGuid: s.intake || null,
@@ -555,7 +628,18 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
         </div>
 
         {/* ── Two-panel layout ──────────────────────────────────── */}
-        <div className="fsm-layout">
+        <div className="fsm-layout" aria-busy={isCopyLoading || undefined}>
+          {isCopyLoading && (
+            <div className="fsm-loading-overlay" role="status">
+              <div className="fsm-loading-card">
+                <i className="lni lni-spinner-arrow spin" aria-hidden="true" />
+                <div>
+                  <strong>Fetching fees from {copySource?.feeCode.trim() ?? 'the selected fee code'}…</strong>
+                  <small>{isCrossProgrammeCopy ? 'Matching them to this programme’s semesters' : 'This only takes a moment'}</small>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Left sidebar — structure list */}
           <div className="fsm-sidebar">
@@ -653,16 +737,14 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
               </div>
               <div className="fg m-0">
                 <div className="lbl">Base Currency</div>
+                {/* From the finance currency master (same list as every other
+                    currency picker here), not a hard-coded set — that one
+                    offered EUR/GBP, which don't exist, and KES where the
+                    master calls it KSH. */}
                 <SearchSelect
-                  options={[
-                    { value: 'UGX', label: 'UGX (Ugandan Shilling)' },
-                    { value: 'USD', label: 'USD (US Dollar)' },
-                    { value: 'KES', label: 'KES (Kenyan Shilling)' },
-                    { value: 'EUR', label: 'EUR (Euro)' },
-                    { value: 'GBP', label: 'GBP (British Pound)' },
-                  ]}
+                  options={baseCurrencyOptions}
                   value={active.currency}
-                  onChange={val => updateStructureMeta('currency', val)}
+                  onChange={updateBaseCurrency}
                 />
               </div>
               <div className="fg m-0">
@@ -742,7 +824,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                 <div className="fg m-0">
                   <div className="lbl">Currency <span className="text-g400 font-normal normal-case">(Lateral Entry / Credit Exemption / Aptech Credit Exemption)</span></div>
                   <SearchSelect
-                    options={currencyIntOptions}
+                    options={currencyGuidOptions}
                     value={active.lefCurrency}
                     onChange={updateSharedFeeCurrency}
                     onSearch={setCurrencySearch}
@@ -758,7 +840,12 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
 
             {/* Per-semester accordion — driven by the selected programme's real semesters */}
             <div className="flex flex-col gap-2">
-              {active.programme && semesters.length === 0 && (
+              {active.programme && semestersLoading && (
+                <div className="flex items-center gap-2 text-g500" style={{ fontSize: 12.5 }} role="status">
+                  <i className="lni lni-spinner-arrow spin text-b500" aria-hidden="true" /> Loading semesters…
+                </div>
+              )}
+              {active.programme && !semestersLoading && semesters.length === 0 && (
                 <div className="text-g400 italic" style={{ fontSize: 12.5 }}>No semesters found for this programme.</div>
               )}
               {semesters.map((sem, si) => {
