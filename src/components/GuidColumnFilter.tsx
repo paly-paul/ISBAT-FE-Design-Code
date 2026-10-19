@@ -23,12 +23,15 @@ interface GuidColumnFilterProps {
   onClose: () => void
   disabled?: boolean
   disabledHint?: string
+  // Options still being fetched (e.g. loaded only once the filter opens) —
+  // shows a loading line instead of "No matches".
+  isLoading?: boolean
 }
 
 // Gap kept between the dropdown and the viewport edges.
 const EDGE = 8
 
-export function GuidColumnFilter({ label, options, isOpen, activeFilter, onToggle, onSelect, onClear, onClose, disabled, disabledHint }: GuidColumnFilterProps) {
+export function GuidColumnFilter({ label, options, isOpen, activeFilter, onToggle, onSelect, onClear, onClose, disabled, disabledHint, isLoading }: GuidColumnFilterProps) {
   const [search, setSearch] = useState('')
   const [pending, setPending] = useState<string[]>([])
   const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; minWidth: number; maxHeight?: number }>({ top: 0, left: 0, minWidth: 0 })
@@ -167,7 +170,9 @@ export function GuidColumnFilter({ label, options, isOpen, activeFilter, onToggl
                 </label>
               ))}
               {visible.length === 0 && (
-                <div className="col-filter-no-match">No matches</div>
+                isLoading
+                  ? <div className="col-filter-no-match" role="status"><i className="lni lni-spinner-arrow spin" aria-hidden="true" /> Loading {label.toLowerCase()}s…</div>
+                  : <div className="col-filter-no-match">No matches</div>
               )}
             </div>
 

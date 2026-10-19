@@ -41,6 +41,24 @@ function displayYmd(ymd: string) {
   return ymd ? ymd.split('-').reverse().join('/') : '—'
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+// "2027-01-01" → "01-Jan-2027", the format the server's message uses.
+function displayDdMmmYyyy(ymd: string) {
+  const [y, m, d] = ymd.split('-')
+  return `${d}-${MONTHS[+m - 1]}-${y}`
+}
+
+// An intake's earliest allowed date (post-intake.md "Earliest allowed date"):
+// Fall (intakes = 2) → 1 Jan of financialYear; Spring (intakes = 1) → 1 Oct
+// of the year before. null when the intake doesn't say which it is.
+function earliestBatchStart(intake: { financialYear?: number; intakes?: number } | undefined): string | null {
+  if (!intake?.financialYear) return null
+  if (intake.intakes === 2) return `${intake.financialYear}-01-01`
+  if (intake.intakes === 1) return `${intake.financialYear - 1}-10-01`
+  return null
+}
+
 // Server "not found" messages (all HTTP 400) → the field the user should fix.
 const NOT_FOUND_FIELDS: [RegExp, string, string][] = [
   [/intake not found/i,     'intakeGuid',    'This intake no longer exists, or has no month / financial year set. Pick another intake.'],
@@ -190,6 +208,14 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   const originalEnd = isEdit && batch?.bEndDate ? batch.bEndDate.slice(0, 10) : ''
   const isEnded = !!originalEnd && originalEnd < todayUtcYmd()
 
+  // Acd-013 (post-batch.md / put-batch.md): bStartDate can't be before the
+  // intake's earliest allowed date. On edit it's only checked when the start
+  // date changes, so an older batch can still be edited as is.
+  const minStart = earliestBatchStart(selectedIntake.data)
+  const originalStart = isEdit && batch?.bStartDate ? batch.bStartDate.slice(0, 10) : ''
+  const startChanged = !isEdit || startDate !== originalStart
+  const enforceMinStart = !!minStart && (startChanged || originalStart >= minStart)
+
   if (!isOpen) return null
 
   function clearError(field: string) {
@@ -225,6 +251,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
     // Same rules as POST and PUT (ACD-006/007, post-batch.md / put-batch.md):
     // both dates required, end strictly after start (equal is rejected).
     if (!startDate) e.startDate = 'Please select a Start Date'
+    else if (minStart && startChanged && startDate < minStart) e.startDate = `Start date can't be before ${displayDdMmmYyyy(minStart)} for this intake`
     if (!endDate)   e.endDate = 'Please select an End Date'
     if (startDate && endDate && endDate <= startDate) e.endDate = 'End date must be after the start date'
     if (isEnded && (!endDate || endDate <= todayUtcYmd())) {
@@ -273,6 +300,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
         const fieldHit = NOT_FOUND_FIELDS.find(([re]) => re.test(msg))
         if (fieldHit) fieldErrors[fieldHit[1]] = fieldHit[2]
         else if (/start ?date is required/i.test(msg)) fieldErrors.startDate = 'Please select a Start Date'
+        else if (/start ?date cannot be before/i.test(msg)) fieldErrors.startDate = msg
         else if (/end ?date is required/i.test(msg)) fieldErrors.endDate = 'Please select an End Date'
         else if (/end ?date must be after/i.test(msg)) fieldErrors.endDate = 'End date must be after the start date'
         else if (msg) unmatched.push(msg)
@@ -481,7 +509,13 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
             {isEnded
               // DatePicker has no disabled mode — show the locked value read-only.
               ? <input className="ctrl" readOnly value={displayYmd(startDate)} style={{ background: 'var(--surface)', color: 'var(--g700)', cursor: 'default' }} aria-label="Start date (locked)" />
-              : <DatePicker value={startDate} onChange={v => { setStartDate(v); clearError('startDate'); clearError('endDate') }} hasError={!!errors.startDate} />}
+              : <DatePicker
+                  value={startDate}
+                  onChange={v => { setStartDate(v); clearError('startDate'); clearError('endDate') }}
+                  minYmd={enforceMinStart ? minStart ?? undefined : undefined}
+                  rangeMessage={minStart ? `Start date can't be before ${displayDdMmmYyyy(minStart)} for this intake` : undefined}
+                  hasError={!!errors.startDate}
+                />}
             {errors.startDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.startDate}</p>}
           </div>
           <div className="fg">

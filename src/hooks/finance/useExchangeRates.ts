@@ -1,8 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createExchangeRate,
   CreateExchangeRateInput,
   deleteExchangeRate,
+  ExchangeRate,
   getExchangeRateExists,
   getExchangeRateHistory,
   ExchangeRateHistoryParams,
@@ -41,6 +43,32 @@ export function useExchangeRatesByDate(date: string, enabled = true) {
     staleTime: 60_000,
     refetchOnWindowFocus: query => (query.state.status !== 'error' ? 'always' : false),
   })
+}
+
+// Several dates' boards at once — Student Statement converts each payment
+// to USD at its own payDate's rates. Same query key as useExchangeRatesByDate
+// so a day already loaded elsewhere is reused. Past days' rates are
+// effectively settled, so no cross-tab focus refetch here.
+export function useExchangeRatesByDates(dates: string[], enabled = true) {
+  const unique = Array.from(new Set(dates.filter(Boolean)))
+  const results = useQueries({
+    queries: unique.map(date => ({
+      queryKey: [...EXCHANGE_RATES_KEY, 'by-date', date],
+      queryFn: () => getExchangeRatesByDate(date),
+      enabled,
+      staleTime: 5 * 60 * 1000,
+    })),
+  })
+  return useMemo(() => {
+    const byDate = new Map<string, ExchangeRate[]>()
+    results.forEach((r, i) => { if (r.data) byDate.set(unique[i], r.data) })
+    return {
+      byDate,
+      isLoading: results.some(r => r.isLoading),
+      isError: results.some(r => r.isError),
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results])
 }
 
 export function useExchangeRateHistory(params: ExchangeRateHistoryParams) {

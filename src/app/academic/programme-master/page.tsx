@@ -11,11 +11,10 @@ import { ViewProgrammeModal } from '@/components/modals/academic/ViewProgrammeMo
 import { SpecializationModal } from '@/components/modals/academic/SpecializationModal'
 import { CurriculumModal } from '@/components/modals/academic/CurriculumModal'
 import { Toast } from '@/components/Toast'
-import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { useCreateProgramMaster, useDeleteProgramMasterComplete, useProgramMasters, useProgramMasterSearch, useUpdateProgramMasterComplete } from '@/hooks/academic/useProgramMaster'
+import { useCreateProgramMaster, useDeleteProgramMasterComplete, useProgramMastersPaged, useUpdateProgramMasterComplete } from '@/hooks/academic/useProgramMaster'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useProgramLevelsDropdown } from '@/hooks/academic/useProgramLevels'
 import { formatDate } from '@/lib/date'
@@ -31,11 +30,8 @@ export default function Page() {
   const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [filters, setFilters] = useState<Record<string, string[]>>({})
-  const [openFilter, setOpenFilter] = useState<string | null>(null)
   // '' means no filter — SearchSelect's placeholder state, not a literal "All ..." option.
   const [levelFilter, setLevelFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
   const [progMode, setProgMode] = useState<'add' | 'edit'>('add')
   const [editingProgramGuid, setEditingProgramGuid] = useState<string | null>(null)
@@ -67,14 +63,6 @@ export default function Page() {
     })
   }
 
-  useEffect(() => {
-    function closeFilter(e: MouseEvent) {
-      const target = e.target as HTMLElement
-      if (!target.closest('th')) setOpenFilter(null)
-    }
-    document.addEventListener('click', closeFilter)
-    return () => document.removeEventListener('click', closeFilter)
-  }, [])
 
   // Previous hardcoded rows (pre GET /api/v1/academic/program-master
   // integration) — kept for reference. The real response has no accreditation
@@ -89,13 +77,13 @@ export default function Page() {
   //   { progCode: 'PHD-CS-2023', progName: 'Doctor of Philosophy — CS 2023',       group: '—',   level: 'PhD · 3yr / 6sem',       faculty: 'FCT → Main Campus', accredDate: 'Jun 2023', expires: 'Jun 2028',         expiresBadge: 'badge-green', expiresIcon: '',                        noIA: 'Yes', specializations: '—',                    admissionStatus: 'Active',   admissionBadge: 'badge-green', rowClass: '', variant: 'edit' },
   // ]
 
-  // Full list, filtered/sorted/paged in the browser (2026-10-15, per
-  // request). Server paging (2026-09-10) left the Level/Status dropdowns,
-  // the column filters and the newest-first sort working on just the 10
-  // rows of the current page — GET /program-master has no level/status/sort
-  // params — so they never found matches on other pages. Programme counts
-  // are small, so one fetch (getProgramMasters' pageSize=1000 cap) covers it.
-  // Search still goes to the server (?search=) via useProgramMasterSearch.
+  // Server-side paging: one GET /program-master request per page
+  // (pageNumber/pageSize), with search and Programme Level sent as the
+  // endpoint's own ?search= / ?programLevelGuid= params (get-programs.md).
+  // Replaces a single pageSize=1000 fetch paged in the browser. The API has
+  // no status/group/sort params, so the Status dropdown, the column filters
+  // and the client-side newest-first sort were dropped rather than left
+  // acting on the current page only — rows come back in server order.
   const [page, setPage] = useState(1)
   // programGroups backs the table's own Group column (the list endpoint only
   // echoes back a guid, no name) — gated on the Add/Edit modal being open
@@ -111,10 +99,11 @@ export default function Page() {
   // full-list fetch rather than a batched-by-guid lookup.
   const searchTrimmed = search.trim()
   const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
-  const allQuery = useProgramMasters(!activeSearch)
-  const searchQuery = useProgramMasterSearch(activeSearch)
-  const { data: programs = [], isLoading } = activeSearch ? searchQuery : allQuery
-  const searchPending = !!activeSearch && searchQuery.isFetching
+  const { data, isLoading, isFetching, isPlaceholderData } = useProgramMastersPaged(page, PAGE_SIZE, activeSearch, levelFilter)
+  const programs = data?.items ?? []
+  // keepPreviousData holds the old page on screen while the next one loads;
+  // show the loader then instead of stale rows.
+  const pagePending = isFetching && isPlaceholderData
 
   const rows = programs.map(p => {
     const specializationNames = (p.streams ?? []).map(stream => stream.streamName).filter(Boolean)
@@ -126,74 +115,31 @@ export default function Page() {
       group: p.programGroupName ?? '—',
       level: p.programLevelName ? `${p.programLevelName} · ${p.yearCount}yr / ${p.semCount}sem` : `${p.yearCount}yr / ${p.semCount}sem`,
       faculty: p.facultyName ?? '—',
-      // Kept alongside the display string below — dateAcc is the only real
-      // date field the list endpoint returns (no created/updated timestamp),
-      // so it's what "newest to oldest" sorts on.
-      dateAccRaw: p.dateAcc,
       accredDate: formatDate(p.dateAcc),
       noIA: p.noIa ? 'Yes' : 'No',
       specializations: specializationNames.length > 0 ? specializationNames.join(', ') : '—',
       admissionStatus: p.pgmStatus ? 'Active' : 'Inactive',
     }
-  }).sort((a, b) => {
-    // Newest accreditation first; undated rows last; ties by code so the
-    // order is stable across refetches.
-    const aTime = a.dateAccRaw ? new Date(a.dateAccRaw).getTime() : 0
-    const bTime = b.dateAccRaw ? new Date(b.dateAccRaw).getTime() : 0
-    return bTime - aTime || a.progCode.localeCompare(b.progCode)
   })
 
-  const groupFilterOpts = Array.from(new Set(rows.map(r => r.group)))
-  const levelFilterOpts = Array.from(new Set(rows.map(r => r.level)))
   // Options from GET /program-levels/dropdown (get-program-levels-dropdown.md,
   // in the levels' own order), not from the rows — `guid` is the same
   // programLevelGuid each programme row carries, which levelFilter matches on.
   const { data: programLevels = [], isLoading: programLevelsLoading } = useProgramLevelsDropdown()
   const levelDropdownOpts = programLevels.map(l => ({ value: l.guid, label: l.name }))
 
-  // Live preview shown in the search dropdown as the user types — matches
-  // the same code/name test as the table's own search filter below, just
-  // capped to a handful of rows and ignoring the Level/Status dropdowns so
-  // it always reflects "what search alone would find". Empty below
-  // MIN_SEARCH_CHARS, matching TableSearch's own minChars gate on when the
-  // dropdown is even allowed to open.
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? rows.filter(r => `${r.progCode} ${r.progName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
-    : []
+  // Search dropdown preview — the first few rows of the server's own search
+  // results (already filtered by ?search=). Empty below MIN_SEARCH_CHARS,
+  // matching TableSearch's own minChars gate on when it may open.
+  const searchMatches = activeSearch ? rows.slice(0, 8) : []
 
-  const filteredRows = rows.filter(r => {
-    // levelFilter is a programLevelGuid.
-    if (levelFilter && r.programLevelGuid !== levelFilter) return false
-    if (statusFilter && r.admissionStatus !== statusFilter) return false
-    // Re-filter client-side on top of whatever the server sent back — rows
-    // is already search-scoped (see useProgramMasterSearch above), but this
-    // keeps results correct even if the backend doesn't actually honor
-    // ?search=.
-    if (searchTrimmed.length >= MIN_SEARCH_CHARS && !`${r.progCode} ${r.progName}`.toLowerCase().includes(searchTrimmed.toLowerCase())) return false
-    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as Record<string, unknown>)[k])))
-  })
-
-  const totalCount = filteredRows.length
+  const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  // Clamp rather than reset, so deleting the last row on the last page
-  // lands on the new last page instead of an empty one.
-  const currentPage = Math.min(page, totalPages)
-  const pageItems = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
-
-  function fth(label: string, col: string, opts: string[]) {
-    return (
-      <FilterTh
-        label={label}
-        opts={opts}
-        isOpen={openFilter === col}
-        activeFilter={filters[col] ?? []}
-        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null); setPage(1) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null); setPage(1) }}
-        onClose={() => setOpenFilter(null)}
-      />
-    )
-  }
+  // Deleting the last row on the last page leaves `page` past the end —
+  // step back to the new last page instead of showing an empty one.
+  useEffect(() => {
+    if (data && page > totalPages) setPage(totalPages)
+  }, [data, page, totalPages])
 
   return (
     <>
@@ -221,7 +167,7 @@ export default function Page() {
                 value={search}
                 onChange={v => { setSearch(v); setPage(1) }}
                 results={searchMatches.map(r => ({ id: r.programGuid, primary: r.progCode, secondary: r.progName }))}
-                loading={searchPending}
+                loading={!!activeSearch && isFetching}
                 minChars={MIN_SEARCH_CHARS}
                 onSelect={(r) => openViewModal(r.id)}
               />
@@ -233,30 +179,25 @@ export default function Page() {
                 value={levelFilter}
                 onChange={v => { setLevelFilter(v); setPage(1) }}
               />
-              <SearchSelect
-                className="w-auto text-[var(--fs-sm)]"
-                placeholder="All Statuses"
-                options={['Active', 'Inactive']}
-                value={statusFilter}
-                onChange={v => { setStatusFilter(v); setPage(1) }}
-              />
               <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
             </div>
           </div>
-          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
+          <ScrollTable>
             <table>
               {/* Previous header (pre GET integration) — kept for reference; the Expires column
                   has no backing field in the real response, so it's dropped rather than left blank.
               <thead><tr><th style={{ width: 48 }}></th><th>Prog. Code</th><th>Programme Name</th>{fth('Group', 'group', ['BCA', 'BBA', 'MBA', '—'])}{fth('Programme Level', 'level', ["Bachelor's · 3yr / 6sem", "Master's · 2yr / 4sem", 'PhD · 3yr / 6sem'])}<th>Faculty → Campus</th><th>Accreditation Date</th><th>Expires</th><th>No IA</th><th>Specializations</th>{fth('Admission Status', 'admissionStatus', ['Active', 'Inactive'])}</tr></thead>
               */}
-              <thead><tr><th style={{ width: 48 }}></th><th>Prog. Code</th><th>Programme Name</th>{fth('Group', 'group', groupFilterOpts)}{fth('Programme Level', 'level', levelFilterOpts)}<th>Faculty → Campus</th><th>Accreditation Date</th><th>No IA</th>{fth('Admission Status', 'admissionStatus', ['Active', 'Inactive'])}</tr></thead>
+              {/* Plain headers — Group/Level/Status column filters dropped with
+                  server paging (no matching API params; see the note above). */}
+              <thead><tr><th style={{ width: 48 }}></th><th>Prog. Code</th><th>Programme Name</th><th>Group</th><th>Programme Level</th><th>Faculty → Campus</th><th>Accreditation Date</th><th>No IA</th><th>Admission Status</th></tr></thead>
               <tbody>
-                {(isLoading || searchPending)
+                {(isLoading || pagePending)
                   ? <TableLoadingState colSpan={999} />
-                  : filteredRows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => { setFilters({}); setPage(1) }} />
+                  : rows.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={!!activeSearch || !!levelFilter} onClearFilters={() => { setSearch(''); setLevelFilter(''); setPage(1) }} />
                     : null}
-                {!(isLoading || searchPending) && pageItems.map(r => (
+                {!(isLoading || pagePending) && rows.map(r => (
                   <tr key={r.programGuid}>
                     <td>
                       {/* Previous per-row action variants (edit/view/renew/editspec) — simulated
@@ -328,7 +269,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
-          <Pagination page={currentPage} totalPages={totalPages} totalCount={totalCount} itemLabel="programmes" onPageChange={setPage} />
+          <Pagination page={Math.min(page, totalPages)} totalPages={totalPages} totalCount={totalCount} itemLabel="programmes" onPageChange={setPage} />
         </div>
       </div>
       <ProgrammeModal

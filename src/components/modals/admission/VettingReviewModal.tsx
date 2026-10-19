@@ -20,6 +20,15 @@ const DOCUMENT_LABELS: Record<string, string> = {
 
 // Display value for an optional text field: "—" for null, blank, or the
 // literal string "null" some admission endpoints send.
+// The API sends either the label ("Male") or the backend code — 0 = Male,
+// 1 = Female, 2 = Other. Codes used to be shown raw ("0", "1").
+const GENDER_LABELS = ['Male', 'Female', 'Other']
+function genderText(g: number | string | null | undefined): string {
+  if (g == null || g === '') return ''
+  const code = typeof g === 'number' ? g : /^\d+$/.test(g.trim()) ? +g : null
+  return code != null ? (GENDER_LABELS[code] ?? String(g)) : String(g).trim()
+}
+
 function orDash(value: string | null | undefined): string {
   const v = value?.trim()
   return v && v.toLowerCase() !== 'null' ? v : '—'
@@ -181,7 +190,7 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
                     programme: detail.programName,
                     type: detail.admissionType,
                     dob: detail.dob ?? undefined,
-                    gender: detail.gender != null ? String(detail.gender) : undefined,
+                    gender: genderText(detail.gender) || undefined,
                     nationality: orDash(detail.nationality) !== '—' ? orDash(detail.nationality) : undefined,
                     nationalId: detail.nationalId ?? undefined,
                     phone: detail.phone ?? undefined,
@@ -204,9 +213,7 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
                 <div className="fg"><label className="lbl">First Name</label><input className="ctrl" readOnly value={detail.firstName || ''} /></div>
                 <div className="fg"><label className="lbl">Last Name</label><input className="ctrl" readOnly value={detail.lastName || '—'} /></div>
                 <div className="fg"><label className="lbl">Date of Birth</label><input className="ctrl" readOnly value={detail.dob ? detail.dob.slice(0, 10) : '—'} /></div>
-                {/* Shown as sent: the label ("Male") in current responses, a
-                    raw code in older ones (no confirmed code mapping). */}
-                <div className="fg"><label className="lbl">Gender</label><input className="ctrl" readOnly value={detail.gender != null ? String(detail.gender) : '—'} /></div>
+                <div className="fg"><label className="lbl">Gender</label><input className="ctrl" readOnly value={genderText(detail.gender) || '—'} /></div>
                 {/* Both looked up from the application's country (vetting.ts):
                     Nationality is the demonym, Country the country name. */}
                 <div className="fg"><label className="lbl">Nationality</label><input className="ctrl" readOnly value={orDash(detail.nationality)} /></div>

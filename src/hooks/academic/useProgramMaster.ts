@@ -128,10 +128,10 @@ export function useProgramMasterSearch(search: string) {
 // infinite scroll). useProgramMasters() above stays untouched — programme-
 // master's own name-resolution consumers elsewhere (ProgrammeModal,
 // ViewProgrammeModal, course-allocation, etc.) still need the full list.
-export function useProgramMastersPaged(page: number, pageSize: number, search: string) {
+export function useProgramMastersPaged(page: number, pageSize: number, search: string, programLevelGuid = '') {
   return useQuery({
-    queryKey: [...PROGRAM_MASTERS_KEY, 'paged', page, pageSize, search],
-    queryFn: () => getProgramMastersPage(page, pageSize, search),
+    queryKey: [...PROGRAM_MASTERS_KEY, 'paged', page, pageSize, search, programLevelGuid],
+    queryFn: () => getProgramMastersPage(page, pageSize, search, programLevelGuid),
     placeholderData: keepPreviousData,
   })
 }

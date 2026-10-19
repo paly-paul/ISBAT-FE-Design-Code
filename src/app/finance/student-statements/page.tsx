@@ -12,6 +12,7 @@ import { ViewPaymentReceiptModal } from '@/components/modals/finance/ViewPayment
 import { useStudentStatementSearch, useStudentStatement, useStudentFeeSummary } from '@/hooks/student/useStudentStatement'
 import { getStudentStatementPdfUrl } from '@/lib/api/student/studentStatement'
 import { PAYMENT_CATEGORY_LABELS, type PaymentHistoryListEntry } from '@/lib/api/finance/paymentConsole'
+import { useExchangeRatesByDates, type ExchangeRate } from '@/hooks/finance/useExchangeRates'
 
 // Category options for standard SearchSelect dropdown
 const CATEGORY_OPTIONS = [
@@ -57,12 +58,52 @@ function sumByCurrency<T extends { currencyName?: string | null; amount?: number
 ): { currency: string; total: number }[] {
   const byCurrency = new Map<string, number>()
   for (const r of rows) {
-    const rawCur = r.currencyName?.trim()
-    const cur = !rawCur || rawCur === '—' ? 'UGX' : rawCur
+    const cur = currencyLabel(r.currencyName)
     const val = (field === 'amount' ? r.amount : field === 'outstanding' ? r.outstanding : r.amountDue) ?? 0
     byCurrency.set(cur, (byCurrency.get(cur) ?? 0) + val)
   }
   return [...byCurrency.entries()].map(([currency, total]) => ({ currency, total }))
+}
+
+// Exchange rates are UGX per one unit of the currency (amountUsh = amount ×
+// exRate), so USD = amount × rate(currency) / rate(USD), both taken from the
+// payment's own payDate board. UGX itself has no rate row — it's the base,
+// and a null currency (NCHE/Guild rows) is UGX here too, same as
+// sumByCurrency. null when that day has no rate for either side.
+function isUgx(currencyName?: string | null) {
+  const c = currencyName?.trim().toLowerCase()
+  return !c || c === '—' || c === 'ugx' || c.startsWith('uganda')
+}
+
+// Short code for a currency name, so totals group "Uganda Shillings" and the
+// currency-less NCHE/Guild rows together as one UGX figure instead of two.
+const CURRENCY_CODES: Record<string, string> = { 'us dollar': 'USD', 'kenyan shilling': 'KES' }
+function currencyLabel(currencyName?: string | null) {
+  if (isUgx(currencyName)) return 'UGX'
+  const name = currencyName!.trim()
+  return CURRENCY_CODES[name.toLowerCase()] ?? name
+}
+
+function toUsd(
+  p: { amount: number; currencyGuid: string | null; currencyName: string | null },
+  rates: ExchangeRate[] | undefined,
+): number | null {
+  const usdRate = rates?.find(r => r.currencyCode?.toUpperCase() === 'USD')
+  if (usdRate && p.currencyGuid === usdRate.currencyGuid) return p.amount
+  if (p.currencyName?.trim().toLowerCase() === 'us dollar') return p.amount
+  if (!usdRate?.exRate) return null
+  const ownRate = isUgx(p.currencyName) ? 1 : rates?.find(r => r.currencyGuid === p.currencyGuid)?.exRate
+  if (!ownRate) return null
+  return (p.amount * ownRate) / usdRate.exRate
+}
+
+// Row number by on-screen position, running on across semester groups — the
+// API's slNo follows its own newest-first order, so it read out of sequence
+// once rows were grouped, sorted or filtered.
+function runningNo(groups: { items: unknown[] }[], groupIdx: number, idx: number) {
+  let n = idx + 1
+  for (let i = 0; i < groupIdx; i++) n += groups[i].items.length
+  return n
 }
 
 function getCategoryBadge(category?: number | null) {
@@ -110,6 +151,8 @@ export default function StudentStatementPage() {
   const [tableSearch, setTableSearch] = useState('')
   const [hoveredChartSegment, setHoveredChartSegment] = useState<string | null>(null)
   const [groupBySemester, setGroupBySemester] = useState(true)
+  // Payment totals show USD only; this adds the per-currency totals beside it.
+  const [showAllCurrencies, setShowAllCurrencies] = useState(false)
 
   // Receipt Modal State (matching payment-history convention)
   const [receiptEntry, setReceiptEntry] = useState<PaymentHistoryListEntry | null>(null)
@@ -137,6 +180,12 @@ export default function StudentStatementPage() {
   const paymentHistory = statement?.paymentHistory ?? []
   const outstandingItems = statement?.outstandingItems ?? []
   const futurePayments = statement?.futurePayments ?? []
+
+  // Rate boards for every distinct payDate in the history, for the USD column.
+  const { byDate: ratesByDate, isLoading: isRatesLoading } = useExchangeRatesByDates(
+    paymentHistory.map(p => p.payDate?.slice(0, 10)),
+    paymentHistory.length > 0,
+  )
 
   // Summary totals
   const { data: feeSummary } = useStudentFeeSummary(selectedGuid)
@@ -217,10 +266,72 @@ export default function StudentStatementPage() {
     setAutoPrint(print)
   }
 
+  function paymentUsd(p: (typeof paymentHistory)[0]) {
+    return toUsd(p, ratesByDate.get(p.payDate?.slice(0, 10)))
+  }
+
+  // USD total of a set of payments, plus how many couldn't be converted (no
+  // rate on their payDate) so the total can say it's partial.
+  function usdTotal(items: typeof paymentHistory) {
+    let total = 0
+    let missing = 0
+    for (const p of items) {
+      const usd = paymentUsd(p)
+      if (usd == null) missing++
+      else total += usd
+    }
+    return { total, missing }
+  }
+
+  // The USD total as a highlighted chip. A warning icon (explained on hover)
+  // flags payments left out for lack of a rate on their payDate.
+  function renderUsdTotal(items: typeof paymentHistory) {
+    const { total, missing } = usdTotal(items)
+    return (
+      <span className="stmt-total-chip is-primary" title="Converted at each payment date's exchange rate">
+        <span>Total (USD)</span>
+        <span className="font-mono">{isRatesLoading ? '…' : formatMoney(total)}</span>
+        {!isRatesLoading && missing > 0 && (
+          <i
+            className="lni lni-warning text-amber"
+            title={`${missing} ${missing === 1 ? 'payment has' : 'payments have'} no exchange rate for ${missing === 1 ? 'its' : 'their'} payment date and ${missing === 1 ? 'is' : 'are'} not included in this total`}
+            aria-label={`${missing} not converted`}
+          />
+        )}
+      </span>
+    )
+  }
+
+  // "Paid in UGX 246,978.58 · KES 500.00" — the original amounts behind the
+  // USD total, shown while the All Currencies switch is on.
+  function renderCurrencyBreakdown(items: typeof paymentHistory) {
+    const totals = sumByCurrency(items, 'amount')
+    if (!showAllCurrencies || totals.length === 0) return null
+    return (
+      <span className="stmt-total-breakdown">
+        <span className="stmt-total-breakdown-lbl">Paid in</span>
+        {totals.map((ct, i) => (
+          <Fragment key={ct.currency}>
+            {i > 0 && <span className="text-g300">·</span>}
+            <span>{ct.currency} <span className="font-mono">{formatMoney(ct.total)}</span></span>
+          </Fragment>
+        ))}
+      </span>
+    )
+  }
+
+  function renderUsdCell(p: (typeof paymentHistory)[0]) {
+    const usd = paymentUsd(p)
+    if (usd != null) return formatMoney(usd)
+    if (isRatesLoading) return <span className="text-g300">…</span>
+    const day = p.payDate ? new Date(p.payDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'this date'
+    return <span className="text-g300" title={`No exchange rate recorded for ${day}`}>—</span>
+  }
+
   // One payment row, shared by the grouped and flat views. The grouped view
   // drops the Semester cell — the group header above already names it.
   // Empty values render as a plain muted dash, not an empty pill/badge.
-  function renderPaymentRow(p: (typeof paymentHistory)[0], idx: number, key: string, showSemester: boolean) {
+  function renderPaymentRow(p: (typeof paymentHistory)[0], rowNo: number, key: string, showSemester: boolean) {
     const dash = <span className="text-g300">—</span>
     return (
       <tr key={key}>
@@ -244,7 +355,7 @@ export default function StudentStatementPage() {
             )}
           </ActionMenu>
         </td>
-        <td className="text-center text-g400">{p.slNo || idx + 1}</td>
+        <td className="text-center text-g400">{rowNo}</td>
         <td className="font-mono text-blue font-semibold">{p.paymentCode || dash}</td>
         <td className="whitespace-nowrap text-g700">
           {p.payDate
@@ -256,6 +367,7 @@ export default function StudentStatementPage() {
         <td className="font-mono text-g700">{p.receipt || dash}</td>
         <td className="num font-mono font-bold text-green">{formatMoney(p.amount)}</td>
         <td className="text-g500">{p.currencyName || dash}</td>
+        <td className="num font-mono font-bold text-g900">{renderUsdCell(p)}</td>
         <td>{renderCategoryBadge(p.category)}</td>
       </tr>
     )
@@ -904,16 +1016,32 @@ export default function StudentStatementPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-4">
+                    {tableTab === 'payments' && (
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={showAllCurrencies}
+                        className="stmt-switch"
+                        onClick={() => setShowAllCurrencies(prev => !prev)}
+                        title="Show totals in each payment currency as well as USD"
+                      >
+                        <span className="stmt-switch-off">USD</span>
+                        <span className="stmt-switch-track"><span className="stmt-switch-thumb" /></span>
+                        <span className="stmt-switch-on">All Currencies</span>
+                      </button>
+                    )}
                     <button
                       type="button"
-                      className={`btn btn-sm ${groupBySemester ? 'btn-primary' : 'btn-neu'}`}
+                      role="switch"
+                      aria-checked={groupBySemester}
+                      className="stmt-switch"
                       onClick={() => setGroupBySemester(prev => !prev)}
-                      title="Toggle grouping records by semester"
+                      title="Group records by semester"
                     >
-                      <i className="lni lni-layers" />
-                      <span>Group by Semester</span>
-                      {groupBySemester && <i className="lni lni-checkmark" />}
+                      <span className="stmt-switch-off">All Records</span>
+                      <span className="stmt-switch-track"><span className="stmt-switch-thumb" /></span>
+                      <span className="stmt-switch-on">By Semester</span>
                     </button>
                   </div>
                 </div>
@@ -934,13 +1062,14 @@ export default function StudentStatementPage() {
                           <th>Receipt #</th>
                           <th className="num">Amount</th>
                           <th>Currency</th>
+                          <th className="num" title="Converted at the exchange rate on the payment date">Amount (USD)</th>
                           <th>Category</th>
                         </tr>
                       </thead>
                       <tbody>
                         {filteredPayments.length === 0 ? (
                           <EmptyState
-                            colSpan={10}
+                            colSpan={11}
                             title={tableSearch || selectedCategory !== 'all' ? 'No matching payments' : 'No payments recorded'}
                             subtitle={
                               tableSearch || selectedCategory !== 'all'
@@ -958,7 +1087,7 @@ export default function StudentStatementPage() {
                             <Fragment key={group.semester || groupIdx}>
                               {/* Semester Group Header Row */}
                               <tr className="stmt-group-hdr">
-                                <td colSpan={9}>
+                                <td colSpan={10}>
                                   <div className="flex items-center gap-2.5">
                                     <span className="text-b700 font-bold">
                                       <i className="lni lni-graduation" />
@@ -974,24 +1103,18 @@ export default function StudentStatementPage() {
                               </tr>
 
                               {/* Rows in this Semester */}
-                              {group.items.map((p, idx) => renderPaymentRow(p, idx, p.paymentGuid || `${groupIdx}-${idx}`, false))}
+                              {group.items.map((p, idx) => renderPaymentRow(p, runningNo(groupedPayments, groupIdx, idx), p.paymentGuid || `${groupIdx}-${idx}`, false))}
 
                               {/* Section Subtotal Row */}
                               <tr className="stmt-group-total">
-                                <td colSpan={9}>
+                                <td colSpan={10}>
                                   <div className="flex items-center justify-between gap-4 flex-wrap">
                                     <div className="flex items-center gap-2">
                                       <span className="stmt-group-total-label">Semester Total</span>
                                     </div>
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      {group.currencyTotals.map(ct => (
-                                        <div key={ct.currency} className="stmt-total-chip">
-                                          <span>{ct.currency}</span>
-                                          <span className="font-mono">
-                                            {formatMoney(ct.total)}
-                                          </span>
-                                        </div>
-                                      ))}
+                                    <div className="flex items-center gap-3 flex-wrap justify-end">
+                                      {renderCurrencyBreakdown(group.items)}
+                                      {renderUsdTotal(group.items)}
                                     </div>
                                   </div>
                                 </td>
@@ -999,7 +1122,7 @@ export default function StudentStatementPage() {
                             </Fragment>
                           ))
                         ) : (
-                          filteredPayments.map((p, idx) => renderPaymentRow(p, idx, p.paymentGuid || String(idx), true))
+                          filteredPayments.map((p, idx) => renderPaymentRow(p, idx + 1,p.paymentGuid || String(idx), true))
                         )}
                       </tbody>
                     </table>
@@ -1057,7 +1180,7 @@ export default function StudentStatementPage() {
                               {/* Rows in this Semester */}
                               {group.items.map((o, idx) => (
                                 <tr key={o.ledgerGuid || `${groupIdx}-${idx}`}>
-                                  <td className="text-center text-g500">{o.slNo || idx + 1}</td>
+                                  <td className="text-center text-g500">{runningNo(groupedOutstanding, groupIdx, idx)}</td>
                                   <td className="font-bold text-g900">{o.description || 'Fee Assessment'}</td>
                                   <td className="text-g700">{o.semesterName || header?.semesterName || '—'}</td>
                                   <td>{renderCategoryBadge(o.category)}</td>
@@ -1095,7 +1218,7 @@ export default function StudentStatementPage() {
                         ) : (
                           filteredOutstanding.map((o, idx) => (
                             <tr key={o.ledgerGuid || idx}>
-                              <td className="text-center text-g500">{o.slNo || idx + 1}</td>
+                              <td className="text-center text-g500">{idx + 1}</td>
                               <td className="font-bold text-g900">{o.description || 'Fee Assessment'}</td>
                               <td className="text-g700">{o.semesterName || header?.semesterName || '—'}</td>
                               <td>{renderCategoryBadge(o.category)}</td>
@@ -1160,7 +1283,7 @@ export default function StudentStatementPage() {
                               {/* Rows in this Semester */}
                               {group.items.map((f, idx) => (
                                 <tr key={f.slNo || `${groupIdx}-${idx}`}>
-                                  <td className="text-center text-g500">{f.slNo || idx + 1}</td>
+                                  <td className="text-center text-g500">{runningNo(groupedFuture, groupIdx, idx)}</td>
                                   <td className="font-bold text-g900">{f.description}</td>
                                   <td className="text-g700">{f.semesterName || '—'}</td>
                                   <td className="num font-mono font-bold text-g900">
@@ -1197,7 +1320,7 @@ export default function StudentStatementPage() {
                         ) : (
                           filteredFuture.map((f, idx) => (
                             <tr key={f.slNo || idx}>
-                              <td className="text-center text-g500">{f.slNo || idx + 1}</td>
+                              <td className="text-center text-g500">{idx + 1}</td>
                               <td className="font-bold text-g900">{f.description}</td>
                               <td className="text-g700">{f.semesterName || 'Year Three - Semester Two'}</td>
                               <td className="num font-mono font-bold text-g900">
@@ -1221,13 +1344,9 @@ export default function StudentStatementPage() {
                       Showing <strong className="text-g900">{filteredPayments.length}</strong> of{' '}
                       <strong>{paymentHistory.length}</strong> payment records
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-g700">Total Paid Sum:</span>
-                      <span className="font-mono font-bold text-green">
-                        {sumByCurrency(filteredPayments, 'amount')
-                          .map(c => `${c.currency} ${c.total.toLocaleString()}`)
-                          .join(' • ') || '0.00'}
-                      </span>
+                    <div className="flex items-center gap-3 flex-wrap justify-end">
+                      {renderCurrencyBreakdown(filteredPayments)}
+                      {renderUsdTotal(filteredPayments)}
                     </div>
                   </div>
                 )}

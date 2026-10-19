@@ -210,9 +210,15 @@ function StudentMasterContent() {
   const batches = allBatchesData?.items ?? []
   // Semester options come from GET /academic/semesters/filter/by-semcode —
   // one option per semCode ("Year One - Semester One", …), usable without a
-  // Programme picked. A picked code goes to /students/filter as semCode, so
-  // one request covers every programme's semester with that code.
-  const { groups: semCodeGroups } = useSemesterCodeGroups()
+  // Programme picked. /students/filter only filters by semesterGuid, so a
+  // picked code is sent as each programme's own semesterGuid for that code
+  // (see getStudentsFilterCombinations).
+  // Fetched only once needed — the Semester filter opened, or a semester
+  // already picked (e.g. from the URL) — not on every page load. Cached for
+  // the session afterwards, so closing the filter keeps the options.
+  const needSemCodes = openColFilter === 'semCode' || colFilters.semCode.length > 0
+  const { groups: semCodeGroups, isLoading: semCodesLoading } = useSemesterCodeGroups(needSemCodes)
+  const semesterRowsByCode = new Map(semCodeGroups.map(g => [g.semCode, g.semesters]))
 
   // Academic Intake column funnel options (by intake code), and the label
   // lookup for the header joined-intake dropdown's trigger (by intakeGuid —
@@ -244,16 +250,21 @@ function StudentMasterContent() {
   // combination's first page × PAGE_SIZE rows and merges them into one
   // name-sorted list (see that hook's comment in useStudents.ts).
   const normalizedSearch = (search || '').trim()
-  const combos = getStudentsFilterCombinations(colFilters, normalizedSearch || undefined)
+  const combos = getStudentsFilterCombinations(colFilters, semesterRowsByCode, normalizedSearch || undefined)
   const isMultiCombo = combos.length > 1
+  // A Semester pick waits for its by-semcode rows before querying; if it then
+  // matches no semester (e.g. none of the picked programmes has it), there's
+  // nothing to ask the server for — the result is simply empty.
+  const awaitingSemesters = colFilters.semCode.length > 0 && semCodesLoading
+  const noCombos = combos.length === 0
 
-  const singleQuery = useStudentsFilter(page, PAGE_SIZE, combos[0], !isMultiCombo && !awaitingDefault)
-  const multi = useStudentsFilterMulti(combos, page, PAGE_SIZE, isMultiCombo && !awaitingDefault)
+  const singleQuery = useStudentsFilter(page, PAGE_SIZE, combos[0] ?? {}, !isMultiCombo && !noCombos && !awaitingDefault && !awaitingSemesters)
+  const multi = useStudentsFilterMulti(combos, page, PAGE_SIZE, isMultiCombo && !awaitingDefault && !awaitingSemesters)
 
-  const items = isMultiCombo ? multi.items : (singleQuery.data?.items ?? [])
-  const totalCount = isMultiCombo ? multi.totalCount : (singleQuery.data?.totalCount ?? 0)
+  const items = noCombos ? [] : isMultiCombo ? multi.items : (singleQuery.data?.items ?? [])
+  const totalCount = noCombos ? 0 : isMultiCombo ? multi.totalCount : (singleQuery.data?.totalCount ?? 0)
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  const isLoading = awaitingDefault || (isMultiCombo ? multi.isLoading : singleQuery.isLoading)
+  const isLoading = awaitingDefault || awaitingSemesters || (!noCombos && (isMultiCombo ? multi.isLoading : singleQuery.isLoading))
 
   // Dedicated, infinite-scroll query for the search dropdown — its matches
   // aren't filtered by the guid columns above, so it's suppressed the
@@ -328,6 +339,7 @@ function StudentMasterContent() {
                   <GuidColumnFilter
                     label="Semester"
                     options={semCodeGroups.map(g => ({ value: g.semCode, label: g.semName }))}
+                    isLoading={semCodesLoading}
                     isOpen={openColFilter === 'semCode'}
                     activeFilter={colFilters.semCode}
                     onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'semCode' ? null : 'semCode') }}
