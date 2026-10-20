@@ -3,7 +3,7 @@
 Reference for the permission-driven sidebar menu API, `GET /api/v1/users/me/menu`.
 Each node has the shape `{ name, icon, url, permissions, children }`.
 
-**Last updated: 2026-10-15.** The tree below is generated from the live frontend menu
+**Last updated: 2026-10-19.** The tree below is generated from the live frontend menu
 (`mockMenu` in `src/lib/api/users/menu.ts`), so it lists every page that is in the
 sidebar today. The events on each page come from reading the buttons and actions in
 that page's code.
@@ -132,6 +132,7 @@ action. Real access control still has to be enforced by each API.
 | Admission Flow | Registrar's Desk | `/admission/registration` | `get` `register` `print` | none | `print` = onboarding print-out |
 | Records | All Applicants | `/admission/applicants` | `get` `export` | none |  |
 | Records | Application Status Report | `/admission/reports/application-status` | `get` `export` | none | Preview with count per stage + Excel export; exports land in the shared Downloads list |
+| Records | Paid Students | `/admission/paid-students` | `get` `print` | none | Paid / exempted applicants per intake with their application stage; `print` = reprint the application payment receipt PDF (paid rows with a receipt only) |
 | Records | Receipts | *(none)* | — | — | no page yet |
 | Records | Reports | *(none)* | — | — | no page yet |
 
@@ -263,6 +264,13 @@ action. Real access control still has to be enforced by each API.
           "children": []
         },
         {
+          "name": "Paid Students",
+          "icon": "lni lni-wallet",
+          "url": "/admission/paid-students",
+          "permissions": { "get": true, "print": true },
+          "children": []
+        },
+        {
           "name": "Receipts",
           "icon": "lni lni-files",
           "url": null,
@@ -304,7 +312,10 @@ action. Real access control still has to be enforced by each API.
 | Programme Master | Programme Master | `/academic/programme-master` | `get` `add` `edit` `delete` `export` | `add` `edit` `delete` | `edit` also covers Renew; `add` covers New Version |
 | Programme Master | Programme Approval | `/academic/programme-approval` | `get` `delete` `approve` | `edit` `delete` |  |
 | Programme Master | Fee Structure | `/academic/fee-structure` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Timetable | Timetable | `/academic/timetable` | `get` `add` `edit` `delete` `import` | `add` `edit` `delete` | `import` = Excel import |
+| Timetable | Schedule Timetable | `/academic/timetable` | `get` `add` `edit` `delete` | `add` `edit` `delete` | Current or next intake only. Print uses the browser. Bulk Import is shown disabled (no API), so `import` is no longer used |
+| Timetable | Lecturer View | `/academic/timetable-lecturer` | `get` `export` | none | `export` = PDF (browser print) |
+| Timetable | Batch View | `/academic/timetable-batch` | `get` `export` | none | `export` = PDF (browser print) |
+| Timetable | Time Slot Audit | `/academic/timetable-slot-audit` | `get` `export` | none | `export` = PDF (browser print) and Excel (CSV built in the browser) |
 | ODL Applications | ODL Applications | `/academic/odl-applications` | `get` `export` | none |  |
 | ODL Applications | Payment Reconciliation | `/academic/odl-reconciliation` | `get` `approve` `reject` | `edit` `delete` | `approve` = confirm reconciliation |
 | Cross-Module | Student Lookup | `/academic/student-lookup` | `get` `edit` | `edit` |  |
@@ -467,10 +478,31 @@ action. Real access control still has to be enforced by each API.
       "permissions": null,
       "children": [
         {
-          "name": "Timetable",
+          "name": "Schedule Timetable",
           "icon": "lni lni-calendar",
           "url": "/academic/timetable",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true, "import": true },
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Lecturer View",
+          "icon": "lni lni-user",
+          "url": "/academic/timetable-lecturer",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        },
+        {
+          "name": "Batch View",
+          "icon": "lni lni-users",
+          "url": "/academic/timetable-batch",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        },
+        {
+          "name": "Time Slot Audit",
+          "icon": "lni lni-alarm-clock",
+          "url": "/academic/timetable-slot-audit",
+          "permissions": { "get": true, "export": true },
           "children": []
         }
       ]
@@ -1704,7 +1736,23 @@ removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
 | Assessment | Pending QP Upload | `/assessment/rpt-pending-qp` |
 | Assessment | Faculty Summary | `/assessment/rpt-faculty` |
 
-## Changes since the previous version (2026-10-09)
+## Changes since the previous version (2026-10-15)
+
+- **Academic › Timetable** now has four pages (from the timetable design,
+  `timetable-page.md`). Please register them in the menu API; until then the frontend
+  renames the existing leaf and adds the other three after it:
+  - The existing **Timetable** leaf (`/academic/timetable`) is renamed **Schedule
+    Timetable**. Its events are now `get` `add` `edit` `delete`; `import` is no longer
+    used (Bulk Import has no API and is shown disabled).
+  - Added **Lecturer View** (`/academic/timetable-lecturer`), **Batch View**
+    (`/academic/timetable-batch`) and **Time Slot Audit**
+    (`/academic/timetable-slot-audit`), each with `get` and `export`.
+- Added **Admission › Records › Paid Students** (`/admission/paid-students`), with `get`
+  and `print` (reprint the application payment receipt). Please register it in the
+  menu API; until then the frontend adds it to the end of the Records section, after
+  Application Status Report.
+
+## Changes in the 2026-10-15 version (since 2026-10-09)
 
 - Hid **Assessment › Assessment Structure › Weight Configuration**
   (`/assessment/weight-config`) and **Assessment Schedule** (`/assessment/schedule`),
