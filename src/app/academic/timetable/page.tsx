@@ -63,7 +63,7 @@ export default function SchedulePage() {
 
   const { data: lecturers = [], isLoading: lecturersLoading } = useTimetableLecturers(intakeGuid || null, termNo)
   const lecturer = lecturers.find(l => l.employeeGuid === lecturerGuid)
-  const lecturerName = lecturer?.empName ?? (lecturerGuid ? 'Unnamed lecturer' : '')
+  const lecturerName = lecturer?.empName ?? (lecturerGuid ? '—' : '')
   const { data: load } = useLecturerLoad(lecturerGuid || null, intakeGuid || null, termNo)
 
   const { data: units = [], isLoading: unitsLoading } = useTimetableCourseUnits(intakeGuid || null, termNo, lecturerGuid || null)
@@ -143,7 +143,7 @@ export default function SchedulePage() {
       mode: 'edit',
       timetableGuid: e.timetableGuid,
       lecturerGuid: e.lecturerGuid,
-      lecturerName: e.lecturerName ?? 'Unnamed lecturer',
+      lecturerName: e.lecturerName ?? '—',
       batchTimeGuid: e.batchTimeGuid,
       batchTimeName: e.batchTimeName,
       courseLabel: u.name ? `${u.code} – ${u.name}` : u.code,
@@ -307,7 +307,7 @@ export default function SchedulePage() {
                 </div>
                 <SearchSelect
                   placeholder={!intakeGuid ? 'Pick a session first' : lecturersLoading ? 'Loading…' : lecturers.length === 0 ? 'No lecturers planned for this term' : '— Select lecturer —'}
-                  options={lecturers.map(l => ({ value: l.employeeGuid, label: l.empName ?? 'Unnamed lecturer' }))}
+                  options={lecturers.map(l => ({ value: l.employeeGuid, label: l.empName ?? '—' }))}
                   value={lecturerGuid}
                   onChange={changeLecturer}
                   disabled={!intakeGuid}

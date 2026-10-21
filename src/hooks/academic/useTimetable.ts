@@ -47,10 +47,17 @@ export function useTimetableIntakes() {
 }
 
 // Lecturers planned for the intake and term (program planning).
+// empName is null when Identity can't resolve the lecturer
+// (get-timetable-lecturers.md). Those can't be told apart in a picker, so
+// they're left out — fix the name in Identity / Employee Master to list them.
 export function useTimetableLecturers(intakeGuid: string | null, term: number, enabled = true) {
   return useQuery({
     queryKey: [...TIMETABLE_KEY, 'lecturers', intakeGuid, term],
     queryFn: () => getTimetableLecturers(intakeGuid as string, term),
+    select: (lecturers: TimetableLecturer[]) => lecturers.filter(l => {
+      const name = l.empName?.trim()
+      return !!name && name.toLowerCase() !== 'null'
+    }),
     enabled: enabled && !!intakeGuid,
   })
 }
@@ -125,10 +132,24 @@ export function useLecturerLoad(lecturerGuid: string | null, intakeGuid: string 
 
 // ── Reference lists ──
 // batchTimeGuid narrows to that batch time; null lists every slot.
+// The master holds placeholder rows ("Unknown" / "Not Set", 12:00–12:00) that
+// aren't real teaching slots — they showed up as extra calendar columns.
+function isPlaceholderSlot(s: TimeSlotDropdownItem) {
+  return /unknown|not set/i.test(`${s.timeSlot ?? ''} ${s.timeSlotCode ?? ''}`)
+    || !s.startTime || !s.endTime
+    || s.startTime.slice(0, 5) === s.endTime.slice(0, 5)
+}
+
+// Columns are the selected batch time's own slots (timetable-page.md). The
+// guid is also checked here so a slot from another shift never becomes a
+// column, and the result is ordered by start time.
 export function useTimeSlots(batchTimeGuid: string | null, enabled = true) {
   return useQuery({
     queryKey: ['timeslots', 'dropdown', batchTimeGuid ?? 'all'],
     queryFn: () => getTimeSlotDropdown(batchTimeGuid),
+    select: (slots: TimeSlotDropdownItem[]) => slots
+      .filter(s => !isPlaceholderSlot(s) && (!batchTimeGuid || s.batchTimeGuid?.toLowerCase() === batchTimeGuid.toLowerCase()))
+      .sort((a, b) => (a.batchTimeName ?? '').localeCompare(b.batchTimeName ?? '') || a.startTime.localeCompare(b.startTime)),
     enabled,
     staleTime: Infinity,
   })
