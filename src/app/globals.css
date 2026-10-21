@@ -7,8 +7,9 @@
 @layer base {
   html {
     font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    /* Reserve the scrollbar's space even on short pages so the layout
+       doesn't jump sideways when navigating between short and long pages. */
+    scrollbar-gutter: stable;
   }
 
   /* Global removal of native up/down scrolling arrows from all number inputs */
@@ -108,15 +109,6 @@ body {
   color: var(--g900);
   min-height: 100vh;
   overflow-x: hidden;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-body::-webkit-scrollbar,
-html::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
 }
 
 /* ═══════════════════════════════════════
@@ -827,14 +819,30 @@ html::-webkit-scrollbar {
   overflow-y: auto;
   overflow-x: hidden;
   padding-bottom: 16px;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
 }
 
-.sb-panel::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
+/* Sidebar panel: same soft brand-blue scrollbar as the page (shown only
+   when the nav overflows), instead of the global blue-on-hover treatment. */
+.sb-panel,
+.sb-panel:hover {
+  scrollbar-color: var(--b300) transparent;
+}
+
+.sb-panel::-webkit-scrollbar,
+.sb-panel:hover::-webkit-scrollbar {
+  width: 10px;
+}
+
+.sb-panel::-webkit-scrollbar-track,
+.sb-panel:hover::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sb-panel::-webkit-scrollbar-thumb,
+.sb-panel:hover::-webkit-scrollbar-thumb {
+  background: var(--b300);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 .sb-panel.active {
@@ -7258,12 +7266,15 @@ body:has(.modal-overlay.open) {
   background: var(--b500);
 }
 
+/* background-color, not the `background` shorthand — the shorthand resets
+   background-clip, which makes inset thumbs (page, sidebar) jump to full
+   width on hover. */
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--b700) !important;
+  background-color: var(--b700) !important;
 }
 
 ::-webkit-scrollbar-thumb:active {
-  background: var(--b900) !important;
+  background-color: var(--b900) !important;
 }
 
 * {
@@ -7273,6 +7284,48 @@ body:has(.modal-overlay.open) {
 
 *:hover {
   scrollbar-color: var(--b500) var(--b50);
+}
+
+/* Page scrollbar: the pointer is always "over" <html>, so the blue hover
+   treatment above would keep it permanently highlighted. Keep it a soft
+   brand blue that darkens only when the thumb itself is hovered or dragged. */
+html,
+html:hover {
+  scrollbar-color: var(--b300) transparent;
+}
+
+html::-webkit-scrollbar,
+html:hover::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html::-webkit-scrollbar-track,
+html:hover::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html::-webkit-scrollbar-thumb,
+html:hover::-webkit-scrollbar-thumb {
+  background: var(--b300);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Chrome ignores the ::-webkit-scrollbar rules whenever scrollbar-color or
+   scrollbar-width is set, and the standard properties have no thumb-hover
+   state (and draw arrow buttons on Windows). Where ::-webkit-scrollbar is
+   supported, unset them for the page and sidebar so the thumb deepens to
+   dark blue on hover/drag (the global thumb :hover/:active rules above).
+   Firefox keeps the scrollbar-color fallback. */
+@supports selector(::-webkit-scrollbar) {
+  html,
+  html:hover,
+  .sb-panel,
+  .sb-panel:hover {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
 }
 
 @media(max-width:900px) {

@@ -220,11 +220,6 @@ export default function OutstandingReportPage() {
           <div className="pg-title">Outstanding Report</div>
           <div className="pg-sub">Students who still owe fees · billed, paid, discount and balance for the current semester, plus arrears, per currency</div>
         </div>
-        <div className="flex items-center gap-2">
-          <button type="button" className="btn btn-neu btn-sm" aria-expanded={filtersOpen} aria-controls="rpt-filters" onClick={() => setFiltersOpen(o => !o)}>
-            <i className={`lni ${filtersOpen ? 'lni-chevron-up' : 'lni-funnel'}`} aria-hidden="true" /> {filtersOpen ? 'Hide filters' : 'Show filters'}
-          </button>
-        </div>
       </div>
 
       {/* Filters */}

@@ -177,7 +177,7 @@ export default function Page() {
               placeholder="Name, receipt#, student no… (this page)"
               value={search}
               onChange={setSearch}
-              results={searchMatches.map(r => ({ id: `${r.paymentGuid}-${r.feeType}`, primary: r.studentName ?? r.receiptNo, secondary: `${r.receiptNo} · ${r.studentNo ?? '—'}` }))}
+              results={searchMatches.map(r => ({ id: `${r.paymentGuid}-${r.feeType}`, primary: r.studentName || r.receiptNo || '—', secondary: `${r.receiptNo || '—'} · ${r.studentNo || '—'}` }))}
               minChars={MIN_SEARCH_CHARS}
               onSelect={(res) => {
                 const row = rows.find(r => `${r.paymentGuid}-${r.feeType}` === res.id)
@@ -222,21 +222,23 @@ export default function Page() {
                         {r.category === 1 && permissions.edit && (
                           <button
                             className="btn btn-neu btn-sm"
-                            onClick={() => setEditEntry({ paymentGuid: r.paymentGuid, amount: r.amount, payDate: r.payDate, payType: r.payType, label: r.receiptNo })}
+                            onClick={() => setEditEntry({ paymentGuid: r.paymentGuid, amount: r.amount, payDate: r.payDate, payType: r.payType, label: r.receiptNo || '—' })}
                           >
                             <i className="lni lni-pencil-alt"></i> Edit
                           </button>
                         )}
                       </ActionMenu>
                     </td>
-                    <td className="text-blue font-bold font-mono">{r.receiptNo}</td>
+                    {/* `||`, not `??` — NCHE/Guild rows can send receiptNo and
+                        currencyCode empty, not just null. */}
+                    <td className="text-blue font-bold font-mono">{r.receiptNo || <span className="text-g400">—</span>}</td>
                     <td className="text-muted">{formatDate(r.payDate)}</td>
-                    <td className="font-mono text-blue">{r.studentNo ?? '—'}</td>
-                    <td><strong>{r.studentName ?? '—'}</strong></td>
-                    <td>{r.programName ?? '—'}</td>
-                    <td><span className={`badge ${feeTypeBadge(r.feeType)}`}>{r.feeType}</span></td>
+                    <td className="font-mono text-blue">{r.studentNo || '—'}</td>
+                    <td><strong>{r.studentName || '—'}</strong></td>
+                    <td>{r.programName || '—'}</td>
+                    <td>{r.feeType ? <span className={`badge ${feeTypeBadge(r.feeType)}`}>{r.feeType}</span> : <span className="text-g400">—</span>}</td>
                     <td className="text-green font-bold">{fmtAmount(r.amount)}</td>
-                    <td><span className="badge badge-gold">{r.currencyCode}</span></td>
+                    <td>{r.currencyCode ? <span className="badge badge-gold">{r.currencyCode}</span> : <span className="text-g400">—</span>}</td>
                     <td className="font-bold">{fmtAmount(r.ugxValue)}</td>
                     <td className="text-g400" style={{ fontSize: 11 }}>{r.rate != null ? fmtAmount(r.rate) : '—'}</td>
                     <td>{r.payType ? <span className={`pill ${payTypePill(r.payType.value)}`}>{r.payType.name}</span> : <span className="text-g400">—</span>}</td>

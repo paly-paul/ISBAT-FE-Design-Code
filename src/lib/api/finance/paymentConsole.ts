@@ -576,14 +576,15 @@ export function getPaymentHistory(applicationGuid: string): Promise<PaymentHisto
 export interface PaymentHistoryListEntry {
   paymentGuid: string
   category: number
-  receiptNo: string
+  // Empty (or null) on NCHE/Guild fee rows, as is currencyCode.
+  receiptNo: string | null
   payDate: string
   studentNo: string | null
   studentName: string | null
   programName: string | null
   feeType: string
   amount: number
-  currencyCode: string
+  currencyCode: string | null
   ugxValue: number
   rate: number | null
   payType: { value: number; name: string } | null

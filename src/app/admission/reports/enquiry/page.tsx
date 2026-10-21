@@ -169,11 +169,6 @@ export default function EnquiryReportPage() {
           <div className="pg-title">Enquiry Report</div>
           <div className="pg-sub">Every enquiry for the chosen intakes · who it’s assigned to, and its enquiry and follow-up status</div>
         </div>
-        <div className="flex items-center gap-2">
-          <button type="button" className="btn btn-neu btn-sm" aria-expanded={filtersOpen} aria-controls="rpt-filters" onClick={() => setFiltersOpen(o => !o)}>
-            <i className={`lni ${filtersOpen ? 'lni-chevron-up' : 'lni-funnel'}`} aria-hidden="true" /> {filtersOpen ? 'Hide filters' : 'Show filters'}
-          </button>
-        </div>
       </div>
 
       {/* Filters */}

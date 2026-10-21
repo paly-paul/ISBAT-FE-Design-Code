@@ -184,11 +184,6 @@ export default function ApplicationStatusReportPage() {
           <div className="pg-title">Application Status Report</div>
           <div className="pg-sub">Where every applicant of the chosen intakes is in the admission pipeline · from payment to registration</div>
         </div>
-        <div className="flex items-center gap-2">
-          <button type="button" className="btn btn-neu btn-sm" aria-expanded={filtersOpen} aria-controls="rpt-filters" onClick={() => setFiltersOpen(o => !o)}>
-            <i className={`lni ${filtersOpen ? 'lni-chevron-up' : 'lni-funnel'}`} aria-hidden="true" /> {filtersOpen ? 'Hide filters' : 'Show filters'}
-          </button>
-        </div>
       </div>
 
       {/* Filters */}
