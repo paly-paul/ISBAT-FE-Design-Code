@@ -1666,6 +1666,11 @@ export default function PaymentConsolePage() {
                       Campus dropped entirely (2026-09-09, per request) —
                       it only ever existed via the useCampuses() fallback
                       lookup that's now gone, nothing left to show here. */}
+                  {/* Student identifiers first. Both are null until the
+                      applicant is registered (same lifecycle as studentGuid),
+                      so an applicant shows "—". */}
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Student No</span><span className="pc-hero-fact-val tabular-nums" title={profile.studentNum || '—'}>{profile.studentNum || '—'}</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Reg. No</span><span className="pc-hero-fact-val tabular-nums" title={profile.studentRegNo || '—'}>{profile.studentRegNo || '—'}</span></div>
                   <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Semester</span><span className="pc-hero-fact-val" title={semName ?? '—'}>{semName ?? '—'}</span></div>
                   {/* Guards against the literal string "null" —
                       confirmed live on an application with no intake

@@ -223,7 +223,9 @@ export default function NcheGuildPaymentPage() {
       applicationGuid: a.applicationGuid,
       studentGuid: a.studentGuid,
       name: a.studentName || a.studentNum || '—',
-      subtitle: [a.studentNum, a.programName, a.semesterName].filter(Boolean).join(' · ') || '—',
+      // studentNum is the registration number (get-nche-search.md) — labelled,
+      // so it reads as the reg. no rather than an unexplained code.
+      subtitle: [a.studentNum ? `Reg. No ${a.studentNum}` : null, a.programName, a.semesterName].filter(Boolean).join(' · ') || '—',
     }))
     : (guildPages?.pages.flatMap(p => p.items) ?? []).map(a => ({
       key: a.applicationGuid,
@@ -465,7 +467,10 @@ export default function NcheGuildPaymentPage() {
               <input
                 className="ctrl"
                 type="text"
-                placeholder={category === 'nche' ? 'e.g. STU/2024/001 or Tumukunde Alice' : 'e.g. APP20222/667 or Tumukunde Alice'}
+                // Both endpoints match the registration number (get-nche-search.md,
+                // get-payment-console-search.md) — say so; the old NCHE example
+                // was a made-up "STU/2024/001" format.
+                placeholder={category === 'nche' ? 'Reg. no or name, e.g. 027240104' : 'Reg. no, App ref, name, phone or email'}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
@@ -570,7 +575,13 @@ export default function NcheGuildPaymentPage() {
                   </div>
                 </div>
                 <div className="pc-hero-facts">
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val">—</span></div>
+                  {/* Student identifiers first, same as Payment Console. Null
+                      until the applicant is registered, so an applicant
+                      shows "—". */}
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Student No</span><span className="pc-hero-fact-val tabular-nums" title={profile.studentNum || '—'}>{profile.studentNum || '—'}</span></div>
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Reg. No</span><span className="pc-hero-fact-val tabular-nums" title={profile.studentRegNo || '—'}>{profile.studentRegNo || '—'}</span></div>
+                  {/* Was hard-coded "—"; the profile response does carry campusName. */}
+                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val" title={profile.campusName || '—'}>{profile.campusName || '—'}</span></div>
                   <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Semester</span><span className="pc-hero-fact-val" title={profile.semesterName ?? '—'}>{profile.semesterName ?? '—'}</span></div>
                   {/* Guards against the literal string "null" — same live
                       quirk Payment Console's own Intake tile guards against. */}

@@ -72,8 +72,7 @@ A page with nothing beyond View is written as "View only".
 | Intake Master | `/academic/intake-master` | View · New Intake (gated: `add`) · Edit (gated: `edit`) · Delete (gated: `delete`) |
 | Bulk Intake Edit | `/academic/bulk-intake-edit` | View · Edit multiple intake rows inline, Save changes, Reset changes (all not yet permission-gated) |
 | Skill Management | `/academic/skill-master` | View · Add Skill (gated: `add`) · Edit (gated: `edit`) · Delete (gated: `delete`) · Proceed to Allocation (not yet permission-gated) |
-| Batch Management | `/academic/batch-management` | View · Create Batch (gated: `add`) · Edit (gated: `edit`) · Delete (gated: `delete`) |
-| Batch Summary | `/academic/batch-summary` | View · Export |
+| Batch Management | `/academic/batch-management` | View · Create Batch (gated: `add`) · Edit (gated: `edit`) · Delete (gated: `delete`) · Head Count tab (former Batch Summary, view only) |
 | Room Management | `/academic/room-management` | View · Add Room (gated: `add`) · Edit (gated: `edit`) · Delete (gated: `delete`) |
 | Session Movement | `/academic/session-movement` | View · Preview Movement Results, Download Preview CSV, Cancel, Confirm & Execute Session Movement (all not yet permission-gated) |
 
@@ -167,6 +166,7 @@ every action below is **not yet permission-gated**.
 | Mark Entry — CW | `/assessment/mark-cw` | View · Save All Marks |
 | Mark Entry — CBT | `/assessment/mark-cbt` | View · View Details / View Log · Override (mark override) · Action Blocked state for locked rows |
 | Mark Entry — UE | `/assessment/mark-ue` | View · Save All · View (per row) |
+| Mark Verify — UE | `/assessment/mark-ue-verify` | View · Edit a mark (gated: `edit`) · Verify exam (not yet permission-gated) |
 | Result & Moderation | `/assessment/moderation` | View · Publish Results · View (per row) |
 
 ### Resit & Disputes

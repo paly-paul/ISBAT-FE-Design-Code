@@ -266,13 +266,6 @@ through unchanged.
           "children": []
         },
         {
-          "name": "Batch Summary",
-          "icon": "lni lni-grid-alt",
-          "url": "/academic/batch-summary",
-          "permissions": {},
-          "children": []
-        },
-        {
           "name": "Room Management",
           "icon": "lni lni-home",
           "url": "/academic/room-management",
@@ -939,13 +932,12 @@ through unchanged.
 > `permissions` above reflect what the page *would* gate once a real API and
 > `usePagePermissions()`-backed leaf exist, not a confirmed backend contract.
 
-> `Batch Summary` moved out of `Student Records` into `Academic` >
-> `Academic Core` on 2026-09-02 (see the `Academic` section above) — the
-> page already pulled from the academic batch-summary API, not a students
-> endpoint. `mergeStudentSections()` filters it out of `Student Records`
-> here in case the real backend still registers it, and `ensureBatchSummary`
-> adds it into `Academic Core` (right after `Batch Management`) if the
-> backend doesn't register it there yet.
+> `Batch Summary` is no longer a menu item: on 2026-10-21 it was merged into
+> `Batch Management` as its **Head Count** tab (with the summary stat tiles on
+> top). `/academic/batch-summary` only redirects to
+> `/academic/batch-management?tab=headcount`. If the backend still registers
+> a `Batch Summary` leaf, `mergeStudentSections()` drops it from `Student
+> Records` and `removeBatchSummary()` drops it from `Academic Core`.
 
 > The whole `Services` section (`Student Services`) was hidden from the
 > sidebar on 2026-09-02 — `mergeStudentSections()` filters it out (so a

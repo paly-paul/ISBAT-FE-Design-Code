@@ -332,9 +332,6 @@ const mockMenu: MenuNode[] = [
       leaf('Bulk Intake Edit', 'layers', '/academic/bulk-intake-edit'),
       leaf('Skill Management', 'bulb', '/academic/skill-master'),
       leaf('Batch Management', 'users', '/academic/batch-management'),
-      // Moved from Student > Student Records, 2026-09-02 — the page already
-      // pulled from the academic/batchSummary API, not a students endpoint.
-      leaf('Batch Summary', 'grid-alt', '/academic/batch-summary'),
       leaf('Room Management', 'home', '/academic/room-management'),
       leaf('Session Movement', 'reload', '/academic/session-movement'),
     ]),
@@ -524,7 +521,7 @@ function mergeStudentSections(menu: MenuNode[]): MenuNode[] {
   // Student Statement extends the existing "Student Records" section rather
   // than getting its own section. Batch Summary used to live here too, but
   // moved to Academic > Academic Core on 2026-09-02 (see
-  // ensureBatchSummary below) — filtered out of Student Records here in
+  // removeBatchSummary below) — filtered out of Student Records here in
   // case the real backend still registers it, so a stale entry pointing at
   // the now-removed /student/batch-summary route doesn't linger.
   const recordsIdx = studentModule.children.findIndex(c => c.name === 'Student Records')
@@ -708,14 +705,9 @@ function ensureBulkIntakeEdit(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
-// TEMPORARY: Batch Summary moved from Student > Student Records to Academic
-// > Academic Core, 2026-09-02 — mergeStudentSections() above strips it out
-// of Student Records if the real backend still has it registered there, and
-// this adds it into Academic Core (right after Batch Management) if the
-// backend doesn't register it there yet. Same shape as ensureBulkIntakeEdit.
 // New page, no confirmed backend yet (no menu/permission registration for
 // it) — same "patch it into the real menu client-side" pattern as
-// ensureBatchSummary etc. immediately below. Targets "Course Unit Master"
+// ensureBulkIntakeEdit etc. Targets "Course Unit Master"
 // specifically, inserted right after "Course Units" since that's the
 // page it's most closely related to (assigning lecturers to the units
 // listed there).
@@ -751,7 +743,11 @@ function ensureCourseAllocation(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
-function ensureBatchSummary(menu: MenuNode[]): MenuNode[] {
+// Batch Summary was merged into Batch Management (2026-10-21) — the head
+// count view is now the "Head Count" tab there, and /academic/batch-summary
+// just redirects to it. Drops the leaf if the backend menu still registers
+// it, so the sidebar shows a single Batch Management entry.
+function removeBatchSummary(menu: MenuNode[]): MenuNode[] {
   const acadIdx = menu.findIndex(n => n.name === 'Academic')
   if (acadIdx === -1) return menu
 
@@ -760,19 +756,9 @@ function ensureBatchSummary(menu: MenuNode[]): MenuNode[] {
   if (coreIdx === -1) return menu
 
   const coreSection = acadModule.children[coreIdx]
-  if (coreSection.children.some(l => l.name === 'Batch Summary')) return menu
+  if (!coreSection.children.some(l => l.name === 'Batch Summary')) return menu
 
-  const children = [...coreSection.children]
-  const batchMgmtIdx = children.findIndex(l => l.name === 'Batch Management')
-  const batchSummaryLeaf = leaf('Batch Summary', 'grid-alt', '/academic/batch-summary')
-
-  if (batchMgmtIdx !== -1) {
-    children.splice(batchMgmtIdx + 1, 0, batchSummaryLeaf)
-  } else {
-    children.push(batchSummaryLeaf)
-  }
-
-  const mergedSection = { ...coreSection, children }
+  const mergedSection = { ...coreSection, children: coreSection.children.filter(l => l.name !== 'Batch Summary') }
 
   const mergedAcad = { ...acadModule }
   mergedAcad.children = [...acadModule.children]
@@ -1719,7 +1705,7 @@ export function getMenu(): Promise<MenuResult> {
       const withFinance = mergeFinanceSections(withApprovals)
       const withStudent = mergeStudentSections(withFinance)
       const withBulkEdit = ensureBulkIntakeEdit(withStudent)
-      const withBatchSummary = ensureBatchSummary(withBulkEdit)
+      const withBatchSummary = removeBatchSummary(withBulkEdit)
       const withCourseAllocation = ensureCourseAllocation(withBatchSummary)
       const withConfig = mergeConfigSections(withCourseAllocation)
       const withProgApp = ensureProgrammeApproval(withConfig)

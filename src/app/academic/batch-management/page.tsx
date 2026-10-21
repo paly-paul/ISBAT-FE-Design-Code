@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
@@ -12,6 +12,12 @@ import { Pagination } from '@/components/Pagination'
 import { useBatches, useCreateBatch, useUpdateBatch, useDeleteBatch, useBatchStudentCount, Batch } from '@/hooks/academic/useBatches'
 import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { SearchSelect } from '@/components/SearchSelect'
+import { InfiniteSearchSelect } from '@/components/InfiniteSearchSelect'
+import { useCampusDropdown } from '@/hooks/config/useCampuses'
+import { useBatchSummary } from '@/hooks/academic/useBatchSummary'
+import { getIntakesPaged } from '@/lib/api/academic/intake'
+import { HeadCountTab } from './_components/HeadCountTab'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -33,6 +39,11 @@ const PAGE_SIZE = 10
 // Skill Master's search boxes.
 const MIN_SEARCH_CHARS = 2
 
+// Batch Summary was merged into this page (2026-10-21): its head counts are
+// the stat tiles plus the Head Count tab. ?tab=headcount opens that tab —
+// /academic/batch-summary redirects here with it.
+type Tab = 'manage' | 'headcount'
+
 export default function Page() {
   const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
@@ -41,6 +52,35 @@ export default function Page() {
   const [page, setPage] = useState(1)
   const [editingBatchGuid, setEditingBatchGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Batch | null>(null)
+
+  // ---- Tabs (same sliding underline as the other .tab-bar screens) ----
+  const [activeTab, setActiveTab] = useState<Tab>('manage')
+  // Read on mount, not via useSearchParams — the static export would need a
+  // Suspense boundary for that, and this is only an entry hint.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('tab') === 'headcount') setActiveTab('headcount')
+  }, [])
+  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement>>>({})
+  const [indicator, setIndicator] = useState({ left: 0, width: 0 })
+  useLayoutEffect(() => {
+    const el = tabRefs.current[activeTab]
+    if (el) setIndicator({ left: el.offsetLeft, width: el.offsetWidth })
+  }, [activeTab])
+
+  // ---- Head count (GET /academic/batch-summary) ----
+  // Scoped by campus and intake; no intake = the current admission intake,
+  // the endpoint's default. Feeds both the stat tiles and the Head Count tab.
+  const [campusGuid, setCampusGuid] = useState('')
+  const [intakeGuid, setIntakeGuid] = useState('')
+  const { data: campuses = [] } = useCampusDropdown()
+  const summary = useBatchSummary(campusGuid || null, intakeGuid || null)
+  const summaryRows = useMemo(() => summary.data?.items ?? [], [summary.data])
+  const totalStudents = summaryRows.reduce((sum, r) => sum + r.headCount, 0)
+  const avgBatchSize = summaryRows.length ? Math.round(totalStudents / summaryRows.length) : 0
+  const scopeLabel = [
+    campusGuid ? (campuses.find(c => c.campusGuid === campusGuid)?.campusName ?? 'This campus') : 'All campuses',
+    intakeGuid ? 'Selected intake' : 'Current intake',
+  ].join(' · ')
 
   // Real server-side pagination (2026-09-09) — only PAGE_SIZE rows are ever
   // requested for the page on screen, not the whole 333+-row table fetched
@@ -135,17 +175,81 @@ export default function Page() {
     <>
       <div className="page active">
         <div className="pg-hdr">
-          <div><div className="pg-title">Batch Management</div><div className="pg-sub">Create batches per intake · Assign Batch In-Charge</div></div>
+          <div><div className="pg-title">Batch Management</div><div className="pg-sub">Create batches per intake · Assign Batch In-Charge · Track head counts</div></div>
           <div className="flex items-center gap-3">
             {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-batch-modal')}><i className="lni lni-plus"></i> Create Batch</button>}
           </div>
         </div>
 
+        {/* Head-count scope: drives the stat tiles and the Head Count tab
+            (not the Manage Batches table, which lists every batch). */}
+        <div className="flex items-center gap-2 flex-wrap mb-3">
+          <span className="text-sm font-semibold text-g600">Head count for</span>
+          <SearchSelect
+            style={{ width: 200 }}
+            placeholder="All Campuses"
+            options={campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))}
+            value={campusGuid}
+            onChange={setCampusGuid}
+          />
+          <div style={{ width: 220 }}>
+            <InfiniteSearchSelect
+              queryKey={['intakes', 'batch-summary']}
+              fetchPage={getIntakesPaged}
+              toOption={i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })}
+              allLabel="Current Intake"
+              value={intakeGuid}
+              onChange={setIntakeGuid}
+            />
+          </div>
+        </div>
 
+        <div className="stats-row" style={{ opacity: summary.isPlaceholderData ? 0.45 : 1, transition: 'opacity .15s ease' }}>
+          <div className="stat-card"><div className="stat-lbl">Total Batches</div><div className="stat-num" style={{ color: 'var(--b700)' }}>{summary.isLoading ? '—' : summaryRows.length}</div><div className="stat-sub">{scopeLabel}</div></div>
+          <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Students</div><div className="stat-num" style={{ color: 'var(--green)' }}>{summary.isLoading ? '—' : totalStudents.toLocaleString()}</div><div className="stat-sub up">Across these batches</div></div>
+          <div className="stat-card"><div className="stat-lbl">Avg Batch Size</div><div className="stat-num">{summary.isLoading ? '—' : avgBatchSize}</div><div className="stat-sub">students / batch</div></div>
+        </div>
 
-        <div className="card">
-          <div className="card-hdr" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-users"></i></span> Batches</div>
+        <div className="card p-0 overflow-hidden">
+          <div className="tab-bar" role="tablist" aria-label="Batches">
+            {([
+              { id: 'manage', label: 'Manage Batches', icon: 'lni-users', count: data ? totalCount : undefined },
+              { id: 'headcount', label: 'Head Count', icon: 'lni-grid-alt', count: summary.data ? summaryRows.length : undefined },
+            ] as { id: Tab; label: string; icon: string; count?: number }[]).map(t => {
+              const active = activeTab === t.id
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  ref={el => { if (el) tabRefs.current[t.id] = el }}
+                  className={`tab-btn${active ? ' active' : ''}`}
+                  onClick={() => setActiveTab(t.id)}
+                >
+                  <i className={`lni ${t.icon}`} aria-hidden="true" /> {t.label}
+                  {t.count !== undefined && <span className={`badge ${active ? 'badge-blue' : 'badge-grey'}`}>{t.count.toLocaleString()}</span>}
+                </button>
+              )
+            })}
+            <span className="tab-indicator" style={{ left: indicator.left, width: indicator.width }} />
+          </div>
+
+        {activeTab === 'headcount' && (
+          <div key="headcount" className="p-5 tab-panel-in">
+            <HeadCountTab
+              rows={summaryRows}
+              isLoading={summary.isLoading}
+              isRefetching={summary.isPlaceholderData}
+              hasFilters={!!campusGuid || !!intakeGuid}
+              onClearFilters={() => { setCampusGuid(''); setIntakeGuid('') }}
+            />
+          </div>
+        )}
+
+        {activeTab === 'manage' && (
+        <div key="manage" className="p-5 tab-panel-in">
+          <div className="flex items-center justify-end mb-4">
             <TableSearch
               className="w-56"
               placeholder="Search by batch code…"
@@ -183,15 +287,13 @@ export default function Page() {
                 {!isLoading && pageItems.map(r => (
                   <tr key={r.batchGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete || true) && (
-                        <ActionMenu>
-                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.batchGuid)}><i className="lni lni-eye"></i> View</button>
-                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.batchGuid)}><i className="lni lni-pencil"></i> Edit</button>}
-                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
-                        </ActionMenu>
-                      )}
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.batchGuid)}><i className="lni lni-eye"></i> View</button>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.batchGuid)}><i className="lni lni-pencil"></i> Edit</button>}
+                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
+                      </ActionMenu>
                     </td>
-                    <td><span className="font-bold font-mono text-blue">{r.batchCode}</span></td>
+                    <td><span className="font-bold text-blue tabular-nums">{r.batchCode}</span></td>
                     <td>{programName(r)}</td>
                     <td>{semesterName(r)}</td>
                     <td>{streamName(r)}</td>
@@ -208,6 +310,8 @@ export default function Page() {
           </ScrollTable>
 
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="batches" onPageChange={setPage} />
+        </div>
+        )}
         </div>
       </div>
       {openModals.has('new-batch-modal') && (
