@@ -1,4 +1,4 @@
-import { AuthError, post, apiPost, refreshAccessTokenWithRetry } from './api/client'
+import { AuthError, post, apiGet, apiPost, apiPostWithMessage, refreshAccessTokenWithRetry } from './api/client'
 
 export { AuthError }
 
@@ -126,81 +126,50 @@ export function otpVerify(challengeId: string, code: string) {
   return post<OtpVerifyResult>('/api/auth/otp/verify', { challengeId, code })
 }
 
-// Forgot password
+// Forgot password (staff-portal-forgot-password-page.md)
+// Two calls: request an OTP by username, then send the OTP together with the
+// new password. There is no separate "verify OTP" step or reset token.
 
-export interface ForgotStartResult {
-  challengeId: string
+export interface ForgotPasswordResult {
+  // "" when no account matched, or the account has no email — the page must
+  // not say the username is wrong (post-forgot-password.md).
+  maskedEmail: string
 }
 
-export function forgotStart(staffId: string, channel: 'email' | 'sms') {
+export function requestPasswordReset(username: string): Promise<ForgotPasswordResult> {
+  if (MOCK_AUTH) return Promise.resolve({ maskedEmail: 'ad***@isbat.ac.ug' })
+  return apiPost<ForgotPasswordResult | null>('/api/v1/users/auth/forgot-password', { username })
+    .then(data => ({ maskedEmail: data?.maskedEmail ?? '' }))
+}
+
+// Resolves with the API's success message ("Password reset successfully.").
+// Errors: otp_invalid, otp_max_attempts, validation_error, rate_limit_exceeded.
+export function resetPassword(username: string, otp: string, newPassword: string): Promise<string> {
   if (MOCK_AUTH) {
-    return Promise.resolve<ForgotStartResult>({ challengeId: 'mock-challenge-id' })
+    if (otp !== MOCK_CREDENTIALS.otp) return Promise.reject(new AuthError('otp_invalid', 'Invalid or expired OTP.'))
+    return Promise.resolve('Password reset successfully.')
   }
-  return post<ForgotStartResult>('/api/auth/forgot/start', { staffId, channel })
+  return apiPostWithMessage<boolean>('/api/v1/users/auth/reset-password', { username, otp, newPassword })
+    .then(r => r.message || 'Password reset successfully.')
 }
 
-export interface ForgotVerifyResult {
-  resetToken: string
-}
+// Set password from the approval email (staff-portal-set-password-page.md)
 
-export function forgotVerify(challengeId: string, code: string) {
+// Doesn't consume the token and doesn't check the username. Rejects with
+// setup_token_invalid when the link is unknown, used or expired.
+export function validateSetupToken(token: string): Promise<boolean> {
   if (MOCK_AUTH) {
-    return Promise.resolve<ForgotVerifyResult>({ resetToken: 'mock-reset-token' })
+    return token === 'expired'
+      ? Promise.reject(new AuthError('setup_token_invalid', 'This setup link is invalid or has expired.'))
+      : Promise.resolve(true)
   }
-  return post<ForgotVerifyResult>('/api/auth/forgot/verify', { challengeId, code })
+  return apiGet<boolean>(`/api/v1/users/auth/validate-setup-token?token=${encodeURIComponent(token)}`)
 }
 
-export function forgotReset(resetToken: string, newPassword: string) {
-  if (MOCK_AUTH) return Promise.resolve()
-  return post<void>('/api/auth/forgot/reset', { resetToken, newPassword })
-}
-
-// Account activation
-
-export interface ActivateProfile {
-  fullName: string
-  role: string
-  staffId: string
-  email: string
-  department: string
-  createdAt: string
-}
-
-export function activateConfirm(activationToken: string) {
-  if (MOCK_AUTH) {
-    return Promise.resolve<ActivateProfile>({
-      fullName: 'Mock User',
-      role: 'Staff',
-      staffId: activationToken,
-      email: 'mock@isbat.ac.ug',
-      department: 'Academic Affairs',
-      createdAt: new Date().toISOString(),
-    })
-  }
-  return post<ActivateProfile>('/api/auth/activate/confirm', { activationToken })
-}
-
-export interface ActivateSetupResult {
-  sessionId: string
-  redirect: string
-}
-
-export function activateSetup(
-  activationToken: string,
-  password: string,
-  otpChannel: 'email' | 'sms',
-  consent: boolean,
-) {
-  if (MOCK_AUTH) {
-    return Promise.resolve<ActivateSetupResult>({
-      sessionId: 'mock-session-id',
-      redirect: '/academic',
-    })
-  }
-  return post<ActivateSetupResult>('/api/auth/activate/setup', {
-    activationToken,
-    password,
-    otpChannel,
-    consent,
-  })
+// Resolves with the API's success message. setup_token_invalid also covers a
+// username that doesn't match the token's account — same response by design.
+export function setInitialPassword(token: string, username: string, newPassword: string): Promise<string> {
+  if (MOCK_AUTH) return Promise.resolve('Password set successfully. You can now log in.')
+  return apiPostWithMessage<boolean>('/api/v1/users/auth/set-password', { token, username, newPassword })
+    .then(r => r.message || 'Password set successfully. You can now log in.')
 }

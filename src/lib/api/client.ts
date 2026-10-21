@@ -31,7 +31,8 @@ export class AuthError extends Error {
 }
 
 // These auth routes should not trigger a refresh loop.
-const AUTH_ENDPOINTS = ['/auth/login', '/auth/refresh', '/auth/logout']
+// Public password flows too: a 401 there must not try to refresh a session.
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/refresh', '/auth/logout', '/auth/forgot-password', '/auth/reset-password', '/auth/validate-setup-token', '/auth/set-password']
 
 function isAuthEndpoint(path: string): boolean {
   return AUTH_ENDPOINTS.some(endpoint => path.includes(endpoint))

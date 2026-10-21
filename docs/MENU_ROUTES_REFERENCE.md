@@ -3,7 +3,7 @@
 Reference for the permission-driven sidebar menu API, `GET /api/v1/users/me/menu`.
 Each node has the shape `{ name, icon, url, permissions, children }`.
 
-**Last updated: 2026-10-19.** The tree below is generated from the live frontend menu
+**Last updated: 2026-10-21.** The tree below is generated from the live frontend menu
 (`mockMenu` in `src/lib/api/users/menu.ts`), so it lists every page that is in the
 sidebar today. The events on each page come from reading the buttons and actions in
 that page's code.
@@ -300,8 +300,7 @@ action. Real access control still has to be enforced by each API.
 | Academic Core | Intake Master | `/academic/intake-master` | `get` `add` `edit` `delete` `export` | `add` `edit` `delete` |  |
 | Academic Core | Bulk Intake Edit | `/academic/bulk-intake-edit` | `get` `edit` | none |  |
 | Academic Core | Skill Management | `/academic/skill-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Academic Core | Batch Management | `/academic/batch-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Academic Core | Batch Summary | `/academic/batch-summary` | `get` `export` | none |  |
+| Academic Core | Batch Management | `/academic/batch-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` | Includes the former Batch Summary as the Head Count tab (2026-10-21) |
 | Academic Core | Room Management | `/academic/room-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Academic Core | Session Movement | `/academic/session-movement` | `get` `execute` | none | `execute` = single and bulk Move Session |
 | Course Unit Master | Repetition Tag | `/academic/repetition-tag` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
@@ -374,13 +373,6 @@ action. Real access control still has to be enforced by each API.
           "icon": "lni lni-users",
           "url": "/academic/batch-management",
           "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Batch Summary",
-          "icon": "lni lni-grid-alt",
-          "url": "/academic/batch-summary",
-          "permissions": { "get": true, "export": true },
           "children": []
         },
         {
@@ -1053,7 +1045,7 @@ action. Real access control still has to be enforced by each API.
 | Assessment Structure | Exam Rules Master | `/assessment/exam-rules` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Assessment Structure | Question FAQs | `/assessment/question-faqs` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Assessment Structure | Bulk Exam Scheduler | `/assessment/bulk-exam-scheduler` | `get` `add` | none |  |
-| Assessment Structure | IA Creation | `/assessment/ia-creation` | `get` `add` `edit` | none | `add` = create structure; `edit` = edit CW/CT/UE schedule |
+| Assessment Structure | Assessment Scheduler | `/assessment/ia-creation` | `get` `add` `edit` | none | Formerly IA Creation. `add` = create structure; `edit` = edit CW/CT/UE schedule |
 | Assessment Structure | IA Evaluation | `/assessment/ia-evaluation` | `get` `edit` `submit` | none | `edit` = save marks; `submit` = finalize |
 | Coursework (CW) | Question Bank Upload | `/assessment/cw-qbank` | `get` `add` `edit` `delete` `import` `download` | none | `import` = Excel import; `download` = template |
 | Coursework (CW) | CW Rectification | `/assessment/cw-rectify` | `get` `edit` `delete` | none | `edit` = reopen / re-evaluate attempt |
@@ -1072,7 +1064,8 @@ action. Real access control still has to be enforced by each API.
 | University Exam (UE) | Resit Question Print | `/assessment/resit-question-print` | `get` `delete` `print` `generate` | none |  |
 | University Exam (UE) | UE Attendance | `/assessment/ue-attendance` | `get` `edit` | none |  |
 | University Exam (UE) | UE Mark Import | `/assessment/ue-mark-import` | `get` `import` | none |  |
-| Mark Entry & Results | Mark Entry — UE | `/assessment/mark-ue` | `get` `verify` | none |  |
+| Mark Entry & Results | Mark Entry — UE | `/assessment/mark-ue` | `get` `edit` | `get` `edit` | `edit` = save a student's marks |
+| Mark Entry & Results | Mark Verify — UE | `/assessment/mark-ue-verify` | `get` `edit` `verify` | `get` `edit` | `edit` = correct a mark; `verify` = verify the exam (locks it for mark entry) |
 | Mark Entry & Results | Result & Moderation | `/assessment/moderation` | `get` `edit` | none |  |
 | Mark Entry & Results | Exam Mark Import | `/assessment/exam-mark-import` | `get` `import` `download` `publish` | none |  |
 | Mark Entry & Results | Generate Result | `/assessment/generate-result` | `get` `edit` `delete` `export` `generate` `publish` | none | `edit` = apply moderation; `publish` also covers withdraw |
@@ -1148,7 +1141,7 @@ action. Real access control still has to be enforced by each API.
           "children": []
         },
         {
-          "name": "IA Creation",
+          "name": "Assessment Scheduler",
           "icon": "lni lni-graduation",
           "url": "/assessment/ia-creation",
           "permissions": { "get": true, "add": true, "edit": true },
@@ -1316,7 +1309,14 @@ action. Real access control still has to be enforced by each API.
           "name": "Mark Entry — UE",
           "icon": "lni lni-pencil-alt",
           "url": "/assessment/mark-ue",
-          "permissions": { "get": true, "verify": true },
+          "permissions": { "get": true, "edit": true },
+          "children": []
+        },
+        {
+          "name": "Mark Verify — UE",
+          "icon": "lni lni-shield",
+          "url": "/assessment/mark-ue-verify",
+          "permissions": { "get": true, "edit": true, "verify": true },
           "children": []
         },
         {
@@ -1716,6 +1716,7 @@ removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
 
 | Module | Page | URL |
 |---|---|---|
+| Academic | Batch Summary | `/academic/batch-summary` (redirects to Batch Management's Head Count tab; dropped by `removeBatchSummary`) |
 | Student | Learning Mode Report | `/student/learning-mode-report` |
 | Student | Student Services | `/student/services` |
 | Assessment | Weight Configuration | `/assessment/weight-config` |
@@ -1736,7 +1737,24 @@ removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
 | Assessment | Pending QP Upload | `/assessment/rpt-pending-qp` |
 | Assessment | Faculty Summary | `/assessment/rpt-faculty` |
 
-## Changes since the previous version (2026-10-15)
+## Changes since the previous version (2026-10-19)
+
+- **Academic › Academic Core › Batch Summary** is removed from the menu. It is now
+  the **Head Count** tab of **Batch Management** (`/academic/batch-management`),
+  with the summary stat tiles on top. Please remove the Batch Summary page from the
+  menu API and its permissions. `/academic/batch-summary` only redirects to
+  `/academic/batch-management?tab=headcount`, and the frontend drops the leaf if the
+  menu still sends it (`removeBatchSummary`).
+- **Assessment › Assessment Structure › IA Creation** is renamed **Assessment
+  Scheduler** (same URL, `/assessment/ia-creation`, same events). Please rename it in
+  the menu API; until then the frontend renames it (`renameIaCreation`).
+- Added **Assessment › Mark Entry & Results › Mark Verify — UE**
+  (`/assessment/mark-ue-verify`), right after Mark Entry — UE, with `get` `edit`
+  `verify`. Please register it in the menu API; until then the frontend adds it.
+- Corrected **Mark Entry — UE**'s events to `get` `edit`. It was listed with `verify`,
+  but verifying is done on the new Mark Verify — UE page; mark entry only saves marks.
+
+## Changes in the 2026-10-19 version (since 2026-10-15)
 
 - **Academic › Timetable** now has four pages (from the timetable design,
   `timetable-page.md`). Please register them in the menu API; until then the frontend

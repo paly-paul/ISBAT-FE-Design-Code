@@ -4,8 +4,6 @@ export interface LoginFlowState {
   challengeId?: string
   otpChannel?: 'email' | 'sms'
   maskedTarget?: string
-  forgotChallengeId?: string
-  forgotResetToken?: string
   returnTo?: string
 }
 

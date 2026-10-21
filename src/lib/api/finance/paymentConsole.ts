@@ -48,6 +48,8 @@ export interface StudentProfile {
   yearCode: string | null
   intakeGuid: string | null
   campusGuid: string | null
+  // Pre-resolved, seen on a live student-profile response (2026-10-21).
+  campusName?: string | null
   programGuid: string | null
   semesterGuid: string | null
   feeHdGuid: string | null

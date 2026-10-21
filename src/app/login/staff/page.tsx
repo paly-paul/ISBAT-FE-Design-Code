@@ -32,6 +32,16 @@ export default function StaffLoginPage() {
   const queryClient = useQueryClient()
   useEffect(() => { rememberNextFromUrl() }, [])
 
+  // Set-password and forgot-password send people back here with
+  // ?username= (prefilled) and, after a reset, ?reset=1 for a confirmation.
+  const [resetDone, setResetDone] = useState(false)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const u = params.get('username')
+    if (u) setStaffId(u)
+    if (params.get('reset') === '1') setResetDone(true)
+  }, [])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     // const idErr = validateStaffId(staffId)
@@ -102,6 +112,13 @@ export default function StaffLoginPage() {
         </div>
       )} */}
 
+      {resetDone && (
+        <div className="isb-error-banner" role="status" style={{ background: 'var(--isb-paper-2)', borderColor: 'var(--isb-line-2)', color: 'var(--isb-ink)', marginBottom: 16 }}>
+          <Icon name="check" size={16} color="var(--isb-green)" />
+          <span>Password updated. Sign in with your new password — you&apos;ve been signed out on other devices.</span>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit}>
         <div className="isb-field">
           <label className="isb-label" htmlFor="staff-id">Staff ID</label>
@@ -126,7 +143,7 @@ export default function StaffLoginPage() {
             <span>Password</span>
             <button
               type="button"
-              onClick={() => router.push('/login/forgot')}
+              onClick={() => router.push(staffId.trim() ? `/login/forgot?username=${encodeURIComponent(staffId.trim())}` : '/login/forgot')}
               className="isb-btn link"
               style={{ fontSize: 11 }}
             >
