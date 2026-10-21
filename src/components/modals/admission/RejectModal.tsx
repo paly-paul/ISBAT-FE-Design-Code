@@ -94,7 +94,7 @@ export function RejectModal({ isOpen, onClose, showToast, applicationGuid, vetAp
 
         <div className="danger-box mb-3">
           <i className="lni lni-warning"></i>
-          <span>This action will permanently reject the application and notify the applicant. This cannot be undone.</span>
+          <span>This will reject the application and notify the applicant. A mistaken rejection can be reverted from the Rejections tab.</span>
         </div>
 
         <div className="fg mb-3">

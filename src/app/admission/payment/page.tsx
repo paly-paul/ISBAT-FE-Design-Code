@@ -552,14 +552,26 @@ function PaymentPageContent() {
       appliedEnquiryGuidRef.current = enquiryGuid
       const [firstName, ...rest] = (selectedEnquiry.studentName || '').trim().split(/\s+/)
 
-      const matchedCountry = findMatchingCountry(selectedEnquiry, allCountries)
+      // An enquiry with no country comes back as the all-zero guid — treat
+      // that as "none". When it does have one, that guid is the answer: it
+      // used to go through findMatchingCountry, whose name/phone/Uganda
+      // fallbacks replaced the enquiry's real country with a guess whenever
+      // the guid wasn't in the cached list. Guess only when there's no guid.
+      const enquiryCountryGuid = selectedEnquiry.countryGuid && selectedEnquiry.countryGuid !== EMPTY_GUID
+        ? selectedEnquiry.countryGuid
+        : ''
+      const matchedCountry = enquiryCountryGuid
+        ? allCountries.find(c => c.countryGuid?.toLowerCase() === enquiryCountryGuid.toLowerCase())
+        : findMatchingCountry(selectedEnquiry, allCountries)
       // The enquiry's own phone country (mobileCountryGuid, 2026-10) wins for
       // the dial code; older enquiries don't have one, so fall back to the
       // student's country.
       const mobileCountry = selectedEnquiry.mobileCountryGuid
         ? allCountries.find(c => c.countryGuid === selectedEnquiry.mobileCountryGuid)
         : undefined
-      const phoneDial = mobileCountry ? dialCode(mobileCountry) : matchedCountry ? dialCode(matchedCountry) : undefined
+      const phoneDial = mobileCountry ? dialCode(mobileCountry)
+        : selectedEnquiry.mobileCountryPrefix?.trim() ? selectedEnquiry.mobileCountryPrefix.trim()
+        : matchedCountry ? dialCode(matchedCountry) : undefined
 
       setForm(prev => ({
         ...prev,
@@ -573,12 +585,9 @@ function PaymentPageContent() {
         lastName: rest.join(' '),
         phone: selectedEnquiry.mobile ?? prev.phone,
         email: selectedEnquiry.email ?? prev.email,
-        // An enquiry with no country comes back as the all-zero guid — treat
-        // that as "none" so the field asks for a country instead of holding
-        // an invalid value (which also blocked the default-country prefill).
-        countryGuid: matchedCountry?.countryGuid
-          ?? (selectedEnquiry.countryGuid && selectedEnquiry.countryGuid !== EMPTY_GUID ? selectedEnquiry.countryGuid : '')
-          ?? prev.countryGuid,
+        // Not in the cached list → keep the guid anyway; countryOptions
+        // labels it from the enquiry's countryName.
+        countryGuid: matchedCountry?.countryGuid ?? enquiryCountryGuid,
         phoneCode: phoneDial ?? prev.phoneCode,
         remarks: selectedEnquiry.remarks ?? prev.remarks,
       }))

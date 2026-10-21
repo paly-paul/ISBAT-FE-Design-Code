@@ -142,8 +142,65 @@ const mockQueue: VettingQueueItem[] = [
   { intApplication: 1045, applicationGuid: 'a1b2c3d4-vet-0000-0000-000000000045', appRefNo: 'APP-2025-0045', studentName: 'Kyomuhendo Faith',  programGuid: 'prog-bscs', programName: 'BSc Computer Science',       intakeGuid: 'a1b2c3d4-0000-4000-8000-000000000001', intakeName: 'May 2026',     intakeCode: '20262',     type: 'Direct', documentsUploaded: 4, documentsTotal: 4, submittedDate: new Date(Date.now() - 1 * 3600_000).toISOString(), action: 1 },
 ]
 
+// ---- Waiting list (GET /api/v1/admissions/vetting/waiting-list) ----
+// Applications parked with POST .../wait. They leave the queue and are listed
+// here, newest waitingDate first, until approved or rejected via the same vet
+// call as the queue — there is no "un-wait" endpoint.
+
+export interface VettingWaitingItem {
+  applicationGuid: string
+  appRefNo: string
+  studentName: string
+  phone: string | null
+  emailId: string | null
+  programGuid: string
+  programName: string | null
+  // "Direct" or "ODL"
+  type: string
+  submittedDate: string | null
+  waitingDate: string | null
+  remarks: string | null
+}
+
+// Same filter set and search semantics as the Rejections list.
+export type VettingWaitingFilters = VettingRejectionFilters
+
+export interface VettingWaitingListResponse {
+  items: VettingWaitingItem[]
+  totalCount: number
+  pageNumber: number
+  pageSize: number
+}
+
+const mockWaiting: VettingWaitingItem[] = [
+  { applicationGuid: 'a1b2c3d4-wai-0000-0000-000000000038', appRefNo: 'APP-2025-0038', studentName: 'Tumusiime Ivan',  phone: '256772100038', emailId: 'ivan.t@example.com', programGuid: 'prog-bscs', programName: 'BSc Computer Science', type: 'Direct', submittedDate: new Date(Date.now() - 7 * 86400_000).toISOString(), waitingDate: new Date(Date.now() - 2 * 86400_000).toISOString(), remarks: 'Awaiting original transcript from the applicant.' },
+  { applicationGuid: 'a1b2c3d4-wai-0000-0000-000000000035', appRefNo: 'APP-2025-0035', studentName: 'Achieng Mercy',   phone: '256701200035', emailId: null,                 programGuid: 'prog-bba',  programName: 'BBA Accounting',       type: 'ODL',    submittedDate: new Date(Date.now() - 12 * 86400_000).toISOString(), waitingDate: new Date(Date.now() - 4 * 86400_000).toISOString(), remarks: null },
+]
+
+// Waiting rows feed the same mock detail map as the queue so Review works
+// from the Waiting List tab too.
+const mockDetailSources: VettingQueueItem[] = [
+  ...mockQueue,
+  ...mockWaiting.map((w, i) => ({
+    intApplication: 1035 + i,
+    applicationGuid: w.applicationGuid,
+    appRefNo: w.appRefNo,
+    studentName: w.studentName,
+    programGuid: w.programGuid,
+    programName: w.programName ?? '',
+    intakeGuid: 'a1b2c3d4-0000-4000-8000-000000000002',
+    intakeName: 'January 2026',
+    intakeCode: '20261',
+    type: w.type,
+    documentsUploaded: 4,
+    documentsTotal: 4,
+    submittedDate: w.submittedDate ?? new Date().toISOString(),
+    action: 0,
+  })),
+]
+
 const mockDetails: Record<string, VettingApplicationDetail> = Object.fromEntries(
-  mockQueue.map(q => [q.applicationGuid, {
+  mockDetailSources.map(q => [q.applicationGuid, {
     intApplication: q.intApplication,
     applicationGuid: q.applicationGuid,
     appRefNo: q.appRefNo,
@@ -228,8 +285,25 @@ export function getVettingApplicationDetail(applicationGuid: string): Promise<Ve
   return apiGet<VettingApplicationDetail>(`/api/v1/admissions/vetting/applications/${applicationGuid}`)
 }
 
+export function getVettingWaitingList(page = 1, pageSize = 10, filters?: VettingWaitingFilters): Promise<VettingWaitingListResponse> {
+  if (MOCK_AUTH) {
+    const term = filters?.search?.trim().toLowerCase()
+    const items = mockWaiting.filter(w => !term
+      || [w.appRefNo, w.phone, w.emailId].some(v => v?.toLowerCase() === term)
+      || w.studentName.toLowerCase().includes(term))
+    return Promise.resolve({ items, totalCount: items.length, pageNumber: page, pageSize })
+  }
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (filters?.search?.trim()) params.set('search', filters.search.trim())
+  if (filters?.intakeGuid) params.set('intakeGuid', filters.intakeGuid)
+  if (filters?.campusGuid) params.set('campusGuid', filters.campusGuid)
+  if (filters?.programGuid) params.set('programGuid', filters.programGuid)
+  return apiGet<VettingWaitingListResponse | null>(`/api/v1/admissions/vetting/waiting-list?${params.toString()}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+}
+
 // Non-terminal — sets action=0 (Waiting), which drops the application out of
-// the Submitted-only (action==1) vetting queue.
+// the Submitted-only (action==1) vetting queue and into the waiting list.
 export function waitApplication(applicationGuid: string, remarks?: string | null): Promise<boolean> {
   if (MOCK_AUTH) {
     return Promise.resolve(true)
@@ -244,12 +318,13 @@ export function waitApplication(applicationGuid: string, remarks?: string | null
 export const NOT_CURRENT_INTAKE_MESSAGE = 'Only applications and payments of the current admission intake can be approved.'
 export const NO_CURRENT_INTAKE_MESSAGE = 'No current admission intake is configured.'
 
-// Terminal Approve/Reject. Note this hits Application Filling's base path,
-// not Vetting's — confirmed in VettingApiDocs.md ("lives in Application
+// Approve/Reject. Accepts Submitted (queue) and Waiting (waiting list)
+// applications. Note this hits Application Filling's base path, not
+// Vetting's — confirmed in VettingApiDocs.md ("lives in Application
 // Filling, not Vetting").
 export function vetApplication(applicationGuid: string, input: VetApplicationInput): Promise<VetApplicationResponse> {
   if (MOCK_AUTH) {
-    const item = mockQueue.find(i => i.applicationGuid === applicationGuid)
+    const item = mockDetailSources.find(i => i.applicationGuid === applicationGuid)
     if (input.action === 2 && item?.intakeGuid !== 'a1b2c3d4-0000-4000-8000-000000000002') {
       return Promise.reject(new Error(NOT_CURRENT_INTAKE_MESSAGE))
     }
@@ -313,4 +388,15 @@ export function getVettingRejections(page = 1, pageSize = 10, filters?: VettingR
   if (filters?.programGuid) params.set('programGuid', filters.programGuid)
   return apiGet<VettingRejectionsResponse | null>(`/api/v1/admissions/vetting/rejections?${params.toString()}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+}
+
+// Undoes a mistaken rejection: status goes back to Submitted (vetting queue)
+// and the stored reason, date and registrar are cleared. No request body.
+// 400 "Only rejected applications can be reverted." if it already moved on.
+export function revertApplicationRejection(applicationGuid: string): Promise<boolean> {
+  if (MOCK_AUTH) {
+    return Promise.resolve(true)
+  }
+  // undefined → no body at all (Content-Length: 0), as the endpoint expects.
+  return apiPost<boolean>(`/api/v1/admissions/vetting/applications/${applicationGuid}/revert-rejection`, undefined)
 }

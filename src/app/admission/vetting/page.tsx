@@ -11,9 +11,10 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { RejectModal } from '@/components/modals/admission/RejectModal'
 import { VettingReviewModal } from '@/components/modals/admission/VettingReviewModal'
-import { useVettingQueue, useVettingRejections, useVetApplication } from '@/hooks/admission/useVetting'
+import { RevertRejectionModal } from '@/components/modals/admission/RevertRejectionModal'
+import { useVettingQueue, useVettingRejections, useVettingWaitingList, useVetApplication } from '@/hooks/admission/useVetting'
 import { useCurrentAdmissionIntake } from '@/hooks/academic/useIntakes'
-import { VettingQueueItem } from '@/lib/api/admission/vetting'
+import { VettingQueueItem, VettingRejectionItem } from '@/lib/api/admission/vetting'
 import { getIntakesPaged } from '@/lib/api/academic/intake'
 import { getCampusesPaged } from '@/lib/api/academic/campus'
 import { getProgramMastersPage } from '@/lib/api/academic/programMaster'
@@ -34,7 +35,7 @@ const PIPELINE_STEPS = [
   { num: 4, label: 'Approval' }, { num: 5, label: 'Registration' },
 ]
 
-type Tab = 'queue' | 'rejections'
+type Tab = 'queue' | 'waiting' | 'rejections'
 
 // action is a byte? assembled from three different enums depending on who
 // wrote it (see VettingApiDocs.md "Status values") — the queue endpoint
@@ -49,6 +50,13 @@ function actionLabel(action: number | null): string {
     case 4: return 'Registered'
     default: return '—'
   }
+}
+
+// "—" for null, blank, or the literal string "null" some admission endpoints
+// send — same rule as VettingReviewModal's orDash.
+function orDash(value: string | null | undefined): string {
+  const v = value?.trim()
+  return v && v.toLowerCase() !== 'null' ? v : '—'
 }
 
 function timeAgo(dateStr: string | null): string {
@@ -71,6 +79,9 @@ export default function VettingPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [selectedApplicationGuid, setSelectedApplicationGuid] = useState<string | null>(null)
+  // Waiting applications are already on hold, so Review hides "Wait" for them.
+  const [reviewFromWaiting, setReviewFromWaiting] = useState(false)
+  const [revertTarget, setRevertTarget] = useState<VettingRejectionItem | null>(null)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -143,9 +154,15 @@ export default function VettingPage() {
     return !!currentAdmissionIntake && !!row.intakeGuid && row.intakeGuid !== currentAdmissionIntake.intakeGuid
   }
 
-  function handleReview(row: VettingQueueItem) {
-    setSelectedApplicationGuid(row.applicationGuid)
+  function handleReview(applicationGuid: string, fromWaiting = false) {
+    setSelectedApplicationGuid(applicationGuid)
+    setReviewFromWaiting(fromWaiting)
     openModal('vetting-review-modal')
+  }
+
+  function handleRevert(row: VettingRejectionItem) {
+    setRevertTarget(row)
+    openModal('revert-rejection-modal')
   }
 
   function handleReject() {
@@ -180,10 +197,39 @@ export default function VettingPage() {
   const rejTotal = rejections.data?.totalCount ?? 0
   const rejTotalPages = Math.max(1, Math.ceil(rejTotal / DISPLAY_PAGE_SIZE))
   const rejHasFilters = !!(rejCommittedSearch || rejIntake || rejCampus || rejProgram)
+  // Revert has no server-side permission check either — the action column
+  // only shows with edit permission.
+  const rejColSpan = permissions.edit ? 9 : 8
   function clearRejFilters() { setRejSearch(''); setRejCommittedSearch(''); setRejIntake(''); setRejCampus(''); setRejProgram(''); setRejPage(1) }
+
+  // ---- Waiting list (GET /admissions/vetting/waiting-list) ----
+  // Same filters and debounce as Rejections; always enabled for the same
+  // badge-freshness reason.
+  const [waitSearch, setWaitSearch] = useState('')
+  const [waitCommittedSearch, setWaitCommittedSearch] = useState('')
+  const [waitIntake, setWaitIntake] = useState('')
+  const [waitCampus, setWaitCampus] = useState('')
+  const [waitProgram, setWaitProgram] = useState('')
+  const [waitPage, setWaitPage] = useState(1)
+  useEffect(() => {
+    const t = setTimeout(() => { setWaitCommittedSearch(waitSearch.trim()); setWaitPage(1) }, 300)
+    return () => clearTimeout(t)
+  }, [waitSearch])
+  const waiting = useVettingWaitingList(waitPage, DISPLAY_PAGE_SIZE, {
+    search: waitCommittedSearch || undefined,
+    intakeGuid: waitIntake || undefined,
+    campusGuid: waitCampus || undefined,
+    programGuid: waitProgram || undefined,
+  })
+  const waitItems = waiting.data?.items ?? []
+  const waitTotal = waiting.data?.totalCount ?? 0
+  const waitTotalPages = Math.max(1, Math.ceil(waitTotal / DISPLAY_PAGE_SIZE))
+  const waitHasFilters = !!(waitCommittedSearch || waitIntake || waitCampus || waitProgram)
+  function clearWaitFilters() { setWaitSearch(''); setWaitCommittedSearch(''); setWaitIntake(''); setWaitCampus(''); setWaitProgram(''); setWaitPage(1) }
 
   const tabs: { id: Tab; label: string; icon: string; count?: number }[] = [
     { id: 'queue', label: 'Vetting Queue', icon: 'lni-list', count: summary?.pendingCount },
+    { id: 'waiting', label: 'Waiting List', icon: 'lni-timer', count: waiting.data ? waitTotal : undefined },
     { id: 'rejections', label: 'Rejections', icon: 'lni-ban', count: rejections.data ? rejTotal : undefined },
   ]
 
@@ -272,12 +318,12 @@ export default function VettingPage() {
                       : null}
                   {visibleRows.map(row => (
                     <tr key={row.applicationGuid}>
-                      <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => handleReview(row)}><i className="lni lni-eye" /> Review</button></ActionMenu></td>
-                      <td className="font-mono text-sm">{row.appRefNo}</td>
-                      <td>{row.studentName}</td>
-                      <td>{row.programName}</td>
-                      <td><span className={`badge badge-${row.type === 'ODL' ? 'cyan' : 'blue'}`}>{row.type}</span></td>
-                      <td>{row.documentsUploaded}/{row.documentsTotal}</td>
+                      <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => handleReview(row.applicationGuid)}><i className="lni lni-eye" /> Review</button></ActionMenu></td>
+                      <td className="font-mono text-sm">{orDash(row.appRefNo)}</td>
+                      <td>{orDash(row.studentName)}</td>
+                      <td>{orDash(row.programName)}</td>
+                      <td>{orDash(row.type) === '—' ? '—' : <span className={`badge badge-${row.type === 'ODL' ? 'cyan' : 'blue'}`}>{row.type}</span>}</td>
+                      <td>{row.documentsUploaded ?? '—'}/{row.documentsTotal ?? '—'}</td>
                       <td className="text-sm text-g500">{timeAgo(row.submittedDate)}</td>
                       <td>
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -298,6 +344,100 @@ export default function VettingPage() {
               </table>
             </ScrollTable>
             <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="applicants" onPageChange={setPage} />
+          </div>
+        )}
+
+        {activeTab === 'waiting' && (
+          <div key="waiting" className="p-5 tab-panel-in">
+            <p className="text-sm text-g500 mb-4">Applications put on hold at vetting, most recently marked first. Review one to approve or reject it.</p>
+            <div className="flex items-center gap-3 flex-wrap mb-4">
+              <TableSearch
+                className="w-64"
+                placeholder="Ref no, phone, email or name…"
+                value={waitSearch}
+                onChange={setWaitSearch}
+              />
+              <div style={{ width: 200 }}>
+                <InfiniteSearchSelect
+                  queryKey={['intakes', 'vetting-waiting']}
+                  fetchPage={getIntakesPaged}
+                  toOption={i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })}
+                  allLabel="All intakes"
+                  value={waitIntake}
+                  onChange={v => { setWaitIntake(v); setWaitPage(1) }}
+                />
+              </div>
+              <div style={{ width: 200 }}>
+                <InfiniteSearchSelect
+                  queryKey={['campuses', 'vetting-waiting']}
+                  fetchPage={getCampusesPaged}
+                  toOption={c => ({ value: c.campusGuid, label: c.campusName })}
+                  allLabel="All campuses"
+                  value={waitCampus}
+                  onChange={v => { setWaitCampus(v); setWaitPage(1) }}
+                />
+              </div>
+              <div style={{ width: 240 }}>
+                <InfiniteSearchSelect
+                  queryKey={['program-masters', 'vetting-waiting']}
+                  fetchPage={getProgramMastersPage}
+                  toOption={p => ({ value: p.programGuid, label: p.programName || p.programCode })}
+                  allLabel="All programmes"
+                  value={waitProgram}
+                  onChange={v => { setWaitProgram(v); setWaitPage(1) }}
+                />
+              </div>
+            </div>
+            <ScrollTable>
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: 48 }}></th>
+                    <th>App. Ref</th>
+                    <th>Applicant</th>
+                    <th>Contact</th>
+                    <th>Programme</th>
+                    <th>Type</th>
+                    <th>Submitted</th>
+                    <th>Waiting Since</th>
+                    <th>Remarks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {waiting.isLoading
+                    ? <TableLoadingState colSpan={9} />
+                    : waitItems.length === 0
+                      ? <EmptyState
+                          colSpan={9}
+                          title={waitHasFilters ? undefined : 'No applications on hold'}
+                          subtitle={waitHasFilters ? undefined : 'Applications marked as waiting at vetting will show here.'}
+                          hasFilters={waitHasFilters}
+                          onClearFilters={clearWaitFilters}
+                        />
+                      : null}
+                  {waitItems.map(w => (
+                    <tr key={w.applicationGuid}>
+                      <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => handleReview(w.applicationGuid, true)}><i className="lni lni-eye" /> Review</button></ActionMenu></td>
+                      <td className="font-mono text-sm">{orDash(w.appRefNo)}</td>
+                      <td>{orDash(w.studentName)}</td>
+                      <td className="text-sm">
+                        <div className="flex flex-col gap-0.5">
+                          {w.phone && <a className="text-b700 hover:underline" href={`tel:${w.phone}`}><i className="lni lni-phone" aria-hidden="true" /> {w.phone}</a>}
+                          {w.emailId && <a className="text-b700 hover:underline" href={`mailto:${w.emailId}`}><i className="lni lni-envelope" aria-hidden="true" /> {w.emailId}</a>}
+                          {!w.phone && !w.emailId && <span className="text-g400">—</span>}
+                        </div>
+                      </td>
+                      <td>{orDash(w.programName)}</td>
+                      <td>{orDash(w.type) === '—' ? '—' : <span className={`badge badge-${w.type === 'ODL' ? 'cyan' : 'blue'}`}>{w.type}</span>}</td>
+                      <td className="text-sm text-g500">{formatDate(w.submittedDate)}</td>
+                      <td className="text-sm text-g500">{formatDate(w.waitingDate)}</td>
+                      <td className="text-sm text-g700" style={{ minWidth: 220, maxWidth: 360, whiteSpace: 'normal' }}>{orDash(w.remarks)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </ScrollTable>
+            <Pagination page={waitPage} totalPages={waitTotalPages} totalCount={waitTotal} itemLabel="applications" onPageChange={setWaitPage} />
           </div>
         )}
 
@@ -346,6 +486,7 @@ export default function VettingPage() {
               <table>
                 <thead>
                   <tr>
+                    {permissions.edit && <th style={{ width: 48 }}></th>}
                     <th>App. Ref</th>
                     <th>Applicant</th>
                     <th>Contact</th>
@@ -358,10 +499,10 @@ export default function VettingPage() {
                 </thead>
                 <tbody>
                   {rejections.isLoading
-                    ? <TableLoadingState colSpan={8} />
+                    ? <TableLoadingState colSpan={rejColSpan} />
                     : rejItems.length === 0
                       ? <EmptyState
-                          colSpan={8}
+                          colSpan={rejColSpan}
                           title={rejHasFilters ? undefined : 'No rejected applications'}
                           subtitle={rejHasFilters ? undefined : 'Applications rejected at vetting will show here with their reason.'}
                           hasFilters={rejHasFilters}
@@ -370,8 +511,11 @@ export default function VettingPage() {
                       : null}
                   {rejItems.map(r => (
                     <tr key={r.applicationGuid}>
-                      <td className="font-mono text-sm">{r.appRefNo}</td>
-                      <td>{r.studentName}</td>
+                      {permissions.edit && (
+                        <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => handleRevert(r)}><i className="lni lni-reload" /> Revert</button></ActionMenu></td>
+                      )}
+                      <td className="font-mono text-sm">{orDash(r.appRefNo)}</td>
+                      <td>{orDash(r.studentName)}</td>
                       <td className="text-sm">
                         <div className="flex flex-col gap-0.5">
                           {r.phone && <a className="text-b700 hover:underline" href={`tel:${r.phone}`}><i className="lni lni-phone" aria-hidden="true" /> {r.phone}</a>}
@@ -379,11 +523,11 @@ export default function VettingPage() {
                           {!r.phone && !r.emailId && <span className="text-g400">—</span>}
                         </div>
                       </td>
-                      <td>{r.programName}</td>
-                      <td><span className={`badge badge-${r.type === 'ODL' ? 'cyan' : 'blue'}`}>{r.type}</span></td>
+                      <td>{orDash(r.programName)}</td>
+                      <td>{orDash(r.type) === '—' ? '—' : <span className={`badge badge-${r.type === 'ODL' ? 'cyan' : 'blue'}`}>{r.type}</span>}</td>
                       <td className="text-sm text-g500">{formatDate(r.submittedDate)}</td>
                       <td className="text-sm text-g500">{formatDate(r.rejectedDate)}</td>
-                      <td className="text-sm text-g700" style={{ minWidth: 220, maxWidth: 360, whiteSpace: 'normal' }}>{r.rejectionReason || '—'}</td>
+                      <td className="text-sm text-g700" style={{ minWidth: 220, maxWidth: 360, whiteSpace: 'normal' }}>{orDash(r.rejectionReason)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -402,6 +546,13 @@ export default function VettingPage() {
         vetApplication={vetApplicationMutation}
         onReject={handleReject}
         canVet={permissions.edit}
+        allowWait={!reviewFromWaiting}
+      />
+      <RevertRejectionModal
+        isOpen={openModals.has('revert-rejection-modal')}
+        onClose={() => { closeModal('revert-rejection-modal'); setRevertTarget(null) }}
+        showToast={showToast}
+        rejection={revertTarget}
       />
       <RejectModal
         isOpen={openModals.has('reject-modal')}
