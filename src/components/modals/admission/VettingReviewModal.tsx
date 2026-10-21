@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
+import { DocumentPreviewModal } from '../shared/DocumentPreviewModal'
 import { applicantProfileHref } from '@/lib/applicantProfileLink'
 import { useVettingApplicationDetail, useWaitApplication } from '@/hooks/admission/useVetting'
 import { NO_CURRENT_INTAKE_MESSAGE, NOT_CURRENT_INTAKE_MESSAGE, VetApplicationInput } from '@/lib/api/admission/vetting'
@@ -44,11 +45,14 @@ interface Props extends ModalProps {
   // The vet and wait endpoints have no permission check server-side (see
   // post-vet-application.md), so the UI is the only gate. Defaults to true.
   canVet?: boolean
+  // False when opened from the Waiting List — the application is already
+  // waiting, so only Approve/Reject are offered. Defaults to true.
+  allowWait?: boolean
 }
 
 const WAIT_REMARKS_MAX = 500
 
-export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid, vetApplication, onReject, canVet = true }: Props) {
+export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid, vetApplication, onReject, canVet = true, allowWait = true }: Props) {
   const { data: detail, isLoading, isError, error } = useVettingApplicationDetail(applicationGuid, isOpen)
   const waitApplication = useWaitApplication()
 
@@ -74,10 +78,13 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
   const [approved, setApproved] = useState(false)
   const [waited, setWaited] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
+  // Documents and qualification proofs open in an in-page preview (PDF/image
+  // inline, with Download) — a plain link just downloaded the file.
+  const [preview, setPreview] = useState<{ url: string; title: string } | null>(null)
 
   if (!isOpen || !applicationGuid) return null
 
-  function handleClose() { setApproved(false); setWaited(false); setFailure(null); setRemarks(''); onClose() }
+  function handleClose() { setApproved(false); setWaited(false); setFailure(null); setRemarks(''); setPreview(null); onClose() }
 
   function handleWait() {
     if (!applicationGuid) return
@@ -171,8 +178,8 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title flex items-center gap-2">
-            <i className="lni lni-eye"></i> Reviewing: {detail.firstName} {detail.lastName} &middot; {detail.programName}
-            <span className="badge badge-blue">{detail.admissionType}</span>
+            <i className="lni lni-eye"></i> Reviewing: {orDash(`${detail.firstName ?? ''} ${detail.lastName ?? ''}`)} &middot; {orDash(detail.programName)}
+            {orDash(detail.admissionType) !== '—' && <span className="badge badge-blue">{detail.admissionType}</span>}
           </div>
           <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
@@ -210,27 +217,27 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
 
               <div className="sec-divider">Personal Information</div>
               <div className="g2 mb-4">
-                <div className="fg"><label className="lbl">First Name</label><input className="ctrl" readOnly value={detail.firstName || ''} /></div>
-                <div className="fg"><label className="lbl">Last Name</label><input className="ctrl" readOnly value={detail.lastName || '—'} /></div>
+                <div className="fg"><label className="lbl">First Name</label><input className="ctrl" readOnly value={orDash(detail.firstName)} /></div>
+                <div className="fg"><label className="lbl">Last Name</label><input className="ctrl" readOnly value={orDash(detail.lastName)} /></div>
                 <div className="fg"><label className="lbl">Date of Birth</label><input className="ctrl" readOnly value={detail.dob ? detail.dob.slice(0, 10) : '—'} /></div>
                 <div className="fg"><label className="lbl">Gender</label><input className="ctrl" readOnly value={genderText(detail.gender) || '—'} /></div>
                 {/* Both looked up from the application's country (vetting.ts):
                     Nationality is the demonym, Country the country name. */}
                 <div className="fg"><label className="lbl">Nationality</label><input className="ctrl" readOnly value={orDash(detail.nationality)} /></div>
                 <div className="fg"><label className="lbl">Country</label><input className="ctrl" readOnly value={orDash(detail.countryName)} /></div>
-                <div className="fg"><label className="lbl">National ID</label><input className="ctrl" readOnly value={detail.nationalId || '—'} /></div>
-                <div className="fg"><label className="lbl">Phone</label><input className="ctrl" readOnly value={detail.phone || '—'} /></div>
-                <div className="fg"><label className="lbl">Email</label><input className="ctrl" readOnly value={detail.emailId || '—'} /></div>
+                <div className="fg"><label className="lbl">National ID</label><input className="ctrl" readOnly value={orDash(detail.nationalId)} /></div>
+                <div className="fg"><label className="lbl">Phone</label><input className="ctrl" readOnly value={orDash(detail.phone)} /></div>
+                <div className="fg"><label className="lbl">Email</label><input className="ctrl" readOnly value={orDash(detail.emailId)} /></div>
               </div>
 
               <div className="sec-divider">Application Details</div>
               <div className="g2">
-                <div className="fg"><label className="lbl">App. Ref</label><input className="ctrl font-mono" readOnly value={detail.appRefNo || ''} /></div>
-                <div className="fg"><label className="lbl">Admission Type</label><input className="ctrl" readOnly value={detail.admissionType || ''} /></div>
-                <div className="fg"><label className="lbl">Programme</label><input className="ctrl" readOnly value={detail.programName || ''} /></div>
+                <div className="fg"><label className="lbl">App. Ref</label><input className="ctrl font-mono" readOnly value={orDash(detail.appRefNo)} /></div>
+                <div className="fg"><label className="lbl">Admission Type</label><input className="ctrl" readOnly value={orDash(detail.admissionType)} /></div>
+                <div className="fg"><label className="lbl">Programme</label><input className="ctrl" readOnly value={orDash(detail.programName)} /></div>
                 <div className="fg"><label className="lbl">Intake</label><input className="ctrl" readOnly value={intakeDisplay} /></div>
-                <div className="fg"><label className="lbl">Campus</label><input className="ctrl" readOnly value={detail.campusName || '—'} /></div>
-                <div className="fg"><label className="lbl">Submitted</label><input className="ctrl" readOnly value={detail.submittedDate ? detail.submittedDate.slice(0, 10) : ''} /></div>
+                <div className="fg"><label className="lbl">Campus</label><input className="ctrl" readOnly value={orDash(detail.campusName)} /></div>
+                <div className="fg"><label className="lbl">Submitted</label><input className="ctrl" readOnly value={detail.submittedDate ? detail.submittedDate.slice(0, 10) : '—'} /></div>
                 <div className="fg"><label className="lbl">Fee Paid</label><input className="ctrl" readOnly value={detail.feePaid ? 'Yes' : 'No'} /></div>
               </div>
             </div>
@@ -249,7 +256,7 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
                       <div className="p-3">
                         <p className={`text-sm font-medium mb-0.5 ${isMissing ? 'text-red-700' : 'text-g800'}`}>{DOCUMENT_LABELS[doc.documentType] ?? doc.documentType}</p>
                         {isMissing ? <span className="badge badge-red">Missing</span> : (
-                          doc.url && <a href={doc.url} target="_blank" rel="noopener noreferrer" className="btn btn-sm text-xs"><i className="lni lni-eye" /> View</a>
+                          doc.url && <button type="button" className="btn btn-sm text-xs" onClick={() => setPreview({ url: doc.url!, title: DOCUMENT_LABELS[doc.documentType] ?? doc.documentType })}><i className="lni lni-eye" /> View</button>
                         )}
                       </div>
                     </div>
@@ -267,11 +274,11 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
                       <div>
                         {/* institution is free text by convention only (e.g. "O Level" /
                             "A Level") — there is no separate structured type column. */}
-                        <p className="text-sm font-medium text-g800">{q.institution} &middot; {q.university}</p>
-                        <p className="text-xs text-g400">Grade {q.grade} &middot; {q.passYear} &middot; {q.yearsTaken} yrs</p>
+                        <p className="text-sm font-medium text-g800">{orDash(q.institution)} &middot; {orDash(q.university)}</p>
+                        <p className="text-xs text-g400">Grade {orDash(q.grade)} &middot; {q.passYear ?? '—'} &middot; {q.yearsTaken != null ? `${q.yearsTaken} yrs` : '—'}</p>
                       </div>
                       {q.proofUrl
-                        ? <a href={q.proofUrl} target="_blank" rel="noopener noreferrer" className="btn btn-sm text-xs"><i className="lni lni-eye" /> View Proof</a>
+                        ? <button type="button" className="btn btn-sm text-xs" onClick={() => setPreview({ url: q.proofUrl!, title: `Proof — ${q.institution} · ${q.university}` })}><i className="lni lni-eye" /> View Proof</button>
                         : <span className="badge badge-red">No Proof</span>
                       }
                     </div>
@@ -286,11 +293,11 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
                 </div>
               )}
 
-              <div className="fg">
+              {allowWait && <div className="fg">
                 <label className="lbl">Vetting Remarks <span className="text-g400" style={{ fontWeight: 400 }}>({remarks.trim().length}/{WAIT_REMARKS_MAX})</span></label>
                 {/* POST .../wait caps remarks at 500 chars. */}
                 <textarea className="ctrl" rows={3} maxLength={WAIT_REMARKS_MAX} placeholder="Enter notes — used for the Wait action's remarks; Approve/Reject send their own justification separately." value={remarks} onChange={e => setRemarks(e.target.value)} />
-              </div>
+              </div>}
             </div>
           </div>
         </div>
@@ -299,7 +306,7 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
           {approveBlockedReason && (
             <div className="warn-box" role="note" style={{ fontSize: 13 }}>
               <i className="lni lni-lock" aria-hidden="true" style={{ marginTop: 2 }}></i>
-              <span>{approveBlockedReason} You can still reject it or place it on hold.</span>
+              <span>{approveBlockedReason} {allowWait ? 'You can still reject it or place it on hold.' : 'You can still reject it.'}</span>
             </div>
           )}
           {!canVet ? (
@@ -308,10 +315,12 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
               <span>View only. You don&apos;t have permission to approve, reject or hold applications.</span>
             </div>
           ) : (
-          <div className="grid grid-cols-3 gap-3">
-            <button className="btn btn-amber w-full justify-center" disabled={waitApplication.isPending} onClick={handleWait}>
-              <i className="lni lni-timer" /> {waitApplication.isPending ? 'Saving…' : 'Wait for Original Documents'}
-            </button>
+          <div className={`grid ${allowWait ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
+            {allowWait && (
+              <button className="btn btn-amber w-full justify-center" disabled={waitApplication.isPending} onClick={handleWait}>
+                <i className="lni lni-timer" /> {waitApplication.isPending ? 'Saving…' : 'Wait for Original Documents'}
+              </button>
+            )}
             <button className="btn btn-success w-full justify-center" disabled={vetApplication.isPending || !!approveBlockedReason} title={approveBlockedReason ?? undefined} onClick={handleApprove}>
               <i className="lni lni-checkmark" /> {vetApplication.isPending ? 'Approving…' : 'Approve & Issue Provisional Letter'}
             </button>
@@ -320,6 +329,12 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
           )}
         </div>
       </div>
+      <DocumentPreviewModal
+        isOpen={!!preview}
+        onClose={() => setPreview(null)}
+        url={preview?.url ?? null}
+        title={preview?.title}
+      />
     </div>
   )
 }
