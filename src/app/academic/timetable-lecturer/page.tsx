@@ -53,7 +53,7 @@ export default function LecturerViewPage() {
           <label className="lbl">Lecturer <span className="req">*</span></label>
           <SearchSelect
             placeholder={!intakeGuid ? 'Pick a session first' : lecturersLoading ? 'Loading…' : lecturers.length === 0 ? 'No lecturers planned this term' : '— Select lecturer —'}
-            options={lecturers.map(l => ({ value: l.employeeGuid, label: l.empName ?? 'Unnamed lecturer' }))}
+            options={lecturers.map(l => ({ value: l.employeeGuid, label: l.empName ?? '—' }))}
             value={lecturerGuid}
             onChange={setLecturerGuid}
             disabled={!intakeGuid}

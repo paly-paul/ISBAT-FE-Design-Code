@@ -14,11 +14,14 @@ export const TERM_OPTIONS = [
 const DAY_ORDER = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
 
 // Teaching weekdays, Monday to Saturday. There is no Sunday weekday on the
-// backend (timetable-page.md), so it's dropped even if the master lists one.
+// backend (timetable-page.md), so it's dropped even if the master lists one,
+// as is any placeholder row ("Unknown - Not Set") without a real day code.
+const TEACHING_DAYS = DAY_ORDER.filter(d => d !== 'SUN')
+
 export function useTeachingDays() {
   const { data: weekdays = [], isLoading } = useWeekdays()
   const days = useMemo(() => weekdays
-    .filter(w => w.dayCode?.toUpperCase() !== 'SUN')
+    .filter(w => TEACHING_DAYS.includes(w.dayCode?.toUpperCase()))
     .sort((a, b) => DAY_ORDER.indexOf(a.dayCode?.toUpperCase()) - DAY_ORDER.indexOf(b.dayCode?.toUpperCase())), [weekdays])
   return { days, isLoading }
 }
