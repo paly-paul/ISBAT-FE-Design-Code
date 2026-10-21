@@ -120,7 +120,9 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
     name: fullName !== '—' ? fullName : applicant.appRefNo,
     programme: programName !== '—' ? programName : undefined,
     dob: applicant.dob ?? undefined,
-    gender: applicant.gender != null ? String(applicant.gender) : undefined,
+    // Backend gender codes: 0 = Male, 1 = Female, 2 = Other. The raw code
+    // used to be passed, so the profile page showed "0" / "1".
+    gender: applicant.gender != null ? (['Male', 'Female', 'Other'][applicant.gender] ?? String(applicant.gender)) : undefined,
     nationality: countryName !== '—' ? countryName : undefined,
     nationalId: applicant.nationalId ?? undefined,
     phone: applicant.phone ?? undefined,

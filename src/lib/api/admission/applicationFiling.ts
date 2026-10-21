@@ -727,44 +727,43 @@ export function saveGeneral(input: SaveGeneralInput): Promise<SaveGeneralRespons
     return Promise.resolve({ intApplication: 1, applicationGuid: 'mock-app-1', isFirstSave: true, saveStep: 1 })
   }
 
-  // Every optional/nullable field is always present in the payload — an
-  // empty value is sent as the literal string "null" rather than omitted
-  // or sent as "". NOTE: this is the opposite of the "Guid?-must-be-omitted"
-  // convention used by programMaster.ts/applicationPayment.ts (there, even
-  // a literal "null" string fails ASP.NET's Guid.Parse binder) — confirmed
-  // deliberately for this endpoint specifically; revisit if SaveGeneral
-  // starts 400ing on an empty guid field the same way those did.
-  const asStr = (v: string | null | undefined) => v || 'null'
+  // Empty optional fields are left out of the form, so they bind as real
+  // nulls. They used to be sent as the text "null", which the backend
+  // stored verbatim — blank National IDs, sponsor details etc. then showed
+  // "null" on Vetting, Registrar, student profiles and Finance screens.
+  // Same "omit, don't send 'null'" convention as programMaster.ts and
+  // applicationPayment.ts.
   const formData = new FormData()
+  const appendOpt = (name: string, value: string | null | undefined) => { if (value) formData.append(name, value) }
   formData.append('appRefNo', input.appRefNo)
-  formData.append('enquiryGuid', asStr(input.enquiryGuid))
-  formData.append('intakeCode', asStr(input.intakeCode))
-  formData.append('emailId', asStr(input.emailId))
-  formData.append('dob', asStr(input.dob))
-  formData.append('firstName', asStr(input.firstName))
-  formData.append('lastName', asStr(input.lastName))
-  formData.append('gender', input.gender != null ? String(input.gender) : 'null')
-  formData.append('countryGuid', asStr(input.countryGuid))
-  formData.append('phone', asStr(input.phone))
-  formData.append('nationalId', asStr(input.nationalId))
+  appendOpt('enquiryGuid', input.enquiryGuid)
+  appendOpt('intakeCode', input.intakeCode)
+  appendOpt('emailId', input.emailId)
+  appendOpt('dob', input.dob)
+  appendOpt('firstName', input.firstName)
+  appendOpt('lastName', input.lastName)
+  if (input.gender != null) formData.append('gender', String(input.gender))
+  appendOpt('countryGuid', input.countryGuid)
+  appendOpt('phone', input.phone)
+  appendOpt('nationalId', input.nationalId)
   if (input.nationalIdFile) formData.append('nationalIdFile', input.nationalIdFile)
-  formData.append('passportNo', asStr(input.passportNo))
+  appendOpt('passportNo', input.passportNo)
   if (input.passportFile) formData.append('passportFile', input.passportFile)
-  formData.append('vStartDate', asStr(input.vStartDate))
-  formData.append('vEndDate', asStr(input.vEndDate))
+  appendOpt('vStartDate', input.vStartDate)
+  appendOpt('vEndDate', input.vEndDate)
   if (input.visaFile) formData.append('visaFile', input.visaFile)
-  formData.append('spName', asStr(input.spName))
-  formData.append('spEmail', asStr(input.spEmail))
-  formData.append('spCountryGuid', asStr(input.spCountryGuid))
-  formData.append('spPhone', asStr(input.spPhone))
+  appendOpt('spName', input.spName)
+  appendOpt('spEmail', input.spEmail)
+  appendOpt('spCountryGuid', input.spCountryGuid)
+  appendOpt('spPhone', input.spPhone)
   formData.append('campusGuid', input.campusGuid)
   formData.append('programGuid', input.programGuid)
   formData.append('feeHdGuid', input.feeHdGuid)
-  formData.append('semesterGuid', asStr(input.semesterGuid))
-  formData.append('batchTimeGuid', asStr(input.batchTimeGuid))
-  formData.append('batchGuid', asStr(input.batchGuid))
+  appendOpt('semesterGuid', input.semesterGuid)
+  appendOpt('batchTimeGuid', input.batchTimeGuid)
+  appendOpt('batchGuid', input.batchGuid)
   formData.append('refugee', String(input.refugee))
-  formData.append('refugeeId', asStr(input.refugeeId))
+  appendOpt('refugeeId', input.refugeeId)
   if (input.refugeeFile) formData.append('refugeeFile', input.refugeeFile)
 
   return apiPostForm<SaveGeneralResponse>('/api/v1/admissions/application-filling/general', formData)

@@ -5,6 +5,7 @@ import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { FailurePopup } from '@/components/modals/shared/FailurePopup'
+import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
 import { useProgramMaster, useProgramMasterByGuid, useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
@@ -196,45 +197,43 @@ function applicantSearchTerm(text: string): string {
   return ref && ref.length >= 2 ? ref : text.trim()
 }
 
-// One row in the Documents tab's "Uploaded Documents" list (req. 11: view/
-// download uploaded documents). Two sources of a document, handled
-// differently since only one of them is actually viewable client-side:
-// - `file`: a File the user just picked in this session (not yet saved, or
-//   saved this session) — View/Download work via a real object-URL, no
-//   backend round-trip needed.
-// - `savedName`: a filename the backend already has on record from a prior
-//   save (e.g. FilingApplicationSearchResult.idUserFileName) — there is no
-//   confirmed document-retrieval endpoint anywhere in the Application Filing
-//   API surface, so this can only show the filename, not serve the file.
-//   Flagged rather than guessed at a URL, same convention as this file's
-//   other "display raw, don't guess" fields.
-function DocRow({ label, file, savedName }: { label: string; file: File | null; savedName?: string | null }) {
-  const [url, setUrl] = useState<string | null>(null)
-  useEffect(() => {
-    if (!file) { setUrl(null); return }
-    const objectUrl = URL.createObjectURL(file)
-    setUrl(objectUrl)
-    return () => URL.revokeObjectURL(objectUrl)
-  }, [file])
-
+// One row in the Documents tab's "Uploaded Documents" list (req. 11). Two
+// sources of a document:
+// - `file`: picked in this session — View opens it in the in-page preview
+//   (DocumentPreviewModal handles local blob: URLs, with its own Download).
+// - `savedName`: a filename the backend already has from a prior save. The
+//   only retrieval endpoint (GET .../{guid}/documents) returns every ID
+//   document as base64 in one large payload, so this shows "On file" with
+//   the name rather than a View button.
+// A missing row links back to the step where that document is attached,
+// instead of a dead "Not uploaded".
+function DocRow({ label, file, savedName, onView, onAdd, addLabel }: {
+  label: string
+  file: File | null
+  savedName?: string | null
+  onView: (file: File, title: string) => void
+  onAdd?: () => void
+  addLabel?: string
+}) {
   const name = file?.name ?? savedName ?? null
   return (
-    <div className="flex items-center justify-between py-2 border-b border-g100 last:border-0">
-      <div className="flex items-center gap-2 min-w-0">
-        <i className="lni lni-files text-g400" />
-        <span className="text-sm text-g700">{label}</span>
-        {name && <span className="text-xs text-g400 truncate">{name}</span>}
-      </div>
-      {url ? (
-        <div className="flex gap-2 flex-shrink-0">
-          <a className="btn text-xs" href={url} target="_blank" rel="noreferrer"><i className="lni lni-eye" /> View</a>
-          <a className="btn text-xs" href={url} download={file?.name}><i className="lni lni-download" /> Download</a>
+    <div className={`vd-doc${name ? '' : ' empty'}`}>
+      <span className="vd-doc-icon"><i className={`lni ${name ? 'lni-files' : 'lni-cloud-upload'}`} aria-hidden="true" /></span>
+      <div className="vd-doc-body">
+        <div className="vd-doc-name">{label}</div>
+        <div className="vd-doc-sub">
+          {file ? <>Attached &middot; {file.name}</> : savedName ? <>On file &middot; {savedName}</> : 'Not uploaded'}
         </div>
-      ) : name ? (
-        <span className="text-xs text-g400 flex-shrink-0">Previously uploaded — no retrieval endpoint yet</span>
-      ) : (
-        <span className="text-xs text-g400 flex-shrink-0">Not uploaded</span>
-      )}
+      </div>
+      {file ? (
+        <button type="button" className="btn btn-neu btn-sm" onClick={() => onView(file, label)} aria-label={`View ${label}`}>
+          <i className="lni lni-eye" aria-hidden="true" /> View
+        </button>
+      ) : !name && onAdd ? (
+        <button type="button" className="btn btn-neu btn-sm" onClick={onAdd}>
+          <i className="lni lni-arrow-left" aria-hidden="true" /> {addLabel ?? 'Add'}
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -1057,24 +1056,46 @@ export default function FilingPage() {
     ([generalSaved, qualifiedCount > 0, hasPhoto].filter(Boolean).length / 3) * 100,
   )
 
-  function handleSavePhoto() {
-    if (!selectedApplication || !photoFile) {
-      setPhotoError('Please select a photo file first')
-      scrollToFirstError({ photo: 'x' })
-      return
-    }
-    if (!PHOTO_EXT_RE.test(photoFile.name)) {
-      setPhotoError(PHOTO_TYPE_MESSAGE)
-      scrollToFirstError({ photo: 'x' })
-      return
-    }
-    uploadPhoto.mutate({ appRefNo: selectedApplication.appRefNo, photo: photoFile }, {
-      onSuccess: () => { setPhotoSaved(true); showToast('Photo uploaded successfully', 'success') },
-      onError: (error: Error) => {
-        if (/jpg|png|bmp|photo/i.test(error.message)) { setPhotoError(error.message); scrollToFirstError({ photo: 'x' }); return }
-        showToast(error.message || 'Failed to upload photo', 'error')
-      },
+  // Picking (or dropping) a photo uploads it straight away. It used to need
+  // a second click on a separate "Upload Photo" button, which people missed
+  // and then hit "photo required" on submit.
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const [photoDrag, setPhotoDrag] = useState(false)
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!photoFile) { setPhotoUrl(null); return }
+    const url = URL.createObjectURL(photoFile)
+    setPhotoUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [photoFile])
+
+  function uploadPhotoFile(file: File) {
+    if (!selectedApplication) return
+    uploadPhoto.mutate({ appRefNo: selectedApplication.appRefNo, photo: file }, {
+      onSuccess: () => { setPhotoSaved(true); showToast('Photo saved', 'success') },
+      onError: (error: Error) => setPhotoError(error.message || "Couldn't upload the photo."),
     })
+  }
+
+  function handlePhotoPicked(file: File | null) {
+    if (photoInputRef.current) photoInputRef.current.value = ''
+    if (!file) return
+    if (!PHOTO_EXT_RE.test(file.name)) { setPhotoError(PHOTO_TYPE_MESSAGE); scrollToFirstError({ photo: 'x' }); return }
+    setPhotoError(null)
+    setPhotoFile(file)
+    setPhotoSaved(false)
+    uploadPhotoFile(file)
+  }
+
+  // Documents picked this session open in the in-page preview, same as the
+  // vetting desk, instead of a new tab.
+  const [docPreview, setDocPreview] = useState<{ url: string; title: string } | null>(null)
+  function viewDocument(file: File, title: string) {
+    setDocPreview({ url: URL.createObjectURL(file), title: `${title} — ${file.name}` })
+  }
+  function closeDocPreview() {
+    if (docPreview) URL.revokeObjectURL(docPreview.url)
+    setDocPreview(null)
   }
 
   function handleSubmitApplication() {
@@ -1574,54 +1595,76 @@ export default function FilingPage() {
                   {summaryPanel}
                   <div className="filing-form-col">
                     <div className="sec-divider">Student Photo</div>
-                    <div className="g2 mt-3">
-                      <Field label="Photo" req error={photoError ?? undefined}>
-                        <FileZone
-                          hint="Click to upload passport-style photo (JPG/JPEG/PNG/BMP)"
-                          file={photoFile}
-                          onChange={f => {
-                            // Reject other types on pick so they never reach upload.
-                            if (f && !PHOTO_EXT_RE.test(f.name)) { setPhotoError(PHOTO_TYPE_MESSAGE); return }
-                            setPhotoError(null)
-                            setPhotoFile(f); if (f) setPhotoSaved(false)
-                          }}
-                        />
-                      </Field>
-                      <div className="flex flex-col items-start justify-end gap-1">
-                        {/* Was a bare `btn text-xs` with no color variant — this page's
-                            other primary actions (Save & Continue, Submit Application)
-                            all use btn-primary, so next to those this one read as plain
-                            text rather than a clickable button. Users picked a photo in
-                            the FileZone above and had no visual cue that a second click
-                            here was still needed to actually save it. btn-success once a
-                            file is picked (not yet saved) draws the eye to the pending
-                            action; falls back to btn-neu once there's nothing to do. */}
-                        <button
-                          className={`btn btn-sm${photoSaved ? ' btn-neu' : photoFile ? ' btn-success' : ' btn-neu'}`}
-                          disabled={!photoFile || uploadPhoto.isPending || (photoSaved && !photoFile) || !permissions.add}
-                          onClick={handleSavePhoto}
-                        >
-                          {photoSaved
-                            ? <><i className="lni lni-checkmark-circle" /> Uploaded</>
-                            : uploadPhoto.isPending
-                            ? <><i className="lni lni-reload" /> Uploading…</>
-                            : <><i className="lni lni-cloud-upload" /> Upload Photo</>}
-                        </button>
-                        {photoFile && !photoSaved && !uploadPhoto.isPending && (
-                          <span className="text-xs text-g400">Click Upload Photo to save it</span>
-                        )}
+                    <Field label="Photo" req error={photoError ?? undefined}>
+                      {/* One step: choose or drop a photo and it's saved. */}
+                      <div
+                        className={`filing-photo${photoDrag ? ' drag-active' : ''}${photoError ? ' has-error' : ''}`}
+                        onDragOver={e => { e.preventDefault(); if (permissions.add) setPhotoDrag(true) }}
+                        onDragLeave={() => setPhotoDrag(false)}
+                        onDrop={e => {
+                          e.preventDefault(); setPhotoDrag(false)
+                          if (permissions.add && !uploadPhoto.isPending) handlePhotoPicked(e.dataTransfer.files?.[0] ?? null)
+                        }}
+                      >
+                        <div className="filing-photo-thumb">
+                          {photoUrl
+                            ? <img src={photoUrl} alt="Selected applicant photo" />
+                            : <i className={`lni ${hasPhoto ? 'lni-checkmark-circle' : 'lni-user'}`} aria-hidden="true" />}
+                        </div>
+                        <div className="filing-photo-body">
+                          <div className="filing-photo-title" role="status" aria-live="polite">
+                            {uploadPhoto.isPending
+                              ? 'Uploading photo…'
+                              : photoError && photoFile
+                                ? 'Photo not saved'
+                                : photoSaved && photoFile
+                                  ? <><i className="lni lni-checkmark-circle" aria-hidden="true" style={{ color: 'var(--green)' }} /> Photo saved</>
+                                  : hasPhoto
+                                    ? <><i className="lni lni-checkmark-circle" aria-hidden="true" style={{ color: 'var(--green)' }} /> Photo on file</>
+                                    : 'No photo yet'}
+                          </div>
+                          <div className="filing-photo-sub">
+                            {photoFile?.name ?? (hasPhoto ? selectedApplication.studUserFileName : null) ?? 'Passport-style, JPG, PNG or BMP. Drag it here or choose a file.'}
+                          </div>
+                          <div className="flex gap-2 flex-wrap mt-2.5">
+                            <input
+                              ref={photoInputRef}
+                              type="file"
+                              accept=".jpg,.jpeg,.png,.bmp"
+                              className="sr-only"
+                              tabIndex={-1}
+                              aria-hidden="true"
+                              onChange={e => handlePhotoPicked(e.target.files?.[0] ?? null)}
+                            />
+                            <button
+                              type="button"
+                              className={`btn btn-sm ${hasPhoto ? 'btn-neu' : 'btn-primary'}`}
+                              disabled={uploadPhoto.isPending || !permissions.add}
+                              onClick={() => photoInputRef.current?.click()}
+                            >
+                              <i className="lni lni-cloud-upload" aria-hidden="true" /> {hasPhoto || photoFile ? 'Replace Photo' : 'Choose Photo'}
+                            </button>
+                            {photoError && photoFile && !uploadPhoto.isPending && (
+                              <button type="button" className="btn btn-sm btn-neu" onClick={() => { setPhotoError(null); uploadPhotoFile(photoFile) }}>
+                                <i className="lni lni-reload" aria-hidden="true" /> Try Again
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    </Field>
 
                     <div className="sec-divider mt-5">Uploaded Documents</div>
-                    <div className="mt-3">
-                      <DocRow label="National ID" file={nationalIdFile} savedName={selectedApplication.idUserFileName} />
-                      <DocRow label="Passport Copy" file={passportFile} savedName={selectedApplication.passUserFileName} />
-                      <DocRow label="Visa Copy" file={visaFile} savedName={selectedApplication.visaUserFileName} />
-                      <DocRow label="Refugee Certificate" file={refugeeFile} savedName={null} />
-                      <DocRow label="Student Photo" file={photoFile} savedName={selectedApplication.studUserFileName} />
+                    {/* The photo isn't repeated here — it has its own section above. */}
+                    <div className="vd-list mt-3">
+                      <DocRow label="National ID" file={nationalIdFile} savedName={selectedApplication.idUserFileName} onView={viewDocument} onAdd={() => setActiveTab('personal')} addLabel="Add in Personal Info" />
+                      <DocRow label="Passport Copy" file={passportFile} savedName={selectedApplication.passUserFileName} onView={viewDocument} onAdd={() => setActiveTab('personal')} addLabel="Add in Personal Info" />
+                      <DocRow label="Visa Copy" file={visaFile} savedName={selectedApplication.visaUserFileName} onView={viewDocument} onAdd={() => setActiveTab('personal')} addLabel="Add in Personal Info" />
+                      {isRefugee && (
+                        <DocRow label="Refugee Certificate" file={refugeeFile} savedName={null} onView={viewDocument} onAdd={() => setActiveTab('personal')} addLabel="Add in Personal Info" />
+                      )}
                       {qualRows.map((row, i) => (
-                        <DocRow key={row.id} label={`Qualification Proof #${i + 1}`} file={row.proofFile} savedName={null} />
+                        <DocRow key={row.id} label={`Qualification Proof #${i + 1}`} file={row.proofFile} savedName={null} onView={viewDocument} onAdd={() => setActiveTab('qualifications')} addLabel="Add in Qualifications" />
                       ))}
                     </div>
 
@@ -1669,6 +1712,7 @@ export default function FilingPage() {
         )}
       </div>
 
+      <DocumentPreviewModal isOpen={!!docPreview} onClose={closeDocPreview} url={docPreview?.url ?? null} title={docPreview?.title} />
       <Toast toast={toast} />
 
       {/* No auto-close (unlike SuccessPopup): the user moves on to Vetting

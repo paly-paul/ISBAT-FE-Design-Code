@@ -2,7 +2,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
-import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
 import { InfiniteSearchSelect } from '@/components/InfiniteSearchSelect'
@@ -37,21 +36,6 @@ const PIPELINE_STEPS = [
 
 type Tab = 'queue' | 'waiting' | 'rejections'
 
-// action is a byte? assembled from three different enums depending on who
-// wrote it (see VettingApiDocs.md "Status values") — the queue endpoint
-// currently only ever returns action==1 rows, but this covers the full
-// range in case that ever changes.
-function actionLabel(action: number | null): string {
-  switch (action) {
-    case 0: return 'Waiting'
-    case 1: return 'Pending'
-    case 2: return 'Approved'
-    case 3: return 'Rejected'
-    case 4: return 'Registered'
-    default: return '—'
-  }
-}
-
 // "—" for null, blank, or the literal string "null" some admission endpoints
 // send — same rule as VettingReviewModal's orDash.
 function orDash(value: string | null | undefined): string {
@@ -66,6 +50,39 @@ function timeAgo(dateStr: string | null): string {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
   return `${Math.floor(diff / 86400)}d ago`
+}
+
+// Date with how long ago underneath — queue age matters as much as the date.
+function When({ date }: { date: string | null }) {
+  if (!date) return <span className="text-g500">—</span>
+  return (
+    <span className="vd-when text-sm text-g700">
+      {formatDate(date)}
+      <span className="vd-when-ago">{timeAgo(date)}</span>
+    </span>
+  )
+}
+
+// Document completeness at a glance: green complete, amber partial, red none.
+function DocsChip({ uploaded, total }: { uploaded: number | null; total: number | null }) {
+  if (uploaded == null || !total) return <span className="text-g500">—</span>
+  const tone = uploaded >= total ? 'green' : uploaded === 0 ? 'red' : 'amber'
+  const label = uploaded >= total ? 'Complete' : `${total - uploaded} missing`
+  return <span className={`badge badge-${tone}`} title={`${uploaded} of ${total} documents uploaded`}>{uploaded}/{total} · {label}</span>
+}
+
+// A one-item Actions menu cost an extra click per review; the action is
+// direct now, and the applicant's name opens it too.
+function ReviewButton({ onClick, name }: { onClick: () => void; name: string | null }) {
+  return (
+    <button type="button" className="btn btn-neu btn-sm" onClick={onClick} aria-label={`Review ${orDash(name)}`}>
+      <i className="lni lni-eye" aria-hidden="true" /> Review
+    </button>
+  )
+}
+
+function NameButton({ name, onClick }: { name: string | null; onClick: () => void }) {
+  return <button type="button" className="vd-name-btn" onClick={onClick}>{orDash(name)}</button>
 }
 
 export default function VettingPage() {
@@ -292,6 +309,8 @@ export default function VettingPage() {
                   value={search}
                   onChange={updateSearch}
                   results={searchMatches.map(row => ({ id: row.applicationGuid, primary: row.appRefNo, secondary: row.studentName }))}
+                  // Picking a suggestion opens that application straight away.
+                  onSelect={r => { updateSearch(r.primary); handleReview(r.id) }}
                 />
                 <SearchSelect options={progOptions} value={filterProg} onChange={v => { setFilterProg(v); setPage(1) }} />
               </div>
@@ -300,14 +319,14 @@ export default function VettingPage() {
               <table>
                 <thead>
                   <tr>
-                    <th style={{ width: 48 }}></th>
+                    <th><span className="sr-only">Actions</span></th>
                     <th>App. Ref</th>
                     <th>Applicant Name</th>
                     <th>Programme</th>
                     <th>Type</th>
                     <th>Documents</th>
                     <th>Submitted</th>
-                    <th>Status</th>
+                    <th>Intake</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -318,16 +337,16 @@ export default function VettingPage() {
                       : null}
                   {visibleRows.map(row => (
                     <tr key={row.applicationGuid}>
-                      <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => handleReview(row.applicationGuid)}><i className="lni lni-eye" /> Review</button></ActionMenu></td>
-                      <td className="font-mono text-sm">{orDash(row.appRefNo)}</td>
-                      <td>{orDash(row.studentName)}</td>
+                      <td><ReviewButton onClick={() => handleReview(row.applicationGuid)} name={row.studentName} /></td>
+                      <td className="text-sm tabular-nums">{orDash(row.appRefNo)}</td>
+                      <td><NameButton name={row.studentName} onClick={() => handleReview(row.applicationGuid)} /></td>
                       <td>{orDash(row.programName)}</td>
                       <td>{orDash(row.type) === '—' ? '—' : <span className={`badge badge-${row.type === 'ODL' ? 'cyan' : 'blue'}`}>{row.type}</span>}</td>
-                      <td>{row.documentsUploaded ?? '—'}/{row.documentsTotal ?? '—'}</td>
-                      <td className="text-sm text-g500">{timeAgo(row.submittedDate)}</td>
+                      <td><DocsChip uploaded={row.documentsUploaded} total={row.documentsTotal} /></td>
+                      <td><When date={row.submittedDate} /></td>
                       <td>
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="badge badge-amber">{actionLabel(row.action)}</span>
+                          <span className="text-sm">{orDash(row.intakeName || row.intakeCode || row.intake)}</span>
                           {isOutsideCurrentIntake(row) && (
                             <span
                               className="badge badge-grey"
@@ -392,7 +411,7 @@ export default function VettingPage() {
               <table>
                 <thead>
                   <tr>
-                    <th style={{ width: 48 }}></th>
+                    <th><span className="sr-only">Actions</span></th>
                     <th>App. Ref</th>
                     <th>Applicant</th>
                     <th>Contact</th>
@@ -417,9 +436,9 @@ export default function VettingPage() {
                       : null}
                   {waitItems.map(w => (
                     <tr key={w.applicationGuid}>
-                      <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => handleReview(w.applicationGuid, true)}><i className="lni lni-eye" /> Review</button></ActionMenu></td>
-                      <td className="font-mono text-sm">{orDash(w.appRefNo)}</td>
-                      <td>{orDash(w.studentName)}</td>
+                      <td><ReviewButton onClick={() => handleReview(w.applicationGuid, true)} name={w.studentName} /></td>
+                      <td className="text-sm tabular-nums">{orDash(w.appRefNo)}</td>
+                      <td><NameButton name={w.studentName} onClick={() => handleReview(w.applicationGuid, true)} /></td>
                       <td className="text-sm">
                         <div className="flex flex-col gap-0.5">
                           {w.phone && <a className="text-b700 hover:underline" href={`tel:${w.phone}`}><i className="lni lni-phone" aria-hidden="true" /> {w.phone}</a>}
@@ -429,8 +448,8 @@ export default function VettingPage() {
                       </td>
                       <td>{orDash(w.programName)}</td>
                       <td>{orDash(w.type) === '—' ? '—' : <span className={`badge badge-${w.type === 'ODL' ? 'cyan' : 'blue'}`}>{w.type}</span>}</td>
-                      <td className="text-sm text-g500">{formatDate(w.submittedDate)}</td>
-                      <td className="text-sm text-g500">{formatDate(w.waitingDate)}</td>
+                      <td><When date={w.submittedDate} /></td>
+                      <td><When date={w.waitingDate} /></td>
                       <td className="text-sm text-g700" style={{ minWidth: 220, maxWidth: 360, whiteSpace: 'normal' }}>{orDash(w.remarks)}</td>
                     </tr>
                   ))}
@@ -486,7 +505,7 @@ export default function VettingPage() {
               <table>
                 <thead>
                   <tr>
-                    {permissions.edit && <th style={{ width: 48 }}></th>}
+                    {permissions.edit && <th><span className="sr-only">Actions</span></th>}
                     <th>App. Ref</th>
                     <th>Applicant</th>
                     <th>Contact</th>
@@ -512,9 +531,9 @@ export default function VettingPage() {
                   {rejItems.map(r => (
                     <tr key={r.applicationGuid}>
                       {permissions.edit && (
-                        <td><ActionMenu><button className="btn btn-neu btn-sm" onClick={() => handleRevert(r)}><i className="lni lni-reload" /> Revert</button></ActionMenu></td>
+                        <td><button type="button" className="btn btn-neu btn-sm" onClick={() => handleRevert(r)} aria-label={`Revert rejection of ${orDash(r.studentName)}`}><i className="lni lni-reload" aria-hidden="true" /> Revert</button></td>
                       )}
-                      <td className="font-mono text-sm">{orDash(r.appRefNo)}</td>
+                      <td className="text-sm tabular-nums">{orDash(r.appRefNo)}</td>
                       <td>{orDash(r.studentName)}</td>
                       <td className="text-sm">
                         <div className="flex flex-col gap-0.5">
@@ -525,8 +544,8 @@ export default function VettingPage() {
                       </td>
                       <td>{orDash(r.programName)}</td>
                       <td>{orDash(r.type) === '—' ? '—' : <span className={`badge badge-${r.type === 'ODL' ? 'cyan' : 'blue'}`}>{r.type}</span>}</td>
-                      <td className="text-sm text-g500">{formatDate(r.submittedDate)}</td>
-                      <td className="text-sm text-g500">{formatDate(r.rejectedDate)}</td>
+                      <td><When date={r.submittedDate} /></td>
+                      <td><When date={r.rejectedDate} /></td>
                       <td className="text-sm text-g700" style={{ minWidth: 220, maxWidth: 360, whiteSpace: 'normal' }}>{orDash(r.rejectionReason)}</td>
                     </tr>
                   ))}

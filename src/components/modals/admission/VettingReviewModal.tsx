@@ -9,6 +9,7 @@ import { useVettingApplicationDetail, useWaitApplication } from '@/hooks/admissi
 import { NO_CURRENT_INTAKE_MESSAGE, NOT_CURRENT_INTAKE_MESSAGE, VetApplicationInput } from '@/lib/api/admission/vetting'
 import { useCurrentAdmissionIntake } from '@/hooks/academic/useIntakes'
 import { AuthError } from '@/lib/api/client'
+import { formatDate } from '@/lib/date'
 
 // A friendlier label than the raw documentType string from the wire
 // ("NationalId" → "National ID").
@@ -17,6 +18,17 @@ const DOCUMENT_LABELS: Record<string, string> = {
   Passport: 'Passport',
   Visa: 'Visa',
   Photo: 'Passport Photo',
+}
+
+// Read-only value, same label/value treatment as ViewApplicantModal — the
+// old read-only inputs looked editable.
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div className="vd-field-lbl">{label}</div>
+      <div className="vd-field-val tabular-nums">{value}</div>
+    </div>
+  )
 }
 
 // Display value for an optional text field: "—" for null, blank, or the
@@ -172,138 +184,216 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
   }
 
   const missingDocs = detail.documents.filter(d => !d.uploaded)
+  const uploadedDocs = detail.documents.length - missingDocs.length
+  const withProof = detail.qualifications.filter(q => q.proofUrl).length
+  const fullName = orDash(`${detail.firstName ?? ''} ${detail.lastName ?? ''}`)
+  const docTitle = (type: string) => DOCUMENT_LABELS[type] ?? type
+
+  // What the registrar weighs before deciding, summarised up front so it
+  // doesn't have to be pieced together from the panels below.
+  const checks: { tone: 'ok' | 'warn' | 'bad'; icon: string; text: string }[] = [
+    detail.documents.length > 0 && {
+      tone: missingDocs.length === 0 ? 'ok' as const : 'warn' as const,
+      icon: missingDocs.length === 0 ? 'lni-checkmark-circle' : 'lni-warning',
+      text: `${uploadedDocs}/${detail.documents.length} documents`,
+    },
+    {
+      tone: detail.qualifications.length > 0 && withProof === detail.qualifications.length ? 'ok' as const : 'warn' as const,
+      icon: detail.qualifications.length > 0 && withProof === detail.qualifications.length ? 'lni-checkmark-circle' : 'lni-warning',
+      text: detail.qualifications.length === 0 ? 'No qualifications' : `${withProof}/${detail.qualifications.length} qualification proofs`,
+    },
+    {
+      tone: detail.feePaid ? 'ok' as const : 'warn' as const,
+      icon: detail.feePaid ? 'lni-checkmark-circle' : 'lni-warning',
+      text: detail.feePaid ? 'Fee paid' : 'Fee not paid',
+    },
+    approveBlockedReason
+      ? { tone: 'bad' as const, icon: 'lni-lock', text: 'Not current intake' }
+      : currentIntake.isSuccess && currentIntake.data
+        ? { tone: 'ok' as const, icon: 'lni-checkmark-circle', text: 'Current intake' }
+        : null,
+  ].filter((c): c is { tone: 'ok' | 'warn' | 'bad'; icon: string; text: string } => !!c)
+
+  const initials = fullName === '—'
+    ? '?'
+    : fullName.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
 
   return (
     <div className="modal-overlay open">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title flex items-center gap-2">
-            <i className="lni lni-eye"></i> Reviewing: {orDash(`${detail.firstName ?? ''} ${detail.lastName ?? ''}`)} &middot; {orDash(detail.programName)}
-            {orDash(detail.admissionType) !== '—' && <span className="badge badge-blue">{detail.admissionType}</span>}
+            <i className="lni lni-eye" aria-hidden="true"></i> Review Application
           </div>
-          <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
+          <button className="modal-close" onClick={handleClose} aria-label="Close"><i className="lni lni-close"></i></button>
         </div>
 
         <div className="modal-scroll">
-          <div className="g2" style={{ gap: 28, alignItems: 'start' }}>
-            {/* LEFT: Applicant Profile */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-g700"><i className="lni lni-user mr-1" /> Applicant Profile</h3>
-                <a
-                  href={applicantProfileHref({
-                    ref: detail.appRefNo,
-                    name: `${detail.firstName} ${detail.lastName}`,
-                    programme: detail.programName,
-                    type: detail.admissionType,
-                    dob: detail.dob ?? undefined,
-                    gender: genderText(detail.gender) || undefined,
-                    nationality: orDash(detail.nationality) !== '—' ? orDash(detail.nationality) : undefined,
-                    nationalId: detail.nationalId ?? undefined,
-                    phone: detail.phone ?? undefined,
-                    email: detail.emailId ?? undefined,
-                    intake: intakeDisplay !== '—' ? intakeDisplay : undefined,
-                    campus: detail.campusName,
-                    submitted: detail.submittedDate,
-                  })}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1"
-                  style={{ fontSize: 'var(--fs-xs)', color: 'var(--b600)', fontWeight: 600 }}
-                >
-                  <i className="lni lni-external-link" /> View Full Profile
-                </a>
+          {/* Who is applying, for what — before any detail. */}
+          <div className="vd-hero">
+            <div className="vd-avatar" aria-hidden="true">{initials}</div>
+            <div className="vd-hero-main">
+              <div className="vd-hero-name flex items-center gap-2 flex-wrap">
+                {fullName}
+                {orDash(detail.admissionType) !== '—' && <span className="badge badge-blue">{detail.admissionType}</span>}
               </div>
-
-              <div className="sec-divider">Personal Information</div>
-              <div className="g2 mb-4">
-                <div className="fg"><label className="lbl">First Name</label><input className="ctrl" readOnly value={orDash(detail.firstName)} /></div>
-                <div className="fg"><label className="lbl">Last Name</label><input className="ctrl" readOnly value={orDash(detail.lastName)} /></div>
-                <div className="fg"><label className="lbl">Date of Birth</label><input className="ctrl" readOnly value={detail.dob ? detail.dob.slice(0, 10) : '—'} /></div>
-                <div className="fg"><label className="lbl">Gender</label><input className="ctrl" readOnly value={genderText(detail.gender) || '—'} /></div>
-                {/* Both looked up from the application's country (vetting.ts):
-                    Nationality is the demonym, Country the country name. */}
-                <div className="fg"><label className="lbl">Nationality</label><input className="ctrl" readOnly value={orDash(detail.nationality)} /></div>
-                <div className="fg"><label className="lbl">Country</label><input className="ctrl" readOnly value={orDash(detail.countryName)} /></div>
-                <div className="fg"><label className="lbl">National ID</label><input className="ctrl" readOnly value={orDash(detail.nationalId)} /></div>
-                <div className="fg"><label className="lbl">Phone</label><input className="ctrl" readOnly value={orDash(detail.phone)} /></div>
-                <div className="fg"><label className="lbl">Email</label><input className="ctrl" readOnly value={orDash(detail.emailId)} /></div>
-              </div>
-
-              <div className="sec-divider">Application Details</div>
-              <div className="g2">
-                <div className="fg"><label className="lbl">App. Ref</label><input className="ctrl font-mono" readOnly value={orDash(detail.appRefNo)} /></div>
-                <div className="fg"><label className="lbl">Admission Type</label><input className="ctrl" readOnly value={orDash(detail.admissionType)} /></div>
-                <div className="fg"><label className="lbl">Programme</label><input className="ctrl" readOnly value={orDash(detail.programName)} /></div>
-                <div className="fg"><label className="lbl">Intake</label><input className="ctrl" readOnly value={intakeDisplay} /></div>
-                <div className="fg"><label className="lbl">Campus</label><input className="ctrl" readOnly value={orDash(detail.campusName)} /></div>
-                <div className="fg"><label className="lbl">Submitted</label><input className="ctrl" readOnly value={detail.submittedDate ? detail.submittedDate.slice(0, 10) : '—'} /></div>
-                <div className="fg"><label className="lbl">Fee Paid</label><input className="ctrl" readOnly value={detail.feePaid ? 'Yes' : 'No'} /></div>
+              <div className="vd-hero-meta">
+                <span>{orDash(detail.appRefNo)}</span>
+                <span><i className="lni lni-graduation" aria-hidden="true" />{orDash(detail.programName)}</span>
+                {orDash(detail.campusName) !== '—' && <span><i className="lni lni-home" aria-hidden="true" />{detail.campusName}</span>}
+                {intakeDisplay !== '—' && <span><i className="lni lni-calendar" aria-hidden="true" />{intakeDisplay}</span>}
               </div>
             </div>
+            <div className="vd-hero-side">
+              <div className="vd-checks" aria-label="Review summary">
+                {checks.map(c => (
+                  <span key={c.text} className={`vd-check ${c.tone}`}><i className={`lni ${c.icon}`} aria-hidden="true" /> {c.text}</span>
+                ))}
+              </div>
+              <a
+                href={applicantProfileHref({
+                  ref: detail.appRefNo,
+                  name: `${detail.firstName} ${detail.lastName}`,
+                  programme: detail.programName,
+                  type: detail.admissionType,
+                  dob: detail.dob ?? undefined,
+                  gender: genderText(detail.gender) || undefined,
+                  nationality: orDash(detail.nationality) !== '—' ? orDash(detail.nationality) : undefined,
+                  nationalId: detail.nationalId ?? undefined,
+                  phone: detail.phone ?? undefined,
+                  email: detail.emailId ?? undefined,
+                  intake: intakeDisplay !== '—' ? intakeDisplay : undefined,
+                  campus: detail.campusName,
+                  submitted: detail.submittedDate,
+                })}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1"
+                style={{ fontSize: 'var(--fs-xs)', color: 'var(--b600)', fontWeight: 600 }}
+              >
+                <i className="lni lni-external-link" aria-hidden="true" /> View Full Profile
+              </a>
+            </div>
+          </div>
 
-            {/* RIGHT: Review content */}
+          <div className="g2" style={{ gap: 20, alignItems: 'start' }}>
+            {/* LEFT: the applicant */}
             <div>
-              <h3 className="text-sm font-semibold text-g700 mb-3"><i className="lni lni-folder mr-1" /> Uploaded Documents</h3>
-              <div className="grid grid-cols-2 gap-3">
-                {detail.documents.map(doc => {
-                  const isMissing = !doc.uploaded
-                  return (
-                    <div key={doc.documentType} className={`border rounded-[10px] overflow-hidden ${isMissing ? 'border-clr-red-bd bg-clr-red-bg' : 'border-g200 bg-white'}`}>
-                      <div className={`h-28 flex items-center justify-center ${isMissing ? 'bg-clr-red-bg' : 'bg-b50'}`}>
-                        <i className={`lni ${isMissing ? 'lni-question-circle text-clr-red' : 'lni-file text-b500'} text-3xl`} />
-                      </div>
-                      <div className="p-3">
-                        <p className={`text-sm font-medium mb-0.5 ${isMissing ? 'text-red-700' : 'text-g800'}`}>{DOCUMENT_LABELS[doc.documentType] ?? doc.documentType}</p>
-                        {isMissing ? <span className="badge badge-red">Missing</span> : (
-                          doc.url && <button type="button" className="btn btn-sm text-xs" onClick={() => setPreview({ url: doc.url!, title: DOCUMENT_LABELS[doc.documentType] ?? doc.documentType })}><i className="lni lni-eye" /> View</button>
+              <section className="vd-panel">
+                <h3 className="vd-panel-title"><i className="lni lni-folder" aria-hidden="true" /> Application</h3>
+                <div className="vd-fields">
+                  <Field label="App. Ref" value={orDash(detail.appRefNo)} />
+                  <Field label="Submitted" value={detail.submittedDate ? formatDate(detail.submittedDate) : '—'} />
+                  <Field label="Admission Type" value={orDash(detail.admissionType)} />
+                  <Field label="Intake" value={intakeDisplay} />
+                </div>
+              </section>
+
+              <section className="vd-panel">
+                <h3 className="vd-panel-title"><i className="lni lni-user" aria-hidden="true" /> Personal Information</h3>
+                <div className="vd-fields">
+                  <Field label="First Name" value={orDash(detail.firstName)} />
+                  <Field label="Last Name" value={orDash(detail.lastName)} />
+                  <Field label="Date of Birth" value={detail.dob ? formatDate(detail.dob) : '—'} />
+                  <Field label="Gender" value={genderText(detail.gender) || '—'} />
+                  {/* Both looked up from the application's country (vetting.ts):
+                      Nationality is the demonym, Country the country name. */}
+                  <Field label="Nationality" value={orDash(detail.nationality)} />
+                  <Field label="Country" value={orDash(detail.countryName)} />
+                  <Field label="National ID" value={orDash(detail.nationalId)} />
+                  <Field label="Phone" value={orDash(detail.phone)} />
+                  <Field label="Email" value={orDash(detail.emailId)} />
+                </div>
+              </section>
+            </div>
+
+            {/* RIGHT: the evidence, then the hold note */}
+            <div>
+              <section className="vd-panel">
+                <h3 className="vd-panel-title">
+                  <i className="lni lni-folder" aria-hidden="true" /> Uploaded Documents
+                  {detail.documents.length > 0 && <span className="vd-count">{uploadedDocs} of {detail.documents.length}</span>}
+                </h3>
+                {detail.documents.length === 0 ? (
+                  <p className="text-sm text-g500">No documents required for this application.</p>
+                ) : (
+                  <div className="vd-list">
+                    {detail.documents.map(doc => (
+                      <div key={doc.documentType} className={`vd-doc${doc.uploaded ? '' : ' missing'}`}>
+                        <span className="vd-doc-icon">{/* lni-file doesn't exist in LineIcons 4 — it rendered as a blank tile. */}
+                          <i className={`lni ${doc.uploaded ? 'lni-folder' : 'lni-question-circle'}`} aria-hidden="true" /></span>
+                        <div className="vd-doc-body">
+                          <div className="vd-doc-name">{docTitle(doc.documentType)}</div>
+                          <div className="vd-doc-sub">{doc.uploaded ? 'Uploaded' : 'Missing'}</div>
+                        </div>
+                        {doc.uploaded && doc.url && (
+                          <button type="button" className="btn btn-neu btn-sm" onClick={() => setPreview({ url: doc.url!, title: docTitle(doc.documentType) })} aria-label={`View ${docTitle(doc.documentType)}`}>
+                            <i className="lni lni-eye" aria-hidden="true" /> View
+                          </button>
                         )}
                       </div>
-                    </div>
-                  )
-                })}
-              </div>
+                    ))}
+                  </div>
+                )}
+                {missingDocs.length > 0 && (
+                  <div className="warn-box mt-3">
+                    <i className="lni lni-warning text-amber-700" aria-hidden="true" style={{ marginTop: 2 }} />
+                    <span className="text-sm">{missingDocs.length} document{missingDocs.length > 1 ? 's' : ''} missing ({missingDocs.map(d => docTitle(d.documentType)).join(', ')}). You may approve provisionally &mdash; student must submit within 7 days.</span>
+                  </div>
+                )}
+              </section>
 
-              <h3 className="text-sm font-semibold text-g700 mb-3 mt-5"><i className="lni lni-book mr-1" /> Qualifications</h3>
-              {detail.qualifications.length === 0 ? (
-                <p className="text-sm text-g400 mb-4">No qualifications submitted yet.</p>
-              ) : (
-                <div className="flex flex-col gap-2 mb-4">
-                  {detail.qualifications.map(q => (
-                    <div key={q.applicationQualGuid} className="flex items-center justify-between border border-g200 rounded-[10px] px-3 py-2">
-                      <div>
-                        {/* institution is free text by convention only (e.g. "O Level" /
-                            "A Level") — there is no separate structured type column. */}
-                        <p className="text-sm font-medium text-g800">{orDash(q.institution)} &middot; {orDash(q.university)}</p>
-                        <p className="text-xs text-g400">Grade {orDash(q.grade)} &middot; {q.passYear ?? '—'} &middot; {q.yearsTaken != null ? `${q.yearsTaken} yrs` : '—'}</p>
+              <section className="vd-panel">
+                <h3 className="vd-panel-title">
+                  <i className="lni lni-book" aria-hidden="true" /> Qualifications
+                  {detail.qualifications.length > 0 && <span className="vd-count">{withProof} of {detail.qualifications.length} with proof</span>}
+                </h3>
+                {detail.qualifications.length === 0 ? (
+                  <p className="text-sm text-g500">No qualifications submitted yet.</p>
+                ) : (
+                  <div className="vd-list">
+                    {detail.qualifications.map(q => (
+                      <div key={q.applicationQualGuid} className={`vd-doc${q.proofUrl ? '' : ' missing'}`}>
+                        <span className="vd-doc-icon"><i className={`lni ${q.proofUrl ? 'lni-book' : 'lni-question-circle'}`} aria-hidden="true" /></span>
+                        <div className="vd-doc-body">
+                          {/* institution is free text by convention only (e.g. "O Level" /
+                              "A Level") — there is no separate structured type column. */}
+                          <div className="vd-doc-name">{orDash(q.institution)} &middot; {orDash(q.university)}</div>
+                          <div className="vd-doc-sub">
+                            Grade {orDash(q.grade)} &middot; {q.passYear ?? '—'} &middot; {q.yearsTaken != null ? `${q.yearsTaken} yrs` : '—'}
+                            {!q.proofUrl && <> &middot; No proof</>}
+                          </div>
+                        </div>
+                        {q.proofUrl && (
+                          <button type="button" className="btn btn-neu btn-sm" onClick={() => setPreview({ url: q.proofUrl!, title: `Proof — ${q.institution} · ${q.university}` })} aria-label={`View proof for ${q.institution}`}>
+                            <i className="lni lni-eye" aria-hidden="true" /> View Proof
+                          </button>
+                        )}
                       </div>
-                      {q.proofUrl
-                        ? <button type="button" className="btn btn-sm text-xs" onClick={() => setPreview({ url: q.proofUrl!, title: `Proof — ${q.institution} · ${q.university}` })}><i className="lni lni-eye" /> View Proof</button>
-                        : <span className="badge badge-red">No Proof</span>
-                      }
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </section>
 
-              {missingDocs.length > 0 && (
-                <div className="warn-box mb-4">
-                  <i className="lni lni-warning mr-2 text-amber-700" />
-                  <span className="text-sm">{missingDocs.length} document{missingDocs.length > 1 ? 's' : ''} missing ({missingDocs.map(d => DOCUMENT_LABELS[d.documentType] ?? d.documentType).join(', ')}). You may approve provisionally &mdash; student must submit within 7 days.</span>
-                </div>
+              {allowWait && canVet && (
+                <section className="vd-panel accent">
+                  <h3 className="vd-panel-title"><i className="lni lni-timer" aria-hidden="true" /> Put on Hold</h3>
+                  <div className="fg">
+                    <label className="lbl" htmlFor="vetting-hold-remarks">
+                      Hold Remarks <span className="text-g500" style={{ fontWeight: 400 }}>(optional · {remarks.trim().length}/{WAIT_REMARKS_MAX})</span>
+                    </label>
+                    {/* POST .../wait caps remarks at 500 chars. */}
+                    <textarea id="vetting-hold-remarks" className="ctrl" rows={3} maxLength={WAIT_REMARKS_MAX} placeholder="e.g. Awaiting original transcript from the applicant" value={remarks} onChange={e => setRemarks(e.target.value)} />
+                    <p className="text-xs text-g600 mt-1.5">Saved with &ldquo;Wait for Original Documents&rdquo; and shown on the Waiting List. Rejecting asks for its own reason.</p>
+                  </div>
+                </section>
               )}
-
-              {allowWait && <div className="fg">
-                <label className="lbl">Vetting Remarks <span className="text-g400" style={{ fontWeight: 400 }}>({remarks.trim().length}/{WAIT_REMARKS_MAX})</span></label>
-                {/* POST .../wait caps remarks at 500 chars. */}
-                <textarea className="ctrl" rows={3} maxLength={WAIT_REMARKS_MAX} placeholder="Enter notes — used for the Wait action's remarks; Approve/Reject send their own justification separately." value={remarks} onChange={e => setRemarks(e.target.value)} />
-              </div>}
             </div>
           </div>
         </div>
 
-        <div className="modal-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
-          {approveBlockedReason && (
+        <div className="modal-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+          {approveBlockedReason && canVet && (
             <div className="warn-box" role="note" style={{ fontSize: 13 }}>
               <i className="lni lni-lock" aria-hidden="true" style={{ marginTop: 2 }}></i>
               <span>{approveBlockedReason} {allowWait ? 'You can still reject it or place it on hold.' : 'You can still reject it.'}</span>
@@ -315,17 +405,20 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
               <span>View only. You don&apos;t have permission to approve, reject or hold applications.</span>
             </div>
           ) : (
-          <div className={`grid ${allowWait ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
-            {allowWait && (
-              <button className="btn btn-amber w-full justify-center" disabled={waitApplication.isPending} onClick={handleWait}>
-                <i className="lni lni-timer" /> {waitApplication.isPending ? 'Saving…' : 'Wait for Original Documents'}
-              </button>
-            )}
-            <button className="btn btn-success w-full justify-center" disabled={vetApplication.isPending || !!approveBlockedReason} title={approveBlockedReason ?? undefined} onClick={handleApprove}>
-              <i className="lni lni-checkmark" /> {vetApplication.isPending ? 'Approving…' : 'Approve & Issue Provisional Letter'}
-            </button>
-            <button className="btn btn-danger w-full justify-center" onClick={onReject}><i className="lni lni-close" /> Reject Application</button>
-          </div>
+            // Reject sits apart on the left; Approve is the one primary action.
+            <div className="vd-actions">
+              <button type="button" className="btn btn-danger" onClick={onReject}><i className="lni lni-close" aria-hidden="true" /> Reject Application</button>
+              <div className="vd-actions-end">
+                {allowWait && (
+                  <button type="button" className="btn btn-neu" disabled={waitApplication.isPending} onClick={handleWait}>
+                    <i className="lni lni-timer" aria-hidden="true" /> {waitApplication.isPending ? 'Saving…' : 'Wait for Original Documents'}
+                  </button>
+                )}
+                <button type="button" className="btn btn-success" disabled={vetApplication.isPending || !!approveBlockedReason} title={approveBlockedReason ?? undefined} onClick={handleApprove}>
+                  <i className="lni lni-checkmark" aria-hidden="true" /> {vetApplication.isPending ? 'Approving…' : 'Approve & Issue Provisional Letter'}
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>

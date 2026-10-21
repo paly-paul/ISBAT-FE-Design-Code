@@ -251,7 +251,7 @@ export async function apiPostWithMessage<T>(path: string, body: unknown, retried
     body: JSON.stringify(body),
   })
 
-  const envelope = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
+  const envelope = (await readJsonNullingText(res).catch(() => null)) as ApiEnvelope<T> | null
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
@@ -509,6 +509,15 @@ export async function apiGetBlob(path: string, retried = false): Promise<{ blob:
   return { blob: await res.blob(), filename }
 }
 
+// Application Filing used to save every empty field as the text "null", and
+// the backend stored it as-is — so blank National IDs, sponsor details etc.
+// came back as "null" and showed up literally on every screen downstream
+// (vetting, registrar, student profile, payment console…). Reading it back
+// as a real null lets each screen's own "—" fallback apply.
+function readJsonNullingText(res: Response): Promise<unknown> {
+  return res.text().then(text => (text ? JSON.parse(text, (_key, value) => (value === 'null' ? null : value)) : null))
+}
+
 export async function apiGet<T>(path: string, retried = false): Promise<T> {
   const res = await fetch(buildUrl(path), {
     method: 'GET',
@@ -516,7 +525,7 @@ export async function apiGet<T>(path: string, retried = false): Promise<T> {
     credentials: 'include',
   })
 
-  const envelope = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
+  const envelope = (await readJsonNullingText(res).catch(() => null)) as ApiEnvelope<T> | null
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
