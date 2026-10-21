@@ -7,15 +7,28 @@ import { applicantProfileHref } from '@/lib/applicantProfileLink'
 import { useRegistrationDetail, useRegisterStudent, RegisterStudentResponse } from '@/hooks/admission/useRegistrarDesk'
 import { AuthError } from '@/lib/api/client'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
+import { formatDate } from '@/lib/date'
 
 interface Props extends ModalProps {
   applicationGuid: string | null
   onRegistered: (result: RegisterStudentResponse) => void
 }
 
-function fmtDate(iso: string | null): string {
-  if (!iso) return '—'
-  return iso.slice(0, 10)
+// "—" for null, blank, or the literal string "null" some admission endpoints send.
+function orDash(value: string | null | undefined): string {
+  const v = value?.trim()
+  return v && v.toLowerCase() !== 'null' ? v : '—'
+}
+
+// Read-only value — same label/value treatment as VettingReviewModal; the
+// old read-only inputs looked editable.
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div className="vd-field-lbl">{label}</div>
+      <div className="vd-field-val tabular-nums">{value}</div>
+    </div>
+  )
 }
 
 // Real now — per registrar-desk-api-docs.html. Admission Type and Address
@@ -112,8 +125,8 @@ export function CompleteRegistrationModal({ isOpen, onClose, showToast, applicat
       <div className="modal-overlay open">
         <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
           <div className="modal-hdr modal-hdr-blue">
-            <div className="modal-title"><i className="lni lni-pencil"></i> Completing Registration</div>
-            <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
+            <div className="modal-title"><i className="lni lni-graduation" aria-hidden="true"></i> Completing Registration</div>
+            <button className="modal-close" onClick={handleClose} aria-label="Close"><i className="lni lni-close"></i></button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 240 }}>
             <span style={{ color: 'var(--g400)' }}>Loading registration details…</span>
@@ -123,142 +136,191 @@ export function CompleteRegistrationModal({ isOpen, onClose, showToast, applicat
     )
   }
 
+  const money = (n: number | null | undefined) => (n != null ? n.toLocaleString() : '—')
+  const initials = orDash(detail.studentName) === '—'
+    ? '?'
+    : detail.studentName.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
+
+  // Registration fee due vs what Payment Console recorded.
+  const due = detail.regFee
+  const paid = detail.regPaymentAmount
+  const balance = due != null && paid != null ? due - paid : null
+  const paidTone = balance == null ? '' : balance <= 0 ? 'ok' : 'bad'
+
+  // The three things the registrar checks before registering.
+  const checks: { tone: 'ok' | 'warn' | 'bad'; icon: string; text: string }[] = [
+    detail.registrationFeeConfirmed
+      ? { tone: 'ok', icon: 'lni-checkmark-circle', text: 'Reg. fee confirmed' }
+      : { tone: 'bad', icon: 'lni-warning', text: 'Reg. fee not confirmed' },
+    detail.provisionalLetterIssued
+      ? { tone: 'ok', icon: 'lni-checkmark-circle', text: 'Provisional letter issued' }
+      : { tone: 'warn', icon: 'lni-warning', text: 'Letter not issued' },
+    detail.academicDocumentsVerified
+      ? { tone: 'ok', icon: 'lni-checkmark-circle', text: 'Documents verified' }
+      : { tone: 'warn', icon: 'lni-warning', text: 'Documents pending' },
+  ]
+
   return (
     <div className="modal-overlay open">
       <div className="modal modal-80 modal-flex" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title flex items-center gap-2">
-            <i className="lni lni-pencil"></i> Completing Registration: <span className="text-b600">{detail.studentName}</span>
+            <i className="lni lni-graduation" aria-hidden="true"></i> Complete Registration
           </div>
-          <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
+          <button className="modal-close" onClick={handleClose} aria-label="Close"><i className="lni lni-close"></i></button>
         </div>
 
         <div className="modal-scroll">
-          <div className="g2" style={{ gap: 28, alignItems: 'start' }}>
-            {/* LEFT: Application detail (read-only, real) */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-g700"><i className="lni lni-user mr-1" /> Student Profile</h3>
-                <a
-                  href={applicantProfileHref({
-                    ref: detail.appRefNo,
-                    name: detail.studentName,
-                    programme: detail.programName ?? undefined,
-                    dob: detail.dob ?? undefined,
-                    gender: detail.gender ?? undefined,
-                    nationality: detail.nationality ?? undefined,
-                    nationalId: detail.nationalId ?? undefined,
-                    phone: detail.phone ?? undefined,
-                    email: detail.emailId ?? undefined,
-                    intake: detail.intakeCode ?? undefined,
-                    campus: detail.campusName ?? undefined,
-                    submitted: detail.submitted,
-                  })}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1"
-                  style={{ fontSize: 'var(--fs-xs)', color: 'var(--b600)', fontWeight: 600 }}
-                >
-                  <i className="lni lni-external-link" /> View Full Profile
-                </a>
-              </div>
-
-              {/* Admission Type dropped from this card per
-                  registrar-desk-api-docs.html's frontend notes. */}
-              <div className="sec-divider">Personal Information</div>
-              <div className="g2 mb-4">
-                <div className="fg"><label className="lbl">First Name</label><input className="ctrl" readOnly value={detail.firstName ?? ''} /></div>
-                <div className="fg"><label className="lbl">Last Name</label><input className="ctrl" readOnly value={detail.lastName ?? '—'} /></div>
-                <div className="fg"><label className="lbl">Date of Birth</label><input className="ctrl" readOnly value={fmtDate(detail.dob)} /></div>
-                <div className="fg"><label className="lbl">Gender</label><input className="ctrl" readOnly value={detail.gender ?? '—'} /></div>
-                <div className="fg"><label className="lbl">Nationality</label><input className="ctrl" readOnly value={detail.nationality ?? '—'} /></div>
-                <div className="fg"><label className="lbl">National ID</label><input className="ctrl" readOnly value={detail.nationalId ?? '—'} /></div>
-                <div className="fg"><label className="lbl">Phone</label><input className="ctrl" readOnly value={detail.phone ?? '—'} /></div>
-                <div className="fg"><label className="lbl">Email</label><input className="ctrl" readOnly value={detail.emailId ?? '—'} /></div>
-              </div>
-
-              {/* Admission Type dropped from this card too — same field,
-                  second card, also not needed here per the frontend notes. */}
-              <div className="sec-divider">Application Details</div>
-              <div className="g2">
-                <div className="fg"><label className="lbl">App. Ref</label><input className="ctrl font-mono" readOnly value={detail.appRefNo} /></div>
-                <div className="fg"><label className="lbl">Programme</label><input className="ctrl" readOnly value={detail.programName ?? '—'} /></div>
-                <div className="fg"><label className="lbl">Intake</label><input className="ctrl" readOnly value={detail.intakeCode ?? '—'} /></div>
-                <div className="fg"><label className="lbl">Campus</label><input className="ctrl" readOnly value={detail.campusName ?? '—'} /></div>
-                <div className="fg"><label className="lbl">Submitted</label><input className="ctrl" readOnly value={fmtDate(detail.submitted)} /></div>
-                {/* Read-only per the frontend notes — pre-assigned by
-                    admissions, not chosen here. */}
-                <div className="fg"><label className="lbl">Semester</label><input className="ctrl" readOnly value={detail.semesterName ?? '—'} /></div>
-                <div className="fg"><label className="lbl">Batch</label><input className="ctrl" readOnly value={detail.batchName ?? '—'} /></div>
+          {/* Who is being registered, before any detail. */}
+          <div className="vd-hero">
+            <div className="vd-avatar" aria-hidden="true">{initials}</div>
+            <div className="vd-hero-main">
+              <div className="vd-hero-name">{orDash(detail.studentName)}</div>
+              <div className="vd-hero-meta">
+                <span>{orDash(detail.appRefNo)}</span>
+                <span><i className="lni lni-graduation" aria-hidden="true" />{orDash(detail.programName)}</span>
+                {orDash(detail.campusName) !== '—' && <span><i className="lni lni-home" aria-hidden="true" />{detail.campusName}</span>}
+                {orDash(detail.intakeCode) !== '—' && <span><i className="lni lni-calendar" aria-hidden="true" />Intake {detail.intakeCode}</span>}
               </div>
             </div>
-
-            {/* RIGHT: Fees, registration payment readiness, and the actual
-                editable Register form */}
-            <div>
-              <div className="sec-divider">Fees &amp; Ledger Lines</div>
-              <div className="flex flex-col gap-2 mb-3">
-                <div className="flex justify-between text-sm"><span className="text-g600">Admission Fee</span><span className="font-semibold text-g800">{detail.admissionFee != null ? detail.admissionFee.toLocaleString() : '—'}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-g600">Registration Fee</span><span className="font-semibold text-g800">{detail.regFee != null ? detail.regFee.toLocaleString() : '—'}</span></div>
+            <div className="vd-hero-side">
+              <div className="vd-checks" aria-label="Registration checks">
+                {checks.map(c => (
+                  <span key={c.text} className={`vd-check ${c.tone}`}><i className={`lni ${c.icon}`} aria-hidden="true" /> {c.text}</span>
+                ))}
               </div>
-              {detail.feeLines.length > 0 && (
-                <div className="flex flex-col gap-1 mb-4" style={{ border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', padding: '8px 12px' }}>
+              <a
+                href={applicantProfileHref({
+                  ref: detail.appRefNo,
+                  name: detail.studentName,
+                  programme: detail.programName ?? undefined,
+                  dob: detail.dob ?? undefined,
+                  gender: detail.gender ?? undefined,
+                  nationality: detail.nationality ?? undefined,
+                  nationalId: detail.nationalId ?? undefined,
+                  phone: detail.phone ?? undefined,
+                  email: detail.emailId ?? undefined,
+                  intake: detail.intakeCode ?? undefined,
+                  campus: detail.campusName ?? undefined,
+                  submitted: detail.submitted,
+                })}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1"
+                style={{ fontSize: 'var(--fs-xs)', color: 'var(--b600)', fontWeight: 600 }}
+              >
+                <i className="lni lni-external-link" aria-hidden="true" /> View Full Profile
+              </a>
+            </div>
+          </div>
+
+          <div className="g2" style={{ gap: 20, alignItems: 'start' }}>
+            {/* LEFT: the application (read-only). Admission Type is
+                deliberately dropped per registrar-desk-api-docs.html. */}
+            <div>
+              <section className="vd-panel">
+                <h3 className="vd-panel-title"><i className="lni lni-folder" aria-hidden="true" /> Application</h3>
+                <div className="vd-fields">
+                  <Field label="App. Ref" value={orDash(detail.appRefNo)} />
+                  <Field label="Submitted" value={formatDate(detail.submitted)} />
+                  {/* Pre-assigned by admissions, not chosen here. */}
+                  <Field label="Semester" value={orDash(detail.semesterName)} />
+                  <Field label="Batch" value={orDash(detail.batchName)} />
+                </div>
+              </section>
+
+              <section className="vd-panel">
+                <h3 className="vd-panel-title"><i className="lni lni-user" aria-hidden="true" /> Personal Information</h3>
+                <div className="vd-fields">
+                  <Field label="First Name" value={orDash(detail.firstName)} />
+                  <Field label="Last Name" value={orDash(detail.lastName)} />
+                  <Field label="Date of Birth" value={formatDate(detail.dob)} />
+                  <Field label="Gender" value={orDash(detail.gender)} />
+                  <Field label="Nationality" value={orDash(detail.nationality)} />
+                  <Field label="National ID" value={orDash(detail.nationalId)} />
+                  <Field label="Phone" value={orDash(detail.phone)} />
+                  <Field label="Email" value={orDash(detail.emailId)} />
+                </div>
+              </section>
+            </div>
+
+            {/* RIGHT: the payment on record (Payment Console took it — a
+                record, not inputs), then the actual register form. */}
+            <div>
+              <section className="vd-panel">
+                <h3 className="vd-panel-title"><i className="lni lni-wallet" aria-hidden="true" /> Registration Payment</h3>
+                <div className="vd-due">
+                  <div className="vd-due-box">
+                    <div className="vd-due-lbl">Registration Fee</div>
+                    <div className="vd-due-num">{money(due)}</div>
+                  </div>
+                  <div className={`vd-due-box ${paidTone}`}>
+                    <div className="vd-due-lbl">
+                      {paidTone === 'ok' ? 'Paid in full' : paidTone === 'bad' ? `Paid · ${money(balance)} short` : 'Amount Paid'}
+                    </div>
+                    <div className="vd-due-num">{money(paid)}</div>
+                  </div>
+                </div>
+                <div className="vd-fields">
+                  <Field label="Payment Type" value={orDash(detail.regPaymentTypeName)} />
+                  <Field label="Payment Date" value={formatDate(detail.regPaymentDate)} />
+                  <Field label="Receipt" value={[detail.regReceiptBookCode, detail.regReceiptNo].map(orDash).filter(v => v !== '—').join(' · ') || '—'} />
+                </div>
+                <div className="vd-lines">
+                  <div className="vd-line"><span>Admission Fee</span><b>{money(detail.admissionFee)}</b></div>
                   {detail.feeLines.map(line => (
-                    <div key={line.ledgerGuid} className="flex justify-between text-sm">
-                      <span className="text-g600">{line.ledgerName}</span>
-                      <span className="font-medium text-g800">{line.amount.toLocaleString()} {line.currencyName}</span>
+                    <div key={line.ledgerGuid} className="vd-line">
+                      <span>{orDash(line.ledgerName)}</span>
+                      <b>{money(line.amount)} {line.currencyName ?? ''}</b>
                     </div>
                   ))}
                 </div>
-              )}
+              </section>
 
-              <div className="sec-divider">Registration Payment Details</div>
-              <div className="g2 mb-4">
-                <div className="fg m-0"><label className="lbl">Payment Type</label><input className="ctrl" readOnly value={detail.regPaymentTypeName ?? '—'} /></div>
-                <div className="fg m-0"><label className="lbl">Receipt Book</label><input className="ctrl" readOnly value={detail.regReceiptBookCode ?? '—'} /></div>
-                <div className="fg m-0"><label className="lbl">Receipt No.</label><input className="ctrl" readOnly value={detail.regReceiptNo ?? '—'} /></div>
-                <div className="fg m-0"><label className="lbl">Amount Paid</label><input className="ctrl" readOnly value={detail.regPaymentAmount != null ? detail.regPaymentAmount.toLocaleString() : '—'} /></div>
-                <div className="fg m-0"><label className="lbl">Payment Date</label><input className="ctrl" readOnly value={fmtDate(detail.regPaymentDate)} /></div>
-              </div>
-              <div className="flex flex-wrap gap-2 mb-4">
-                <span className={`badge ${detail.registrationFeeConfirmed ? 'badge-green' : 'badge-red'}`}>{detail.registrationFeeConfirmed ? 'Reg. Fee Confirmed' : 'Reg. Fee Not Confirmed'}</span>
-                <span className={`badge ${detail.provisionalLetterIssued ? 'badge-green' : 'badge-grey'}`}>{detail.provisionalLetterIssued ? 'Provisional Letter Issued' : 'Letter Not Issued'}</span>
-                <span className={`badge ${detail.academicDocumentsVerified ? 'badge-green' : 'badge-amber'}`}>{detail.academicDocumentsVerified ? 'Documents Verified' : 'Documents Pending'}</span>
-              </div>
-              {!detail.registrationFeeConfirmed && (
-                <div className="warn-box mb-4">
-                  <i className="lni lni-warning mr-2" />
-                  <span className="text-sm">Registration Fee isn&apos;t confirmed yet — the server will reject registration until Payment Console shows it as paid.</span>
+              <section className="vd-panel accent">
+                <h3 className="vd-panel-title"><i className="lni lni-pencil" aria-hidden="true" /> Register Student</h3>
+                {registrationTypeOptions.length === 0 && (
+                  <div className="warn-box mb-3">
+                    <i className="lni lni-warning" aria-hidden="true" style={{ marginTop: 2 }} />
+                    <span className="text-sm">No Registration Types are configured yet — an administrator needs to set these up in Registration Type Master before this application can be registered.</span>
+                  </div>
+                )}
+                <div className="fg">
+                  <label className="lbl">Registration Type <span className="req">*</span></label>
+                  <SearchSelect placeholder="-- Select Registration Type --" options={registrationTypeOptions} value={registrationTypeId} onChange={v => { setRegistrationTypeId(v); setErrors(p => ({ ...p, registrationTypeId: '' })) }} />
+                  {errors.registrationTypeId
+                    ? <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.registrationTypeId}</p>
+                    // post-register-student.md: Lateral Entry / Credit
+                    // Exemption make the student liable for an extra fee.
+                    : <p className="text-xs text-g600 mt-1.5">Lateral Entry and Credit Exemption add a fee that Finance calculates.</p>}
                 </div>
-              )}
 
-              <p className="text-xs font-bold uppercase tracking-wide mt-2 mb-2" style={{ color: 'var(--b600)' }}>Register Student</p>
-              {registrationTypeOptions.length === 0 && (
-                <div className="warn-box mb-3">
-                  <i className="lni lni-warning mr-2" />
-                  <span className="text-sm">No Registration Types are configured yet — an administrator needs to set these up in Registration Type Master before this application can be registered.</span>
-                </div>
-              )}
-              <div className="fg">
-                <label className="lbl">Registration Type <span className="req">*</span></label>
-                <SearchSelect placeholder="-- Select Registration Type --" options={registrationTypeOptions} value={registrationTypeId} onChange={v => { setRegistrationTypeId(v); setErrors(p => ({ ...p, registrationTypeId: '' })) }} />
-                {errors.registrationTypeId && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.registrationTypeId}</p>}
-              </div>
+                {isRefugee && (
+                  <div className="fg mt-3">
+                    <label className="lbl" htmlFor="reg-refugee-id">Refugee ID <span className="req">*</span></label>
+                    <input id="reg-refugee-id" className="ctrl" placeholder="Refugee ID number" value={refugeeId} onChange={e => { setRefugeeId(e.target.value); setErrors(p => ({ ...p, refugeeId: '' })) }} style={errors.refugeeId ? { borderColor: 'var(--red)' } : undefined} />
+                    {errors.refugeeId && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.refugeeId}</p>}
+                  </div>
+                )}
+              </section>
+            </div>
+          </div>
+        </div>
 
-              {isRefugee && (
-                <div className="fg mt-2">
-                  <label className="lbl">Refugee ID <span className="req">*</span></label>
-                  <input className="ctrl" placeholder="Refugee ID number" value={refugeeId} onChange={e => { setRefugeeId(e.target.value); setErrors(p => ({ ...p, refugeeId: '' })) }} style={errors.refugeeId ? { borderColor: 'var(--red)' } : undefined} />
-                  {errors.refugeeId && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.refugeeId}</p>}
-                </div>
-              )}
-
-              <button
-                className="btn btn-success w-full mt-4"
-                disabled={registerStudent.isPending}
-                onClick={handleSubmit}
-              >
-                <i className="lni lni-checkmark-circle mr-1" /> {registerStudent.isPending ? 'Registering…' : 'Complete Registration & Onboard Student'}
+        {/* The action used to sit at the bottom of the scrolling right
+            column, with no Cancel — now a fixed footer like other modals. */}
+        <div className="modal-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+          {!detail.registrationFeeConfirmed && (
+            <div className="warn-box" role="note" style={{ fontSize: 13 }}>
+              <i className="lni lni-warning" aria-hidden="true" style={{ marginTop: 2 }} />
+              <span>Registration Fee isn&apos;t confirmed yet — the server will reject registration until Payment Console shows it as paid.</span>
+            </div>
+          )}
+          <div className="vd-actions">
+            <button type="button" className="btn btn-neu" onClick={handleClose}>Cancel</button>
+            <div className="vd-actions-end">
+              <button type="button" className="btn btn-success" disabled={registerStudent.isPending} onClick={handleSubmit}>
+                <i className="lni lni-checkmark-circle" aria-hidden="true" /> {registerStudent.isPending ? 'Registering…' : 'Complete Registration & Onboard Student'}
               </button>
             </div>
           </div>

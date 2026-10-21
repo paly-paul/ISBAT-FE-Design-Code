@@ -3,7 +3,6 @@ import { Fragment, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
-import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
@@ -28,6 +27,12 @@ const REG_PIPELINE = [
   { label: 'Reg. Payment',  status: 'active', note: 'Registrar checks fee' },
   { label: 'Registration',  status: '',       note: "Registrar's Desk" },
 ]
+
+// "—" for null, blank, or the literal string "null" some admission endpoints send.
+function orDash(value: string | null | undefined): string {
+  const v = value?.trim()
+  return v && v.toLowerCase() !== 'null' ? v : '—'
+}
 
 export default function RegistrationPage() {
   const permissions = usePagePermissions()
@@ -72,6 +77,7 @@ export default function RegistrationPage() {
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
   const searchMatches = search.trim() ? items.slice(0, 8) : []
+  const colSpan = permissions.add ? 5 : 4
 
   function handleRegister(applicationGuid: string) {
     setSelectedApplicationGuid(applicationGuid)
@@ -130,6 +136,8 @@ export default function RegistrationPage() {
               value={search}
               onChange={updateSearch}
               results={searchMatches.map(r => ({ id: r.applicationGuid, primary: r.appRefNo, secondary: r.studentName }))}
+              // Picking a suggestion opens that registration straight away.
+              onSelect={permissions.add ? (r => { updateSearch(r.primary); handleRegister(r.id) }) : undefined}
             />
             {currentIntake.data && (
               <span
@@ -151,40 +159,48 @@ export default function RegistrationPage() {
         <ScrollTable>
           <table>
             <thead>
-              <tr className="text-left text-g500 border-b border-g200">
-                <th style={{ width: 48 }}></th><th className="pb-2 font-medium">App. Ref</th><th className="pb-2 font-medium">Student Name</th>
-                <th className="pb-2 font-medium">Programme</th><th className="pb-2 font-medium">Reg. Fee</th>
+              <tr>
+                {permissions.add && <th><span className="sr-only">Actions</span></th>}
+                <th>App. Ref</th>
+                <th>Student Name</th>
+                <th>Programme</th>
+                <th>Reg. Fee</th>
               </tr>
             </thead>
             <tbody>
               {isLoading
-                ? <TableLoadingState colSpan={5} />
+                ? <TableLoadingState colSpan={colSpan} />
                 : items.length === 0
-                  ? <EmptyState colSpan={5} hasFilters={!!search.trim()} onClearFilters={() => { setSearch(''); setPage(1) }} />
+                  ? <EmptyState
+                      colSpan={colSpan}
+                      title={search.trim() ? undefined : 'No one waiting to register'}
+                      subtitle={search.trim() ? undefined : 'Applicants approved at vetting for this intake will show here.'}
+                      hasFilters={!!search.trim()}
+                      onClearFilters={() => { setSearch(''); setPage(1) }}
+                    />
                   : null}
               {items.map(r => (
-                <tr key={r.applicationGuid} className="border-b border-g100 hover:bg-g50">
+                <tr key={r.applicationGuid}>
+                  {/* Register is no longer gated on r.regPaid (per request,
+                      2026-09-10) — Reg. Fee is shown as information only.
+                      It creates a student and can't be undone, so it needs
+                      the page's add permission. A direct button now: the
+                      one-item Actions menu cost an extra click per row. */}
+                  {permissions.add && (
+                    <td>
+                      <button type="button" className="btn btn-neu btn-sm" onClick={() => handleRegister(r.applicationGuid)} aria-label={`Register ${orDash(r.studentName)}`}>
+                        <i className="lni lni-graduation" aria-hidden="true" /> Register
+                      </button>
+                    </td>
+                  )}
+                  <td className="text-sm tabular-nums">{orDash(r.appRefNo)}</td>
                   <td>
-                    <ActionMenu>
-                      {/* Register is no longer gated on r.regPaid (per
-                          request, 2026-09-10) — every application in this
-                          list can be registered regardless of Reg. Fee
-                          status. The Reg. Fee column below still shows
-                          Paid/Not Paid as information, just no longer
-                          blocks the action. */}
-                      {/* Register creates a student and can't be undone, so it
-                          needs the page's add permission. */}
-                      {permissions.add && (
-                        <button className="btn btn-neu btn-sm" onClick={() => handleRegister(r.applicationGuid)}>
-                          <i className="lni lni-graduation" /> Register
-                        </button>
-                      )}
-                    </ActionMenu>
+                    {permissions.add
+                      ? <button type="button" className="vd-name-btn" onClick={() => handleRegister(r.applicationGuid)}>{orDash(r.studentName)}</button>
+                      : <span className="font-semibold text-g900">{orDash(r.studentName)}</span>}
                   </td>
-                  <td className="py-2.5 font-mono text-xs text-b600">{r.appRefNo}</td>
-                  <td className="py-2.5 text-g800">{r.studentName}</td>
-                  <td className="py-2.5">{r.programName}</td>
-                  <td className="py-2.5"><span className={r.regPaid ? 'badge badge-green' : 'badge badge-red'}>{r.regPaid ? 'Paid' : 'Not Paid'}</span></td>
+                  <td>{orDash(r.programName)}</td>
+                  <td><span className={r.regPaid ? 'badge badge-green' : 'badge badge-red'}>{r.regPaid ? 'Paid' : 'Not Paid'}</span></td>
                 </tr>
               ))}
             </tbody>

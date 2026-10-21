@@ -66,7 +66,7 @@ export function RevertRejectionModal({ isOpen, onClose, showToast, rejection }: 
         {/* One wrapper: .modal only pads its direct <div> children. */}
         <div>
           <p className="text-sm text-g700 mb-4" style={{ lineHeight: 1.55 }}>
-            Send <strong className="text-g800">{orDash(rejection.studentName)}</strong> <span className="font-mono text-g500">({orDash(rejection.appRefNo)})</span> back to the Vetting Queue as a pending application?
+            Send <strong className="text-g800">{orDash(rejection.studentName)}</strong> <span className="text-g500 tabular-nums">({orDash(rejection.appRefNo)})</span> back to the Vetting Queue as a pending application?
           </p>
 
           <div className="fg mb-4">

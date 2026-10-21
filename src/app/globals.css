@@ -13389,3 +13389,83 @@ body:has(.drawer-overlay) {
 .rpt-export-msg { font-size: var(--fs-sm); color: var(--g500); font-variant-numeric: tabular-nums; }
 .rpt-export-msg.ok { color: var(--green); font-weight: 600; }
 .rpt-export-msg.err { color: var(--red); max-width: 420px; }
+
+/* ── Vetting desk (admission/vetting + VettingReviewModal) ──
+   Status colours reuse the .badge-* text shades for 4.5:1 contrast. */
+.vd-checks { display: flex; flex-wrap: wrap; gap: 8px; }
+.vd-check { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: var(--rxs); border: 1px solid var(--g200); background: var(--white); font-size: 12.5px; font-weight: 600; color: var(--g700); font-variant-numeric: tabular-nums; }
+.vd-check.ok   { background: var(--green-bg); border-color: var(--green-bd); color: #065f46; }
+.vd-check.warn { background: var(--amber-bg); border-color: var(--amber-bd); color: #92400e; }
+.vd-check.bad  { background: var(--red-bg);   border-color: var(--red-bd);   color: #991b1b; }
+
+.vd-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px 24px; }
+.vd-field-lbl { font-size: 12px; font-weight: 600; color: var(--g500); margin-bottom: 3px; }
+.vd-field-val { font-size: 14px; font-weight: 500; color: var(--g900); overflow-wrap: anywhere; }
+
+.vd-list { display: flex; flex-direction: column; gap: 8px; }
+.vd-doc { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--g200); border-radius: var(--rsm); background: var(--white); }
+.vd-doc.missing { background: var(--red-bg); border-color: var(--red-bd); }
+.vd-doc-icon { width: 34px; height: 34px; flex-shrink: 0; display: grid; place-items: center; border-radius: var(--rxs); background: var(--b50); color: var(--b600); font-size: 16px; }
+.vd-doc.missing .vd-doc-icon { background: var(--white); color: #991b1b; }
+.vd-doc-body { flex: 1; min-width: 0; }
+.vd-doc-name { font-size: 13.5px; font-weight: 600; color: var(--g800); overflow-wrap: anywhere; }
+.vd-doc-sub { font-size: 12px; color: var(--g500); margin-top: 1px; font-variant-numeric: tabular-nums; }
+.vd-doc.missing .vd-doc-sub { color: #991b1b; }
+
+
+.vd-panel-title .vd-count { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--g500); font-variant-numeric: tabular-nums; }
+
+.vd-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.vd-actions-end { margin-left: auto; display: flex; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 640px) {
+  .vd-actions > .btn, .vd-actions-end, .vd-actions-end > .btn { width: 100%; justify-content: center; margin-left: 0; }
+}
+
+.vd-name-btn { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--g900); cursor: pointer; text-align: left; }
+.vd-name-btn:hover { color: var(--b700); text-decoration: underline; text-underline-offset: 3px; }
+.vd-name-btn:focus-visible { outline: 2px solid var(--b500); outline-offset: 2px; border-radius: 3px; }
+.vd-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vd-when-ago { display: block; font-size: 11.5px; color: var(--g500); }
+
+/* Student header band + grouped panels for the desk review modals. */
+.vd-hero { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 18px; margin-bottom: 20px; background: var(--surface); border: 1px solid var(--g200); border-radius: var(--radius); }
+.vd-avatar { width: 52px; height: 52px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; background: var(--b100); color: var(--b700); font-size: 18px; font-weight: 700; letter-spacing: .02em; box-shadow: var(--neu-sm); }
+.vd-hero-main { flex: 1; min-width: 220px; }
+.vd-hero-name { font-size: 18px; font-weight: 700; color: var(--g900); line-height: 1.25; letter-spacing: -0.01em; text-wrap: balance; }
+.vd-hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 5px; font-size: 13px; color: var(--g600); font-variant-numeric: tabular-nums; }
+.vd-hero-meta span { display: inline-flex; align-items: center; gap: 5px; }
+.vd-hero-meta i { color: var(--g400); }
+.vd-hero-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+@media (max-width: 640px) { .vd-hero-side { align-items: flex-start; width: 100%; } }
+
+.vd-panel { padding: 16px 18px 18px; background: var(--white); border: 1px solid var(--g200); border-radius: var(--radius); box-shadow: 0 1px 2px rgba(15, 30, 61, .04), 0 4px 14px rgba(15, 30, 61, .04); }
+.vd-panel + .vd-panel { margin-top: 16px; }
+.vd-panel-title { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 13.5px; font-weight: 700; color: var(--g800); }
+.vd-panel-title i { width: 26px; height: 26px; display: grid; place-items: center; border-radius: var(--rxs); background: var(--b50); color: var(--b600); font-size: 13px; }
+.vd-panel.accent { background: var(--b50); border-color: var(--b200); box-shadow: none; }
+.vd-panel.accent .vd-panel-title i { background: var(--white); }
+
+.vd-due { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.vd-due-box { padding: 12px 14px; border-radius: var(--rsm); background: var(--surface); border: 1px solid var(--g200); }
+.vd-due-lbl { font-size: 12px; font-weight: 600; color: var(--g500); }
+.vd-due-num { margin-top: 2px; font-size: 20px; font-weight: 700; color: var(--g900); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.vd-due-box.ok { background: var(--green-bg); border-color: var(--green-bd); }
+.vd-due-box.ok .vd-due-num, .vd-due-box.ok .vd-due-lbl { color: #065f46; }
+.vd-due-box.bad { background: var(--red-bg); border-color: var(--red-bd); }
+.vd-due-box.bad .vd-due-num, .vd-due-box.bad .vd-due-lbl { color: #991b1b; }
+
+.vd-lines { display: flex; flex-direction: column; gap: 7px; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--g200); }
+.vd-line { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--g600); font-variant-numeric: tabular-nums; }
+.vd-line b { color: var(--g800); font-weight: 600; }
+
+/* Application Filing — one-step photo upload + document rows. */
+.filing-photo { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border: 1.5px dashed var(--g300); border-radius: var(--radius); background: var(--surface); transition: border-color .15s ease-out, background-color .15s ease-out; }
+.filing-photo.drag-active { border-color: var(--b500); background: var(--b50); }
+.filing-photo.has-error { border-color: var(--red); }
+.filing-photo-thumb { width: 72px; height: 88px; flex-shrink: 0; display: grid; place-items: center; overflow: hidden; border-radius: var(--rsm); background: var(--white); border: 1px solid var(--g200); color: var(--g400); font-size: 26px; }
+.filing-photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.filing-photo-body { flex: 1; min-width: 0; }
+.filing-photo-title { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--g800); }
+.filing-photo-sub { margin-top: 2px; font-size: 12.5px; color: var(--g500); overflow-wrap: anywhere; }
+.vd-doc.empty { background: var(--surface); border-style: dashed; }
+.vd-doc.empty .vd-doc-icon { background: var(--white); color: var(--g400); }
