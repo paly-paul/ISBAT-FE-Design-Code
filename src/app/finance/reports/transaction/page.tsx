@@ -190,11 +190,6 @@ export default function TransactionReportPage() {
           <div className="pg-title">Transaction Report</div>
           <div className="pg-sub">Every fee ledger line paid on a receipt · with its discount and net amount, and totals per currency</div>
         </div>
-        <div className="flex items-center gap-2">
-          <button type="button" className="btn btn-neu btn-sm" aria-expanded={filtersOpen} aria-controls="rpt-filters" onClick={() => setFiltersOpen(o => !o)}>
-            <i className={`lni ${filtersOpen ? 'lni-chevron-up' : 'lni-funnel'}`} aria-hidden="true" /> {filtersOpen ? 'Hide filters' : 'Show filters'}
-          </button>
-        </div>
       </div>
 
       {/* Filters */}

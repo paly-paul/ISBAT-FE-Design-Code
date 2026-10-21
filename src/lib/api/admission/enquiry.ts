@@ -93,6 +93,10 @@ export interface Enquiry {
   countryGuid?: string | null
   countryName?: string | null
   dob: string
+  // Same enum as EnquiryInput.gender (0 Male, 1 Female, 2 Other). GET
+  // /enquiries/:guid also returns the resolved genderLabel ("Male").
+  gender?: number | null
+  genderLabel?: string | null
   remarks: string | null
   programGuid: string | null
   // From the enquiry's latest follow-up. advisorName is resolved on GET only
@@ -208,6 +212,7 @@ export function createEnquiry(input: EnquiryInput): Promise<Enquiry> {
       // matters for actual saves.
       countryCode: '',
       dob: input.dob,
+      gender: input.gender,
       remarks: input.remarks,
       programGuid: input.programGuid,
       enquiryTag: input.enquiryTag,

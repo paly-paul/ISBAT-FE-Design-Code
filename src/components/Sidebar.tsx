@@ -36,22 +36,6 @@ const RAIL_DEFS: RailDef[] = [
   { id: 'activity-log', name: 'Activity Log', fallbackIcon: 'lni lni-list', footer: 'S0 · Audit & Activity' },
 ]
 
-// Cosmetic-only counters — the menu API carries no notion of these, so they
-// stay local and are keyed by the leaf's url slug. Real permission data from
-// the API still decides what's visible; this only decorates what's shown.
-const BADGES: Record<string, { text: string; variant?: 'warn' | 'green' }> = {
-  'enquiry-list': { text: '8' },
-  'enquiry-followup': { text: '4', variant: 'warn' },
-  payment: { text: '12' },
-  filing: { text: '7', variant: 'warn' },
-  vetting: { text: '5', variant: 'warn' },
-  registration: { text: '3', variant: 'green' },
-  'session-movement': { text: '1', variant: 'warn' },
-  'odl-applications': { text: '7' },
-  'odl-reconciliation': { text: '4', variant: 'warn' },
-  'cw-qbank': { text: '3', variant: 'warn' },
-}
-
 function slug(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 }
@@ -73,7 +57,7 @@ function idFromUrl(url: string): string {
 
 // Sidebar entries hidden from navigation without touching the backend menu
 // tree or deleting the page itself — keyed by the same url-slug idFromUrl()
-// resolves for every other leaf (BADGES above, sb-item's `active` state).
+// resolves for every other leaf (sb-item's `active` state).
 // Ledger Adjustments: commented out per request (2026-09-07) — that page is
 // still a UI-only mock (see AdjustLedgerModal.tsx's own comment: no backing
 // "ledger adjustment" endpoint exists in the API spec yet), so it stays out
@@ -175,7 +159,6 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
         ? 'Assessment Scheduler'
         : item.name
     const href = resolveHref(item.url, railId)
-    const badge = BADGES[id]
     return (
       // prefetch={false} — next/link's default auto-prefetch fires for every
       // rendered <Link> as soon as it's in the viewport, not just on hover.
@@ -186,7 +169,6 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
       <Link key={href} href={href} prefetch={false} className={`sb-item${currentPage === id ? ' active' : ''}`}>
         <span className="sb-icon"><i className={iconClass}></i></span>
         {displayName}
-        {badge && <span className={`sb-badge${badge.variant ? ' ' + badge.variant : ''}`}>{badge.text}</span>}
       </Link>
     )
   }

@@ -246,11 +246,6 @@ export default function DiscountReportPage() {
           <div className="pg-title">Discount Report</div>
           <div className="pg-sub">Every fee discount applied on a payment · who got it, on which receipt and semester, and the total given per currency</div>
         </div>
-        <div className="flex items-center gap-2">
-          <button type="button" className="btn btn-neu btn-sm" aria-expanded={filtersOpen} aria-controls="rpt-filters" onClick={() => setFiltersOpen(o => !o)}>
-            <i className={`lni ${filtersOpen ? 'lni-chevron-up' : 'lni-funnel'}`} aria-hidden="true" /> {filtersOpen ? 'Hide filters' : 'Show filters'}
-          </button>
-        </div>
       </div>
 
       {/* Filters */}

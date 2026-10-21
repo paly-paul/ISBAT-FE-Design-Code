@@ -5,7 +5,7 @@ import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { EnquiryUpdateInput, formatEnquiryPhone } from '@/lib/api/admission/enquiry'
-import { useEnquiry } from '@/hooks/admission/useEnquiries'
+import { useEnquiry, useEnquiryGenders } from '@/hooks/admission/useEnquiries'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
 import { useCampuses } from '@/hooks/config/useCampuses'
@@ -50,6 +50,14 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
   function resolveCampusName(guid: string | null) {
     if (!guid) return '—'
     return campuses.find(c => c.campusGuid === guid)?.campusName ?? '—'
+  }
+  // Prefer the server's genderLabel; fall back to labelling the enum value
+  // from the genders enum when it's missing.
+  const { data: genders = [] } = useEnquiryGenders()
+  function resolveGenderName(label: string | null | undefined, value: number | null | undefined) {
+    if (label) return label
+    if (value == null) return '—'
+    return genders.find(g => g.value === value)?.name ?? '—'
   }
 
   const [saved, setSaved]     = useState(false)
@@ -208,6 +216,7 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
             <div className="fg m-0"><div className="lbl">Name</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.studentName}</div></div>
             <div className="fg m-0"><div className="lbl">Phone</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{formatEnquiryPhone(enquiry)}</div></div>
             <div className="fg m-0"><div className="lbl">Email</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.email || '—'}</div></div>
+            <div className="fg m-0"><div className="lbl">Gender</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{resolveGenderName(enquiry.genderLabel, enquiry.gender)}</div></div>
             <div className="fg m-0"><div className="lbl">Enquiry Date</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.enquiryDate.slice(0, 10)}</div></div>
             <div className="fg m-0"><div className="lbl">Source</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.enquirySourceName || enquiry.sourceName || '—'}</div></div>
             {enquiry.isbatSourceName && <div className="fg m-0"><div className="lbl">Isbat Source</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.isbatSourceName}</div></div>}
