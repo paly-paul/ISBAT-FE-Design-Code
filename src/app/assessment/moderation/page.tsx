@@ -61,7 +61,7 @@ export default function ModerationPage() {
           
           {studentDetail && (
             <div className="flex-1 bg-white rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-200 p-4 lg:p-5 flex items-center gap-4 lg:gap-6 transition-all duration-300 hover:shadow-[0_4px_15px_-3px_rgba(6,81,237,0.15)]">
-              <div className="w-12 h-12 lg:w-14 lg:h-14 rounded-full bg-blue-50/80 border border-blue-100 flex items-center justify-center text-blue-600 text-lg lg:text-xl font-bold flex-shrink-0 shadow-inner">
+              <div className="w-12 h-12 lg:w-14 lg:h-14 rounded-full bg-blue-50/80 border border-blue-100 flex items-center justify-center text-blue-600 text-lg lg:text-xl font-bold shrink-0 shadow-inner">
                 {studentDetail.studentName.charAt(0)}
               </div>
               <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3">

@@ -1,8 +1,206 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap')
+layer(base);
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* Tailwind 4 theme (was tailwind.config.ts). `inline` matters here: the app
+   defines its own --radius (14px card radius) and next/font sets --font-sans
+   / --font-mono on <html>, so utilities must use these values directly
+   instead of reading those shared names at runtime. The two --default-*
+   lines keep preflight's fonts what they were in v3. */
+@theme inline {
+  --default-font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  --default-mono-font-family: monospace;
+
+  --color-white: var(--white);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-g100: var(--g100);
+  --color-g200: var(--g200);
+  --color-g300: var(--g300);
+  --color-g400: var(--g400);
+  --color-g500: var(--g500);
+  --color-g700: var(--g700);
+  --color-g900: var(--g900);
+  --color-b50: var(--b50);
+  --color-b100: var(--b100);
+  --color-b200: var(--b200);
+  --color-b300: var(--b300);
+  --color-b400: var(--b400);
+  --color-b500: var(--b500);
+  --color-b600: var(--b600);
+  --color-b700: var(--b700);
+  --color-b800: var(--b800);
+  --color-b900: var(--b900);
+  --color-clr-green: var(--green);
+  --color-clr-green-bg: var(--green-bg);
+  --color-clr-green-bd: var(--green-bd);
+  --color-clr-amber: var(--amber);
+  --color-clr-amber-bg: var(--amber-bg);
+  --color-clr-amber-bd: var(--amber-bd);
+  --color-clr-red: var(--red);
+  --color-clr-red-bg: var(--red-bg);
+  --color-clr-red-bd: var(--red-bd);
+  --color-clr-cyan: var(--cyan);
+  --color-clr-cyan-bg: var(--cyan-bg);
+  --color-clr-gold: var(--gold);
+  --color-clr-gold-bg: var(--gold-bg);
+  --color-clr-purple: var(--purple);
+  --color-clr-purple-bg: var(--purple-bg);
+  --color-clr-purple-bd: var(--purple-bd);
+
+  --radius: var(--rxs);
+  --radius-md: var(--rsm);
+  --radius-xl: var(--radius);
+
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: monospace;
+  /* next/font sets --font-serif (Source Serif 4); v3's font-serif ignored it. */
+  --font-serif: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
+
+  /* Tailwind's own palette as it was in v3 (hex). v4 redrew it in OKLCH,
+     slightly more saturated; only the shades the app uses are listed. */
+  --color-amber-50: #fffbeb;
+  --color-amber-100: #fef3c7;
+  --color-amber-200: #fde68a;
+  --color-amber-300: #fcd34d;
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #f59e0b;
+  --color-amber-600: #d97706;
+  --color-amber-700: #b45309;
+  --color-amber-800: #92400e;
+  --color-amber-900: #78350f;
+  --color-amber-950: #451a03;
+  --color-blue-50: #eff6ff;
+  --color-blue-100: #dbeafe;
+  --color-blue-200: #bfdbfe;
+  --color-blue-300: #93c5fd;
+  --color-blue-400: #60a5fa;
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #2563eb;
+  --color-blue-700: #1d4ed8;
+  --color-blue-800: #1e40af;
+  --color-blue-900: #1e3a8a;
+  --color-cyan-50: #ecfeff;
+  --color-cyan-600: #0891b2;
+  --color-emerald-50: #ecfdf5;
+  --color-emerald-100: #d1fae5;
+  --color-emerald-200: #a7f3d0;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+  --color-emerald-700: #047857;
+  --color-emerald-800: #065f46;
+  --color-emerald-900: #064e3b;
+  --color-emerald-950: #022c22;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-green-50: #f0fdf4;
+  --color-green-100: #dcfce7;
+  --color-green-200: #bbf7d0;
+  --color-green-500: #22c55e;
+  --color-green-600: #16a34a;
+  --color-green-700: #15803d;
+  --color-indigo-50: #eef2ff;
+  --color-indigo-100: #e0e7ff;
+  --color-indigo-200: #c7d2fe;
+  --color-indigo-300: #a5b4fc;
+  --color-indigo-400: #818cf8;
+  --color-indigo-500: #6366f1;
+  --color-indigo-600: #4f46e5;
+  --color-indigo-700: #4338ca;
+  --color-indigo-800: #3730a3;
+  --color-indigo-900: #312e81;
+  --color-indigo-950: #1e1b4b;
+  --color-orange-50: #fff7ed;
+  --color-orange-100: #ffedd5;
+  --color-orange-500: #f97316;
+  --color-orange-700: #c2410c;
+  --color-purple-50: #faf5ff;
+  --color-purple-100: #f3e8ff;
+  --color-purple-200: #e9d5ff;
+  --color-purple-300: #d8b4fe;
+  --color-purple-400: #c084fc;
+  --color-purple-500: #a855f7;
+  --color-purple-600: #9333ea;
+  --color-purple-700: #7e22ce;
+  --color-purple-800: #6b21a8;
+  --color-purple-900: #581c87;
+  --color-purple-950: #3b0764;
+  --color-red-50: #fef2f2;
+  --color-red-100: #fee2e2;
+  --color-red-200: #fecaca;
+  --color-red-300: #fca5a5;
+  --color-red-400: #f87171;
+  --color-red-500: #ef4444;
+  --color-red-600: #dc2626;
+  --color-red-700: #b91c1c;
+  --color-red-800: #991b1b;
+  --color-red-900: #7f1d1d;
+  --color-red-950: #450a0a;
+  --color-rose-50: #fff1f2;
+  --color-rose-200: #fecdd3;
+  --color-rose-400: #fb7185;
+  --color-rose-500: #f43f5e;
+  --color-rose-600: #e11d48;
+  --color-rose-700: #be123c;
+  --color-rose-800: #9f1239;
+  --color-sky-50: #f0f9ff;
+  --color-sky-100: #e0f2fe;
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-teal-50: #f0fdfa;
+
+  --breakpoint-xs: 480px;
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: #e5e7eb; /* v3 gray-200 */
+  }
+
+  /* v3 preflight defaults that v4 dropped — ~360 buttons here carry no
+     class and relied on the pointer, and inputs on the grey placeholder. */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #9ca3af; /* v3 gray-400 */
+  }
+}
 
 @layer base {
   html {
@@ -13273,6 +13471,205 @@ body:has(.drawer-overlay) {
   .nf-slot-missing {
     animation: none;
     transition: none;
+  }
+}
+
+/* ═══════════════════════════════════════
+   403 — ACCESS DENIED (src/app/access-denied/page.tsx)
+   Sibling of the 404: same .nf shell, copy and buttons. Its own visual is an
+   access list — every row ticked except the viewer's, which gets an amber
+   "No access" stamp as the one moment. Amber, not red: being turned
+   away is a permission matter, not an error the user made.
+═══════════════════════════════════════ */
+.nf-code.ad-code {
+  color: var(--gold);
+}
+
+.ad-target {
+  color: var(--g900);
+  font-weight: 700;
+}
+
+.ad-who {
+  align-items: flex-start;
+  margin-top: 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.ad-who i {
+  margin-top: 2px;
+  color: var(--g400);
+}
+
+.ad-who strong {
+  color: var(--g900);
+  font-weight: 600;
+}
+
+.ad-register {
+  padding: 20px;
+  border-radius: var(--radius);
+  background: var(--white);
+  box-shadow: var(--neu-out);
+}
+
+.ad-reg-hdr {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px 14px;
+  margin-bottom: 8px;
+  border-bottom: 1.5px solid var(--g200);
+}
+
+.ad-reg-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--g400);
+}
+
+.ad-reg-page {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--g900);
+}
+
+.ad-reg-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ad-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: clamp(48px, 5vw, 56px);
+  padding: 0 10px;
+  border-radius: var(--rsm);
+  animation: nf-slot-in .5s cubic-bezier(.16, 1, .3, 1) both;
+  animation-delay: calc(var(--i) * 60ms);
+}
+
+.ad-avatar {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+.ad-avatar.blue   { background: var(--b50); color: var(--b700) }
+.ad-avatar.green  { background: var(--green-bg); color: var(--green) }
+.ad-avatar.purple { background: var(--purple-bg); color: var(--purple) }
+.ad-avatar.amber  { background: var(--amber-bg); color: var(--gold) }
+
+.ad-bar {
+  height: 9px;
+  border-radius: 99px;
+  background: var(--g100);
+}
+
+.ad-tick {
+  margin-left: auto;
+  font-size: 17px;
+  color: var(--green);
+}
+
+/* The viewer's row — dashed like the 404's missing slot, in amber. */
+.ad-row-you {
+  margin-top: 6px;
+  border: 2px dashed var(--amber-bd);
+  background: var(--amber-bg);
+}
+
+.ad-avatar.you {
+  background: var(--white);
+  color: var(--gold);
+  font-size: 14px;
+}
+
+.ad-you {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.ad-you b {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--g900);
+}
+
+.ad-you small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--g500);
+}
+
+.ad-stamp {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1.5px solid var(--gold);
+  border-radius: 6px;
+  background: var(--white);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--gold);
+  transform: rotate(-4deg);
+  animation: ad-stamp .45s cubic-bezier(.16, 1, .3, 1) .55s both;
+}
+
+@keyframes ad-stamp {
+  from { opacity: 0; transform: rotate(-12deg) scale(1.6) }
+  to { opacity: 1; transform: rotate(-4deg) scale(1) }
+}
+
+@media (max-width: 900px) {
+  .ad-register {
+    max-width: 460px;
+  }
+}
+
+@media (max-width: 420px) {
+  .ad-register {
+    padding: 12px;
+  }
+
+  .ad-row {
+    gap: 10px;
+    padding: 0 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ad-row,
+  .ad-stamp {
+    animation: none;
   }
 }
 

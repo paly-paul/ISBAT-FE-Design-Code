@@ -38,6 +38,10 @@ export interface SessionIdentity {
   userGuid?: string
   userId?: string
   uuid?: string
+  // Only 'student' is ever set (OTP step); anything else is a staff session.
+  // The login layout uses it so a signed-in student isn't sent into the
+  // staff app — the student portal has no landing page yet.
+  role?: 'staff' | 'student'
 }
 
 export function getSessionIdentity(): SessionIdentity | null {

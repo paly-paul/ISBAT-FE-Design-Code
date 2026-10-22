@@ -40,8 +40,8 @@ export default function ReevaluationPage() {
         </div>
       </div>
 
-      <div className="bg-[#eff6ff] border border-[#dbeafe] rounded-md p-4 mb-5 flex gap-3 text-[13px] text-[#2563eb] items-start shadow-sm">
-        <div className="bg-[#2563eb] text-white w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5"><i className="lni lni-information"></i></div>
+      <div className="bg-[#eff6ff] border border-[#dbeafe] rounded-md p-4 mb-5 flex gap-3 text-[13px] text-[#2563eb] items-start shadow-xs">
+        <div className="bg-[#2563eb] text-white w-5 h-5 rounded flex items-center justify-center shrink-0 mt-0.5"><i className="lni lni-information"></i></div>
         <div className="leading-relaxed">
           <span className="font-semibold">Tier 1 Reevaluation:</span> Used when a student contests their marks (occurs in ~1-2% of cases). The original evaluating faculty member is notified and the work is returned to their dashboard as a pending item. Historical files are locked — student cannot resubmit.
         </div>
@@ -118,7 +118,7 @@ export default function ReevaluationPage() {
                 </td>
                 <td><span className="badge badge-amber">Pending Faculty</span></td>
                 <td className="text-right">
-                  <button className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium text-[12px] px-3 py-1.5 rounded-md transition-colors shadow-sm whitespace-nowrap" onClick={() => showToast('Reminder sent to faculty')}>
+                  <button className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium text-[12px] px-3 py-1.5 rounded-md transition-colors shadow-xs whitespace-nowrap" onClick={() => showToast('Reminder sent to faculty')}>
                     Remind Faculty
                   </button>
                 </td>
@@ -146,7 +146,7 @@ export default function ReevaluationPage() {
                 </td>
                 <td><span className="badge badge-amber">Pending Faculty</span></td>
                 <td className="text-right">
-                  <button className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium text-[12px] px-3 py-1.5 rounded-md transition-colors shadow-sm whitespace-nowrap">
+                  <button className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium text-[12px] px-3 py-1.5 rounded-md transition-colors shadow-xs whitespace-nowrap">
                     Remind Faculty
                   </button>
                 </td>
@@ -202,7 +202,7 @@ export default function ReevaluationPage() {
                 </td>
                 <td><span className="badge badge-amber">Pending Faculty</span></td>
                 <td className="text-right">
-                  <button className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium text-[12px] px-3 py-1.5 rounded-md transition-colors shadow-sm whitespace-nowrap">
+                  <button className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium text-[12px] px-3 py-1.5 rounded-md transition-colors shadow-xs whitespace-nowrap">
                     Remind Faculty
                   </button>
                 </td>

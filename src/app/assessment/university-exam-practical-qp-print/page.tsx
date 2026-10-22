@@ -253,7 +253,7 @@ export default function UniversityExamPracticalQpPrintPage() {
 
         <div className="p-5 pt-0 mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Question Paper Card */}
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xs">
             <div className="bg-slate-50 px-5 py-4 border-b border-gray-100 flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
                 <i className="lni lni-layout"></i>
@@ -303,7 +303,7 @@ export default function UniversityExamPracticalQpPrintPage() {
           </div>
 
           {/* Booklet Card */}
-          <div className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden shadow-sm opacity-70">
+          <div className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden shadow-xs opacity-70">
             <div className="bg-gray-100 px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center">

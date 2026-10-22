@@ -438,15 +438,15 @@ function GrievancePanel({ grievanceGuid, statuses, onClose, onSaved, onStale }: 
               {/* Unit, payment, matching code */}
               <div className="rounded-xl border border-slate-200 divide-y divide-slate-200 text-sm">
                 <div className="flex gap-3 px-4 py-3">
-                  <div className="w-28 flex-shrink-0 text-g500">Course unit</div>
+                  <div className="w-28 shrink-0 text-g500">Course unit</div>
                   <div className="min-w-0"><span className="font-mono font-semibold">{g.unitCode ?? '—'}</span> · {g.unitName ?? '—'}</div>
                 </div>
                 <div className="flex gap-3 px-4 py-3">
-                  <div className="w-28 flex-shrink-0 text-g500">Receipt</div>
+                  <div className="w-28 shrink-0 text-g500">Receipt</div>
                   <div>{g.receiptNumber ? <span className="font-mono">{g.receiptNumber}</span> : <span style={{ color: 'var(--red)', fontWeight: 600 }}>Not paid</span>}</div>
                 </div>
                 <div className="flex gap-3 px-4 py-3 items-center">
-                  <div className="w-28 flex-shrink-0 text-g500">Matching code</div>
+                  <div className="w-28 shrink-0 text-g500">Matching code</div>
                   {g.matchingCode ? (
                     <div className="flex items-center gap-3 flex-wrap">
                       <span className="font-mono font-bold text-base tracking-wider">{g.matchingCode}</span>
@@ -507,7 +507,7 @@ function GrievancePanel({ grievanceGuid, statuses, onClose, onSaved, onStale }: 
                   />
                   <div className="flex items-start justify-between gap-3 mt-1">
                     <div className="text-xs" style={{ color: 'var(--red)' }}>{errors.response}</div>
-                    <div className="text-xs flex-shrink-0" style={{ color: response.length > MAX_RESPONSE * 0.9 ? 'var(--amber)' : 'var(--g500)' }}>
+                    <div className="text-xs shrink-0" style={{ color: response.length > MAX_RESPONSE * 0.9 ? 'var(--amber)' : 'var(--g500)' }}>
                       {response.length.toLocaleString()} / {MAX_RESPONSE.toLocaleString()}
                     </div>
                   </div>

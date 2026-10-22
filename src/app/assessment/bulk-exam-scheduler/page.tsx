@@ -383,7 +383,7 @@ export default function BulkExamSchedulerPage() {
         </div>
 
         {/* ── Legacy Top Filters Bar (Matching Screenshot) ────────────────── */}
-        <div className="bg-white border border-slate-200/80 rounded-lg p-4 mb-4 shadow-sm">
+        <div className="bg-white border border-slate-200/80 rounded-lg p-4 mb-4 shadow-xs">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
             {/* 1. Academic Session */}
             <div className="md:col-span-4 flex items-center gap-2">
@@ -454,7 +454,7 @@ export default function BulkExamSchedulerPage() {
         </div>
 
         {/* ── Main Legacy Table View (Matching Screenshot) ──────────────────── */}
-        <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+        <div className="bg-white border border-slate-200 rounded-lg shadow-xs overflow-hidden">
           {!intakeGuid ? (
             <div className="p-12 text-center text-slate-400 text-xs">
               <i className="lni lni-calendar text-2xl mb-2 block text-slate-300"></i>
@@ -487,7 +487,7 @@ export default function BulkExamSchedulerPage() {
                         <button
                           type="button"
                           onClick={() => handleOpenHeaderBulkSchedule('CW')}
-                          className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-none"
+                          className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-hidden"
                           title="Click to schedule Coursework (CW1) for all programmes in this session"
                         >
                           <span>Schedule All (CW)</span>
@@ -499,7 +499,7 @@ export default function BulkExamSchedulerPage() {
                         <button
                           type="button"
                           onClick={() => handleOpenHeaderBulkSchedule('CLASS_TEST')}
-                          className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-none"
+                          className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-hidden"
                           title="Click to schedule Class Test for all programmes in this session"
                         >
                           <span>Schedule All (Class Test)</span>
@@ -511,7 +511,7 @@ export default function BulkExamSchedulerPage() {
                         <button
                           type="button"
                           onClick={() => handleOpenHeaderBulkSchedule('CA')}
-                          className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-none"
+                          className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-hidden"
                           title="Click to schedule Continuous Assessment (CA) for all programmes in this session"
                         >
                           <span>Schedule All (CA)</span>
@@ -523,7 +523,7 @@ export default function BulkExamSchedulerPage() {
                         <button
                           type="button"
                           onClick={() => handleOpenHeaderBulkSchedule('UE')}
-                          className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-none"
+                          className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-hidden"
                           title="Click to schedule University Exam (UE) for all programmes in this session"
                         >
                           <span>Schedule All (UE)</span>
@@ -535,7 +535,7 @@ export default function BulkExamSchedulerPage() {
                         <button
                           type="button"
                           onClick={() => handleOpenHeaderBulkSchedule('MOCK')}
-                          className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-none"
+                          className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-hidden"
                           title="Click to schedule Mock Exam (CBT) for all programmes in this session"
                         >
                           <span>Schedule All (Mock)</span>
@@ -592,7 +592,7 @@ export default function BulkExamSchedulerPage() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenRowSchedule(row, 'CW')}
-                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${cwScheduled
+                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-hidden shadow-xs ${cwScheduled
                                     ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
                                     : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
                                   }`}
@@ -606,7 +606,7 @@ export default function BulkExamSchedulerPage() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenRowSchedule(row, 'CLASS_TEST')}
-                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${testScheduled
+                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-hidden shadow-xs ${testScheduled
                                     ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
                                     : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
                                   }`}
@@ -620,7 +620,7 @@ export default function BulkExamSchedulerPage() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenRowSchedule(row, 'CA')}
-                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${caScheduled
+                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-hidden shadow-xs ${caScheduled
                                     ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
                                     : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
                                   }`}
@@ -634,7 +634,7 @@ export default function BulkExamSchedulerPage() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenRowSchedule(row, 'UE')}
-                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${ueScheduled
+                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-hidden shadow-xs ${ueScheduled
                                     ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
                                     : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
                                   }`}
@@ -648,7 +648,7 @@ export default function BulkExamSchedulerPage() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenRowSchedule(row, 'MOCK')}
-                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-none shadow-xs ${mockScheduled
+                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-hidden shadow-xs ${mockScheduled
                                     ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
                                     : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
                                   }`}

@@ -282,7 +282,7 @@ export default function ResitApplyPage() {
               <div className="p-4 mb-6 rounded-xl border border-slate-200 bg-slate-50">
                 <div className="flex items-center gap-3">
                   <div
-                    className="flex items-center justify-center rounded-full text-white font-semibold flex-shrink-0"
+                    className="flex items-center justify-center rounded-full text-white font-semibold shrink-0"
                     style={{ width: 40, height: 40, background: 'var(--b500)', fontSize: 15 }}
                   >
                     {(selectedStudent.studentName || '?').trim().charAt(0).toUpperCase()}
@@ -344,7 +344,7 @@ export default function ResitApplyPage() {
                       </div>
 
                       {isTheoryPracticalUnit && (
-                        <div className="flex-shrink-0">
+                        <div className="shrink-0">
                           <label className="lbl">Part <span className="text-red-500">*</span></label>
                           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-1" style={{ minHeight: 36 }}>
                             <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -359,7 +359,7 @@ export default function ResitApplyPage() {
                         </div>
                       )}
 
-                      <div className="flex-shrink-0">
+                      <div className="shrink-0">
                         <label className="lbl">Resit For <span className="text-red-500">*</span></label>
                         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-1" style={{ minHeight: 36 }}>
                           <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -383,7 +383,7 @@ export default function ResitApplyPage() {
                         </div>
                       </div>
 
-                      <div className="flex gap-2 flex-shrink-0 w-full md:w-auto">
+                      <div className="flex gap-2 shrink-0 w-full md:w-auto">
                         {editingGuid && (
                           <button className="btn btn-neu flex-1 md:flex-none justify-center" onClick={handleCancelEdit} disabled={submitMutation.isPending}>Cancel</button>
                         )}

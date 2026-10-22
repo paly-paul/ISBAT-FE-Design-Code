@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { loginUrlForCurrentPage } from '@/lib/postLoginRedirect'
 import { Header } from '@/components/Header'
 import { Sidebar, RailId } from '@/components/Sidebar'
@@ -110,7 +110,6 @@ export default function AssessmentLayout({ children }: { children: React.ReactNo
         profileOpen={profileOpen}
         setProfileOpen={setProfileOpen}
         profileRef={profileRef}
-        onSignOut={() => router.push('/')}
         displayName={displayName ?? undefined}
       />
       <div className="layout">

@@ -47,8 +47,8 @@ export default function RecheckHub() {
           </div>
         </div>
 
-        <div className="bg-red-50 border border-red-100 rounded-md p-4 mb-5 flex gap-3 text-[13px] text-red-600 items-start shadow-sm">
-          <div className="text-[16px] flex-shrink-0 mt-[-2px]">🔒</div>
+        <div className="bg-red-50 border border-red-100 rounded-md p-4 mb-5 flex gap-3 text-[13px] text-red-600 items-start shadow-xs">
+          <div className="text-[16px] shrink-0 mt-[-2px]">🔒</div>
           <div className="leading-relaxed">
             <span className="font-bold">Tier 2 Recheck</span> is reserved for severe anomalies — suspected grading bias, unjustified batch failures, or misconduct. The original evaluator is completely removed from the case. All actions create a permanent audit trail. This page is restricted to Dean and Admin roles.
           </div>
@@ -208,7 +208,7 @@ export default function RecheckHub() {
 
             <div className="flex flex-col gap-1 mb-4">
               <label className="text-[12px] font-semibold text-slate-700">Justification Note (Mandatory)</label>
-              <textarea className="form-control px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-colors" rows={3} placeholder="Describe the anomaly and reason for escalating to Tier 2 recheck..."></textarea>
+              <textarea className="form-control px-3 py-2 border-[1.5px] border-slate-200 rounded-md text-[13px] text-slate-900 bg-white focus:outline-hidden focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-colors" rows={3} placeholder="Describe the anomaly and reason for escalating to Tier 2 recheck..."></textarea>
             </div>
 
             <div className="flex gap-2 justify-end mt-5 pt-4 border-t border-slate-200">

@@ -168,7 +168,7 @@ export default function PendingQPUploadReport() {
                 <td><span className="bg-amber-50 text-amber-600 px-2.5 py-0.5 rounded-full text-[11px] font-bold">1 day</span></td>
                 <td><span className="bg-amber-50 text-amber-600 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-amber-200">Due Soon</span></td>
                 <td>
-                  <button className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-[11.5px] px-3 py-1 rounded-full transition-colors shadow-sm" onClick={() => showToast('Reminder sent to faculty')}>
+                  <button className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-[11.5px] px-3 py-1 rounded-full transition-colors shadow-xs" onClick={() => showToast('Reminder sent to faculty')}>
                     Remind
                   </button>
                 </td>

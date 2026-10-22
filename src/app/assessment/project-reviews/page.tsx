@@ -92,7 +92,7 @@ export default function ProjectReviewsPage() {
       </div>
 
       {/* Top Filters */}
-      <div className="bg-white border border-slate-200/80 rounded-lg p-4 mb-4 shadow-sm">
+      <div className="bg-white border border-slate-200/80 rounded-lg p-4 mb-4 shadow-xs">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
           <div className="md:col-span-5 flex items-center gap-2">
             <label className="text-xs font-semibold text-slate-700 shrink-0 w-24">

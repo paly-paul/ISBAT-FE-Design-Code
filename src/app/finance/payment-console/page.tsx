@@ -84,7 +84,7 @@ function OutstandingCategoryTable({ items, isLoading, isError }: { items: AllOut
             <div className="pc-ledger-name truncate">{it.description}</div>
             {it.semesterName && <div className="pc-ledger-sub">{it.semesterName}</div>}
           </div>
-          <span className="flex items-baseline gap-1.5 justify-end flex-shrink-0">
+          <span className="flex items-baseline gap-1.5 justify-end shrink-0">
             {it.currencyCode && <span className="text-g400 font-semibold" style={{ fontSize: 11 }}>{it.currencyCode}</span>}
             <span className="font-bold text-amber">{fmtAmt(it.outstanding)}</span>
           </span>

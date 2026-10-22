@@ -117,7 +117,7 @@ export default function MarkEntryCwPage() {
                     <td className="text-slate-600">No</td>
                     <td className="text-slate-800 font-medium">100%</td>
                     <td>
-                      <input type="text" className="w-[60px] px-2 py-1 border border-slate-200 rounded text-center text-[13px] focus:outline-none focus:border-purple-500" defaultValue="21" />
+                      <input type="text" className="w-[60px] px-2 py-1 border border-slate-200 rounded text-center text-[13px] focus:outline-hidden focus:border-purple-500" defaultValue="21" />
                     </td>
                     <td className="text-purple-700 font-bold">12.6</td>
                     <td className="text-slate-500">Sarah Mugisha</td>
@@ -139,7 +139,7 @@ export default function MarkEntryCwPage() {
                     <td className="text-slate-600">No</td>
                     <td className="text-slate-800 font-medium">100%</td>
                     <td>
-                      <input type="text" className="w-[60px] px-2 py-1 border border-slate-200 rounded text-center text-[13px] focus:outline-none focus:border-purple-500" defaultValue="18" />
+                      <input type="text" className="w-[60px] px-2 py-1 border border-slate-200 rounded text-center text-[13px] focus:outline-hidden focus:border-purple-500" defaultValue="18" />
                     </td>
                     <td className="text-purple-700 font-bold">10.8</td>
                     <td className="text-slate-500">Sarah Mugisha</td>
@@ -183,7 +183,7 @@ export default function MarkEntryCwPage() {
                     <td><span className="bg-cyan-50 text-cyan-600 px-2 py-0.5 rounded-md text-[11px] font-semibold">Yes</span></td>
                     <td className="text-slate-500 font-medium">Exempt</td>
                     <td>
-                      <input type="text" className="w-[60px] px-2 py-1 border border-slate-200 rounded text-center text-[13px] focus:outline-none focus:border-purple-500" defaultValue="23" />
+                      <input type="text" className="w-[60px] px-2 py-1 border border-slate-200 rounded text-center text-[13px] focus:outline-hidden focus:border-purple-500" defaultValue="23" />
                     </td>
                     <td className="text-purple-700 font-bold">13.8</td>
                     <td className="text-slate-500">Sarah Mugisha</td>

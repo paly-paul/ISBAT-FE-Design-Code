@@ -223,19 +223,19 @@ export default function ResitMarkUpdatePage() {
           <div className="flex bg-gray-100 p-1 rounded-lg w-full md:w-auto">
             <button 
               onClick={() => { setStatusTab(0); setPage(1) }}
-              className={`flex-1 md:flex-none px-4 py-2 text-sm font-medium rounded-md transition-all ${statusTab === 0 ? 'bg-white shadow-sm text-primary' : 'text-gray-600 hover:text-gray-800'}`}
+              className={`flex-1 md:flex-none px-4 py-2 text-sm font-medium rounded-md transition-all ${statusTab === 0 ? 'bg-white shadow-xs text-primary' : 'text-gray-600 hover:text-gray-800'}`}
             >
               Ready ({summary.ready})
             </button>
             <button 
               onClick={() => { setStatusTab(1); setPage(1) }}
-              className={`flex-1 md:flex-none px-4 py-2 text-sm font-medium rounded-md transition-all ${statusTab === 1 ? 'bg-white shadow-sm text-primary' : 'text-gray-600 hover:text-gray-800'}`}
+              className={`flex-1 md:flex-none px-4 py-2 text-sm font-medium rounded-md transition-all ${statusTab === 1 ? 'bg-white shadow-xs text-primary' : 'text-gray-600 hover:text-gray-800'}`}
             >
               Pending ({summary.pending})
             </button>
             <button 
               onClick={() => { setStatusTab(2); setPage(1) }}
-              className={`flex-1 md:flex-none px-4 py-2 text-sm font-medium rounded-md transition-all ${statusTab === 2 ? 'bg-white shadow-sm text-primary' : 'text-gray-600 hover:text-gray-800'}`}
+              className={`flex-1 md:flex-none px-4 py-2 text-sm font-medium rounded-md transition-all ${statusTab === 2 ? 'bg-white shadow-xs text-primary' : 'text-gray-600 hover:text-gray-800'}`}
             >
               Pushed ({summary.pushed})
             </button>

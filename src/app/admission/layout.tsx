@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { Header } from '@/components/Header'
 import { Sidebar, RailId } from '@/components/Sidebar'
 import { RouteGuard } from '@/components/RouteGuard'
@@ -19,7 +19,6 @@ export default function AdmissionLayout({ children }: { children: React.ReactNod
   const [profileOpen, setProfileOpen] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const profileRef = useRef<HTMLDivElement>(null)
-  const router = useRouter()
   // This module never had a mount-time session check (unlike Academic), so
   // displayName was never read at all — Header.tsx defaults to the
   // hardcoded "Administrator" string whenever no displayName prop is
@@ -66,7 +65,6 @@ export default function AdmissionLayout({ children }: { children: React.ReactNod
         profileOpen={profileOpen}
         setProfileOpen={setProfileOpen}
         profileRef={profileRef}
-        onSignOut={() => router.push('/')}
         displayName={displayName ?? undefined}
       />
       <div className="layout">

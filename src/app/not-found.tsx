@@ -214,7 +214,7 @@ export default function NotFound() {
         </div>
       </div>
 
-      <footer className="nf-foot">Still stuck? Contact the ICT help desk.</footer>
+      {/* <footer className="nf-foot">Still stuck? Contact the ICT help desk.</footer> */}
       </div>
     </main>
   )

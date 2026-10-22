@@ -627,7 +627,7 @@ export default function IaEvaluationPage() {
       {currentStep === 'dashboard' && (
         <div className="space-y-4">
           {/* Top Scope Filters Card */}
-          <div className="card p-4 shadow-sm border border-slate-200">
+          <div className="card p-4 shadow-xs border border-slate-200">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
               {/* 1. Academic Intake */}
               <div className="lg:col-span-4 sm:col-span-6 col-span-12 flex flex-col gap-1.5">
@@ -668,7 +668,7 @@ export default function IaEvaluationPage() {
                     placeholder="Search by course unit code or name..."
                     value={dashboardSearch}
                     onChange={e => setDashboardSearch(e.target.value)}
-                    className="w-full text-xs pl-8 pr-3 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 transition-colors"
+                    className="w-full text-xs pl-8 pr-3 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-hidden focus:border-blue-500 transition-colors"
                   />
                   <i className="lni lni-search-alt absolute left-2.5 top-2.5 text-slate-400 text-xs"></i>
                 </div>
@@ -677,7 +677,7 @@ export default function IaEvaluationPage() {
           </div>
 
           {/* Dashboard Tabs: "To Do" (Pending) vs "Done" (Evaluated) */}
-          <div className="card p-0 shadow-sm border border-slate-200 overflow-hidden">
+          <div className="card p-0 shadow-xs border border-slate-200 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 px-4 pt-3">
               <div className="flex items-center gap-2">
                 <button
@@ -760,7 +760,7 @@ export default function IaEvaluationPage() {
                       <div
                         key={`${u.category}-${u.courseworkOrTestGuid}-${idx}`}
                         onClick={() => handleOpenCourseworkRoster(u)}
-                        className="group relative bg-white border border-slate-200 hover:border-blue-300 rounded-2xl p-5 shadow-sm hover:shadow-xl hover:shadow-blue-900/5 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col"
+                        className="group relative bg-white border border-slate-200 hover:border-blue-300 rounded-2xl p-5 shadow-xs hover:shadow-xl hover:shadow-blue-900/5 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col"
                       >
                         <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-50 to-indigo-50/50 rounded-bl-full -z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                         <div className="flex justify-between items-start mb-4 gap-3">
@@ -772,7 +772,7 @@ export default function IaEvaluationPage() {
                               {u.unitName || 'Unnamed Unit'}
                             </h3>
                           </div>
-                          <span className="badge badge-purple text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 shadow-sm border border-purple-100">
+                          <span className="badge badge-purple text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 shadow-xs border border-purple-100">
                             {u.categoryLabel}
                           </span>
                         </div>
@@ -836,7 +836,7 @@ export default function IaEvaluationPage() {
                     <div
                       key={`${u.category}-${u.courseworkOrTestGuid}-${idx}`}
                       onClick={() => handleOpenCourseworkRoster(u)}
-                      className="group relative bg-white border border-slate-200 hover:border-emerald-300 rounded-2xl p-5 shadow-sm hover:shadow-xl hover:shadow-emerald-900/5 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col"
+                      className="group relative bg-white border border-slate-200 hover:border-emerald-300 rounded-2xl p-5 shadow-xs hover:shadow-xl hover:shadow-emerald-900/5 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col"
                     >
                       <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-50 to-teal-50/50 rounded-bl-full -z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                       <div className="flex justify-between items-start mb-4 gap-3">
@@ -848,7 +848,7 @@ export default function IaEvaluationPage() {
                             {u.unitName || 'Unnamed Unit'}
                           </h3>
                         </div>
-                        <span className="badge badge-purple text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 shadow-sm border border-purple-100">
+                        <span className="badge badge-purple text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 shadow-xs border border-purple-100">
                           {u.categoryLabel}
                         </span>
                       </div>
@@ -873,7 +873,7 @@ export default function IaEvaluationPage() {
                         </div>
                         <button
                           type="button"
-                          className="btn btn-neu btn-sm rounded-lg px-4 text-[11px] font-bold shadow-sm group-hover:shadow-md transition-shadow flex items-center gap-2"
+                          className="btn btn-neu btn-sm rounded-lg px-4 text-[11px] font-bold shadow-xs group-hover:shadow-md transition-shadow flex items-center gap-2"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleOpenCourseworkRoster(u);
@@ -898,7 +898,7 @@ export default function IaEvaluationPage() {
       {currentStep === 'roster' && selectedCoursework && (
         <div className="space-y-4">
           {/* Header Summary Banner Card */}
-          <div className="card p-4 shadow-sm border border-slate-200 bg-gradient-to-r from-blue-50/40 via-white to-slate-50">
+          <div className="card p-4 shadow-xs border border-slate-200 bg-gradient-to-r from-blue-50/40 via-white to-slate-50">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -943,7 +943,7 @@ export default function IaEvaluationPage() {
           </div>
 
           {/* Roster Controls: Status Filter Tabs & Search */}
-          <div className="card p-4 shadow-sm border border-slate-200">
+          <div className="card p-4 shadow-xs border border-slate-200">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               {/* Status Filter Tabs */}
               <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-lg border border-slate-200 w-fit">
@@ -986,7 +986,7 @@ export default function IaEvaluationPage() {
                   placeholder="Search student name or registration no..."
                   value={studentSearch}
                   onChange={e => setStudentSearch(e.target.value)}
-                  className="w-full text-xs pl-8 pr-3 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 transition-colors"
+                  className="w-full text-xs pl-8 pr-3 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-hidden focus:border-blue-500 transition-colors"
                 />
                 <i className="lni lni-search-alt absolute left-2.5 top-2.5 text-slate-400 text-xs"></i>
               </div>
@@ -994,7 +994,7 @@ export default function IaEvaluationPage() {
           </div>
 
           {/* Student Roster Table */}
-          <div className="card p-0 shadow-sm border border-slate-200 overflow-hidden">
+          <div className="card p-0 shadow-xs border border-slate-200 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
@@ -1123,7 +1123,7 @@ export default function IaEvaluationPage() {
           {/* Header Card: Evaluated vs Pending */}
           {selectedStudent.evaluationStatus === 'Evaluated' ? (
             /* ── Evaluated Header: Read-only summary from roster response ── */
-            <div className="card p-5 bg-gradient-to-r from-emerald-50/70 via-teal-50/40 to-white border border-emerald-200 shadow-sm">
+            <div className="card p-5 bg-gradient-to-r from-emerald-50/70 via-teal-50/40 to-white border border-emerald-200 shadow-xs">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-emerald-200/60">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
@@ -1178,7 +1178,7 @@ export default function IaEvaluationPage() {
             </div>
           ) : (
             /* ── Pending Header: Live Scoring Desk & Progress ── */
-            <div className="card p-4 bg-gradient-to-r from-blue-50/60 via-indigo-50/30 to-white border border-blue-200 shadow-sm">
+            <div className="card p-4 bg-gradient-to-r from-blue-50/60 via-indigo-50/30 to-white border border-blue-200 shadow-xs">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
@@ -1235,7 +1235,7 @@ export default function IaEvaluationPage() {
 
           {/* Optional Scorecard Drawer Table */}
           {isScorecardOpen && (
-            <div className="card p-4 bg-slate-50 border border-slate-200 shadow-sm">
+            <div className="card p-4 bg-slate-50 border border-slate-200 shadow-xs">
               <div className="flex items-center justify-between mb-2">
                 <span className="font-bold text-xs text-slate-800 uppercase tracking-wider">
                   Marks Scorecard Breakdown
@@ -1389,7 +1389,7 @@ export default function IaEvaluationPage() {
                PENDING STUDENT: INTERACTIVE SCORING DESK
                Editable inputs, Save Mark button, Finalize button
                ═══════════════════════════════════════════════════════════════════ */
-            <div className="card p-5 shadow-sm border border-slate-200 space-y-4">
+            <div className="card p-5 shadow-xs border border-slate-200 space-y-4">
               {/* Question Navigation Tabs */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
@@ -1429,7 +1429,7 @@ export default function IaEvaluationPage() {
 
               {/* Question Statement */}
               {currentQuestion && (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-xs">
                   <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200/70">
                     <div className="text-[11px] uppercase font-bold tracking-wider text-slate-500 flex items-center gap-1.5">
                       <i className="lni lni-question-circle text-blue-600 text-xs"></i>
@@ -1600,7 +1600,7 @@ export default function IaEvaluationPage() {
                     type="button"
                     onClick={handleFinalize}
                     disabled={finalizeStudentMutation.isPending}
-                    className="btn h-[38px] px-5 flex items-center gap-1.5 font-bold text-xs shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white"
+                    className="btn h-[38px] px-5 flex items-center gap-1.5 font-bold text-xs shadow-xs bg-emerald-600 hover:bg-emerald-700 text-white"
                     title="Save current mark and finalize student evaluation"
                   >
                     <i

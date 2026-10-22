@@ -867,7 +867,7 @@ export default function CwRectificationPage() {
                 type="button"
                 disabled={isMutating}
                 onClick={handleConfirmAction}
-                className={`text-xs px-4 py-2 rounded-lg font-semibold text-white shadow-sm transition-colors flex items-center gap-1.5 ${
+                className={`text-xs px-4 py-2 rounded-lg font-semibold text-white shadow-xs transition-colors flex items-center gap-1.5 ${
                   confirmAction === 'delete'
                     ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-300'
                     : confirmAction === 'reopen'

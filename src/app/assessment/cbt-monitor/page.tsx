@@ -40,7 +40,7 @@ export default function CbtMonitorPage() {
           <div className="pg-sub">Live view — CSE 1301 Algorithms · Time Remaining: <strong className="text-red-500 font-bold">00:23:45</strong></div>
         </div>
         <div className="pg-actions">
-          <div className="text-blue-500 font-semibold text-[13px] bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 shadow-sm">
+          <div className="text-blue-500 font-semibold text-[13px] bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 shadow-xs">
             38 Active · 24 Submitted · 0 Timed Out
           </div>
         </div>

@@ -200,7 +200,7 @@ export function UeQuestionModal({
           <div className="modal-body p-5 flex flex-col gap-4 bg-slate-50 overflow-y-auto max-h-[72vh]">
             
             {/* Scope Badge Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white border border-slate-200 rounded-lg shadow-sm text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white border border-slate-200 rounded-lg shadow-xs text-xs">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-slate-500">Subject:</span>
                 <span className="font-mono bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-bold border border-indigo-200">
