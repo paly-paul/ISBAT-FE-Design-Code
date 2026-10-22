@@ -123,13 +123,13 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   const { data: currentAcademicIntake } = useCurrentAcademicIntake(isOpen)
 
   const programOptions = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
-  // Lec/Cec/Acec carry the currency's GUID. GET /finance/currencies no longer
-  // returns intCurrency, so keying these options by it collapsed every
-  // currency into one (only UGX showed) and saved nothing usable.
-  const currencyGuidOptions = useMemo(
-    () => flattenUniquePages(currencyQuery.data?.pages ?? [], c => c.currencyGuid ?? '')
-      .filter(c => c.currencyGuid)
-      .map(c => ({ value: c.currencyGuid as string, label: `${c.currencyCode} — ${c.currencyName}` })),
+  // Lec/Cec/Acec carry the currency's intCurrency (a plain int), not its
+  // GUID — confirmed via the real save-complete payload. Rows without one
+  // are left out rather than collapsing onto a shared empty key.
+  const currencyIntOptions = useMemo(
+    () => flattenUniquePages(currencyQuery.data?.pages ?? [], c => String(c.intCurrency ?? ''))
+      .filter(c => c.intCurrency != null)
+      .map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` })),
     [currencyQuery.data],
   )
 
@@ -353,10 +353,10 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
       let changed = false
       const next = prev.map(s => {
         if (s.lefCurrency || s.cefCurrency || s.aceCurrency) return s
-        const guid = financeCurrencies.find(c => c.currencyCode === s.currency)?.currencyGuid
-        if (!guid) return s
+        const int = financeCurrencies.find(c => c.currencyCode === s.currency)?.intCurrency
+        if (int == null) return s
         changed = true
-        return { ...s, lefCurrency: guid, cefCurrency: guid, aceCurrency: guid }
+        return { ...s, lefCurrency: String(int), cefCurrency: String(int), aceCurrency: String(int) }
       })
       return changed ? next : prev
     })
@@ -448,16 +448,21 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   function baseCurrencyGuid(code: string): string {
     return financeCurrencies.find(c => c.currencyCode === code)?.currencyGuid ?? ''
   }
+  // Lec/Cec/Acec hold intCurrency (as a string), fee lines hold currencyGuid.
+  function baseCurrencyInt(code: string): string {
+    const int = financeCurrencies.find(c => c.currencyCode === code)?.intCurrency
+    return int != null ? String(int) : ''
+  }
 
   function updateBaseCurrency(code: string) {
     setStructures(prev => prev.map((s, i) => {
       if (i !== activeIdx) return s
-      const oldGuid = baseCurrencyGuid(s.currency)
-      const newGuid = baseCurrencyGuid(code)
-      const follow = (g: string) => (!g || g === oldGuid) && newGuid ? newGuid : g
+      const follower = (oldVal: string, newVal: string) => (v: string) => (!v || v === oldVal) && newVal ? newVal : v
+      const followGuid = follower(baseCurrencyGuid(s.currency), baseCurrencyGuid(code))
+      const followInt = follower(baseCurrencyInt(s.currency), baseCurrencyInt(code))
       const semFees: SemFeesMap = {}
-      for (const [sem, items] of Object.entries(s.semFees)) semFees[sem] = items.map(f => ({ ...f, currencyGuid: follow(f.currencyGuid) }))
-      return { ...s, currency: code, lefCurrency: follow(s.lefCurrency), cefCurrency: follow(s.cefCurrency), aceCurrency: follow(s.aceCurrency), semFees }
+      for (const [sem, items] of Object.entries(s.semFees)) semFees[sem] = items.map(f => ({ ...f, currencyGuid: followGuid(f.currencyGuid) }))
+      return { ...s, currency: code, lefCurrency: followInt(s.lefCurrency), cefCurrency: followInt(s.cefCurrency), aceCurrency: followInt(s.aceCurrency), semFees }
     }))
   }
 
@@ -557,9 +562,9 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
             lef: s.lef ? +s.lef : null,
             cef: s.cef ? +s.cef : null,
             ace: s.ace ? +s.ace : null,
-            lec: s.lefCurrency || null,
-            cec: s.cefCurrency || null,
-            acec: s.aceCurrency || null,
+            lec: s.lefCurrency ? +s.lefCurrency : null,
+            cec: s.cefCurrency ? +s.cefCurrency : null,
+            acec: s.aceCurrency ? +s.aceCurrency : null,
             calcType: s.discountType === 'Percentage' ? 2 : 1,
             amtPer: s.amtPer ? +s.amtPer : null,
             intakeGuid: s.intake || null,
@@ -577,9 +582,9 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
             lef: s.lef ? +s.lef : null,
             cef: s.cef ? +s.cef : null,
             ace: s.ace ? +s.ace : null,
-            lec: s.lefCurrency || null,
-            cec: s.cefCurrency || null,
-            acec: s.aceCurrency || null,
+            lec: s.lefCurrency ? +s.lefCurrency : null,
+            cec: s.cefCurrency ? +s.cefCurrency : null,
+            acec: s.aceCurrency ? +s.aceCurrency : null,
             calcType: s.discountType === 'Percentage' ? 2 : 1,
             amtPer: s.amtPer ? +s.amtPer : null,
             intakeGuid: s.intake || null,
@@ -824,7 +829,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                 <div className="fg m-0">
                   <div className="lbl">Currency <span className="text-g400 font-normal normal-case">(Lateral Entry / Credit Exemption / Aptech Credit Exemption)</span></div>
                   <SearchSelect
-                    options={currencyGuidOptions}
+                    options={currencyIntOptions}
                     value={active.lefCurrency}
                     onChange={updateSharedFeeCurrency}
                     onSearch={setCurrencySearch}

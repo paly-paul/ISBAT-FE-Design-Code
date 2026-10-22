@@ -462,12 +462,13 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     [currencyQuery.data],
   )
   // Lec/Cec/Acec (Lateral Entry/Credit Exemption/Aptech Credit Exemption Fee
-  // Currency) carry the currency's GUID. GET /finance/currencies no longer
-  // returns intCurrency, so keying by it collapsed every currency into one
-  // (only UGX showed). Used only for those three fields.
-  const currencyGuidOptions = flattenUniquePages(currencyQuery.data?.pages ?? [], c => c.currencyGuid ?? '')
-    .filter(c => c.currencyGuid)
-    .map(c => ({ value: c.currencyGuid as string, label: `${c.currencyCode} — ${c.currencyName}` }))
+  // Currency) carry the currency's intCurrency (a plain int), not its GUID —
+  // confirmed via the real save-complete payload. Rows without one are left
+  // out rather than collapsing onto a shared empty key. Used only for those
+  // three fields; fee lines use currencyGuid.
+  const currencyIntOptions = flattenUniquePages(currencyQuery.data?.pages ?? [], c => String(c.intCurrency ?? ''))
+    .filter(c => c.intCurrency != null)
+    .map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` }))
 
   // Update wants a real currencyGuid, confirmed via the "three currency guid
   // spaces" gotcha elsewhere in this app — useFinanceCurrencies() carries the
@@ -532,11 +533,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       discountType: String(src.calcType ?? 1),
       discountAmount: src.amtPer != null ? String(src.amtPer) : '',
       lateralEntryFee: src.lef != null ? String(src.lef) : '',
-      lateralEntryFeeCurrency: src.lec ?? '',
+      lateralEntryFeeCurrency: src.lec != null ? String(src.lec) : '',
       creditExemptionFee: src.cef != null ? String(src.cef) : '',
-      creditExemptionFeeCurrency: src.cec ?? '',
+      creditExemptionFeeCurrency: src.cec != null ? String(src.cec) : '',
       aptechCreditExemptionFee: src.ace != null ? String(src.ace) : '',
-      aptechCreditExemptionFeeCurrency: src.acec ?? '',
+      aptechCreditExemptionFeeCurrency: src.acec != null ? String(src.acec) : '',
       semFees,
     }))
     const code = src.feeCode.trim()
@@ -558,10 +559,10 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       let changed = false
       const next = prev.map(s => {
         if (s.lateralEntryFeeCurrency || s.creditExemptionFeeCurrency || s.aptechCreditExemptionFeeCurrency) return s
-        const { guid } = defaultFeeItemCurrency(s.localOrForeign)
-        if (!guid) return s
+        const { legacy } = defaultFeeItemCurrency(s.localOrForeign)
+        if (!legacy) return s
         changed = true
-        return { ...s, lateralEntryFeeCurrency: guid, creditExemptionFeeCurrency: guid, aptechCreditExemptionFeeCurrency: guid }
+        return { ...s, lateralEntryFeeCurrency: legacy, creditExemptionFeeCurrency: legacy, aptechCreditExemptionFeeCurrency: legacy }
       })
       return changed ? next : prev
     })
@@ -1286,9 +1287,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             lef: s.lateralEntryFee ? +s.lateralEntryFee : null,
             cef: s.creditExemptionFee ? +s.creditExemptionFee : null,
             ace: s.aptechCreditExemptionFee ? +s.aptechCreditExemptionFee : null,
-            lec: s.lateralEntryFeeCurrency || null,
-            cec: s.creditExemptionFeeCurrency || null,
-            acec: s.aptechCreditExemptionFeeCurrency || null,
+            lec: s.lateralEntryFeeCurrency ? +s.lateralEntryFeeCurrency : null,
+            cec: s.creditExemptionFeeCurrency ? +s.creditExemptionFeeCurrency : null,
+            acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
             intakeGuid: s.intakeGuid || null,
             feeLines,
           }
@@ -1303,9 +1304,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             lef: s.lateralEntryFee ? +s.lateralEntryFee : null,
             cef: s.creditExemptionFee ? +s.creditExemptionFee : null,
             ace: s.aptechCreditExemptionFee ? +s.aptechCreditExemptionFee : null,
-            lec: s.lateralEntryFeeCurrency || null,
-            cec: s.creditExemptionFeeCurrency || null,
-            acec: s.aptechCreditExemptionFeeCurrency || null,
+            lec: s.lateralEntryFeeCurrency ? +s.lateralEntryFeeCurrency : null,
+            cec: s.creditExemptionFeeCurrency ? +s.creditExemptionFeeCurrency : null,
+            acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
             calcType: +s.discountType || 1,
             amtPer: s.discountAmount ? +s.discountAmount : null,
             intakeGuid: s.intakeGuid || null,
@@ -1497,9 +1498,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         lef: s.lateralEntryFee ? +s.lateralEntryFee : null,
         cef: s.creditExemptionFee ? +s.creditExemptionFee : null,
         ace: s.aptechCreditExemptionFee ? +s.aptechCreditExemptionFee : null,
-        lec: s.lateralEntryFeeCurrency || null,
-        cec: s.creditExemptionFeeCurrency || null,
-        acec: s.aptechCreditExemptionFeeCurrency || null,
+        lec: s.lateralEntryFeeCurrency ? +s.lateralEntryFeeCurrency : null,
+        cec: s.creditExemptionFeeCurrency ? +s.creditExemptionFeeCurrency : null,
+        acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
         calcType: +s.discountType || 1,
         amtPer: s.discountAmount ? +s.discountAmount : null,
         intakeGuid: s.intakeGuid || null,
@@ -1580,9 +1581,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       lef: s.lateralEntryFee ? +s.lateralEntryFee : null,
       cef: s.creditExemptionFee ? +s.creditExemptionFee : null,
       ace: s.aptechCreditExemptionFee ? +s.aptechCreditExemptionFee : null,
-      lec: s.lateralEntryFeeCurrency || null,
-      cec: s.creditExemptionFeeCurrency || null,
-      acec: s.aptechCreditExemptionFeeCurrency || null,
+      lec: s.lateralEntryFeeCurrency ? +s.lateralEntryFeeCurrency : null,
+      cec: s.creditExemptionFeeCurrency ? +s.creditExemptionFeeCurrency : null,
+      acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
       calcType: +s.discountType || 1,
       amtPer: s.discountAmount ? +s.discountAmount : null,
       intakeGuid: s.intakeGuid || null,
@@ -1694,12 +1695,14 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       const oldBase = defaultFeeItemCurrency(s.localOrForeign)
       const newBase = defaultFeeItemCurrency(localOrForeign)
       const follow = (g: string) => (!g || g === oldBase.guid) && newBase.guid ? newBase.guid : g
+      // Lec/Cec/Acec hold intCurrency (as a string), fee lines currencyGuid.
+      const followInt = (v: string) => (!v || v === oldBase.legacy) && newBase.legacy ? newBase.legacy : v
       return {
         ...s,
         localOrForeign,
-        lateralEntryFeeCurrency: follow(s.lateralEntryFeeCurrency),
-        creditExemptionFeeCurrency: follow(s.creditExemptionFeeCurrency),
-        aptechCreditExemptionFeeCurrency: follow(s.aptechCreditExemptionFeeCurrency),
+        lateralEntryFeeCurrency: followInt(s.lateralEntryFeeCurrency),
+        creditExemptionFeeCurrency: followInt(s.creditExemptionFeeCurrency),
+        aptechCreditExemptionFeeCurrency: followInt(s.aptechCreditExemptionFeeCurrency),
         semFees: s.semFees.map(items => items.map(f => {
           const guid = follow(f.currencyGuid)
           return guid === f.currencyGuid ? f : { ...f, currencyGuid: guid, currency: newBase.legacy || f.currency, currencyName: undefined }
@@ -1733,8 +1736,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   function defaultFeeItemCurrency(localOrForeign: string): { guid: string; legacy: string } {
     const code = localOrForeign === 'true' ? 'USD' : 'UGX'
     const fc = financeCurrencies.find(c => c.currencyCode === code) ?? financeCurrencies[0]
-    const legacy = fc ? currencies.find(c => c.currencyCode === fc.currencyCode) : undefined
-    return { guid: fc?.currencyGuid ?? '', legacy: legacy ? String(legacy.intCurrency) : '' }
+    // intCurrency from the same full finance list — the paged `currencies`
+    // only loads once its picker opens, so it can't be relied on here.
+    return { guid: fc?.currencyGuid ?? '', legacy: fc?.intCurrency != null ? String(fc.intCurrency) : '' }
   }
 
   /* ── fee item helpers ── */
@@ -2444,7 +2448,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                       <div className="lbl">Currency <span className="text-g400 font-normal normal-case">(Lateral Entry / Credit Exemption / Aptech Credit Exemption)</span></div>
                       <SearchSelect
                         placeholder="Currency"
-                        options={currencyGuidOptions}
+                        options={currencyIntOptions}
                         value={activeFeeStruct.lateralEntryFeeCurrency}
                         onChange={updateSharedFeeCurrency}
                         onSearch={setCurrencySearch}
