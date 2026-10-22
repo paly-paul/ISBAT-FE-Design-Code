@@ -297,7 +297,7 @@ export default function QpUploadVettingPage() {
 
             {/* Locked State Warning Banner */}
             {isLocked ? (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-md p-3.5 flex gap-3 text-[12.5px] text-emerald-900 items-start shadow-sm">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-md p-3.5 flex gap-3 text-[12.5px] text-emerald-900 items-start shadow-xs">
                 <div className="mt-0.5 text-emerald-600"><i className="lni lni-lock text-[16px]"></i></div>
                 <div>
                   <strong className="font-semibold text-emerald-950">
@@ -307,7 +307,7 @@ export default function QpUploadVettingPage() {
                 </div>
               </div>
             ) : (
-              <div className="bg-amber-50 border border-amber-200 rounded-md p-3.5 flex gap-3 text-[12.5px] text-amber-900 items-start shadow-sm">
+              <div className="bg-amber-50 border border-amber-200 rounded-md p-3.5 flex gap-3 text-[12.5px] text-amber-900 items-start shadow-xs">
                 <div className="mt-0.5 text-amber-600"><i className="lni lni-timer text-[16px]"></i></div>
                 <div>
                   <strong className="font-semibold text-amber-950">Draft Mode:</strong> Add questions to Sections A, B, and C below. Once prepared, the Vetting Committee will verify and sign off.
@@ -755,7 +755,7 @@ function VettingQueueRow({
             <span>No Questions</span>
           </button>
         ) : isVerified ? (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-600 text-white shadow-sm shrink-0">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-600 text-white shadow-xs shrink-0">
             <i className="lni lni-checkmark-circle text-xs" /> Verified
           </span>
         ) : (
@@ -763,7 +763,7 @@ function VettingQueueRow({
             type="button"
             onClick={() => onOpenReview(cu.courseUnitGuid)}
             title={`Review ${totalCount} uploaded questions`}
-            className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm text-xs"
+            className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-xs text-xs"
           >
             <i className="lni lni-pencil-alt" />
             <span>Open for Review ({totalCount})</span>

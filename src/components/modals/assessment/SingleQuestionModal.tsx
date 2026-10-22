@@ -316,7 +316,7 @@ export function SingleQuestionModal({
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           <div className="modal-body p-5 flex flex-col gap-4 bg-slate-50 overflow-y-auto max-h-[72vh]">
             {/* Scope Badge Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white border border-slate-200 rounded-lg shadow-sm text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white border border-slate-200 rounded-lg shadow-xs text-xs">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-slate-500">Course Unit:</span>
                 <span className="font-mono bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-bold border border-indigo-200">
@@ -420,7 +420,7 @@ export function SingleQuestionModal({
             </div>
 
             {/* Question Text with side Upload Image button */}
-            <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm">
+            <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-xs">
               <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <label className="text-xs font-bold text-slate-800 flex items-center gap-1">
@@ -572,7 +572,7 @@ export function SingleQuestionModal({
 
             {/* MCQ Options and Correct Answer Selector */}
             {questionType === 1 ? (
-              <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm space-y-3">
+              <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-xs space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="text-xs font-bold text-slate-800">
                     Options & Correct Answer Selection <span className="text-red-500">*</span>
@@ -709,7 +709,7 @@ export function SingleQuestionModal({
                 </div>
               </div>
             ) : (
-              <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm">
+              <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-xs">
                 {/* Descriptive Answer / Rubric */}
                 <label className="text-xs font-bold text-slate-800 block mb-1.5">
                   Expected Answer / Evaluation Rubric <span className="text-red-500">*</span>

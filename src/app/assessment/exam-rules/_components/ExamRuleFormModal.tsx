@@ -206,7 +206,7 @@ export function ExamRuleFormModal({ isOpen, onClose, showToast, editingGuid }: E
                           onClick={() => setActiveTab(sec.id)}
                           className={`w-full text-left px-3 py-2.5 rounded-[10px] mb-2 flex items-center gap-3 transition-colors ${
                             isActive 
-                              ? 'bg-[var(--b500)] text-white shadow-sm' 
+                              ? 'bg-[var(--b500)] text-white shadow-xs' 
                               : 'hover:bg-slate-200 text-g700'
                           }`}
                         >

@@ -201,7 +201,7 @@ export default function ExamCancelPage() {
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex items-center justify-center rounded-full text-white font-semibold flex-shrink-0" style={{ width: 40, height: 40, background: 'var(--b500)', fontSize: 15 }}>
+                  <div className="flex items-center justify-center rounded-full text-white font-semibold shrink-0" style={{ width: 40, height: 40, background: 'var(--b500)', fontSize: 15 }}>
                     {(student.studentName || '?').trim().charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0">

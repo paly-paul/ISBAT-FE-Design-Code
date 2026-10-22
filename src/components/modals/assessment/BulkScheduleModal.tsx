@@ -532,7 +532,7 @@ export function BulkScheduleModal({
                     </label>
                     <input
                       type="datetime-local"
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
                       value={startDateTime}
                       onChange={e => setStartDateTime(e.target.value)}
                       required
@@ -544,7 +544,7 @@ export function BulkScheduleModal({
                     </label>
                     <input
                       type="datetime-local"
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
                       value={endDateTime}
                       onChange={e => setEndDateTime(e.target.value)}
                       required
@@ -561,7 +561,7 @@ export function BulkScheduleModal({
                       <input
                         type="number"
                         min="1"
-                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
                         value={durationMinutes}
                         onChange={e => setDurationMinutes(Number(e.target.value))}
                         required
@@ -578,7 +578,7 @@ export function BulkScheduleModal({
                         type="number"
                         min="0"
                         step="0.5"
-                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
                         value={maxMark}
                         onChange={e => setMaxMark(Number(e.target.value))}
                         required
@@ -590,7 +590,7 @@ export function BulkScheduleModal({
                     <div>
                       <label className="block text-slate-700 font-semibold mb-1">Mode</label>
                       <select
-                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
                         value={assessmentTypeMode}
                         onChange={e => setAssessmentTypeMode(Number(e.target.value))}
                       >
@@ -604,7 +604,7 @@ export function BulkScheduleModal({
                     <div>
                       <label className="block text-slate-700 font-semibold mb-1">Publish Status</label>
                       <select
-                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
                         value={publishStatus}
                         onChange={e => setPublishStatus(Number(e.target.value))}
                       >
@@ -620,7 +620,7 @@ export function BulkScheduleModal({
                     Exam Rule (Grading / Structure)
                   </label>
                   <select
-                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
                     value={selectedExamRuleGuid}
                     onChange={e => setSelectedExamRuleGuid(e.target.value)}
                   >
@@ -646,7 +646,7 @@ export function BulkScheduleModal({
                     </label>
                     <input
                       type="date"
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
                       value={examDate}
                       onChange={e => setExamDate(e.target.value)}
                       required
@@ -673,7 +673,7 @@ export function BulkScheduleModal({
                       type="number"
                       min="0"
                       step="0.5"
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
                       value={maxMark}
                       onChange={e => setMaxMark(Number(e.target.value))}
                       required
@@ -682,7 +682,7 @@ export function BulkScheduleModal({
                   <div>
                     <label className="block text-slate-700 font-semibold mb-1">Exam Mode</label>
                     <select
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
                       value={assessmentTypeMode}
                       onChange={e => setAssessmentTypeMode(Number(e.target.value))}
                     >
@@ -693,7 +693,7 @@ export function BulkScheduleModal({
                   <div>
                     <label className="block text-slate-700 font-semibold mb-1">Paper Type</label>
                     <select
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
                       value={ueType}
                       onChange={e => setUeType(Number(e.target.value))}
                     >
@@ -704,7 +704,7 @@ export function BulkScheduleModal({
                   <div>
                     <label className="block text-slate-700 font-semibold mb-1">Publish Status</label>
                     <select
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
                       value={publishStatus}
                       onChange={e => setPublishStatus(Number(e.target.value))}
                     >
@@ -719,7 +719,7 @@ export function BulkScheduleModal({
                     Exam Rule (Grading / Question Structure)
                   </label>
                   <select
-                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-none"
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
                     value={selectedExamRuleGuid}
                     onChange={e => setSelectedExamRuleGuid(e.target.value)}
                   >

@@ -237,7 +237,7 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
 
             {/* ASM-045: Notice to upload question paper before scheduling */}
             <div className="mb-6 p-3.5 bg-amber-50/90 border border-amber-200 rounded-lg flex items-start gap-3 text-xs text-amber-900 shadow-xs">
-              <i className="lni lni-warning text-amber-600 text-base flex-shrink-0 mt-0.5"></i>
+              <i className="lni lni-warning text-amber-600 text-base shrink-0 mt-0.5"></i>
               <div className="leading-relaxed">
                 <span className="font-semibold text-amber-950">Notice:</span> Please ensure the question paper is uploaded before scheduling the exam.
               </div>

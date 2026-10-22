@@ -525,7 +525,7 @@ export default function QuestionBankUploadPage() {
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            className="btn btn-neu btn-sm flex items-center gap-1.5 shadow-sm text-xs"
+            className="btn btn-neu btn-sm flex items-center gap-1.5 shadow-xs text-xs"
             onClick={handleDownloadTemplate}
             disabled={downloadTemplateMut.isPending}
             title="Download the official 9-column question import template"
@@ -892,7 +892,7 @@ export default function QuestionBankUploadPage() {
                     <button
                       type="button"
                       className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${repoFilterType === 'ALL'
-                        ? 'bg-white text-slate-900 shadow-sm'
+                        ? 'bg-white text-slate-900 shadow-xs'
                         : 'text-slate-600 hover:text-slate-900'
                         }`}
                       onClick={() => setRepoFilterType('ALL')}
@@ -905,7 +905,7 @@ export default function QuestionBankUploadPage() {
                     <button
                       type="button"
                       className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${repoFilterType === 'MCQ'
-                        ? 'bg-white text-purple-700 shadow-sm'
+                        ? 'bg-white text-purple-700 shadow-xs'
                         : 'text-slate-600 hover:text-slate-900'
                         }`}
                       onClick={() => setRepoFilterType('MCQ')}
@@ -918,7 +918,7 @@ export default function QuestionBankUploadPage() {
                     <button
                       type="button"
                       className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${repoFilterType === 'DQ'
-                        ? 'bg-white text-blue-700 shadow-sm'
+                        ? 'bg-white text-blue-700 shadow-xs'
                         : 'text-slate-600 hover:text-slate-900'
                         }`}
                       onClick={() => setRepoFilterType('DQ')}
@@ -1223,7 +1223,7 @@ export default function QuestionBankUploadPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-sm flex items-center justify-between">
+                      <div className="border border-slate-200 rounded-xl p-3 bg-white shadow-xs flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
                             <i className="lni lni-empty-file"></i>
@@ -1332,7 +1332,7 @@ export default function QuestionBankUploadPage() {
 
               {/* Validation Error Banner */}
               {validationError && (
-                <div ref={errorRef} style={{ scrollMarginTop: '20px' }} className="bg-red-50 border border-red-200 text-red-900 rounded-xl p-4 shadow-sm flex items-start gap-3">
+                <div ref={errorRef} style={{ scrollMarginTop: '20px' }} className="bg-red-50 border border-red-200 text-red-900 rounded-xl p-4 shadow-xs flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center text-lg shrink-0 mt-0.5">
                     <i className="lni lni-warning"></i>
                   </div>
@@ -1385,7 +1385,7 @@ export default function QuestionBankUploadPage() {
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
-                        className="btn btn-primary bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white flex items-center gap-2 px-5 py-2 shadow-sm font-semibold"
+                        className="btn btn-primary bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white flex items-center gap-2 px-5 py-2 shadow-xs font-semibold"
                         onClick={handleImport}
                         disabled={importMut.isPending}
                       >
@@ -1433,7 +1433,7 @@ export default function QuestionBankUploadPage() {
                         <button
                           type="button"
                           className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${previewFilterType === 'ALL'
-                            ? 'bg-white text-slate-900 shadow-sm'
+                            ? 'bg-white text-slate-900 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
                             }`}
                           onClick={() => setPreviewFilterType('ALL')}
@@ -1443,7 +1443,7 @@ export default function QuestionBankUploadPage() {
                         <button
                           type="button"
                           className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${previewFilterType === 'MCQ'
-                            ? 'bg-white text-purple-700 shadow-sm'
+                            ? 'bg-white text-purple-700 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
                             }`}
                           onClick={() => setPreviewFilterType('MCQ')}
@@ -1453,7 +1453,7 @@ export default function QuestionBankUploadPage() {
                         <button
                           type="button"
                           className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${previewFilterType === 'DQ'
-                            ? 'bg-white text-blue-700 shadow-sm'
+                            ? 'bg-white text-blue-700 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
                             }`}
                           onClick={() => setPreviewFilterType('DQ')}
@@ -1631,7 +1631,7 @@ export default function QuestionBankUploadPage() {
 
             <div className="modal-body p-5 flex flex-col gap-4 bg-slate-50 overflow-y-auto max-h-[70vh]">
               {/* Type, Level, & Scope Header */}
-              <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white border border-slate-200 rounded-lg shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white border border-slate-200 rounded-lg shadow-xs">
                 <div className="flex items-center gap-2">
                   <span
                     className={`badge ${viewingQuestion.questionType === 1 ? 'badge-purple' : 'badge-blue'
@@ -1661,7 +1661,7 @@ export default function QuestionBankUploadPage() {
               </div>
 
               {/* Question Text Card */}
-              <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+              <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-xs">
                 <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
                   Question Statement
                 </div>
@@ -1672,7 +1672,7 @@ export default function QuestionBankUploadPage() {
 
               {/* Question Image (If attached) */}
               {viewingQuestion.imageUrl && (
-                <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-xs">
                   <div className="flex items-center justify-between mb-2.5">
                     <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                       <i className="lni lni-image text-indigo-600 text-xs"></i>
@@ -1708,7 +1708,7 @@ export default function QuestionBankUploadPage() {
 
               {/* Options Section (If MCQ) */}
               {viewingQuestion.questionType === 1 ? (
-                <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-xs">
                   <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">
                     Options (A, B, C, D)
                   </div>
@@ -1734,7 +1734,7 @@ export default function QuestionBankUploadPage() {
               ) : null}
 
               {/* Correct Answer / Key */}
-              <div className="bg-white border border-emerald-200/80 rounded-lg p-4 shadow-sm bg-emerald-50/30">
+              <div className="bg-white border border-emerald-200/80 rounded-lg p-4 shadow-xs bg-emerald-50/30">
                 <div className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                   <i className="lni lni-checkmark-circle text-emerald-600"></i>
                   <span>{viewingQuestion.questionType === 1 ? 'Verified Answer' : 'Descriptive Answer / Evaluation Rubric'}</span>

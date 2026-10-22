@@ -71,7 +71,7 @@ export default function ResitCalendarPage() {
           </div>
 
           <div className="bg-[#eff6ff] border border-[#dbeafe] rounded-md p-2.5 flex gap-2.5 text-[12px] text-[#2563eb] items-start mt-auto">
-            <div className="bg-[#2563eb] text-white w-[18px] h-[18px] rounded-sm flex items-center justify-center flex-shrink-0 text-[11px] mt-0.5"><i className="lni lni-information"></i></div>
+            <div className="bg-[#2563eb] text-white w-[18px] h-[18px] rounded-xs flex items-center justify-center shrink-0 text-[11px] mt-0.5"><i className="lni lni-information"></i></div>
             <div className="leading-snug">System auto-locks the portal after 30 Nov. Only students with failed IA or UE components are eligible to apply.</div>
           </div>
         </div>

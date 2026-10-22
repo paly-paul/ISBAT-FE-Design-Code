@@ -74,7 +74,7 @@ export default function AssessmentDashboard() {
             <span className="bg-red-50 text-red-500 rounded-full px-2.5 py-0.5 text-[11px] font-semibold">7 items</span>
           </div>
 
-          <div className="flex items-start gap-3 p-3 bg-white rounded-[12px] border border-slate-100 mb-2.5 shadow-sm">
+          <div className="flex items-start gap-3 p-3 bg-white rounded-[12px] border border-slate-100 mb-2.5 shadow-xs">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg shrink-0 bg-[#fef9c3] text-amber-600">🔍</div>
             <div className="flex-1">
               <div className="flex justify-between items-start">
@@ -82,7 +82,7 @@ export default function AssessmentDashboard() {
                   <div className="text-[13px] font-semibold text-slate-900">QP Vetting Pending — MGT 2101</div>
                   <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">Vetting Committee · Business Management<br />· BBA Sem 3</div>
                 </div>
-                <button className="px-3 py-1 bg-white border border-slate-200 rounded-full text-slate-700 text-[11px] font-medium shadow-sm hover:bg-slate-50 transition-colors">Review</button>
+                <button className="px-3 py-1 bg-white border border-slate-200 rounded-full text-slate-700 text-[11px] font-medium shadow-xs hover:bg-slate-50 transition-colors">Review</button>
               </div>
               <div className="flex items-center gap-3 mt-2">
                 <div className="w-[100px] h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full bg-amber-500 w-[55%]"></div></div>
@@ -91,7 +91,7 @@ export default function AssessmentDashboard() {
             </div>
           </div>
 
-          <div className="flex items-start gap-3 p-3 bg-white rounded-[12px] border border-slate-100 mb-2.5 shadow-sm">
+          <div className="flex items-start gap-3 p-3 bg-white rounded-[12px] border border-slate-100 mb-2.5 shadow-xs">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg shrink-0 bg-[#fee2e2] text-red-600">⚖️</div>
             <div className="flex-1">
               <div className="flex justify-between items-start">
@@ -108,7 +108,7 @@ export default function AssessmentDashboard() {
             </div>
           </div>
 
-          <div className="flex items-start gap-3 p-3 bg-white rounded-[12px] border border-slate-100 shadow-sm">
+          <div className="flex items-start gap-3 p-3 bg-white rounded-[12px] border border-slate-100 shadow-xs">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg shrink-0 bg-[#e0f2fe] text-blue-600">🎫</div>
             <div className="flex-1">
               <div className="flex justify-between items-start">
@@ -116,7 +116,7 @@ export default function AssessmentDashboard() {
                   <div className="text-[13px] font-semibold text-slate-900">14 Hall Tickets — Fee Clearance<br />Incomplete</div>
                   <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">Term 1 · BSc programmes · NCHE/Guild<br />checks pending</div>
                 </div>
-                <button className="px-3 py-1 bg-white border border-slate-200 rounded-full text-slate-700 text-[11px] font-medium shadow-sm hover:bg-slate-50 transition-colors">View</button>
+                <button className="px-3 py-1 bg-white border border-slate-200 rounded-full text-slate-700 text-[11px] font-medium shadow-xs hover:bg-slate-50 transition-colors">View</button>
               </div>
               <div className="flex items-center gap-3 mt-2">
                 <div className="w-[100px] h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full bg-amber-500 w-[50%]"></div></div>

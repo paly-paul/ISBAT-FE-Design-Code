@@ -193,7 +193,7 @@ export function QuestionEditModal({
             <div className="flex items-center gap-2 text-sm">
               <span className="font-semibold text-slate-700">Question Type<span className="text-red-500">*</span></span>
               <select
-                className="border border-slate-300 rounded px-2.5 py-1 bg-slate-50 font-medium text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
+                className="border border-slate-300 rounded px-2.5 py-1 bg-slate-50 font-medium text-slate-800 text-sm focus:outline-hidden focus:border-indigo-500"
                 value={formData.questionType}
                 onChange={e => handleChange('questionType', e.target.value)}
               >
@@ -204,7 +204,7 @@ export function QuestionEditModal({
             <div className="flex items-center gap-2 text-sm">
               <span className="font-semibold text-slate-700">Section</span>
               <select
-                className="border border-slate-300 rounded px-2.5 py-1 bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500"
+                className="border border-slate-300 rounded px-2.5 py-1 bg-slate-50 text-slate-800 text-sm focus:outline-hidden focus:border-indigo-500"
                 value={formData.level || ''}
                 onChange={e => handleChange('level', e.target.value)}
               >
@@ -292,7 +292,7 @@ export function QuestionEditModal({
             <div className="flex-1 w-full">
               <input
                 type="text"
-                className="w-full border border-emerald-300 bg-emerald-50 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:border-emerald-500 text-emerald-900 shadow-xs"
+                className="w-full border border-emerald-300 bg-emerald-50 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-hidden focus:border-emerald-500 text-emerald-900 shadow-xs"
                 value={formData.answer}
                 onChange={e => handleChange('answer', e.target.value)}
                 placeholder={formData.questionType === 'MCQ' ? "Type exact option text as answer key" : "Type model answer or evaluation rubric"}

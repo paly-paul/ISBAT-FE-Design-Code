@@ -219,7 +219,7 @@ function CbtScheduleContent() {
         {/* Content */}
         <div className="text-blue-500 mb-8 relative flex items-center justify-center">
           <div className="absolute inset-0 bg-blue-200 rounded-full blur-lg opacity-50 animate-pulse"></div>
-          <i className="lni lni-calendar relative text-7xl drop-shadow-sm"></i>
+          <i className="lni lni-calendar relative text-7xl drop-shadow-xs"></i>
         </div>
         
         <h2 className="text-2xl font-bold text-slate-900 tracking-tight mb-4 text-center">
@@ -274,7 +274,7 @@ function CbtScheduleContent() {
 
         {/* ASM-045: Notice to upload question paper before scheduling */}
         <div className="mb-6 p-3.5 bg-amber-50/90 border border-amber-200 rounded-lg flex items-start gap-3 text-xs text-amber-900 shadow-xs">
-          <i className="lni lni-warning text-amber-600 text-base flex-shrink-0 mt-0.5"></i>
+          <i className="lni lni-warning text-amber-600 text-base shrink-0 mt-0.5"></i>
           <div className="leading-relaxed">
             <span className="font-semibold text-amber-950">Notice:</span> Please ensure the question paper is uploaded before scheduling the exam.
           </div>

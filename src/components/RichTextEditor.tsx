@@ -496,7 +496,7 @@ export function RichTextEditor({
                 e.target.value = ''
               }}
               defaultValue=""
-              className="h-7 text-[11px] font-medium border border-slate-300 rounded bg-white text-slate-700 px-1.5 py-0 hover:border-slate-400 focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer shadow-2xs"
+              className="h-7 text-[11px] font-medium border border-slate-300 rounded bg-white text-slate-700 px-1.5 py-0 hover:border-slate-400 focus:outline-hidden focus:ring-1 focus:ring-purple-500 cursor-pointer shadow-2xs"
               title="Font Family"
             >
               <option value="" disabled>Arial</option>
@@ -517,7 +517,7 @@ export function RichTextEditor({
                 e.target.value = ''
               }}
               defaultValue=""
-              className="h-7 text-[11px] font-medium border border-slate-300 rounded bg-white text-slate-700 px-1 py-0 hover:border-slate-400 focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer shadow-2xs"
+              className="h-7 text-[11px] font-medium border border-slate-300 rounded bg-white text-slate-700 px-1 py-0 hover:border-slate-400 focus:outline-hidden focus:ring-1 focus:ring-purple-500 cursor-pointer shadow-2xs"
               title="Font Size"
             >
               <option value="" disabled>1</option>
@@ -562,7 +562,7 @@ export function RichTextEditor({
             wordBreak: 'break-word',
             outline: 'none',
           }}
-          className="p-3 text-xs text-slate-800 leading-relaxed overflow-y-auto focus:outline-none rich-editor-content cursor-text"
+          className="p-3 text-xs text-slate-800 leading-relaxed overflow-y-auto focus:outline-hidden rich-editor-content cursor-text"
         />
       </div>
     </div>

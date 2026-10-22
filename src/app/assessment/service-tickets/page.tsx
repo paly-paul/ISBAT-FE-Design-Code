@@ -330,7 +330,7 @@ function TriagePanel({ ticketGuid, statuses, categoryOptions, onClose, onSaved, 
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-3 min-w-0">
                     <div
-                      className="flex items-center justify-center rounded-full text-white font-semibold flex-shrink-0"
+                      className="flex items-center justify-center rounded-full text-white font-semibold shrink-0"
                       style={{ width: 40, height: 40, background: 'var(--b500)', fontSize: 15 }}
                     >
                       {(ticket.studentName || '?').trim().charAt(0).toUpperCase()}

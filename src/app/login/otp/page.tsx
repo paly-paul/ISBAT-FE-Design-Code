@@ -52,13 +52,13 @@ export default function OtpPage() {
 
     try {
       const result = await otpVerify(flowState.challengeId, code)
-      setSessionIdentity({ displayName: result.displayName })
+      setSessionIdentity({ displayName: result.displayName, role: result.role === 'student' ? 'student' : 'staff' })
       clearFlowState()
       // Staff only — same "requested link, else first menu page" rule as
       // the login form (lib/postLoginRedirect.ts).
       const redirect = result.role === 'student'
         ? result.redirect
-        : await resolvePostLoginTarget(queryClient, result.redirect || '/academic')
+        : await resolvePostLoginTarget(queryClient, result.redirect && result.redirect !== '/academic' ? result.redirect : '/academic/acad-dashboard')
       setSuccessState({ role: result.role, redirect })
     } catch (err) {
       if (err instanceof AuthError) {
@@ -92,7 +92,7 @@ export default function OtpPage() {
           subtitle={isStudent
             ? 'The Student Portal is still being built. Check back soon.'
             : 'Welcome back to ISBAT ERP.'}
-          redirectTo={isStudent ? undefined : (successState.redirect || '/academic')}
+          redirectTo={isStudent ? undefined : (successState.redirect || '/academic/acad-dashboard')}
         />
       </PanelA>
     )

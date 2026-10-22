@@ -18,7 +18,7 @@ No test framework is configured. There is no `npm test`.
 ## Project Overview
 
 **ISBAT University ERP — Academic Module** (`isbat-academic-portal`).
-Next.js 15 App Router, React 18, TypeScript, Tailwind CSS 3, `@tanstack/react-query`, `zod`, `jose`.
+Next.js 16 App Router, React 18, TypeScript, Tailwind CSS 4, `@tanstack/react-query`, `zod`, `jose`.
 
 The app is a UI-first design prototype. All data is hard-coded mock data; API calls are behind a `NEXT_PUBLIC_AUTH_MOCK=true` flag in `src/lib/auth.ts`.
 
@@ -101,7 +101,9 @@ CSS token naming:
 - Radii: `--radius` (14px), `--rsm` (10px), `--rxs` (7px)
 - Sidebar dimensions: `--rail-w` (66px), `--panel-w` (228px)
 
-Tailwind config (`tailwind.config.ts`) maps all CSS variables to Tailwind color names (e.g. `bg-b500`, `text-g400`, `bg-clr-green-bg`).
+Tailwind 4 has no JS config: the `@theme inline` block at the top of `globals.css` maps the CSS variables to Tailwind names (e.g. `bg-b500`, `text-g400`, `bg-clr-green-bg`). Keep it `inline` — the app's own `--radius` and next/font's `--font-sans`/`--font-mono`/`--font-serif` share names with Tailwind theme variables. The block also pins Tailwind's default palette to its v3 hex values so the UI looks as it did under v3. v3 → v4 class renames already applied: `shadow-sm`→`shadow-xs`, `outline-none`→`outline-hidden`, `flex-shrink-0`→`shrink-0`, `rounded-sm`→`rounded-xs`.
+
+`package.json` `overrides` swaps `fast-glob` inside `@next/eslint-plugin-next` for `tinyglobby` (same `globSync` API) so the audit stays clean — `braces`, which fast-glob depends on, has no patched release.
 
 ### Icons
 LineIcons 4.0 loaded from CDN in `src/app/layout.tsx`. Usage: `<i className="lni lni-{name}"></i>`.

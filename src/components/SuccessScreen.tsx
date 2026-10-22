@@ -12,7 +12,9 @@ interface Props {
 export default function SuccessScreen({ title, subtitle, redirectTo, redirectDelay = 6000 }: Props) {
   useEffect(() => {
     if (!redirectTo) return
-    const t = setTimeout(() => { window.location.href = redirectTo }, redirectDelay)
+    // replace, not href: the login pages must not stay in history behind the
+    // app, or Back returns to the login form while still signed in.
+    const t = setTimeout(() => { window.location.replace(redirectTo) }, redirectDelay)
     return () => clearTimeout(t)
   }, [redirectTo, redirectDelay])
 
@@ -120,7 +122,7 @@ export default function SuccessScreen({ title, subtitle, redirectTo, redirectDel
           <button
             className="isb-btn primary"
             style={{ minWidth: 200 }}
-            onClick={() => { window.location.href = redirectTo }}
+            onClick={() => { window.location.replace(redirectTo) }}
           >
             Continue &rarr;
           </button>

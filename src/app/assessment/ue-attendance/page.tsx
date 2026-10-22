@@ -276,7 +276,7 @@ export default function UeAttendancePage() {
               </div>
             ) : schedule ? (
               <>
-                <div className="h-14 w-14 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0 border border-blue-100 shadow-sm">
+                <div className="h-14 w-14 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0 border border-blue-100 shadow-xs">
                   <i className="lni lni-calendar text-2xl"></i>
                 </div>
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-8">

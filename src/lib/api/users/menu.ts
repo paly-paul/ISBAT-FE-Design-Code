@@ -1621,16 +1621,22 @@ export function flattenMenuPages(menu: MenuNode[]): AppPage[] {
 
 // Every page the app knows as a menu item, i.e. the full menu before RBAC
 // filtering (same tree getMenu() falls back to). Built once, on first use.
-let catalogCache: { modules: Set<string>; pages: Set<string> } | null = null
+let catalogCache: { modules: Set<string>; pages: Map<string, AppPage> } | null = null
 function menuCatalog() {
   if (!catalogCache) {
     const pages = flattenMenuPages(stripUnintegratedPages(stripLectureMaster(renameIaCreation(mockMenu))))
     catalogCache = {
       modules: new Set(pages.map(p => p.url.split('/')[1])),
-      pages: new Set(pages.map(p => p.url)),
+      pages: new Map(pages.map(p => [p.url, p])),
     }
   }
   return catalogCache
+}
+
+// The catalog entry for `pathname` (name, module, section), whether or not
+// the user can open it — for naming the page on the access-denied screen.
+export function findCatalogPage(pathname: string): AppPage | undefined {
+  return menuCatalog().pages.get(pathname.replace(/\/+$/, '') || '/')
 }
 
 // Whether the user's own (RBAC-filtered) menu lets them open `pathname`.

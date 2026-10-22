@@ -1,18 +1,27 @@
 'use client'
-import { notFound, usePathname } from 'next/navigation'
+import { useEffect } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { useMenu } from '@/hooks/users/useMenu'
 import { isRouteAllowed } from '@/lib/api/users/menu'
 
-// Renders the app-wide 404 for a route the user's /me/menu doesn't grant
-// (see isRouteAllowed), so a typed URL can't open a page they lack. Holds
-// the page back while the menu loads so a forbidden page never flashes or
-// fires its API calls. If the menu call failed (isFallback / error) it fails
-// open, same as the sidebar and usePagePermissions.
+// Sends a route the user's /me/menu doesn't grant (see isRouteAllowed) to
+// /access-denied, so a typed URL can't open a page they lack. replace, not
+// push, so Back skips the forbidden URL instead of bouncing into it again.
+// Holds the page back while the menu loads (and while redirecting) so a
+// forbidden page never flashes or fires its API calls. If the menu call
+// failed (isFallback / error) it fails open, same as the sidebar and
+// usePagePermissions.
 export function RouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const { data, isLoading } = useMenu()
+  const denied = !!data && !data.isFallback && !isRouteAllowed(data.menu, pathname)
 
-  if (isLoading) {
+  useEffect(() => {
+    if (denied) router.replace(`/access-denied?from=${encodeURIComponent(pathname)}`)
+  }, [denied, pathname, router])
+
+  if (isLoading || denied) {
     return (
       <div role="status" style={{ display: 'grid', placeContent: 'center', minHeight: 'calc(100vh - 160px)' }}>
         <div className="tbl-empty-inner">
@@ -30,6 +39,5 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
       </div>
     )
   }
-  if (data && !data.isFallback && !isRouteAllowed(data.menu, pathname)) notFound()
   return <>{children}</>
 }
