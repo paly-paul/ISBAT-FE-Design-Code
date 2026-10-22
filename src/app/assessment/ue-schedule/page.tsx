@@ -48,7 +48,7 @@ export default function UeSchedulePage() {
       <div className="card p-5 mb-5">
         <div className="bg-[#eff6ff] border border-[#dbeafe] rounded-md p-3 flex gap-3 text-[12.5px] text-[#3b82f6] items-start">
           <div className="mt-0.5 text-[#2563eb]"><i className="lni lni-information"></i></div>
-          <div>The physical timetable is created externally by the Registrar to manage seating capacity. Enter each subject's date/time slot here to display it on student portals. <strong className="font-semibold text-[#1e40af]">No Launch button is enabled</strong> — UE is a physical examination.</div>
+          <div>The physical timetable is created externally by the Registrar to manage seating capacity. Enter each subject&apos;s date/time slot here to display it on student portals. <strong className="font-semibold text-[#1e40af]">No Launch button is enabled</strong> — UE is a physical examination.</div>
         </div>
       </div>
 

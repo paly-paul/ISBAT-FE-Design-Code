@@ -359,7 +359,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
       <div className="modal-overlay open">
         <div className="modal" style={{ maxWidth: 400, padding: 24, textAlign: 'center' }}>
           <div style={{ fontSize: 24, marginBottom: 12, color: 'var(--red)' }}><i className="lni lni-warning"></i></div>
-          <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Couldn't Load Batch</div>
+          <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Couldn&apos;t Load Batch</div>
           <div style={{ color: 'var(--g500)', marginBottom: 20 }}>
             {error instanceof AuthError ? (error.message || 'Failed to load batch details.') : 'Failed to load batch details.'}
           </div>

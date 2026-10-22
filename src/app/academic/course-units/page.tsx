@@ -183,7 +183,6 @@ export default function Page() {
   // changes the server query.
   useEffect(() => {
     setPage(1)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, programFilter])
 
   const filteredRows = searchRows.filter(r =>

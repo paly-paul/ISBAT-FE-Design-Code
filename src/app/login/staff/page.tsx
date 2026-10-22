@@ -223,7 +223,7 @@ export default function StaffLoginPage() {
         background: 'var(--isb-paper-2)', border: '1px solid var(--isb-line-2)',
         borderRadius: 8, fontSize: 11.5, color: 'var(--isb-muted)', lineHeight: 1.55,
       }}>
-        By signing in you consent to ISBAT's processing of your data for ERP operations.
+        By signing in you consent to ISBAT&apos;s processing of your data for ERP operations.
         See our{' '}
         <a href="#" className="isb-link">Data Processing Consent</a>
         {' '}and{' '}

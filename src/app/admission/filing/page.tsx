@@ -324,7 +324,6 @@ export default function FilingPage() {
   useEffect(() => {
     const payment = consumeFilingPrefill()
     if (payment) selectApplication(filingResultFromNewPayment(payment))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Once an application is picked, warn on leaving until it's actually been

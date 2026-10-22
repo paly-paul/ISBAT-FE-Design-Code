@@ -63,8 +63,8 @@ const MODULE_FOR_ENTITY: Record<string, string> = {
 export function notificationHref(n: NotificationItem): string {
   if (!n.pageUrl) return FALLBACK_PAGE_FOR_ENTITY[n.entityType] ?? '/notifications'
   if (n.pageUrl.startsWith('/')) return n.pageUrl
-  const module = MODULE_FOR_ENTITY[n.entityType] ?? 'academic'
-  return `/${module}/${n.pageUrl}`
+  const moduleSeg = MODULE_FOR_ENTITY[n.entityType] ?? 'academic'
+  return `/${moduleSeg}/${n.pageUrl}`
 }
 
 // typeCode isn't a confirmed closed set (the doc's sample only shows

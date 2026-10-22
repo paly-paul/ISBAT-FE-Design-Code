@@ -80,7 +80,6 @@ export function RefundLedgerPicker({ applicationGuid, studentGuid, showToast, on
     setRefundAmount('')
     setRefundDate(todayYmd())
     setRemarks('')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applicationGuid])
 
   // Prefill amount/currency once a ledger is picked. A refund is scoped to

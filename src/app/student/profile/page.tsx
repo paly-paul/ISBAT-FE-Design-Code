@@ -639,7 +639,7 @@ function StudentProfileContent() {
                     ) : (
                       <div style={{ textAlign: 'center' }}>
                         <img src={getIdCardQrImageUrl(student.studentGuid)} alt="ID card QR code" style={{ width: 160, height: 160 }} />
-                        <div style={{ fontSize: 11, color: 'var(--g500)', marginTop: 6 }}>Scans to this student's GUID — verify via the scan-result endpoint, not the image alone.</div>
+                        <div style={{ fontSize: 11, color: 'var(--g500)', marginTop: 6 }}>Scans to this student&apos;s GUID — verify via the scan-result endpoint, not the image alone.</div>
                       </div>
                     )}
                     {/* <div className="fg">

@@ -42,7 +42,6 @@ export function useSemesterCodeGroups(enabled = true) {
       if (rows.length > 0) groups.push({ semCode: String(i + 1), semName: rows[0].semName?.trim() || `Semester ${i + 1}`, semesters: rows })
     })
     return { groups, isLoading: results.some(r => r.isLoading) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results])
 }
 

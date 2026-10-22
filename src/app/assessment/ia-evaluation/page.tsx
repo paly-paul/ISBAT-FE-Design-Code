@@ -250,7 +250,6 @@ export default function IaEvaluationPage() {
   const loadError = pendingError || evaluatedError || studentsError || questionsError
   useEffect(() => {
     if (loadError) showToast((loadError as Error).message || 'Failed to load evaluation data.', 'error')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadError])
 
   // ── Refresh Handler ───────────────────────────────────────────────────────

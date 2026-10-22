@@ -88,7 +88,7 @@ export default function Page() {
         <div className="pg-hdr">
           <div>
             <div className="pg-title">Interest Level Master</div>
-            <div className="pg-sub">Manage the levels used to rate an applicant's interest during admissions</div>
+            <div className="pg-sub">Manage the levels used to rate an applicant&apos;s interest during admissions</div>
           </div>
           {permissions.add && (
             <button className="btn btn-primary" onClick={() => openModal('new-interest-level-modal')}>

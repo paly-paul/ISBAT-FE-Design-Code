@@ -317,7 +317,7 @@ export default function ResitApplyPage() {
                 </div>
 
                 {periodClosed ? (
-                  <div className="warn-box text-sm"><i className="lni lni-lock mt-0.5"></i><span>{periodClosed} Applications can't be made or changed now.</span></div>
+                  <div className="warn-box text-sm"><i className="lni lni-lock mt-0.5"></i><span>{periodClosed} Applications can&apos;t be made or changed now.</span></div>
                 ) : (!dropdownUnits || dropdownUnits.length === 0) && !editingGuid ? (
                   <div className="text-sm text-slate-500 flex items-center gap-2">
                     <i className="lni lni-checkmark-circle" style={{ color: 'var(--green)' }}></i> No units left to apply for.

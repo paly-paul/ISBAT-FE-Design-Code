@@ -381,7 +381,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
   useEffect(() => {
     if (isOpen && mode === 'edit') setCurrencyGuid(initialCurrencyGuid ?? '')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, mode, initialCurrencyGuid])
   const [unitCount, setUnitCount] = useState('')
   const [dateAcc, setDateAcc] = useState('')

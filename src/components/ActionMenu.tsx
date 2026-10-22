@@ -57,7 +57,6 @@ export function ActionMenu({ children, tooltip = 'Actions' }: ActionMenuProps) {
     }
 
     setPos(prev => (prev.left === left && prev.top === top && prev.ready ? prev : { top, left, ready: true }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, pos.top, pos.left])
 
   function onMouseEnter() {

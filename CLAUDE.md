@@ -105,6 +105,8 @@ Tailwind 4 has no JS config: the `@theme inline` block at the top of `globals.cs
 
 `package.json` `overrides` swaps `fast-glob` inside `@next/eslint-plugin-next` for `tinyglobby` (same `globSync` API) so the audit stays clean — `braces`, which fast-glob depends on, has no patched release.
 
+Lint is ESLint 9 with a flat `eslint.config.mjs` (`eslint-config-next/core-web-vitals`). Its React Compiler rules (`react-hooks/set-state-in-effect`, `refs`, `immutability`, `preserve-manual-memoization`, `use-memo`) are downgraded to warnings — the app is on React 18 without the compiler — so `npm run lint` fails only on real errors.
+
 ### Icons
 LineIcons 4.0 loaded from CDN in `src/app/layout.tsx`. Usage: `<i className="lni lni-{name}"></i>`.
 

@@ -63,7 +63,6 @@ function SessionKeepAlive() {
 
     return () => clearInterval(interval)
     // Deliberately no `pathname` dependency — see the note above.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
   return null

@@ -210,7 +210,7 @@ function BatchTransferContent() {
                       <div className="danger-box mt-2">
                         <i className="lni lni-warning" style={{ color: 'var(--red)', fontSize: 14, flexShrink: 0 }}></i>
                         <div style={{ fontSize: 12 }}>
-                          Couldn&apos;t load eligible batches: {eligibleErrorObj instanceof Error ? eligibleErrorObj.message : 'an unexpected error occurred'}. This student&apos;s current batch record has a data issue on the backend — batch transfer can&apos;t proceed until it's corrected there.
+                          Couldn&apos;t load eligible batches: {eligibleErrorObj instanceof Error ? eligibleErrorObj.message : 'an unexpected error occurred'}. This student&apos;s current batch record has a data issue on the backend — batch transfer can&apos;t proceed until it&apos;s corrected there.
                         </div>
                       </div>
                     )}
@@ -299,7 +299,7 @@ function BatchTransferContent() {
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hdr"><div className="modal-title"><i className="lni lni-warning" style={{ color: 'var(--red)' }}></i> Confirm Batch Transfer</div><button className="modal-close" onClick={() => setConfirmOpen(false)}>✕</button></div>
             <div>
-              <div className="danger-box" style={{ marginBottom: 16 }}><i className="lni lni-warning" style={{ color: 'var(--red)', fontSize: 16, flexShrink: 0 }}></i><div><strong>This cannot be undone.</strong> The student's active history is deactivated and cloned into a new row under the destination batch.</div></div>
+              <div className="danger-box" style={{ marginBottom: 16 }}><i className="lni lni-warning" style={{ color: 'var(--red)', fontSize: 16, flexShrink: 0 }}></i><div><strong>This cannot be undone.</strong> The student&apos;s active history is deactivated and cloned into a new row under the destination batch.</div></div>
               <div style={{ fontSize: 13, color: 'var(--g700)', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={{ display: 'flex', gap: 12 }}><span style={{ fontWeight: 600, width: 120, color: 'var(--g500)' }}>Student</span><span>{student.studentName} — {student.studentNum}</span></div>
                 <div style={{ display: 'flex', gap: 12 }}><span style={{ fontWeight: 600, width: 120, color: 'var(--g500)' }}>From batch</span><span style={{ fontFamily: 'monospace' }}>{detail?.currentBatchCode ?? student.batchCode ?? '—'}</span></div>
