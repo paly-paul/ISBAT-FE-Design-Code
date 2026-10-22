@@ -324,7 +324,7 @@ function EditModerationModal({ row, studentGuid, onClose, onSuccess, onError }: 
                <input type="number" className="ctrl w-full" value={ueMod} onChange={e => setUeMod(e.target.value)} min="0" step="0.5" disabled={isPending} />
              </div>
            </div>
-           <div className="text-xs text-g500 mt-3">Moderation can't take a component above 50% of its max. Set 0 to remove it.</div>
+           <div className="text-xs text-g500 mt-3">Moderation can&apos;t take a component above 50% of its max. Set 0 to remove it.</div>
            {saveError && <div className="danger-box mt-3 text-sm"><i className="lni lni-warning"></i> {saveError}</div>}
         </div>
         <div className="modal-ftr">

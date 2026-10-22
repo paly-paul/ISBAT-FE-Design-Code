@@ -135,7 +135,6 @@ export default function Page() {
   // page of the newly-filtered result set.
   useEffect(() => {
     setPage(1)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, levelFilter])
 
   const totalCount = approvalsData?.totalCount ?? 0

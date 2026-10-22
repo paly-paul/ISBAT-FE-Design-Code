@@ -406,7 +406,7 @@ export default function Page() {
         <div className="pg-hdr">
           <div>
             <div className="pg-title">Bulk Intake Calendar Update</div>
-            <div className="pg-sub">Update calendar dates across the current admission intake's back-fill batch · Select entries, edit values, then save</div>
+            <div className="pg-sub">Update calendar dates across the current admission intake&apos;s back-fill batch · Select entries, edit values, then save</div>
           </div>
         </div>
 

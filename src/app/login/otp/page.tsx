@@ -101,7 +101,7 @@ export default function OtpPage() {
   return (
     <PanelA eyebrow="Two-factor authentication" headline="Verify it's you.">
       <p style={{ color: 'var(--isb-muted)', fontSize: 13.5, margin: '0 0 24px', lineHeight: 1.55 }}>
-        We've sent a 6-digit code to{' '}
+        We&apos;ve sent a 6-digit code to{' '}
         <b style={{ color: 'var(--isb-ink)' }}>{maskedTarget}</b>.
         Enter it below to continue.
       </p>
@@ -167,7 +167,7 @@ export default function OtpPage() {
       </form>
 
       <div style={{ marginTop: 18, fontSize: 12, color: 'var(--isb-muted)', textAlign: 'center' }}>
-        Can't access your {flowState.otpChannel === 'sms' ? 'phone' : 'email'}?{' '}
+        Can&apos;t access your {flowState.otpChannel === 'sms' ? 'phone' : 'email'}?{' '}
         <a href="mailto:itsupport@isbatuniversity.ac.ug" className="isb-link">
           Contact IT support
         </a>

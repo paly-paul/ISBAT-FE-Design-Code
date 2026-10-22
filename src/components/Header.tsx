@@ -17,7 +17,6 @@ interface HeaderProps {
   profileOpen: boolean
   setProfileOpen: React.Dispatch<React.SetStateAction<boolean>>
   profileRef: React.RefObject<HTMLDivElement>
-  onSignOut: () => void
   displayName?: string
 }
 
@@ -28,7 +27,7 @@ function initialsOf(name: string): string {
 
 // No made-up name when the session hasn't supplied one — the avatar falls
 // back to a plain user icon and the name is simply left out.
-export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, profileRef, onSignOut, displayName }: HeaderProps) {
+export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, profileRef, displayName }: HeaderProps) {
   const name = displayName?.trim() ?? ''
   const initials = initialsOf(name)
   const [signingOut, setSigningOut] = useState(false)
@@ -73,14 +72,14 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
       // different user logging in later in this same tab gets a genuine
       // fresh count-then-connect sequence rather than finding it a no-op.
       endNotificationsSession()
-      // onSignOut() navigates client-side (router.push), which does not
-      // reset the app's single long-lived QueryClient (see providers.tsx) —
-      // without this, every cached query (menu, employees, ...), including
-      // any that's cached in an error state, survives into the next login
-      // and can serve stale/wrong-user data or a stale error instead of a
-      // genuinely fresh fetch.
+      // The full reload below also drops the QueryClient, but clear it first
+      // so nothing cached (menu, employees, ...) is served in the moment
+      // before the page unloads.
       queryClient.clear()
-      onSignOut()
+      // A full page load, replacing this entry: the signed-in page leaves
+      // history and the app's in-memory state is thrown away, so Back /
+      // Forward after logout can't bring back a saved signed-in screen.
+      window.location.replace('/login')
     }
   }
 

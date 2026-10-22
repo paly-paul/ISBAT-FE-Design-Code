@@ -68,7 +68,6 @@ export function HeaderDownloads() {
     } else if (s.status === REPORT_STATUS.Failed && !inline) {
       showToast(s.errorMessage || `${s.reportName} could not be generated`, 'error')
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [queryClient])
 
   const running = jobs.filter(j => j.status.value === REPORT_STATUS.Queued || j.status.value === REPORT_STATUS.Processing).length
