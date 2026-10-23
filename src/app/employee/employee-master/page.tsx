@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
-import { EmployeeFormModal } from '@/components/modals/employee/EmployeeFormModal'
+import { EmployeeFormModal, normalizeTitle } from '@/components/modals/employee/EmployeeFormModal'
 import { ViewEmployeeModal } from '@/components/modals/employee/ViewEmployeeModal'
 import { EmployeePermissionsFormModal } from '@/components/modals/employee/EmployeePermissionsFormModal'
 import { Toast } from '@/components/Toast'
@@ -220,7 +220,7 @@ export default function Page() {
                       )}
                     </td>
                     <td className="font-mono text-b700">{r.shortCode}</td>
-                    <td><strong>{r.title} {r.firstName} {r.surname}</strong></td>
+                    <td><strong>{normalizeTitle(r.title)} {r.firstName} {r.surname}</strong></td>
                     <td>{r.sex === 1 ? 'Male' : 'Female'}</td>
                     <td><span className={`badge ${r.isApproved ? 'badge-green' : 'badge-amber'}`}><span className="bdot"></span>{r.isApproved ? 'Approved' : 'Pending'}</span></td>
                   </tr>

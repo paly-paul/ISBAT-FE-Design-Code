@@ -4,6 +4,7 @@ import { ModalProps } from '../types'
 import { useEmployee } from '@/hooks/employee/useEmployees'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { formatDate } from '@/lib/date'
+import { normalizeTitle, findCategory } from './EmployeeFormModal'
 
 const SEXES: Record<number, string> = { 1: 'Male', 2: 'Female', 3: 'Others' }
 const MARITAL_STATUSES = ['Single', 'Married', 'Divorced', 'Widow', 'Widower', 'Separated']
@@ -77,7 +78,8 @@ export function ViewEmployeeModal({ isOpen, onClose, employeeGuid, onEdit, canEd
           <div className="sec-divider">Personal Details</div>
           <div className="view-detail-grid">
             <Field label="Short Code" value={employee.shortCode} mono />
-            <Field label="Title" value={employee.title} />
+            <Field label="Category" value={findCategory(employee.category)?.label || '—'} />
+            <Field label="Title" value={normalizeTitle(employee.title) || '—'} />
             <Field label="First Name" value={employee.firstName} />
             <Field label="Surname" value={employee.surname} />
             <Field label="Other Name" value={employee.otherName || '—'} />
