@@ -23,6 +23,33 @@ function unitType(value?: string | null): EffectiveType | 'Combined' {
   }
 }
 
+const OUTCOME_NAMES = ['Printed', 'Reprinted', 'ExamRuleNotSet', 'QuestionsNotAvailable', 'ConfirmationRequired'] as const
+type QpOutcome = typeof OUTCOME_NAMES[number]
+
+function parseOutcome(result: any): { outcome: QpOutcome | null; message: string } {
+  if (result === null || result === undefined) return { outcome: null, message: '' }
+
+  const raw = result?.outcome ?? result?.Outcome ?? (typeof result === 'object' && 'data' in result ? (result.data?.outcome ?? result.data?.Outcome ?? result.data) : result)
+
+  let outcome: QpOutcome | null = null
+  if (typeof raw === 'number') {
+    outcome = OUTCOME_NAMES[raw] ?? null
+  } else if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (/^\d+$/.test(trimmed)) {
+      outcome = OUTCOME_NAMES[Number(trimmed)] ?? null
+    } else {
+      outcome = OUTCOME_NAMES.find(n => n.toLowerCase() === trimmed.toLowerCase()) ?? null
+    }
+  }
+
+  const message = (typeof result?.message === 'string' && result.message)
+    || (typeof result?.data?.message === 'string' && result.data.message)
+    || ''
+
+  return { outcome, message }
+}
+
 export default function UniversityExamMaterialPrintPage() {
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
@@ -79,12 +106,15 @@ export default function UniversityExamMaterialPrintPage() {
   )
   const { data: programUnits } = useUeMaterialPrintProgramUnits(programGuid || null)
 
-  const selectedUnitType = useMemo(() => {
-    const selected = (programUnits ?? []).find(unit =>
+  const selectedUnitRow = useMemo(() => {
+    return (programUnits ?? []).find(unit =>
       unit.courseUnitGuid === courseUnitGuid && unit.semesterGuid === semesterGuid,
     )
-    return unitType(selected?.unitTypeName)
   }, [courseUnitGuid, programUnits, semesterGuid])
+
+  const selectedUnitType = useMemo(() => {
+    return unitType(selectedUnitRow?.unitTypeName)
+  }, [selectedUnitRow])
   const effectiveType: EffectiveType = selectedUnitType === 'Combined' ? combinedType : selectedUnitType
   const intakeGuid = selectedIntakeGuid || currentIntake?.intakeGuid || ''
   const formComplete = Boolean(intakeGuid && programGuid && semesterGuid && courseUnitGuid)
@@ -100,7 +130,14 @@ export default function UniversityExamMaterialPrintPage() {
   const isWorking = printBooklet.isPending || downloadBooklet.isPending || printTheory.isPending ||
     downloadTheoryWord.isPending || printPractical.isPending || downloadPracticalWord.isPending
 
-  const request = (confirm = false) => ({ programGuid, semesterGuid, courseUnitGuid, intakeGuid, confirm })
+  const request = (confirm = false) => ({
+    programGuid,
+    semesterGuid,
+    courseUnitGuid,
+    intakeGuid,
+    streamGuid: (selectedUnitRow as any)?.streamGuid ?? null,
+    confirm,
+  })
   const reset = () => {
     setProgramGuid('')
     setSemesterGuid('')
@@ -146,27 +183,47 @@ export default function UniversityExamMaterialPrintPage() {
       const result = effectiveType === 'Practical'
         ? await printPractical.mutateAsync(request(confirm))
         : await printTheory.mutateAsync(request(confirm))
-      if (result.outcome === 'ConfirmationRequired' || result.outcome === 4) {
+
+      const { outcome, message } = parseOutcome(result)
+
+      if (outcome === 'ConfirmationRequired') {
         setConfirmation({
-          message: result.message || 'Questions are already printed. Do you want to reprint the same?',
+          message: message || 'Questions are already printed. Do you want to reprint the same?',
           action: () => handleQuestionPaperPrint(true),
         })
         return
       }
-      if (result.outcome === 'ExamRuleNotSet' || result.outcome === 2) {
-        showToast(result.message || 'University Exam not yet Scheduled!!', 'error')
+      if (outcome === 'ExamRuleNotSet') {
+        showToast(message || 'University Exam not yet Scheduled!!', 'error')
         return
       }
-      if (result.outcome === 'QuestionsNotAvailable' || result.outcome === 3) {
-        showToast(result.message || 'Questions are not yet uploaded!!', 'error')
+      if (outcome === 'QuestionsNotAvailable') {
+        showToast(message || 'Questions are not yet uploaded!!', 'error')
         return
       }
-      if (result.outcome === 'Printed' || result.outcome === 'Reprinted' || result.outcome === 0 || result.outcome === 1) {
+      if (outcome === 'Printed' || outcome === 'Reprinted') {
         const file = effectiveType === 'Practical'
           ? await downloadPracticalWord.mutateAsync(request())
           : await downloadTheoryWord.mutateAsync(request())
         download(file.blob, file.filename, 'QuestionPaper.doc')
-        showToast('Question paper downloaded successfully.', 'success')
+        showToast(message || (outcome === 'Reprinted' ? 'Question paper reprinted successfully.' : 'Question paper downloaded successfully.'), 'success')
+        return
+      }
+
+      // Fallback: If print completed without a blocking outcome, proceed to download Word doc
+      try {
+        const file = effectiveType === 'Practical'
+          ? await downloadPracticalWord.mutateAsync(request())
+          : await downloadTheoryWord.mutateAsync(request())
+        download(file.blob, file.filename, 'QuestionPaper.doc')
+        showToast(message || 'Question paper downloaded successfully.', 'success')
+        return
+      } catch (downloadErr: any) {
+        if (message) {
+          showToast(message, 'info')
+        } else {
+          showToast(downloadErr?.message || 'Failed to download question paper.', 'error')
+        }
       }
     } catch (error: any) {
       showToast(error?.message || 'Failed to print question paper.', 'error')
