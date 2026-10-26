@@ -141,9 +141,9 @@ export default function Page() {
                         : <span className="text-g400">—</span>}
                     </td>
                     <td>
-                      {r.carry === 1
+                      {r.carryForward
                         ? <span className="badge badge-green"><i className="lni lni-checkmark"></i> Yes</span>
-                        : <span className="badge badge-grey">No</span>
+                        : <span className="badge badge-amber">One semester</span>
                       }
                     </td>
                     <td>{r.cop ?? <span className="text-g400">—</span>}</td>

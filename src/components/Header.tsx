@@ -79,7 +79,9 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
       // A full page load, replacing this entry: the signed-in page leaves
       // history and the app's in-memory state is thrown away, so Back /
       // Forward after logout can't bring back a saved signed-in screen.
-      window.location.replace('/login')
+      // Straight to the staff sign-in form, not the portal selector — every
+      // screen with this header is staff-facing.
+      window.location.replace('/login/staff')
     }
   }
 
