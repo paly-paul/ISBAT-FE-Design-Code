@@ -5,39 +5,52 @@ import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
+import { EmptyState } from '@/components/EmptyState'
+import { TableLoadingState } from '@/components/TableLoadingState'
+import { ViewApplicantModal } from '@/components/modals/admission/ViewApplicantModal'
+import { useApplicants, ApplicantListItem, ApplicantStatus, ApplicationListItem } from '@/hooks/admission/useApplicationFiling'
+import { useVettingQueue } from '@/hooks/admission/useVetting'
+import { useRegistrarDeskApplications } from '@/hooks/admission/useRegistrarDesk'
 
-const PAGE_SIZE = 10
+const PAGE_SIZE = 6
 
-const PIPELINE = [
-  { label: 'App. Payment',   status: 'done',   note: '23 paid' },
-  { label: 'App. Filing',    status: 'done',   note: '20 filed' },
-  { label: 'Vetting',        status: 'active', note: '5 pending' },
-  { label: 'Reg. Payment',   status: '',        note: '$250 check' },
-  { label: 'Registration',   status: '',        note: "Registrar's Desk" },
-  { label: 'Active Student', status: '',        note: 'T_Student' },
-]
+const STATUS_BADGE: Record<ApplicantStatus, string> = {
+  Waiting: 'badge-amber',
+  Submitted: 'badge-blue',
+  Vetted: 'badge-cyan',
+  Rejected: 'badge-red',
+  Registered: 'badge-green',
+}
 
-const RECENT_APPS = [
-  { ref: 'APP-2026-0023', name: 'Nakato Sarah Bridget',   src: 'Walk-in',      prog: 'BSc. Computer Science',      type: 'Direct', fee: '50,000',     feeOk: true,  stage: 'In Vetting',     action: 'review' },
-  { ref: 'APP-2026-0022', name: 'Okello James Patrick',   src: 'CRM (Merito)', prog: 'MBA Business Admin',         type: 'ODL',    fee: 'Waived (HTC)', feeOk: true, stage: 'In Vetting',     action: 'review' },
-  { ref: 'APP-2026-0021', name: 'Tumukunde Alice Grace',  src: 'Walk-in',      prog: 'Diploma in Nursing',         type: 'Direct', fee: '50,000',     feeOk: true,  stage: 'Reg. Payment',   action: 'register' },
-  { ref: 'APP-2026-0020', name: 'Mugisha David Kalisa',   src: 'CRM (Merito)', prog: 'BSc. Information Technology', type: 'Direct', fee: 'Pending',    feeOk: false, stage: 'Payment Pending', action: 'collect' },
-  { ref: 'APP-2026-0019', name: 'Nampijja Grace Miriam',  src: 'Walk-in',      prog: 'BCom. Accounting',           type: 'Direct', fee: '50,000',     feeOk: true,  stage: 'Filing Pending', action: 'file' },
-]
+function renderApplicantStatus(a: ApplicantListItem) {
+  if (!a.status) return <span className="badge badge-grey">—</span>
+  return <span className={`badge ${STATUS_BADGE[a.status] ?? 'badge-grey'}`}>{a.status}</span>
+}
 
-const VETTING_QUEUE = [
-  { name: 'Nakato Sarah Bridget', prog: 'BSc. CS',        docs: 4, time: '2h ago',  urgent: true },
-  { name: 'Okello James Patrick', prog: 'MBA ODL',        docs: 5, time: '3h ago',  urgent: true },
-  { name: 'Byamukama Robert',     prog: 'BEng. Civil',    docs: 3, time: '5h ago',  urgent: false },
-  { name: 'Nalwoga Brenda',       prog: 'Diploma Nursing',docs: 5, time: '6h ago',  urgent: false },
-]
+function toModalRow(a: ApplicantListItem): ApplicationListItem {
+  return {
+    applicationGuid: a.applicationGuid,
+    appRefNo: a.appRefNo,
+    firstName: a.name,
+    lastName: null,
+    phone: a.phone,
+    emailId: a.email,
+    programName: a.programName,
+    intakeCode: a.intakeCode,
+    createdDate: a.applicationDate,
+    actionLabel: a.status,
+  } as ApplicationListItem
+}
 
-const READY_REG = [
-  { name: 'Tumukunde Alice',   prog: 'Nursing', fee: 'Paid $250', paid: true },
-  { name: 'Ssemakula Peter',   prog: 'IT',      fee: 'Pending',   paid: false },
-  { name: 'Birungi Christine', prog: 'BCom.',   fee: 'Paid $250', paid: true },
-]
+function timeAgo(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—'
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
+  if (isNaN(diff) || diff < 0) return 'recently'
+  if (diff < 60) return 'just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return `${Math.floor(diff / 86400)}d ago`
+}
 
 const DONUT_DATA = [
   { label: 'Direct (Walk-in)', value: 9, pct: 39, color: '#2d448f' },
@@ -83,94 +96,37 @@ function ConvBar({ from, to, pct, level, meta }: { from: string; to: string; pct
   )
 }
 
-function stageBadge(stage: string) {
-  const map: Record<string, string> = {
-    'In Vetting':      'badge-amber',
-    'Reg. Payment':    'badge-green',
-    'Payment Pending': 'badge-amber',
-    'Filing Pending':  'badge-blue',
-  }
-  return map[stage] || 'badge-grey'
-}
-
-function srcBadge(src: string) {
-  const map: Record<string, string> = {
-    'Walk-in':      'badge-blue',
-    'CRM (Merito)': 'badge-purple',
-    'Online':       'badge-green',
-    'ODel':         'badge-amber',
-  }
-  return map[src] || 'badge-grey'
-}
-
-
 export default function DashboardPage() {
   const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [hoveredSrc, setHoveredSrc] = useState<string | null>(null)
+  const [selectedApplicant, setSelectedApplicant] = useState<ApplicationListItem | null>(null)
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
+
+  // Recent Applications (Task 2: from All Applicants page API)
+  const [appsPage, setAppsPage] = useState(1)
+  const { data: applicantsData, isLoading: isApplicantsLoading } = useApplicants(appsPage, PAGE_SIZE)
+  const applicantItems = applicantsData?.items ?? []
+  const applicantsTotalCount = applicantsData?.totalCount ?? 0
+  const applicantsTotalPages = Math.max(1, Math.ceil(applicantsTotalCount / PAGE_SIZE))
+
+  // Vetting Queue (Task 3: from Vetting Desk page API)
+  const { data: vettingData, isLoading: isVettingLoading } = useVettingQueue(1, 5)
+
+  // Ready to Register (Task 4: from Registrar Desk page API)
+  const { data: regDeskData, isLoading: isRegDeskLoading } = useRegistrarDeskApplications(1, 5)
+
   const segments = donutSegments()
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(RECENT_APPS, PAGE_SIZE)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
+  function openViewModal(applicant: ApplicantListItem) {
+    setSelectedApplicant(toModalRow(applicant))
+    setIsViewModalOpen(true)
+  }
+
   return (
     <div id="page-dashboard">
-      <div className="pg-hdr">
-        <div>
-          <div className="pg-title">Admission Dashboard</div>
-          <div className="pg-sub">Spring 2026 (20261) · Real-time overview of the admission pipeline</div>
-        </div>
-        <button className="btn btn-primary" onClick={() => router.push('/admission/payment')}>
-          <i className="lni lni-plus" /> New Application
-        </button>
-      </div>
-
-      {/* Pipeline */}
-      <div className="pipeline mb-6">
-        {PIPELINE.map((step, i) => (
-          <React.Fragment key={step.label}>
-            <div className={`pip-step ${step.status}`}>
-              <div className="pip-circle">{i + 1}</div>
-              {/* min-w-0 — this div is itself a flex child of .pip-step; without it,
-                  its default min-width:auto still sizes to the label/note's natural
-                  width and blocks .pip-step's flex:1 from landing on equal widths
-                  across steps (see the #page-dashboard .pip-step rule in globals.css). */}
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="pip-label">{step.label}</span>
-                <span className="pip-desc">{step.note}</span>
-              </div>
-            </div>
-            {i < PIPELINE.length - 1 && (
-              <div className={`pip-line${step.status === 'done' ? ' done' : ''}`} />
-            )}
-          </React.Fragment>
-        ))}
-      </div>
-
-      {/* Stat cards */}
-      <div className="stats-row mb-6">
-        <div className="stat-card flex flex-col">
-          <span className="stat-lbl">Total Applicants</span>
-          <span className="stat-num">23</span>
-          <span className="stat-sub up">↑ 18% vs last intake</span>
-        </div>
-        <div className="stat-card flex flex-col">
-          <span className="stat-lbl">Awaiting Vetting</span>
-          <span className="stat-num" style={{ color: 'var(--amber)' }}>5</span>
-          <span className="stat-sub warn">Needs attention</span>
-        </div>
-        <div className="stat-card flex flex-col">
-          <span className="stat-lbl">Provisionally Admitted</span>
-          <span className="stat-num" style={{ color: 'var(--green)' }}>14</span>
-          <span className="stat-sub up">↑ 6 this week</span>
-        </div>
-        <div className="stat-card flex flex-col">
-          <span className="stat-lbl">Fully Registered</span>
-          <span className="stat-num" style={{ color: 'var(--gold)' }}>4</span>
-          <span className="stat-sub up">↑ 2 this week</span>
-        </div>
-      </div>
-
       {/* Admission Progress */}
       <div className="card mb-6">
         <div className="card-hdr">
@@ -178,7 +134,9 @@ export default function DashboardPage() {
             <div className="card-title">Admission Progress — Spring 2026 (20261)</div>
             <div className="card-sub">Application source mix + stage-to-stage conversion · 23 applicants, 14 active</div>
           </div>
-          <span className="badge-green px-2 py-0.5 rounded-full font-medium" style={{ fontSize: 'var(--fs-xs)' }}>● Live</span>
+          <button className="btn btn-primary" onClick={() => router.push('/admission/payment')}>
+            <i className="lni lni-plus" /> New Application
+          </button>
         </div>
         <div className="adm-chart-grid">
           {/* Left — donut chart */}
@@ -272,108 +230,163 @@ export default function DashboardPage() {
                 <th style={{ width: 48 }}></th>
                 <th className="pb-2 pr-4 font-medium">Ref No.</th>
                 <th className="pb-2 pr-4 font-medium">Applicant Name</th>
-                <th className="pb-2 pr-4 font-medium">Source</th>
+                <th className="pb-2 pr-4 font-medium">Phone</th>
                 <th className="pb-2 pr-4 font-medium">Programme</th>
-                <th className="pb-2 pr-4 font-medium">Type</th>
-                <th className="pb-2 pr-4 font-medium">App. Fee</th>
-                <th className="pb-2 pr-4 font-medium">Stage</th>
+                <th className="pb-2 pr-4 font-medium">Intake</th>
+                <th className="pb-2 pr-4 font-medium">Status</th>
+                <th className="pb-2 pr-4 font-medium">Date</th>
               </tr>
             </thead>
             <tbody>
-              {pageItems.map(app => (
-                <tr key={app.ref} className="border-b border-g100 hover:bg-g50 transition-colors">
-                  <td>
-                    <ActionMenu>
-                      <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/applicants')}>
-                        View
+              {isApplicantsLoading ? (
+                <TableLoadingState colSpan={8} />
+              ) : applicantItems.length === 0 ? (
+                <EmptyState colSpan={8} hasFilters={false} title="No applications found" />
+              ) : (
+                applicantItems.map(app => (
+                  <tr key={app.applicationGuid} className="border-b border-g100 hover:bg-g50 transition-colors">
+                    <td>
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(app)}>
+                          <i className="lni lni-eye" /> View
+                        </button>
+                        {app.status === 'Submitted' && (
+                          <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/vetting')}>
+                            Review →
+                          </button>
+                        )}
+                        {app.status === 'Vetted' && (
+                          <button className="btn btn-success btn-sm" onClick={() => router.push('/admission/registration')}>
+                            Register →
+                          </button>
+                        )}
+                        {app.studentGuid && (
+                          <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/profile?studentGuid=' + app.studentGuid)}>
+                            <i className="lni lni-user" /> Student Profile
+                          </button>
+                        )}
+                      </ActionMenu>
+                    </td>
+                    <td className="py-2.5 pr-4 font-mono text-b600" style={{ fontSize: 'var(--fs-xs)' }}>
+                      <button type="button" className="hover:underline font-mono text-b600 text-left" onClick={() => openViewModal(app)}>
+                        {app.appRefNo}
                       </button>
-                      {app.action === 'review' && (
-                        <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/vetting')}>
-                          Review →
-                        </button>
-                      )}
-                      {app.action === 'register' && (
-                        <button className="btn btn-success btn-sm" onClick={() => router.push('/admission/registration')}>
-                          Register →
-                        </button>
-                      )}
-                      {app.action === 'collect' && (
-                        <button className="btn btn-amber btn-sm" onClick={() => router.push('/admission/payment')}>
-                          Collect Fee
-                        </button>
-                      )}
-                      {app.action === 'file' && (
-                        <button className="btn btn-primary btn-sm" onClick={() => router.push('/admission/filing')}>
-                          File Now →
-                        </button>
-                      )}
-                    </ActionMenu>
-                  </td>
-                  <td className="py-2.5 pr-4 font-mono text-b600" style={{ fontSize: 'var(--fs-xs)' }}>{app.ref}</td>
-                  <td className="py-2.5 pr-4 text-g800 font-medium">{app.name}</td>
-                  <td className="py-2.5 pr-4"><span className={`badge ${srcBadge(app.src)}`}>{app.src}</span></td>
-                  <td className="py-2.5 pr-4 text-g700">{app.prog}</td>
-                  <td className="py-2.5 pr-4 text-g600">{app.type}</td>
-                  <td className="py-2.5 pr-4">
-                    {app.feeOk
-                      ? <span className="text-clr-green font-medium" style={{ fontSize: 'var(--fs-xs)' }}>✓ {app.fee}</span>
-                      : <span className="text-clr-amber font-medium" style={{ fontSize: 'var(--fs-xs)' }}>{app.fee}</span>}
-                  </td>
-                  <td className="py-2.5 pr-4"><span className={`badge ${stageBadge(app.stage)}`}>{app.stage}</span></td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="py-2.5 pr-4 text-g800 font-medium">
+                      <button type="button" className="hover:underline text-g800 font-medium text-left" onClick={() => openViewModal(app)}>
+                        {app.name || '—'}
+                      </button>
+                    </td>
+                    <td className="py-2.5 pr-4 text-g600">{app.phone || '—'}</td>
+                    <td className="py-2.5 pr-4 text-g700">{app.programName || '—'}</td>
+                    <td className="py-2.5 pr-4 text-g600">{app.intakeCode || '—'}</td>
+                    <td className="py-2.5 pr-4">{renderApplicantStatus(app)}</td>
+                    <td className="py-2.5 pr-4 text-g500" style={{ fontSize: 'var(--fs-xs)' }}>
+                      {app.applicationDate ? app.applicationDate.slice(0, 10) : '—'}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </ScrollTable>
-        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="applications" onPageChange={setPage} />
+        <Pagination page={appsPage} totalPages={applicantsTotalPages} totalCount={applicantsTotalCount} itemLabel="applications" onPageChange={setAppsPage} />
       </div>
 
       {/* Bottom panels */}
       <div className="g2">
         <div className="card">
           <div className="card-hdr">
-            <div className="card-title">Vetting Queue (5)</div>
+            <div className="card-title">Vetting Queue ({vettingData?.totalCount ?? 0})</div>
             <button style={{ fontSize: 'var(--fs-xs)', color: 'var(--b500)', fontWeight: 600 }} onClick={() => router.push('/admission/vetting')}>Open →</button>
           </div>
-          <div className="timeline">
-            {VETTING_QUEUE.map(item => (
-              <div key={item.name} className="tl-item">
-                <div className={`tl-dot ${item.urgent ? 'active' : ''}`}>
-                  {item.urgent ? <i className="lni lni-warning" style={{ fontSize: 14 }} /> : null}
-                </div>
-                <div className="tl-content">
-                  <div className="tl-label">{item.name}</div>
-                  <div className="tl-meta">{item.prog} · Docs {item.docs}/5 · {item.time}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+          {isVettingLoading ? (
+            <div className="p-4 text-center text-sm text-g400">Loading queue…</div>
+          ) : (vettingData?.items ?? []).length === 0 ? (
+            <div className="p-4 text-center text-sm text-g400">No applicants in vetting queue</div>
+          ) : (
+            <div className="timeline">
+              {(vettingData?.items ?? []).map(item => {
+                const isUrgent = (item.documentsUploaded ?? 0) < (item.documentsTotal ?? 0)
+                return (
+                  <div
+                    key={item.applicationGuid || item.appRefNo}
+                    className="tl-item cursor-pointer hover:bg-g50 p-1.5 rounded transition-colors"
+                    onClick={() => router.push('/admission/vetting')}
+                  >
+                    <div className={`tl-dot ${isUrgent ? 'active' : ''}`}>
+                      {isUrgent ? <i className="lni lni-warning" style={{ fontSize: 14 }} /> : null}
+                    </div>
+                    <div className="tl-content">
+                      <div className="tl-label flex items-center justify-between">
+                        <span className="font-medium text-g800">{item.studentName || item.appRefNo}</span>
+                        <span className="text-xs text-g400 font-mono">{item.appRefNo}</span>
+                      </div>
+                      <div className="tl-meta">
+                        {item.programName || '—'} · Docs {item.documentsUploaded ?? 0}/{item.documentsTotal ?? 0} · {timeAgo(item.submittedDate)}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         <div className="card">
           <div className="card-hdr">
-            <div className="card-title">Ready to Register (3)</div>
+            <div className="card-title">Ready to Register ({regDeskData?.totalCount ?? 0})</div>
             <button style={{ fontSize: 'var(--fs-xs)', color: 'var(--b500)', fontWeight: 600 }} onClick={() => router.push('/admission/registration')}>Open →</button>
           </div>
-          <div className="timeline">
-            {READY_REG.map(item => (
-              <div key={item.name} className="tl-item">
-                <div className={`tl-dot ${item.paid ? 'done' : 'active'}`}>
-                  {item.paid
-                    ? <i className="lni lni-checkmark" style={{ fontSize: 14 }} />
-                    : <i className="lni lni-warning" style={{ fontSize: 14 }} />}
+          {isRegDeskLoading ? (
+            <div className="p-4 text-center text-sm text-g400">Loading queue…</div>
+          ) : (regDeskData?.items ?? []).length === 0 ? (
+            <div className="p-4 text-center text-sm text-g400">No applicants waiting to register</div>
+          ) : (
+            <div className="timeline">
+              {(regDeskData?.items ?? []).map(item => (
+                <div
+                  key={item.applicationGuid || item.appRefNo}
+                  className="tl-item cursor-pointer hover:bg-g50 p-1.5 rounded transition-colors"
+                  onClick={() => router.push('/admission/registration')}
+                >
+                  <div className={`tl-dot ${item.regPaid ? 'done' : 'active'}`}>
+                    {item.regPaid
+                      ? <i className="lni lni-checkmark" style={{ fontSize: 14 }} />
+                      : <i className="lni lni-warning" style={{ fontSize: 14 }} />}
+                  </div>
+                  <div className="tl-content">
+                    <div className="tl-label flex items-center justify-between">
+                      <span className="font-medium text-g800">{item.studentName || item.appRefNo}</span>
+                      <span className="text-xs text-g400 font-mono">{item.appRefNo}</span>
+                    </div>
+                    <div className="tl-meta">
+                      {item.programName || '—'} · Reg. fee{' '}
+                      <span className={item.regPaid ? 'text-clr-green font-medium' : 'text-clr-amber font-medium'}>
+                        {item.regPaid ? 'Paid' : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="tl-content">
-                  <div className="tl-label">{item.name}</div>
-                  <div className="tl-meta">{item.prog} · Reg. fee <span className={item.paid ? 'text-clr-green font-medium' : 'text-clr-amber font-medium'}>{item.fee}</span></div>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
+
+      {isViewModalOpen && (
+        <ViewApplicantModal
+          isOpen={isViewModalOpen}
+          onClose={() => {
+            setIsViewModalOpen(false)
+            setSelectedApplicant(null)
+          }}
+          applicant={selectedApplicant}
+        />
+      )}
 
       <Toast toast={toast} />
     </div>
   )
 }
+
