@@ -1,7 +1,20 @@
+/* Tailwind is imported in parts, not as `@import 'tailwindcss'`, so the
+   utilities stay UNLAYERED — the same cascade position v3's
+   `@tailwind utilities` had. v4's default puts them in @layer utilities, and
+   any unlayered rule beats any layered one regardless of specificity, so
+   this file's global `* { margin: 0; padding: 0 }` and `th` / `td` rules
+   were silently overriding every p-*, m-*, text-right, bg-* … utility, and
+   custom classes were beating hover: / focus: / disabled: variants.
+   Unlayered, specificity decides again: a utility beats an element rule,
+   and on an equal-specificity tie the custom CSS below still wins (as in v3). */
+@layer theme, base, components;
+
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap')
 layer(base);
 
-@import 'tailwindcss';
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/preflight.css' layer(base);
+@import 'tailwindcss/utilities.css';
 
 /* Tailwind 4 theme (was tailwind.config.ts). `inline` matters here: the app
    defines its own --radius (14px card radius) and next/font sets --font-sans
