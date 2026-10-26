@@ -221,10 +221,10 @@ export default function GenerateResultPage() {
     }
   }, [applied, search])
 
-  // When filtering by student name, request a larger page size (200) from server so that
-  // if the backend returns unfiltered rows, client-side filtering can inspect the full batch
+  // When filtering by student name, request a larger page size (max 100 allowed by backend)
+  // so that if the backend returns unfiltered rows, client-side filtering can inspect the batch.
   const isSearchActive = !!search.trim()
-  const fetchPageSize = isSearchActive ? Math.max(pageSize, 200) : pageSize
+  const fetchPageSize = isSearchActive ? 100 : pageSize
   const fetchPage = isSearchActive ? 1 : page
   const resultsQuery = useGeneratedResults(effectiveFilters, fetchPage, fetchPageSize)
   const rawRows = resultsQuery.data?.items ?? []

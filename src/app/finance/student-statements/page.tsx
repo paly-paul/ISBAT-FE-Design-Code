@@ -789,95 +789,198 @@ export default function StudentStatementPage() {
                ══════════════════════════════════════════════════════════════ */}
             {(viewMode === 'hybrid' || viewMode === 'charts') && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                {/* Chart 1: Donut Clearance Ratio */}
+                {/* Chart 1: Donut Clearance Ratio (Redesigned - No White Space) */}
                 <div className="card mb-0 flex flex-col justify-between">
                   <div>
-                    <div className="card-hdr">
-                      <div className="card-title">
-                        <span className="ctitle-icon">
-                          <i className="lni lni-pie-chart" />
-                        </span>
-                        Fee Clearance Ratio
+                    <div className="card-hdr" style={{ marginBottom: 14 }}>
+                      <div>
+                        <div className="card-title">
+                          <span className="ctitle-icon">
+                            <i className="lni lni-pie-chart" />
+                          </span>
+                          Fee Clearance Ratio
+                        </div>
+                        <div className="card-sub">Paid vs. Outstanding vs. Future Assessments</div>
                       </div>
-                      <span className="badge badge-green">{paidPercent}% Cleared</span>
+                      <span className={`badge ${paidPercent >= 100 ? 'badge-green' : paidPercent >= 50 ? 'badge-blue' : 'badge-amber'}`}>
+                        {paidPercent}% Cleared
+                      </span>
                     </div>
-                    <div className="card-sub -mt-3 mb-3">Paid vs. Outstanding vs. Future</div>
 
-                    {/* SVG Donut Chart */}
-                    <div className="relative py-2 flex items-center justify-center">
-                      <svg width="140" height="140" viewBox="0 0 100 100" className="transform -rotate-90">
-                        {/* Background track */}
-                        <circle cx="50" cy="50" r="38" stroke="var(--g100)" strokeWidth="10" fill="transparent" />
+                    {/* Side-by-Side: Donut on Left, Breakdown Cards on Right (Fills Full Width) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-[140px_minmax(0,1fr)] gap-4 items-center py-1">
+                      {/* Interactive SVG Donut Chart */}
+                      <div className="relative flex items-center justify-center mx-auto" style={{ width: 140, height: 140 }}>
+                        <svg width="140" height="140" viewBox="0 0 100 100" className="transform -rotate-90">
+                          {/* Background track */}
+                          <circle cx="50" cy="50" r="38" stroke="var(--g100)" strokeWidth="11" fill="transparent" />
 
-                        {/* Paid arc (Green) */}
-                        <circle
-                          cx="50"
-                          cy="50"
-                          r="38"
-                          stroke="var(--green)"
-                          strokeWidth="10"
-                          strokeDasharray="238.76"
-                          strokeDashoffset={238.76 - (238.76 * totalPaid) / chartTotal}
-                          strokeLinecap="round"
-                          fill="transparent"
-                          className="transition-all duration-700 cursor-pointer"
-                          onMouseEnter={() => setHoveredChartSegment('paid')}
-                          onMouseLeave={() => setHoveredChartSegment(null)}
-                        />
+                          {/* Future assessments arc (Blue/slate background segment) */}
+                          {totalFuture > 0 && (
+                            <circle
+                              cx="50"
+                              cy="50"
+                              r="38"
+                              stroke="var(--b300)"
+                              strokeWidth="11"
+                              strokeDasharray="238.76"
+                              strokeDashoffset={238.76 - (238.76 * (totalPaid + currentOutstanding + totalFuture)) / chartTotal}
+                              strokeLinecap="round"
+                              fill="transparent"
+                              className="transition-all duration-700"
+                              opacity={hoveredChartSegment === 'future' ? 1 : 0.7}
+                            />
+                          )}
 
-                        {/* Outstanding arc (Red) */}
-                        <circle
-                          cx="50"
-                          cy="50"
-                          r="38"
-                          stroke="var(--red)"
-                          strokeWidth="10"
-                          strokeDasharray="238.76"
-                          strokeDashoffset={238.76 - (238.76 * currentOutstanding) / chartTotal}
-                          style={{
-                            strokeDashoffset: `${238.76 - (238.76 * (totalPaid + currentOutstanding)) / chartTotal}`,
-                          }}
-                          strokeLinecap="round"
-                          fill="transparent"
-                          className="transition-all duration-700 cursor-pointer"
-                          onMouseEnter={() => setHoveredChartSegment('outstanding')}
-                          onMouseLeave={() => setHoveredChartSegment(null)}
-                        />
-                      </svg>
+                          {/* Outstanding arc (Red) */}
+                          {currentOutstanding > 0 && (
+                            <circle
+                              cx="50"
+                              cy="50"
+                              r="38"
+                              stroke="var(--red)"
+                              strokeWidth="11"
+                              strokeDasharray="238.76"
+                              strokeDashoffset={238.76 - (238.76 * currentOutstanding) / chartTotal}
+                              style={{
+                                strokeDashoffset: `${238.76 - (238.76 * (totalPaid + currentOutstanding)) / chartTotal}`,
+                              }}
+                              strokeLinecap="round"
+                              fill="transparent"
+                              className="transition-all duration-700 cursor-pointer"
+                              onMouseEnter={() => setHoveredChartSegment('outstanding')}
+                              onMouseLeave={() => setHoveredChartSegment(null)}
+                            />
+                          )}
 
-                      {/* Inner Ring Badge */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                        <span className="text-xl font-extrabold text-g900 tracking-tight">{paidPercent}%</span>
-                        <span className="text-[10px] font-semibold text-g400 uppercase tracking-wide">
-                          {hoveredChartSegment === 'paid'
-                            ? 'Paid Total'
-                            : hoveredChartSegment === 'outstanding'
-                            ? 'Pending'
-                            : 'Settled'}
-                        </span>
+                          {/* Paid arc (Green) */}
+                          {totalPaid > 0 && (
+                            <circle
+                              cx="50"
+                              cy="50"
+                              r="38"
+                              stroke="var(--green)"
+                              strokeWidth="11"
+                              strokeDasharray="238.76"
+                              strokeDashoffset={238.76 - (238.76 * totalPaid) / chartTotal}
+                              strokeLinecap="round"
+                              fill="transparent"
+                              className="transition-all duration-700 cursor-pointer"
+                              onMouseEnter={() => setHoveredChartSegment('paid')}
+                              onMouseLeave={() => setHoveredChartSegment(null)}
+                            />
+                          )}
+                        </svg>
+
+                        {/* Inner Ring Badge */}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                          <span className="text-xl font-extrabold text-g900 tracking-tight">{paidPercent}%</span>
+                          <span className="text-[10px] font-semibold text-g500 uppercase tracking-wider">
+                            {hoveredChartSegment === 'paid'
+                              ? 'Paid Total'
+                              : hoveredChartSegment === 'outstanding'
+                              ? 'Pending'
+                              : 'Settled'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Right-Side Structured Metric List (Eliminates White Space) */}
+                      <div className="flex flex-col gap-2">
+                        {/* 1. Paid Tile */}
+                        <div
+                          className="p-2.5 rounded-[var(--rxs)] border border-g100 bg-surface flex items-center justify-between"
+                          style={{ transition: 'all 0.15s ease' }}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: 'var(--green)' }} />
+                            <div>
+                              <div className="text-xs font-bold text-g800">Total Paid (Settled)</div>
+                              <div className="text-[11px] text-g500">
+                                {chartTotal > 0 ? Math.round((totalPaid / chartTotal) * 100) : 0}% of total assessed
+                              </div>
+                            </div>
+                          </div>
+                          <span className="font-mono font-bold text-green text-xs tabular-nums ml-2">
+                            {formatMoney(totalPaid)}
+                          </span>
+                        </div>
+
+                        {/* 2. Outstanding Tile */}
+                        <div
+                          className={`p-2.5 rounded-[var(--rxs)] border flex items-center justify-between ${
+                            currentOutstanding > 0 ? 'border-red-bd bg-red-bg' : 'border-g100 bg-surface'
+                          }`}
+                          style={{ transition: 'all 0.15s ease' }}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: 'var(--red)' }} />
+                            <div>
+                              <div className="text-xs font-bold text-g800">Current Outstanding</div>
+                              <div className="text-[11px] text-g500">
+                                {currentOutstanding > 0 ? 'Immediate clearance required' : 'No overdue balance'}
+                              </div>
+                            </div>
+                          </div>
+                          <span className={`font-mono font-bold text-xs tabular-nums ml-2 ${currentOutstanding > 0 ? 'text-red' : 'text-g700'}`}>
+                            {formatMoney(currentOutstanding)}
+                          </span>
+                        </div>
+
+                        {/* 3. Future Tile */}
+                        <div
+                          className="p-2.5 rounded-[var(--rxs)] border border-g100 bg-surface flex items-center justify-between"
+                          style={{ transition: 'all 0.15s ease' }}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: 'var(--b400)' }} />
+                            <div>
+                              <div className="text-xs font-bold text-g800">Future Assessments</div>
+                              <div className="text-[11px] text-g500">{futurePayments.length} upcoming fees</div>
+                            </div>
+                          </div>
+                          <span className="font-mono font-bold text-g800 text-xs tabular-nums ml-2">
+                            {formatMoney(totalFuture)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Legend */}
-                  <div className="space-y-1.5 pt-3 border-t border-g100 text-xs mt-2">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 text-g600">
-                        <span className="w-2 h-2 rounded-full" style={{ background: 'var(--green)' }} /> Total Paid
-                      </span>
-                      <span className="font-bold text-g900 font-mono">{formatMoney(totalPaid)}</span>
+                  {/* Bottom Clearance Progress Bar & Standing Footnote */}
+                  <div className="pt-3 border-t border-g100 mt-3">
+                    {/* Multi-segment stacked progress bar */}
+                    <div className="w-full bg-g100 h-2 rounded-full overflow-hidden flex mb-2">
+                      <div
+                        className="h-full transition-all duration-500"
+                        style={{ width: `${chartTotal > 0 ? (totalPaid / chartTotal) * 100 : 0}%`, background: 'var(--green)' }}
+                        title={`Paid: ${formatMoney(totalPaid)}`}
+                      />
+                      <div
+                        className="h-full transition-all duration-500"
+                        style={{ width: `${chartTotal > 0 ? (currentOutstanding / chartTotal) * 100 : 0}%`, background: 'var(--red)' }}
+                        title={`Outstanding: ${formatMoney(currentOutstanding)}`}
+                      />
+                      <div
+                        className="h-full transition-all duration-500"
+                        style={{ width: `${chartTotal > 0 ? (totalFuture / chartTotal) * 100 : 0}%`, background: 'var(--b300)' }}
+                        title={`Future: ${formatMoney(totalFuture)}`}
+                      />
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 text-g600">
-                        <span className="w-2 h-2 rounded-full" style={{ background: 'var(--red)' }} /> Current Outstanding
+
+                    <div className="flex items-center justify-between text-xs text-g600 flex-wrap gap-2">
+                      <span className="text-[11.5px]">
+                        Assessed Total: <strong className="font-mono text-g900">{formatMoney(chartTotal)}</strong>
                       </span>
-                      <span className="font-bold text-red font-mono">{formatMoney(currentOutstanding)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 text-g600">
-                        <span className="w-2 h-2 rounded-full" style={{ background: 'var(--b500)' }} /> Future Assessments
+                      <span className="flex items-center gap-1.5 text-[11px]">
+                        <span
+                          className="w-2 h-2 rounded-full"
+                          style={{ background: balanceDueCurrent <= 0 ? 'var(--green)' : 'var(--red)' }}
+                        />
+                        <span className="font-semibold" style={{ color: balanceDueCurrent <= 0 ? 'var(--green)' : 'var(--red)' }}>
+                          {balanceDueCurrent <= 0 ? 'Exam Clearance Eligible' : 'Fee Clearance Pending'}
+                        </span>
                       </span>
-                      <span className="font-bold text-g800 font-mono">{formatMoney(totalFuture)}</span>
                     </div>
                   </div>
                 </div>

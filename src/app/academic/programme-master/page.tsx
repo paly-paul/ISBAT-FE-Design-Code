@@ -232,7 +232,8 @@ export default function Page() {
                         {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => { setProgMode('edit'); setEditingProgramGuid(r.programGuid); openModal('new-prog-modal') }}><i className="lni lni-pencil"></i> Edit</button>}
                         <button className="btn btn-neu btn-sm" onClick={() => { setSelectedProgram({ programGuid: r.programGuid, progName: r.progName }); openModal('curriculum-modal') }}><i className="lni lni-book"></i> Curriculum</button>
                         {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => { setSelectedProgram({ programGuid: r.programGuid, progName: r.progName }); openModal('specialization-modal') }}><i className="lni lni-target"></i> Specializations</button>}
-                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget({ programGuid: r.programGuid, progName: r.progName })}><i className="lni lni-trash-can"></i> Delete</button>}
+                        {/* ACA-048: No Need For Delete option inside program master */}
+                        {/* {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget({ programGuid: r.programGuid, progName: r.progName })}><i className="lni lni-trash-can"></i> Delete</button>} */}
                       </ActionMenu>
                     </td>
                     <td className={`font-mono text-[var(--fs-xs)] ${r.admissionStatus === 'Inactive' ? 'text-g400' : 'text-b700'}`}>{r.progCode}</td>
@@ -310,6 +311,7 @@ export default function Page() {
       />
       <Toast toast={toast} />
 
+      {/* ACA-048: Delete option commented out
       {deleteTarget && (
         <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
           <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
@@ -327,6 +329,7 @@ export default function Page() {
           </div>
         </div>
       )}
+      */}
     </>
   )
 }

@@ -9,6 +9,7 @@ import { usePermissionGroups, PermissionGroup } from '@/hooks/config/usePermissi
 import { usePermissionCatalog } from '@/hooks/users/usePermissionCatalog'
 import { useAssignEmployeePermissionGroups, useEmployeePermissionGroups } from '@/hooks/employee/useEmployees'
 import { catalogSections, ModuleAccessMatrix, UncataloguedAccess, DestructiveCaution, ReviewStats, DESTRUCTIVE } from '@/components/permissions/PermissionMatrix'
+import { normalizeTitle } from './EmployeeFormModal'
 
 // Assign and Edit are two entry points into the same form — they only ever
 // differed in title/icon, success/failure copy, and the confirm-step button
@@ -54,7 +55,7 @@ export function EmployeePermissionsFormModal({ isOpen, onClose, showToast, mode,
   // of the assigned-groups query doesn't clobber in-progress edits.
   const seededForRef = useRef<string | null>(null)
 
-  const employeeName = employee ? `${employee.title} ${employee.firstName} ${employee.surname}` : ''
+  const employeeName = employee ? `${normalizeTitle(employee.title)} ${employee.firstName} ${employee.surname}`.trim() : ''
 
   // Seed from whatever the employee is already assigned, once per employee
   // per time the modal is open — not on every background refetch.

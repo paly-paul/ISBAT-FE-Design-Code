@@ -8,6 +8,7 @@ import { Toast } from '@/components/Toast'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { usePendingEmployees, useApproveEmployee } from '@/hooks/employee/useEmployees'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { normalizeTitle } from '@/components/modals/employee/EmployeeFormModal'
 
 const PAGE_SIZE = 10
 
@@ -81,7 +82,7 @@ export default function Page() {
                     : pageItems.map(r => (
                       <tr key={r.employeeGuid}>
                         <td className="font-mono text-b700">{r.shortCode}</td>
-                        <td><strong>{r.title} {r.firstName} {r.surname}</strong></td>
+                        <td><strong>{normalizeTitle(r.title)} {r.firstName} {r.surname}</strong></td>
                         <td>{r.sex === 1 ? 'Male' : 'Female'}</td>
                         <td><span className="badge badge-amber"><span className="bdot"></span>Pending</span></td>
                         <td>

@@ -15,12 +15,62 @@ import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Add and Edit share this form — differ in prefill and which mutation runs.
 
-// Only one employee category is confirmed by the API for now.
-const CATEGORIES: { label: string; category: number; prefix: string }[] = [
-  { label: 'Administrative Staff', category: 1, prefix: 'AD' },
+// All 8 employee categories based on legacy system and ERP specification.
+export const CATEGORIES: { label: string; category: number; prefix: string }[] = [
+  { label: 'Administrative', category: 1, prefix: 'AD' },
+  { label: 'Permanent Academic', category: 2, prefix: 'AC' },
+  { label: 'Part Time Academic', category: 3, prefix: 'PT' },
+  { label: 'Non-Teaching Staff', category: 4, prefix: 'SS' },
+  { label: 'Project Staff', category: 5, prefix: 'PP' },
+  { label: 'Volunteers', category: 6, prefix: 'VV' },
+  { label: 'Interns', category: 7, prefix: 'IN' },
+  { label: 'Temporary Administrative', category: 8, prefix: 'TA' },
 ]
 
-const TITLES = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof']
+export const TITLES = ['Mr', 'Mrs', 'Ms', 'Miss', 'Dr', 'Prof']
+
+const TITLE_NUMERIC_MAP: Record<string, string> = {
+  '1': 'Mr',
+  '2': 'Mrs',
+  '3': 'Ms',
+  '4': 'Dr',
+  '5': 'Prof',
+  '6': 'Miss',
+}
+
+export function normalizeTitle(val?: string | number | null): string {
+  if (val === null || val === undefined) return ''
+  const str = String(val).trim()
+  if (!str) return ''
+  if (TITLE_NUMERIC_MAP[str]) return TITLE_NUMERIC_MAP[str]
+  const clean = str.replace(/\.+$/, '')
+  const match = TITLES.find(t => t.toLowerCase() === clean.toLowerCase() || t.toLowerCase() === str.toLowerCase())
+  return match || str
+}
+
+export function findCategory(val?: string | number | null) {
+  if (val === null || val === undefined || val === '') return CATEGORIES[0]
+  if (typeof val === 'number') {
+    return CATEGORIES.find(c => c.category === val) ?? CATEGORIES[0]
+  }
+  const str = String(val).trim()
+  const byPrefix = CATEGORIES.find(c => c.prefix.toLowerCase() === str.toLowerCase())
+  if (byPrefix) return byPrefix
+
+  if (/^\d+$/.test(str)) {
+    const num = Number(str)
+    const byNum = CATEGORIES.find(c => c.category === num)
+    if (byNum) return byNum
+  }
+
+  const byLabel = CATEGORIES.find(c => c.label.toLowerCase() === str.toLowerCase())
+  if (byLabel) return byLabel
+
+  if (str.toLowerCase().startsWith('admin')) return CATEGORIES[0]
+
+  return CATEGORIES[0]
+}
+
 // The lookup values below are placeholders until the API provides fuller options.
 const SEXES = ['Male', 'Female', 'Others']
 const MARITAL_STATUSES = ['Single', 'Married', 'Divorced', 'Widow', 'Widower', 'Separated']
@@ -132,7 +182,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
   // Reuse the API validation messages so the form shows issues immediately.
   function validate(): Record<string, string> {
     const e: Record<string, string> = {}
-    const selectedCategory = CATEGORIES.find(c => c.label === category)
+    const selectedCategory = findCategory(category)
     if (!selectedCategory || selectedCategory.category <= 0) e.category = 'Select Category before proceeding!'
     if (!title.trim()) e.title = 'Select Title before proceeding!'
     if (!surname.trim()) e.surname = 'Surname cannot be left blank!'
@@ -158,8 +208,9 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
   useEffect(() => {
     if (!isOpen) return
     if (isEdit && employee) {
-      setCategory(CATEGORIES.find(c => c.category === employee.category)?.label ?? CATEGORIES[0].label)
-      setTitle(employee.title)
+      const cat = findCategory(employee.category) || findCategory(employee.shortCode?.split('/')[0])
+      setCategory(cat.label)
+      setTitle(normalizeTitle(employee.title))
       setFirstName(employee.firstName)
       setSurname(employee.surname)
       setOtherName(employee.otherName ?? '')
@@ -204,11 +255,12 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
     scrollToFirstError(validationErrors)
     if (Object.keys(validationErrors).length > 0) return
 
-    const selectedCategory = CATEGORIES.find(c => c.label === category) ?? CATEGORIES[0]
+    const selectedCategory = findCategory(category)
+    const resolvedTitle = normalizeTitle(title) || title.trim()
     const input: CreateEmployeeInput = {
       category: selectedCategory.category,
       categoryPrefix: selectedCategory.prefix,
-      title,
+      title: resolvedTitle,
       surname,
       firstName,
       designationGuid,
@@ -273,12 +325,22 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
           <div className="g3">
             <div className="fg">
               <div className="lbl">Category <span className="req">*</span></div>
-              <SearchSelect options={CATEGORIES.map(c => c.label)} value={category} onChange={v => { setCategory(v); clearError('category') }} />
+              <SearchSelect
+                placeholder="Select category…"
+                options={CATEGORIES.map(c => c.label)}
+                value={category}
+                onChange={v => { setCategory(v); clearError('category') }}
+              />
               {errors.category && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.category}</p>}
             </div>
             <div className="fg">
               <div className="lbl">Title <span className="req">*</span></div>
-              <SearchSelect placeholder="Select…" options={TITLES} value={title} onChange={v => { setTitle(v); clearError('title') }} />
+              <SearchSelect
+                placeholder="Select title…"
+                options={TITLES}
+                value={title}
+                onChange={v => { setTitle(v); clearError('title') }}
+              />
               {errors.title && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.title}</p>}
             </div>
             <div className="fg">

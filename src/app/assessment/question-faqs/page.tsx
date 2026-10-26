@@ -98,16 +98,15 @@ export default function QuestionFaqsPage() {
             <thead>
               <tr>
                 <th style={{ width: 48 }}></th>
-                <th style={{ width: '35%' }}>Question</th>
-                <th style={{ width: '45%' }}>Answer Preview</th>
-                <th style={{ width: 100 }}>Status</th>
+                <th style={{ width: '40%' }}>Question</th>
+                <th style={{ width: '60%' }}>Answer Preview</th>
               </tr>
             </thead>
             <tbody>
               {loading
-                ? <TableLoadingState colSpan={4} />
+                ? <TableLoadingState colSpan={3} />
                 : pageItems.length === 0
-                  ? <EmptyState colSpan={4} hasFilters={false} onClearFilters={() => {}} />
+                  ? <EmptyState colSpan={3} hasFilters={false} onClearFilters={() => {}} />
                   : null}
               {pageItems.map(r => (
                 <tr key={r.questionFaqGuid}>
@@ -137,9 +136,6 @@ export default function QuestionFaqsPage() {
                     <div className="text-g600 truncate" title={r.answerText || ''}>
                       {r.answerText}
                     </div>
-                  </td>
-                  <td>
-                    {r.status === 2 ? <span className="badge badge-green">Approved</span> : <span className="badge badge-neu">Pending</span>}
                   </td>
                 </tr>
               ))}
