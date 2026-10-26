@@ -60,6 +60,14 @@ export default function TransactionReportPage() {
     setErrors(prev => (prev[k] ? { ...prev, [k]: '' } : prev))
   }
 
+  // Finance Dashboard's "View all" opens this as ?date=yyyy-MM-dd: fill both
+  // dates with that day. Read from window, not useSearchParams, so the
+  // static export doesn't need a Suspense boundary.
+  useEffect(() => {
+    const date = new URLSearchParams(window.location.search).get('date')
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) setForm(prev => ({ ...prev, fromDate: date, toDate: date }))
+  }, [])
+
   // Step 1: the dropdowns load in parallel on page open.
   const intakesQuery = useIntakesDropdown()
   const booksQuery = useQuery({ queryKey: ['finance', 'receipt-books', 'dropdown', 'all'], queryFn: () => getReceiptBookDropdown(true) })

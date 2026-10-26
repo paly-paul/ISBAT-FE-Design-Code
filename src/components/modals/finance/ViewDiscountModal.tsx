@@ -74,9 +74,9 @@ export function ViewDiscountModal({ isOpen, onClose, discountGuid, onEdit, canEd
                 : '—'
             } />
             <Field label="Carry Forward" value={
-              discount.carry === 1
-                ? <span className="badge badge-green"><i className="lni lni-checkmark"></i> Yes</span>
-                : <span className="badge badge-grey">No</span>
+              discount.carryForward
+                ? <span className="badge badge-green"><i className="lni lni-checkmark"></i> Yes — until cancelled</span>
+                : <span className="badge badge-amber">No — one semester only</span>
             } />
             <Field label="COP" value={discount.cop ?? '—'} />
           </div>

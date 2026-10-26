@@ -13919,3 +13919,368 @@ body:has(.drawer-overlay) {
 .filing-photo-sub { margin-top: 2px; font-size: 12.5px; color: var(--g500); overflow-wrap: anywhere; }
 .vd-doc.empty { background: var(--surface); border-style: dashed; }
 .vd-doc.empty .vd-doc-icon { background: var(--white); color: var(--g400); }
+
+/* ═══════════════════════════════════════
+   FINANCE DASHBOARD (finance/dashboard)
+   Glance row (KPIs, fee bars + attention, recent payments) always on
+   screen; trends / discounts / outstanding / defaulters share one tabbed
+   card so the page stays about two screens tall.
+═══════════════════════════════════════ */
+#page-finance-dashboard {
+  /* Categorical slots, fixed order (validated: CVD-adjacent ΔE ≥ 9.1,
+     normal-vision ≥ 19.6). c3–c5 are under 3:1 on white → always labelled. */
+  --fd-c1: #2a78d6; --fd-c2: #eb6834; --fd-c3: #1baf7a; --fd-c4: #eda100; --fd-c5: #e87ba4;
+}
+#page-finance-dashboard .card { margin-bottom: 16px; }
+.fd-cur { font-size: .56em; font-weight: 700; letter-spacing: .03em; opacity: .62; vertical-align: .2em; margin-right: 1px; }
+.fd-tag {
+  display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 5px;
+  background: var(--g100); color: var(--g600); font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+}
+.fd-link {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 2px; border: 0; background: none;
+  color: var(--b600); font-size: var(--fs-sm); font-weight: 600; cursor: pointer; border-radius: 4px; white-space: nowrap;
+}
+.fd-link i { font-size: 10px; transition: transform .2s cubic-bezier(.16, 1, .3, 1); }
+.fd-link:hover { color: var(--b700); }
+.fd-link:hover i { transform: translateX(2px); }
+.fd-link:focus-visible { outline: 2px solid var(--b500); outline-offset: 2px; }
+
+/* Header live status: a pulsing dot while both 60 s timers run, amber and
+   still once a refresh has failed. */
+.fd-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.fd-status {
+  display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 6px 0 12px;
+  border: 1px solid var(--g200); border-radius: 999px; background: var(--white);
+  font-size: var(--fs-sm); color: var(--g500); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.fd-status strong { color: var(--g800); font-weight: 700; }
+.fd-pulse { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+.fd-pulse::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--green); animation: fd-pulse 2.4s cubic-bezier(.16, 1, .3, 1) infinite; }
+@keyframes fd-pulse { from { transform: scale(1); opacity: .55; } 70%, to { transform: scale(2.8); opacity: 0; } }
+.fd-status.paused { border-color: var(--amber-bd); background: var(--amber-bg); color: #92400e; }
+.fd-status.paused strong { color: #78350f; }
+.fd-status.paused .fd-pulse { background: var(--amber); }
+.fd-status.paused .fd-pulse::after { animation: none; opacity: 0; }
+.fd-refresh {
+  display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%;
+  background: none; color: var(--g500); cursor: pointer; font-size: 13px;
+  transition: background-color .15s ease-out, color .15s ease-out;
+}
+.fd-refresh:hover:not(:disabled) { background: var(--g100); color: var(--g800); }
+.fd-status.paused .fd-refresh:hover:not(:disabled) { background: var(--amber-bd); color: #78350f; }
+.fd-refresh:disabled { cursor: default; opacity: .7; }
+.fd-refresh:focus-visible { outline: 2px solid var(--b500); outline-offset: 1px; }
+/* Sections the KPI cards scroll to clear the fixed app header. */
+.fd-anchor { scroll-margin-top: 84px; }
+
+/* Missing-rates banner: one quiet line, not a block. */
+.fd-banner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 16px; padding: 9px 14px; border-radius: var(--rsm);
+  background: var(--amber-bg); border: 1px solid var(--amber-bd);
+  font-size: var(--fs-base); color: #78350f;
+}
+.fd-banner > i { color: var(--amber); font-size: 15px; }
+.fd-banner > span { flex: 1; min-width: 0; font-weight: 500; }
+.fd-banner .fd-link { color: #92400e; }
+
+/* KPI cards: label + tinted icon, figure, one line of context, and a thin
+   meter showing the share of all students where that's meaningful. */
+.fd-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+.fd-kpi { --tone: var(--b600); --tone-bg: var(--b50); display: flex; flex-direction: column; padding: 16px 18px 15px; container-type: inline-size; }
+.fd-kpi-green { --b700: var(--green); --b400: #34d399; --tone: var(--green); --tone-bg: var(--green-bg); }
+.fd-kpi-amber { --b700: var(--amber); --b400: #fbbf24; --tone: var(--amber); --tone-bg: var(--amber-bg); }
+.fd-kpi-red { --b700: var(--red); --b400: #f87171; --tone: var(--red); --tone-bg: var(--red-bg); }
+.fd-kpi-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fd-kpi-lbl { font-size: var(--fs-sm); font-weight: 600; color: var(--g500); }
+.fd-kpi-ic {
+  display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0;
+  border-radius: 9px; background: var(--tone-bg); color: var(--tone); font-size: 15px;
+}
+.fd-kpi-num {
+  margin-top: 6px; font-size: clamp(20px, 13cqi, 28px); font-weight: 800; line-height: 1.15;
+  color: var(--g900); letter-spacing: -0.025em; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.fd-kpi-foot { margin-top: 4px; font-size: var(--fs-sm); color: var(--g500); font-variant-numeric: tabular-nums; }
+.fd-kpi-foot .fd-cur { font-size: 1em; vertical-align: 0; opacity: 1; font-weight: 600; }
+.fd-chg { display: inline-flex; align-items: center; padding: 1px 6px; margin-right: 3px; border-radius: 999px; font-weight: 700; }
+.fd-chg.up { background: var(--green-bg); color: var(--green); }
+.fd-chg.dn { background: var(--red-bg); color: var(--red); }
+.fd-meter { margin-top: auto; padding-top: 12px; }
+.fd-meter::before { content: ''; display: block; height: 4px; border-radius: 2px; background: var(--g100); }
+.fd-meter > span { display: block; height: 4px; margin-top: -4px; border-radius: 2px; background: var(--tone); transition: width .6s cubic-bezier(.16, 1, .3, 1); }
+/* A card with a destination: lifts on hover and its icon tile fills with
+   the card's tone. */
+.fd-kpi-btn {
+  width: 100%; margin: 0; font: inherit; color: inherit; text-align: left; cursor: pointer;
+  transition: border-color .2s ease-out, box-shadow .25s cubic-bezier(.16, 1, .3, 1), transform .25s cubic-bezier(.16, 1, .3, 1);
+}
+.fd-kpi-btn .fd-kpi-ic { transition: background-color .2s ease-out, color .2s ease-out; }
+.fd-kpi-btn:hover { border-color: color-mix(in srgb, var(--tone) 40%, var(--g200)); box-shadow: var(--neu-out), 0 12px 24px -16px rgba(15, 23, 42, .4); transform: translateY(-2px); }
+.fd-kpi-btn:hover .fd-kpi-ic, .fd-kpi-btn:focus-visible .fd-kpi-ic { background: var(--tone); color: var(--white); }
+.fd-kpi-btn:active { transform: translateY(0); box-shadow: var(--neu-sm); }
+.fd-kpi-btn:focus-visible { outline: 2px solid var(--b500); outline-offset: 2px; }
+@media (max-width: 1100px) { .fd-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 460px) { .fd-kpis { grid-template-columns: 1fr; } }
+
+/* Fee-type bars beside Needs attention. The attention card takes the fee
+   card's height and scrolls inside it instead of stretching the row. */
+.fd-card { display: flex; flex-direction: column; }
+.fd-card > .card-hdr { margin-bottom: 14px; }
+.fd-updated { font-size: var(--fs-xs); color: var(--g500); font-variant-numeric: tabular-nums; }
+
+/* Fee types as a 2-up grid of groups (full-width card). Inside a group each
+   currency is two lines on a fixed grid, so every bar is the same length:
+   [tag] [bar............] [rate]
+         [collected of expected · outstanding · overpaid] */
+.fd-fees { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 22px 48px; }
+.fd-fee-hd { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 10px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--g100); }
+.fd-fee-name { margin: 0; font-size: var(--fs-md); font-weight: 700; color: var(--g900); }
+.fd-fee-note { font-size: var(--fs-xs); color: var(--g500); font-variant-numeric: tabular-nums; }
+.fd-fee-sum { margin-left: auto; font-size: var(--fs-sm); color: var(--g500); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fd-fee-sum .fd-cur { font-size: 1em; vertical-align: 0; opacity: 1; }
+.fd-fee-sum strong { margin-left: 8px; color: var(--g800); font-weight: 700; }
+.fd-fee-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.fd-fee-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) 52px; align-items: center; gap: 4px 12px; }
+.fd-fee-row .fd-tag { justify-content: center; }
+.fd-fee-rate { text-align: right; font-size: var(--fs-base); font-weight: 800; color: var(--g900); font-variant-numeric: tabular-nums; }
+.fd-fee-amt { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 0 14px; font-size: var(--fs-xs); color: var(--g500); font-variant-numeric: tabular-nums; }
+.fd-fee-amt strong { color: var(--g800); font-weight: 600; }
+.fd-fee-track { height: 8px; border-radius: 4px; background: var(--g100); overflow: hidden; }
+.fd-fee-track > span { display: block; height: 100%; border-radius: 4px; transition: width .6s cubic-bezier(.16, 1, .3, 1); }
+.fd-overpaid { display: inline-flex; align-items: center; gap: 4px; color: var(--amber); font-weight: 600; }
+.fd-reg {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px;
+  margin-top: auto; padding: 10px 12px; border-radius: var(--rsm); background: var(--surface);
+  font-size: var(--fs-sm); color: var(--g600);
+}
+.fd-fees + .fd-reg { margin-top: 18px; }
+.fd-reg-lbl { font-weight: 700; color: var(--g800); }
+.fd-reg-item strong { margin-left: 3px; color: var(--g900); font-variant-numeric: tabular-nums; }
+.fd-reg-note { margin-left: auto; font-size: var(--fs-xs); color: var(--g500); }
+
+/* Needs attention: a full-width strip, one column per list; a long list
+   (up to 20 recent changes) scrolls inside its own column. */
+.fd-att { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 16px 32px; align-items: start; }
+.fd-att-group ul { max-height: 200px; overflow-y: auto; scrollbar-width: thin; overscroll-behavior: contain; }
+.fd-att-card.is-clear > .card-hdr { margin-bottom: 0; }
+.fd-att-card.is-clear .fd-clear { flex-direction: row; justify-content: flex-start; gap: 8px; padding: 10px 0 0; font-size: var(--fs-sm); }
+.fd-att-card.is-clear .fd-clear-ic { width: 22px; height: 22px; font-size: 11px; }
+/* Each list is a tile toned by severity: red stops work today, amber soon,
+   blue is for review. */
+.fd-att-group { --att: var(--amber); --att-bg: var(--amber-bg); min-width: 0; padding: 12px 14px 6px; border-radius: var(--rsm); background: var(--surface); border: 1px solid var(--g100); }
+.fd-att-red { --att: var(--red); --att-bg: var(--red-bg); border-color: color-mix(in srgb, var(--red-bd) 55%, var(--g100)); background: color-mix(in srgb, var(--red-bg) 35%, var(--white)); }
+.fd-att-blue { --att: var(--b600); --att-bg: var(--b50); }
+.fd-att-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.fd-att-ic { display: grid; place-items: center; width: 24px; height: 24px; flex-shrink: 0; border-radius: 7px; background: var(--att-bg); color: var(--att); font-size: 12px; }
+.fd-att-title { flex: 1; min-width: 0; font-size: var(--fs-base); font-weight: 700; color: var(--g800); }
+.fd-att-count { min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--g100); color: var(--g700); font-size: var(--fs-xs); font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+.fd-att-group ul { list-style: none; margin: 0 0 0 32px; padding: 0; }
+.fd-att-group li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid var(--g200); font-size: var(--fs-base); color: var(--g800); }
+.fd-att-red .fd-left { color: var(--red); }
+.fd-att-group li > span:first-child { min-width: 0; font-weight: 600; display: flex; flex-direction: column; align-items: flex-start; }
+.fd-att-group li small { font-weight: 400; color: var(--g500); font-size: var(--fs-xs); margin-top: 1px; }
+.fd-left { color: var(--amber); font-size: var(--fs-sm); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fd-clear { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px 0; font-size: var(--fs-base); font-weight: 600; color: var(--g600); }
+.fd-clear-ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--green-bg); color: var(--green); font-size: 18px; }
+
+@media (max-width: 560px) {
+  .fd-fee-sum { margin-left: 0; }
+  .fd-reg-note { margin-left: 0; }
+}
+
+/* Tables that scroll inside their card, header kept in view. */
+.tbl-wrap.fd-scroll { overflow-y: auto; max-height: 352px; }
+.tbl-wrap.fd-scroll thead { position: sticky; top: 0; z-index: 4; }
+.tbl-wrap.fd-scroll, .fd-att-group ul, .fd-bars-wrap.open > .fd-bars { scrollbar-color: var(--g300) transparent; }
+
+/* The page's one authored motion: a payment that arrived on the last
+   refresh fades in from a soft wash, so "Live" is visible in the table. */
+.fd-new > td { animation: fd-new 2.8s cubic-bezier(.16, 1, .3, 1) both; }
+@keyframes fd-new { from { background-color: var(--b100); } to { background-color: transparent; } }
+
+/* Analysis card: tab bar, a toolbar of filters for the active tab, panel. */
+.fd-toolbar {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px;
+  padding: 14px 20px; border-bottom: 1px solid var(--g100); background: var(--surface);
+}
+.fd-field { width: 168px; max-width: 100%; }
+.fd-field .lbl { margin-bottom: 4px; }
+.fd-field-sm { width: 120px; }
+.fd-check { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; font-size: var(--fs-base); font-weight: 600; color: var(--g700); cursor: pointer; }
+.fd-check input { width: 16px; height: 16px; accent-color: var(--b600); }
+.fd-toolbar-end { margin-left: auto; align-self: center; }
+.fd-toolbar-note { align-self: center; font-size: var(--fs-sm); color: var(--g500); font-variant-numeric: tabular-nums; }
+.fd-panel { padding: 18px 20px 20px; }
+.fd-ph { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 12px; min-height: 30px; }
+.fd-ph-title { margin: 0; font-size: var(--fs-base); font-weight: 700; color: var(--g800); }
+.fd-ph-meta { margin-top: 1px; font-size: var(--fs-xs); color: var(--g500); font-variant-numeric: tabular-nums; }
+.fd-ph-meta strong { color: var(--g800); font-weight: 700; }
+.fd-ph-meta .fd-cur { font-size: 1em; vertical-align: 0; }
+
+.fd-trends { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 20px 32px; }
+.fd-side { min-width: 0; padding-left: 32px; border-left: 1px solid var(--g100); }
+.fd-disc { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); gap: 20px 40px; align-items: start; }
+.fd-cols2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 24px 40px; margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--g100); }
+.fd-gap { margin-top: 26px; }
+.fd-ph-actions { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; }
+@media (max-width: 960px) {
+  .fd-trends, .fd-disc { grid-template-columns: minmax(0, 1fr); }
+  .fd-side { padding-left: 0; padding-top: 20px; border-left: 0; border-top: 1px solid var(--g100); }
+}
+
+.fd-seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--g100); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.fd-seg button {
+  padding: 4px 10px; border: 0; border-radius: 7px; background: none; cursor: pointer; white-space: nowrap;
+  font-size: var(--fs-sm); font-weight: 600; color: var(--g500);
+  transition: background-color .2s ease-out, color .2s ease-out, box-shadow .2s ease-out;
+}
+.fd-seg button:hover { color: var(--g800); }
+.fd-seg button.active { background: var(--white); color: var(--b700); box-shadow: 0 1px 3px rgba(15, 23, 42, .1); }
+.fd-seg button:focus-visible { outline: 2px solid var(--b500); outline-offset: 1px; }
+
+.fd-chart { position: relative; width: 100%; min-height: 236px; }
+.fd-chart svg { display: block; overflow: visible; }
+.fd-grid { stroke: var(--g100); stroke-width: 1; }
+.fd-guide { stroke: var(--g400); stroke-width: 1; stroke-dasharray: 3 3; }
+.fd-axis { fill: var(--g500); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.fd-chart-empty { position: absolute; inset: 0; display: grid; place-items: center; font-size: var(--fs-base); color: var(--g500); }
+.fd-tip {
+  position: absolute; transform: translateX(-50%); pointer-events: none; z-index: 2;
+  min-width: 170px; padding: 8px 10px; border-radius: var(--rxs);
+  background: var(--white); border: 1px solid var(--g200);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, .12); font-size: var(--fs-sm);
+}
+.fd-tip-hd { font-weight: 700; color: var(--g800); margin-bottom: 4px; }
+.fd-tip-row { display: flex; align-items: center; gap: 6px; color: var(--g600); white-space: nowrap; }
+.fd-tip-row strong { margin-left: auto; padding-left: 10px; color: var(--g900); font-variant-numeric: tabular-nums; }
+.fd-key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+.fd-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--g600); }
+.fd-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+
+.fd-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+.fd-bars-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 5px; font-size: var(--fs-base); }
+.fd-bars-lbl { min-width: 0; color: var(--g800); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fd-bars-sub { color: var(--g500); font-weight: 400; }
+.fd-bars-val { flex-shrink: 0; color: var(--g900); font-weight: 600; font-variant-numeric: tabular-nums; }
+.fd-bars-val .fd-cur { opacity: .55; vertical-align: 0; font-size: .85em; }
+.fd-bars-pct { display: inline-block; min-width: 34px; text-align: right; color: var(--g500); font-weight: 500; }
+.fd-bars-track { height: 6px; border-radius: 3px; background: var(--g100); overflow: hidden; }
+.fd-bars-fill { height: 100%; border-radius: 3px; transition: width .5s cubic-bezier(.16, 1, .3, 1); }
+/* Long ranked lists: top N, then the rest in a bounded scroll box */
+.fd-bars-wrap.open > .fd-bars { max-height: 440px; overflow-y: auto; margin-right: -8px; padding-right: 8px; scrollbar-width: thin; overscroll-behavior: contain; }
+.fd-more {
+  display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 10px; padding: 8px 10px;
+  border: 1px dashed var(--g200); border-radius: var(--rxs); background: none; cursor: pointer;
+  font: inherit; font-size: var(--fs-sm); font-weight: 600; color: var(--b600); text-align: left;
+  transition: background-color .15s, border-color .15s;
+}
+.fd-more:hover { background: var(--surface); border-color: var(--b200); }
+.fd-more:focus-visible { outline: 2px solid var(--b500); outline-offset: 2px; }
+.fd-more i { margin-left: auto; font-size: 10px; }
+.fd-more-sub { color: var(--g500); font-weight: 500; font-variant-numeric: tabular-nums; }
+.fd-more-sub .fd-cur { font-size: 1em; vertical-align: 0; opacity: 1; }
+
+/* Part-to-whole: one stacked bar (2px surface gaps, rounded ends) and a
+   legend that carries every value. Hover links a segment to its row. */
+.fd-share-bar { display: flex; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; background: var(--g100); }
+.fd-share-seg { flex-basis: 0; min-width: 3px; transition: opacity .2s ease-out; cursor: default; }
+.fd-share-seg.dim, .fd-share-item.dim { opacity: .35; }
+.fd-share-legend { list-style: none; margin: 12px 0 0; padding: 0; }
+.fd-share-item {
+  display: grid; grid-template-columns: 10px minmax(0, 1fr) auto 46px; align-items: center; gap: 10px;
+  padding: 7px 8px; margin: 0 -8px; border-radius: 7px; font-size: var(--fs-base);
+  transition: opacity .2s ease-out, background-color .2s ease-out;
+}
+.fd-share-item.on { background: var(--surface); }
+.fd-sw { width: 10px; height: 10px; border-radius: 3px; }
+.fd-share-name { min-width: 0; font-weight: 600; color: var(--g800); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fd-share-name small { display: block; font-weight: 400; font-size: var(--fs-xs); color: var(--g500); margin-top: 1px; font-variant-numeric: tabular-nums; }
+.fd-share-val { font-weight: 600; color: var(--g900); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fd-share-val .fd-cur { opacity: .55; vertical-align: 0; font-size: .85em; }
+.fd-share-pct { text-align: right; color: var(--g500); font-variant-numeric: tabular-nums; }
+/* Inline variant: few parts, legend reads across as figures. */
+.fd-share-inline .fd-share-bar { height: 18px; }
+.fd-share-inline .fd-share-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 4px 20px; }
+.fd-share-inline .fd-share-item { grid-template-columns: 10px auto 1fr; grid-template-rows: auto auto; row-gap: 2px; margin: 0; padding: 8px 10px; }
+.fd-share-inline .fd-sw { grid-row: 1; }
+.fd-share-inline .fd-share-name { grid-column: 2 / -1; font-weight: 500; color: var(--g600); font-size: var(--fs-sm); }
+.fd-share-inline .fd-share-val { grid-column: 2; grid-row: 2; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+.fd-share-inline .fd-share-pct { grid-column: 3; grid-row: 2; text-align: left; align-self: end; padding-bottom: 3px; }
+
+/* Discounts: hero figure + ratio meter beside the composition. */
+.fd-hero { padding: 18px 20px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--g100); }
+.fd-hero-lbl { font-size: var(--fs-sm); font-weight: 600; color: var(--g500); }
+.fd-hero-num { margin-top: 4px; font-size: 34px; font-weight: 800; line-height: 1.1; letter-spacing: -0.03em; color: var(--g900); }
+.fd-hero-sub { margin-top: 4px; font-size: var(--fs-sm); color: var(--g500); font-variant-numeric: tabular-nums; }
+.fd-ratio { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--g200); }
+.fd-ratio-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: var(--fs-sm); color: var(--g600); font-weight: 600; }
+.fd-ratio-top strong { font-size: 18px; font-weight: 800; color: var(--g900); font-variant-numeric: tabular-nums; }
+.fd-ratio-track { height: 8px; margin-top: 8px; border-radius: 4px; background: var(--g200); overflow: hidden; }
+.fd-ratio-track > span { display: block; height: 100%; min-width: 4px; border-radius: 4px; background: var(--fd-c1); transition: width .6s cubic-bezier(.16, 1, .3, 1); }
+.fd-ratio-scale { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10.5px; color: var(--g500); font-variant-numeric: tabular-nums; }
+
+/* Top defaulters: ranked bars on one scale, split by currency (in base). */
+.fd-dft { list-style: none; margin: 0; padding: 0; }
+.fd-dft-row {
+  display: grid; grid-template-columns: 22px minmax(150px, 250px) minmax(0, 1fr) 76px; align-items: center; gap: 14px;
+  padding: 8px 10px; margin: 0 -10px; border-radius: 8px; outline: none;
+  transition: background-color .15s ease-out;
+}
+.fd-dft-row + .fd-dft-row { margin-top: 2px; }
+.fd-dft-row:hover, .fd-dft-row:focus-visible { background: var(--surface); }
+.fd-dft-row:focus-visible { box-shadow: inset 0 0 0 2px var(--b500); }
+.fd-dft-rank { font-size: var(--fs-sm); font-weight: 700; color: var(--g500); text-align: right; font-variant-numeric: tabular-nums; }
+.fd-dft-row:nth-child(-n+3) .fd-dft-rank { color: var(--g900); }
+.fd-dft-who { min-width: 0; }
+.fd-dft-who strong { display: block; font-size: var(--fs-base); font-weight: 600; color: var(--g900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fd-dft-who small { display: block; margin-top: 1px; font-size: var(--fs-xs); color: var(--g500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fd-dft-track { position: relative; height: 12px; }
+.fd-dft-fill { position: relative; display: flex; gap: 2px; height: 100%; min-width: 4px; border-radius: 0 4px 4px 0; transition: width .6s cubic-bezier(.16, 1, .3, 1); }
+.fd-dft-fill > span { flex-basis: 0; min-width: 2px; }
+.fd-dft-fill > span:last-of-type { border-radius: 0 4px 4px 0; }
+.fd-dft-val { text-align: right; font-size: var(--fs-base); font-weight: 700; color: var(--g900); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fd-dft-val .fd-cur { opacity: .55; vertical-align: 0; font-size: .82em; }
+.fd-dft-tip {
+  position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 3; min-width: 190px;
+  padding: 8px 10px; border-radius: var(--rxs); background: var(--white); border: 1px solid var(--g200);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, .12); font-size: var(--fs-sm);
+  opacity: 0; transform: translateY(4px); pointer-events: none;
+  transition: opacity .15s ease-out, transform .15s ease-out;
+}
+.fd-dft-row:hover .fd-dft-tip, .fd-dft-row:focus-visible .fd-dft-tip { opacity: 1; transform: none; }
+.fd-tip-total { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--g100); }
+@media (max-width: 640px) {
+  .fd-dft-row { grid-template-columns: 22px minmax(0, 1fr) auto; row-gap: 6px; }
+  .fd-dft-track { grid-column: 2 / -1; grid-row: 2; }
+  .fd-dft-tip { display: none; }
+}
+
+/* Per-section loading / error / empty, so each call renders on its own */
+.fd-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 36px 16px; text-align: center; font-size: var(--fs-base); font-weight: 600; color: var(--g600); }
+.fd-state > i { font-size: 20px; color: var(--g400); }
+.fd-state small { max-width: 420px; font-weight: 400; font-size: var(--fs-sm); color: var(--g500); }
+.fd-state .btn { margin-top: 6px; }
+.fd-state-err > i { color: var(--red); }
+.fd-none { margin: 0; padding: 20px 0; font-size: var(--fs-base); color: var(--g500); }
+.fd-busy { opacity: .55; transition: opacity .2s; }
+.fd-kpi-err { color: var(--red); }
+.fd-toolbar-err { color: var(--red); }
+.fd-skel {
+  display: inline-block; height: .8em; border-radius: 4px; vertical-align: middle;
+  background: linear-gradient(90deg, var(--g100) 25%, var(--g200) 50%, var(--g100) 75%); background-size: 200% 100%;
+  animation: fd-skel 1.2s ease-in-out infinite;
+}
+@keyframes fd-skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .fd-meter > span, .fd-fee-track > span, .fd-bars-fill, .fd-link i,
+  .fd-ratio-track > span, .fd-dft-fill, .fd-dft-tip, .fd-share-seg, .fd-share-item, .fd-busy,
+  .fd-kpi-btn, .fd-kpi-btn .fd-kpi-ic, .fd-refresh { transition: none; }
+  .fd-kpi-btn:hover { transform: none; }
+  .fd-skel, .fd-pulse::after { animation: none; }
+  /* Still mark new payments, without the fade. */
+  .fd-new > td { animation: none; background-color: var(--b50); }
+}
+

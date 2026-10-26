@@ -7,7 +7,8 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
-import { StudentDto, normalizeStudentDetail } from '@/lib/api/student/student'
+import { StudentDto, StudentDetailDto, normalizeStudentDetail } from '@/lib/api/student/student'
+import { oneSemesterDiscountInForce } from '@/lib/api/student/studentDiscount'
 import { useStudent } from '@/hooks/student/useStudents'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
@@ -49,15 +50,20 @@ const TARGET_PROGRAMMES_FALLBACK = [{ value: '', label: 'No programmes available
 // populates its discount fields at all).
 function formatDiscount(
   transferDetail: { discountName: string | null; discountAmtPer?: number | null; discountCalcType?: number | null } | undefined,
-  detail: { discountStatus: string | null; calcType: string | null; amtPer: number | null } | undefined,
+  detail: Pick<StudentDetailDto, 'discountStatus' | 'calcType' | 'amtPer' | 'discountEffectiveFromSemesterGuid' | 'discountCancelledAtSemesterGuid' | 'currentSemesterGuid'> | undefined,
 ) {
   if (transferDetail?.discountName) {
     const kind = transferDetail.discountCalcType === 2 ? '%' : transferDetail.discountCalcType === 1 ? 'Amt' : ''
     return transferDetail.discountAmtPer != null ? `${transferDetail.discountName} — ${transferDetail.discountAmtPer}${kind}` : transferDetail.discountName
   }
-  if (!detail?.discountStatus || detail.discountStatus === 'Cancelled' || detail.discountStatus === 'CancelledImmediate') return 'None'
+  if (!detail?.discountStatus) return 'None'
+  // One-semester discounts are stored as Cancelled but still apply to their
+  // own semester (see isOneSemesterDiscount).
+  const oneSemester = oneSemesterDiscountInForce(detail, detail.currentSemesterGuid)
+  if (!oneSemester && (detail.discountStatus === 'Cancelled' || detail.discountStatus === 'CancelledImmediate')) return 'None'
   const kind = detail.calcType === '2' ? '%' : detail.calcType === '1' ? 'Amt' : ''
-  return detail.amtPer != null ? `${detail.amtPer}${kind}` : detail.discountStatus
+  const value = detail.amtPer != null ? `${detail.amtPer}${kind}` : detail.discountStatus
+  return oneSemester ? `${value} · one semester` : value
 }
 
 // useSearchParams() requires a Suspense boundary above it (Next.js App

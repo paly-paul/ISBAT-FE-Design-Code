@@ -33,7 +33,9 @@ export function DiscountFormModal({ isOpen, onClose, showToast, mode, discountGu
   const [discountName, setDiscountName] = useState('')
   const [calcType, setCalcType]         = useState<DiscountCalcType | ''>('')
   const [amtPer, setAmtPer]             = useState('')
-  const [carry, setCarry]               = useState(false)
+  // Defaults to true on create (the long-standing behaviour); edit sends the
+  // discount's current value back when untouched — the field is required.
+  const [carryForward, setCarryForward] = useState(true)
   const [cop, setCop]                   = useState('')
   const [errors, setErrors]             = useState<Record<string, string>>({})
 
@@ -44,10 +46,10 @@ export function DiscountFormModal({ isOpen, onClose, showToast, mode, discountGu
       setDiscountName(discount.discountName)
       setCalcType(discount.calcType != null ? CALC_TYPE_LABELS[discount.calcType] ?? '' : '')
       setAmtPer(discount.amtPer != null ? String(discount.amtPer) : '')
-      setCarry(discount.carry === 1)
+      setCarryForward(discount.carryForward ?? true)
       setCop(discount.cop ?? '')
     } else if (!isEdit) {
-      setDiscountCode(''); setDiscountName(''); setCalcType(''); setAmtPer(''); setCarry(false); setCop('')
+      setDiscountCode(''); setDiscountName(''); setCalcType(''); setAmtPer(''); setCarryForward(true); setCop('')
     }
     setErrors({})
   }, [isOpen, isEdit, discount])
@@ -78,8 +80,8 @@ export function DiscountFormModal({ isOpen, onClose, showToast, mode, discountGu
       discountName,
       calcType: calcType ? CALC_TYPE_VALUES[calcType] : null,
       amtPer: amtPer ? +amtPer : null,
-      carry: carry ? 1 : 0,
       cop: cop.trim() || null,
+      carryForward,
     }
     const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Discount updated successfully' : 'Discount added successfully') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} discount. Please try again.`)
@@ -207,16 +209,16 @@ export function DiscountFormModal({ isOpen, onClose, showToast, mode, discountGu
           </div>
           <div className="fg">
             <div className="lbl">Carry Forward</div>
-            <div style={{ display: 'flex', gap: 16, marginTop: 6 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                <input type="checkbox" checked={carry} onChange={() => setCarry(true)} style={{ width: 16, height: 16, accentColor: 'var(--b500)', cursor: 'pointer' }} />
-                <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>Yes</span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                <input type="checkbox" checked={!carry} onChange={() => setCarry(false)} style={{ width: 16, height: 16, accentColor: 'var(--b500)', cursor: 'pointer' }} />
-                <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)' }}>No</span>
-              </label>
-            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, cursor: 'pointer' }}>
+              <input type="checkbox" checked={carryForward} onChange={e => setCarryForward(e.target.checked)} style={{ width: 16, height: 16, accentColor: 'var(--b500)', cursor: 'pointer' }} />
+              <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--g700)', fontWeight: 600 }}>Carry forward to later semesters</span>
+            </label>
+            <p style={{ fontSize: 12, color: 'var(--g500)', marginTop: 4 }}>
+              {carryForward
+                ? 'Keeps applying each semester until it is cancelled.'
+                : 'Applies to one semester only — the one it is assigned in. It ends automatically after that.'}
+              {isEdit && ' Changing this affects new assignments only.'}
+            </p>
           </div>
           <div className="fg">
             <div className="lbl">COP</div>

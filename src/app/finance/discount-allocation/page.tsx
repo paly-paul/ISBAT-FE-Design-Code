@@ -18,6 +18,7 @@ import {
   useCancelStudentDiscount,
   DISCOUNT_STATUS_VALUES,
   DISCOUNT_STATUS_LABELS,
+  oneSemesterDiscountInForce,
 } from '@/hooks/student/useStudentDiscount'
 import { CALC_TYPE_VALUES, CALC_TYPE_LABELS } from '@/lib/api/finance/discount'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -210,6 +211,9 @@ function DiscountAllocationContent() {
 
   const [editing, setEditing] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  // A one-semester discount can't be edited or cancelled; "Assign New
+  // Discount" opens the assign form over it instead.
+  const [replacing, setReplacing] = useState(false)
 
   const [discountChoice, setDiscountChoice] = useState('')
   const [calcType, setCalcType] = useState<'Amount' | 'Percentage'>('Percentage')
@@ -234,6 +238,7 @@ function DiscountAllocationContent() {
     setErrors({})
     setEditing(false)
     setShowCancelConfirm(false)
+    setReplacing(false)
   }
 
   // AssignStudentDiscountCommandValidator / UpdateStudentDiscountCommand-
@@ -331,7 +336,7 @@ function DiscountAllocationContent() {
         },
       },
       {
-        onSuccess: () => showToast('Discount assigned.', 'success'),
+        onSuccess: () => { showToast('Discount assigned.', 'success'); setReplacing(false) },
         onError: (error: Error) => showServerError(error, 'Could not assign discount.'),
       },
     )
@@ -400,9 +405,17 @@ function DiscountAllocationContent() {
     setAmtPer(chosenDiscount.amtPer != null ? String(chosenDiscount.amtPer) : '')
   }, [chosenDiscount, editing])
 
+  // A one-semester discount (carryForward = false) is stored as Cancelled
+  // but still applies to its own semester — shown as active until the
+  // session moves on, never as "no discount".
+  const oneSemesterInForce = !!discountDetail && oneSemesterDiscountInForce(discountDetail, profile?.semesterGuid)
   // See isCancelledStatus's own comment — a cancelled assignment still
   // means "free to assign a new one", same as no assignment at all.
-  const canAssignNew = !discountDetail || isCancelledStatus(discountDetail.discountStatus)
+  const canAssignNew = !discountDetail || replacing || (isCancelledStatus(discountDetail.discountStatus) && !oneSemesterInForce)
+  const assignedBadge = oneSemesterInForce
+    ? { cls: 'badge-green', label: 'Active · One semester' }
+    : { cls: statusBadgeClass(discountDetail?.discountStatus), label: statusLabel(discountDetail?.discountStatus) }
+  const chosenIsOneSemester = chosenDiscount?.carryForward === false
   const busy = assignDiscount.isPending || updateDiscount.isPending || cancelDiscount.isPending
 
   // The Corporate field only applies to discounts flagged as corporate/
@@ -564,7 +577,7 @@ function DiscountAllocationContent() {
               <div className="card">
                 <div className="card-hdr">
                   <div className="card-title"><span className="ctitle-icon"><i className="lni lni-tag"></i></span> {canAssignNew ? 'Apply Discount' : 'Discount Allocation'}</div>
-                  {discountDetail && !canAssignNew && <span className={`badge ${statusBadgeClass(discountDetail.discountStatus)}`}>{statusLabel(discountDetail.discountStatus)}</span>}
+                  {discountDetail && !canAssignNew && <span className={`badge ${assignedBadge.cls}`}>{assignedBadge.label}</span>}
                 </div>
 
                 {!studentGuid ? null : isDiscountLoading ? (
@@ -600,7 +613,14 @@ function DiscountAllocationContent() {
                         <div className="pc-pay-meta">
                           <div><span>Type</span><b>{calcType}</b></div>
                           <div><span>{calcType === 'Percentage' ? 'Percentage' : 'Amount'}</span><b>{amtPer || '—'}</b></div>
+                          {chosenDiscount && <div><span>Duration</span><b>{chosenIsOneSemester ? 'One semester' : 'Until cancelled'}</b></div>}
                         </div>
+                      </div>
+                    )}
+                    {replacing && oneSemesterInForce && (
+                      <div className="info-box mb-[14px]">
+                        <i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i>
+                        <div style={{ fontSize: 12 }}>This replaces the current one-semester discount, <strong>{discountDetail?.discountName}</strong>.</div>
                       </div>
                     )}
 
@@ -615,6 +635,14 @@ function DiscountAllocationContent() {
                         onChange={v => { setDiscountChoice(v); setCorporate(''); clearError('discountGuid'); clearError('amtPer') }}
                       />
                       {fieldErr('discountGuid')}
+                      {chosenIsOneSemester && (
+                        <div className="warn-box mt-2" style={{ alignItems: 'center' }}>
+                          <i className="lni lni-calendar" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0 }}></i>
+                          <div style={{ fontSize: 12 }}>
+                            <strong>Applies to one semester only</strong>{semName ? ` — ${semName}` : ''}. It ends automatically after that and can&apos;t be edited once assigned.
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="g2 mb-[14px]">
                       <div className="fg">
@@ -649,6 +677,9 @@ function DiscountAllocationContent() {
                     </div>
 
                     <div className="flex gap-[10px] justify-end">
+                      {replacing && (
+                        <button className="btn btn-neu" disabled={assignDiscount.isPending} onClick={() => { setReplacing(false); setDiscountChoice(''); setRemarks(''); setErrors({}) }}>Back</button>
+                      )}
                       {permissions.add && (
                         <button className="btn btn-primary btn-lg" disabled={assignDiscount.isPending} onClick={handleAssign}>
                           <i className="lni lni-checkmark"></i> {assignDiscount.isPending ? 'Assigning…' : 'Assign Discount'}
@@ -666,23 +697,48 @@ function DiscountAllocationContent() {
                         <div className="pc-ledger-sub">
                           {CALC_TYPE_LABELS[discountDetail.calcType ?? 2] ?? 'Percentage'}
                           {discountDetail.amtPer != null ? ` · ${discountDetail.amtPer}${discountDetail.calcType === CALC_TYPE_VALUES.Amount ? '' : '%'}` : ' · inherited from discount'}
+                          {oneSemesterInForce && ' · One semester'}
                         </div>
                       </div>
                     </div>
+                    {oneSemesterInForce && (
+                      <div className="receipt-row"><span className="text-muted">Applies to</span><span>{semName ? `${semName} only` : 'This semester only'}</span></div>
+                    )}
                     {showCorporateForAssigned && (
                       <div className="receipt-row"><span className="text-muted">Corporate</span><span>{discountDetail.cop ? (cooperates.find(c => c.cooperateGuid === discountDetail.cop)?.cooperateName ?? discountDetail.cop) : '—'}</span></div>
                     )}
                     <div className="receipt-row"><span className="text-muted">Remarks</span><span>{discountDetail.remarks ?? '—'}</span></div>
 
-                    <div className="info-box mt-3">
-                      <i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i>
-                      <div style={{ fontSize: 12 }}>The discount and its effective-from semester can&apos;t be changed here — cancel this assignment and assign again to change either.</div>
-                    </div>
+                    {oneSemesterInForce ? (
+                      // Stored as Cancelled, so the backend refuses both
+                      // update ("A cancelled discount cannot be updated.")
+                      // and cancel — the only change is a new assignment.
+                      <>
+                        <div className="info-box mt-3">
+                          <i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i>
+                          <div style={{ fontSize: 12 }}>A one-semester discount ends automatically when the student moves to the next semester. It can&apos;t be edited or cancelled — to change it, assign a new discount.</div>
+                        </div>
+                        {permissions.add && (
+                          <div className="flex gap-[10px] justify-end mt-4">
+                            <button className="btn btn-primary" disabled={busy} onClick={() => { setDiscountChoice(''); setRemarks(''); setErrors({}); setReplacing(true) }}>
+                              <i className="lni lni-plus"></i> Assign New Discount
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="info-box mt-3">
+                          <i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i>
+                          <div style={{ fontSize: 12 }}>The discount and its effective-from semester can&apos;t be changed here — cancel this assignment and assign again to change either.</div>
+                        </div>
 
-                    <div className="flex gap-[10px] justify-end mt-4">
-                      {permissions.delete && <button className="btn btn-neu" disabled={busy} onClick={() => setShowCancelConfirm(true)}><i className="lni lni-close"></i> Cancel Discount</button>}
-                      {permissions.edit && <button className="btn btn-primary" disabled={busy} onClick={startEdit}><i className="lni lni-pencil"></i> Edit Discount</button>}
-                    </div>
+                        <div className="flex gap-[10px] justify-end mt-4">
+                          {permissions.delete && <button className="btn btn-neu" disabled={busy} onClick={() => setShowCancelConfirm(true)}><i className="lni lni-close"></i> Cancel Discount</button>}
+                          {permissions.edit && <button className="btn btn-primary" disabled={busy} onClick={startEdit}><i className="lni lni-pencil"></i> Edit Discount</button>}
+                        </div>
+                      </>
+                    )}
                   </>
                 ) : (
                   // ── Editing the existing assignment's terms. ──

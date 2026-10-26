@@ -1,4 +1,5 @@
 import { apiGet, apiPost, apiPut, AuthError } from '../client'
+import { getDiscounts } from '../finance/discount'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -47,6 +48,34 @@ export const DISCOUNT_STATUS_LABELS: Record<number, string> = {
   [DISCOUNT_STATUS_VALUES.CancelledImmediate]: 'Cancelled Immediately',
 }
 
+// A discount whose carryForward is false is stored as Cancelled with its
+// cancelled-at semester equal to its effective-from semester — nobody
+// cancelled it; that's how "one semester only" is saved
+// (get-student-discount.md). It still applies to that semester, so it must
+// not be read as "no discount". Takes the numeric status (StudentDiscountDto)
+// or the string label (StudentDetailDto). A carry-forward discount cancelled
+// "from next semester" in the semester it started looks identical — and it,
+// too, applies to that one semester only, so the reading holds.
+export function isOneSemesterDiscount(a: {
+  discountStatus: number | string | null
+  discountEffectiveFromSemesterGuid: string | null
+  discountCancelledAtSemesterGuid: string | null
+}) {
+  const cancelled = a.discountStatus === DISCOUNT_STATUS_VALUES.Cancelled || a.discountStatus === 'Cancelled'
+  return cancelled && !!a.discountEffectiveFromSemesterGuid
+    && a.discountCancelledAtSemesterGuid === a.discountEffectiveFromSemesterGuid
+}
+
+// A one-semester discount is in force only while the student is still in
+// that semester; after session movement it has ended. Unknown current
+// semester → assume it's still the same one.
+export function oneSemesterDiscountInForce(
+  a: Parameters<typeof isOneSemesterDiscount>[0],
+  currentSemesterGuid: string | null | undefined,
+) {
+  return isOneSemesterDiscount(a) && (!currentSemesterGuid || currentSemesterGuid === a.discountEffectiveFromSemesterGuid)
+}
+
 export interface AssignStudentDiscountRequest {
   discountGuid: string
   calcType?: number | null
@@ -83,23 +112,27 @@ export function getStudentDiscount(studentGuid: string): Promise<StudentDiscount
 
 export function assignStudentDiscount(studentGuid: string, payload: AssignStudentDiscountRequest): Promise<StudentDiscountDto> {
   if (MOCK_AUTH) {
-    const row: StudentDiscountDto = {
-      studentGuid,
-      discountGuid: payload.discountGuid,
-      // Mock mode has no discount catalogue wired into this module to
-      // resolve a real code/name from — left blank rather than guessed.
-      discountCode: '',
-      discountName: '',
-      calcType: payload.calcType ?? null,
-      amtPer: payload.amtPer ?? null,
-      cop: payload.cop ?? null,
-      discountStatus: DISCOUNT_STATUS_VALUES.Active,
-      discountEffectiveFromSemesterGuid: payload.effectiveFromSemesterGuid,
-      discountCancelledAtSemesterGuid: null,
-      remarks: payload.remarks ?? null,
-    }
-    mockDiscountAssignments[studentGuid] = row
-    return Promise.resolve(row)
+    // Mirrors the backend: a non-carry-forward discount is saved Cancelled,
+    // ending in the semester it starts in.
+    return getDiscounts().then(catalogue => {
+      const discount = catalogue.find(d => d.discountGuid === payload.discountGuid)
+      const oneSemester = discount?.carryForward === false
+      const row: StudentDiscountDto = {
+        studentGuid,
+        discountGuid: payload.discountGuid,
+        discountCode: discount?.discountCode ?? '',
+        discountName: discount?.discountName ?? '',
+        calcType: payload.calcType ?? null,
+        amtPer: payload.amtPer ?? null,
+        cop: payload.cop ?? null,
+        discountStatus: oneSemester ? DISCOUNT_STATUS_VALUES.Cancelled : DISCOUNT_STATUS_VALUES.Active,
+        discountEffectiveFromSemesterGuid: payload.effectiveFromSemesterGuid,
+        discountCancelledAtSemesterGuid: oneSemester ? payload.effectiveFromSemesterGuid : null,
+        remarks: payload.remarks ?? null,
+      }
+      mockDiscountAssignments[studentGuid] = row
+      return row
+    })
   }
   return apiPost<StudentDiscountDto>(`/api/v1/students/${studentGuid}/discount`, payload)
 }
@@ -108,6 +141,7 @@ export function updateStudentDiscount(studentGuid: string, payload: UpdateStuden
   if (MOCK_AUTH) {
     const existing = mockDiscountAssignments[studentGuid]
     if (!existing) throw new AuthError('not_found')
+    if (existing.discountStatus !== DISCOUNT_STATUS_VALUES.Active) return Promise.reject(new Error('A cancelled discount cannot be updated.'))
     const updated = { ...existing, ...payload }
     mockDiscountAssignments[studentGuid] = updated
     return Promise.resolve(updated)

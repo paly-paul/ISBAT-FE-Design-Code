@@ -15,8 +15,11 @@ export interface Discount {
   discountName: string
   calcType: number | null
   amtPer: number | null
-  carry: number
   cop: string | null
+  // true = once assigned, applies to later semesters until cancelled; false =
+  // the one semester it's assigned in (the backend ends it). Required on
+  // POST/PUT — omitting it is a 400 "CarryForward is required."
+  carryForward: boolean
 }
 
 export type DiscountInput = Omit<Discount, 'discountGuid'>
@@ -31,7 +34,7 @@ interface DiscountListResponse {
 // Backing store used only when NEXT_PUBLIC_AUTH_MOCK is on — GET, POST, PUT,
 // and DELETE are all wired to the real endpoints otherwise.
 const mockDiscounts: Discount[] = [
-  { discountGuid: 'd49f90ee-38cc-4291-9279-9404fd9a179b', discountCode: 'DIS-001', discountName: 'Discount code 1', calcType: null, amtPer: null, carry: 1, cop: null },
+  { discountGuid: 'd49f90ee-38cc-4291-9279-9404fd9a179b', discountCode: 'DIS-001', discountName: 'Discount code 1', calcType: null, amtPer: null, cop: null, carryForward: true },
 ]
 
 // GET /discounts is paged (get-discounts.md: pageSize defaults to 10, no
