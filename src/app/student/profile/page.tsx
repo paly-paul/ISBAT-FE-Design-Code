@@ -5,7 +5,8 @@ import { Toast } from '@/components/Toast'
 import { ActionMenu } from '@/components/ActionMenu'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { useStudent } from '@/hooks/student/useStudents'
-import { StudentDto, normalizeStudentDetail } from '@/lib/api/student/student'
+import { StudentDto, StudentDetailDto, normalizeStudentDetail } from '@/lib/api/student/student'
+import { oneSemesterDiscountInForce } from '@/lib/api/student/studentDiscount'
 import { useIdCard, useIssueOrRenewIdCard, useUpdateIdCardDates, getIdCardQrImageUrl, currentCardIssue } from '@/hooks/student/useIdCards'
 import { useSponsorDetails } from '@/hooks/student/useSponsor'
 import { useStudentRefugeeDetails } from '@/hooks/student/useRefugee'
@@ -71,9 +72,14 @@ function formatDiscountValue(amtPer: number, isPercentage: boolean, isAmount: bo
 // calcType is documented ("1" = Amount, "2" = Percentage) on the
 // student-discounts assign/update endpoints; StudentDetailDto carries the
 // same field for whatever discount is already resolved onto the student.
-function formatDiscount(detail: { discountStatus: string | null; calcType: string | null; amtPer: number | null } | undefined) {
-  if (!detail?.discountStatus || detail.discountStatus === 'Cancelled' || detail.discountStatus === 'CancelledImmediate') return 'None'
-  return detail.amtPer != null ? formatDiscountValue(detail.amtPer, detail.calcType === '2', detail.calcType === '1') : detail.discountStatus
+// A one-semester discount is stored as Cancelled but still applies to its
+// own semester — shown, labelled, until the student moves on.
+function formatDiscount(detail: Pick<StudentDetailDto, 'discountStatus' | 'calcType' | 'amtPer' | 'discountEffectiveFromSemesterGuid' | 'discountCancelledAtSemesterGuid' | 'currentSemesterGuid'> | undefined) {
+  if (!detail?.discountStatus) return 'None'
+  const oneSemester = oneSemesterDiscountInForce(detail, detail.currentSemesterGuid)
+  if (!oneSemester && (detail.discountStatus === 'Cancelled' || detail.discountStatus === 'CancelledImmediate')) return 'None'
+  const value = detail.amtPer != null ? formatDiscountValue(detail.amtPer, detail.calcType === '2', detail.calcType === '1') : detail.discountStatus
+  return oneSemester ? `${value} · one semester` : value
 }
 
 function StudentProfileContent() {

@@ -139,14 +139,15 @@ export interface DiscountDropdownItem {
   calcType: number
   amtPer: number
   cop: number | null
+  carryForward: boolean
 }
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
 
 const mockDiscounts: DiscountDropdownItem[] = [
-  { discountGuid: 'mock-disc-staff', discountCode: 'STAFF20', discountName: 'Staff Child 20%', calcType: 2, amtPer: 20, cop: null },
-  { discountGuid: 'mock-disc-lump', discountCode: 'LUMP', discountName: 'Lumpsum', calcType: 1, amtPer: 0, cop: null },
-  { discountGuid: 'mock-disc-sib', discountCode: 'SIB10', discountName: 'Sibling 10%', calcType: 2, amtPer: 10, cop: null },
+  { discountGuid: 'mock-disc-staff', discountCode: 'STAFF20', discountName: 'Staff Child 20%', calcType: 2, amtPer: 20, cop: null, carryForward: true },
+  { discountGuid: 'mock-disc-lump', discountCode: 'LUMP', discountName: 'Lumpsum', calcType: 1, amtPer: 0, cop: null, carryForward: false },
+  { discountGuid: 'mock-disc-sib', discountCode: 'SIB10', discountName: 'Sibling 10%', calcType: 2, amtPer: 10, cop: null, carryForward: true },
 ]
 
 const MOCK_NAMES = ['Amina Nakato', 'James Okello', 'Grace Nampijja', 'Brian Kamya', 'Esther Tumukunde', 'Peter Ssemwogerere', 'Ruth Achieng', 'Daniel Mugisha']

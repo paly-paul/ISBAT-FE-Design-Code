@@ -39,9 +39,10 @@ export interface FeeStructureInput {
   lef: number | null
   cef: number | null
   ace: number | null
-  lec: string | null
-  cec: string | null
-  acec: string | null
+  // intCurrency, not currencyGuid — see ProgramFeeStructureHeaderInput.
+  lec: number | null
+  cec: number | null
+  acec: number | null
   calcType: number
   amtPer: number | null
   // Confirmed per program_master_frontend_fixes.md: the create payload was
@@ -537,10 +538,10 @@ export interface FeeStructureDetail {
   amtPer: number | null
   lef: number | null
   cef: number | null
-  lec: string | null
-  cec: string | null
+  lec: number | null
+  cec: number | null
   ace: number | null
-  acec: string | null
+  acec: number | null
   feeLines: FeeLineDetail[]
 }
 
@@ -626,9 +627,9 @@ export interface FeeStructureUpdateInput {
   lef: number | null
   cef: number | null
   ace: number | null
-  lec: string | null
-  cec: string | null
-  acec: string | null
+  lec: number | null
+  cec: number | null
+  acec: number | null
   calcType: number
   amtPer: number | null
   intakeGuid: string | null
