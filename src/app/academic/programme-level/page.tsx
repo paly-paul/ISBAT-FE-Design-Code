@@ -14,7 +14,6 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useCreateProgramLevel, useDeleteProgramLevel, useProgramLevelsPaged, useUpdateProgramLevel, ProgramLevel } from '@/hooks/academic/useProgramLevels'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
-import { AuthError } from '@/lib/api/client'
 
 const PAGE_SIZE = 10
 // Don't narrow the table (or open the search dropdown) until the user's
@@ -113,16 +112,11 @@ export default function Page() {
     if (!deleteTarget) return
     deleteProgramLevel.mutate(deleteTarget.programLevelGuid, {
       onSuccess: () => { setDeleteTarget(null); showToast('Programme Level deleted successfully') },
-      onError: (error: Error) => {
-        // The backend blocks the delete while programme groups or programmes
-        // still reference this level.
-        if (error instanceof AuthError && error.code === 'level_in_use') {
-          setDeleteTarget(null)
-          showToast(`${deleteTarget.levelCode} is still used by programme groups or programmes. Move or delete those first.`, 'error')
-          return
-        }
-        showToast(error.message || 'Failed to delete programme level', 'error')
-      },
+      // A level in use (level_in_use) or one whose usage couldn't be checked
+      // (level_usage_check_failed) comes back as a 400 with user-ready text in
+      // errors[0] — shown as-is (delete-program-level.md). The dialog stays
+      // open so the second case can be retried.
+      onError: (error: Error) => showToast(error.message || 'Failed to delete programme level', 'error'),
     })
   }
 

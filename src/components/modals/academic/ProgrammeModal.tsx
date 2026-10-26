@@ -346,6 +346,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false)
   const [facultyGuid, setFacultyGuid] = useState('')
   const [facultyLabel, setFacultyLabel] = useState('')
+  // The picked faculty's campus, shown read-only beside it — not saved (a
+  // programme's campus is its faculty's campus).
+  const [facultyCampus, setFacultyCampus] = useState('')
   const [appFee, setAppFee] = useState('')
   const [lateFee, setLateFee] = useState('')
   // Confirmed per program_master_frontend_fixes.md: Create wants a real
@@ -454,8 +457,10 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // (facultyGuid: guid?). The label comes from the pick itself, or in Edit
   // from full-details' schoolName; when that's missing the faculty is looked
   // up by guid so the picker never shows a bare placeholder for a real value.
-  const facultyLookup = useFacultiesByGuids(facultyGuid && !facultyLabel ? [facultyGuid] : [])
+  // The same lookup gives the campus in Edit, where full-details has none.
+  const facultyLookup = useFacultiesByGuids(facultyGuid && (!facultyLabel || !facultyCampus) ? [facultyGuid] : [])
   const facultyDisplay = facultyLabel || facultyLookup.get(facultyGuid)?.facultyName || null
+  const campusDisplay = facultyCampus || facultyLookup.get(facultyGuid)?.campusName || ''
 
   const currencies = useMemo(
     () => flattenUniquePages(currencyQuery.data?.pages ?? [], c => String(c.intCurrency)),
@@ -786,6 +791,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setProgramLevelLabel(fullDetails.programLevelName ?? '')
     setFacultyGuid(fullDetails.facultyGuid ?? '')
     setFacultyLabel(fullDetails.schoolName ?? '')
+    setFacultyCampus('')
     // Confirmed live (2026-09-07) that full-details DOES return a real
     // currencyGuid — overrides whatever the initialCurrencyGuid-driven
     // effect above set from the (often-null) list row the moment this
@@ -1455,7 +1461,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setSemLabels(['Semester 1'])
     setSemGuids([])
     setProgramCode(''); setProgramName(''); setProgramGroupGuid(''); setProgramLevelGuid('')
-    setFacultyGuid(''); setFacultyLabel(''); setAppFee(''); setLateFee(''); setCurrencyGuid(''); setUnitCount('')
+    setFacultyGuid(''); setFacultyLabel(''); setFacultyCampus(''); setAppFee(''); setLateFee(''); setCurrencyGuid(''); setUnitCount('')
     setDateAcc(''); setStreamGuids([])
     setIntakeGuid(''); setPgmStatus(true); setNoIa(false); setAccLetterFile(null); setStep1Errors({})
     setCreatedProgramGuid(null); setCreatedSemesters([]); setUnitsSubmitted(false)
@@ -2058,6 +2064,30 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                 </div>
 
                 <div className="fg">
+                  <div className="lbl">Faculty</div>
+                  <FacultySearchPicker
+                    placeholder="— Select faculty —"
+                    selectedLabel={facultyDisplay}
+                    onSelect={f => { setFacultyGuid(f.facultyGuid); setFacultyLabel(f.facultyName); setFacultyCampus(f.campusName ?? '') }}
+                    onClear={() => { setFacultyGuid(''); setFacultyLabel(''); setFacultyCampus('') }}
+                  />
+                </div>
+                <div className="fg span2">
+                  <div className="lbl">Campus</div>
+                  {/* Each faculty belongs to one campus, so this follows the
+                      Faculty pick and isn't editable or saved. */}
+                  <input
+                    className="ctrl"
+                    readOnly
+                    tabIndex={-1}
+                    aria-readonly="true"
+                    value={campusDisplay}
+                    placeholder={facultyGuid ? 'Loading campus…' : 'Select a faculty to see its campus'}
+                    style={{ background: 'var(--surface)', color: 'var(--g700)', cursor: 'default' }}
+                  />
+                </div>
+
+                <div className="fg">
                   <div className="lbl">No. of Course Units</div>
                   <input
                     className="ctrl"
@@ -2140,16 +2170,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     </div>
                   )}
                   <div style={{ fontSize: 11, color: 'var(--g400)', marginTop: 4 }}>Every specialization this programme offers — picked per course unit in Course Unit Allocation.</div>
-                </div>
-
-                <div className="fg">
-                  <div className="lbl">Faculty</div>
-                  <FacultySearchPicker
-                    placeholder="— Select faculty —"
-                    selectedLabel={facultyDisplay}
-                    onSelect={f => { setFacultyGuid(f.facultyGuid); setFacultyLabel(f.facultyName) }}
-                    onClear={() => { setFacultyGuid(''); setFacultyLabel('') }}
-                  />
                 </div>
 
                 <div className="fg">
