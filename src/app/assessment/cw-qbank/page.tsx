@@ -1159,28 +1159,6 @@ export default function QuestionBankUploadPage() {
                       </div>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="btn btn-neu btn-sm flex items-center gap-1.5"
-                      onClick={handleDownloadTemplate}
-                      disabled={downloadTemplateMut.isPending}
-                      title="Download blank official 9-column template"
-                    >
-                      {downloadTemplateMut.isPending ? (
-                        <>
-                          <span className="inline-block w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
-                          <span>Generating Link...</span>
-                        </>
-                      ) : (
-                        <>
-                          <i className="lni lni-download"></i>
-                          <span>Blank 9-Column Template</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
                 </div>
 
                 {/* Template Format Note */}
