@@ -1,17 +1,41 @@
-import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { createBatch, deleteBatch, getBatchById, getBatchDropdown, getBatches, getStudentCountsByBatch, updateBatch, Batch, BatchCreateInput, BatchDetail, BatchUpdateInput } from '@/lib/api/academic/batch'
+import { useMutation, useQueries, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { createBatch, deleteBatch, getBatchById, getBatchDropdown, getBatches, getStudentCountsByBatch, updateBatch, Batch, BatchCreateInput, BatchDetail, BatchScope, BatchUpdateInput } from '@/lib/api/academic/batch'
 
 const BATCHES_KEY = ['batches']
 
-export function useBatches(pageNumber: number, pageSize: number, search = '', enabled = true) {
+// No intakeGuid in scope = the current admission intake only (see BatchScope).
+export function useBatches(pageNumber: number, pageSize: number, search = '', enabled = true, scope: BatchScope = {}) {
   return useQuery({
-    queryKey: [...BATCHES_KEY, pageNumber, pageSize, search],
-    queryFn: () => getBatches(pageNumber, pageSize, search),
+    queryKey: [...BATCHES_KEY, pageNumber, pageSize, search, scope.intakeGuid ?? '', scope.campusGuid ?? ''],
+    queryFn: () => getBatches(pageNumber, pageSize, search, scope),
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,
     placeholderData: keepPreviousData,
   })
+}
+
+// Every batch in the given intakes, merged and sorted by code — one
+// GET /batches call per intake, since the endpoint takes a single intakeGuid.
+// An empty list means the endpoint's default, the current admission intake.
+const INTAKE_BATCHES_PAGE_SIZE = 1000
+export function useBatchesForIntakes(intakeGuids: string[], enabled = true) {
+  const scopes = intakeGuids.length ? [...new Set(intakeGuids)].sort() : ['']
+  const results = useQueries({
+    queries: scopes.map(intakeGuid => ({
+      queryKey: [...BATCHES_KEY, 1, INTAKE_BATCHES_PAGE_SIZE, '', intakeGuid, ''],
+      queryFn: () => getBatches(1, INTAKE_BATCHES_PAGE_SIZE, '', { intakeGuid: intakeGuid || null }),
+      enabled,
+      staleTime: Infinity,
+      gcTime: Infinity,
+    })),
+  })
+  const byGuid = new Map<string, Batch>()
+  results.forEach(r => r.data?.items.forEach(b => byGuid.set(b.batchGuid, b)))
+  return {
+    batches: [...byGuid.values()].sort((a, b) => a.batchCode.localeCompare(b.batchCode)),
+    isLoading: results.some(r => r.isLoading),
+  }
 }
 
 // Server-side search for Batch Management's search box — hits the same list

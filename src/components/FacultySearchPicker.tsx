@@ -7,6 +7,9 @@ export interface FacultyPickOption {
   facultyGuid: string
   facultyCode: string
   facultyName: string
+  // The faculty's own campus (each faculty belongs to one), as returned by
+  // GET /faculties.
+  campusName?: string | null
 }
 
 interface FacultySearchPickerProps {

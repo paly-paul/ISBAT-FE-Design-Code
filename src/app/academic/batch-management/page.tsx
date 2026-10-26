@@ -67,15 +67,17 @@ export default function Page() {
     if (el) setIndicator({ left: el.offsetLeft, width: el.offsetWidth })
   }, [activeTab])
 
-  // ---- Head count (GET /academic/batch-summary) ----
-  // Scoped by campus and intake; no intake = the current admission intake,
-  // the endpoint's default. Feeds both the stat tiles and the Head Count tab.
+  // ---- Scope: campus + intake, for both tabs ----
+  // GET /academic/batches lists one intake at a time; no intake = the current
+  // admission intake (the endpoint's default — it has no 'all intakes'). The
+  // full set for the scope feeds the stat tiles and the Head Count tab; Manage
+  // Batches pages through the same scope server-side.
   const [campusGuid, setCampusGuid] = useState('')
   const [intakeGuid, setIntakeGuid] = useState('')
   const { data: campuses = [] } = useCampusDropdown()
   const summary = useBatchSummary(campusGuid || null, intakeGuid || null)
   const summaryRows = useMemo(() => summary.data?.items ?? [], [summary.data])
-  const totalStudents = summaryRows.reduce((sum, r) => sum + r.headCount, 0)
+  const totalStudents = summaryRows.reduce((sum, r) => sum + (r.headCount ?? 0), 0)
   const avgBatchSize = summaryRows.length ? Math.round(totalStudents / summaryRows.length) : 0
   const scopeLabel = [
     campusGuid ? (campuses.find(c => c.campusGuid === campusGuid)?.campusName ?? 'This campus') : 'All campuses',
@@ -94,7 +96,7 @@ export default function Page() {
   // own filters made.
   const searchTrimmed = search.trim()
   const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
-  const { data, isLoading, isFetching } = useBatches(page, PAGE_SIZE, activeSearch)
+  const { data, isLoading, isFetching } = useBatches(page, PAGE_SIZE, activeSearch, true, { campusGuid: campusGuid || null, intakeGuid: intakeGuid || null })
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && isFetching
@@ -181,16 +183,15 @@ export default function Page() {
           </div>
         </div>
 
-        {/* Head-count scope: drives the stat tiles and the Head Count tab
-            (not the Manage Batches table, which lists every batch). */}
+        {/* Scope for the whole page: stat tiles and both tabs. */}
         <div className="flex items-center gap-2 flex-wrap mb-3">
-          <span className="text-sm font-semibold text-g600">Head count for</span>
+          <span className="text-sm font-semibold text-g600">Showing batches for</span>
           <SearchSelect
             style={{ width: 200 }}
             placeholder="All Campuses"
             options={campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))}
             value={campusGuid}
-            onChange={setCampusGuid}
+            onChange={v => { setCampusGuid(v); setPage(1) }}
           />
           <div style={{ width: 220 }}>
             <InfiniteSearchSelect
@@ -199,7 +200,7 @@ export default function Page() {
               toOption={i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })}
               allLabel="Current Intake"
               value={intakeGuid}
-              onChange={setIntakeGuid}
+              onChange={v => { setIntakeGuid(v); setPage(1) }}
             />
           </div>
         </div>
@@ -242,7 +243,7 @@ export default function Page() {
               isLoading={summary.isLoading}
               isRefetching={summary.isPlaceholderData}
               hasFilters={!!campusGuid || !!intakeGuid}
-              onClearFilters={() => { setCampusGuid(''); setIntakeGuid('') }}
+              onClearFilters={() => { setCampusGuid(''); setIntakeGuid(''); setPage(1) }}
             />
           </div>
         )}
@@ -282,7 +283,7 @@ export default function Page() {
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
                   : pageItems.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
+                    ? <EmptyState colSpan={999} hasFilters={!!search.trim() || !!campusGuid || !!intakeGuid} onClearFilters={() => { setSearch(''); setCampusGuid(''); setIntakeGuid(''); setPage(1) }} />
                     : null}
                 {!isLoading && pageItems.map(r => (
                   <tr key={r.batchGuid}>

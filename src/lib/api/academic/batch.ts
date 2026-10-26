@@ -34,9 +34,22 @@ export interface Batch {
   streamName?: string | null
   batchTimeName?: string | null
   batchTimeCode?: string | null
+  // From MR !341 (get-batches.md, 2026-10-26), which folded the removed
+  // GET /batch-summary into this endpoint. intakeName/intakeCode/intakeGuid
+  // are the batch's OWN intake — it can differ from the intake being listed.
+  programCode?: string | null
+  semCode?: number | null
+  intakeGuid?: string | null
+  intakeCode?: number | null
+  intakeName?: string | null
+  bInChargeName?: string | null
+  pHeadName?: string | null
+  // Students currently in the batch; null when the Student service has no
+  // entry for it — show as 0.
+  headCount?: number | null
 }
 
-interface BatchListResult {
+export interface BatchListResult {
   items: Batch[]
   totalCount: number
   pageNumber: number
@@ -106,12 +119,19 @@ const mockBatches: Batch[] = [
   { batchGuid: 'd7b04278-21ef-4cfa-8bee-ff336f08e344', batchCode: 'CSF26MRNA', programGuid: 'mock-program-1', semesterGuid: 'mock-semester-1', streamGuid: 'mock-stream-1', batchTimeGuid: 'mock-batchtime-1', bStartDate: '2024-02-12T00:00:00', bEndDate: '2024-06-07T00:00:00', active: 1 },
 ]
 
-// Lists batches (paginated). search is forwarded to the endpoint's own
-// ?search= param (same convention as getIntakes/getSkills) rather than
-// filtered client-side — not confirmed against a spec, so callers pair it
-// with a client-side re-filter of whatever comes back, keeping results
-// correct even if the backend doesn't actually recognize the param.
-export function getBatches(pageNumber = 1, pageSize = 20, search = ''): Promise<BatchListResult> {
+// Scope for GET /batches (get-batches.md). intakeGuid omitted = the CURRENT
+// ADMISSION INTAKE, not every batch: the API has no "all intakes" option
+// (an unknown guid returns an empty page). An intake's batches are those
+// created in it plus older batches with a session in it. Unknown campus /
+// intake guids return an empty page, not an error.
+export interface BatchScope {
+  intakeGuid?: string | null
+  campusGuid?: string | null
+}
+
+// Lists batches (paginated), ordered by batch code. search matches batch
+// code, programme code/name, semester, stream and batch time server-side.
+export function getBatches(pageNumber = 1, pageSize = 20, search = '', scope: BatchScope = {}): Promise<BatchListResult> {
   const q = search.trim()
   if (MOCK_AUTH) {
     const filtered = q ? mockBatches.filter(b => b.batchCode.toLowerCase().includes(q.toLowerCase())) : mockBatches
@@ -119,6 +139,8 @@ export function getBatches(pageNumber = 1, pageSize = 20, search = ''): Promise<
   }
   const params = new URLSearchParams({ pageNumber: String(pageNumber), pageSize: String(pageSize) })
   if (q) params.set('search', q)
+  if (scope.intakeGuid) params.set('intakeGuid', scope.intakeGuid)
+  if (scope.campusGuid) params.set('campusGuid', scope.campusGuid)
   return apiGet<BatchListResult | null>(`/api/v1/academic/batches?${params.toString()}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }

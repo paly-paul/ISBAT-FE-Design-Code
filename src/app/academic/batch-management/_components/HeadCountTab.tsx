@@ -5,19 +5,16 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { TableSearch } from '@/components/TableSearch'
-import type { BatchSummaryItem } from '@/lib/api/academic/batchSummary'
+import type { Batch } from '@/lib/api/academic/batch'
 
 // The Head Count tab of Batch Management (was the separate Batch Summary
-// page, merged 2026-10-21). Rows come from GET /academic/batch-summary,
-// fetched by the page so the stat tiles above share the same data.
+// page, merged 2026-10-21). Rows come from GET /academic/batches (the old
+// /batch-summary endpoint was removed in MR !341), fetched by the page so the
+// stat tiles above share the same data. Column mapping per
+// batch-summary-page.md: Faculty = bInChargeName, Head count = headCount.
 
-// The real endpoint returns semCode — a bare int counting semesters
-// across the whole programme (1, 2, 3…), not a resolved name and not
-// per-year — rather than a semesterName string, confirmed against a real
-// response (2026-08-31). No lookup/name mapping exists anywhere for this
-// code, so it's turned into a "Year N - Semester M" label by simple
-// arithmetic (two semesters per year, the convention every other real
-// semester name in this app already follows).
+// Fallback label when a row has no semesterName: semCode counts semesters
+// across the whole programme (1, 2, 3…), two per year.
 function semesterLabelFromCode(semCode: number): string {
   const year = Math.ceil(semCode / 2)
   const sem = semCode % 2 === 0 ? 2 : 1
@@ -27,22 +24,22 @@ function semesterLabelFromCode(semCode: number): string {
 const PAGE_SIZE = 10
 
 export function HeadCountTab({ rows: allRows, isLoading, isRefetching, hasFilters, onClearFilters }: {
-  rows: BatchSummaryItem[]
+  rows: Batch[]
   isLoading: boolean
   isRefetching: boolean
   hasFilters: boolean
   onClearFilters: () => void
 }) {
-  // Same fields the endpoint's own `search` matches (get-batch-summary.md),
-  // applied to the rows already loaded since useBatchSummary fetches them all.
+  // Searches the rows already loaded (useBatchSummary fetches them all), on
+  // the main fields the endpoint's own `search` matches (get-batches.md).
   const [search, setSearch] = useState('')
   const term = search.trim().toLowerCase()
   const filteredRows = term
-    ? allRows.filter(r => [r.batchCode, r.programCode, r.programName].some(v => v?.toLowerCase().includes(term)))
+    ? allRows.filter(r => [r.batchCode, r.programCode, r.programName, r.semesterName].some(v => v?.toLowerCase().includes(term)))
     : allRows
 
-  // The endpoint returns every batch for the campus in one go (no server
-  // paging — see useBatchSummary), so it's paged here.
+  // Every batch for the scope arrives in one go (see useBatchSummary), so
+  // it's paged here.
   const [page, setPage] = useState(1)
   const totalCount = filteredRows.length
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
@@ -86,12 +83,12 @@ export function HeadCountTab({ rows: allRows, isLoading, isRefetching, hasFilter
                     // been seen leaving it blank/duplicated across rows; the
                     // page-qualified row index is always unique.
                     <tr key={`${r.batchGuid || 'row'}-${(safePage - 1) * PAGE_SIZE + i}`}>
-                      <td className="text-g500 tabular-nums">{r.slNo ?? (safePage - 1) * PAGE_SIZE + i + 1}</td>
+                      <td className="text-g500 tabular-nums">{(safePage - 1) * PAGE_SIZE + i + 1}</td>
                       <td><span className="font-bold text-blue tabular-nums">{r.batchCode || '—'}</span></td>
                       <td>{r.programName || '—'}</td>
-                      <td>{semesterLabelFromCode(r.semCode)}</td>
-                      <td>{r.facultyName || '—'}</td>
-                      <td className="tabular-nums font-semibold">{r.headCount}</td>
+                      <td>{r.semesterName || (r.semCode ? semesterLabelFromCode(r.semCode) : '—')}</td>
+                      <td>{r.bInChargeName || '—'}</td>
+                      <td className="tabular-nums font-semibold">{r.headCount ?? 0}</td>
                     </tr>
                   ))}
             </tbody>

@@ -210,7 +210,10 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
   // dropdown's own loading/scroll state.
   const programQuery = campusGuid ? programByCampusQuery : programAllQuery
   const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
-  const { data: batchesData } = useBatches(1, 20, batchSearch, true)
+  // GET /batches lists one intake at a time and defaults to the current
+  // admission intake, so the picked intake/campus is passed through — passout
+  // students are mostly in older intakes' batches.
+  const { data: batchesData } = useBatches(1, 20, batchSearch, true, { intakeGuid: intakeGuid || null, campusGuid: campusGuid || null })
   // Batch is scoped to whichever Programme is currently picked — filtered
   // client-side (Batch has no server-side by-program search endpoint in
   // this app), same pattern Filing/Payment's own programGuid+semesterGuid+

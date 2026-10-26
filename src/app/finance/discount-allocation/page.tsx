@@ -7,7 +7,7 @@ import { useSearchStudentsInfinite, useStudentProfile } from '@/hooks/finance/us
 import { refugeeLabel, studCategoryLabel, searchStudents } from '@/lib/api/finance/paymentConsole'
 import { useCampuses } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
-import { useBatches } from '@/hooks/academic/useBatches'
+import { useBatch } from '@/hooks/academic/useBatches'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useDiscounts } from '@/hooks/finance/useDiscounts'
 import { useCooperates } from '@/hooks/finance/useCooperates'
@@ -189,12 +189,14 @@ function DiscountAllocationContent() {
   // to the client-side lookup only when the server sends null).
   const { data: campuses = [] } = useCampuses(!!profile)
   const { data: programs = [] } = useProgramMasters(!profile?.programName && !!profile)
-  const { data: allBatchesData } = useBatches(1, 1000, '', !profile?.batchCode && !!profile)
-  const batches = allBatchesData?.items ?? []
+  // The student's own batch by guid — the /batches list only covers one
+  // intake (the current one by default), so an older student's batch
+  // wouldn't be in it.
+  const { data: profileBatch } = useBatch(profile?.batchGuid ?? null, !profile?.batchCode && !!profile)
   const { data: semesters = [] } = useSemestersForProgram(profile?.programGuid ?? '', !profile?.semesterName && !!profile?.programGuid)
   const campusName = campuses.find(c => c.campusGuid === profile?.campusGuid)?.campusName
   const programName = profile?.programName ?? programs.find(p => p.programGuid === profile?.programGuid)?.programName
-  const batchCode = profile?.batchCode ?? batches.find(b => b.batchGuid === profile?.batchGuid)?.batchCode
+  const batchCode = profile?.batchCode ?? profileBatch?.batchCode
   const semName = profile?.semesterName ?? semesters.find(s => s.semesterGuid === profile?.semesterGuid)?.semName
 
   // ── Discount catalogue + this student's current assignment. ──
