@@ -64,13 +64,12 @@ export function ViewRoomModal({ isOpen, onClose, roomGuid, onEdit, canEdit }: Vi
 
         <div style={{ padding: '20px clamp(14px, 4vw, 22px)' }}>
           {/* view-detail-grid only reaches its 3-col breakpoint at >=820px
-              (globals.css), but modal-md caps out at 580px — with just 3
-              short fields that left Location's "wide" row half-empty next
-              to Capacity. Force 3 columns here instead since the modal
-              never needs to stack these three on a narrow screen. */}
-          <div className="view-detail-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+              (globals.css), but modal-md caps out at 580px. With four short
+              fields a fixed 2×2 grid keeps every row full. */}
+          <div className="view-detail-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
             <Field label="Room Code" value={room.roomCode} mono />
             <Field label="Capacity" value={room.capacity ?? '—'} />
+            <Field label="Room Type" value={room.roomTypeName || 'Not set'} />
             <Field label="Location" value={room.location || '—'} />
           </div>
         </div>

@@ -1,8 +1,18 @@
 import { useEffect } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoom, deleteRoom, getRoomById, getRooms, Room, RoomInput, RoomListResult, updateRoom } from '@/lib/api/academic/room'
+import { createRoom, deleteRoom, getRoomById, getRooms, getRoomTypes, Room, RoomInput, RoomListResult, RoomTypeOption, updateRoom } from '@/lib/api/academic/room'
 
 const ROOMS_KEY = ['rooms']
+
+// Class / Lab options for the room form's select and the list's filter.
+export function useRoomTypes() {
+  return useQuery<RoomTypeOption[]>({
+    queryKey: [...ROOMS_KEY, 'types'],
+    queryFn: getRoomTypes,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
 
 // Original unpaged room list used by the modal/other consumers that expect a
 // flat Room[] payload.
@@ -20,12 +30,13 @@ export function useRooms(enabled = true) {
 // keeps the current page (and its totalCount) on screen while the next page
 // loads, instead of dropping to "no data" for a moment on every page change.
 // `search` narrows the table server-side (?search=, room code/location) and
-// is part of the key, so each term's pages cache separately.
-export function useRoomsPaged(enabled = true, pageNumber = 1, pageSize = 10, search = '') {
+// is part of the key, so each term's pages cache separately. `roomType`
+// (?roomType=) works the same way; null shows every room.
+export function useRoomsPaged(enabled = true, pageNumber = 1, pageSize = 10, search = '', roomType: number | null = null) {
   const queryClient = useQueryClient()
   const query = useQuery<RoomListResult>({
-    queryKey: [...ROOMS_KEY, 'paged', search, pageNumber, pageSize],
-    queryFn: () => getRooms(search, pageNumber, pageSize),
+    queryKey: [...ROOMS_KEY, 'paged', search, roomType, pageNumber, pageSize],
+    queryFn: () => getRooms(search, pageNumber, pageSize, roomType),
     placeholderData: keepPreviousData,
     staleTime: Infinity,
     gcTime: Infinity,
@@ -43,12 +54,12 @@ export function useRoomsPaged(enabled = true, pageNumber = 1, pageSize = 10, sea
     for (const p of [pageNumber + 1, pageNumber - 1]) {
       if (p < 1 || p > lastPage) continue
       queryClient.prefetchQuery({
-        queryKey: [...ROOMS_KEY, 'paged', search, p, pageSize],
-        queryFn: () => getRooms(search, p, pageSize),
+        queryKey: [...ROOMS_KEY, 'paged', search, roomType, p, pageSize],
+        queryFn: () => getRooms(search, p, pageSize, roomType),
         staleTime: Infinity,
       })
     }
-  }, [enabled, isRealData, totalCount, pageNumber, pageSize, search, queryClient])
+  }, [enabled, isRealData, totalCount, pageNumber, pageSize, search, roomType, queryClient])
 
   return query
 }
@@ -105,4 +116,4 @@ export function useDeleteRoom() {
   })
 }
 
-export type { Room, RoomInput }
+export type { Room, RoomInput, RoomTypeOption }
