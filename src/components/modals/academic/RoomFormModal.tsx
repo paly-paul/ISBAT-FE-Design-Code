@@ -4,7 +4,8 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { RoomInput } from '@/lib/api/academic/room'
-import { useRoom } from '@/hooks/academic/useRooms'
+import { useRoom, useRoomTypes } from '@/hooks/academic/useRooms'
+import { SearchSelect } from '@/components/SearchSelect'
 import { AuthError } from '@/lib/api/client'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
@@ -33,12 +34,15 @@ interface RoomFormModalProps extends ModalProps {
 export function RoomFormModal({ isOpen, onClose, showToast, mode, roomGuid, createRoom, updateRoom }: RoomFormModalProps) {
   const isEdit = mode === 'edit'
   const { data: room, isLoading, isError, error } = useRoom(roomGuid, isOpen && isEdit)
+  const { data: roomTypes = [], isLoading: isTypesLoading } = useRoomTypes()
 
   const [saved, setSaved]       = useState(false)
   const [failure, setFailure]   = useState<string | null>(null)
   const [roomCode, setRoomCode] = useState('')
   const [location, setLocation] = useState('')
   const [capacity, setCapacity] = useState('')
+  // '' = not set; otherwise the type's value as a string
+  const [roomType, setRoomType] = useState('')
   const [errors, setErrors]     = useState<Record<string, string>>({})
 
   // Prefill on edit once the room loads (react-query resets `room` to undefined per guid); blank on fresh create.
@@ -48,9 +52,10 @@ export function RoomFormModal({ isOpen, onClose, showToast, mode, roomGuid, crea
       setRoomCode(room.roomCode)
       setLocation(room.location ?? '')
       setCapacity(room.capacity != null ? String(room.capacity) : '')
+      setRoomType(room.roomType != null ? String(room.roomType) : '')
       setErrors({})
     } else if (!isEdit) {
-      setRoomCode(''); setLocation(''); setCapacity(''); setErrors({})
+      setRoomCode(''); setLocation(''); setCapacity(''); setRoomType(''); setErrors({})
     }
   }, [isOpen, isEdit, room])
 
@@ -58,7 +63,7 @@ export function RoomFormModal({ isOpen, onClose, showToast, mode, roomGuid, crea
 
   function handleClose() {
     setSaved(false); setFailure(null)
-    setRoomCode(''); setLocation(''); setCapacity(''); setErrors({})
+    setRoomCode(''); setLocation(''); setCapacity(''); setRoomType(''); setErrors({})
     onClose()
   }
 
@@ -94,14 +99,26 @@ export function RoomFormModal({ isOpen, onClose, showToast, mode, roomGuid, crea
       scrollToFirstError(e)
       return
     }
+    // "Room type is invalid." (an option the API no longer accepts)
+    if (code === 'validation_error' && /room type/i.test(msg)) {
+      const e = { roomType: msg }
+      setErrors(prev => ({ ...prev, ...e }))
+      scrollToFirstError(e)
+      return
+    }
     setFailure(msg || `Failed to ${isEdit ? 'update' : 'add'} room. Please try again.`)
   }
 
   function handleSubmit() {
     if (!validate()) return
-    // PUT is a full replacement — omitting location/capacity clears them
-    // (see put-room.md), so both are always sent even when blank.
-    const input: RoomInput = { roomCode: roomCode.trim(), location: location.trim() || null, capacity: capacity.trim() ? Number(capacity) : null }
+    // PUT is a full replacement — omitting location/capacity/roomType clears
+    // them (see put-room.md), so all three are always sent, null when blank.
+    const input: RoomInput = {
+      roomCode: roomCode.trim(),
+      location: location.trim() || null,
+      capacity: capacity.trim() ? Number(capacity) : null,
+      roomType: roomType ? Number(roomType) : null,
+    }
 
     if (isEdit && roomGuid) {
       updateRoom.mutate(
@@ -213,6 +230,17 @@ export function RoomFormModal({ isOpen, onClose, showToast, mode, roomGuid, crea
               style={errors.capacity ? { borderColor: 'var(--red)' } : undefined}
             />
             {errors.capacity && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.capacity}</p>}
+          </div>
+          <div className="fg span2">
+            <div className="lbl">Room Type</div>
+            <SearchSelect
+              placeholder="Not set"
+              options={[{ value: '', label: 'Not set' }, ...roomTypes.map(t => ({ value: String(t.value), label: t.name }))]}
+              value={roomType}
+              onChange={v => { setRoomType(v); clearError('roomType') }}
+              isLoading={isTypesLoading}
+            />
+            {errors.roomType && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.roomType}</p>}
           </div>
           <div className="fg span2">
             <div className="lbl">Location</div>

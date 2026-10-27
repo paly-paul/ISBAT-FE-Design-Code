@@ -253,6 +253,9 @@ export interface RoomOption {
   roomCode: string
   location: string | null
   capacity: number | null
+  // Class / Lab label; null for rooms with no type set
+  roomType?: number | null
+  roomTypeName?: string | null
 }
 
 export function getRoomDropdown(): Promise<RoomOption[]> {
