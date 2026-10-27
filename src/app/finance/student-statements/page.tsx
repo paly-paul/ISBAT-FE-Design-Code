@@ -21,6 +21,7 @@ const CATEGORY_OPTIONS = [
   { value: '3', label: 'NCHE Fee' },
   { value: '4', label: 'Guild Fee' },
   { value: '5', label: 'Advance Deposit' },
+  { value: '6', label: 'Application Fee' },
 ]
 
 // Format currency amount with commas
@@ -116,6 +117,8 @@ function getCategoryBadge(category?: number | null) {
       return { badge: 'badge-blue', label: 'Tuition' }
     case 5: // Advance Deposit
       return { badge: 'badge-purple', label: 'Advance Deposit' }
+    case 6: // Application Fee
+      return { badge: 'badge-cyan', label: 'Application Fee' }
     default:
       return {
         badge: 'badge-grey',

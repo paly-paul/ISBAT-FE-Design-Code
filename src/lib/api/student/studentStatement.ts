@@ -43,7 +43,8 @@ export interface StudentStatementHeaderDto {
   admissionTypeLabel: string | null
 }
 
-// category: PaymentHistoryCategory — 1=Tuition, 2=Other, 3=Nche, 4=Guild, 5=Advance
+// category: PaymentHistoryCategory — 1=Tuition, 2=Other, 3=Nche, 4=Guild, 5=Advance,
+// 6=ApplicationFee (the Admission application payment; not yet in erp-docs)
 export interface StudentStatementPaymentDto {
   slNo: number
   paymentGuid: string
@@ -111,6 +112,7 @@ const mockStatement: StudentStatementDto = {
     admissionTypeLabel: 'Fresh',
   },
   paymentHistory: [
+    { slNo: 0, paymentGuid: 'pay-mock-app', category: 6, paymentCode: 'APP-PAY-001', payDate: '2023-12-04T00:00:00', amount: 50000, currencyGuid: 'cur-ugx', currencyName: 'UGX', receipt: 'RCT-2023-00981', payType: 'Cash' },
     { slNo: 1, paymentGuid: 'pay-mock-1', category: 1, paymentCode: 'PAY-001', payDate: '2024-01-15T00:00:00', amount: 750000, currencyGuid: 'cur-ugx', currencyName: 'UGX', receipt: 'RCT-2024-00142', payType: 'Cash' },
     { slNo: 2, paymentGuid: 'pay-mock-2', category: 1, paymentCode: 'PAY-002', payDate: '2024-06-10T00:00:00', amount: 750, currencyGuid: 'cur-usd', currencyName: 'USD', receipt: 'RCT-2024-00289', payType: 'Bank' },
   ],

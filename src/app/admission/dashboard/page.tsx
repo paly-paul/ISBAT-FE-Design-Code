@@ -1,3 +1,4 @@
+
 'use client'
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -11,6 +12,7 @@ import { ViewApplicantModal } from '@/components/modals/admission/ViewApplicantM
 import { useApplicants, ApplicantListItem, ApplicantStatus, ApplicationListItem } from '@/hooks/admission/useApplicationFiling'
 import { useVettingQueue } from '@/hooks/admission/useVetting'
 import { useRegistrarDeskApplications } from '@/hooks/admission/useRegistrarDesk'
+import { useAdmissionDashboard, AdmissionDashboard, AdmissionSourceMixEntry, AdmissionConversionStep } from '@/hooks/admission/useAdmissionDashboard'
 
 const PAGE_SIZE = 6
 
@@ -42,6 +44,15 @@ function toModalRow(a: ApplicantListItem): ApplicationListItem {
   } as ApplicationListItem
 }
 
+// Up to two initials for the queue avatars ("MACHIRAJU NEELA" → "MN").
+function initials(name: string | null | undefined): string {
+  const parts = (name ?? '').trim().split(/\s+/).filter(p => /[a-z]/i.test(p))
+  if (parts.length === 0) return '?'
+  const first = parts[0][0]
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : ''
+  return (first + last).toUpperCase()
+}
+
 function timeAgo(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
   const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
@@ -52,54 +63,119 @@ function timeAgo(dateStr: string | null | undefined): string {
   return `${Math.floor(diff / 86400)}d ago`
 }
 
-const DONUT_DATA = [
-  { label: 'Direct (Walk-in)', value: 9, pct: 39, color: '#2d448f' },
-  { label: 'CRM (Merito)',     value: 6, pct: 26, color: '#3b82f6' },
-  { label: 'ODel Online App.', value: 4, pct: 17, color: '#d97706' },
-  { label: 'Online Enquiry',   value: 4, pct: 17, color: '#059669' },
-]
+// Keyed by sourceMix source number; the API sends the label in `name`.
+const SOURCE_COLORS: Record<number, string> = {
+  1: 'var(--adm-ink)', // Direct (Walk-in)
+  2: 'var(--adm-mist)', // CRM (Merito)
+  3: 'var(--adm-ochre)', // ODel Online App
+  4: 'var(--adm-sage)', // Online Enquiry
+  5: 'var(--adm-stone)', // Other
+}
 
-const CONV_BARS = [
-  { from: 'Enquiry',       to: 'App. Payment',  pct: 38, level: 'low'  as const, meta: '60 → 23 · 37 lost' },
-  { from: 'App. Payment',  to: 'App. Filing',   pct: 87, level: 'high' as const, meta: '23 → 20 · 3 pending' },
-  { from: 'App. Filing',   to: 'Vetting',       pct: 90, level: 'high' as const, meta: '20 → 18 · 2 pending' },
-  { from: 'Vetting',       to: 'Reg. Payment',  pct: 89, level: 'high' as const, meta: '18 → 16 · 2 pending' },
-  { from: 'Reg. Payment',  to: 'Active Student',pct: 88, level: 'high' as const, meta: '16 → 14 · 2 pending' },
-]
+// How the API buckets each applicant, for the legend tooltips.
+const SOURCE_HINTS: Record<number, string> = {
+  1: 'Enquiry source Direct, FrontDesk or Self Kiosk, or no enquiry',
+  2: 'Not identified yet — always 0 for now',
+  3: 'Application came from the ODel system',
+  4: 'Enquiry source Website, Facebook, Twitter, Instagram or WhatsApp',
+  5: 'Any other enquiry source',
+}
 
-function donutSegments() {
-  const total = DONUT_DATA.reduce((s, d) => s + d.value, 0)
-  const R = 45, C = 2 * Math.PI * R
+// conversion fromStage/toStage numbers
+const STAGE_LABELS: Record<number, string> = {
+  1: 'Enquiry',
+  2: 'App. Payment',
+  3: 'App. Filing',
+  4: 'Vetting',
+  5: 'Reg. Payment',
+  6: 'Active Student',
+}
+
+// Step tone by its percent: green from 80, amber from 50, red below.
+function stepTone(percent: number) {
+  if (percent >= 80) return 'tone-strong'
+  if (percent >= 50) return 'tone-fair'
+  return 'tone-weak'
+}
+
+const fmtCount = (n: number) => n.toLocaleString('en-US')
+const sourceColor = (source: number) => SOURCE_COLORS[source] ?? SOURCE_COLORS[5]
+
+// Zero-count sources stay in the legend but get no slice. Starts at 12
+// o'clock; a small gap separates slices when there's more than one.
+const DONUT_R = 46
+function donutSegments(sources: AdmissionSourceMixEntry[]) {
+  const drawn = sources.filter(s => s.count > 0)
+  const total = drawn.reduce((sum, s) => sum + s.count, 0)
+  const C = 2 * Math.PI * DONUT_R
+  const gap = drawn.length > 1 ? 1.5 : 0
   let offset = 0
-  return DONUT_DATA.map(d => {
-    const len = (d.value / total) * C
-    const gap = 2
-    const seg = { ...d, dashArray: `${len - gap} ${C - len + gap}`, dashOffset: -offset }
+  return drawn.map(s => {
+    const len = (s.count / total) * C
+    const dash = Math.max(len - gap, 0.6)
+    const seg = { ...s, color: sourceColor(s.source), dashArray: `${dash} ${C - dash}`, dashOffset: -offset }
     offset += len
     return seg
   })
 }
 
-function ConvBar({ from, to, pct, level, meta }: { from: string; to: string; pct: number; level: 'high' | 'low'; meta: string }) {
-  const isHigh = level === 'high'
+function ConvBar({ step, isFirst, index }: { step: AdmissionConversionStep; isFirst: boolean; index: number }) {
+  const from = STAGE_LABELS[step.fromStage] ?? `Stage ${step.fromStage}`
+  const to = STAGE_LABELS[step.toStage] ?? `Stage ${step.toStage}`
   return (
-    <div className="conv-item">
+    <li className={`conv-item ${stepTone(step.percent)}${isFirst ? ' is-lost' : ''}`}>
       <div className="conv-hdr">
         <span className="conv-from">{from} → {to}</span>
-        <span className={`conv-pct ${isHigh ? 'conv-pct-high' : 'conv-pct-low'}`}>{pct}%</span>
+        <span className="conv-meta">
+          {fmtCount(step.fromCount)} → {fmtCount(step.toCount)} ·{' '}
+          <strong className={isFirst && step.remaining > 0 ? 'is-lost' : undefined}>
+            {fmtCount(step.remaining)} {isFirst ? 'lost' : 'pending'}
+          </strong>
+        </span>
+        <span className="conv-pct">{step.percent}%</span>
       </div>
-      <div className="conv-track">
-        <div className={`conv-fill ${isHigh ? 'conv-fill-high' : 'conv-fill-low'}`} style={{ width: `${pct}%` }} />
+      <div className="conv-track" role="img" aria-label={`${from} to ${to}: ${step.percent}%`}>
+        <div className="conv-fill" style={{ width: `${step.percent}%`, ['--i' as string]: index }} />
       </div>
-      <span className="conv-meta">{meta}</span>
+    </li>
+  )
+}
+
+function ProgressSkeleton() {
+  return (
+    <div className="adm-chart-grid" aria-busy="true" aria-label="Loading admission progress">
+      <div className="adm-chart-col">
+        <span className="adm-skel" style={{ width: 170, height: 13 }} />
+        <span className="adm-skel" style={{ width: 240, height: 10, margin: '8px 0 20px' }} />
+        <div className="adm-mix">
+          <span className="adm-skel adm-skel-ring" />
+          <div className="adm-skel-rows">
+            {[0, 1, 2, 3].map(i => <span key={i} className="adm-skel" style={{ height: 14 }} />)}
+          </div>
+        </div>
+        <span className="adm-skel" style={{ height: 64, marginTop: 20, borderRadius: 'var(--rsm)' }} />
+      </div>
+      <div className="adm-chart-col">
+        <span className="adm-skel" style={{ width: 190, height: 13 }} />
+        <span className="adm-skel" style={{ width: 260, height: 10, margin: '8px 0 20px' }} />
+        <div className="adm-skel-rows" style={{ gap: 22 }}>
+          {[0, 1, 2, 3, 4].map(i => <span key={i} className="adm-skel" style={{ height: 22 }} />)}
+        </div>
+        <span className="adm-skel" style={{ height: 78, marginTop: 20, borderRadius: 'var(--rsm)' }} />
+      </div>
     </div>
   )
+}
+
+function dashboardTitle(d: AdmissionDashboard | undefined) {
+  if (!d) return 'Admission Progress'
+  return d.intakeName ? `Admission Progress — ${d.intakeName} (${d.intakeCode})` : `Admission Progress — ${d.intakeCode}`
 }
 
 export default function DashboardPage() {
   const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [hoveredSrc, setHoveredSrc] = useState<string | null>(null)
+  const [hoveredSrc, setHoveredSrc] = useState<number | null>(null)
   const [selectedApplicant, setSelectedApplicant] = useState<ApplicationListItem | null>(null)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
 
@@ -116,7 +192,14 @@ export default function DashboardPage() {
   // Ready to Register (Task 4: from Registrar Desk page API)
   const { data: regDeskData, isLoading: isRegDeskLoading } = useRegistrarDeskApplications(1, 5)
 
-  const segments = donutSegments()
+  // Admission Progress card: the current admission intake
+  const { data: dashboard, isLoading: isDashboardLoading, error: dashboardError } = useAdmissionDashboard()
+  const sourceMix = dashboard?.sourceMix
+  const conversion = dashboard?.conversion
+  const segments = sourceMix ? donutSegments(sourceMix.sources) : []
+  const noOpenIntake = dashboardError?.message?.toLowerCase().includes('no active admission intake') ?? false
+  // The hovered source swaps into the donut centre, in place of the total.
+  const hoveredEntry = sourceMix?.sources.find(s => s.source === hoveredSrc) ?? null
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -127,68 +210,115 @@ export default function DashboardPage() {
 
   return (
     <div id="page-dashboard">
+      <div className="pg-hdr">
+        <div>
+          <div className="pg-title">Admission Dashboard</div>
+          <div className="pg-sub">Where applicants come from, how they move through admission, and who is waiting on you</div>
+        </div>
+        <button className="btn btn-primary" onClick={() => router.push('/admission/payment')}>
+          <i className="lni lni-plus" /> New Application
+        </button>
+      </div>
+
       {/* Admission Progress */}
-      <div className="card mb-6">
+      <section className="card mb-6" aria-labelledby="adm-progress-title">
         <div className="card-hdr">
           <div>
-            <div className="card-title">Admission Progress — Spring 2026 (20261)</div>
-            <div className="card-sub">Application source mix + stage-to-stage conversion · 23 applicants, 14 active</div>
+            <h2 id="adm-progress-title" className="card-title">{dashboardTitle(dashboard)}</h2>
+            {sourceMix && conversion && (
+              <div className="card-sub">
+                Application source mix + stage-to-stage conversion · {fmtCount(sourceMix.totalApplicants)} applicants, {fmtCount(conversion.activeStudentCount)} active
+              </div>
+            )}
           </div>
-          <button className="btn btn-primary" onClick={() => router.push('/admission/payment')}>
-            <i className="lni lni-plus" /> New Application
-          </button>
+          {dashboard && <span className="adm-intake-chip">Current intake</span>}
         </div>
+        {isDashboardLoading ? (
+          <ProgressSkeleton />
+        ) : !sourceMix || !conversion ? (
+          <div className={`adm-state${noOpenIntake ? '' : ' is-error'}`} role={noOpenIntake ? undefined : 'alert'}>
+            <span className="adm-state-ic" aria-hidden="true">
+              <i className={`lni ${noOpenIntake ? 'lni-calendar' : 'lni-warning'}`} />
+            </span>
+            <div className="adm-state-title">{noOpenIntake ? 'No admission intake is open' : 'Admission progress couldn’t load'}</div>
+            <div className="adm-state-sub">
+              {noOpenIntake
+                ? 'Progress appears here once an intake is set as the current admission intake.'
+                : dashboardError?.message || 'The dashboard service didn’t return any data.'}
+            </div>
+          </div>
+        ) : (
         <div className="adm-chart-grid">
-          {/* Left — donut chart */}
+          {/* Left — source mix */}
           <div className="adm-chart-col">
             <h3 className="adm-chart-title">Application Source Mix</h3>
-            <p className="adm-chart-sub">How the 23 applicants reached the admission desk</p>
-            <div className="donut-wrap">
+            <p className="adm-chart-sub">How the {fmtCount(sourceMix.totalApplicants)} applicants reached the admission desk</p>
+            <div className="adm-mix">
               <div className="donut-svg-wrap">
-                <svg viewBox="0 0 120 120" className="donut">
-                  {segments.map(seg => (
-                    <circle key={seg.label} className="donut-seg" cx="60" cy="60" r="45" fill="none"
-                      stroke={seg.color} strokeWidth="18"
-                      strokeDasharray={seg.dashArray} strokeDashoffset={seg.dashOffset}
-                      onMouseEnter={() => setHoveredSrc(seg.label)}
-                      onMouseLeave={() => setHoveredSrc(null)} />
-                  ))}
-                  <text x="60" y="55" className="donut-center-num" textAnchor="middle" dominantBaseline="middle">23</text>
-                  <text x="60" y="70" className="donut-center-lbl" textAnchor="middle">APPLICANTS</text>
+                <svg viewBox="0 0 120 120" className={`donut${hoveredEntry ? ' has-focus' : ''}`} role="img"
+                  aria-label={`${fmtCount(sourceMix.totalApplicants)} applicants by source`}>
+                  <circle className="donut-track" cx="60" cy="60" r={DONUT_R} fill="none" strokeWidth="14" />
+                  <g transform="rotate(-90 60 60)">
+                    {segments.map(seg => (
+                      <circle key={seg.source} className={`donut-seg${hoveredSrc === seg.source ? ' is-on' : ''}`}
+                        cx="60" cy="60" r={DONUT_R} fill="none" stroke={seg.color} strokeWidth="14"
+                        strokeDasharray={seg.dashArray} strokeDashoffset={seg.dashOffset}
+                        onMouseEnter={() => setHoveredSrc(seg.source)}
+                        onMouseLeave={() => setHoveredSrc(null)} />
+                    ))}
+                  </g>
+                  <text x="60" y="57" className="donut-center-num" textAnchor="middle" dominantBaseline="middle">
+                    {fmtCount(hoveredEntry ? hoveredEntry.count : sourceMix.totalApplicants)}
+                  </text>
+                  <text x="60" y="71" className="donut-center-lbl" textAnchor="middle">
+                    {hoveredEntry ? `${hoveredEntry.percent}% OF TOTAL` : 'APPLICANTS'}
+                  </text>
                 </svg>
               </div>
-              <div className="donut-legend">
-                {DONUT_DATA.map(d => (
-                  <div
-                    key={d.label}
-                    className={`donut-legend-item${hoveredSrc === d.label ? ' active' : ''}${hoveredSrc && hoveredSrc !== d.label ? ' dim' : ''}`}
-                    onMouseEnter={() => setHoveredSrc(d.label)}
+              <ul className="donut-legend">
+                {sourceMix.sources.map(s => (
+                  <li
+                    key={s.source}
+                    title={SOURCE_HINTS[s.source]}
+                    className={`donut-legend-item${s.count === 0 ? ' is-zero' : ''}${hoveredSrc === s.source ? ' active' : ''}${hoveredSrc != null && hoveredSrc !== s.source ? ' dim' : ''}`}
+                    onMouseEnter={() => setHoveredSrc(s.source)}
                     onMouseLeave={() => setHoveredSrc(null)}
                   >
-                    <span className="donut-swatch" style={{ background: d.color }} />
-                    <span className="donut-legend-lbl">{d.label}</span>
-                    <span className="donut-legend-val">{d.value}</span>
-                    <span className="donut-legend-pct">{d.pct}%</span>
-                  </div>
+                    <span className="donut-swatch" style={{ background: sourceColor(s.source) }} />
+                    <span className="donut-legend-lbl">{s.name}</span>
+                    <span className="donut-legend-val">{fmtCount(s.count)}</span>
+                    <span className="donut-legend-pct">{s.percent}%</span>
+                    <span className="donut-legend-bar" aria-hidden="true">
+                      <span style={{ width: `${s.percent}%`, background: sourceColor(s.source) }} />
+                    </span>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
-            <div className="donut-metrics">
+            <div className="adm-metrics">
+            <div className="adm-split" aria-hidden="true">
+              <span style={{ width: `${sourceMix.counsellorDrivenPercent}%`, background: 'var(--adm-ink)' }} />
+              <span style={{ width: `${sourceMix.selfServicePercent}%`, background: 'var(--adm-sage)' }} />
+            </div>
+            <div className={`donut-metrics${sourceMix.topSource ? '' : ' is-two'}`}>
               <div className="donut-metric">
-                <div className="donut-metric-lbl">Counsellor-Driven</div>
-                <div className="donut-metric-val">65%</div>
+                <div className="donut-metric-lbl"><span className="donut-swatch" style={{ background: 'var(--adm-ink)' }} />Counsellor-Driven</div>
+                <div className="donut-metric-val">{sourceMix.counsellorDrivenPercent}%</div>
                 <div className="donut-metric-sub">Direct + CRM</div>
               </div>
               <div className="donut-metric">
-                <div className="donut-metric-lbl">Self-Service</div>
-                <div className="donut-metric-val">35%</div>
+                <div className="donut-metric-lbl"><span className="donut-swatch" style={{ background: 'var(--adm-sage)' }} />Self-Service</div>
+                <div className="donut-metric-val">{sourceMix.selfServicePercent}%</div>
                 <div className="donut-metric-sub">ODel + Online</div>
               </div>
-              <div className="donut-metric">
-                <div className="donut-metric-lbl">Top Source</div>
-                <div className="donut-metric-val">Direct</div>
-                <div className="donut-metric-sub">9 applicants</div>
-              </div>
+              {sourceMix.topSource && (
+                <div className="donut-metric">
+                  <div className="donut-metric-lbl"><span className="donut-swatch" style={{ background: sourceColor(sourceMix.topSource.source) }} />Top Source</div>
+                  <div className="donut-metric-val is-text">{sourceMix.topSource.name}</div>
+                  <div className="donut-metric-sub">{fmtCount(sourceMix.topSource.count)} applicants</div>
+                </div>
+              )}
+            </div>
             </div>
           </div>
 
@@ -196,26 +326,33 @@ export default function DashboardPage() {
           <div className="adm-chart-col">
             <h3 className="adm-chart-title">Stage-to-Stage Conversion</h3>
             <p className="adm-chart-sub">Where applicants drop off — % moving forward each step</p>
-            <div className="conv-list">
-              {CONV_BARS.map(b => (
-                <ConvBar key={b.from} from={b.from} to={b.to} pct={b.pct} level={b.level} meta={b.meta} />
+            <ol className="conv-list">
+              {conversion.steps.map((step, i) => (
+                <ConvBar key={`${step.fromStage}-${step.toStage}`} step={step} isFirst={i === 0} index={i} />
               ))}
-            </div>
+            </ol>
             <div className="conv-summary">
               <div>
                 <div className="conv-summary-lbl">Overall Conversion (Enquiry → Active)</div>
-                <div className="conv-summary-meta">60 enquiries · 14 active students</div>
+                <div className="conv-summary-meta">{fmtCount(conversion.enquiryCount)} enquiries · {fmtCount(conversion.activeStudentCount)} active students</div>
               </div>
-              <span className="conv-summary-val">23%</span>
+              <span className="conv-summary-val">{conversion.overallPercent}%</span>
+              <span className="conv-summary-track" aria-hidden="true">
+                <span style={{ width: `${conversion.overallPercent}%` }} />
+              </span>
             </div>
           </div>
         </div>
-      </div>
+        )}
+      </section>
 
       {/* Recent Applications */}
       <div className="card mb-6">
         <div className="card-hdr">
-          <div className="card-title">Recent Applications — Spring 2026</div>
+          <div>
+            <div className="card-title">Recent Applications</div>
+            <div className="card-sub">Newest applications across all intakes</div>
+          </div>
           <div className="flex items-center gap-2">
             <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/applicants')}>View All</button>
             <button className="btn btn-primary btn-sm" onClick={() => router.push('/admission/payment')}>
@@ -295,81 +432,98 @@ export default function DashboardPage() {
 
       {/* Bottom panels */}
       <div className="g2">
-        <div className="card">
+        <div className="card adm-queue">
           <div className="card-hdr">
-            <div className="card-title">Vetting Queue ({vettingData?.totalCount ?? 0})</div>
-            <button style={{ fontSize: 'var(--fs-xs)', color: 'var(--b500)', fontWeight: 600 }} onClick={() => router.push('/admission/vetting')}>Open →</button>
+            <div className="card-title">Vetting Queue <span className="adm-count">{vettingData?.totalCount ?? 0}</span></div>
+            <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/vetting')}>
+              Open <i className="lni lni-arrow-right" />
+            </button>
           </div>
           {isVettingLoading ? (
-            <div className="p-4 text-center text-sm text-g400">Loading queue…</div>
+            <div className="adm-queue-state">Loading queue…</div>
           ) : (vettingData?.items ?? []).length === 0 ? (
-            <div className="p-4 text-center text-sm text-g400">No applicants in vetting queue</div>
+            <div className="adm-queue-state">No applicants in vetting queue</div>
           ) : (
-            <div className="timeline">
+            <ul className="adm-qlist">
               {(vettingData?.items ?? []).map(item => {
-                const isUrgent = (item.documentsUploaded ?? 0) < (item.documentsTotal ?? 0)
+                const uploaded = item.documentsUploaded ?? 0
+                const total = item.documentsTotal ?? 0
+                const complete = total > 0 && uploaded >= total
                 return (
-                  <div
+                  <li
                     key={item.applicationGuid || item.appRefNo}
-                    className="tl-item cursor-pointer hover:bg-g50 p-1.5 rounded transition-colors"
+                    className="adm-qrow"
+                    role="link"
+                    tabIndex={0}
                     onClick={() => router.push('/admission/vetting')}
+                    onKeyDown={e => { if (e.key === 'Enter') router.push('/admission/vetting') }}
                   >
-                    <div className={`tl-dot ${isUrgent ? 'active' : ''}`}>
-                      {isUrgent ? <i className="lni lni-warning" style={{ fontSize: 14 }} /> : null}
-                    </div>
-                    <div className="tl-content">
-                      <div className="tl-label flex items-center justify-between">
-                        <span className="font-medium text-g800">{item.studentName || item.appRefNo}</span>
-                        <span className="text-xs text-g400 font-mono">{item.appRefNo}</span>
+                    <span className="adm-avatar" aria-hidden="true">{initials(item.studentName || item.appRefNo)}</span>
+                    <div className="adm-qmain">
+                      <div className="adm-qname">
+                        <span>{item.studentName || item.appRefNo}</span>
+                        <span className="adm-qref">{item.appRefNo}</span>
                       </div>
-                      <div className="tl-meta">
-                        {item.programName || '—'} · Docs {item.documentsUploaded ?? 0}/{item.documentsTotal ?? 0} · {timeAgo(item.submittedDate)}
-                      </div>
+                      <div className="adm-qprog" title={item.programName || undefined}>{item.programName || '—'}</div>
                     </div>
-                  </div>
+                    <div className="adm-qside">
+                      <span className={`adm-docs${complete ? ' is-complete' : ''}`}>
+                        <span className="adm-docs-txt">Docs {uploaded}/{total}</span>
+                        <span className="adm-docs-bar" aria-hidden="true">
+                          <span style={{ width: `${total > 0 ? Math.min(100, (uploaded / total) * 100) : 0}%` }} />
+                        </span>
+                      </span>
+                      <span className="adm-qtime">{timeAgo(item.submittedDate)}</span>
+                    </div>
+                    <i className="lni lni-chevron-right adm-qchev" aria-hidden="true" />
+                  </li>
                 )
               })}
-            </div>
+            </ul>
           )}
         </div>
 
-        <div className="card">
+        <div className="card adm-queue">
           <div className="card-hdr">
-            <div className="card-title">Ready to Register ({regDeskData?.totalCount ?? 0})</div>
-            <button style={{ fontSize: 'var(--fs-xs)', color: 'var(--b500)', fontWeight: 600 }} onClick={() => router.push('/admission/registration')}>Open →</button>
+            <div className="card-title">Ready to Register <span className="adm-count">{regDeskData?.totalCount ?? 0}</span></div>
+            <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/registration')}>
+              Open <i className="lni lni-arrow-right" />
+            </button>
           </div>
           {isRegDeskLoading ? (
-            <div className="p-4 text-center text-sm text-g400">Loading queue…</div>
+            <div className="adm-queue-state">Loading queue…</div>
           ) : (regDeskData?.items ?? []).length === 0 ? (
-            <div className="p-4 text-center text-sm text-g400">No applicants waiting to register</div>
+            <div className="adm-queue-state">No applicants waiting to register</div>
           ) : (
-            <div className="timeline">
+            <ul className="adm-qlist">
               {(regDeskData?.items ?? []).map(item => (
-                <div
+                <li
                   key={item.applicationGuid || item.appRefNo}
-                  className="tl-item cursor-pointer hover:bg-g50 p-1.5 rounded transition-colors"
+                  className="adm-qrow"
+                  role="link"
+                  tabIndex={0}
                   onClick={() => router.push('/admission/registration')}
+                  onKeyDown={e => { if (e.key === 'Enter') router.push('/admission/registration') }}
                 >
-                  <div className={`tl-dot ${item.regPaid ? 'done' : 'active'}`}>
-                    {item.regPaid
-                      ? <i className="lni lni-checkmark" style={{ fontSize: 14 }} />
-                      : <i className="lni lni-warning" style={{ fontSize: 14 }} />}
-                  </div>
-                  <div className="tl-content">
-                    <div className="tl-label flex items-center justify-between">
-                      <span className="font-medium text-g800">{item.studentName || item.appRefNo}</span>
-                      <span className="text-xs text-g400 font-mono">{item.appRefNo}</span>
+                  <span className="adm-avatar" aria-hidden="true">{initials(item.studentName || item.appRefNo)}</span>
+                  <div className="adm-qmain">
+                    <div className="adm-qname">
+                      <span>{item.studentName || item.appRefNo}</span>
+                      <span className="adm-qref">{item.appRefNo}</span>
                     </div>
-                    <div className="tl-meta">
-                      {item.programName || '—'} · Reg. fee{' '}
-                      <span className={item.regPaid ? 'text-clr-green font-medium' : 'text-clr-amber font-medium'}>
-                        {item.regPaid ? 'Paid' : 'Pending'}
-                      </span>
-                    </div>
+                    <div className="adm-qprog" title={item.programName || undefined}>{item.programName || '—'}</div>
                   </div>
-                </div>
+                  <div className="adm-qside">
+                    <span className={`adm-fee${item.regPaid ? ' is-paid' : ''}`}>
+                      <i className={`lni ${item.regPaid ? 'lni-checkmark-circle' : 'lni-timer'}`} aria-hidden="true" />
+                      {item.regPaid ? 'Paid' : 'Pending'}
+                    </span>
+                    <span className="adm-qtime">Reg. fee</span>
+                  </div>
+                  <i className="lni lni-chevron-right adm-qchev" aria-hidden="true" />
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </div>
       </div>

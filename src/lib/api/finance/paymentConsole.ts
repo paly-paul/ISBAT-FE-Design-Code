@@ -238,6 +238,7 @@ export const PAYMENT_CATEGORY_LABELS: Record<number, string> = {
   3: 'NCHE',
   4: 'Guild',
   5: 'Advance',
+  6: 'Application Fee',
 }
 
 export const PAY_TYPE_LABELS: Record<number, string> = {
