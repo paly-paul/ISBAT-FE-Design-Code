@@ -24,6 +24,24 @@ function formatSafeTime(isoString?: string | null): string {
   }
 }
 
+// Calculate duration between start and end ISO strings (e.g. "3 hrs" or "1h 30m")
+function formatDuration(start?: string | null, end?: string | null): string | null {
+  if (!start || !end) return null
+  try {
+    const t1 = new Date(start).getTime()
+    const t2 = new Date(end).getTime()
+    if (isNaN(t1) || isNaN(t2) || t2 <= t1) return null
+    const diffMinutes = Math.round((t2 - t1) / 60000)
+    const hours = Math.floor(diffMinutes / 60)
+    const mins = diffMinutes % 60
+    if (hours > 0 && mins > 0) return `${hours}h ${mins}m`
+    if (hours > 0) return `${hours} hr${hours > 1 ? 's' : ''}`
+    return `${mins} mins`
+  } catch {
+    return null
+  }
+}
+
 export default function AssessmentDashboard() {
   const router = useRouter()
   const [examPage, setExamPage] = useState(1)
@@ -45,35 +63,57 @@ export default function AssessmentDashboard() {
   const isInitialLoading = overviewLoading && hallTicketLoading && resitLoading && lecturerLoading
 
   // ---------------------------------------------------------------------------
-  // 2. Computed Metrics & Role Adaptations
+  // 2. Computed Metrics & Dual-View Scope (Enhancement #3: Dean-Lecturer Toggle)
   // ---------------------------------------------------------------------------
+  const hasBothViews =
+    overview != null &&
+    lecturer != null &&
+    (lecturer.schedules?.length > 0 ||
+      lecturer.cwSubmissionPendingCount > 0 ||
+      lecturer.cwEvaluationPendingCount > 0)
+
+  const [activeScope, setActiveScope] = useState<'overview' | 'teaching'>('overview')
+
   const isRegistrar = overview?.isUniversityWide === true
   const isDean = overview != null && overview.isUniversityWide === false
   const isLecturerOnly = overview == null && lecturer != null
 
-  const roleBadge = isRegistrar
+  const isViewingTeaching = activeScope === 'teaching' || isLecturerOnly
+
+  const roleBadge = isViewingTeaching
+    ? { label: 'Lecturer', class: 'bg-emerald-100 text-emerald-700 border-emerald-200' }
+    : isRegistrar
     ? { label: 'Registrar', class: 'bg-purple-100 text-purple-700 border-purple-200' }
     : isDean
     ? { label: 'Dean', class: 'bg-blue-100 text-blue-700 border-blue-200' }
-    : isLecturerOnly
-    ? { label: 'Lecturer', class: 'bg-emerald-100 text-emerald-700 border-emerald-200' }
     : { label: 'Assessment', class: 'bg-slate-100 text-slate-700 border-slate-200' }
 
-  const viewSubtitle = isRegistrar
-    ? 'Academic Intake · Academic Registrar View'
+  const viewSubtitle = isViewingTeaching
+    ? 'Academic Intake · My Teaching Subjects (Personal Workload)'
+    : isRegistrar
+    ? 'Academic Intake · Academic Registrar View (University Totals)'
     : isDean
     ? 'Academic Intake · Faculty Dean View'
-    : isLecturerOnly
-    ? 'Academic Intake · Lecturer View (My Subjects)'
     : 'Academic Intake Overview'
 
-  // Top 4 Stat metrics — 100% live from API, zero dummy fallbacks
-  const cwEvaluationPending = overview?.cwEvaluationPendingCount ?? lecturer?.cwEvaluationPendingCount ?? 0
-  const cwSubmissionPending = overview?.cwSubmissionPendingCount ?? lecturer?.cwSubmissionPendingCount ?? 0
-  const qpVettingPending = overview?.ueQpAwaitingVettingCount ?? lecturer?.ueQpAwaitingVettingCount ?? 0
-  const classTestSubmissionPending = overview?.classTestSubmissionPendingCount ?? lecturer?.classTestSubmissionPendingCount ?? 0
+  // Top 4 Stat metrics — adapts dynamically to active scope (Overview vs Teaching)
+  const cwEvaluationPending = isViewingTeaching
+    ? (lecturer?.cwEvaluationPendingCount ?? 0)
+    : (overview?.cwEvaluationPendingCount ?? lecturer?.cwEvaluationPendingCount ?? 0)
 
-  // Safely find Term 1 and Term 2 records from hallTicket.terms
+  const cwSubmissionPending = isViewingTeaching
+    ? (lecturer?.cwSubmissionPendingCount ?? 0)
+    : (overview?.cwSubmissionPendingCount ?? lecturer?.cwSubmissionPendingCount ?? 0)
+
+  const qpVettingPending = isViewingTeaching
+    ? (lecturer?.ueQpAwaitingVettingCount ?? 0)
+    : (overview?.ueQpAwaitingVettingCount ?? lecturer?.ueQpAwaitingVettingCount ?? 0)
+
+  const classTestSubmissionPending = isViewingTeaching
+    ? (lecturer?.classTestSubmissionPendingCount ?? 0)
+    : (overview?.classTestSubmissionPendingCount ?? lecturer?.classTestSubmissionPendingCount ?? 0)
+
+  // Safely find Term 1 and Term 2 records from hallTicket.terms (Enhancement #2)
   const term1 = hallTicket?.terms?.find(t => t.term === 1) ?? hallTicket?.terms?.[0]
   const term2 = hallTicket?.terms?.find(t => t.term === 2) ?? hallTicket?.terms?.[1]
 
@@ -91,7 +131,7 @@ export default function AssessmentDashboard() {
   }
 
   // ---------------------------------------------------------------------------
-  // 3. Dynamic Pending Actions List from Real API Data
+  // 3. Dynamic Pending Actions List from Real API Data (Enhancement #4 included)
   // ---------------------------------------------------------------------------
   interface PendingActionItem {
     id: string
@@ -104,12 +144,14 @@ export default function AssessmentDashboard() {
     icon: string
     iconBg: string
     iconColor: string
+    progressPercent?: number
+    pendingCount?: number
   }
 
   const pendingActions: PendingActionItem[] = useMemo(() => {
     const list: PendingActionItem[] = []
 
-    // Action 1: Question Papers awaiting vetting (from overview or lecturer)
+    // Action 1: Question Papers awaiting vetting
     if (qpVettingPending > 0) {
       list.push({
         id: 'qp-vetting',
@@ -173,26 +215,33 @@ export default function AssessmentDashboard() {
       })
     }
 
-    // Action 5: Lecturer Pending Resit Evaluations (from resit dashboard)
+    // Action 5: Lecturer Pending Resit Evaluations with Grading Progress Rate (Enhancement #4)
     if (resit?.pendingEvaluations && resit.pendingEvaluations.length > 0) {
       for (const evalItem of resit.pendingEvaluations) {
         const progLabel = evalItem.programmeNames?.length
           ? evalItem.programmeNames.join(', ')
           : 'Enrolled Programmes'
+        const evalRate =
+          evalItem.submittedCount > 0
+            ? Math.round((evalItem.evaluatedCount / evalItem.submittedCount) * 100)
+            : 0
+
         list.push({
           id: `resit-eval-${evalItem.courseUnitGuid}-${evalItem.category}`,
           title: `${evalItem.unitCode} (${evalItem.unitName}) — ${evalItem.categoryLabel}`,
-          subtitle: `${evalItem.pendingCount} pending of ${evalItem.submittedCount} submissions (${progLabel})`,
-          tag: 'Resit Evaluation',
-          tagColor: 'text-orange-600 bg-orange-50',
+          subtitle: `${evalItem.evaluatedCount} of ${evalItem.submittedCount} evaluated · ${evalItem.headCount} enrolled (${progLabel})`,
+          tag: `${evalRate}% Evaluated`,
+          tagColor: 'text-emerald-700 bg-emerald-50 border border-emerald-200',
           buttonText: 'Evaluate',
+          progressPercent: evalRate,
+          pendingCount: evalItem.pendingCount,
           onAction: () =>
             router.push(
               `/assessment/resit-evaluation?unit=${evalItem.courseUnitGuid}&intake=${resit.academicIntakeGuid}&config=${resit.resitConfigGuid}`
             ),
           icon: '📝',
-          iconBg: 'bg-orange-100',
-          iconColor: 'text-orange-700',
+          iconBg: 'bg-emerald-100',
+          iconColor: 'text-emerald-700',
         })
       }
     }
@@ -242,7 +291,7 @@ export default function AssessmentDashboard() {
     const csvLines = [
       'ISBAT UNIVERSITY ERP - ASSESSMENT DASHBOARD LIVE SUMMARY',
       `Generated: ${new Date().toLocaleString()}`,
-      `View: ${viewSubtitle}`,
+      `Scope: ${viewSubtitle}`,
       '',
       'METRIC,COUNT,STATUS',
       `Coursework Evaluations Pending,${cwEvaluationPending},Action Required`,
@@ -285,7 +334,7 @@ export default function AssessmentDashboard() {
 
   return (
     <div className="page active">
-      {/* Header */}
+      {/* Header with Dual View Switcher (Enhancement #3) */}
       <div className="pg-hdr">
         <div>
           <div className="pg-title">Assessment Dashboard</div>
@@ -293,7 +342,35 @@ export default function AssessmentDashboard() {
             {overviewLoading ? 'Loading dashboard overview...' : viewSubtitle}
           </div>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center flex-wrap">
+          {/* Dual View Toggle for Deans who also teach */}
+          {hasBothViews && (
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs mr-1">
+              <button
+                type="button"
+                onClick={() => setActiveScope('overview')}
+                className={`px-3 py-1 rounded-md font-medium transition-all ${
+                  activeScope === 'overview'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {isRegistrar ? 'University Totals' : 'Faculty Overview'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveScope('teaching')}
+                className={`px-3 py-1 rounded-md font-medium transition-all ${
+                  activeScope === 'teaching'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                My Subjects
+              </button>
+            </div>
+          )}
+
           <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${roleBadge.class}`}>
             {roleBadge.label}
           </span>
@@ -369,7 +446,7 @@ export default function AssessmentDashboard() {
           </div>
         </div>
 
-        {/* Card 3: Hall Tickets Pending */}
+        {/* Card 3: Hall Tickets Pending with Term 1 & Term 2 Split (Enhancement #2) */}
         <div
           onClick={() => router.push('/assessment/hall-ticket')}
           className="card card-sm flex flex-col gap-1 cursor-pointer hover:shadow-md transition-shadow group"
@@ -384,13 +461,20 @@ export default function AssessmentDashboard() {
             {hallTicketLoading ? (
               <span className="text-slate-300 text-2xl">...</span>
             ) : (
-              term1Pending.toLocaleString()
+              totalPendingHallTickets.toLocaleString()
             )}
           </div>
-          <div className="text-[11px] text-slate-500">
-            {hallTicketLoading
-              ? 'Loading...'
-              : `Term 1: ${term1Pending} pending · Term 2: ${term2Pending} pending`}
+          {/* Term 1 & Term 2 Split Pills */}
+          <div className="flex items-center gap-1.5 mt-1 text-[11px]">
+            <span className="bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded-full border border-blue-200">
+              T1: {term1Pending}
+            </span>
+            <span className="bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded-full border border-indigo-200">
+              T2: {term2Pending}
+            </span>
+            <span className="text-slate-400 text-[10px]">
+              of {totalRegisteredStudents.toLocaleString()}
+            </span>
           </div>
           <div className="h-1 rounded-full bg-slate-100 overflow-hidden mt-1">
             <div
@@ -398,7 +482,7 @@ export default function AssessmentDashboard() {
               style={{
                 width: `${
                   totalRegisteredStudents > 0
-                    ? Math.round((term1Issued / totalRegisteredStudents) * 100)
+                    ? Math.round(((term1Issued + term2Issued) / (totalRegisteredStudents * 2)) * 100)
                     : 0
                 }%`,
               }}
@@ -498,11 +582,32 @@ export default function AssessmentDashboard() {
                           {action.buttonText}
                         </button>
                       </div>
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${action.tagColor}`}>
-                          {action.tag}
-                        </span>
-                      </div>
+
+                      {/* Grading progress bar for resit evaluations (Enhancement #4) */}
+                      {action.progressPercent !== undefined ? (
+                        <div className="flex items-center gap-2 mt-2">
+                          <div className="w-[120px] h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-emerald-500 transition-all"
+                              style={{ width: `${action.progressPercent}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-[10px] font-semibold text-emerald-700">
+                            {action.progressPercent}% completed
+                          </span>
+                          {action.pendingCount !== undefined && action.pendingCount > 0 && (
+                            <span className="text-[10px] text-slate-400">
+                              ({action.pendingCount} remaining)
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${action.tagColor}`}>
+                            {action.tag}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -511,7 +616,7 @@ export default function AssessmentDashboard() {
           </div>
         </div>
 
-        {/* Scheduled Exams / Schedules Table */}
+        {/* Scheduled Exams / Schedules Table with Time Window & Duration (Enhancement #1) */}
         <div className="bg-white rounded-[14px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 p-5 flex flex-col justify-between">
           <div>
             <div className="font-bold text-[15px] mb-4 flex items-center justify-between">
@@ -532,7 +637,7 @@ export default function AssessmentDashboard() {
                     <tr className="text-[11px] font-bold text-white uppercase bg-[#4f46e5]">
                       <th className="px-3 py-3">Course Unit</th>
                       <th className="px-3 py-3">Exam Type</th>
-                      <th className="px-3 py-3">Date & Time</th>
+                      <th className="px-3 py-3">Date, Time & Duration</th>
                       <th className="px-3 py-3 text-center">Status</th>
                     </tr>
                   </thead>
@@ -547,6 +652,7 @@ export default function AssessmentDashboard() {
                           : exam.examType === 2
                           ? 'Coursework Window'
                           : 'General Window')
+                      const durationStr = formatDuration(exam.startDateTime, exam.endDateTime)
                       return (
                         <tr
                           key={exam.scheduleGuid || idx}
@@ -566,9 +672,16 @@ export default function AssessmentDashboard() {
                             </span>
                           </td>
                           <td className="px-3 py-3 align-middle text-[12px] text-slate-700">
-                            <div>{formatDate(exam.startDateTime)}</div>
-                            <div className="text-[11px] text-slate-400">
-                              {formatSafeTime(exam.startDateTime)}
+                            <div className="font-medium text-slate-900">{formatDate(exam.startDateTime)}</div>
+                            <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1 mt-0.5">
+                              <span>
+                                {formatSafeTime(exam.startDateTime)} – {formatSafeTime(exam.endDateTime)}
+                              </span>
+                              {durationStr && (
+                                <span className="bg-slate-100 text-slate-600 rounded px-1.5 py-0.2 text-[10px] font-semibold border border-slate-200">
+                                  {durationStr}
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="px-3 py-3 align-middle text-center">
@@ -595,13 +708,14 @@ export default function AssessmentDashboard() {
                     <tr className="text-[11px] font-bold text-white uppercase bg-[#4f46e5]">
                       <th className="px-3 py-3">Subject</th>
                       <th className="px-3 py-3">Schedule</th>
-                      <th className="px-3 py-3">Date</th>
+                      <th className="px-3 py-3">Date, Time & Duration</th>
                       <th className="px-3 py-3 text-center">Max Mark</th>
                     </tr>
                   </thead>
                   <tbody>
                     {lecturerSchedules.slice(0, 5).map((sched, idx) => {
                       const typeBadge = getExamTypeLabel(sched.scheduleType)
+                      const durationStr = formatDuration(sched.startDateTime, sched.endDateTime)
                       return (
                         <tr
                           key={sched.scheduleGuid || idx}
@@ -621,7 +735,17 @@ export default function AssessmentDashboard() {
                             </span>
                           </td>
                           <td className="px-3 py-3 align-middle text-[12px] text-slate-700">
-                            {formatDate(sched.startDateTime)}
+                            <div className="font-medium text-slate-900">{formatDate(sched.startDateTime)}</div>
+                            <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1 mt-0.5">
+                              <span>
+                                {formatSafeTime(sched.startDateTime)} – {formatSafeTime(sched.endDateTime)}
+                              </span>
+                              {durationStr && (
+                                <span className="bg-slate-100 text-slate-600 rounded px-1.5 py-0.2 text-[10px] font-semibold border border-slate-200">
+                                  {durationStr}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-3 py-3 align-middle text-center font-semibold text-slate-700">
                             {sched.maxMark ?? '—'}
@@ -680,19 +804,19 @@ export default function AssessmentDashboard() {
               </div>
               <div className="flex justify-between items-center text-[13px] text-slate-700">
                 <span>Term 1 Pending Clearance</span>
-                <span className="bg-amber-100 text-amber-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
+                <span className="bg-blue-100 text-blue-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
                   {hallTicketLoading ? '...' : term1Pending.toLocaleString()}
                 </span>
               </div>
               <div className="flex justify-between items-center text-[13px] text-slate-700">
                 <span>Term 2 Hall Tickets Issued</span>
-                <span className="bg-blue-100 text-blue-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
+                <span className="bg-green-100 text-green-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
                   {hallTicketLoading ? '...' : term2Issued.toLocaleString()}
                 </span>
               </div>
               <div className="flex justify-between items-center text-[13px] text-slate-700">
                 <span>Term 2 Pending Clearance</span>
-                <span className="bg-purple-100 text-purple-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
+                <span className="bg-indigo-100 text-indigo-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
                   {hallTicketLoading ? '...' : term2Pending.toLocaleString()}
                 </span>
               </div>
