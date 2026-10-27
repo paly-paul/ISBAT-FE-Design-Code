@@ -152,112 +152,47 @@ export default function ProfilePage() {
 
   return (
     <>
-      <div className="page active" id="page-profile-master">
-        <style>{`
-          .profile-2col-layout {
-            display: grid;
-            grid-template-columns: minmax(310px, 350px) minmax(0, 1fr);
-            gap: 22px;
-            align-items: start;
-          }
+      <div className="page active profile-page" id="page-profile-master">
+        <header className="profile-page-header">
+          <div>
+            <div className="profile-eyebrow"><i className="lni lni-user"></i> ACCOUNT CENTRE</div>
+            <h1 className="profile-page-title">My profile</h1>
+            <p className="profile-page-subtitle">Manage your personal information, work details, and account security.</p>
+          </div>
+          <div className="profile-record-status">
+            <span className="profile-record-status-icon"><i className="lni lni-shield"></i></span>
+            <span><strong>Profile record</strong><small>Verified by the university</small></span>
+          </div>
+        </header>
 
-          .profile-left-col {
-            position: sticky;
-            top: 16px;
-            align-self: start;
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
-          }
+        <ProfileIdentityCard
+          displayName={displayName}
+          email={email}
+          phone={phone}
+          photo={photo}
+          handlePhoto={handlePhoto}
+          copied={copied}
+          onCopyStaffId={handleCopyStaffId}
+        />
 
-          .profile-fields-2col {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            row-gap: 24px;
-            column-gap: 36px;
-          }
+        <div className="profile-summary-strip">
+          <div className="profile-summary-item">
+            <span className="profile-summary-icon is-green"><i className="lni lni-shield" /></span>
+            <span><small>ACCOUNT STATUS</small><strong>Verified &amp; active</strong></span>
+          </div>
+          <div className="profile-summary-item">
+            <span className="profile-summary-icon is-blue"><i className="lni lni-display" /></span>
+            <span><small>CONNECTED DEVICES</small><strong>3 active sessions</strong></span>
+          </div>
+          <div className="profile-summary-item">
+            <span className="profile-summary-icon is-amber"><i className="lni lni-briefcase" /></span>
+            <span><small>EMPLOYMENT</small><strong>Full-time · Since Jan 2024</strong></span>
+          </div>
+        </div>
 
-          .profile-fields-3col {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            row-gap: 24px;
-            column-gap: 32px;
-            margin-bottom: 18px;
-          }
-
-          .profile-security-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-            gap: 18px;
-            align-items: start;
-          }
-
-          /* Jab menu sidebar open ho (.main.panel-open) tab Change Password aur Recent Sign-in ek dusre ke niche aayenge */
-          .main.panel-open .profile-security-grid {
-            grid-template-columns: 1fr;
-          }
-
-          /* On large/wide screens (>=1560px), even with panel open there is enough room for parallel */
-          @media (min-width: 1560px) {
-            .main.panel-open .profile-security-grid {
-              grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-            }
-          }
-
-          @media (max-width: 1100px) {
-            .profile-fields-3col {
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-          }
-
-          /* Tablet & medium screens */
-          @media (max-width: 1024px) {
-            .profile-2col-layout {
-              grid-template-columns: 1fr;
-              gap: 18px;
-            }
-            .profile-left-col {
-              position: static;
-            }
-            .profile-security-grid {
-              grid-template-columns: 1fr !important;
-            }
-          }
-
-          /* Mobile screens */
-          @media (max-width: 600px) {
-            .profile-fields-2col,
-            .profile-fields-3col {
-              grid-template-columns: 1fr !important;
-              row-gap: 18px;
-            }
-            #page-profile-master .card {
-              padding: 18px 16px;
-            }
-          }
-        `}</style>
-
-        {/* 2-Column Executive Profile Dashboard */}
-        <div className="profile-2col-layout">
-          {/* ============================================================ */}
-          {/* LEFT COLUMN: Executive Profile & Identity Card               */}
-          {/* ============================================================ */}
-          <ProfileIdentityCard
-            displayName={displayName}
-            email={email}
-            phone={phone}
-            photo={photo}
-            handlePhoto={handlePhoto}
-            copied={copied}
-            onCopyStaffId={handleCopyStaffId}
-          />
-
-          {/* ============================================================ */}
-          {/* RIGHT COLUMN: Interactive Work Panes                         */}
-          {/* ============================================================ */}
-          <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div className="profile-content">
             {/* Top Workspace Tab Bar */}
-            <div className="ptabs" style={{ margin: 0 }}>
+            <div className="ptabs profile-tabs" style={{ margin: 0 }}>
               <button
                 type="button"
                 className={`ptab${tab === 'info' ? ' active' : ''}`}
@@ -276,9 +211,9 @@ export default function ProfilePage() {
 
             {/* TAB 1: Profile Info Panes (Spacious, Executive 4-Card Hierarchy) */}
             {tab === 'info' && (
-              <>
+              <div className="profile-info-grid">
                 {/* 1. Personal Information Card */}
-                <div className="card" style={{ padding: '22px 26px', margin: 0 }}>
+                <div className="card profile-personal-card" style={{ padding: '22px 26px', margin: 0 }}>
                   <div className="card-hdr" style={{ marginBottom: 20 }}>
                     <div>
                       <div className="card-title">
@@ -331,7 +266,7 @@ export default function ProfilePage() {
                 </div>
 
                 {/* 2. Contact & Residential Details Card */}
-                <div className="card" style={{ padding: '22px 26px', margin: 0 }}>
+                <div className="card profile-contact-card" style={{ padding: '22px 26px', margin: 0 }}>
                   <div className="card-hdr" style={{ marginBottom: 20 }}>
                     <div>
                       <div className="card-title">
@@ -352,7 +287,7 @@ export default function ProfilePage() {
                 </div>
 
                 {/* 3. Emergency Contact Point Card */}
-                <div className="card" style={{ padding: '22px 26px', margin: 0 }}>
+                <div className="card profile-emergency-card" style={{ padding: '22px 26px', margin: 0 }}>
                   <div className="card-hdr" style={{ marginBottom: 20 }}>
                     <div>
                       <div className="card-title">
@@ -388,7 +323,7 @@ export default function ProfilePage() {
                 </div>
 
                 {/* 4. Role & Institutional Assignment Card */}
-                <div className="card" style={{ padding: '22px 26px', margin: 0 }}>
+                <div className="card profile-assignment-card" style={{ padding: '22px 26px', margin: 0 }}>
                   <div className="card-hdr" style={{ marginBottom: 20 }}>
                     <div>
                       <div className="card-title">
@@ -424,7 +359,7 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 </div>
-              </>
+              </div>
             )}
 
             {/* TAB 2: Security & Device Panes */}
@@ -625,7 +560,6 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
-        </div>
       </div>
 
       <Toast toast={toast} />

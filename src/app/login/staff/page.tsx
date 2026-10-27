@@ -91,16 +91,6 @@ export default function StaffLoginPage() {
 
   return (
     <PanelA eyebrow="Staff & Faculty" headline="Sign in to ERP.">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24, fontSize: 12 }}>
-        <button
-          type="button"
-          onClick={() => router.push('/login')}
-          className="isb-btn link"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
-        >
-          <Icon name="back" size={13} /> All portals
-        </button>
-      </div>
 
       {/* {MOCK_AUTH && (
         <div className="isb-error-banner" style={{ background: 'var(--isb-paper-2)', borderColor: 'var(--isb-line-2)', color: 'var(--isb-muted)', marginBottom: 16 }}>

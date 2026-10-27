@@ -11,9 +11,7 @@ import { resolvePostLoginTarget } from '@/lib/postLoginRedirect'
 // on `pageshow` since a page restored from the back/forward cache doesn't
 // remount. location.replace drops the login entry from history.
 //
-// Only the sign-in steps are guarded: forgot / set-password / activate /
-// expired have to work regardless of what's left in sessionStorage.
-const GUARDED = new Set(['/login', '/login/staff', '/login/student', '/login/otp'])
+const GUARDED = new Set(['/login', '/login/staff', '/login/otp'])
 
 export default function LoginLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -23,7 +21,7 @@ export default function LoginLayout({ children }: { children: React.ReactNode })
   // Before paint, so the form never flashes for a signed-in user.
   useLayoutEffect(() => {
     const identity = getSessionIdentity()
-    setRedirecting(GUARDED.has(pathname) && !!identity && identity.role !== 'student')
+    setRedirecting(GUARDED.has(pathname) && !!identity)
   }, [pathname])
 
   useEffect(() => {
@@ -31,7 +29,7 @@ export default function LoginLayout({ children }: { children: React.ReactNode })
 
     async function check() {
       const identity = getSessionIdentity()
-      if (!GUARDED.has(pathname) || !identity || identity.role === 'student') return
+      if (!GUARDED.has(pathname) || !identity) return
       setRedirecting(true)
       // The dashboard itself, not '/academic' — that's only a redirect page,
       // which never settles if the menu lookup above failed.
