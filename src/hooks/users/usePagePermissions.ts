@@ -8,23 +8,69 @@ import { MenuNode, MenuPermissions } from '@/lib/api/users/menu'
 // only ever changes the UI — real authorization is still enforced
 // server-side per request — so this avoids a flash of missing buttons on
 // every page load.
-const FULL_ACCESS: MenuPermissions = { add: true, edit: true, delete: true, get: true }
+const FULL_ACCESS: MenuPermissions = {
+  add: true,
+  create: true,
+  edit: true,
+  update: true,
+  delete: true,
+  get: true,
+  view: true,
+  approve: true,
+}
 
 // When the menu call failed, nothing is granted (RouteGuard also blocks the
 // page in that case).
 const NO_ACCESS: MenuPermissions = {}
 
 // A module's railId is always its lowercased name ("Config" -> "config"),
-// confirmed against RAIL_DEFS in Sidebar.tsx — duplicated here (rather than
-// imported) since RAIL_DEFS is module-private and this derivation is trivial.
-function resolveHref(url: string, railId: string): string {
-  return url.startsWith('/') ? url : `/${railId}/${url}`
+// confirmed against RAIL_DEFS in Sidebar.tsx.
+function normalizeHref(url: string, railId: string): string {
+  const clean = url.trim().replace(/^\/+|\/+$/g, '')
+  if (clean.toLowerCase().startsWith(railId.toLowerCase() + '/')) {
+    return '/' + clean.toLowerCase()
+  }
+  return '/' + railId.toLowerCase() + '/' + clean.toLowerCase()
+}
+
+function matchesPath(url: string, railId: string, pathname: string): boolean {
+  const normPath = pathname.trim().split('?')[0].replace(/\/+$/, '').toLowerCase()
+  const normHref = normalizeHref(url, railId)
+  if (normHref === normPath) return true
+  // Also compare slug if url is just the page slug and pathname ends with that slug
+  const pageSlug = url.split('/').filter(Boolean).pop()?.toLowerCase()
+  const pathSlug = normPath.split('/').filter(Boolean).pop()?.toLowerCase()
+  const pathModule = normPath.split('/')[1]?.toLowerCase()
+  if (pageSlug && pathSlug && pageSlug === pathSlug && pathModule === railId.toLowerCase()) {
+    return true
+  }
+  return false
+}
+
+function normalizePermissions(raw: MenuPermissions | null | undefined): MenuPermissions {
+  if (!raw) return FULL_ACCESS
+  const canAdd = Boolean(raw.add || raw.create)
+  const canEdit = Boolean(raw.edit || raw.update)
+  const canDelete = Boolean(raw.delete)
+  const canGet = Boolean(raw.get || raw.view)
+  const canApprove = raw.approve !== undefined ? Boolean(raw.approve) : canEdit
+  return {
+    ...raw,
+    add: canAdd,
+    create: canAdd,
+    edit: canEdit,
+    update: canEdit,
+    delete: canDelete,
+    get: canGet,
+    view: canGet,
+    approve: canApprove,
+  }
 }
 
 function findNode(nodes: MenuNode[], railId: string, pathname: string): MenuNode | null {
   for (const n of nodes) {
-    if (n.url && resolveHref(n.url, railId) === pathname) return n
-    if (n.children.length) {
+    if (n.url && matchesPath(n.url, railId, pathname)) return n
+    if (n.children && n.children.length > 0) {
       const found = findNode(n.children, railId, pathname)
       if (found) return found
     }
@@ -46,7 +92,7 @@ export function usePagePermissions(): MenuPermissions {
     if (isLoading || !data) return FULL_ACCESS
     for (const moduleNode of data.menu) {
       const found = findNode(moduleNode.children, moduleNode.name.toLowerCase(), pathname)
-      if (found) return found.permissions ?? FULL_ACCESS
+      if (found) return normalizePermissions(found.permissions)
     }
     return FULL_ACCESS
   }, [data, isLoading, isError, pathname])

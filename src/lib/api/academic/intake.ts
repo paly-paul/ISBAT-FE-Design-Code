@@ -277,9 +277,32 @@ export function getCurrentIntake(flag: 'currentIntake' | 'currentAdmissionIntake
     const match = mockIntakes.find(i => i[flag])
     return Promise.resolve(match ?? null)
   }
-  const params = new URLSearchParams({ page: '1', pageSize: '1', [flag]: 'true' })
-  return apiGet<IntakeListResponse | null>(`/api/v1/academic/intakes?${params.toString()}`)
-    .then(data => data?.items?.[0] ?? null)
+  // Source from the dedicated dropdown endpoint (/api/v1/academic/intakes/dropdown)
+  // so any logged-in user (regardless of Intake Master CRUD permissions) can resolve
+  // the current active session in the global Header and modal defaults without 403.
+  return getIntakesDropdown()
+    .then(items => {
+      const match = items.find(i => Boolean(i[flag]))
+      if (!match) return null
+      return {
+        intakeGuid: match.intakeGuid,
+        intakeCode: match.intakeCode,
+        description: match.description,
+        financialYear: 0,
+        examYear: 0,
+        intakes: 0,
+        examMonth: 0,
+        month: '',
+        durationInWeeks: 0,
+        lastDateForReRegistration: null,
+        currentIntake: Boolean(match.currentIntake),
+        grievanceStartDate: null,
+        currentAdmissionIntake: Boolean(match.currentAdmissionIntake),
+        grievanceEndDate: null,
+        academicCalendar: [],
+      } as Intake
+    })
+    .catch(() => null)
 }
 
 // Confirmed via GET /api/v1/academic/intakes/:intakeGuid — returns the same

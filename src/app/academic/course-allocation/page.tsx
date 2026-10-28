@@ -9,7 +9,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { CourseUnitSearchPicker, CourseUnitPickOption } from '@/components/CourseUnitSearchPicker'
-import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
 import { useSearchFacultiesInfinite } from '@/hooks/config/useFaculties'
 import { useProgramPlannings, useCreateProgramPlanning, useUpdateProgramPlanning, useDeleteProgramPlanning } from '@/hooks/academic/useProgramPlannings'
@@ -47,20 +47,12 @@ export default function CourseAllocationPage() {
   const [courseUnit, setCourseUnit] = useState<CourseUnitPickOption | null>(null)
   const [load, setLoad] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [intakePickerOpen, setIntakePickerOpen] = useState(false)
   const [lecturerPickerOpen, setLecturerPickerOpen] = useState(false)
   const [facultyPickerOpen, setFacultyPickerOpen] = useState(false)
-  const [intakeSearch, setIntakeSearch] = useState('')
   const [lecturerSearch, setLecturerSearch] = useState('')
   const [facultySearch, setFacultySearch] = useState('')
-  const [committedIntakeSearch, setCommittedIntakeSearch] = useState('')
   const [committedLecturerSearch, setCommittedLecturerSearch] = useState('')
   const [committedFacultySearch, setCommittedFacultySearch] = useState('')
-
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedIntakeSearch(intakeSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [intakeSearch])
 
   useEffect(() => {
     const timer = setTimeout(() => setCommittedLecturerSearch(lecturerSearch.trim()), 300)
@@ -72,19 +64,21 @@ export default function CourseAllocationPage() {
     return () => clearTimeout(timer)
   }, [facultySearch])
 
-  const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, intakePickerOpen)
+  const { data: intakeDropdownItems = [], isLoading: isIntakesLoading } = useIntakesDropdown()
   const lecturerQuery = useSearchEmployeesInfinite(committedLecturerSearch, 20, lecturerPickerOpen)
   const facultyQuery = useSearchFacultiesInfinite(committedFacultySearch, 20, facultyPickerOpen)
-  const intakes = useMemo(() => flattenUniquePages(intakeQuery.data?.pages ?? [], intake => intake.intakeGuid), [intakeQuery.data])
   const employees = useMemo(() => flattenUniquePages(lecturerQuery.data?.pages ?? [], employee => employee.employeeGuid), [lecturerQuery.data])
   const faculties = useMemo(() => flattenUniquePages(facultyQuery.data?.pages ?? [], faculty => faculty.facultyGuid), [facultyQuery.data])
   // While editing, the row's own session / school are kept in their lists
   // (labelled from the row) — the pickers only load options once opened.
   const [editingRow, setEditingRow] = useState<ProgramPlanningDto | null>(null)
-  const intakeOptions = intakes.map(i => ({ value: i.intakeGuid, label: `${i.description} (${i.intakeCode})` }))
-  if (editingRow && intakeGuid === editingRow.intakeGuid && !intakeOptions.some(o => o.value === intakeGuid)) {
-    intakeOptions.unshift({ value: editingRow.intakeGuid, label: `${editingRow.description ?? 'Session'}${editingRow.intakeCode != null ? ` (${editingRow.intakeCode})` : ''}` })
-  }
+  const intakeOptions = useMemo(() => {
+    const list = intakeDropdownItems.map(i => ({ value: i.intakeGuid, label: `${i.description} (${i.intakeCode})` }))
+    if (editingRow && intakeGuid === editingRow.intakeGuid && !list.some(o => o.value === intakeGuid)) {
+      list.unshift({ value: editingRow.intakeGuid, label: `${editingRow.description ?? 'Session'}${editingRow.intakeCode != null ? ` (${editingRow.intakeCode})` : ''}` })
+    }
+    return list
+  }, [intakeDropdownItems, editingRow, intakeGuid])
   // The options are only the current search's results, and closing the
   // picker resets the search — so a lecturer picked from a search would drop
   // out of the list and the field would fall back to the placeholder. Keep
@@ -321,12 +315,7 @@ export default function CourseAllocationPage() {
               placeholder="— Select Academic Session —"
               options={intakeOptions}
               value={intakeGuid}
-              onSearch={setIntakeSearch}
-              onOpenChange={setIntakePickerOpen}
-              isLoading={intakeQuery.isLoading}
-              hasNextPage={intakeQuery.hasNextPage}
-              isFetchingNextPage={intakeQuery.isFetchingNextPage}
-              onLoadMore={() => intakeQuery.fetchNextPage()}
+              isLoading={isIntakesLoading}
               onChange={val => { setIntakeGuid(val); setErrors(p => ({ ...p, intakeGuid: '', courseUnit: p.courseUnit === DUPLICATE_MESSAGE ? '' : p.courseUnit })) }}
             />
             {errors.intakeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}

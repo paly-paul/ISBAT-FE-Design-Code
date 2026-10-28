@@ -36,6 +36,10 @@ function displayIntakeCode(intake: Intake): string {
 export default function Page() {
   const router = useRouter()
   const permissions = usePagePermissions()
+  const canCreate = Boolean(permissions.add || permissions.create)
+  const canEdit = Boolean(permissions.edit || permissions.update)
+  const canDelete = Boolean(permissions.delete)
+  const canView = Boolean(permissions.get || permissions.view)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [filters, setFilters] = useState<Record<string, string[]>>({})
@@ -165,7 +169,7 @@ export default function Page() {
       <div className="page active">
         <div className="pg-hdr">
           <div><div className="pg-title">Intake Master</div><div className="pg-sub">Configure academic sessions · Set all semester and term dates · Manage current intakes</div></div>
-          {permissions.add && <button className="btn btn-primary" onClick={() => openModal('new-intake-modal')}><i className="lni lni-plus"></i> New Intake</button>}
+          {canCreate && <button className="btn btn-primary" onClick={() => openModal('new-intake-modal')}><i className="lni lni-plus"></i> New Intake</button>}
         </div>
         <div className="g2 mb-[18px]">
           {/* Previous hard-coded hero cards (before GET /api/v1/academic/intakes
@@ -285,36 +289,60 @@ export default function Page() {
                     — otherwise, while searchPending is true (debouncing/in flight), these
                     still render the *previous* debouncedSearch's stale pageItems underneath
                     the "Loading records…" row instead of being replaced by it. */}
-                {!(isLoading || searchPending) && pageItems.map((r) => {
-                  // const calendar = firstCalendarEntry(r) // only used by the Sem Start / Term1 End / Term2 End columns, commented out below
-                  return (
-                    <tr key={r.intakeGuid} className={r.currentIntake ? 'selected-row' : ''}>
-                      <td>
-                        {(permissions.edit || permissions.delete || true) && (
-                          <ActionMenu>
-                            <button className="btn btn-neu btn-sm" onClick={() => { setEditingIntakeGuid(r.intakeGuid); openModal('intake-view-modal') }}><i className="lni lni-eye"></i> View</button>
-                            {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => { setEditingIntakeGuid(r.intakeGuid); openModal('intake-edit-modal') }}><i className="lni lni-pencil"></i> Edit</button>}
-                            {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
-                          </ActionMenu>
-                        )}
-                      </td>
-                      <td><span className="font-bold text-blue font-mono">{displayIntakeCode(r)}</span></td>
-                      <td><strong>{r.description}</strong></td>
-                      <td>{formatFinancialYear(r.financialYear)}</td>
-                      {/* <td>{formatDate(calendar?.semesterStartDate)}</td>
-                      <td>{formatDate(calendar?.term1EndDate)}</td>
-                      <td>{formatDate(calendar?.term2EndDate)}</td> */}
-                      <td>{formatDate(r.grievanceEndDate)}</td>
-                      <td>{formatDate(r.lastDateForReRegistration)}</td>
-                      <td>{statusBadge(r.currentIntake)}</td>
-                      <td>{statusBadge(r.currentAdmissionIntake)}</td>
-                    </tr>
-                  )
-                })}
+                {!canView ? (
+                  <tr>
+                    <td colSpan={10} className="text-center py-10 text-g500">
+                      <div className="flex flex-col items-center justify-center gap-1.5 py-4">
+                        <i className="lni lni-lock text-2xl text-g400" />
+                        <span className="font-semibold text-sm text-g700">No permission to view records</span>
+                        <span className="text-xs text-g400">You do not have access to view intake data.</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  !(isLoading || searchPending) && pageItems.map((r) => {
+                    // const calendar = firstCalendarEntry(r) // only used by the Sem Start / Term1 End / Term2 End columns, commented out below
+                    return (
+                      <tr key={r.intakeGuid} className={r.currentIntake ? 'selected-row' : ''}>
+                        <td>
+                          {(canView || canEdit || canDelete) && (
+                            <ActionMenu>
+                              {canView && (
+                                <button className="btn btn-neu btn-sm" onClick={() => { setEditingIntakeGuid(r.intakeGuid); openModal('intake-view-modal') }}>
+                                  <i className="lni lni-eye"></i> View
+                                </button>
+                              )}
+                              {canEdit && (
+                                <button className="btn btn-neu btn-sm" onClick={() => { setEditingIntakeGuid(r.intakeGuid); openModal('intake-edit-modal') }}>
+                                  <i className="lni lni-pencil"></i> Edit
+                                </button>
+                              )}
+                              {canDelete && (
+                                <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                                  <i className="lni lni-trash-can"></i> Delete
+                                </button>
+                              )}
+                            </ActionMenu>
+                          )}
+                        </td>
+                        <td><span className="font-bold text-blue font-mono">{displayIntakeCode(r)}</span></td>
+                        <td><strong>{r.description}</strong></td>
+                        <td>{formatFinancialYear(r.financialYear)}</td>
+                        {/* <td>{formatDate(calendar?.semesterStartDate)}</td>
+                        <td>{formatDate(calendar?.term1EndDate)}</td>
+                        <td>{formatDate(calendar?.term2EndDate)}</td> */}
+                        <td>{formatDate(r.grievanceEndDate)}</td>
+                        <td>{formatDate(r.lastDateForReRegistration)}</td>
+                        <td>{statusBadge(r.currentIntake)}</td>
+                        <td>{statusBadge(r.currentAdmissionIntake)}</td>
+                      </tr>
+                    )
+                  })
+                )}
               </tbody>
             </table>
           </ScrollTable>
-          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="intakes" onPageChange={setPage} />
+          {canView && <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="intakes" onPageChange={setPage} />}
         </div>
       </div>
       <IntakeFormModal

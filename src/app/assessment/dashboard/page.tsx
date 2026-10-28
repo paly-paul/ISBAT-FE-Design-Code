@@ -42,6 +42,46 @@ function formatDuration(start?: string | null, end?: string | null): string | nu
   }
 }
 
+// Extract uppercase 3-letter month for calendar date tile
+function getMonthShort(isoString?: string | null): string {
+  if (!isoString) return 'CAL'
+  try {
+    const d = new Date(isoString)
+    if (isNaN(d.getTime())) return 'CAL'
+    return d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
+  } catch {
+    return 'CAL'
+  }
+}
+
+// Extract day of month number for calendar tile
+function getDayNumber(isoString?: string | null): string {
+  if (!isoString) return '—'
+  try {
+    const d = new Date(isoString)
+    if (isNaN(d.getTime())) return '—'
+    return String(d.getDate())
+  } catch {
+    return '—'
+  }
+}
+
+interface PendingActionItem {
+  id: string
+  title: string
+  subtitle: string
+  tag: string
+  badgeClass: string
+  buttonText: string
+  onAction: () => void
+  iconClass: string
+  avatarBg: string
+  avatarColor: string
+  borderAccent: string
+  progressPercent?: number
+  pendingCount?: number
+}
+
 export default function AssessmentDashboard() {
   const router = useRouter()
   const [examPage, setExamPage] = useState(1)
@@ -63,7 +103,7 @@ export default function AssessmentDashboard() {
   const isInitialLoading = overviewLoading && hallTicketLoading && resitLoading && lecturerLoading
 
   // ---------------------------------------------------------------------------
-  // 2. Computed Metrics & Dual-View Scope (Enhancement #3: Dean-Lecturer Toggle)
+  // 2. Computed Metrics & Dual-View Scope (Dean-Lecturer Toggle)
   // ---------------------------------------------------------------------------
   const hasBothViews =
     overview != null &&
@@ -81,12 +121,12 @@ export default function AssessmentDashboard() {
   const isViewingTeaching = activeScope === 'teaching' || isLecturerOnly
 
   const roleBadge = isViewingTeaching
-    ? { label: 'Lecturer', class: 'bg-emerald-100 text-emerald-700 border-emerald-200' }
+    ? { label: 'Lecturer', class: 'badge-green' }
     : isRegistrar
-    ? { label: 'Registrar', class: 'bg-purple-100 text-purple-700 border-purple-200' }
+    ? { label: 'Registrar', class: 'bg-purple-100 text-purple-700 border border-purple-200' }
     : isDean
-    ? { label: 'Dean', class: 'bg-blue-100 text-blue-700 border-blue-200' }
-    : { label: 'Assessment', class: 'bg-slate-100 text-slate-700 border-slate-200' }
+    ? { label: 'Dean', class: 'badge-blue' }
+    : { label: 'Assessment', class: 'badge-grey' }
 
   const viewSubtitle = isViewingTeaching
     ? 'Academic Intake · My Teaching Subjects (Personal Workload)'
@@ -113,7 +153,7 @@ export default function AssessmentDashboard() {
     ? (lecturer?.classTestSubmissionPendingCount ?? 0)
     : (overview?.classTestSubmissionPendingCount ?? lecturer?.classTestSubmissionPendingCount ?? 0)
 
-  // Safely find Term 1 and Term 2 records from hallTicket.terms (Enhancement #2)
+  // Safely find Term 1 and Term 2 records from hallTicket.terms
   const term1 = hallTicket?.terms?.find(t => t.term === 1) ?? hallTicket?.terms?.[0]
   const term2 = hallTicket?.terms?.find(t => t.term === 2) ?? hallTicket?.terms?.[1]
 
@@ -124,6 +164,17 @@ export default function AssessmentDashboard() {
   const totalRegisteredStudents = hallTicket?.registeredStudentCount ?? 0
   const totalPendingHallTickets = term1Pending + term2Pending
 
+  // Clearance rate calculations
+  const term1Rate = totalRegisteredStudents > 0 ? Math.round((term1Issued / totalRegisteredStudents) * 100) : 0
+  const term2Rate = totalRegisteredStudents > 0 ? Math.round((term2Issued / totalRegisteredStudents) * 100) : 0
+
+  // Workload distribution breakdown
+  const totalWorkload = cwEvaluationPending + cwSubmissionPending + classTestSubmissionPending + qpVettingPending
+  const cwEvalPct = totalWorkload > 0 ? Math.round((cwEvaluationPending / totalWorkload) * 100) : 0
+  const cwSubPct = totalWorkload > 0 ? Math.round((cwSubmissionPending / totalWorkload) * 100) : 0
+  const testPct = totalWorkload > 0 ? Math.round((classTestSubmissionPending / totalWorkload) * 100) : 0
+  const qpPct = totalWorkload > 0 ? Math.max(0, 100 - cwEvalPct - cwSubPct - testPct) : 0
+
   // Format resit dates dynamically and safely
   const formatResitDates = () => {
     if (!resit?.applicationOpenDate || !resit?.applicationCloseDate) return null
@@ -131,23 +182,8 @@ export default function AssessmentDashboard() {
   }
 
   // ---------------------------------------------------------------------------
-  // 3. Dynamic Pending Actions List from Real API Data (Enhancement #4 included)
+  // 3. Dynamic Pending Actions List from Real API Data (Flexible, snugly sized)
   // ---------------------------------------------------------------------------
-  interface PendingActionItem {
-    id: string
-    title: string
-    subtitle: string
-    tag: string
-    tagColor: string
-    buttonText: string
-    onAction: () => void
-    icon: string
-    iconBg: string
-    iconColor: string
-    progressPercent?: number
-    pendingCount?: number
-  }
-
   const pendingActions: PendingActionItem[] = useMemo(() => {
     const list: PendingActionItem[] = []
 
@@ -158,12 +194,13 @@ export default function AssessmentDashboard() {
         title: `${qpVettingPending} UE Question Paper${qpVettingPending > 1 ? 's' : ''} Awaiting Vetting`,
         subtitle: 'Vetting Committee review required on question papers before exam scheduling',
         tag: 'Pending Vetting',
-        tagColor: 'text-amber-600 bg-amber-50',
+        badgeClass: 'badge-amber',
         buttonText: 'Review',
-        onAction: () => router.push('/assessment/ue-questions'),
-        icon: '🔍',
-        iconBg: 'bg-[#fef9c3]',
-        iconColor: 'text-amber-600',
+        onAction: () => router.push('/assessment/qp-vetting'),
+        iconClass: 'lni lni-timer',
+        avatarBg: 'bg-amber-50',
+        avatarColor: 'text-amber-700',
+        borderAccent: 'border-l-amber-500',
       })
     }
 
@@ -174,12 +211,13 @@ export default function AssessmentDashboard() {
         title: `${cwEvaluationPending} Coursework Evaluation${cwEvaluationPending > 1 ? 's' : ''} Pending`,
         subtitle: `${cwSubmissionPending.toLocaleString()} submitted coursework assignments awaiting lecturer grading`,
         tag: 'Evaluation Due',
-        tagColor: 'text-purple-600 bg-purple-50',
+        badgeClass: 'bg-purple-50 text-purple-700 border border-purple-200',
         buttonText: 'Evaluate',
         onAction: () => router.push('/assessment/ia-evaluation'),
-        icon: '📋',
-        iconBg: 'bg-purple-100',
-        iconColor: 'text-purple-700',
+        iconClass: 'lni lni-clipboard',
+        avatarBg: 'bg-purple-50',
+        avatarColor: 'text-purple-700',
+        borderAccent: 'border-l-purple-500',
       })
     }
 
@@ -188,14 +226,15 @@ export default function AssessmentDashboard() {
       list.push({
         id: 'ht-term-1',
         title: `${term1Pending} Term 1 Hall Ticket${term1Pending > 1 ? 's' : ''} Not Issued`,
-        subtitle: `${totalRegisteredStudents} registered students · Fee clearance (50%) & CW completion required`,
+        subtitle: `${totalRegisteredStudents.toLocaleString()} registered students · Fee clearance (50%) & CW completion required`,
         tag: 'Term 1 Pending',
-        tagColor: 'text-blue-600 bg-blue-50',
+        badgeClass: 'badge-blue',
         buttonText: 'View',
         onAction: () => router.push('/assessment/hall-ticket'),
-        icon: '🎫',
-        iconBg: 'bg-[#e0f2fe]',
-        iconColor: 'text-blue-600',
+        iconClass: 'lni lni-ticket',
+        avatarBg: 'bg-blue-50',
+        avatarColor: 'text-blue-700',
+        borderAccent: 'border-l-blue-500',
       })
     }
 
@@ -206,16 +245,17 @@ export default function AssessmentDashboard() {
         title: `${term2Pending} Term 2 Hall Ticket${term2Pending > 1 ? 's' : ''} Not Issued`,
         subtitle: '100% fee clearance, Guild & NCHE fee checks required before issuance',
         tag: 'Term 2 Pending',
-        tagColor: 'text-indigo-600 bg-indigo-50',
+        badgeClass: 'badge-cyan',
         buttonText: 'View',
         onAction: () => router.push('/assessment/hall-ticket'),
-        icon: '🎫',
-        iconBg: 'bg-indigo-100',
-        iconColor: 'text-indigo-600',
+        iconClass: 'lni lni-ticket',
+        avatarBg: 'bg-cyan-50',
+        avatarColor: 'text-cyan-700',
+        borderAccent: 'border-l-cyan-500',
       })
     }
 
-    // Action 5: Lecturer Pending Resit Evaluations with Grading Progress Rate (Enhancement #4)
+    // Action 5: Lecturer Pending Resit Evaluations with Grading Progress Rate
     if (resit?.pendingEvaluations && resit.pendingEvaluations.length > 0) {
       for (const evalItem of resit.pendingEvaluations) {
         const progLabel = evalItem.programmeNames?.length
@@ -231,7 +271,7 @@ export default function AssessmentDashboard() {
           title: `${evalItem.unitCode} (${evalItem.unitName}) — ${evalItem.categoryLabel}`,
           subtitle: `${evalItem.evaluatedCount} of ${evalItem.submittedCount} evaluated · ${evalItem.headCount} enrolled (${progLabel})`,
           tag: `${evalRate}% Evaluated`,
-          tagColor: 'text-emerald-700 bg-emerald-50 border border-emerald-200',
+          badgeClass: 'badge-green',
           buttonText: 'Evaluate',
           progressPercent: evalRate,
           pendingCount: evalItem.pendingCount,
@@ -239,9 +279,10 @@ export default function AssessmentDashboard() {
             router.push(
               `/assessment/resit-evaluation?unit=${evalItem.courseUnitGuid}&intake=${resit.academicIntakeGuid}&config=${resit.resitConfigGuid}`
             ),
-          icon: '📝',
-          iconBg: 'bg-emerald-100',
-          iconColor: 'text-emerald-700',
+          iconClass: 'lni lni-pencil',
+          avatarBg: 'bg-emerald-50',
+          avatarColor: 'text-emerald-700',
+          borderAccent: 'border-l-emerald-500',
         })
       }
     }
@@ -253,12 +294,13 @@ export default function AssessmentDashboard() {
         title: `${classTestSubmissionPending} Class Test Submission${classTestSubmissionPending > 1 ? 's' : ''} Pending`,
         subtitle: 'Students with unsubmitted class tests past deadline',
         tag: 'Test Overdue',
-        tagColor: 'text-rose-600 bg-rose-50',
+        badgeClass: 'badge-red',
         buttonText: 'View Tests',
         onAction: () => router.push('/assessment/bulk-exam-scheduler'),
-        icon: '⏱️',
-        iconBg: 'bg-rose-100',
-        iconColor: 'text-rose-700',
+        iconClass: 'lni lni-alarm-clock',
+        avatarBg: 'bg-rose-50',
+        avatarColor: 'text-rose-700',
+        borderAccent: 'border-l-rose-500',
       })
     }
 
@@ -276,13 +318,33 @@ export default function AssessmentDashboard() {
   ])
 
   // ---------------------------------------------------------------------------
-  // 4. Scheduled Exams / Schedules List (Live from Resit or Lecturer API)
+  // 4. Scheduled Exams List (100% Real Live Data Only - No Hardcoded Rows)
   // ---------------------------------------------------------------------------
-  const scheduledExamsList = resit?.scheduledExams?.items ?? []
+  const liveScheduledExams = resit?.scheduledExams?.items ?? []
   const scheduledExamsTotal = resit?.scheduledExams?.totalCount ?? 0
   const scheduledExamsPages = Math.ceil(scheduledExamsTotal / 5) || 1
 
   const lecturerSchedules = lecturer?.schedules ?? []
+
+  // Purely dynamic live data: displays live exams from resit or lecturer schedules
+  const displayExams = useMemo(() => {
+    if (liveScheduledExams.length > 0) {
+      return liveScheduledExams
+    }
+    if (lecturerSchedules.length > 0) {
+      return lecturerSchedules.map(s => ({
+        scheduleGuid: s.scheduleGuid,
+        examType: s.scheduleType,
+        courseUnitCode: s.courseUnitCode,
+        courseUnitName: s.courseUnitName,
+        startDateTime: s.startDateTime,
+        endDateTime: s.endDateTime,
+        publishStatus: 1,
+        maxMark: s.maxMark,
+      }))
+    }
+    return []
+  }, [liveScheduledExams, lecturerSchedules])
 
   // ---------------------------------------------------------------------------
   // 5. Export Summary handler
@@ -311,7 +373,7 @@ export default function AssessmentDashboard() {
       `Fee Cleared Resit Students,${resit?.feeClearedStudentCount ?? 0}`,
       `Registered Course Units,${resit?.registeredCourseUnitCount ?? 0}`,
       `Fee Cleared Course Units,${resit?.feeClearedCourseUnitCount ?? 0}`,
-      `Upcoming Scheduled Exams,${scheduledExamsTotal}`,
+      `Upcoming Scheduled Exams,${scheduledExamsTotal || displayExams.length}`,
     ]
 
     const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' })
@@ -322,23 +384,29 @@ export default function AssessmentDashboard() {
   const getExamTypeLabel = (type: number) => {
     switch (type) {
       case 1:
-        return { label: 'Class Test', class: 'bg-amber-100 text-amber-800' }
+        return { label: 'Class Test', badgeClass: 'badge-amber' }
       case 2:
-        return { label: 'Coursework', class: 'bg-blue-100 text-blue-800' }
+        return { label: 'Coursework', badgeClass: 'badge-blue' }
       case 5:
-        return { label: 'University Exam', class: 'bg-purple-100 text-purple-800' }
+        return { label: 'University Exam', badgeClass: 'bg-purple-50 text-purple-700 border border-purple-200' }
       default:
-        return { label: 'Exam', class: 'bg-slate-100 text-slate-700' }
+        return { label: 'Exam', badgeClass: 'badge-grey' }
     }
   }
 
   return (
-    <div className="page active">
-      {/* Header with Dual View Switcher (Enhancement #3) */}
+    <div id="page-assessment-dashboard">
+      {/* Header with Live Intake Chip and Dual View Switcher */}
       <div className="pg-hdr">
         <div>
-          <div className="pg-title">Assessment Dashboard</div>
-          <div className="pg-sub">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="pg-title mb-0">Assessment Dashboard</h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Spring 2026 (Active Intake)
+            </span>
+          </div>
+          <div className="pg-sub mt-1">
             {overviewLoading ? 'Loading dashboard overview...' : viewSubtitle}
           </div>
         </div>
@@ -371,554 +439,740 @@ export default function AssessmentDashboard() {
             </div>
           )}
 
-          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${roleBadge.class}`}>
+          <span className={`badge ${roleBadge.class}`}>
             {roleBadge.label}
           </span>
           <button
             type="button"
-            className="btn btn-neu btn-sm flex items-center gap-1.5"
+            className="btn btn-neu btn-sm"
             onClick={handleExportSummary}
             title="Download CSV Summary"
           >
-            <i className="lni lni-download"></i>
+            <i className="lni lni-download" />
             <span>Export Summary</span>
           </button>
         </div>
       </div>
 
-      {/* Top 4 Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+      {/* Top 4 KPI Stat Cards with Top Color Accent Gradient Lines & Hover Micro-Interactions */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {/* Card 1: Coursework Evaluations Pending */}
         <div
           onClick={() => router.push('/assessment/ia-evaluation')}
-          className="card card-sm flex flex-col gap-1 cursor-pointer hover:shadow-md transition-shadow group"
+          className="stat-card [--b700:var(--purple)] [--b400:#a78bfa] flex flex-col justify-between !p-4 cursor-pointer hover:border-b300 hover:-translate-y-0.5 hover:shadow-xs transition-all duration-200 group min-h-[158px]"
         >
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg mb-1 bg-purple-100 text-purple-700 group-hover:scale-105 transition-transform">
-            📋
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-g500">
+                CW Evaluations Pending
+              </div>
+              <div className="text-2xl font-extrabold text-g900 mt-1 leading-tight">
+                {overviewLoading || lecturerLoading ? (
+                  <span className="text-g300">...</span>
+                ) : (
+                  cwEvaluationPending.toLocaleString()
+                )}
+              </div>
+            </div>
+            <span className="w-10 h-10 rounded-lg flex items-center justify-center bg-purple-50 text-purple-700 border border-purple-100 shrink-0 group-hover:scale-105 transition-transform">
+              <i className="lni lni-clipboard text-lg" />
+            </span>
           </div>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            CW Evaluations Pending
-          </div>
-          <div className="text-3xl font-bold text-slate-900 leading-none">
-            {overviewLoading || lecturerLoading ? (
-              <span className="text-slate-300 text-2xl">...</span>
-            ) : (
-              cwEvaluationPending.toLocaleString()
-            )}
-          </div>
-          <div className="text-[11px] text-slate-500">
-            {overviewLoading ? 'Loading...' : `${cwSubmissionPending.toLocaleString()} submissions awaiting grading`}
-          </div>
-          <div className="h-1 rounded-full bg-slate-100 overflow-hidden mt-1">
-            <div
-              className="h-full rounded-full bg-purple-500 transition-all"
-              style={{ width: `${Math.min(100, cwEvaluationPending > 0 ? Math.max(15, cwEvaluationPending) : 0)}%` }}
-            ></div>
+          <div>
+            <div className="text-[12px] text-g500 truncate mb-2">
+              {overviewLoading ? 'Loading...' : `${cwSubmissionPending.toLocaleString()} submissions awaiting grading`}
+            </div>
+            <div className="h-1.5 rounded-full bg-g100 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-purple-600 transition-all duration-500"
+                style={{ width: `${Math.min(100, cwEvaluationPending > 0 ? Math.max(15, cwEvaluationPending) : 0)}%` }}
+              />
+            </div>
           </div>
         </div>
 
         {/* Card 2: QP Awaiting Vetting */}
         <div
-          onClick={() => router.push('/assessment/ue-questions')}
-          className="card card-sm flex flex-col gap-1 cursor-pointer hover:shadow-md transition-shadow group"
+          onClick={() => router.push('/assessment/qp-vetting')}
+          className="stat-card [--b700:var(--amber)] [--b400:#fbbf24] flex flex-col justify-between !p-4 cursor-pointer hover:border-b300 hover:-translate-y-0.5 hover:shadow-xs transition-all duration-200 group min-h-[158px]"
         >
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg mb-1 bg-amber-100 text-amber-600 group-hover:scale-105 transition-transform">
-            ⏳
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-g500">
+                QP Awaiting Vetting
+              </div>
+              <div className="text-2xl font-extrabold text-g900 mt-1 leading-tight">
+                {overviewLoading || lecturerLoading ? (
+                  <span className="text-g300">...</span>
+                ) : (
+                  qpVettingPending.toLocaleString()
+                )}
+              </div>
+            </div>
+            <span className="w-10 h-10 rounded-lg flex items-center justify-center bg-amber-50 text-amber-700 border border-amber-100 shrink-0 group-hover:scale-105 transition-transform">
+              <i className="lni lni-timer text-lg" />
+            </span>
           </div>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            QP Awaiting Vetting
-          </div>
-          <div className="text-3xl font-bold text-slate-900 leading-none">
-            {overviewLoading || lecturerLoading ? (
-              <span className="text-slate-300 text-2xl">...</span>
-            ) : (
-              qpVettingPending.toLocaleString()
-            )}
-          </div>
-          <div className="text-[11px] text-slate-500">
-            {qpVettingPending > 0 ? 'Vetting committee review pending' : 'All question papers vetted'}
-          </div>
-          <div className="h-1 rounded-full bg-slate-100 overflow-hidden mt-1">
-            <div
-              className={`h-full rounded-full transition-all ${qpVettingPending > 0 ? 'bg-amber-500' : 'bg-green-500'}`}
-              style={{ width: `${qpVettingPending > 0 ? Math.min(100, Math.max(20, qpVettingPending * 10)) : 100}%` }}
-            ></div>
+          <div>
+            <div className="text-[12px] text-g500 truncate mb-2">
+              {qpVettingPending > 0 ? 'Vetting committee review pending' : 'All question papers vetted'}
+            </div>
+            <div className="h-1.5 rounded-full bg-g100 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${qpVettingPending > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                style={{ width: `${qpVettingPending > 0 ? Math.min(100, Math.max(20, qpVettingPending * 10)) : 100}%` }}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Card 3: Hall Tickets Pending with Term 1 & Term 2 Split (Enhancement #2) */}
+        {/* Card 3: Hall Tickets Pending with Dual Term Segmented Bar */}
         <div
           onClick={() => router.push('/assessment/hall-ticket')}
-          className="card card-sm flex flex-col gap-1 cursor-pointer hover:shadow-md transition-shadow group"
+          className="stat-card flex flex-col justify-between !p-4 cursor-pointer hover:border-b300 hover:-translate-y-0.5 hover:shadow-xs transition-all duration-200 group min-h-[158px]"
         >
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg mb-1 bg-blue-100 text-blue-600 group-hover:scale-105 transition-transform">
-            🎫
-          </div>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            Hall Tickets Pending
-          </div>
-          <div className="text-3xl font-bold text-slate-900 leading-none">
-            {hallTicketLoading ? (
-              <span className="text-slate-300 text-2xl">...</span>
-            ) : (
-              totalPendingHallTickets.toLocaleString()
-            )}
-          </div>
-          {/* Term 1 & Term 2 Split Pills */}
-          <div className="flex items-center gap-1.5 mt-1 text-[11px]">
-            <span className="bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded-full border border-blue-200">
-              T1: {term1Pending}
-            </span>
-            <span className="bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded-full border border-indigo-200">
-              T2: {term2Pending}
-            </span>
-            <span className="text-slate-400 text-[10px]">
-              of {totalRegisteredStudents.toLocaleString()}
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-g500">
+                Hall Tickets Pending
+              </div>
+              <div className="text-2xl font-extrabold text-g900 mt-1 leading-tight">
+                {hallTicketLoading ? (
+                  <span className="text-g300">...</span>
+                ) : (
+                  totalPendingHallTickets.toLocaleString()
+                )}
+              </div>
+            </div>
+            <span className="w-10 h-10 rounded-lg flex items-center justify-center bg-blue-50 text-blue-700 border border-blue-100 shrink-0 group-hover:scale-105 transition-transform">
+              <i className="lni lni-ticket text-lg" />
             </span>
           </div>
-          <div className="h-1 rounded-full bg-slate-100 overflow-hidden mt-1">
-            <div
-              className="h-full rounded-full bg-blue-500 transition-all"
-              style={{
-                width: `${
-                  totalRegisteredStudents > 0
-                    ? Math.round(((term1Issued + term2Issued) / (totalRegisteredStudents * 2)) * 100)
-                    : 0
-                }%`,
-              }}
-            ></div>
+          <div>
+            <div className="flex items-center gap-1.5 mb-2 text-[11px] flex-wrap">
+              <span className="badge badge-blue">
+                T1: {term1Pending}
+              </span>
+              <span className="badge badge-cyan">
+                T2: {term2Pending}
+              </span>
+              <span className="text-g400 text-[11px]">
+                of {totalRegisteredStudents.toLocaleString()}
+              </span>
+            </div>
+            {/* Segmented Clearance Progress */}
+            <div className="h-1.5 rounded-full bg-g100 overflow-hidden flex">
+              <div
+                className="h-full bg-blue-600 transition-all duration-500"
+                style={{ width: `${totalRegisteredStudents > 0 ? Math.round((term1Issued / (totalRegisteredStudents * 2)) * 100) : 0}%` }}
+                title={`Term 1: ${term1Rate}% issued`}
+              />
+              <div
+                className="h-full bg-cyan-500 transition-all duration-500"
+                style={{ width: `${totalRegisteredStudents > 0 ? Math.round((term2Issued / (totalRegisteredStudents * 2)) * 100) : 0}%` }}
+                title={`Term 2: ${term2Rate}% issued`}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Card 4: Resit Applications / Registrations */}
+        {/* Card 4: Resit Registrations */}
         <div
           onClick={() => router.push(resit ? '/assessment/resit-applications' : '/assessment/bulk-exam-scheduler')}
-          className="card card-sm flex flex-col gap-1 cursor-pointer hover:shadow-md transition-shadow group"
+          className="stat-card [--b700:var(--green)] [--b400:#34d399] flex flex-col justify-between !p-4 cursor-pointer hover:border-b300 hover:-translate-y-0.5 hover:shadow-xs transition-all duration-200 group min-h-[158px]"
         >
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg mb-1 bg-emerald-100 text-emerald-700 group-hover:scale-105 transition-transform">
-            🔄
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-g500">
+                Resit Registrations
+              </div>
+              <div className="text-2xl font-extrabold text-g900 mt-1 leading-tight">
+                {resitLoading ? (
+                  <span className="text-g300">...</span>
+                ) : (
+                  (resit?.registeredStudentCount ?? 0).toLocaleString()
+                )}
+              </div>
+            </div>
+            <span className="w-10 h-10 rounded-lg flex items-center justify-center bg-emerald-50 text-emerald-700 border border-emerald-100 shrink-0 group-hover:scale-105 transition-transform">
+              <i className="lni lni-reload text-lg" />
+            </span>
           </div>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            Resit Registrations
-          </div>
-          <div className="text-3xl font-bold text-slate-900 leading-none">
-            {resitLoading ? (
-              <span className="text-slate-300 text-2xl">...</span>
-            ) : (
-              (resit?.registeredStudentCount ?? 0).toLocaleString()
-            )}
-          </div>
-          <div className="text-[11px] text-slate-500">
-            {resitLoading
-              ? 'Loading...'
-              : resit
-              ? `${resit.feeClearedStudentCount} fee cleared · ${resit.registeredCourseUnitCount} units`
-              : 'No active resit window'}
-          </div>
-          <div className="h-1 rounded-full bg-slate-100 overflow-hidden mt-1">
-            <div
-              className="h-full rounded-full bg-emerald-500 transition-all"
-              style={{
-                width: `${
-                  resit && resit.registeredStudentCount > 0
-                    ? Math.round((resit.feeClearedStudentCount / resit.registeredStudentCount) * 100)
-                    : 0
-                }%`,
-              }}
-            ></div>
+          <div>
+            <div className="text-[12px] text-g500 truncate mb-2">
+              {resitLoading
+                ? 'Loading...'
+                : resit
+                ? `${resit.feeClearedStudentCount} fee cleared · ${resit.registeredCourseUnitCount} units`
+                : 'No active resit window'}
+            </div>
+            <div className="h-1.5 rounded-full bg-g100 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                style={{
+                  width: `${
+                    resit && resit.registeredStudentCount > 0
+                      ? Math.round((resit.feeClearedStudentCount / resit.registeredStudentCount) * 100)
+                      : 0
+                  }%`,
+                }}
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Middle Row: Pending Actions & Upcoming Schedules */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
-        {/* Pending Actions List */}
-        <div className="bg-white rounded-[14px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 p-5 flex flex-col justify-between">
-          <div>
-            <div className="font-bold text-[15px] mb-4 flex items-center gap-2">
-              📌 Pending Actions
-              <span className="bg-red-50 text-red-500 rounded-full px-2.5 py-0.5 text-[11px] font-semibold">
-                {pendingActions.length} item{pendingActions.length !== 1 ? 's' : ''}
-              </span>
+      {/* Middle Row: Pending Actions & Upcoming Scheduled Exams (Equal Height Matching Cards with Light Gray Header) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6 items-stretch">
+        {/* Left Column: Pending Actions */}
+        <div className="card adm-queue flex flex-col justify-between h-full !p-0 overflow-hidden">
+          {/* Light Gray Card Header */}
+          <div className="card-hdr !mb-0 px-5 py-3.5 bg-slate-50 border-b border-slate-200/90 flex items-center justify-between !flex-nowrap gap-2">
+            <div className="card-title flex items-center gap-2 min-w-0">
+              <i className="lni lni-alarm-clock text-amber-600 shrink-0" />
+              <span className="truncate">Pending Actions</span>
+              <span className="adm-count shrink-0 bg-white border border-slate-200 shadow-2xs">{pendingActions.length}</span>
             </div>
+            {pendingActions.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-neu btn-sm shrink-0 ml-auto flex items-center gap-1.5 whitespace-nowrap bg-white"
+                onClick={() => pendingActions[0]?.onAction()}
+              >
+                <span>Open</span>
+                <i className="lni lni-arrow-right" />
+              </button>
+            )}
+          </div>
 
+          <div className="p-4 flex-1 flex flex-col justify-between">
             {isInitialLoading ? (
-              <div className="py-8 text-center text-slate-400 text-sm">Loading pending actions...</div>
+              <div className="adm-queue-state flex-1 flex items-center justify-center">Loading pending actions…</div>
             ) : pendingActions.length === 0 ? (
-              <div className="text-center py-12 text-slate-400">
-                <div className="text-3xl mb-2">🎉</div>
-                <div className="text-[14px] font-medium text-slate-700">No pending actions</div>
-                <div className="text-[12px] text-slate-400 mt-1">
+              <div className="adm-queue-state flex-1 flex flex-col items-center justify-center py-6">
+                <div className="w-10 h-10 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 mb-2 text-lg">
+                  <i className="lni lni-checkmark-circle" />
+                </div>
+                <div className="text-sm font-semibold text-g800">No pending actions</div>
+                <div className="text-xs text-g400 mt-0.5 max-w-xs text-center">
                   All question papers, evaluations, and tickets for this intake are current.
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col gap-2.5">
+              <ul className="adm-qlist flex-1">
                 {pendingActions.map(action => (
-                  <div
+                  <li
                     key={action.id}
-                    className="flex items-start gap-3 p-3 bg-white rounded-[12px] border border-slate-100 shadow-xs hover:border-slate-200 transition-colors"
+                    className="adm-qrow group"
+                    role="link"
+                    tabIndex={0}
+                    onClick={action.onAction}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') action.onAction()
+                    }}
                   >
-                    <div
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg shrink-0 ${action.iconBg} ${action.iconColor}`}
-                    >
-                      {action.icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="min-w-0">
-                          <div className="text-[13px] font-semibold text-slate-900 truncate">
-                            {action.title}
-                          </div>
-                          <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">
-                            {action.subtitle}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={action.onAction}
-                          className="px-3 py-1 bg-white border border-slate-200 rounded-full text-slate-700 text-[11px] font-medium shadow-xs hover:bg-slate-50 transition-colors shrink-0"
-                        >
-                          {action.buttonText}
-                        </button>
+                    <span className={`adm-avatar ${action.avatarBg} ${action.avatarColor} shadow-2xs group-hover:scale-105 transition-transform`} aria-hidden="true">
+                      <i className={action.iconClass} />
+                    </span>
+                    <div className="adm-qmain">
+                      <div className="adm-qname">
+                        <span className="text-g900 group-hover:text-b600 transition-colors">{action.title}</span>
+                      </div>
+                      <div className="adm-qprog" title={action.subtitle}>
+                        {action.subtitle}
                       </div>
 
-                      {/* Grading progress bar for resit evaluations (Enhancement #4) */}
-                      {action.progressPercent !== undefined ? (
-                        <div className="flex items-center gap-2 mt-2">
-                          <div className="w-[120px] h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                      {/* Grading progress bar for resit evaluations */}
+                      {action.progressPercent !== undefined && (
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <div className="w-28 h-1.5 rounded-full bg-g100 overflow-hidden">
                             <div
                               className="h-full rounded-full bg-emerald-500 transition-all"
                               style={{ width: `${action.progressPercent}%` }}
-                            ></div>
+                            />
                           </div>
                           <span className="text-[10px] font-semibold text-emerald-700">
                             {action.progressPercent}% completed
                           </span>
                           {action.pendingCount !== undefined && action.pendingCount > 0 && (
-                            <span className="text-[10px] text-slate-400">
+                            <span className="text-[10px] text-g400">
                               ({action.pendingCount} remaining)
                             </span>
                           )}
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-2 mt-2">
-                          <span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${action.tagColor}`}>
-                            {action.tag}
-                          </span>
-                        </div>
                       )}
                     </div>
-                  </div>
+                    <div className="adm-qside !flex-row !items-center !gap-2.5 shrink-0">
+                      <span className={`badge ${action.badgeClass} shrink-0 whitespace-nowrap`}>
+                        {action.tag}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={e => {
+                          e.stopPropagation()
+                          action.onAction()
+                        }}
+                        className="btn btn-neu btn-xs shrink-0 whitespace-nowrap font-medium"
+                      >
+                        {action.buttonText}
+                      </button>
+                    </div>
+                    <i className="lni lni-chevron-right adm-qchev shrink-0" aria-hidden="true" />
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
+
+            <div className="mt-2.5 pt-2 border-t border-g100 flex items-center justify-between text-xs text-g500">
+              <span className="flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${pendingActions.length > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                {pendingActions.length > 0 ? 'Action Required' : 'Status'}
+              </span>
+              <span className="font-semibold text-g800">
+                {pendingActions.length > 0 ? `${pendingActions.length} pending items` : 'All cleared'}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Scheduled Exams / Schedules Table with Time Window & Duration (Enhancement #1) */}
-        <div className="bg-white rounded-[14px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 p-5 flex flex-col justify-between">
-          <div>
-            <div className="font-bold text-[15px] mb-4 flex items-center justify-between">
-              <span>📅 Upcoming Scheduled Exams</span>
-              {scheduledExamsTotal > 0 && (
-                <span className="text-xs text-slate-500 font-normal">
-                  Total: {scheduledExamsTotal} exam{scheduledExamsTotal > 1 ? 's' : ''}
-                </span>
+        {/* Right Column: Upcoming Scheduled Exams (Equal Height Matching Pending Actions) */}
+        <div className="card adm-queue flex flex-col justify-between h-full !p-0 overflow-hidden">
+          {/* Light Gray Card Header */}
+          <div className="card-hdr !mb-0 px-5 py-3.5 bg-slate-50 border-b border-slate-200/90 flex items-center justify-between !flex-nowrap gap-2">
+            <div className="card-title flex items-center gap-2 min-w-0">
+              <i className="lni lni-calendar text-indigo-600 shrink-0" />
+              <span className="truncate">Upcoming Scheduled Exams</span>
+              <span className="adm-count shrink-0 bg-white border border-slate-200 shadow-2xs">{displayExams.length}</span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-neu btn-sm shrink-0 ml-auto flex items-center gap-1.5 whitespace-nowrap bg-white"
+              onClick={() => router.push('/assessment/bulk-exam-scheduler')}
+            >
+              <span>Scheduler</span>
+              <i className="lni lni-arrow-right" />
+            </button>
+          </div>
+
+          <div className="p-4 flex-1 flex flex-col justify-between">
+            <div className="flex-1 flex flex-col">
+              {resitLoading || lecturerLoading ? (
+                <div className="adm-queue-state flex-1 flex items-center justify-center">Loading scheduled exams…</div>
+              ) : displayExams.length > 0 ? (
+                <div className="overflow-x-auto flex-1">
+                  <table className="w-full text-left border-collapse text-[13px]">
+                    <thead>
+                      <tr className="text-[11px] font-bold text-g600 uppercase tracking-wider bg-g50/80 border-b border-g200">
+                        <th className="py-2.5 px-3">Date</th>
+                        <th className="py-2.5 px-3">Course Unit</th>
+                        <th className="py-2.5 px-3">Exam Type</th>
+                        <th className="py-2.5 px-3">Time & Duration</th>
+                        <th className="py-2.5 px-3 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayExams.map((exam, idx) => {
+                        const typeBadge = getExamTypeLabel(exam.examType)
+                        const isPublished = exam.publishStatus === 1
+                        const durationStr = formatDuration(exam.startDateTime, exam.endDateTime)
+                        const monthShort = getMonthShort(exam.startDateTime)
+                        const dayNum = getDayNumber(exam.startDateTime)
+
+                        return (
+                          <tr
+                            key={exam.scheduleGuid || idx}
+                            className="border-b border-g100 hover:bg-g50/60 transition-colors group"
+                          >
+                            {/* Modern Calendar Date Tile */}
+                            <td className="py-2.5 px-3 align-middle">
+                              <div className="w-11 h-12 rounded-lg bg-b50 border border-b200/60 flex flex-col items-center justify-center text-center shrink-0 shadow-2xs group-hover:border-b400 transition-colors">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-b700 leading-none">
+                                  {monthShort}
+                                </span>
+                                <span className="text-base font-extrabold text-b900 leading-none mt-0.5">
+                                  {dayNum}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 align-middle">
+                              <div className="font-semibold text-g900 text-[13px]">
+                                {exam.courseUnitCode || 'Intake Schedule'}
+                              </div>
+                              <div className="text-[11px] text-g500 truncate max-w-[190px]" title={exam.courseUnitName || undefined}>
+                                {exam.courseUnitName || 'Intake-wide schedule'}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 align-middle">
+                              <span className={`badge ${typeBadge.badgeClass}`}>
+                                {typeBadge.label}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 align-middle text-[12px] text-g700">
+                              <div className="font-medium text-g800 flex items-center gap-1">
+                                <i className="lni lni-timer text-g400 text-xs" />
+                                <span>
+                                  {formatSafeTime(exam.startDateTime)} – {formatSafeTime(exam.endDateTime)}
+                                </span>
+                              </div>
+                              {durationStr && (
+                                <div className="mt-0.5">
+                                  <span className="badge badge-grey text-[10px] py-0 px-1.5">
+                                    {durationStr}
+                                  </span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 align-middle text-center">
+                              <span
+                                className={`badge ${
+                                  isPublished ? 'badge-green' : 'badge-grey'
+                                } inline-flex items-center gap-1.5`}
+                              >
+                                {isPublished && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                )}
+                                {isPublished ? 'Published' : 'Draft'}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="adm-queue-state flex-1 flex flex-col items-center justify-center py-8">
+                  <div className="w-10 h-10 rounded-full bg-g50 border border-g200 flex items-center justify-center text-g400 mb-2 text-lg">
+                    <i className="lni lni-calendar" />
+                  </div>
+                  <div className="text-sm font-semibold text-g800">No scheduled exams</div>
+                  <div className="text-xs text-g400 mt-0.5 max-w-xs text-center">
+                    Upcoming UE exams and class tests will appear here once scheduled.
+                  </div>
+                </div>
               )}
             </div>
 
-            {resitLoading || lecturerLoading ? (
-              <div className="py-8 text-center text-slate-400 text-sm">Loading scheduled exams...</div>
-            ) : scheduledExamsList.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-[13px]">
-                  <thead>
-                    <tr className="text-[11px] font-bold text-white uppercase bg-[#4f46e5]">
-                      <th className="px-3 py-3">Course Unit</th>
-                      <th className="px-3 py-3">Exam Type</th>
-                      <th className="px-3 py-3">Date, Time & Duration</th>
-                      <th className="px-3 py-3 text-center">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {scheduledExamsList.map((exam, idx) => {
-                      const typeBadge = getExamTypeLabel(exam.examType)
-                      const isPublished = exam.publishStatus === 1
-                      const courseUnitTitle =
-                        exam.courseUnitCode ||
-                        (exam.examType === 1
-                          ? 'Class Test Window'
-                          : exam.examType === 2
-                          ? 'Coursework Window'
-                          : 'General Window')
-                      const durationStr = formatDuration(exam.startDateTime, exam.endDateTime)
-                      return (
-                        <tr
-                          key={exam.scheduleGuid || idx}
-                          className={`hover:bg-slate-50/50 transition-colors ${
-                            idx === scheduledExamsList.length - 1 ? '' : 'border-b border-slate-100'
-                          }`}
-                        >
-                          <td className="px-3 py-3 align-middle">
-                            <div className="font-bold text-slate-900 text-[13px]">{courseUnitTitle}</div>
-                            <div className="text-[12px] text-slate-500">
-                              {exam.courseUnitName || 'Intake-wide schedule'}
-                            </div>
-                          </td>
-                          <td className="px-3 py-3 align-middle">
-                            <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${typeBadge.class}`}>
-                              {typeBadge.label}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3 align-middle text-[12px] text-slate-700">
-                            <div className="font-medium text-slate-900">{formatDate(exam.startDateTime)}</div>
-                            <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1 mt-0.5">
-                              <span>
-                                {formatSafeTime(exam.startDateTime)} – {formatSafeTime(exam.endDateTime)}
-                              </span>
-                              {durationStr && (
-                                <span className="bg-slate-100 text-slate-600 rounded px-1.5 py-0.2 text-[10px] font-semibold border border-slate-200">
-                                  {durationStr}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-3 py-3 align-middle text-center">
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                                isPublished
-                                  ? 'bg-[#d1fae5] text-[#047857]'
-                                  : 'bg-slate-100 text-slate-500'
-                              }`}
-                            >
-                              {isPublished ? 'Published' : 'Draft'}
-                            </span>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : lecturerSchedules.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-[13px]">
-                  <thead>
-                    <tr className="text-[11px] font-bold text-white uppercase bg-[#4f46e5]">
-                      <th className="px-3 py-3">Subject</th>
-                      <th className="px-3 py-3">Schedule</th>
-                      <th className="px-3 py-3">Date, Time & Duration</th>
-                      <th className="px-3 py-3 text-center">Max Mark</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lecturerSchedules.slice(0, 5).map((sched, idx) => {
-                      const typeBadge = getExamTypeLabel(sched.scheduleType)
-                      const durationStr = formatDuration(sched.startDateTime, sched.endDateTime)
-                      return (
-                        <tr
-                          key={sched.scheduleGuid || idx}
-                          className={`hover:bg-slate-50/50 transition-colors ${
-                            idx === lecturerSchedules.length - 1 ? '' : 'border-b border-slate-100'
-                          }`}
-                        >
-                          <td className="px-3 py-3 align-middle">
-                            <div className="font-bold text-slate-900 text-[13px]">
-                              {sched.courseUnitCode || 'Course Unit'}
-                            </div>
-                            <div className="text-[12px] text-slate-500">{sched.courseUnitName || '—'}</div>
-                          </td>
-                          <td className="px-3 py-3 align-middle">
-                            <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${typeBadge.class}`}>
-                              {sched.number ? `${typeBadge.label} ${sched.number}` : typeBadge.label}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3 align-middle text-[12px] text-slate-700">
-                            <div className="font-medium text-slate-900">{formatDate(sched.startDateTime)}</div>
-                            <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1 mt-0.5">
-                              <span>
-                                {formatSafeTime(sched.startDateTime)} – {formatSafeTime(sched.endDateTime)}
-                              </span>
-                              {durationStr && (
-                                <span className="bg-slate-100 text-slate-600 rounded px-1.5 py-0.2 text-[10px] font-semibold border border-slate-200">
-                                  {durationStr}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-3 py-3 align-middle text-center font-semibold text-slate-700">
-                            {sched.maxMark ?? '—'}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-center py-12 text-slate-400">
-                <div className="text-3xl mb-2">🗓️</div>
-                <div className="text-[14px] font-medium text-slate-700">No scheduled exams</div>
-                <div className="text-[12px] text-slate-400 mt-1">
-                  Upcoming UE exams and class tests will appear here once scheduled.
-                </div>
+            {scheduledExamsTotal > 5 && displayExams.length > 5 && (
+              <div className="mt-3 px-3 pb-2">
+                <Pagination
+                  page={examPage}
+                  totalPages={scheduledExamsPages}
+                  totalCount={scheduledExamsTotal}
+                  itemLabel="exams"
+                  onPageChange={setExamPage}
+                />
               </div>
             )}
-          </div>
 
-          {scheduledExamsTotal > 5 && (
-            <div className="mt-3">
-              <Pagination
-                page={examPage}
-                totalPages={scheduledExamsPages}
-                totalCount={scheduledExamsTotal}
-                onPageChange={setExamPage}
-              />
+            <div className="mt-2.5 pt-2 border-t border-g100 flex items-center justify-between text-xs text-g500">
+              <span className="flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${displayExams.length > 0 ? 'bg-indigo-500' : 'bg-g400'}`} />
+                Schedule Status
+              </span>
+              <span className="font-semibold text-g800">
+                {displayExams.length > 0 ? `${scheduledExamsTotal} scheduled exams` : 'No scheduled sessions'}
+              </span>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
-      {/* Tertiary Cards (Bottom Row) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+      {/* Tertiary Cards: Equal Height Aligned Across all 3 Columns with Light Gray Header */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 items-stretch">
         {/* Card 1: Hall Ticket Clearance Gate */}
-        <div className="bg-white rounded-[14px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 p-5 flex flex-col justify-between">
-          <div>
-            <div className="font-bold text-[14px] mb-1 text-slate-900">💰 Hall Ticket Clearance Gate</div>
-            <div className="text-[12px] text-slate-500 mb-4 border-b border-slate-100 pb-3">
-              Current Academic Intake Status
+        <div className="card flex flex-col justify-between h-full !p-0 overflow-hidden">
+          <div className="card-hdr !mb-0 px-4 py-2.5 bg-slate-50 border-b border-slate-200/90 flex items-center justify-between !flex-nowrap">
+            <div className="min-w-0 pr-2">
+              <div className="card-title text-sm flex items-center gap-1.5 truncate">
+                <i className="lni lni-shield text-blue-600 shrink-0" />
+                <span>Hall Ticket Clearance Gate</span>
+              </div>
+              <div className="card-sub text-[11px] text-g400 truncate">Current Academic Intake Status</div>
             </div>
-            <div className="flex flex-col gap-3">
-              <div className="flex justify-between items-center text-[13px] text-slate-700">
-                <span>Registered Students</span>
-                <span className="font-semibold text-slate-900">
-                  {hallTicketLoading ? '...' : totalRegisteredStudents.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-[13px] text-slate-700">
-                <span>Term 1 Hall Tickets Issued</span>
-                <span className="bg-green-100 text-green-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
-                  {hallTicketLoading ? '...' : term1Issued.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-[13px] text-slate-700">
-                <span>Term 1 Pending Clearance</span>
-                <span className="bg-blue-100 text-blue-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
-                  {hallTicketLoading ? '...' : term1Pending.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-[13px] text-slate-700">
-                <span>Term 2 Hall Tickets Issued</span>
-                <span className="bg-green-100 text-green-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
-                  {hallTicketLoading ? '...' : term2Issued.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-[13px] text-slate-700">
-                <span>Term 2 Pending Clearance</span>
-                <span className="bg-indigo-100 text-indigo-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
-                  {hallTicketLoading ? '...' : term2Pending.toLocaleString()}
-                </span>
-              </div>
-            </div>
+            <button
+              type="button"
+              className="btn btn-neu btn-xs shrink-0 whitespace-nowrap bg-white"
+              onClick={() => router.push('/assessment/hall-ticket')}
+            >
+              View
+            </button>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500">
-            {hallTicketLoading
-              ? 'Loading gate status...'
-              : `${totalPendingHallTickets.toLocaleString()} total ticket${totalPendingHallTickets !== 1 ? 's' : ''} awaiting issue`}
+
+          <div className="p-4 flex-1 flex flex-col justify-between">
+            <div>
+              {/* Visual Clearance Gauge Meter */}
+              <div className="mb-2 p-2 bg-g50/70 rounded-lg border border-g100/80">
+                <div className="flex items-center justify-between text-[11px] mb-1">
+                  <span className="font-medium text-g600">Term 1: <strong className="text-b700 font-bold">{term1Rate}%</strong></span>
+                  <span className="font-medium text-g600">Term 2: <strong className="text-cyan-700 font-bold">{term2Rate}%</strong></span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="h-1.5 rounded-full bg-g200 overflow-hidden">
+                    <div className="h-full rounded-full bg-blue-600 transition-all duration-500" style={{ width: `${term1Rate}%` }} />
+                  </div>
+                  <div className="h-1.5 rounded-full bg-g200 overflow-hidden">
+                    <div className="h-full rounded-full bg-cyan-600 transition-all duration-500" style={{ width: `${term2Rate}%` }} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                  <span className="font-medium text-g700">Registered Students</span>
+                  <span className="font-bold text-g900">
+                    {hallTicketLoading ? '...' : totalRegisteredStudents.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                  <span className="font-medium text-g700">Term 1 Hall Tickets Issued</span>
+                  <span className="badge badge-green font-semibold">
+                    {hallTicketLoading ? '...' : term1Issued.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                  <span className="font-medium text-g700">Term 1 Pending Clearance</span>
+                  <span className="badge badge-blue font-semibold">
+                    {hallTicketLoading ? '...' : term1Pending.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                  <span className="font-medium text-g700">Term 2 Hall Tickets Issued</span>
+                  <span className="badge badge-green font-semibold">
+                    {hallTicketLoading ? '...' : term2Issued.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs py-0.5">
+                  <span className="font-medium text-g700">Term 2 Pending Clearance</span>
+                  <span className="badge badge-cyan font-semibold">
+                    {hallTicketLoading ? '...' : term2Pending.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-g100 text-[11px] text-g500 flex items-center justify-between">
+              <span>Awaiting Issuance</span>
+              <span className="font-bold text-g800">
+                {hallTicketLoading ? '...' : `${totalPendingHallTickets.toLocaleString()} tickets`}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Card 2: Resit Summary */}
-        <div className="bg-white rounded-[14px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 p-5 flex flex-col justify-between">
-          <div>
-            <div className="font-bold text-[14px] mb-1 text-slate-900">🔄 Resit Summary</div>
-            <div className="text-[12px] text-slate-500 mb-4 border-b border-slate-100 pb-3 truncate">
-              {resitLoading ? 'Loading resit config...' : (resit?.refCode ?? 'No active resit window')}
+        {/* Card 2: Resit Summary (Equal Height Matching Card 1 & Card 3) */}
+        <div className="card flex flex-col justify-between h-full !p-0 overflow-hidden">
+          <div className="card-hdr !mb-0 px-4 py-2.5 bg-slate-50 border-b border-slate-200/90 flex items-center justify-between !flex-nowrap">
+            <div className="min-w-0 pr-2">
+              <div className="card-title text-sm flex items-center gap-1.5 truncate">
+                <i className="lni lni-reload text-emerald-600 shrink-0" />
+                <span>Resit Summary</span>
+              </div>
+              <div className="card-sub text-[11px] text-g400 truncate" title={resit?.refCode}>
+                {resitLoading ? 'Loading resit config...' : (resit?.refCode ?? 'No active resit window')}
+              </div>
             </div>
-
-            {resitLoading ? (
-              <div className="py-6 text-center text-slate-400 text-xs">Loading resit details...</div>
-            ) : resit ? (
-              <div className="flex flex-col gap-3">
-                <div className="flex justify-between items-center text-[13px] text-slate-700">
-                  <span>Applications Window</span>
-                  <span className="bg-amber-100 text-amber-800 rounded-full px-2 py-0.5 text-[11px] font-medium">
-                    {formatResitDates() ?? '—'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-[13px] text-slate-700">
-                  <span>Registered Students</span>
-                  <span className="bg-blue-100 text-blue-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
-                    {resit.registeredStudentCount.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-[13px] text-slate-700">
-                  <span>Fee Cleared Students</span>
-                  <span className="bg-green-100 text-green-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
-                    {resit.feeClearedStudentCount.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-[13px] text-slate-700">
-                  <span>Registered Course Units</span>
-                  <span className="bg-purple-100 text-purple-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
-                    {resit.registeredCourseUnitCount.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-[13px] text-slate-700">
-                  <span>Fee Cleared Units</span>
-                  <span className="bg-emerald-100 text-emerald-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
-                    {resit.feeClearedCourseUnitCount.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="py-6 text-center text-slate-400 text-xs">
-                No active resit window configured for the current intake.
-              </div>
+            {resit && (
+              <button
+                type="button"
+                className="btn btn-neu btn-xs shrink-0 whitespace-nowrap bg-white"
+                onClick={() => router.push('/assessment/resit-applications')}
+              >
+                Open
+              </button>
             )}
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500">
-            {resit ? `${scheduledExamsTotal} scheduled exams upcoming` : 'Resit registration closed'}
+
+          <div className="p-4 flex-1 flex flex-col justify-between">
+            {resitLoading ? (
+              <div className="adm-queue-state py-6">Loading resit details…</div>
+            ) : resit ? (
+              <>
+                <div>
+                  {/* Active Resit Fee Clearance Meter */}
+                  <div className="mb-2 p-2 bg-g50/70 rounded-lg border border-g100/80">
+                    <div className="flex justify-between items-center text-[11px] mb-1">
+                      <span className="font-medium text-g600">Fee Clearance Rate</span>
+                      <span className="font-bold text-emerald-700">
+                        {resit.registeredStudentCount > 0
+                          ? `${Math.round((resit.feeClearedStudentCount / resit.registeredStudentCount) * 100)}%`
+                          : '0%'}
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-g200 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                        style={{
+                          width: `${
+                            resit.registeredStudentCount > 0
+                              ? Math.round((resit.feeClearedStudentCount / resit.registeredStudentCount) * 100)
+                              : 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                      <span className="font-medium text-g700">Applications Window</span>
+                      <span className="badge badge-amber font-semibold">
+                        {formatResitDates() ?? '—'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                      <span className="font-medium text-g700">Registered Students</span>
+                      <span className="badge badge-blue font-semibold">
+                        {resit.registeredStudentCount.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                      <span className="font-medium text-g700">Fee Cleared Students</span>
+                      <span className="badge badge-green font-semibold">
+                        {resit.feeClearedStudentCount.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                      <span className="font-medium text-g700">Registered Course Units</span>
+                      <span className="badge bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
+                        {resit.registeredCourseUnitCount.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs py-0.5">
+                      <span className="font-medium text-g700">Fee Cleared Units</span>
+                      <span className="badge badge-green font-semibold">
+                        {resit.feeClearedCourseUnitCount.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  {/* Inactive Resit Status Meter */}
+                  <div className="mb-2 p-2 bg-g50/70 rounded-lg border border-g100/80 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs text-g600">
+                      <span className="w-2 h-2 rounded-full bg-g400 shrink-0" />
+                      <span className="font-medium">Resit Window Inactive</span>
+                    </div>
+                    <span className="text-[10px] text-g400">Current Intake</span>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                      <span className="font-medium text-g700">Applications Window</span>
+                      <span className="badge badge-grey font-semibold">Closed</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                      <span className="font-medium text-g700">Registered Students</span>
+                      <span className="badge badge-grey font-semibold">0</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                      <span className="font-medium text-g700">Fee Cleared Students</span>
+                      <span className="badge badge-grey font-semibold">0</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                      <span className="font-medium text-g700">Registered Course Units</span>
+                      <span className="badge badge-grey font-semibold">0</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs py-0.5">
+                      <span className="font-medium text-g700">Fee Cleared Units</span>
+                      <span className="badge badge-grey font-semibold">0</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="mt-2.5 pt-2 border-t border-g100 text-[11px] text-g500 flex items-center justify-between">
+              <span>Schedule Status</span>
+              <span className="font-semibold text-g800">
+                {resit ? `${scheduledExamsTotal} scheduled exams` : 'Resit registration closed'}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Card 3: Assessment Activity Breakdown */}
-        <div className="bg-white rounded-[14px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 p-5 flex flex-col justify-between">
-          <div>
-            <div className="font-bold text-[14px] mb-1 text-slate-900">📊 Assessment Activity</div>
-            <div className="text-[12px] text-slate-500 mb-4 border-b border-slate-100 pb-3">
-              Current Intake Submissions & Workload
+        {/* Card 3: Assessment Activity Breakdown with Workload Distribution Bar */}
+        <div className="card flex flex-col justify-between h-full !p-0 overflow-hidden">
+          <div className="card-hdr !mb-0 px-4 py-2.5 bg-slate-50 border-b border-slate-200/90 flex items-center justify-between !flex-nowrap">
+            <div className="min-w-0 pr-2">
+              <div className="card-title text-sm flex items-center gap-1.5 truncate">
+                <i className="lni lni-bar-chart text-purple-600 shrink-0" />
+                <span>Assessment Activity</span>
+              </div>
+              <div className="card-sub text-[11px] text-g400 truncate">Current Intake Submissions & Workload</div>
             </div>
-            <div className="flex flex-col gap-3">
-              <div className="flex justify-between items-center text-[13px] text-slate-700">
-                <span>CW Evaluations Pending</span>
-                <span className="bg-purple-100 text-purple-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
-                  {overviewLoading || lecturerLoading ? '...' : cwEvaluationPending.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-[13px] text-slate-700">
-                <span>CW Submissions Pending</span>
-                <span className="bg-amber-100 text-amber-800 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
-                  {overviewLoading || lecturerLoading ? '...' : cwSubmissionPending.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-[13px] text-slate-700">
-                <span>Class Tests Pending</span>
-                <span className="bg-rose-100 text-rose-700 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
-                  {overviewLoading || lecturerLoading ? '...' : classTestSubmissionPending.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-[13px] text-slate-700">
-                <span>QP Awaiting Vetting</span>
-                <span className="bg-yellow-100 text-yellow-800 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
-                  {overviewLoading || lecturerLoading ? '...' : qpVettingPending.toLocaleString()}
-                </span>
-              </div>
-            </div>
+            <button
+              type="button"
+              className="btn btn-neu btn-xs shrink-0 whitespace-nowrap bg-white"
+              onClick={() => router.push('/assessment/ia-evaluation')}
+            >
+              Details
+            </button>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500">
-            Live counts across current academic intake
+
+          <div className="p-4 flex-1 flex flex-col justify-between">
+            <div>
+              {/* Segmented Workload Distribution Meter */}
+              <div className="mb-2 p-2 bg-g50/70 rounded-lg border border-g100/80">
+                <div className="flex justify-between items-center text-[11px] mb-1">
+                  <span className="font-medium text-g600">Workload Mix</span>
+                  <span className="font-bold text-g800">{totalWorkload.toLocaleString()} items</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-g200 overflow-hidden flex">
+                  <div className="h-full bg-purple-500 transition-all duration-500" style={{ width: `${cwEvalPct}%` }} title={`CW Evaluations: ${cwEvalPct}%`} />
+                  <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${cwSubPct}%` }} title={`CW Submissions: ${cwSubPct}%`} />
+                  <div className="h-full bg-rose-500 transition-all duration-500" style={{ width: `${testPct}%` }} title={`Class Tests: ${testPct}%`} />
+                  <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${qpPct}%` }} title={`QP Vetting: ${qpPct}%`} />
+                </div>
+                <div className="flex items-center justify-between mt-1 text-[10px] text-g400">
+                  <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-purple-500" /> CW Eval</span>
+                  <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> CW Sub</span>
+                  <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Tests</span>
+                  <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> QP</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                  <span className="font-medium text-g700">Total Workload Items</span>
+                  <span className="font-bold text-g900">
+                    {overviewLoading || lecturerLoading ? '...' : totalWorkload.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                  <span className="font-medium text-g700">CW Evaluations Pending</span>
+                  <span className="badge bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
+                    {overviewLoading || lecturerLoading ? '...' : cwEvaluationPending.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                  <span className="font-medium text-g700">CW Submissions Pending</span>
+                  <span className="badge badge-amber font-semibold">
+                    {overviewLoading || lecturerLoading ? '...' : cwSubmissionPending.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs py-0.5 border-b border-g50">
+                  <span className="font-medium text-g700">Class Tests Pending</span>
+                  <span className="badge badge-red font-semibold">
+                    {overviewLoading || lecturerLoading ? '...' : classTestSubmissionPending.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs py-0.5">
+                  <span className="font-medium text-g700">QP Awaiting Vetting</span>
+                  <span className="badge badge-amber font-semibold">
+                    {overviewLoading || lecturerLoading ? '...' : qpVettingPending.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-g100 text-[11px] text-g500 flex items-center justify-between">
+              <span>Workload Scope</span>
+              <span className="font-semibold text-g800">
+                {isViewingTeaching ? 'Personal Teaching Subjects' : 'University Intake Totals'}
+              </span>
+            </div>
           </div>
         </div>
       </div>

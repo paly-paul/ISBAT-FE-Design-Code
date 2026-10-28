@@ -209,7 +209,7 @@ export default function Page() {
                     <td>
                       <ActionMenu>
                         <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.programGuid)}><i className="lni lni-eye"></i> View</button>
-                        {permissions.edit && <button className="btn btn-neu btn-sm" style={{ color: 'var(--green, #10b981)' }} onClick={() => handleApprove(r.programGuid, true)}><i className="lni lni-checkmark"></i> Approve</button>}
+                        {permissions.approve && <button className="btn btn-neu btn-sm" style={{ color: 'var(--green, #10b981)' }} onClick={() => handleApprove(r.programGuid, true)}><i className="lni lni-checkmark"></i> Approve</button>}
                         {permissions.delete && <button className="btn btn-neu btn-sm" style={{ color: 'var(--danger, #ef4444)' }} onClick={() => setDeleteTarget({ programGuid: r.programGuid, progName: r.progName })}><i className="lni lni-trash-can"></i> Delete</button>}
                       </ActionMenu>
                     </td>

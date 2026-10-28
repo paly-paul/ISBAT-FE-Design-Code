@@ -10,6 +10,7 @@ import { useCalendarBatch, useBulkUpdateCalendarBatch } from '@/hooks/academic/u
 import { AcademicCalendarBatchEntryDto } from '@/lib/api/academic/intake'
 import { formatDate } from '@/lib/date'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // This page is a client for PATCH /api/v1/academic/intakes/calendar-batch
 // (see patch-calendar-batch-bulk.md) — it does NOT bulk-edit arbitrary
@@ -131,6 +132,9 @@ type ConfirmAction =
   | { kind: 'row'; row: AcademicCalendarBatchEntryDto; entry: AcademicCalendarBatchEntryDto }
 
 export default function Page() {
+  const permissions = usePagePermissions()
+  const canEdit = Boolean(permissions.edit || permissions.update)
+  const canView = Boolean(permissions.get || permissions.view)
   const { data: batch = [], isLoading } = useCalendarBatch()
   const bulkUpdate = useBulkUpdateCalendarBatch()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
@@ -410,56 +414,58 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="card" style={{ marginBottom: 18 }}>
-          <div className="card-hdr">
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-calendar"></i></span> Edit Calendar Dates</div>
-          </div>
-          {!activeRow ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 22px', padding: '10px 14px', background: 'var(--b50)', border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)', fontSize: 12.5, color: 'var(--g700)' }}>
-              <i className="lni lni-information" style={{ color: 'var(--b600)', fontSize: 16 }}></i>
-              Select an intake&apos;s checkbox below to edit its calendar dates.
+        {canEdit && (
+          <div className="card" style={{ marginBottom: 18 }}>
+            <div className="card-hdr">
+              <div className="card-title"><span className="ctitle-icon"><i className="lni lni-calendar"></i></span> Edit Calendar Dates</div>
             </div>
-          ) : (
-            <div style={{ padding: '18px 22px' }}>
-              <div style={{ fontSize: 12.5, color: 'var(--g400)', marginBottom: 14 }}>
-                Editing <strong style={{ color: 'var(--g700)' }}>Intake {activeRow.intakeCode} · {activeRow.description} · Sem {activeRow.semCode}</strong>
-                {selectedGuids.size > 1 && ` — changes apply to all ${selectedGuids.size} selected rows`}
+            {!activeRow ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 22px', padding: '10px 14px', background: 'var(--b50)', border: '1.5px solid var(--b100)', borderRadius: 'var(--rsm)', fontSize: 12.5, color: 'var(--g700)' }}>
+                <i className="lni lni-information" style={{ color: 'var(--b600)', fontSize: 16 }}></i>
+                Select an intake&apos;s checkbox below to edit its calendar dates.
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
-                {BULK_FIELDS.map(field => {
-                  const error = panelError(field.key)
-                  return (
-                    <div className="fg" key={field.key}>
-                      <div className="lbl">{field.label}{REQUIRED_FIELDS.has(field.key) && <> <span className="req">*</span></>}</div>
-                      <DatePicker
-                        value={pendingValues[pendingKey(activeRow.academicCalendarGuid, field.key)] ?? originalValueFor(activeRow, field.key)}
-                        onChange={v => updateSelectedField(field.key, v)}
-                        hasError={!!error}
-                      />
-                      {error && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{error}</p>}
-                    </div>
-                  )
-                })}
+            ) : (
+              <div style={{ padding: '18px 22px' }}>
+                <div style={{ fontSize: 12.5, color: 'var(--g400)', marginBottom: 14 }}>
+                  Editing <strong style={{ color: 'var(--g700)' }}>Intake {activeRow.intakeCode} · {activeRow.description} · Sem {activeRow.semCode}</strong>
+                  {selectedGuids.size > 1 && ` — changes apply to all ${selectedGuids.size} selected rows`}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
+                  {BULK_FIELDS.map(field => {
+                    const error = panelError(field.key)
+                    return (
+                      <div className="fg" key={field.key}>
+                        <div className="lbl">{field.label}{REQUIRED_FIELDS.has(field.key) && <> <span className="req">*</span></>}</div>
+                        <DatePicker
+                          value={pendingValues[pendingKey(activeRow.academicCalendarGuid, field.key)] ?? originalValueFor(activeRow, field.key)}
+                          onChange={v => updateSelectedField(field.key, v)}
+                          hasError={!!error}
+                        />
+                        {error && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{error}</p>}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, padding: '14px 22px', borderTop: '1px solid var(--g200)' }}>
+              <span style={{ fontSize: 12.5, color: 'var(--g400)' }}>
+                {changedSelectedRows.length} of {selectedGuids.size} selected row{selectedGuids.size === 1 ? '' : 's'} changed
+              </span>
+              <button className="btn btn-neu" onClick={resetChanges} disabled={saving}>
+                <i className="lni lni-reload"></i> Reset
+              </button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving || changedSelectedRows.length === 0}>
+                <i className="lni lni-checkmark"></i> {saving ? 'Saving…' : `Save Changes${changedSelectedRows.length ? ` (${changedSelectedRows.length})` : ''}`}
+              </button>
             </div>
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, padding: '14px 22px', borderTop: '1px solid var(--g200)' }}>
-            <span style={{ fontSize: 12.5, color: 'var(--g400)' }}>
-              {changedSelectedRows.length} of {selectedGuids.size} selected row{selectedGuids.size === 1 ? '' : 's'} changed
-            </span>
-            <button className="btn btn-neu" onClick={resetChanges} disabled={saving}>
-              <i className="lni lni-reload"></i> Reset
-            </button>
-            <button className="btn btn-primary" onClick={handleSave} disabled={saving || changedSelectedRows.length === 0}>
-              <i className="lni lni-checkmark"></i> {saving ? 'Saving…' : `Save Changes${changedSelectedRows.length ? ` (${changedSelectedRows.length})` : ''}`}
-            </button>
           </div>
-        </div>
+        )}
 
         <div className="card">
           <div className="card-hdr" style={{ flexWrap: 'wrap', gap: 12 }}>
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-calendar"></i></span> Calendar Batch Entries</div>
-            <span style={{ fontSize: 12.5, color: 'var(--g400)' }}>{selectedGuids.size} selected</span>
+            {canEdit && <span style={{ fontSize: 12.5, color: 'var(--g400)' }}>{selectedGuids.size} selected</span>}
             <span className="flex-1"></span>
             <input
               className="ctrl w-56"
@@ -470,7 +476,7 @@ export default function Page() {
             />
           </div>
 
-          {selectedGuids.size >= 2 && (
+          {canEdit && selectedGuids.size >= 2 && (
             // The icon and message must be the flex container's only two
             // items — putting flex directly on a mix of bare text nodes and
             // <strong> makes each text run its own anonymous flex item, so
@@ -487,12 +493,11 @@ export default function Page() {
             <table>
               <thead>
                 <tr>
-                  <th style={{ width: 40 }}>
-                    <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }} />
-                  </th>
-                  {/* Single-row inline edit (pencil/tick) column —
-                      commented out per request, kept for reference. See the
-                      note above startEditRow further up this file. */}
+                  {canEdit && (
+                    <th style={{ width: 40 }}>
+                      <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }} />
+                    </th>
+                  )}
                   <th>Intake Code</th>
                   <th>Description</th>
                   <th>Sem</th>
@@ -502,31 +507,39 @@ export default function Page() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading
-                  // 4 fixed columns now that the single-row edit column
-                  // above is commented out (was 5).
-                  ? <TableLoadingState colSpan={4 + BULK_FIELDS.length} />
-                  : visibleRows.length === 0
-                    ? <EmptyState colSpan={4 + BULK_FIELDS.length} hasFilters={!!search} onClearFilters={() => setSearch('')} />
-                    : null}
-                {visibleRows.map(row => {
-                  const selected = selectedGuids.has(row.academicCalendarGuid)
-                  const editing = editingGuids.has(row.academicCalendarGuid)
-                  const rowChanged = rowHasChanges(row)
-                  const changed = selected && rowChanged
-                  const active = activeRow?.academicCalendarGuid === row.academicCalendarGuid
-                  // Only fed the now-commented-out single-row edit column below.
-                  // const isRowSaving = rowSaving.has(row.academicCalendarGuid)
-                  return (
-                    <tr key={row.academicCalendarGuid} className={changed ? 'selected-row' : ''} style={active ? { outline: '2px solid var(--b400)', outlineOffset: -2 } : undefined}>
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={selected}
-                          onChange={() => toggleRow(row.academicCalendarGuid)}
-                          style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }}
-                        />
-                      </td>
+                {!canView ? (
+                  <tr>
+                    <td colSpan={(canEdit ? 4 : 3) + BULK_FIELDS.length} className="text-center py-10 text-g500">
+                      <div className="flex flex-col items-center justify-center gap-1.5 py-4">
+                        <i className="lni lni-lock text-2xl text-g400" />
+                        <span className="font-semibold text-sm text-g700">No permission to view calendar records</span>
+                        <span className="text-xs text-g400">You do not have access to view this data.</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : isLoading ? (
+                  <TableLoadingState colSpan={(canEdit ? 4 : 3) + BULK_FIELDS.length} />
+                ) : visibleRows.length === 0 ? (
+                  <EmptyState colSpan={(canEdit ? 4 : 3) + BULK_FIELDS.length} hasFilters={!!search} onClearFilters={() => setSearch('')} />
+                ) : (
+                  visibleRows.map(row => {
+                    const selected = selectedGuids.has(row.academicCalendarGuid)
+                    const editing = editingGuids.has(row.academicCalendarGuid)
+                    const rowChanged = rowHasChanges(row)
+                    const changed = selected && rowChanged
+                    const active = activeRow?.academicCalendarGuid === row.academicCalendarGuid
+                    return (
+                      <tr key={row.academicCalendarGuid} className={changed ? 'selected-row' : ''} style={active ? { outline: '2px solid var(--b400)', outlineOffset: -2 } : undefined}>
+                        {canEdit && (
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggleRow(row.academicCalendarGuid)}
+                              style={{ width: 15, height: 15, accentColor: 'var(--b500)', cursor: 'pointer' }}
+                            />
+                          </td>
+                        )}
                       {/* Single-row inline edit (pencil/tick) column —
                           commented out per request, kept for reference. See
                           the note above startEditRow further up this file.
@@ -593,7 +606,7 @@ export default function Page() {
                       })}
                     </tr>
                   )
-                })}
+                }))}
               </tbody>
             </table>
           </ScrollTable>
