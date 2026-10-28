@@ -8,7 +8,7 @@ import { StudentLookup } from '@/components/student/StudentLookup'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
 import { StudentDto, normalizeStudentDetail } from '@/lib/api/student/student'
 import { useStudent } from '@/hooks/student/useStudents'
-// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
   useLearningModeOptions,
   useStudentLearningModeDetail,
@@ -35,8 +35,7 @@ const REMARKS_MAX = 500
 function LearningModeContent() {
   // Permission checks disabled for now — every action is allowed. Restore the
   // line below (and the import above) to gate actions by the menu permissions again.
-  // const permissions = usePagePermissions()
-  const permissions = { add: true, edit: true, delete: true }
+  const permissions = usePagePermissions()
   const router = useRouter()
   const searchParams = useSearchParams()
   // Student Profile's action menu links here as

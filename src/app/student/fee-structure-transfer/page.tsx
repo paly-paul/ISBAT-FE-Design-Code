@@ -14,15 +14,14 @@ import { useStudent } from '@/hooks/student/useStudents'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { useFeeTransferContext, useFeeTransferHistory, useExecuteFeeTransfer } from '@/hooks/student/useFeeTransfer'
 import { useProgramTransferFeeStructures } from '@/hooks/student/useProgramTransfer'
-// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // useSearchParams() requires a Suspense boundary above it (Next.js App
 // Router) — see the wrapping default export at the bottom of this file.
 function FeeStructureTransferContent() {
   // Permission checks disabled for now — every action is allowed. Restore the
   // line below (and the import above) to gate actions by the menu permissions again.
-  // const permissions = usePagePermissions()
-  const permissions = { add: true, edit: true, delete: true }
+  const permissions = usePagePermissions()
   const router = useRouter()
   const searchParams = useSearchParams()
   // The refugee flow redirects here as

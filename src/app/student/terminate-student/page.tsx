@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
-// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { useSearchStudentsInfinite, useStudentProfile } from '@/hooks/finance/usePaymentConsole'
 import { refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
@@ -39,8 +39,7 @@ function initialsFor(name: string) {
 export default function TerminateStudentPage() {
   // Permission checks disabled for now — every action is allowed. Restore the
   // line below (and the import above) to gate actions by the menu permissions again.
-  // const permissions = usePagePermissions()
-  const permissions = { add: true, edit: true, delete: true }
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 

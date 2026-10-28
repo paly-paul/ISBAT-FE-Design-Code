@@ -53,6 +53,7 @@ import { AuthError } from '@/lib/api/client'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import { stripLeadingZeros } from '@/lib/errorMessages'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { useActionGuard } from '@/hooks/users/useActionGuard'
 
 // Real "what's owed" table for the Other Payment tab, sourced from GET
 // .../outstanding-all (get-all-outstanding-ledgers.md) filtered to
@@ -293,6 +294,7 @@ export default function PaymentConsolePage() {
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+  const guard = useActionGuard(showToast)
 
   // Step 8 — server-rendered receipt PDF (tuition payments only). The tab is
   // opened synchronously on click, before the fetch, because popup blockers
@@ -1755,7 +1757,7 @@ export default function PaymentConsolePage() {
                                     <button className="btn btn-neu btn-sm" onClick={() => setViewEntry(h)}>
                                       <i className="lni lni-eye"></i> View
                                     </button>
-                                    {/* permissions.edit && ( */}
+                                    {permissions.edit && (
                                       <button
                                         className="btn btn-neu btn-sm"
                                         disabled={isAdvanceFunded}
@@ -1764,10 +1766,10 @@ export default function PaymentConsolePage() {
                                       >
                                         <i className="lni lni-pencil-alt"></i> Edit
                                       </button>
-                                    {/* )} */}
+                                    )}
                                     {/* Receipt PDF exists for tuition only — other categories 404. */}
                                     {h.category === 1 && (
-                                      <button className="btn btn-neu btn-sm" disabled={printingGuid === h.paymentGuid} onClick={() => printReceipt(h.paymentGuid, h.paymentCode)}>
+                                      <button className="btn btn-neu btn-sm" disabled={printingGuid === h.paymentGuid} onClick={() => guard('print', () => printReceipt(h.paymentGuid, h.paymentCode), 'receipts')}>
                                         <i className="lni lni-printer"></i> {printingGuid === h.paymentGuid ? 'Loading…' : 'Print / Reprint'}
                                       </button>
                                     )}
@@ -2782,11 +2784,11 @@ export default function PaymentConsolePage() {
                           </div>
 
                           <div className="flex gap-[10px] justify-end items-center">
-                            {/* permissions.add && ( */}
+                            {permissions.add && (
                               <button className="btn btn-primary btn-lg" disabled={createPayment.isPending} onClick={() => handleSave()}>
                                 <i className="lni lni-save"></i> {createPayment.isPending ? 'Saving…' : 'Save Payment & Generate Receipt →'}
                               </button>
-                            {/* )} */}
+                            )}
                           </div>
                         </>
                       )}
@@ -3044,7 +3046,7 @@ export default function PaymentConsolePage() {
                 <div className="flex gap-2 mt-3 flex-wrap no-print">
                   {/* Opens the official server-rendered receipt PDF (step 8)
                       instead of printing this on-screen summary card. */}
-                  <button className="btn btn-neu flex-1 justify-center" disabled={printingGuid === receipt.paymentGuid} onClick={() => printReceipt(receipt.paymentGuid, receipt.ref)}>
+                  <button className="btn btn-neu flex-1 justify-center" disabled={printingGuid === receipt.paymentGuid} onClick={() => guard('print', () => printReceipt(receipt.paymentGuid, receipt.ref), 'receipts')}>
                     <i className="lni lni-printer"></i> {printingGuid === receipt.paymentGuid ? 'Loading receipt…' : 'Print Receipt'}
                   </button>
                   {studentGuid && (

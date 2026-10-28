@@ -361,7 +361,7 @@ function DiscountAllocationContent() {
   }
 
   function handleCancelDiscount(includeCurrentSemester: boolean) {
-    if (!permissions.delete || !studentGuid) return
+    if (!permissions.cancel || !studentGuid) return
     cancelDiscount.mutate(
       { studentGuid, includeCurrentSemester },
       {
@@ -736,7 +736,7 @@ function DiscountAllocationContent() {
                         </div>
 
                         <div className="flex gap-[10px] justify-end mt-4">
-                          {permissions.delete && <button className="btn btn-neu" disabled={busy} onClick={() => setShowCancelConfirm(true)}><i className="lni lni-close"></i> Cancel Discount</button>}
+                          {permissions.cancel && <button className="btn btn-neu" disabled={busy} onClick={() => setShowCancelConfirm(true)}><i className="lni lni-close"></i> Cancel Discount</button>}
                           {permissions.edit && <button className="btn btn-primary" disabled={busy} onClick={startEdit}><i className="lni lni-pencil"></i> Edit Discount</button>}
                         </div>
                       </>
@@ -829,7 +829,7 @@ function DiscountAllocationContent() {
             </div>
             <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
               <button className="btn btn-neu" disabled={cancelDiscount.isPending} onClick={() => handleCancelDiscount(false)}>Cancel from Next Semester</button>
-              {permissions.delete && <button className="btn btn-danger" disabled={cancelDiscount.isPending} onClick={() => handleCancelDiscount(true)}>Cancel Immediately</button>}
+              <button className="btn btn-danger" disabled={cancelDiscount.isPending} onClick={() => handleCancelDiscount(true)}>Cancel Immediately</button>
             </div>
           </div>
         </div>

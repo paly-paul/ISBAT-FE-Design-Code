@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createPermissionGroup, PermissionGroup, PermissionGroupInput, getPermissionGroups, updatePermissionGroup } from '@/lib/api/academic/permissionGroup'
+import { createPermissionGroup, deletePermissionGroup, PermissionGroup, PermissionGroupInput, getPermissionGroups, updatePermissionGroup } from '@/lib/api/academic/permissionGroup'
 import { MENU_KEY } from '@/hooks/users/useMenu'
 
 const PERMISSION_GROUPS_KEY = ['permissionGroups']
@@ -33,6 +33,18 @@ export function useUpdatePermissionGroup() {
       // The logged-in user may be in this group — refetch /me/menu so the
       // sidebar and each page's usePagePermissions() pick up the change
       // without a full page reload (useMenu caches for the whole session).
+      queryClient.invalidateQueries({ queryKey: MENU_KEY })
+    },
+  })
+}
+
+export function useDeletePermissionGroup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => deletePermissionGroup(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PERMISSION_GROUPS_KEY })
+      // Same reason as update: the logged-in user may be in this group.
       queryClient.invalidateQueries({ queryKey: MENU_KEY })
     },
   })

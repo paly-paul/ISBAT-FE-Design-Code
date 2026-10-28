@@ -14,6 +14,7 @@ import { formatDate } from '@/lib/date'
 import { ViewPaymentReceiptModal } from '@/components/modals/finance/ViewPaymentReceiptModal'
 import { EditPaymentModal, EditablePaymentTarget } from '@/components/modals/finance/EditPaymentModal'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { useActionGuard } from '@/hooks/users/useActionGuard'
 
 const PAGE_SIZE = 10
 // Don't narrow the table (or open the search dropdown) until the user's
@@ -89,6 +90,7 @@ export default function Page() {
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+  const guard = useActionGuard(showToast)
 
   // The real endpoint only paginates — it has no confirmed search/filter
   // query params — so, same convention as /admission/enquiry-list, Search
@@ -213,7 +215,7 @@ export default function Page() {
                   <tr key={`${r.paymentGuid}-${r.feeType}-${i}`}>
                     <td>
                       <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openReceipt(r, true)}>
+                        <button className="btn btn-neu btn-sm" onClick={() => guard('print', () => openReceipt(r, true), 'receipts')}>
                           <i className="lni lni-printer"></i> Print
                         </button>
                         <button className="btn btn-neu btn-sm" onClick={() => openReceipt(r, false)}>

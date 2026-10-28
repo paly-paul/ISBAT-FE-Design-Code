@@ -2,7 +2,8 @@
 import { useMemo } from 'react'
 import { ModalProps } from '../types'
 import { PermissionGroup } from '@/lib/api/academic/permissionGroup'
-import { usePermissionCatalog, moduleIcon, moduleLabel } from '@/hooks/users/usePermissionCatalog'
+import { usePermissionCatalog, CatalogModule } from '@/hooks/users/usePermissionCatalog'
+import { catalogSections, DESTRUCTIVE, ModuleAccessMatrix, UncataloguedAccess, DestructiveCaution, ReviewStats } from '@/components/permissions/PermissionMatrix'
 
 interface ViewPermissionModalProps extends ModalProps {
   permissionGroup: PermissionGroup | null
@@ -10,96 +11,101 @@ interface ViewPermissionModalProps extends ModalProps {
   canEdit?: boolean
 }
 
-// Read-only mirror of PermissionFormModal's "Confirm Changes" summary step, minus the editable checkboxes.
-// `permissions` only carries {id, name} with no module attribution, so module grouping is done by
-// reconciling permissionName against the cached catalog, same as PermissionFormModal's own seeding does.
+const EMPTY_CATALOG: CatalogModule[] = []
+
+// Read-only twin of PermissionFormModal's Review step — same shell
+// (pm-modal), stats, destructive-access note and per-module pages × actions
+// matrices, so viewing a group looks like the last step of editing it.
+// The group's permissions only carry {id, name}, so each is matched to the
+// catalog by name first (ids can drift between endpoints), then by id —
+// the same reconciliation PermissionFormModal's seeding does.
 export function ViewPermissionModal({ isOpen, onClose, permissionGroup, onEdit, canEdit }: ViewPermissionModalProps) {
-  const { data: catalog = [] } = usePermissionCatalog(isOpen)
+  const { data: catalog = EMPTY_CATALOG, isLoading } = usePermissionCatalog(isOpen)
+  const { modules, sectionsByModule } = useMemo(() => catalogSections(catalog), [catalog])
 
-  const moduleByPermissionName = useMemo(() => {
-    const map: Record<string, string> = {}
-    catalog.forEach(m => m.subModules.forEach(sm => sm.pages.forEach(pg => pg.permissions.forEach(p => {
-      map[p.permissionName] = m.mainModule
-    }))))
-    return map
-  }, [catalog])
+  // Granted catalog ids, plus the names the catalog doesn't know.
+  const { grantedIds, uncatalogued } = useMemo(() => {
+    const idByName: Record<string, number> = {}
+    const known = new Set<number>()
+    for (const sections of Object.values(sectionsByModule)) {
+      for (const s of sections) for (const pg of s.pages) for (const p of pg.permissions) {
+        idByName[p.permissionName] = p.intPermission
+        known.add(p.intPermission)
+      }
+    }
+    const ids = new Set<number>()
+    const unknown: string[] = []
+    for (const p of permissionGroup?.permissions ?? []) {
+      const id = idByName[p.permissionName] ?? (known.has(p.intPermission) ? p.intPermission : undefined)
+      if (id !== undefined) ids.add(id)
+      else unknown.push(p.permissionName)
+    }
+    return { grantedIds: ids, uncatalogued: unknown }
+  }, [permissionGroup, sectionsByModule])
 
-  // Grouped before the isOpen/permissionGroup early return below, so this
-  // hook always runs in the same order across renders regardless of
-  // whether the modal happens to be open with data yet.
-  const grouped = useMemo(() => {
-    if (!permissionGroup) return []
-    const byModule = new Map<string, string[]>()
-    permissionGroup.permissions.forEach(p => {
-      const mod = moduleByPermissionName[p.permissionName] ?? 'Other'
-      if (!byModule.has(mod)) byModule.set(mod, [])
-      byModule.get(mod)!.push(p.permissionName)
-    })
-    return Array.from(byModule.entries())
-  }, [permissionGroup, moduleByPermissionName])
+  const grantedModules = modules.filter(m => (sectionsByModule[m] ?? []).some(s => s.pages.some(pg => pg.permissions.some(p => grantedIds.has(p.intPermission)))))
+  const pageCount = grantedModules.reduce((n, m) => n + (sectionsByModule[m] ?? []).reduce((k, s) => k + s.pages.filter(pg => pg.permissions.some(p => grantedIds.has(p.intPermission))).length, 0), 0)
+  const destructive = (permissionGroup?.permissions ?? []).map(p => p.permissionName).filter(n => DESTRUCTIVE.test(n))
 
   if (!isOpen || !permissionGroup) return null
 
+  const total = permissionGroup.permissions.length
+
   return (
     <div className="modal-overlay open" id="view-permission-modal">
-      <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+      <div className="modal pm-modal pm-modal--view" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-eye"></i> View Permission Group — <span className="font-mono">{permissionGroup.group}</span></div>
-          <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
+          <button className="modal-close" onClick={onClose} aria-label="Close"><i className="lni lni-close"></i></button>
         </div>
 
-        <div style={{ padding: '20px clamp(14px, 4vw, 22px)' }}>
-          <div className="view-detail-grid" style={{ marginBottom: 18 }}>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--g500)', marginBottom: '4px' }}>Group Name</div>
-              <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{permissionGroup.group}</div>
+        <div className="pm-review tab-panel-in">
+          <div className="pm-review-hdr">
+            <div style={{ minWidth: 0 }}>
+              <h3 className="pm-pane-title">{permissionGroup.group}</h3>
+              <div className="pm-pane-sub">{permissionGroup.description || 'What members of this group can do.'}</div>
             </div>
-            {permissionGroup.description && (
-              <div style={{ gridColumn: '1 / -1' }}>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--g500)', marginBottom: '4px' }}>Description</div>
-                <div style={{ fontSize: '14px', color: 'var(--g900)', fontWeight: 500 }}>{permissionGroup.description}</div>
-              </div>
-            )}
+            <ReviewStats items={[
+              { label: 'Permissions', value: total },
+              { label: 'Modules', value: grantedModules.length + (uncatalogued.length ? 1 : 0) },
+              { label: 'Pages', value: pageCount },
+            ]} />
           </div>
 
-          <div className="sec-divider">Access Scope ({permissionGroup.permissions.length} permission{permissionGroup.permissions.length !== 1 ? 's' : ''})</div>
+          <DestructiveCaution names={destructive} />
 
-          {grouped.length === 0 ? (
-            <div className="text-g400 italic" style={{ fontSize: 12.5, padding: '12px 0' }}>No permissions assigned to this group.</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {grouped.map(([mod, names]) => (
-                <div key={mod} style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px',
-                  border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', background: 'var(--surface)',
-                }}>
-                  <span style={{
-                    width: 32, height: 32, borderRadius: 8, display: 'grid', placeItems: 'center',
-                    background: 'var(--b100)', color: 'var(--b700)', flexShrink: 0,
-                  }}>
-                    <i className={`lni lni-${moduleIcon(mod)}`}></i>
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--g900)' }}>{moduleLabel(mod)}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--g500)' }}>{names.join(', ')}</div>
-                  </div>
-                  <span className="badge badge-blue">{names.length}</span>
-                </div>
-              ))}
+          {total === 0 ? (
+            <div className="pm-empty">
+              <i className="lni lni-lock" aria-hidden="true"></i>
+              <div><strong>No permissions assigned</strong><br />Members of this group can&apos;t do anything yet.</div>
             </div>
+          ) : isLoading ? (
+            <div className="pm-empty"><span className="pm-spinner" aria-hidden="true"></span> Loading permissions…</div>
+          ) : (
+            <>
+              {grantedModules.map(m => (
+                <ModuleAccessMatrix
+                  key={m}
+                  module={m}
+                  sections={sectionsByModule[m] ?? []}
+                  isGranted={p => grantedIds.has(p.intPermission)}
+                />
+              ))}
+              <UncataloguedAccess names={uncatalogued} />
+            </>
           )}
         </div>
 
         <div className="modal-footer">
-          <span className="flex-1"></span>
+          <div className="pm-foot-summary">
+            <strong>{total}</strong> permission{total === 1 ? '' : 's'} · <strong>{grantedModules.length}</strong> module{grantedModules.length === 1 ? '' : 's'}
+          </div>
           {canEdit && onEdit && (
             <button className="btn btn-neu" onClick={onEdit}>
               <i className="lni lni-pencil"></i> Edit
             </button>
           )}
-          <button className="btn btn-primary" onClick={onClose}>
-            Close
-          </button>
+          <button className="btn btn-primary" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

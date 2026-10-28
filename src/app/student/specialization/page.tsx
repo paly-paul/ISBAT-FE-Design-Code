@@ -6,7 +6,7 @@ import { Toast } from '@/components/Toast'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { useIntakes } from '@/hooks/academic/useIntakes'
-// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useSpecializationBatchesByIntake, useSpecializationBatchContext, useSpecializationStudentsInBatch, useAssignSpecialization } from '@/hooks/student/useSpecialization'
 
 // Same 10-per-page convention as the rest of the app (see e.g.
@@ -31,8 +31,7 @@ const PAGE_SIZE = 10
 export default function Page() {
   // Permission checks disabled for now — every action is allowed. Restore the
   // line below (and the import above) to gate actions by the menu permissions again.
-  // const permissions = usePagePermissions()
-  const permissions = { add: true, edit: true, delete: true }
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
