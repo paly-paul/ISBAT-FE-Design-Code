@@ -123,7 +123,6 @@ function visibleChildren(children: MenuNode[], railId: RailId): MenuNode[] {
 export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {
   const { data, isLoading, isError, refetch } = useMenu()
   const menu = data?.menu
-  const isFallback = data?.isFallback ?? false
 
   // No route-warming effect here on purpose. A prior version fired
   // router.prefetch() for every route in the active module in one tight
@@ -335,15 +334,6 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
               <div className="sb-panel-error-sub">Check your connection and try again.</div>
               <button className="btn btn-neu btn-sm" onClick={() => refetch()}>
                 <i className="lni lni-reload"></i> Retry
-              </button>
-            </div>
-          )}
-          {!isLoading && !isError && isFallback && (
-            <div className="sb-panel-fallback" title="Couldn't verify permissions from the server — showing the full navigation menu instead. Access shown here isn't confirmed.">
-              <i className="lni lni-warning"></i>
-              <span>Menu permissions unavailable — showing full navigation</span>
-              <button className="sb-panel-fallback-retry" onClick={() => refetch()} aria-label="Retry loading real permissions">
-                <i className="lni lni-reload"></i>
               </button>
             </div>
           )}

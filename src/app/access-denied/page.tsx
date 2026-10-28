@@ -33,7 +33,7 @@ export default function AccessDenied() {
   const [signedIn, setSignedIn] = useState(false)
   const [displayName, setDisplayName] = useState('')
   const { data: menuResult, isLoading: menuLoading, isError: menuError } = useMenu(signedIn)
-  const pagesAvailable = signedIn && !!menuResult && !menuResult.isFallback
+  const pagesAvailable = signedIn && !!menuResult
   const pages = useMemo(
     () => (pagesAvailable && menuResult ? flattenMenuPages(menuResult.menu) : []),
     [pagesAvailable, menuResult],
@@ -99,7 +99,7 @@ export default function AccessDenied() {
               <p className="nf-note" aria-live="polite">
                 {menuLoading
                   ? <><span className="nf-spinner" aria-hidden="true"></span> Loading your pages…</>
-                  : (menuError || menuResult?.isFallback) && 'Your page list couldn’t be loaded right now.'}
+                  : menuError &&'Your page list couldn’t be loaded right now.'}
               </p>
             ) : (
               <>

@@ -1291,48 +1291,6 @@ body {
   margin-bottom: 8px;
 }
 
-/* Shown when /me/menu failed and the sidebar is running on fallback,
-   full-navigation data instead of real permissions (see MenuResult.isFallback
-   in src/lib/api/users/menu.ts) — deliberately visible, never silent. */
-.sb-panel-fallback {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 10px 10px 0;
-  padding: 8px 10px;
-  background: var(--amber-bg);
-  border: 1.5px solid var(--amber-bd);
-  border-radius: var(--rxs);
-  font-size: 10.5px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: #92400e;
-}
-
-.sb-panel-fallback i.lni-warning {
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
-.sb-panel-fallback span {
-  flex: 1;
-}
-
-.sb-panel-fallback-retry {
-  flex-shrink: 0;
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: inherit;
-  opacity: .75;
-  padding: 2px;
-  display: flex;
-}
-
-.sb-panel-fallback-retry:hover {
-  opacity: 1;
-}
-
 /* Nav item with no page behind it yet (e.g. Receipts/Reports) */
 .sb-item-disabled {
   cursor: not-allowed;
