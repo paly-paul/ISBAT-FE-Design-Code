@@ -14,7 +14,7 @@ import { getSessionIdentity } from '@/lib/session'
 // RBAC: the "Or jump to" links, closest matches and page search only ever
 // use the user's own menu (useMenu — the same /me/menu result the sidebar
 // is built from). Signed-out visitors get no page list, and neither does a
-// session whose menu failed to load (isFallback isn't permission-checked).
+// session whose menu failed to load.
 
 const EXTRA_PAGES: AppPage[] = [
   { name: 'My Profile', url: '/profile', module: 'Account', section: null },
@@ -75,7 +75,7 @@ export default function NotFound() {
   const [query, setQuery] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
   const { data: menuResult, isLoading: menuLoading, isError: menuError } = useMenu(signedIn)
-  const pagesAvailable = signedIn && !!menuResult && !menuResult.isFallback
+  const pagesAvailable = signedIn && !!menuResult
   const pages = useMemo(
     () => (pagesAvailable && menuResult ? [...flattenMenuPages(menuResult.menu), ...EXTRA_PAGES] : []),
     [pagesAvailable, menuResult],
@@ -156,7 +156,7 @@ export default function NotFound() {
               <p className="nf-note" aria-live="polite">
                 {menuLoading
                   ? <><span className="nf-spinner" aria-hidden="true"></span> Loading your pages…</>
-                  : (menuError || menuResult?.isFallback) && 'Your page list couldn’t be loaded right now.'}
+                  : menuError &&'Your page list couldn’t be loaded right now.'}
               </p>
             ) : (
               <>
