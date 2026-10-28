@@ -23,7 +23,7 @@ import {
   FeedbackQuestionType,
 } from '@/hooks/student/useFeedbackMaster'
 import { getFeedbackQuestions } from '@/lib/api/student/feedbackMaster'
-// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Feedback Master (pages/students/feedback-master-admin-page.md) — replaces
 // the legacy feedback master screen. Feedback forms per academic intake
@@ -58,8 +58,7 @@ type Confirm =
 export default function FeedbackMasterPage() {
   // Permission checks disabled for now — every action is allowed. Restore the
   // line below (and the import above) to gate actions by the menu permissions again.
-  // const permissions = usePagePermissions()
-  const permissions = { add: true, edit: true, delete: true }
+  const permissions = usePagePermissions()
   const queryClient = useQueryClient()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }

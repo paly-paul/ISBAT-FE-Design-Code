@@ -15,7 +15,7 @@ import { StudentAcademicRecord } from '@/components/student/StudentAcademicRecor
 import { StudentDto } from '@/lib/api/student/student'
 import { useDropoutStudents, useRejoinCandidate, useRejoinBatches, useRejoinStudent } from '@/hooks/student/useDropoutRejoin'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
-// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Ported from isbat_student_module.html's Intake Transfer page. Only the
 // "Dropout Rejoin" reason has a real backend contract — students/dropout-
@@ -88,8 +88,7 @@ const REJOIN_TABS: { id: RejoinTab; label: string; icon: string }[] = [
 function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: string) => void }) {
   // Permission checks disabled for now — every action is allowed. Restore the
   // line below (and the import above) to gate actions by the menu permissions again.
-  // const permissions = usePagePermissions()
-  const permissions = { add: true, edit: true, delete: true }
+  const permissions = usePagePermissions()
   const router = useRouter()
   const searchParams = useSearchParams()
   // Student Profile's action menu links here as
@@ -402,8 +401,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
 function DefermentPanel({ showToast }: { showToast: (msg: string, type?: string) => void }) {
   // Permission checks disabled for now — every action is allowed. Restore the
   // line below (and the import above) to gate actions by the menu permissions again.
-  // const permissions = usePagePermissions()
-  const permissions = { add: true, edit: true, delete: true }
+  const permissions = usePagePermissions()
   const [student, setStudent] = useState<StudentDto | null>(null)
   const [targetIntake, setTargetIntake] = useState(TARGET_INTAKES[0].value)
   const [targetBatch, setTargetBatch] = useState('BSc.IT-2025A · Day')
