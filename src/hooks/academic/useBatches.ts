@@ -82,8 +82,27 @@ export function useBatchCodesForIntake(intakeGuid: string | null) {
 }
 
 export function useCreateBatch() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: BatchCreateInput) => createBatch(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: BATCHES_KEY }),
+  })
+}
+
+// Every batch for a campus + intake in one call. Batch Management searches,
+// column-filters (multi-select, like the other Academic tables) and pages
+// these rows client-side — GET /batches' own column filters take one value
+// each — and totals them for the stat tiles. Under BATCHES_KEY so
+// create/update/delete refresh it. pageSize is sent explicitly — the
+// endpoint defaults to 20. intakeGuid null = the current admission intake
+// (the endpoint's default).
+const SCOPE_PAGE_SIZE = 10000
+export function useBatchesInScope(scope: BatchScope) {
+  return useQuery({
+    queryKey: [...BATCHES_KEY, 'scope', scope.campusGuid ?? '', scope.intakeGuid ?? ''],
+    queryFn: () => getBatches(1, SCOPE_PAGE_SIZE, '', scope),
+    // Keep the previous scope's table up while the next one loads.
+    placeholderData: keepPreviousData,
   })
 }
 

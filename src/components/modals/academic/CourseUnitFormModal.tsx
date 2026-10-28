@@ -77,6 +77,8 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
   const [committedRepetitionTagSearch, setCommittedRepetitionTagSearch] = useState('')
   const [repetitionTagPickerOpen, setRepetitionTagPickerOpen] = useState(false)
   const [syllabusFile, setSyllabusFile] = useState<File | null>(null)
+  // Cleared on Remove so picking the same file again still fires onChange.
+  const syllabusInputRef = useRef<HTMLInputElement>(null)
   const [syllabusLinkLoading, setSyllabusLinkLoading] = useState(false)
   // View shows the syllabus in an in-page preview, not a bare new tab.
   const [syllabusPreview, setSyllabusPreview] = useState<string | null>(null)
@@ -1008,8 +1010,31 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
                 </div>
               </div>
             )}
+            {/* Picked-but-not-saved file, with a way to drop it. Outside the
+                .file-zone for the same overlay reason as the panel above. */}
+            {syllabusFile && (
+              <div
+                className="flex items-center justify-between gap-3"
+                style={{ background: 'var(--white)', border: '1.5px solid var(--green-bd)', borderRadius: 'var(--rsm)', padding: '10px 14px', marginBottom: 10 }}
+              >
+                <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+                  <i className="lni lni-files" style={{ color: 'var(--green)', fontSize: 18, flexShrink: 0 }}></i>
+                  <span className="truncate" style={{ fontSize: 'var(--fs-sm)', fontWeight: 600, color: 'var(--g700)' }} title={syllabusFile.name}>{syllabusFile.name}</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-neu btn-sm"
+                  style={{ flexShrink: 0 }}
+                  onClick={() => { setSyllabusFile(null); if (syllabusInputRef.current) syllabusInputRef.current.value = '' }}
+                  aria-label={`Remove ${syllabusFile.name}`}
+                >
+                  <i className="lni lni-trash-can"></i> Remove
+                </button>
+              </div>
+            )}
             <div className="file-zone">
               <input
+                ref={syllabusInputRef}
                 type="file"
                 accept=".pdf,.doc,.docx"
                 onChange={e => setSyllabusFile(e.target.files?.[0] ?? null)}

@@ -1,23 +1,23 @@
 'use client'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
+import { FilterTh } from '@/components/FilterTh'
 import { BatchFormModal } from '@/components/modals/academic/BatchFormModal'
 import { ViewBatchModal } from '@/components/modals/academic/ViewBatchModal'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { useBatches, useCreateBatch, useUpdateBatch, useDeleteBatch, useBatchStudentCount, Batch } from '@/hooks/academic/useBatches'
+import { useBatchesInScope, useCreateBatch, useUpdateBatch, useDeleteBatch, useBatchStudentCount, Batch } from '@/hooks/academic/useBatches'
 import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { SearchSelect } from '@/components/SearchSelect'
 import { InfiniteSearchSelect } from '@/components/InfiniteSearchSelect'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
-import { useBatchSummary } from '@/hooks/academic/useBatchSummary'
 import { getIntakesPaged } from '@/lib/api/academic/intake'
-import { HeadCountTab } from './_components/HeadCountTab'
+import { EMPTY_GUID } from '@/lib/api/academic/batch'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -30,20 +30,30 @@ function formatDisplayDate(dateStr?: string | null) {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
 }
 
+// Fallback label when a row has no semesterName: semCode counts semesters
+// across the whole programme (1, 2, 3…), two per year.
+function semesterLabelFromCode(semCode: number): string {
+  const year = Math.ceil(semCode / 2)
+  const sem = semCode % 2 === 0 ? 2 : 1
+  return `Year ${year} - Semester ${sem}`
+}
+
+function semesterName(r: Batch) {
+  return r.semesterName || (r.semCode ? semesterLabelFromCode(r.semCode) : '—')
+}
+
 // 10 rows/page — same convention as the other master pages (Intake
-// Master, Programme Group, Repetition Tag), not the 20 this used while it
-// was still client-paginating a 1000-row full fetch.
+// Master, Programme Group, Repetition Tag).
 const PAGE_SIZE = 10
 // Don't narrow the table (or open the search dropdown) until the user's
 // typed at least this many characters — same convention as Intake Master /
 // Skill Master's search boxes.
 const MIN_SEARCH_CHARS = 2
 
-// Batch Summary was merged into this page (2026-10-21): its head counts are
-// the stat tiles plus the Head Count tab. ?tab=headcount opens that tab —
-// /academic/batch-summary redirects here with it.
-type Tab = 'manage' | 'headcount'
-
+// Batch Summary was merged into this page (2026-10-21), and its Head Count
+// tab into the one batch table (2026-10-28): head count is a column there,
+// and the stat tiles total the whole campus + intake scope.
+// /academic/batch-summary redirects here.
 export default function Page() {
   const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
@@ -52,95 +62,110 @@ export default function Page() {
   const [page, setPage] = useState(1)
   const [editingBatchGuid, setEditingBatchGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Batch | null>(null)
+  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
 
-  // ---- Tabs (same sliding underline as the other .tab-bar screens) ----
-  const [activeTab, setActiveTab] = useState<Tab>('manage')
-  // Read on mount, not via useSearchParams — the static export would need a
-  // Suspense boundary for that, and this is only an entry hint.
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('tab') === 'headcount') setActiveTab('headcount')
-  }, [])
-  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement>>>({})
-  const [indicator, setIndicator] = useState({ left: 0, width: 0 })
-  useLayoutEffect(() => {
-    const el = tabRefs.current[activeTab]
-    if (el) setIndicator({ left: el.offsetLeft, width: el.offsetWidth })
-  }, [activeTab])
-
-  // ---- Scope: campus + intake, for both tabs ----
+  // ---- Scope: campus + intake ----
   // GET /academic/batches lists one intake at a time; no intake = the current
-  // admission intake (the endpoint's default — it has no 'all intakes'). The
-  // full set for the scope feeds the stat tiles and the Head Count tab; Manage
-  // Batches pages through the same scope server-side.
+  // admission intake (the endpoint's default — it has no 'all intakes'). A
+  // batch from an older intake shows up here when it has a session in the
+  // listed one.
   const [campusGuid, setCampusGuid] = useState('')
   const [intakeGuid, setIntakeGuid] = useState('')
   const { data: campuses = [] } = useCampusDropdown()
-  const summary = useBatchSummary(campusGuid || null, intakeGuid || null)
-  const summaryRows = useMemo(() => summary.data?.items ?? [], [summary.data])
-  const totalStudents = summaryRows.reduce((sum, r) => sum + (r.headCount ?? 0), 0)
-  const avgBatchSize = summaryRows.length ? Math.round(totalStudents / summaryRows.length) : 0
+  const { data, isLoading, isPlaceholderData } = useBatchesInScope({ campusGuid: campusGuid || null, intakeGuid: intakeGuid || null })
+  const scopeRows = useMemo(() => data?.items ?? [], [data])
   const scopeLabel = [
     campusGuid ? (campuses.find(c => c.campusGuid === campusGuid)?.campusName ?? 'This campus') : 'All campuses',
     intakeGuid ? 'Selected intake' : 'Current intake',
   ].join(' · ')
 
-  // Real server-side pagination (2026-09-09) — only PAGE_SIZE rows are ever
-  // requested for the page on screen, not the whole 333+-row table fetched
-  // at once the way this page used to (useBatches(1, 1000)). Search is real
-  // server-side too (see useBatches), only
-  // actually queried once the term clears MIN_SEARCH_CHARS, same gate
-  // TableSearch's own dropdown uses. Trade-off: "newest to oldest" sorting
-  // (Batch has no createdAt, only bStartDate) can now only sort the rows
-  // already on the current page, not the full dataset — same "server
-  // search/paging, client work stays page-scoped" trade-off enquiry-list's
-  // own filters made.
-  const searchTrimmed = search.trim()
-  const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
-  const { data, isLoading, isFetching } = useBatches(page, PAGE_SIZE, activeSearch, true, { campusGuid: campusGuid || null, intakeGuid: intakeGuid || null })
-  const totalCount = data?.totalCount ?? 0
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && isFetching
+  // Tiles total the campus + intake scope, not the search/column filters.
+  const totalStudents = scopeRows.reduce((sum, r) => sum + (r.headCount ?? 0), 0)
+  const avgBatchSize = scopeRows.length ? Math.round(totalStudents / scopeRows.length) : 0
 
-  const sortedRows = useMemo(
-    () => [...(data?.items ?? [])].sort((a, b) => (b.bStartDate ?? '').localeCompare(a.bStartDate ?? '')),
-    [data],
+  // bInChargeName/pHeadName come pre-resolved on the row; the employee list
+  // is only fetched if a row has a guid without its name.
+  const needsEmployeeLookup = scopeRows.some(r => (isSet(r.bInCharge) && !r.bInChargeName) || (isSet(r.pHead) && !r.pHeadName))
+  const { data: employees = [] } = useEmployeeDropdown(needsEmployeeLookup)
+
+  function isSet(guid?: string | null) {
+    return !!guid && guid !== EMPTY_GUID
+  }
+  function employeeName(name?: string | null, guid?: string | null) {
+    if (name?.trim()) return name.trim()
+    if (!isSet(guid)) return '—'
+    return employees.find(e => e.employeeGuid === guid)?.displayName || '—'
+  }
+
+  // The display value each filterable column filters on — same "filter on
+  // what's shown" convention as the other Academic tables' FilterTh columns.
+  const columnValue: Record<string, (r: Batch) => string> = {
+    batchCode: r => r.batchCode || '—',
+    programme: r => r.programName || '—',
+    semester: semesterName,
+    stream: r => r.streamName || '—',
+    batchTime: r => r.batchTimeName || '—',
+    inCharge: r => employeeName(r.bInChargeName, r.bInCharge),
+    pHead: r => employeeName(r.pHeadName, r.pHead),
+    startDate: r => formatDisplayDate(r.bStartDate),
+    endDate: r => formatDisplayDate(r.bEndDate),
+    status: r => (r.active ? 'Active' : 'Inactive'),
+  }
+
+  // Search, column filters and paging all run over the whole scope (every
+  // batch for the campus + intake is loaded), so they cover every page, not
+  // just the one on screen. Search matches the same fields GET /batches'
+  // own search does.
+  const searchTrimmed = search.trim()
+  const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed.toLowerCase() : ''
+  const searchedRows = activeSearch
+    ? scopeRows.filter(r => [r.batchCode, r.programCode, r.programName, r.semesterName, r.streamName, r.batchTimeName].some(v => v?.toLowerCase().includes(activeSearch)))
+    : scopeRows
+  const filteredRows = searchedRows.filter(r =>
+    Object.entries(filters).every(([col, vals]) => !vals.length || vals.includes(columnValue[col](r))),
   )
-  const filteredRows = sortedRows
-  const pageItems = filteredRows
+  const hasColumnFilters = Object.values(filters).some(v => v.length > 0)
+
+  const totalCount = filteredRows.length
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pageItems = filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
+  // Live preview in the search dropdown — the searched rows, ignoring the
+  // column filters, capped to a handful (same as Intake Master).
+  const searchMatches = activeSearch ? searchedRows.slice(0, 8) : []
+
+  // Options are the distinct values among the loaded rows, sorted; dates in
+  // date order rather than alphabetically.
+  function opts(col: string) {
+    const values = [...new Set(scopeRows.map(columnValue[col]))]
+    if (col === 'startDate' || col === 'endDate') {
+      const field = col === 'startDate' ? 'bStartDate' : 'bEndDate'
+      const time = new Map(scopeRows.map(r => [formatDisplayDate(r[field]), r[field] ? new Date(r[field]!).getTime() : 0]))
+      return values.sort((a, b) => (time.get(a) ?? 0) - (time.get(b) ?? 0))
+    }
+    return values.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  }
+
+  function fth(label: string, col: string) {
+    return (
+      <FilterTh
+        label={label}
+        opts={opts(col)}
+        isOpen={openFilter === col}
+        activeFilter={filters[col] ?? []}
+        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
+        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null); setPage(1) }}
+        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null); setPage(1) }}
+        onClose={() => setOpenFilter(null)}
+      />
+    )
+  }
 
   const createBatch = useCreateBatch()
   const updateBatch = useUpdateBatch()
   const deleteBatch = useDeleteBatch()
-
-  const needsEmployeeLookup = pageItems.some(r => r.bInCharge || r.pHead)
-  const { data: employees = [] } = useEmployeeDropdown(needsEmployeeLookup)
-
-  function programName(r: Batch) {
-    return r.programName ?? '—'
-  }
-  function streamName(r: Batch) {
-    return r.streamName ?? '—'
-  }
-  function batchTimeName(r: Batch) {
-    return r.batchTimeName ?? '—'
-  }
-  // No client-side fallback needed — semesterName is always present on the
-  // row (see the Batch type's own comment). This replaces what used to be a
-  // genuinely N+1 fetch (one GET .../semesters/dropdownforprogram request
-  // per distinct programme on the page, since there's no global semester
-  // list) with zero extra requests at all.
-  function semesterName(r: Batch) {
-    return r.semesterName ?? '—'
-  }
-  function employeeName(guid?: string | null) {
-    if (!guid || guid === '00000000-0000-0000-0000-000000000000') return '—'
-    return employees.find(e => e.employeeGuid === guid)?.displayName || '—'
-  }
-
-  // Rows are already server-filtered by activeSearch — this just previews
-  // up to 8 of what's already loaded (same convention as enquiry-list's own
-  // searchMatches).
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? filteredRows.slice(0, 8) : []
 
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
@@ -157,12 +182,16 @@ export default function Page() {
     setSearch('')
   }
 
-  // Confirmed bug fix: the delete confirmation used to say nothing about
-  // whether the batch actually had students in it — students/counts-by-
-  // batch.md is explicit this endpoint exists "to display student counts on
-  // batch management screens", but nothing on this page ever called it.
-  // Scoped to just the batch actually being deleted (enabled only while the
-  // dialog is open), not the whole visible page.
+  // Same as the other Academic tables: clears search and column filters.
+  // The campus + intake scope stays — it's the page's context, not a filter.
+  function clearFilters() {
+    setSearch('')
+    setFilters({})
+    setPage(1)
+  }
+
+  // Scoped to just the batch being deleted (enabled only while the dialog is
+  // open), so the confirmation can warn when students are still in it.
   const { data: deleteTargetStudentCount } = useBatchStudentCount(deleteTarget?.batchGuid ?? null, !!deleteTarget)
 
   function confirmDeleteBatch() {
@@ -175,7 +204,7 @@ export default function Page() {
 
   return (
     <>
-      <div className="page active">
+      <div className="page active" id="page-batch-management">
         <div className="pg-hdr">
           <div><div className="pg-title">Batch Management</div><div className="pg-sub">Create batches per intake · Assign Batch In-Charge · Track head counts</div></div>
           <div className="flex items-center gap-3">
@@ -183,7 +212,7 @@ export default function Page() {
           </div>
         </div>
 
-        {/* Scope for the whole page: stat tiles and both tabs. */}
+        {/* Scope for the whole page: stat tiles and the table. */}
         <div className="flex items-center gap-2 flex-wrap mb-3">
           <span className="text-sm font-semibold text-g600">Showing batches for</span>
           <SearchSelect
@@ -191,128 +220,103 @@ export default function Page() {
             placeholder="All Campuses"
             options={campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))}
             value={campusGuid}
-            onChange={v => { setCampusGuid(v); setPage(1) }}
+            onChange={v => { setCampusGuid(v); setFilters({}); setPage(1) }}
           />
           <div style={{ width: 220 }}>
             <InfiniteSearchSelect
-              queryKey={['intakes', 'batch-summary']}
+              queryKey={['intakes', 'batch-management']}
               fetchPage={getIntakesPaged}
               toOption={i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })}
               allLabel="Current Intake"
               value={intakeGuid}
-              onChange={v => { setIntakeGuid(v); setPage(1) }}
+              onChange={v => { setIntakeGuid(v); setFilters({}); setPage(1) }}
             />
           </div>
         </div>
 
-        <div className="stats-row" style={{ opacity: summary.isPlaceholderData ? 0.45 : 1, transition: 'opacity .15s ease' }}>
-          <div className="stat-card"><div className="stat-lbl">Total Batches</div><div className="stat-num" style={{ color: 'var(--b700)' }}>{summary.isLoading ? '—' : summaryRows.length}</div><div className="stat-sub">{scopeLabel}</div></div>
-          <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Students</div><div className="stat-num" style={{ color: 'var(--green)' }}>{summary.isLoading ? '—' : totalStudents.toLocaleString()}</div><div className="stat-sub up">Across these batches</div></div>
-          <div className="stat-card"><div className="stat-lbl">Avg Batch Size</div><div className="stat-num">{summary.isLoading ? '—' : avgBatchSize}</div><div className="stat-sub">students / batch</div></div>
+        <div className="stats-row" style={{ opacity: isPlaceholderData ? 0.45 : 1, transition: 'opacity .15s ease' }}>
+          <div className="stat-card"><div className="stat-lbl">Total Batches</div><div className="stat-num" style={{ color: 'var(--b700)' }}>{data ? scopeRows.length.toLocaleString() : '—'}</div><div className="stat-sub">{scopeLabel}</div></div>
+          <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Students</div><div className="stat-num" style={{ color: 'var(--green)' }}>{data ? totalStudents.toLocaleString() : '—'}</div><div className="stat-sub up">Across these batches</div></div>
+          <div className="stat-card"><div className="stat-lbl">Avg Batch Size</div><div className="stat-num">{data ? avgBatchSize : '—'}</div><div className="stat-sub">students / batch</div></div>
         </div>
 
-        <div className="card p-0 overflow-hidden">
-          <div className="tab-bar" role="tablist" aria-label="Batches">
-            {([
-              { id: 'manage', label: 'Manage Batches', icon: 'lni-users', count: data ? totalCount : undefined },
-              { id: 'headcount', label: 'Head Count', icon: 'lni-grid-alt', count: summary.data ? summaryRows.length : undefined },
-            ] as { id: Tab; label: string; icon: string; count?: number }[]).map(t => {
-              const active = activeTab === t.id
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  ref={el => { if (el) tabRefs.current[t.id] = el }}
-                  className={`tab-btn${active ? ' active' : ''}`}
-                  onClick={() => setActiveTab(t.id)}
-                >
-                  <i className={`lni ${t.icon}`} aria-hidden="true" /> {t.label}
-                  {t.count !== undefined && <span className={`badge ${active ? 'badge-blue' : 'badge-grey'}`}>{t.count.toLocaleString()}</span>}
-                </button>
-              )
-            })}
-            <span className="tab-indicator" style={{ left: indicator.left, width: indicator.width }} />
-          </div>
-
-        {activeTab === 'headcount' && (
-          <div key="headcount" className="p-5 tab-panel-in">
-            <HeadCountTab
-              rows={summaryRows}
-              isLoading={summary.isLoading}
-              isRefetching={summary.isPlaceholderData}
-              hasFilters={!!campusGuid || !!intakeGuid}
-              onClearFilters={() => { setCampusGuid(''); setIntakeGuid(''); setPage(1) }}
-            />
-          </div>
-        )}
-
-        {activeTab === 'manage' && (
-        <div key="manage" className="p-5 tab-panel-in">
+        <div className="card">
           <div className="flex items-center justify-end mb-4">
             <TableSearch
-              className="w-56"
-              placeholder="Search by batch code…"
+              className="w-64"
+              placeholder="Search batch, programme…"
               value={search}
               onChange={v => { setSearch(v); setPage(1) }}
-              results={searchMatches.map(r => ({ id: r.batchGuid, primary: r.batchCode, secondary: programName(r) }))}
-              loading={searchPending}
+              results={searchMatches.map(r => ({ id: r.batchGuid, primary: r.batchCode, secondary: r.programName ?? '' }))}
               minChars={MIN_SEARCH_CHARS}
               onSelect={(r) => openViewModal(r.id)}
             />
           </div>
-          <ScrollTable>
-            <table>
-              <thead>
-                <tr>
-                  <th style={{ width: 48 }}></th>
-                  <th>Batch Code</th>
-                  <th>Programme</th>
-                  <th>Semester</th>
-                  <th>Specialization</th>
-                  <th>Batch Time</th>
-                  <th>Batch In-Charge</th>
-                  <th>Programme Head</th>
-                  <th>Start Date</th>
-                  <th>End Date</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading
-                  ? <TableLoadingState colSpan={999} />
-                  : pageItems.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={!!search.trim() || !!campusGuid || !!intakeGuid} onClearFilters={() => { setSearch(''); setCampusGuid(''); setIntakeGuid(''); setPage(1) }} />
-                    : null}
-                {!isLoading && pageItems.map(r => (
-                  <tr key={r.batchGuid}>
-                    <td>
-                      <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.batchGuid)}><i className="lni lni-eye"></i> View</button>
-                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.batchGuid)}><i className="lni lni-pencil"></i> Edit</button>}
-                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
-                      </ActionMenu>
-                    </td>
-                    <td><span className="font-bold text-blue tabular-nums">{r.batchCode}</span></td>
-                    <td>{programName(r)}</td>
-                    <td>{semesterName(r)}</td>
-                    <td>{streamName(r)}</td>
-                    <td>{batchTimeName(r)}</td>
-                    <td>{employeeName(r.bInCharge)}</td>
-                    <td>{employeeName(r.pHead)}</td>
-                    <td className="text-sm text-g600">{formatDisplayDate(r.bStartDate)}</td>
-                    <td className="text-sm text-g600">{formatDisplayDate(r.bEndDate)}</td>
-                    <td><span className={`badge ${r.active ? 'badge-green' : 'badge-grey'}`}>{r.active ? 'Active' : 'Inactive'}</span></td>
+          <div className={`tbl-refetch-wrap${isPlaceholderData ? ' is-refetching' : ''}`} aria-busy={isPlaceholderData}>
+            {isPlaceholderData && (
+              <div className="tbl-refetch-pill" role="status">
+                <i className="lni lni-reload" aria-hidden="true" /> Loading batches…
+              </div>
+            )}
+            <ScrollTable filters={filters} onResetFilters={() => { setFilters({}); setPage(1) }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: 48 }}></th>
+                    <th style={{ width: 56 }}>Sl. No</th>
+                    {fth('Batch Code', 'batchCode')}
+                    {fth('Programme', 'programme')}
+                    {fth('Semester', 'semester')}
+                    {fth('Specialization', 'stream')}
+                    {fth('Batch Time', 'batchTime')}
+                    {fth('Batch In-Charge', 'inCharge')}
+                    {fth('Programme Head', 'pHead')}
+                    <th>Head Count</th>
+                    {fth('Start Date', 'startDate')}
+                    {fth('End Date', 'endDate')}
+                    {fth('Status', 'status')}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </ScrollTable>
+                </thead>
+                <tbody>
+                  {isLoading
+                    ? <TableLoadingState colSpan={13} />
+                    : pageItems.length === 0
+                      ? <EmptyState colSpan={13} hasFilters={!!searchTrimmed || hasColumnFilters} onClearFilters={clearFilters} />
+                      : pageItems.map((r, i) => {
+                        const slNo = (safePage - 1) * PAGE_SIZE + i + 1
+                        return (
+                          // batchGuid alone isn't a safe key — a live response
+                          // has been seen leaving it blank/duplicated across
+                          // rows; the serial number is always unique.
+                          <tr key={`${r.batchGuid || 'row'}-${slNo}`}>
+                            <td>
+                              <ActionMenu>
+                                <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.batchGuid)}><i className="lni lni-eye"></i> View</button>
+                                {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.batchGuid)}><i className="lni lni-pencil"></i> Edit</button>}
+                                {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
+                              </ActionMenu>
+                            </td>
+                            <td className="text-g500 tabular-nums">{slNo}</td>
+                            <td><span className="font-bold text-blue tabular-nums">{r.batchCode || '—'}</span></td>
+                            <td>{r.programName || '—'}</td>
+                            <td>{semesterName(r)}</td>
+                            <td>{r.streamName || '—'}</td>
+                            <td>{r.batchTimeName || '—'}</td>
+                            <td>{employeeName(r.bInChargeName, r.bInCharge)}</td>
+                            <td>{employeeName(r.pHeadName, r.pHead)}</td>
+                            <td className="tabular-nums font-semibold">{r.headCount ?? 0}</td>
+                            <td className="text-sm text-g600">{formatDisplayDate(r.bStartDate)}</td>
+                            <td className="text-sm text-g600">{formatDisplayDate(r.bEndDate)}</td>
+                            <td><span className={`badge ${r.active ? 'badge-green' : 'badge-grey'}`}>{r.active ? 'Active' : 'Inactive'}</span></td>
+                          </tr>
+                        )
+                      })}
+                </tbody>
+              </table>
+            </ScrollTable>
+          </div>
 
-          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="batches" onPageChange={setPage} />
-        </div>
-        )}
+          <Pagination page={safePage} totalPages={totalPages} totalCount={totalCount} itemLabel="batches" onPageChange={setPage} />
         </div>
       </div>
       {openModals.has('new-batch-modal') && (

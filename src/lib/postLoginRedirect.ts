@@ -40,8 +40,7 @@ export async function resolvePostLoginTarget(queryClient: QueryClient, fallback:
   const next = takeNext()
   try {
     // Same cache entry the sidebar uses, so it isn't fetched twice.
-    const { menu, isFallback } = await queryClient.fetchQuery({ queryKey: MENU_KEY, queryFn: getMenu, staleTime: Infinity })
-    if (isFallback) return next ?? fallback
+    const { menu } = await queryClient.fetchQuery({ queryKey: MENU_KEY, queryFn: getMenu, staleTime: Infinity })
     if (next && isRouteAllowed(menu, next.split(/[?#]/)[0])) return next
     return flattenMenuPages(menu)[0]?.url ?? fallback
   } catch {

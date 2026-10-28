@@ -9,7 +9,8 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { useRoomsPaged, useRoomSearch, useCreateRoom, useUpdateRoom, useDeleteRoom, Room } from '@/hooks/academic/useRooms'
+import { SearchSelect } from '@/components/SearchSelect'
+import { useRoomsPaged, useRoomSearch, useRoomTypes, useCreateRoom, useUpdateRoom, useDeleteRoom, Room } from '@/hooks/academic/useRooms'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -27,6 +28,11 @@ export default function Page() {
   const [deleteTarget, setDeleteTarget] = useState<Room | null>(null)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  // Type filter (?roomType=): 'all' or the type's value. The API can't
+  // filter for "not set", so there's no option for it.
+  const [typeFilter, setTypeFilter] = useState('all')
+  const roomTypeParam = typeFilter === 'all' ? null : Number(typeFilter)
+  const { data: roomTypes = [], isLoading: isTypesLoading } = useRoomTypes()
 
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
@@ -43,12 +49,12 @@ export default function Page() {
     const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
     return () => clearTimeout(t)
   }, [search])
-  // A new term starts from its own first page.
-  useEffect(() => { setPage(1) }, [debouncedSearch])
+  // A new term or type starts from its own first page.
+  useEffect(() => { setPage(1) }, [debouncedSearch, typeFilter])
 
   // The table now shows the search results (it used to ignore the search
   // box entirely and only the dropdown preview reacted).
-  const { data, isLoading, isFetching, isPlaceholderData } = useRoomsPaged(true, page, PAGE_SIZE, debouncedSearch)
+  const { data, isLoading, isFetching, isPlaceholderData } = useRoomsPaged(true, page, PAGE_SIZE, debouncedSearch, roomTypeParam)
   const rows = data?.items ?? []
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
@@ -123,16 +129,25 @@ export default function Page() {
               <span className="ctitle-icon"><i className="lni lni-home"></i></span>
               Rooms &amp; Venues
             </div>
-            <TableSearch
-              className="w-56"
-              placeholder="Search by room code or location…"
-              value={search}
-              onChange={setSearch}
-              results={searchMatches.map(r => ({ id: r.roomGuid, primary: r.roomCode, secondary: r.location ?? '' }))}
-              loading={searchPending}
-              minChars={MIN_SEARCH_CHARS}
-              onSelect={(r) => openViewModal(r.id)}
-            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <SearchSelect
+                className="w-40"
+                options={[{ value: 'all', label: 'All Types' }, ...roomTypes.map(t => ({ value: String(t.value), label: t.name }))]}
+                value={typeFilter}
+                onChange={setTypeFilter}
+                isLoading={isTypesLoading}
+              />
+              <TableSearch
+                className="w-56"
+                placeholder="Search by room code or location…"
+                value={search}
+                onChange={setSearch}
+                results={searchMatches.map(r => ({ id: r.roomGuid, primary: r.roomCode, secondary: [r.roomTypeName, r.location].filter(Boolean).join(' · ') }))}
+                loading={searchPending}
+                minChars={MIN_SEARCH_CHARS}
+                onSelect={(r) => openViewModal(r.id)}
+              />
+            </div>
           </div>
           <ScrollTable>
             <table>
@@ -140,6 +155,7 @@ export default function Page() {
                 <tr>
                   <th style={{ width: 48 }}></th>
                   <th>Room Code</th>
+                  <th>Type</th>
                   <th>Location</th>
                   <th>Capacity</th>
                 </tr>
@@ -148,7 +164,7 @@ export default function Page() {
                 {(isLoading || tableSearchPending)
                   ? <TableLoadingState colSpan={999} />
                   : rows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
+                    ? <EmptyState colSpan={999} hasFilters={!!search.trim() || typeFilter !== 'all'} onClearFilters={() => { setSearch(''); setTypeFilter('all') }} />
                     : null}
                 {!(isLoading || tableSearchPending) && rows.map((r) => (
                   <tr key={r.roomGuid}>
@@ -166,6 +182,11 @@ export default function Page() {
                       </ActionMenu>
                     </td>
                     <td className="font-mono font-bold text-b700">{r.roomCode}</td>
+                    <td>
+                      {r.roomTypeName
+                        ? <span className="badge badge-blue">{r.roomTypeName}</span>
+                        : <span className="text-g400">—</span>}
+                    </td>
                     <td>{r.location || '—'}</td>
                     <td>{r.capacity ?? '—'}</td>
                   </tr>
