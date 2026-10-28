@@ -363,6 +363,18 @@ const mockMenu: MenuNode[] = [
     ]),
     ...STUDENT_OPERATIONS_SECTIONS,
   ]),
+  // Class Attendance (class-attendance-frontend-spec.md, 2026-10-28). Real
+  // mode shows it once /me/menu returns an "Attendance" module with these
+  // pages.
+  module_('Attendance', 'alarm-clock', [
+    section('Class Attendance', [
+      leaf('Record Attendance', 'checkmark-circle', '/attendance/record'),
+      leaf('Pending Outlines', 'list', '/attendance/pending-outlines'),
+    ]),
+    section('Management', [
+      leaf('Attendance Sessions', 'calendar', '/attendance/sessions'),
+    ]),
+  ]),
   module_('Employee', 'briefcase', [
     section('Employee Records', [
       leaf('Employee Master', 'user', '/employee/employee-master'),

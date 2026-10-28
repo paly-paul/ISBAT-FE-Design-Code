@@ -30,6 +30,7 @@ export function CampusFormModal({ isOpen, onClose, showToast, mode, campus, crea
   const [location, setLocation] = useState('')
   const [address, setAddress] = useState('')
   const [contact, setContact] = useState('')
+  const [isAutomated, setIsAutomated] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -40,8 +41,9 @@ export function CampusFormModal({ isOpen, onClose, showToast, mode, campus, crea
       setLocation(campus.location)
       setAddress(campus.address ?? '')
       setContact(campus.contact ?? '')
+      setIsAutomated(!!campus.isAutomated)
     } else if (!isEdit) {
-      setCampusCode(''); setCampusName(''); setLocation(''); setAddress(''); setContact('')
+      setCampusCode(''); setCampusName(''); setLocation(''); setAddress(''); setContact(''); setIsAutomated(false)
     }
     setErrors({})
   }, [isOpen, isEdit, campus])
@@ -68,6 +70,7 @@ export function CampusFormModal({ isOpen, onClose, showToast, mode, campus, crea
       location,
       address: address.trim() ? address.trim() : '',
       contact: contact.trim() ? contact.trim() : '',
+      isAutomated,
     }
     const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Campus updated successfully' : 'Campus added successfully') }
     const onError = (error: Error) => {
@@ -179,6 +182,19 @@ export function CampusFormModal({ isOpen, onClose, showToast, mode, campus, crea
               value={contact}
               onChange={e => setContact(e.target.value.replace(/[^0-9+\s-]/g, ''))}
             />
+          </div>
+          <div className="fg span2">
+            <div className="lbl" id="campus-biometric-lbl">Is biometric enabled for campus</div>
+            <div className="flex items-center gap-4 mt-2" role="radiogroup" aria-labelledby="campus-biometric-lbl">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="campusIsAutomated" checked={isAutomated} onChange={() => setIsAutomated(true)} />
+                <span>Yes</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="campusIsAutomated" checked={!isAutomated} onChange={() => setIsAutomated(false)} />
+                <span>No</span>
+              </label>
+            </div>
           </div>
         </div>
         <div className="modal-footer">
